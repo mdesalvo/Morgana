@@ -1,7 +1,7 @@
 <table style="border:none;">
   <tr>
     <td width="144">
-      <img src="https://ma-tobi.visualstudio.com/4ce8976f-00ed-4f82-97f2-739bdfdd7c83/_apis/git/repositories/d46bd5c0-4390-421b-9b7a-2e64f75a679f/items?path=/Morgana.jpg&versionDescriptor%5BversionOptions%5D=0&versionDescriptor%5BversionType%5D=0&versionDescriptor%5Bversion%5D=master&resolveLfs=true&%24format=octetStream&api-version=5.0" alt="Morgana Logo" width="128"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/master/Morgana.jpg" alt="Morgana Logo" width="128"/>
     </td>
     <td>
       <h1>Morgana</h1>
