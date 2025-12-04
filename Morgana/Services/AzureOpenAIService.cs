@@ -16,7 +16,7 @@ public class AzureOpenAIService : ILLMService
 
         var endpoint = new Uri(_config["Azure:OpenAI:Endpoint"]!);
         var credential = new AzureCliCredential();
-        var deploymentName = _config["Azure:OpenAI:DeploymentName"]!;
+        string deploymentName = _config["Azure:OpenAI:DeploymentName"]!;
 
         var azureClient = new AzureOpenAIClient(endpoint, credential);
         _chatClient = azureClient.GetChatClient(deploymentName).AsIChatClient();

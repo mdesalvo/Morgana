@@ -17,7 +17,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 // Azure Services
-var storageConnectionString = builder.Configuration["Azure:StorageConnectionString"];
+string? storageConnectionString = builder.Configuration["Azure:StorageConnectionString"];
 builder.Services.AddSingleton(new TableServiceClient(storageConnectionString));
 builder.Services.AddSingleton(new BlobServiceClient(storageConnectionString));
 builder.Services.AddApplicationInsightsTelemetry(builder.Configuration["Azure:AppInsightsConnectionString"]);

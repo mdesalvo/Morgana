@@ -1,6 +1,7 @@
 using Akka.Actor;
 using Morgana.Messages;
 using Morgana.Interfaces;
+using System.Text.Json;
 
 namespace Morgana.Agents;
 
@@ -18,7 +19,7 @@ public class GuardAgent : ReceiveActor
     private async Task CheckCompliance(GuardCheckRequest req)
     {
         // Basic profanity check
-        foreach (var term in _prohibitedTerms)
+        foreach (string term in _prohibitedTerms)
         {
             if (req.Message.Contains(term, StringComparison.OrdinalIgnoreCase))
             {
@@ -28,14 +29,14 @@ public class GuardAgent : ReceiveActor
         }
 
         // Advanced LLM-based policy check
-        var prompt = $@"Verifica se questo messaggio viola policy aziendali (spam, phishing, contenuti offensivi):
+        string prompt = $@"Verifica se questo messaggio viola policy aziendali (spam, phishing, contenuti offensivi):
 
 Messaggio: {req.Message}
 
 Rispondi JSON: {{""compliant"": true/false, ""violation"": ""motivo o null""}}";
 
-        var response = await _llmService.CompleteAsync(prompt);
-        var result = System.Text.Json.JsonSerializer.Deserialize<GuardResponse>(response);
+        string response = await _llmService.CompleteAsync(prompt);
+        GuardResponse? result = JsonSerializer.Deserialize<GuardResponse>(response);
 
         Sender.Tell(new GuardCheckResponse(result.Compliant, result.Violation));
     }

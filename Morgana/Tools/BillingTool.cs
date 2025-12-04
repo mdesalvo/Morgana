@@ -11,7 +11,7 @@ public class BillingTool
         // Simulazione recupero da storage/database
         await Task.Delay(100);
 
-        var invoices = new[]
+        string[] invoices = new[]
         {
             "Fattura Nov 2024: €150.00 - Scadenza: 15/12/2024",
             "Fattura Ott 2024: €150.00 - Pagata il: 14/11/2024",

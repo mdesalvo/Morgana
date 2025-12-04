@@ -19,7 +19,7 @@ public class DispositiveAgent : ReceiveActor
 
     private async Task RouteToExecutor(ExecuteRequest req)
     {
-        var intent = req.Classification.Intent;
+        string intent = req.Classification.Intent;
         var executor = _executors.ContainsKey(intent)
             ? _executors[intent]
             : Self; // fallback

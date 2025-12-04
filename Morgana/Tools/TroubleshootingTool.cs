@@ -24,7 +24,7 @@ public class TroubleshootingTool
             ["wifi-issues"] = "Soluzione 'Problemi WiFi':\n1. Verifichi password WiFi corretta\n2. Dimentichi la rete e riconnetta\n3. Cambi canale WiFi nel router\n4. Aggiorni driver scheda di rete"
         };
 
-        return guides.TryGetValue(issueType, out var guide)
+        return guides.TryGetValue(issueType, out string? guide)
             ? guide
             : "Guida non trovata. Tipi disponibili: no-internet, slow-connection, wifi-issues";
     }

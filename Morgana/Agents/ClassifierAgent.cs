@@ -31,7 +31,7 @@ public class ClassifierAgent : ReceiveActor
     {
         try
         {
-            var prompt = $@"Classifica questa richiesta cliente:
+            string prompt = $@"Classifica questa richiesta cliente:
 
 Richiesta: {msg.Content}
 
@@ -43,7 +43,7 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
 }}";
 
             var response = await _agent.RunAsync(prompt);
-            var jsonText = response.Text?.Trim() ?? "{}";
+            string jsonText = response.Text?.Trim() ?? "{}";
 
             // Rimuovi eventuali markdown fence
             jsonText = jsonText.Replace("```json", "").Replace("```", "").Trim();
