@@ -8,15 +8,15 @@ namespace Morgana.Agents.Executors;
 
 public class ContractCancellationExecutorAgent : ReceiveActor
 {
-    private readonly AIAgent _agent;
-    private readonly ILogger<ContractCancellationExecutorAgent> _logger;
+    private readonly AIAgent aiAgent;
+    private readonly ILogger<ContractCancellationExecutorAgent> logger;
 
     public ContractCancellationExecutorAgent(ILLMService llmService, IStorageService storageService, ILogger<ContractCancellationExecutorAgent> logger)
     {
-        _logger = logger;
+        this.logger = logger;
 
-        var adapter = new AgentExecutorAdapter(llmService.GetChatClient());
-        _agent = adapter.CreateContractAgent(storageService);
+        AgentExecutorAdapter adapter = new AgentExecutorAdapter(llmService.GetChatClient());
+        aiAgent = adapter.CreateContractAgent(storageService);
 
         ReceiveAsync<ExecuteRequest>(ExecuteCancellation);
     }
@@ -25,16 +25,18 @@ public class ContractCancellationExecutorAgent : ReceiveActor
     {
         try
         {
-            _logger.LogInformation($"Executing contract operation for user {req.UserId}");
+            logger.LogInformation($"Executing contract operation for user {req.UserId}");
 
-            var thread = _agent.GetNewThread();
-            var response = await _agent.RunAsync(req.Content, thread: thread);
+            //TODO: support storing threads based on req.sessionId
+            //      and check if it is new (GetNewThread) or not (DeserialazesThread)
+            AgentThread thread = aiAgent.GetNewThread();
+            AgentRunResponse response = await aiAgent.RunAsync(req.Content, thread: thread);
 
             Sender.Tell(new ExecuteResponse(response.Text ?? "Operazione contrattuale completata."));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error executing contract agent");
+            logger.LogError(ex, "Error executing contract agent");
             Sender.Tell(new ExecuteResponse("Errore nell'operazione. Contatti l'ufficio contratti."));
         }
     }

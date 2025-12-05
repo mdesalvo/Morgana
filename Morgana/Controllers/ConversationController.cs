@@ -8,23 +8,22 @@ namespace Morgana.Controllers;
 [Route("api/[controller]")]
 public class ConversationController : ControllerBase
 {
-    private readonly ActorSystem _actorSystem;
-    private readonly ILogger<ConversationController> _logger;
+    private readonly ActorSystem actorSystem;
+    private readonly ILogger<ConversationController> logger;
 
     public ConversationController(ActorSystem actorSystem, ILogger<ConversationController> logger)
     {
-        _actorSystem = actorSystem;
-        _logger = logger;
+        this.actorSystem = actorSystem;
+        this.logger = logger;
     }
 
     [HttpPost("message")]
     public async Task<IActionResult> SendMessage([FromBody] UserMessageRequest request)
     {
-        var supervisor = _actorSystem.ActorSelection("/user/conversation-supervisor");
-        var response = await supervisor.Ask<ConversationResponse>(
-            new UserMessage(request.UserId, request.SessionId, request.Message),
-            TimeSpan.FromSeconds(30));
+        ActorSelection? conversationSupervisor = actorSystem.ActorSelection("/user/conversation-supervisor");
+        ConversationResponse? conversationResponse = await conversationSupervisor.Ask<ConversationResponse>(
+            new UserMessage(request.UserId, request.SessionId, request.Message), TimeSpan.FromSeconds(30));
 
-        return Ok(response);
+        return Ok(conversationResponse);
     }
 }

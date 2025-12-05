@@ -11,9 +11,9 @@ public class InformativeAgent : ReceiveActor
 
     public InformativeAgent()
     {
-        var resolver = DependencyResolver.For(Context.System);
-        _executors["billing_retrieval"] = Context.ActorOf(resolver.Props<BillingExecutorAgent>(), "billing-executor");
-        _executors["hardware_troubleshooting"] = Context.ActorOf(resolver.Props<HardwareTroubleshootingExecutorAgent>(), "hardware-executor");
+        DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
+        _executors["billing_retrieval"] = Context.ActorOf(dependencyResolver.Props<BillingExecutorAgent>(), "billing-executor");
+        _executors["hardware_troubleshooting"] = Context.ActorOf(dependencyResolver.Props<HardwareTroubleshootingExecutorAgent>(), "hardware-executor");
 
         ReceiveAsync<ExecuteRequest>(RouteToExecutor);
     }
@@ -21,11 +21,17 @@ public class InformativeAgent : ReceiveActor
     private async Task RouteToExecutor(ExecuteRequest req)
     {
         string intent = req.Classification.Intent;
-        var executor = _executors.ContainsKey(intent)
+        IActorRef? executorAgent = _executors.ContainsKey(intent)
             ? _executors[intent]
-            : _executors["billing_retrieval"]; // default
+            : Self; // fallback
 
-        var response = await executor.Ask<ExecuteResponse>(req, TimeSpan.FromSeconds(15));
+        if (executorAgent.Equals(Self))
+        {
+            Sender.Tell(new ExecuteResponse("Mi dispiace, non posso gestire questa richiesta informativa al momento."));
+            return;
+        }
+
+        ExecuteResponse? response = await executorAgent.Ask<ExecuteResponse>(req, TimeSpan.FromSeconds(15));
         Sender.Tell(response);
     }
 }

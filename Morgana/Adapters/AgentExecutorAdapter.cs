@@ -5,23 +5,20 @@ using Morgana.Tools;
 
 namespace Morgana.Adapters;
 
-/// <summary>
-/// Adapter per integrare Microsoft.Agents.Framework con gli executor di Morgana
-/// </summary>
 public class AgentExecutorAdapter
 {
-    private readonly IChatClient _chatClient;
+    private readonly IChatClient chatClient;
 
     public AgentExecutorAdapter(IChatClient chatClient)
     {
-        _chatClient = chatClient;
+        this.chatClient = chatClient;
     }
 
     public AIAgent CreateBillingAgent(IStorageService storageService)
     {
-        var billingTool = new BillingTool();
+        BillingTool billingTool = new BillingTool();
 
-        return _chatClient.CreateAIAgent(
+        return chatClient.CreateAIAgent(
             instructions: @"Sei un assistente specializzato in fatturazione e pagamenti.
                 Aiuti i clienti a recuperare fatture, verificare pagamenti e risolvere problemi di billing.
                 Usa sempre un tono professionale e fornisci informazioni precise.
@@ -36,9 +33,9 @@ public class AgentExecutorAdapter
 
     public AIAgent CreateContractAgent(IStorageService storageService)
     {
-        var contractTool = new ContractTool();
+        ContractTool contractTool = new ContractTool();
 
-        return _chatClient.CreateAIAgent(
+        return chatClient.CreateAIAgent(
             instructions: @"Sei un assistente specializzato in gestione contratti.
                 Gestisci richieste su dettagli contrattuali, modifiche e disdette.
                 Spiega sempre chiaramente i termini contrattuali e le procedure necessarie.
@@ -53,9 +50,9 @@ public class AgentExecutorAdapter
 
     public AIAgent CreateTroubleshootingAgent()
     {
-        var troubleshootingTool = new TroubleshootingTool();
+        TroubleshootingTool troubleshootingTool = new TroubleshootingTool();
 
-        return _chatClient.CreateAIAgent(
+        return chatClient.CreateAIAgent(
             instructions: @"Sei un tecnico di assistenza hardware e connettività.
                 Aiuti i clienti a diagnosticare e risolvere problemi tecnici.
                 Fornisci guide step-by-step chiare e verificabili.

@@ -11,7 +11,7 @@ public class DispositiveAgent : ReceiveActor
 
     public DispositiveAgent()
     {
-        var resolver = DependencyResolver.For(Context.System);
+        DependencyResolver? resolver = DependencyResolver.For(Context.System);
         _executors["contract_cancellation"] = Context.ActorOf(resolver.Props<ContractCancellationExecutorAgent>(), "cancellation-executor");
 
         ReceiveAsync<ExecuteRequest>(RouteToExecutor);
@@ -20,17 +20,17 @@ public class DispositiveAgent : ReceiveActor
     private async Task RouteToExecutor(ExecuteRequest req)
     {
         string intent = req.Classification.Intent;
-        var executor = _executors.ContainsKey(intent)
+        IActorRef? executorAgent = _executors.ContainsKey(intent)
             ? _executors[intent]
             : Self; // fallback
 
-        if (executor == Self)
+        if (executorAgent.Equals(Self))
         {
-            Sender.Tell(new ExecuteResponse("Mi dispiace, non posso gestire questa richiesta al momento."));
+            Sender.Tell(new ExecuteResponse("Mi dispiace, non posso gestire questa richiesta dispositiva al momento."));
             return;
         }
 
-        var response = await executor.Ask<ExecuteResponse>(req, TimeSpan.FromSeconds(15));
+        ExecuteResponse? response = await executorAgent.Ask<ExecuteResponse>(req, TimeSpan.FromSeconds(15));
         Sender.Tell(response);
     }
 }

@@ -36,10 +36,8 @@ Messaggio: {req.Message}
 Rispondi JSON: {{""compliant"": true/false, ""violation"": ""motivo o null""}}";
 
         string response = await _llmService.CompleteAsync(prompt);
-        GuardResponse? result = JsonSerializer.Deserialize<GuardResponse>(response);
+        GuardCheckResponse? result = JsonSerializer.Deserialize<GuardCheckResponse>(response);
 
-        Sender.Tell(new GuardCheckResponse(result.Compliant, result.Violation));
+        Sender.Tell(new GuardCheckResponse(result.IsCompliant, result.Violation));
     }
-
-    private record GuardResponse(bool Compliant, string? Violation);
 }

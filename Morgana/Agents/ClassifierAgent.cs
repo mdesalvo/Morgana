@@ -9,15 +9,15 @@ namespace Morgana.Agents;
 
 public class ClassifierAgent : ReceiveActor
 {
-    private readonly AIAgent _agent;
-    private readonly ILogger<ClassifierAgent> _logger;
+    private readonly AIAgent aiAgent;
+    private readonly ILogger<ClassifierAgent> logger;
 
     public ClassifierAgent(ILLMService llmService, ILogger<ClassifierAgent> logger)
     {
-        _logger = logger;
+        this.logger = logger;
 
         // Crea un agente dedicato alla classificazione
-        _agent = llmService.GetChatClient().CreateAIAgent(
+        aiAgent = llmService.GetChatClient().CreateAIAgent(
             instructions: @"Sei un classificatore esperto di richieste clienti.
                 Classifica ogni richiesta in 'informative' (richiesta informazioni) o 'dispositive' (richiesta azione).
                 Identifica anche l'intento specifico tra: billing_retrieval, hardware_troubleshooting, contract_cancellation, contract_info, service_info.
@@ -42,15 +42,15 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
   ""confidence"": 0.95
 }}";
 
-            var response = await _agent.RunAsync(prompt);
+            AgentRunResponse response = await aiAgent.RunAsync(prompt);
             string jsonText = response.Text?.Trim() ?? "{}";
 
             // Rimuovi eventuali markdown fence
             jsonText = jsonText.Replace("```json", "").Replace("```", "").Trim();
 
-            var result = JsonSerializer.Deserialize<ClassificationResponse>(jsonText);
+            ClassificationResponse? result = JsonSerializer.Deserialize<ClassificationResponse>(jsonText);
 
-            var classification = new ClassificationResult(
+            ClassificationResult classification = new ClassificationResult(
                 result?.Category ?? "informative",
                 result?.Intent ?? "service_info",
                 new Dictionary<string, string>
@@ -63,10 +63,10 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error classifying message");
+            logger.LogError(ex, "Error classifying message");
 
             // Fallback classification
-            var fallback = new ClassificationResult(
+            ClassificationResult fallback = new ClassificationResult(
                 "informative",
                 "service_info",
                 new Dictionary<string, string> { ["confidence"] = "0.00", ["error"] = "classification_failed" });

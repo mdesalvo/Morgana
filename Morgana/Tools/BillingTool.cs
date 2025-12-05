@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 
 namespace Morgana.Tools;
+
 public class BillingTool
 {
     [Description("Recupera le fatture dell'utente per un periodo specificato")]

@@ -8,15 +8,15 @@ namespace Morgana.Agents.Executors;
 
 public class HardwareTroubleshootingExecutorAgent : ReceiveActor
 {
-    private readonly AIAgent _agent;
-    private readonly ILogger<HardwareTroubleshootingExecutorAgent> _logger;
+    private readonly AIAgent aiAgent;
+    private readonly ILogger<HardwareTroubleshootingExecutorAgent> logger;
 
     public HardwareTroubleshootingExecutorAgent(ILLMService llmService, ILogger<HardwareTroubleshootingExecutorAgent> logger)
     {
-        _logger = logger;
+        this.logger = logger;
 
-        var adapter = new AgentExecutorAdapter(llmService.GetChatClient());
-        _agent = adapter.CreateTroubleshootingAgent();
+        AgentExecutorAdapter adapter = new AgentExecutorAdapter(llmService.GetChatClient());
+        aiAgent = adapter.CreateTroubleshootingAgent();
 
         ReceiveAsync<ExecuteRequest>(ExecuteTroubleshooting);
     }
@@ -25,16 +25,18 @@ public class HardwareTroubleshootingExecutorAgent : ReceiveActor
     {
         try
         {
-            _logger.LogInformation($"Executing troubleshooting for user {req.UserId}");
+            logger.LogInformation($"Executing troubleshooting for user {req.UserId}");
 
-            var thread = _agent.GetNewThread();
-            var response = await _agent.RunAsync(req.Content, thread: thread);
+            //TODO: support storing threads based on req.sessionId
+            //      and check if it is new (GetNewThread) or not (DeserialazesThread)
+            AgentThread thread = aiAgent.GetNewThread();
+            AgentRunResponse response = await aiAgent.RunAsync(req.Content, thread: thread);
 
             Sender.Tell(new ExecuteResponse(response.Text ?? "Diagnostica completata."));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error executing troubleshooting agent");
+            logger.LogError(ex, "Error executing troubleshooting agent");
             Sender.Tell(new ExecuteResponse("Errore durante la diagnostica. Contatti il supporto tecnico."));
         }
     }

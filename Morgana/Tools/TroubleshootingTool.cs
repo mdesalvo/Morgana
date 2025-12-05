@@ -17,7 +17,7 @@ public class TroubleshootingTool
     {
         await Task.Delay(100);
 
-        var guides = new Dictionary<string, string>
+        Dictionary<string, string> guides = new Dictionary<string, string>
         {
             ["no-internet"] = "Soluzione 'Nessuna connessione':\n1. Verifichi che il modem sia acceso\n2. Controlli i cavi di connessione\n3. Riavvii il modem (spegnere 30 sec)\n4. Se persiste, contatti assistenza",
             ["slow-connection"] = "Soluzione 'Connessione lenta':\n1. Chiuda applicazioni non necessarie\n2. Verifichi dispositivi connessi al wifi\n3. Avvicini il dispositivo al router\n4. Riavvii il router",

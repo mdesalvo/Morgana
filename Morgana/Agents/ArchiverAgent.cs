@@ -8,19 +8,19 @@ namespace Morgana.Agents;
 public class ArchiverAgent : ReceiveActor
 {
     private readonly IStorageService _storageService;
-    private readonly ILogger<ArchiverAgent> _logger;
+    private readonly ILogger<ArchiverAgent> logger;
 
     public ArchiverAgent(IStorageService storageService, ILogger<ArchiverAgent> logger)
     {
         _storageService = storageService;
-        _logger = logger;
+        this.logger = logger;
 
         ReceiveAsync<ArchiveRequest>(ArchiveConversation);
     }
 
     private async Task ArchiveConversation(ArchiveRequest req)
     {
-        var entry = new ConversationEntry
+        ConversationEntry entry = new ConversationEntry
         {
             PartitionKey = req.SessionId,
             RowKey = Guid.NewGuid().ToString(),
@@ -33,6 +33,6 @@ public class ArchiverAgent : ReceiveActor
         };
 
         await _storageService.SaveConversationAsync(entry);
-        _logger.LogInformation($"Archived conversation for session {req.SessionId}");
+        logger.LogInformation($"Archived conversation for session {req.SessionId}");
     }
 }

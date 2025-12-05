@@ -6,41 +6,40 @@ namespace Morgana.Agents;
 
 public class ConversationSupervisorAgent : ReceiveActor
 {
-    private readonly IActorRef _classifier;
-    private readonly IActorRef _informative;
-    private readonly IActorRef _dispositive;
-    private readonly IActorRef _guard;
-    private readonly IActorRef _archiver;
-    private readonly ILogger<ConversationSupervisorAgent> _logger;
+    private readonly IActorRef classifierAgent;
+    private readonly IActorRef informativeAgent;
+    private readonly IActorRef dispositiveAgent;
+    private readonly IActorRef guardAgent;
+    private readonly IActorRef archiverAgent;
+    private readonly ILogger<ConversationSupervisorAgent> logger;
 
     public ConversationSupervisorAgent(ILogger<ConversationSupervisorAgent> logger)
     {
-        _logger = logger;
+        this.logger = logger;
 
-        var resolver = DependencyResolver.For(Context.System);
-        _classifier = Context.ActorOf(resolver.Props<ClassifierAgent>(), "classifier");
-        _informative = Context.ActorOf(resolver.Props<InformativeAgent>(), "informative");
-        _dispositive = Context.ActorOf(resolver.Props<DispositiveAgent>(), "dispositive");
-        _guard = Context.ActorOf(resolver.Props<GuardAgent>(), "guard");
-        _archiver = Context.ActorOf(resolver.Props<ArchiverAgent>(), "archiver");
+        DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
+        classifierAgent = Context.ActorOf(dependencyResolver.Props<ClassifierAgent>(), "classifier");
+        informativeAgent = Context.ActorOf(dependencyResolver.Props<InformativeAgent>(), "informative");
+        dispositiveAgent = Context.ActorOf(dependencyResolver.Props<DispositiveAgent>(), "dispositive");
+        guardAgent = Context.ActorOf(dependencyResolver.Props<GuardAgent>(), "guard");
+        archiverAgent = Context.ActorOf(dependencyResolver.Props<ArchiverAgent>(), "archiver");
 
         ReceiveAsync<UserMessage>(HandleUserMessage);
     }
 
     private async Task HandleUserMessage(UserMessage msg)
     {
-        var originalSender = Sender;
+        IActorRef? originalSender = Sender;
 
         try
         {
             // 1. Guard check
-            var guardResult = await _guard.Ask<GuardCheckResponse>(
+            GuardCheckResponse? guardCheckResponse = await guardAgent.Ask<GuardCheckResponse>(
                 new GuardCheckRequest(msg.UserId, msg.Content), TimeSpan.FromSeconds(5));
-
-            if (!guardResult.IsCompliant)
+            if (!guardCheckResponse.IsCompliant)
             {
-                var response = new ConversationResponse(
-                    $"La prego di mantenere un tono professionale. {guardResult.Violation}",
+                ConversationResponse response = new ConversationResponse(
+                    $"La prego di mantenere un tono professionale. {guardCheckResponse.Violation}",
                     "guard_violation",
                     []);
                 originalSender.Tell(response);
@@ -48,32 +47,32 @@ public class ConversationSupervisorAgent : ReceiveActor
             }
 
             // 2. Classification
-            var classification = await _classifier.Ask<ClassificationResult>(msg, TimeSpan.FromSeconds(10));
+            ClassificationResult? classificationResult = await classifierAgent.Ask<ClassificationResult>(msg, TimeSpan.FromSeconds(10));
 
             // 3. Route to appropriate agent
-            var executor = classification.Category.ToLower() switch
+            IActorRef executorAgent = classificationResult.Category.ToLower() switch
             {
-                "informative" => _informative,
-                "dispositive" => _dispositive,
-                _ => _informative
+                "informative" => informativeAgent,
+                "dispositive" => dispositiveAgent,
+                _ => informativeAgent
             };
 
-            var executeRequest = new ExecuteRequest(msg.UserId, msg.SessionId, msg.Content, classification);
-            var executeResponse = await executor.Ask<ExecuteResponse>(executeRequest, TimeSpan.FromSeconds(20));
+            ExecuteRequest executeRequest = new ExecuteRequest(msg.UserId, msg.SessionId, msg.Content, classificationResult);
+            ExecuteResponse? executeResponse = await executorAgent.Ask<ExecuteResponse>(executeRequest, TimeSpan.FromSeconds(20));
 
             // 4. Archive conversation
-            _archiver.Tell(new ArchiveRequest(msg.UserId, msg.SessionId, msg.Content, executeResponse.Response, classification));
+            archiverAgent.Tell(new ArchiveRequest(msg.UserId, msg.SessionId, msg.Content, executeResponse.Response, classificationResult));
 
             // 5. Return response
-            var finalResponse = new ConversationResponse(
+            ConversationResponse conversationResponse = new ConversationResponse(
                 executeResponse.Response,
-                classification.Category,
-                classification.Metadata);
-            originalSender.Tell(finalResponse);
+                classificationResult.Category,
+                classificationResult.Metadata);
+            originalSender.Tell(conversationResponse);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing message");
+            logger.LogError(ex, "Error processing message");
             originalSender.Tell(new ConversationResponse(
                 "Si è verificato un errore. La preghiamo di riprovare.",
                 "error",

@@ -14,11 +14,11 @@ public class AzureOpenAIService : ILLMService
     {
         _config = config;
 
-        var endpoint = new Uri(_config["Azure:OpenAI:Endpoint"]!);
-        var credential = new AzureCliCredential();
+        Uri endpoint = new Uri(_config["Azure:OpenAI:Endpoint"]!);
+        AzureCliCredential credential = new AzureCliCredential();
         string deploymentName = _config["Azure:OpenAI:DeploymentName"]!;
 
-        var azureClient = new AzureOpenAIClient(endpoint, credential);
+        AzureOpenAIClient azureClient = new AzureOpenAIClient(endpoint, credential);
         _chatClient = azureClient.GetChatClient(deploymentName).AsIChatClient();
     }
 
@@ -26,25 +26,25 @@ public class AzureOpenAIService : ILLMService
 
     public async Task<string> CompleteAsync(string prompt)
     {
-        var messages = new List<ChatMessage>
+        List<ChatMessage> messages = new List<ChatMessage>
         {
             new(ChatRole.System, "Sei un assistente utile e professionale."),
             new(ChatRole.User, prompt)
         };
 
-        var response = await _chatClient.GetResponseAsync(messages);
+        ChatResponse response = await _chatClient.GetResponseAsync(messages);
         return response.Text ?? string.Empty;
     }
 
     public async Task<string> CompleteWithSystemPromptAsync(string systemPrompt, string userPrompt)
     {
-        var messages = new List<ChatMessage>
+        List<ChatMessage> messages = new List<ChatMessage>
         {
             new(ChatRole.System, systemPrompt),
             new(ChatRole.User, userPrompt)
         };
 
-        var response = await _chatClient.GetResponseAsync(messages);
+        ChatResponse response = await _chatClient.GetResponseAsync(messages);
         return response.Text ?? string.Empty;
     }
 }

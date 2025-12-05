@@ -8,15 +8,15 @@ namespace Morgana.Agents.Executors;
 
 public class BillingExecutorAgent : ReceiveActor
 {
-    private readonly AIAgent _agent;
-    private readonly ILogger<BillingExecutorAgent> _logger;
+    private readonly AIAgent aiAgent;
+    private readonly ILogger<BillingExecutorAgent> logger;
 
     public BillingExecutorAgent(ILLMService llmService, IStorageService storageService, ILogger<BillingExecutorAgent> logger)
     {
-        _logger = logger;
+        this.logger = logger;
 
-        var adapter = new AgentExecutorAdapter(llmService.GetChatClient());
-        _agent = adapter.CreateBillingAgent(storageService);
+        AgentExecutorAdapter adapter = new AgentExecutorAdapter(llmService.GetChatClient());
+        aiAgent = adapter.CreateBillingAgent(storageService);
 
         ReceiveAsync<ExecuteRequest>(ExecuteBilling);
     }
@@ -25,19 +25,18 @@ public class BillingExecutorAgent : ReceiveActor
     {
         try
         {
-            _logger.LogInformation($"Executing billing request for user {req.UserId}");
+            logger.LogInformation($"Executing billing request for user {req.UserId}");
 
-            // Crea thread per mantenere contesto conversazione
-            var thread = _agent.GetNewThread();
-
-            // Esegui agente con tools
-            var response = await _agent.RunAsync(req.Content, thread: thread);
+            //TODO: support storing threads based on req.sessionId
+            //      and check if it is new (GetNewThread) or not (DeserialazesThread)
+            AgentThread thread = aiAgent.GetNewThread();
+            AgentRunResponse response = await aiAgent.RunAsync(req.Content, thread: thread);
 
             Sender.Tell(new ExecuteResponse(response.Text ?? "Operazione completata."));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error executing billing agent");
+            logger.LogError(ex, "Error executing billing agent");
             Sender.Tell(new ExecuteResponse("Si è verificato un errore. La preghiamo di riprovare."));
         }
     }

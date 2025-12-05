@@ -7,7 +7,7 @@ namespace Morgana.Services;
 public class AzureStorageService : IStorageService
 {
     private readonly TableServiceClient _tableServiceClient;
-    private readonly ILogger<AzureStorageService> _logger;
+    private readonly ILogger<AzureStorageService> logger;
     private TableClient? _tableClient;
 
     public AzureStorageService(
@@ -15,7 +15,7 @@ public class AzureStorageService : IStorageService
         ILogger<AzureStorageService> logger)
     {
         _tableServiceClient = tableServiceClient;
-        _logger = logger;
+        this.logger = logger;
     }
 
     public async Task SaveConversationAsync(ConversationEntry entry)
@@ -28,7 +28,7 @@ public class AzureStorageService : IStorageService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error saving conversation to Azure Table Storage");
+            logger.LogError(ex, "Error saving conversation to Azure Table Storage");
             throw;
         }
     }

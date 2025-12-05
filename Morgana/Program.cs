@@ -1,9 +1,5 @@
-// ============================================================================
-// MORGANA - Sistema Conversazionale Multi-Agente
-// ASP.NET Web API (.NET 10) + Akka.NET + Microsoft.Agents.Framework
-// ============================================================================
-
 using Akka.Actor;
+using Akka.Actor.Setup;
 using Akka.DependencyInjection;
 using Azure.Data.Tables;
 using Azure.Storage.Blobs;
@@ -11,7 +7,7 @@ using Morgana.Agents;
 using Morgana.Interfaces;
 using Morgana.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -25,9 +21,9 @@ builder.Services.AddApplicationInsightsTelemetry(builder.Configuration["Azure:Ap
 // Akka.NET Actor System
 builder.Services.AddSingleton(sp =>
 {
-    var bootstrap = BootstrapSetup.Create();
-    var di = DependencyResolverSetup.Create(sp);
-    var actorSystemSetup = bootstrap.And(di);
+    BootstrapSetup bootstrap = BootstrapSetup.Create();
+    DependencyResolverSetup di = DependencyResolverSetup.Create(sp);
+    ActorSystemSetup actorSystemSetup = bootstrap.And(di);
     return ActorSystem.Create("MorganaSystem", actorSystemSetup);
 });
 
@@ -35,7 +31,7 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton<ILLMService, AzureOpenAIService>();
 builder.Services.AddSingleton<IStorageService, AzureStorageService>();
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
 if (app.Environment.IsDevelopment()) { }
 
@@ -43,8 +39,8 @@ app.UseHttpsRedirection();
 app.MapControllers();
 
 // Initialize Actors
-var actorSystem = app.Services.GetRequiredService<ActorSystem>();
-var supervisorProps = DependencyResolver.For(actorSystem).Props<ConversationSupervisorAgent>();
-var supervisor = actorSystem.ActorOf(supervisorProps, "conversation-supervisor");
+ActorSystem actorSystem = app.Services.GetRequiredService<ActorSystem>();
+Props supervisorProps = DependencyResolver.For(actorSystem).Props<ConversationSupervisorAgent>();
+IActorRef supervisor = actorSystem.ActorOf(supervisorProps, "conversation-supervisor");
 
 app.Run();
