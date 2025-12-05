@@ -249,33 +249,6 @@ Akka.NET provides:
 - **Circuit breakers**: Prevents cascade failures to external services
 - **Backpressure handling**: Graceful degradation under load
 
-## Use Cases
-
-### Customer Service Automation
-Morgana can handle 70-80% of routine customer inquiries autonomously:
-- "What's my current bill?" → Billing executor retrieves and formats invoice
-- "My WiFi is slow" → Troubleshooting executor runs diagnostics, suggests fixes
-- "I want to cancel" → Contract executor explains process, initiates workflow
-
-### Compliance & Audit Trails
-Regulated industries require full conversation logs:
-- Financial services: SEC/FINRA compliance
-- Healthcare: HIPAA-compliant patient interaction logs
-- Telecommunications: Contract dispute resolution evidence
-
-### Agent Performance Analytics
-Archived conversations enable:
-- Classification accuracy measurement
-- Agent response quality evaluation
-- Intent distribution analysis
-- Bottleneck identification
-
-### A/B Testing & Experimentation
-Deploy multiple agent variants:
-- Test different system prompts
-- Compare tool invocation strategies
-- Measure user satisfaction across agent versions
-
 ## Configuration
 
 ### appsettings.json
@@ -332,10 +305,8 @@ Send a user message to Morgana.
 ```bash
 dotnet restore
 dotnet build
-dotnet run --project src/Morgana.Api
+dotnet run --project src/Morgana
 ```
-
-Access Swagger UI at `https://localhost:5001/swagger`
 
 ### Docker Container
 ```dockerfile
@@ -357,9 +328,9 @@ ENTRYPOINT ["dotnet", "Morgana.dll"]
 
 ### Azure App Service
 ```bash
-az webapp create --resource-group morgana-rg --plan morgana-plan --name morgana-api --runtime "DOTNET:10"
-az webapp config appsettings set --resource-group morgana-rg --name morgana-api --settings @appsettings.json
-az webapp deployment source config-zip --resource-group morgana-rg --name morgana-api --src publish.zip
+az webapp create --resource-group morgana-rg --plan morgana-plan --name morgana --runtime "DOTNET:10"
+az webapp config appsettings set --resource-group morgana-rg --name morgana --settings @appsettings.json
+az webapp deployment source config-zip --resource-group morgana-rg --name morgana --src publish.zip
 ```
 
 ### Kubernetes (AKS)
@@ -380,7 +351,7 @@ spec:
     spec:
       containers:
       - name: morgana
-        image: youracr.azurecr.io/morgana-api:latest
+        image: youracr.azurecr.io/morgana:latest
         ports:
         - containerPort: 80
         env:
@@ -437,13 +408,6 @@ private async Task<bool> CheckCustomPolicy(string message)
     
     return await _llmService.CompleteAsync($"Is this compliant? {message}");
 }
-```
-
-### Multi-Language Support
-Add language detection and routing:
-```csharp
-var language = await DetectLanguage(message);
-var localizedAgent = GetAgentForLanguage(language);
 ```
 
 ## Performance Considerations
