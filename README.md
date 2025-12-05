@@ -1,15 +1,14 @@
 <table style="border:none;">
   <tr>
-    <td width="144">
-      <img src="https://github.com/mdesalvo/Morgana/blob/master/Morgana.jpg" alt="Morgana Logo" width="128"/>
+    <td width="256">
+      <img src="https://github.com/mdesalvo/Morgana/blob/master/Morgana.jpg" alt="Morgana Logo" width="256"/>
     </td>
     <td>
       <h1>Morgana</h1>
-      <p><strong>A Multi-Agent Conversational System for Enterprise Customer Service</strong></p>
+      <p><strong>A multi-agent conversational system for enterprise customer service</strong></p>
       <p>
         <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10"/>
         <img src="https://img.shields.io/badge/Akka.NET-1.5-00ADD8?logo=akka" alt="Akka.NET"/>
-        <img src="https://img.shields.io/badge/Azure-Cloud%20Native-0078D4?logo=microsoft-azure" alt="Azure"/>
       </p>
     </td>
   </tr>
