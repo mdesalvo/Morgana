@@ -26,11 +26,11 @@ public class AzureOpenAIService : ILLMService
 
     public async Task<string> CompleteAsync(string prompt)
     {
-        List<ChatMessage> messages = new List<ChatMessage>
-        {
+        List<ChatMessage> messages =
+        [
             new(ChatRole.System, "Sei un assistente utile e professionale."),
             new(ChatRole.User, prompt)
-        };
+        ];
 
         ChatResponse response = await _chatClient.GetResponseAsync(messages);
         return response.Text ?? string.Empty;
@@ -38,11 +38,11 @@ public class AzureOpenAIService : ILLMService
 
     public async Task<string> CompleteWithSystemPromptAsync(string systemPrompt, string userPrompt)
     {
-        List<ChatMessage> messages = new List<ChatMessage>
-        {
+        List<ChatMessage> messages =
+        [
             new(ChatRole.System, systemPrompt),
             new(ChatRole.User, userPrompt)
-        };
+        ];
 
         ChatResponse response = await _chatClient.GetResponseAsync(messages);
         return response.Text ?? string.Empty;

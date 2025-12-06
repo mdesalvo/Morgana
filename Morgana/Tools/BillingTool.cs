@@ -12,12 +12,12 @@ public class BillingTool
         // Simulazione recupero da storage/database
         await Task.Delay(100);
 
-        string[] invoices = new[]
-        {
+        string[] invoices =
+        [
             "Fattura Nov 2024: €150.00 - Scadenza: 15/12/2024",
             "Fattura Ott 2024: €150.00 - Pagata il: 14/11/2024",
             "Fattura Set 2024: €150.00 - Pagata il: 13/10/2024"
-        };
+        ];
 
         return string.Join("\n", invoices.Take(count));
     }
