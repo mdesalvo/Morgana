@@ -6,25 +6,33 @@ namespace Morgana.Services;
 
 public class AzureStorageService : IStorageService
 {
-    private readonly TableServiceClient _tableServiceClient;
+    private readonly IConfiguration configuration;
     private readonly ILogger<AzureStorageService> logger;
-    private TableClient? _tableClient;
+    private readonly TableServiceClient? tableServiceClient;
 
     public AzureStorageService(
-        TableServiceClient tableServiceClient,
+        IConfiguration configuration,
         ILogger<AzureStorageService> logger)
     {
-        _tableServiceClient = tableServiceClient;
+        this.configuration = configuration;
         this.logger = logger;
+        tableServiceClient = new TableServiceClient(configuration["Azure:StorageConnectionString"]);
     }
 
+    private async Task<TableClient> GetTableClientAsync(string tableName)
+    {
+        TableClient tableClient = tableServiceClient!.GetTableClient(tableName);
+        await tableClient.CreateIfNotExistsAsync();
+        return tableClient;
+    }
+    
     public async Task SaveConversationAsync(ConversationEntry entry)
     {
         try
         {
-            _tableClient ??= _tableServiceClient.GetTableClient("MorganaConversations");
-            await _tableClient.CreateIfNotExistsAsync();
-            await _tableClient.AddEntityAsync(entry);
+            TableClient tableClient = await GetTableClientAsync("MorganaConversations");
+            await tableClient.CreateIfNotExistsAsync();
+            await tableClient.AddEntityAsync(entry);
         }
         catch (Exception ex)
         {
