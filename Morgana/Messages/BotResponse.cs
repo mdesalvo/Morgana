@@ -1,8 +1,7 @@
 namespace Morgana.Messages;
 
-public record UserMessage(
+public record BotResponse(
     string ConversationId, 
-    string UserId, 
     string Text, 
-    DateTime Timestamp
+    string? ErrorReason
 );

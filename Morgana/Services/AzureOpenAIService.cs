@@ -7,22 +7,22 @@ namespace Morgana.Services;
 
 public class AzureOpenAIService : ILLMService
 {
-    private readonly IConfiguration _config;
-    private readonly IChatClient _chatClient;
+    private readonly IConfiguration configuration;
+    private readonly IChatClient chatClient;
 
-    public AzureOpenAIService(IConfiguration config)
+    public AzureOpenAIService(IConfiguration configuration)
     {
-        _config = config;
+        this.configuration = configuration;
 
-        Uri endpoint = new Uri(_config["Azure:OpenAI:Endpoint"]!);
+        Uri endpoint = new Uri(this.configuration["Azure:OpenAI:Endpoint"]!);
         AzureCliCredential credential = new AzureCliCredential();
-        string deploymentName = _config["Azure:OpenAI:DeploymentName"]!;
-
         AzureOpenAIClient azureClient = new AzureOpenAIClient(endpoint, credential);
-        _chatClient = azureClient.GetChatClient(deploymentName).AsIChatClient();
+        string deploymentName = this.configuration["Azure:OpenAI:DeploymentName"]!;
+
+        chatClient = azureClient.GetChatClient(deploymentName).AsIChatClient();
     }
 
-    public IChatClient GetChatClient() => _chatClient;
+    public IChatClient GetChatClient() => chatClient;
 
     public async Task<string> CompleteAsync(string prompt)
     {
@@ -32,8 +32,8 @@ public class AzureOpenAIService : ILLMService
             new(ChatRole.User, prompt)
         ];
 
-        ChatResponse response = await _chatClient.GetResponseAsync(messages);
-        return response.Text ?? string.Empty;
+        ChatResponse response = await chatClient.GetResponseAsync(messages);
+        return response.Text;
     }
 
     public async Task<string> CompleteWithSystemPromptAsync(string systemPrompt, string userPrompt)
@@ -44,7 +44,7 @@ public class AzureOpenAIService : ILLMService
             new(ChatRole.User, userPrompt)
         ];
 
-        ChatResponse response = await _chatClient.GetResponseAsync(messages);
-        return response.Text ?? string.Empty;
+        ChatResponse response = await chatClient.GetResponseAsync(messages);
+        return response.Text;
     }
 }

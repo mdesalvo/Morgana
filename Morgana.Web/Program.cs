@@ -9,7 +9,7 @@ builder.Services.AddServerSideBlazor();
 // Configurazione API endpoint
 builder.Services.AddScoped(sp => new HttpClient 
 { 
-    BaseAddress = new Uri(builder.Configuration["Morgana:BaseUrl"] ?? "https://localhost:5001") 
+    BaseAddress = new Uri(builder.Configuration["Morgana:BaseUrl"]!) 
 });
 
 // SignalR client service

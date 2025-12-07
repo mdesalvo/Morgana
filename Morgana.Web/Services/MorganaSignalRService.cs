@@ -22,16 +22,16 @@ public class MorganaSignalRService : IAsyncDisposable
         if (_hubConnection != null)
             return;
 
-        string apiBaseUrl = _configuration["Morgana:BaseUrl"] ?? "https://localhost:5001";
+        string apiBaseUrl = _configuration["Morgana:BaseUrl"]!;
         
         _hubConnection = new HubConnectionBuilder()
             .WithUrl($"{apiBaseUrl}/conversationHub")
-            .WithAutomaticReconnect(new[] { 
+            .WithAutomaticReconnect([
                 TimeSpan.Zero, 
                 TimeSpan.FromSeconds(2), 
                 TimeSpan.FromSeconds(5), 
-                TimeSpan.FromSeconds(10) 
-            })
+                TimeSpan.FromSeconds(10)
+            ])
             .Build();
 
         _hubConnection.On<MessageReceivedDto>("ReceiveMessage", (message) =>

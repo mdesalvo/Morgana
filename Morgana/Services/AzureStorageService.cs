@@ -31,7 +31,6 @@ public class AzureStorageService : IStorageService
         try
         {
             TableClient tableClient = await GetTableClientAsync("MorganaConversations");
-            await tableClient.CreateIfNotExistsAsync();
             await tableClient.AddEntityAsync(entry);
         }
         catch (Exception ex)

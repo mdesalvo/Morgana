@@ -35,7 +35,7 @@ public class ConversationSupervisorAgent : ReceiveActor
         {
             // 1. Guard check
             GuardCheckResponse? guardCheckResponse = await guardAgent.Ask<GuardCheckResponse>(
-                new GuardCheckRequest(msg.UserId, msg.Content), TimeSpan.FromSeconds(5));
+                new GuardCheckRequest(msg.UserId, msg.Text), TimeSpan.FromSeconds(5));
             if (!guardCheckResponse.IsCompliant)
             {
                 ConversationResponse response = new ConversationResponse(
@@ -57,11 +57,11 @@ public class ConversationSupervisorAgent : ReceiveActor
                 _ => informativeAgent
             };
 
-            ExecuteRequest executeRequest = new ExecuteRequest(msg.UserId, msg.SessionId, msg.Content, classificationResult);
+            ExecuteRequest executeRequest = new ExecuteRequest(msg.UserId, msg.ConversationId, msg.Text, classificationResult);
             ExecuteResponse? executeResponse = await executorAgent.Ask<ExecuteResponse>(executeRequest, TimeSpan.FromSeconds(20));
 
             // 4. Archive conversation
-            archiverAgent.Tell(new ArchiveRequest(msg.UserId, msg.SessionId, msg.Content, executeResponse.Response, classificationResult));
+            archiverAgent.Tell(new ArchiveRequest(msg.UserId, msg.ConversationId, msg.Text, executeResponse.Response, classificationResult));
 
             // 5. Return response
             ConversationResponse conversationResponse = new ConversationResponse(

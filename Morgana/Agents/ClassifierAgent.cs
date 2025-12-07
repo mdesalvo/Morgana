@@ -33,7 +33,7 @@ public class ClassifierAgent : ReceiveActor
         {
             string prompt = $@"Classifica questa richiesta cliente:
 
-Richiesta: {msg.Content}
+Richiesta: {msg.Text}
 
 Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preamble):
 {{
