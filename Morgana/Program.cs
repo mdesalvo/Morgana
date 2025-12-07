@@ -15,7 +15,7 @@ builder.Services.AddEndpointsApiExplorer();
 // SignalR per comunicazione real-time
 builder.Services.AddSignalR();
 
-// CORS per Morgana.Chat
+// CORS per Morgana.Web
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
