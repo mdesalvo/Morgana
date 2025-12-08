@@ -34,9 +34,8 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Starting conversation {request.ConversationId} for user {request.UserId}");
 
-            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(
-                request.ConversationId, request.UserId);
-            IActorRef manager = actorSystem.ActorOf(managerProps/*, $"manager-{request.ConversationId}"*/);
+            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(request.ConversationId, request.UserId);
+            IActorRef manager = actorSystem.ActorOf(managerProps);
             
             ConversationCreated? conversationCreated = await manager.Ask<ConversationCreated>(
                 new CreateConversation(request.ConversationId, request.UserId));
@@ -64,9 +63,8 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Ending conversation {conversationId} for user {userId}");
 
-            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(
-                conversationId, userId);
-            IActorRef manager = actorSystem.ActorOf(managerProps/*, $"manager-{conversationId}"*/);
+            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(conversationId, userId);
+            IActorRef manager = actorSystem.ActorOf(managerProps);
 
             manager.Tell(new TerminateConversation(conversationId, userId));
 
@@ -88,9 +86,8 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Sending message conversation {request.ConversationId} to user {request.UserId}");
 
-            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(
-                request.ConversationId, request.UserId);
-            IActorRef manager = actorSystem.ActorOf(managerProps/*, $"manager-{request.ConversationId}"*/);
+            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(request.ConversationId, request.UserId);
+            IActorRef manager = actorSystem.ActorOf(managerProps);
             
             manager.Tell(new UserMessage(
                 request.ConversationId,
