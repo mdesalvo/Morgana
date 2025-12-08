@@ -16,18 +16,15 @@ public class ConversationController : ControllerBase
     private readonly ActorSystem actorSystem;
     private readonly ILogger<ConversationController> logger;
     private readonly IHubContext<ConversationHub> hubContext;
-    private readonly IStorageService storageService;
     
     public ConversationController(
         ActorSystem actorSystem,
         ILogger<ConversationController> logger,
-        IHubContext<ConversationHub> hubContext,
-        IStorageService storageService)
+        IHubContext<ConversationHub> hubContext)
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
         this.hubContext = hubContext;
-        this.storageService = storageService;
     }
     
     [HttpPost("start")]
