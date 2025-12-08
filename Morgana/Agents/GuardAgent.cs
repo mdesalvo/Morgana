@@ -5,12 +5,12 @@ using System.Text.Json;
 
 namespace Morgana.Agents;
 
-public class GuardAgent : ReceiveActor
+public class GuardAgent : MorganaAgent
 {
     private readonly ILLMService _llmService;
-    private readonly string[] _prohibitedTerms = ["stupido", "idiota", "incapace"];
+    private readonly string[] _prohibitedTerms = ["stupido", "idiota", "incapace", "inetto"];
 
-    public GuardAgent(ILLMService llmService)
+    public GuardAgent(string conversationId, string userId, ILLMService llmService) : base(conversationId, userId)
     {
         _llmService = llmService;
 

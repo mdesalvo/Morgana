@@ -42,7 +42,7 @@ public class ConversationController : ControllerBase
             IActorRef manager = actorSystem.ActorOf(managerProps/*, $"manager-{request.ConversationId}"*/);
             
             ConversationCreated? conversationCreated = await manager.Ask<ConversationCreated>(
-                new CreateConversation(request.ConversationId, request.UserId), TimeSpan.FromSeconds(10));
+                new CreateConversation(request.ConversationId, request.UserId));
             
             logger.LogInformation($"Started conversation {conversationCreated.ConversationId} for user {conversationCreated.UserId}");
             

@@ -6,12 +6,13 @@ using Microsoft.Agents.AI;
 
 namespace Morgana.Agents.Executors;
 
-public class BillingExecutorAgent : ReceiveActor
+public class BillingExecutorAgent : MorganaAgent
 {
     private readonly AIAgent aiAgent;
     private readonly ILogger<BillingExecutorAgent> logger;
 
-    public BillingExecutorAgent(ILLMService llmService, IStorageService storageService, ILogger<BillingExecutorAgent> logger)
+    public BillingExecutorAgent(string conversationId, string userId, ILLMService llmService,
+        IStorageService storageService, ILogger<BillingExecutorAgent> logger) : base(conversationId, userId)
     {
         this.logger = logger;
 

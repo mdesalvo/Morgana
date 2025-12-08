@@ -5,15 +5,15 @@ using Morgana.Messages;
 
 namespace Morgana.Agents;
 
-public class InformativeAgent : ReceiveActor
+public class InformativeAgent : MorganaAgent
 {
     private readonly Dictionary<string, IActorRef> _executors = [];
 
-    public InformativeAgent()
+    public InformativeAgent(string conversationId, string userId) : base(conversationId, userId)
     {
         DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
-        _executors["billing_retrieval"] = Context.ActorOf(dependencyResolver.Props<BillingExecutorAgent>(), "billing-executor");
-        _executors["hardware_troubleshooting"] = Context.ActorOf(dependencyResolver.Props<HardwareTroubleshootingExecutorAgent>(), "hardware-executor");
+        _executors["billing_retrieval"] = Context.ActorOf(dependencyResolver.Props<BillingExecutorAgent>(conversationId, userId), $"billing-executor-{conversationId}");
+        _executors["hardware_troubleshooting"] = Context.ActorOf(dependencyResolver.Props<HardwareTroubleshootingExecutorAgent>(conversationId, userId), $"hardware-executor-{conversationId}");
 
         ReceiveAsync<ExecuteRequest>(RouteToExecutorAsync);
     }
@@ -22,9 +22,8 @@ public class InformativeAgent : ReceiveActor
     {
         IActorRef originalSender = Sender;
 
-        string intent = req.Classification.Intent;
-        IActorRef? executorAgent = _executors.ContainsKey(intent)
-            ? _executors[intent]
+        IActorRef? executorAgent = _executors.ContainsKey(req.Classification.Intent)
+            ? _executors[req.Classification.Intent]
             : Self; // fallback
 
         if (executorAgent.Equals(Self))
@@ -33,7 +32,7 @@ public class InformativeAgent : ReceiveActor
             return;
         }
 
-        ExecuteResponse? response = await executorAgent.Ask<ExecuteResponse>(req, TimeSpan.FromSeconds(15));
+        ExecuteResponse? response = await executorAgent.Ask<ExecuteResponse>(req);
         originalSender.Tell(response);
     }
 }

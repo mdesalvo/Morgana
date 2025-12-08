@@ -9,7 +9,7 @@ builder.Services.AddServerSideBlazor();
 // Configurazione API endpoint
 builder.Services.AddScoped(sp => new HttpClient 
 { 
-    BaseAddress = new Uri(builder.Configuration["Morgana:BaseUrl"]!) 
+    BaseAddress = new Uri(builder.Configuration["Morgana:BaseUrl"]!)  //Morgana
 });
 
 // SignalR client service
@@ -31,4 +31,4 @@ app.UseRouting();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 
-app.Run();
+await app.RunAsync();

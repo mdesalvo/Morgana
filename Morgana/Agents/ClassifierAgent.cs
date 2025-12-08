@@ -7,12 +7,12 @@ using Microsoft.Extensions.AI;
 
 namespace Morgana.Agents;
 
-public class ClassifierAgent : ReceiveActor
+public class ClassifierAgent : MorganaAgent
 {
     private readonly AIAgent aiAgent;
     private readonly ILogger<ClassifierAgent> logger;
 
-    public ClassifierAgent(ILLMService llmService, ILogger<ClassifierAgent> logger)
+    public ClassifierAgent(string conversationId, string userId, ILLMService llmService, ILogger<ClassifierAgent> logger) : base(conversationId, userId)
     {
         this.logger = logger;
 
@@ -46,12 +46,9 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
 
             AgentRunResponse response = await aiAgent.RunAsync(prompt);
             string jsonText = response.Text?.Trim() ?? "{}";
-
-            // Rimuovi eventuali markdown fence
             jsonText = jsonText.Replace("```json", "").Replace("```", "").Trim();
 
             ClassificationResponse? result = JsonSerializer.Deserialize<ClassificationResponse>(jsonText);
-
             ClassificationResult classification = new ClassificationResult(
                 result?.Category ?? "informative",
                 result?.Intent ?? "service_info",

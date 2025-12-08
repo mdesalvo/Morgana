@@ -20,10 +20,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
     {
-        policy.WithOrigins("https://localhost:5002", "http://localhost:5003")
+        policy.WithOrigins("https://localhost:5002", "http://localhost:5003") //Morgana.Web
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials(); // Importante per SignalR!
+              .AllowCredentials();
     });
 });
 
@@ -42,7 +42,7 @@ builder.Services.AddSingleton(sp =>
     DependencyResolverSetup di = DependencyResolverSetup.Create(sp);
     ActorSystemSetup actorSystemSetup = bootstrap.And(di);
     
-    ActorSystem actorSystem = ActorSystem.Create("MorganaSystem", actorSystemSetup);
+    ActorSystem actorSystem = ActorSystem.Create("Morgana", actorSystemSetup);
     return actorSystem;
 });
 
@@ -60,26 +60,4 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ConversationHub>("/conversationHub"); // SignalR Hub
 
-app.Run();
-
-// Hosted Service per gestire lifecycle Akka.NET
-public class AkkaHostedService : IHostedService
-{
-    private readonly ActorSystem _actorSystem;
-    
-    public AkkaHostedService(ActorSystem actorSystem)
-    {
-        _actorSystem = actorSystem;
-    }
-    
-    public Task StartAsync(CancellationToken cancellationToken)
-    {
-        // Actor system già inizializzato nel DI container
-        return Task.CompletedTask;
-    }
-    
-    public async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await _actorSystem.Terminate();
-    }
-}
+await app.RunAsync();

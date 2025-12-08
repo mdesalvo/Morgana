@@ -27,7 +27,8 @@ public class MorganaSignalRService : IAsyncDisposable
         
         _hubConnection = new HubConnectionBuilder()
             .WithUrl($"{apiBaseUrl}/conversationHub")
-            .WithAutomaticReconnect([
+            .WithAutomaticReconnect(
+            [
                 TimeSpan.Zero, 
                 TimeSpan.FromSeconds(2), 
                 TimeSpan.FromSeconds(5), 

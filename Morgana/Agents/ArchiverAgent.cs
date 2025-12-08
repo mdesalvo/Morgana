@@ -5,14 +5,14 @@ using Morgana.Models;
 
 namespace Morgana.Agents;
 
-public class ArchiverAgent : ReceiveActor
+public class ArchiverAgent : MorganaAgent
 {
-    private readonly IStorageService _storageService;
+    private readonly IStorageService storageService;
     private readonly ILogger<ArchiverAgent> logger;
 
-    public ArchiverAgent(IStorageService storageService, ILogger<ArchiverAgent> logger)
+    public ArchiverAgent(string conversationId, string userId, IStorageService storageService, ILogger<ArchiverAgent> logger) : base(conversationId, userId)
     {
-        _storageService = storageService;
+        this.storageService = storageService;
         this.logger = logger;
 
         ReceiveAsync<ArchiveRequest>(ArchiveConversationAsync);
@@ -34,7 +34,7 @@ public class ArchiverAgent : ReceiveActor
             Intent = req.Classification.Intent
         };
 
-        await _storageService.SaveConversationAsync(entry);
+        await storageService.SaveConversationAsync(entry);
         logger.LogInformation($"Archived conversation for session {req.SessionId}");
     }
 }

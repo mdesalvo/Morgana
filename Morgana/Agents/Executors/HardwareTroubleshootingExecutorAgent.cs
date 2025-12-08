@@ -6,12 +6,13 @@ using Microsoft.Agents.AI;
 
 namespace Morgana.Agents.Executors;
 
-public class HardwareTroubleshootingExecutorAgent : ReceiveActor
+public class HardwareTroubleshootingExecutorAgent : MorganaAgent
 {
     private readonly AIAgent aiAgent;
     private readonly ILogger<HardwareTroubleshootingExecutorAgent> logger;
 
-    public HardwareTroubleshootingExecutorAgent(ILLMService llmService, ILogger<HardwareTroubleshootingExecutorAgent> logger)
+    public HardwareTroubleshootingExecutorAgent(string conversationId, string userId, ILLMService llmService,
+        ILogger<HardwareTroubleshootingExecutorAgent> logger) : base(conversationId, userId)
     {
         this.logger = logger;
 
