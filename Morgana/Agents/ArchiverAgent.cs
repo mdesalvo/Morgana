@@ -15,11 +15,13 @@ public class ArchiverAgent : ReceiveActor
         _storageService = storageService;
         this.logger = logger;
 
-        ReceiveAsync<ArchiveRequest>(ArchiveConversation);
+        ReceiveAsync<ArchiveRequest>(ArchiveConversationAsync);
     }
 
-    private async Task ArchiveConversation(ArchiveRequest req)
+    private async Task ArchiveConversationAsync(ArchiveRequest req)
     {
+        IActorRef originalSender = Sender;
+
         ConversationEntry entry = new ConversationEntry
         {
             PartitionKey = req.SessionId,

@@ -6,6 +6,8 @@ namespace Morgana.Agents;
 
 public class ConversationSupervisorAgent : ReceiveActor
 {
+    private readonly string conversationId;
+    private readonly string userId;
     private readonly IActorRef classifierAgent;
     private readonly IActorRef informativeAgent;
     private readonly IActorRef dispositiveAgent;
@@ -13,28 +15,31 @@ public class ConversationSupervisorAgent : ReceiveActor
     private readonly IActorRef archiverAgent;
     private readonly ILogger<ConversationSupervisorAgent> logger;
 
-    public ConversationSupervisorAgent(ILogger<ConversationSupervisorAgent> logger)
+    public ConversationSupervisorAgent(
+        string conversationId, 
+        string userId,
+        ILogger<ConversationSupervisorAgent> logger)
     {
+        this.conversationId = conversationId;
+        this.userId = userId;
         this.logger = logger;
 
         DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
-        classifierAgent = Context.ActorOf(dependencyResolver.Props<ClassifierAgent>(), "classifier");
-        informativeAgent = Context.ActorOf(dependencyResolver.Props<InformativeAgent>(), "informative");
-        dispositiveAgent = Context.ActorOf(dependencyResolver.Props<DispositiveAgent>(), "dispositive");
-        guardAgent = Context.ActorOf(dependencyResolver.Props<GuardAgent>(), "guard");
-        archiverAgent = Context.ActorOf(dependencyResolver.Props<ArchiverAgent>(), "archiver");
+        classifierAgent = Context.ActorOf(dependencyResolver.Props<ClassifierAgent>());
+        informativeAgent = Context.ActorOf(dependencyResolver.Props<InformativeAgent>());
+        dispositiveAgent = Context.ActorOf(dependencyResolver.Props<DispositiveAgent>());
+        guardAgent = Context.ActorOf(dependencyResolver.Props<GuardAgent>());
+        archiverAgent = Context.ActorOf(dependencyResolver.Props<ArchiverAgent>());
 
-        ReceiveAsync<UserMessage>(HandleUserMessage);
-        
+        ReceiveAsync<UserMessage>(HandleUserMessageAsync);
     }
 
-    private async Task HandleUserMessage(UserMessage msg)
+    private async Task HandleUserMessageAsync(UserMessage msg)
     {
-        IActorRef? originalSender = Sender;
+        IActorRef originalSender = Sender;
 
         try
         {
-            // 1. Guard check
             GuardCheckResponse? guardCheckResponse = await guardAgent.Ask<GuardCheckResponse>(
                 new GuardCheckRequest(msg.UserId, msg.Text), TimeSpan.FromSeconds(5));
             if (!guardCheckResponse.IsCompliant)

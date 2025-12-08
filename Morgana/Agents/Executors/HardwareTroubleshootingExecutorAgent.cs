@@ -18,17 +18,17 @@ public class HardwareTroubleshootingExecutorAgent : ReceiveActor
         AgentExecutorAdapter adapter = new AgentExecutorAdapter(llmService.GetChatClient());
         aiAgent = adapter.CreateTroubleshootingAgent();
 
-        ReceiveAsync<ExecuteRequest>(ExecuteTroubleshooting);
+        ReceiveAsync<ExecuteRequest>(ExecuteTroubleshootingAsync);
     }
 
-    private async Task ExecuteTroubleshooting(ExecuteRequest req)
+    private async Task ExecuteTroubleshootingAsync(ExecuteRequest req)
     {
+        IActorRef originalSender = Sender;
+
         try
         {
             logger.LogInformation($"Executing troubleshooting for user {req.UserId}");
 
-            //TODO: support storing threads based on req.sessionId
-            //      and check if it is new (GetNewThread) or not (DeserialazesThread)
             AgentThread thread = aiAgent.GetNewThread();
             AgentRunResponse response = await aiAgent.RunAsync(req.Content, thread: thread);
 

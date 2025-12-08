@@ -24,11 +24,13 @@ public class ClassifierAgent : ReceiveActor
                 Rispondi SOLO in formato JSON valido senza preamble.",
             name: "ClassifierAgent");
 
-        ReceiveAsync<UserMessage>(ClassifyMessage);
+        ReceiveAsync<UserMessage>(ClassifyMessageAsync);
     }
 
-    private async Task ClassifyMessage(UserMessage msg)
+    private async Task ClassifyMessageAsync(UserMessage msg)
     {
+        IActorRef originalSender = Sender;
+
         try
         {
             string prompt = $@"Classifica questa richiesta cliente:
@@ -59,7 +61,7 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
                     ["intent"] = result?.Intent ?? "service_info"
                 });
 
-            Sender.Tell(classification);
+            originalSender.Tell(classification);
         }
         catch (Exception ex)
         {
@@ -71,7 +73,7 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
                 "service_info",
                 new Dictionary<string, string> { ["confidence"] = "0.00", ["error"] = "classification_failed" });
 
-            Sender.Tell(fallback);
+            originalSender.Tell(fallback);
         }
     }
 }

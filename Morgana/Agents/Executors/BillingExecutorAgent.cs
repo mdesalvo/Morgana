@@ -18,26 +18,26 @@ public class BillingExecutorAgent : ReceiveActor
         AgentExecutorAdapter adapter = new AgentExecutorAdapter(llmService.GetChatClient());
         aiAgent = adapter.CreateBillingAgent(storageService);
 
-        ReceiveAsync<ExecuteRequest>(ExecuteBilling);
+        ReceiveAsync<ExecuteRequest>(ExecuteBillingAsync);
     }
 
-    private async Task ExecuteBilling(ExecuteRequest req)
+    private async Task ExecuteBillingAsync(ExecuteRequest req)
     {
+        IActorRef originalSender = Sender;
+
         try
         {
             logger.LogInformation($"Executing billing request for user {req.UserId}");
 
-            //TODO: support storing threads based on req.sessionId
-            //      and check if it is new (GetNewThread) or not (DeserialazesThread)
             AgentThread thread = aiAgent.GetNewThread();
             AgentRunResponse response = await aiAgent.RunAsync(req.Content, thread: thread);
 
-            Sender.Tell(new ExecuteResponse(response.Text ?? "Operazione completata."));
+            originalSender.Tell(new ExecuteResponse(response.Text ?? "Operazione completata."));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error executing billing agent");
-            Sender.Tell(new ExecuteResponse("Si è verificato un errore. La preghiamo di riprovare."));
+            originalSender.Tell(new ExecuteResponse("Si è verificato un errore. La preghiamo di riprovare."));
         }
     }
 }

@@ -14,11 +14,13 @@ public class DispositiveAgent : ReceiveActor
         DependencyResolver? resolver = DependencyResolver.For(Context.System);
         _executors["contract_cancellation"] = Context.ActorOf(resolver.Props<ContractCancellationExecutorAgent>(), "cancellation-executor");
 
-        ReceiveAsync<ExecuteRequest>(RouteToExecutor);
+        ReceiveAsync<ExecuteRequest>(RouteToExecutorAsync);
     }
 
-    private async Task RouteToExecutor(ExecuteRequest req)
+    private async Task RouteToExecutorAsync(ExecuteRequest req)
     {
+        IActorRef originalSender = Sender;
+
         string intent = req.Classification.Intent;
         IActorRef? executorAgent = _executors.ContainsKey(intent)
             ? _executors[intent]
@@ -31,6 +33,6 @@ public class DispositiveAgent : ReceiveActor
         }
 
         ExecuteResponse? response = await executorAgent.Ask<ExecuteResponse>(req, TimeSpan.FromSeconds(15));
-        Sender.Tell(response);
+        originalSender.Tell(response);
     }
 }

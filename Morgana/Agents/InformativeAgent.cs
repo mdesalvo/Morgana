@@ -15,11 +15,13 @@ public class InformativeAgent : ReceiveActor
         _executors["billing_retrieval"] = Context.ActorOf(dependencyResolver.Props<BillingExecutorAgent>(), "billing-executor");
         _executors["hardware_troubleshooting"] = Context.ActorOf(dependencyResolver.Props<HardwareTroubleshootingExecutorAgent>(), "hardware-executor");
 
-        ReceiveAsync<ExecuteRequest>(RouteToExecutor);
+        ReceiveAsync<ExecuteRequest>(RouteToExecutorAsync);
     }
 
-    private async Task RouteToExecutor(ExecuteRequest req)
+    private async Task RouteToExecutorAsync(ExecuteRequest req)
     {
+        IActorRef originalSender = Sender;
+
         string intent = req.Classification.Intent;
         IActorRef? executorAgent = _executors.ContainsKey(intent)
             ? _executors[intent]
@@ -32,6 +34,6 @@ public class InformativeAgent : ReceiveActor
         }
 
         ExecuteResponse? response = await executorAgent.Ask<ExecuteResponse>(req, TimeSpan.FromSeconds(15));
-        Sender.Tell(response);
+        originalSender.Tell(response);
     }
 }

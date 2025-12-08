@@ -18,26 +18,26 @@ public class ContractCancellationExecutorAgent : ReceiveActor
         AgentExecutorAdapter adapter = new AgentExecutorAdapter(llmService.GetChatClient());
         aiAgent = adapter.CreateContractAgent(storageService);
 
-        ReceiveAsync<ExecuteRequest>(ExecuteCancellation);
+        ReceiveAsync<ExecuteRequest>(ExecuteCancellationAsync);
     }
 
-    private async Task ExecuteCancellation(ExecuteRequest req)
+    private async Task ExecuteCancellationAsync(ExecuteRequest req)
     {
+        IActorRef originalSender = Sender;
+
         try
         {
             logger.LogInformation($"Executing contract operation for user {req.UserId}");
 
-            //TODO: support storing threads based on req.sessionId
-            //      and check if it is new (GetNewThread) or not (DeserialazesThread)
             AgentThread thread = aiAgent.GetNewThread();
             AgentRunResponse response = await aiAgent.RunAsync(req.Content, thread: thread);
 
-            Sender.Tell(new ExecuteResponse(response.Text ?? "Operazione contrattuale completata."));
+            originalSender.Tell(new ExecuteResponse(response.Text ?? "Operazione contrattuale completata."));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error executing contract agent");
-            Sender.Tell(new ExecuteResponse("Errore nell'operazione. Contatti l'ufficio contratti."));
+            originalSender.Tell(new ExecuteResponse("Errore nell'operazione. Contatti l'ufficio contratti."));
         }
     }
 }

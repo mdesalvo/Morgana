@@ -25,41 +25,43 @@ public class ConversationManagerAgent : ReceiveActor, IWithTimers
         this.userId = userId;
         this.signalRBridge = signalRBridge;
         
-        ReceiveAsync<UserMessage>(HandleUserMessage);
-        ReceiveAsync<ConversationTimeout>(HandleTimeout);
-        ReceiveAsync<CreateConversation>(HandleCreateConversation);
-        ReceiveAsync<TerminateConversation>(HandleTerminateConversation);
+        ReceiveAsync<UserMessage>(HandleUserMessageAsync);
+        ReceiveAsync<ConversationTimeout>(HandleTimeoutAsync);
+        ReceiveAsync<CreateConversation>(HandleCreateConversationAsync);
+        ReceiveAsync<TerminateConversation>(HandleTerminateConversationAsync);
 
         // Timer per timeout conversazione
         Timers.StartSingleTimer("timeout", new ConversationTimeout(), TimeSpan.FromMinutes(15));
     }
 
-    private Task HandleCreateConversation(CreateConversation msg)
+    private Task HandleCreateConversationAsync(CreateConversation msg)
     {
+        IActorRef originalSender = Sender;
+
         logger.Info($"Creating conversation {msg.ConversationId} for user {msg.UserId}");
         
         Props? props = DependencyResolver.For(Context.System)
                                          .Props<ConversationManagerAgent>(msg.ConversationId, msg.UserId);
 
-        IActorRef? manager = Context.ActorOf(props/*, $"conversation-{msg.ConversationId}"*/);
+        IActorRef? manager = Context.ActorOf(props);
 
         Context.Watch(manager);
 
         logger.Info($"Created conversation: {manager.Path}");
         
-        Sender.Tell(new ConversationCreated(msg.ConversationId, msg.UserId));
+        originalSender.Tell(new ConversationCreated(msg.ConversationId, msg.UserId));
 
         return Task.CompletedTask;
     }
 
-    private Task HandleTerminateConversation(TerminateConversation msg)
+    private Task HandleTerminateConversationAsync(TerminateConversation msg)
     {
         logger.Info($"Terminating conversation {msg.ConversationId} for user {msg.UserId}");
         
         Props? props = DependencyResolver.For(Context.System)
                                          .Props<ConversationManagerAgent>(msg.ConversationId, msg.UserId);
         
-        IActorRef? manager = Context.ActorOf(props/*, $"conversation-{msg.ConversationId}"*/);
+        IActorRef? manager = Context.ActorOf(props);
 
         Context.Stop(manager);
 
@@ -68,46 +70,23 @@ public class ConversationManagerAgent : ReceiveActor, IWithTimers
         return Task.CompletedTask;
     }
 
-    private Task HandleUserMessage(UserMessage msg)
+    private async Task HandleUserMessageAsync(UserMessage msg)
     {
         logger.Info($"Received message in conversation {conversationId} from user {userId}: {msg.Text}");
 
         Timers.StartSingleTimer("timeout", new ConversationTimeout(), TimeSpan.FromMinutes(15));
 
-        // TODO: Qui dovrebbe partire il flusso con Supervisor, Guardiano, Classificatore, ecc.
-        // Per ora risposta di test immediata
-        string response = ProcessMessage(msg);
+        Props? props = DependencyResolver.For(Context.System)
+                                         .Props<ConversationSupervisorAgent>(msg.ConversationId, msg.UserId);
         
-        signalRBridge.SendMessageToConversationAsync(conversationId, userId, response);
+        IActorRef? supervisorAgent = Context.ActorOf(props);
 
-        return Task.CompletedTask;
+        ConversationResponse conversationResponse = await supervisorAgent.Ask<ConversationResponse>(msg);
+
+        _ = signalRBridge.SendMessageToConversationAsync(conversationId, userId, conversationResponse.Response);
     }
 
-    [Description("Temporary mock for core of HandleUserMessage!!")]
-    private string ProcessMessage(UserMessage msg)
-    {
-        // GUARDIA SEMPLIFICATA per test
-        string lowerText = msg.Text.ToLower();
-        
-        if (lowerText.Contains("stupido") || lowerText.Contains("idiota") || lowerText.Contains("cretino"))
-        {
-            return "Ti prego di mantenere un tono cortese. Sono qui per aiutarti! 😊";
-        }
-        
-        // Risposta mock per test
-        string[] responses = new[]
-        {
-            $"Ho ricevuto il tuo messaggio: {msg.ConversationId}-{msg.UserId}:{msg.Text}. Come posso aiutarti?",
-            "Interessante! Dimmi di più.",
-            "Capisco. Vuoi che approfondisca questo argomento?",
-            "Sono qui per supportarti. Di cosa hai bisogno?",
-            "Ottima domanda! Ecco cosa posso dirti...",
-        };
-        
-        return responses[new Random().Next(responses.Length)];
-    }
-
-    private Task HandleTimeout(ConversationTimeout msg)
+    private Task HandleTimeoutAsync(ConversationTimeout msg)
     {
         logger.Info($"Conversation {conversationId} for user {userId} timed out");
         Context.Parent.Tell(new TerminateConversation(conversationId, userId));
