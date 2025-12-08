@@ -25,6 +25,7 @@ public class ConversationSupervisorAgent : ReceiveActor
         archiverAgent = Context.ActorOf(dependencyResolver.Props<ArchiverAgent>(), "archiver");
 
         ReceiveAsync<UserMessage>(HandleUserMessage);
+        
     }
 
     private async Task HandleUserMessage(UserMessage msg)
@@ -56,19 +57,17 @@ public class ConversationSupervisorAgent : ReceiveActor
                 "dispositive" => dispositiveAgent,
                 _ => informativeAgent
             };
-
-            ExecuteRequest executeRequest = new ExecuteRequest(msg.UserId, msg.ConversationId, msg.Text, classificationResult);
-            ExecuteResponse? executeResponse = await executorAgent.Ask<ExecuteResponse>(executeRequest, TimeSpan.FromSeconds(20));
+            ExecuteResponse? executeResponse = await executorAgent.Ask<ExecuteResponse>(
+                new ExecuteRequest(msg.UserId, msg.ConversationId, msg.Text, classificationResult), TimeSpan.FromSeconds(20));
 
             // 4. Archive conversation
             archiverAgent.Tell(new ArchiveRequest(msg.UserId, msg.ConversationId, msg.Text, executeResponse.Response, classificationResult));
 
             // 5. Return response
-            ConversationResponse conversationResponse = new ConversationResponse(
+            originalSender.Tell(new ConversationResponse(
                 executeResponse.Response,
                 classificationResult.Category,
-                classificationResult.Metadata);
-            originalSender.Tell(conversationResponse);
+                classificationResult.Metadata));
         }
         catch (Exception ex)
         {

@@ -4,7 +4,8 @@ using Microsoft.AspNetCore.SignalR;
 using Morgana.Hubs;
 using Morgana.Messages;
 using Morgana.Interfaces;
-using System.Collections.Concurrent;
+using Akka.DependencyInjection;
+using Morgana.Agents;
 
 namespace Morgana.Controllers;
 
@@ -12,13 +13,10 @@ namespace Morgana.Controllers;
 [Route("api/[controller]")]
 public class ConversationController : ControllerBase
 {
-    private readonly ActorSystem _actorSystem;
-    private readonly ILogger<ConversationController> _logger;
-    private readonly IHubContext<ConversationHub> _hubContext;
-    private readonly IStorageService _storageService;
-    
-    // Cache locale dei supervisor refs
-    private static readonly ConcurrentDictionary<string, IActorRef> _supervisors = new();
+    private readonly ActorSystem actorSystem;
+    private readonly ILogger<ConversationController> logger;
+    private readonly IHubContext<ConversationHub> hubContext;
+    private readonly IStorageService storageService;
     
     public ConversationController(
         ActorSystem actorSystem,
@@ -26,10 +24,10 @@ public class ConversationController : ControllerBase
         IHubContext<ConversationHub> hubContext,
         IStorageService storageService)
     {
-        _actorSystem = actorSystem;
-        _logger = logger;
-        _hubContext = hubContext;
-        _storageService = storageService;
+        this.actorSystem = actorSystem;
+        this.logger = logger;
+        this.hubContext = hubContext;
+        this.storageService = storageService;
     }
     
     [HttpPost("start")]
@@ -37,100 +35,86 @@ public class ConversationController : ControllerBase
     {
         try
         {
-            string conversationId = Guid.NewGuid().ToString();
+            logger.LogInformation($"Starting conversation {request.ConversationId} for user {request.UserId}");
+
+            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(
+                request.ConversationId, request.UserId);
+            IActorRef manager = actorSystem.ActorOf(managerProps/*, $"manager-{request.ConversationId}"*/);
             
-            // Get o crea supervisor
-            IActorRef supervisor = _supervisors.GetOrAdd(
-                "main-supervisor",
-                _ => _actorSystem.ActorSelection("/user/supervisor")
-                    .ResolveOne(TimeSpan.FromSeconds(5)).Result
-            );
+            ConversationCreated? conversationCreated = await manager.Ask<ConversationCreated>(
+                new CreateConversation(request.ConversationId, request.UserId), TimeSpan.FromSeconds(10));
             
-            // Crea conversation
-            ConversationCreated? response = await supervisor.Ask<ConversationCreated>(
-                new CreateConversation(conversationId, request.UserId),
-                TimeSpan.FromSeconds(10)
-            );
-            
-            _logger.LogInformation($"Started conversation {conversationId} for user {request.UserId}");
+            logger.LogInformation($"Started conversation {conversationCreated.ConversationId} for user {conversationCreated.UserId}");
             
             return Ok(new
             {
-                conversationId = response.ConversationId,
+                conversationId = conversationCreated.ConversationId,
+                userId = conversationCreated.UserId,
                 message = "Conversation started successfully"
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to start conversation");
+            logger.LogError(ex, "Failed to start conversation");
             return StatusCode(500, new { error = ex.Message });
         }
     }
-    
-    [HttpPost("{conversationId}/message")]
-    public async Task<IActionResult> SendMessage(string conversationId, [FromBody] SendMessageRequest request)
+
+    [HttpPost("{conversationId}/end")]
+    public async Task<IActionResult> EndConversation(string conversationId, string userId)
     {
         try
         {
-            if (!_supervisors.ContainsKey("main-supervisor"))
-            {
-                return BadRequest(new { error = "No active supervisor" });
-            }
+            logger.LogInformation($"Ending conversation {conversationId} for user {userId}");
 
-            IActorRef supervisor = _supervisors["main-supervisor"];
+            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(
+                conversationId, userId);
+            IActorRef manager = actorSystem.ActorOf(managerProps/*, $"manager-{conversationId}"*/);
+
+            manager.Tell(new TerminateConversation(conversationId, userId));
+
+            logger.LogInformation($"Ended conversation {conversationId} for user {userId}");
+
+            return Ok(new { message = "Conversation ended" });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, $"Failed to end conversation {conversationId}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("{conversationId}/message")]
+    public async Task<IActionResult> SendMessage([FromBody] SendMessageRequest request)
+    {
+        try
+        {
+            logger.LogInformation($"Sending message conversation {request.ConversationId} to user {request.UserId}");
+
+            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(
+                request.ConversationId, request.UserId);
+            IActorRef manager = actorSystem.ActorOf(managerProps/*, $"manager-{request.ConversationId}"*/);
             
-            // Invia messaggio all'actor system
-            UserMessage userMessage = new UserMessage(
-                conversationId,
+            manager.Tell(new UserMessage(
+                request.ConversationId,
                 request.UserId,
                 request.Text,
                 DateTime.UtcNow
-            );
+            ));
             
-            // Ottieni conversation manager
-            ActorSelection? conversationManager = _actorSystem.ActorSelection(
-                $"/user/supervisor/conversation-{conversationId}"
-            );
-            
-            // Invia messaggio (fire and forget, risposta via SignalR)
-            conversationManager.Tell(userMessage);
-            
-            _logger.LogInformation($"Message sent to conversation {conversationId}");
+            logger.LogInformation($"Message sent to conversation {request.ConversationId} to user {request.UserId}");
             
             return Accepted(new
             {
-                conversationId,
+                conversationId = request.ConversationId,
+                userId = request.UserId,
                 message = "Message processing started",
                 note = "Response will be sent via SignalR"
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Failed to send message to conversation {conversationId}");
-            return StatusCode(500, new { error = ex.Message });
-        }
-    }
-    
-    [HttpPost("{conversationId}/end")]
-    public IActionResult EndConversation(string conversationId)
-    {
-        try
-        {
-            if (!_supervisors.ContainsKey("main-supervisor"))
-            {
-                return BadRequest(new { error = "No active supervisor" });
-            }
-
-            IActorRef supervisor = _supervisors["main-supervisor"];
-            supervisor.Tell(new TerminateConversation(conversationId));
-            
-            _logger.LogInformation($"Ended conversation {conversationId}");
-            
-            return Ok(new { message = "Conversation ended" });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Failed to end conversation {conversationId}");
+            logger.LogError(ex, $"Failed to send message to conversation {request.ConversationId} to user {request.UserId}");
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -142,7 +126,7 @@ public class ConversationController : ControllerBase
         { 
             status = "healthy",
             timestamp = DateTime.UtcNow,
-            actorSystem = _actorSystem.WhenTerminated.IsCompleted ? "terminated" : "running"
+            actorSystem = actorSystem.WhenTerminated.IsCompleted ? "terminated" : "running"
         });
     }
 }

@@ -11,18 +11,18 @@ public class ConversationHub : Hub
         _logger = logger;
     }
     
-    public async Task JoinConversation(string conversationId)
+    public async Task JoinConversation(string conversationId, string userId)
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, conversationId);
-        _logger.LogInformation(
-            $"Client {Context.ConnectionId} joined conversation {conversationId}");
+
+        _logger.LogInformation($"Client {Context.ConnectionId} joined conversation {conversationId} as user {userId}");
     }
     
-    public async Task LeaveConversation(string conversationId)
+    public async Task LeaveConversation(string conversationId, string userId)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId);
-        _logger.LogInformation(
-            $"Client {Context.ConnectionId} left conversation {conversationId}");
+
+        _logger.LogInformation($"Client {Context.ConnectionId} left conversation {conversationId} as user {userId}");
     }
     
     public override async Task OnConnectedAsync()

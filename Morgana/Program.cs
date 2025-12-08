@@ -27,14 +27,13 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Azure AI Services
-builder.Services.AddSingleton<ILLMService, AzureOpenAIService>();
-
-// Storage Services
-builder.Services.AddSingleton<IStorageService, AzureStorageService>();
-
 // Application Insights
 builder.Services.AddApplicationInsightsTelemetry();
+
+// Services
+builder.Services.AddSingleton<ILLMService, AzureOpenAIService>();
+builder.Services.AddSingleton<IStorageService, AzureStorageService>();
+builder.Services.AddSingleton<ISignalRBridgeService, SignalRBridgeService>();
 
 // Akka.NET Actor System
 builder.Services.AddSingleton(sp =>
@@ -44,11 +43,6 @@ builder.Services.AddSingleton(sp =>
     ActorSystemSetup actorSystemSetup = bootstrap.And(di);
     
     ActorSystem actorSystem = ActorSystem.Create("MorganaSystem", actorSystemSetup);
-    
-    // Crea il supervisor root
-    Props supervisorProps = DependencyResolver.For(actorSystem).Props<ConversationSupervisorAgent>();
-    IActorRef supervisor = actorSystem.ActorOf(supervisorProps, "supervisor");
-    
     return actorSystem;
 });
 

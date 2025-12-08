@@ -1,6 +1,5 @@
 @page "/"
-@using Microsoft.AspNetCore.Components.Web
-@using Microsoft.AspNetCore.SignalR.Client
+@using Morgana.Web.Messages
 @using Morgana.Web.Services
 @inject MorganaSignalRService SignalRService
 @inject HttpClient Http
@@ -24,7 +23,14 @@
 
     <!-- Messages Area -->
     <div class="messages-container" @ref="messagesContainer">
-        @if (messages.Count == 0)
+        @if (!isInitialized)
+        {
+            <div class="welcome-message">
+                <div class="spinner"></div>
+                <p>Inizializzazione in corso...</p>
+            </div>
+        }
+        else if (messages.Count == 0)
         {
             <div class="welcome-message">
                 <img src="images/morgana-avatar.png" alt="Morgana" class="welcome-avatar" />
@@ -69,12 +75,12 @@
             @onkeydown="HandleKeyPress"
             placeholder="Scrivi un messaggio..."
             rows="1"
-            disabled="@(!isConnected || isSending)"
+            disabled="@(!isConnected || isSending || !isInitialized)"
             class="message-input"
         ></textarea>
         <button 
             @onclick="SendMessage" 
-            disabled="@(!isConnected || isSending || string.IsNullOrWhiteSpace(inputText))"
+            disabled="@(!isConnected || isSending || string.IsNullOrWhiteSpace(inputText) || !isInitialized)"
             class="send-button">
             @if (isSending)
             {
@@ -86,6 +92,13 @@
             }
         </button>
     </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-banner">
+            ⚠️ @errorMessage
+        </div>
+    }
 </div>
 
 @code {
@@ -93,57 +106,108 @@
     private List<ChatMessage> messages = new();
     private string inputText = string.Empty;
     private string conversationId = string.Empty;
+    private string userId = string.Empty;
     private bool isConnected = false;
     private bool isSending = false;
+    private bool isInitialized = false;
+    private string errorMessage = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
-        await SignalRService.StartAsync();
-        isConnected = SignalRService.IsConnected;
-
-        SignalRService.OnMessageReceived += HandleMessageReceived;
-        SignalRService.OnConnectionStateChanged += (connected) =>
+        try
         {
-            isConnected = connected;
-            StateHasChanged();
-        };
+            Console.WriteLine("🔵 OnInitializedAsync: Starting...");
 
-        await StartConversation();
+            await SignalRService.StartAsync();
+            isConnected = SignalRService.IsConnected;
+            Console.WriteLine($"🔵 SignalR connected: {isConnected}");
+
+            SignalRService.OnMessageReceived += HandleMessageReceived;
+            SignalRService.OnConnectionStateChanged += (connected) =>
+            {
+                isConnected = connected;
+                Console.WriteLine($"🔵 Connection state changed: {connected}");
+                InvokeAsync(StateHasChanged);
+            };
+
+            await StartConversation();
+            isInitialized = true;
+            errorMessage = string.Empty;
+            Console.WriteLine($"🔵 Initialized with conversationId: {conversationId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Initialization error: {ex.Message}");
+            errorMessage = $"Errore di inizializzazione: {ex.Message}";
+        }
+        finally
+        {
+            StateHasChanged();
+        }
     }
 
     private async Task StartConversation()
     {
         try
         {
+            Console.WriteLine("🟢 StartConversation: Calling Morgana...");
+
             HttpResponseMessage response = await Http.PostAsJsonAsync("/api/conversation/start", new
             {
-                userId = "user-" + Guid.NewGuid().ToString("N")[..8]
+                conversationId = Guid.NewGuid().ToString("N"),
+                userId = "User" //TODO: from config
             });
+
+            Console.WriteLine($"🟢 Morgana Response Status: {response.StatusCode}");
 
             if (response.IsSuccessStatusCode)
             {
                 ConversationStartResponse? result = await response.Content.ReadFromJsonAsync<ConversationStartResponse>();
                 conversationId = result?.ConversationId ?? string.Empty;
-                await SignalRService.JoinConversation(conversationId);
+                userId = result?.UserId ?? string.Empty;
+
+                Console.WriteLine($"🟢 ConversationId received: {conversationId}");
+
+                if (string.IsNullOrEmpty(conversationId))
+                    throw new Exception("ConversationId is empty!");
+
+                await SignalRService.JoinConversation(conversationId, userId);
+
+                Console.WriteLine($"🟢 Joined SignalR group: {conversationId}");
+            }
+            else
+            {
+                string errorContent = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Morgana error: {response.StatusCode} - {errorContent}");
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error starting conversation: {ex.Message}");
+            errorMessage = $"Impossibile avviare la conversazione: {ex.Message}";
+            StateHasChanged();
         }
     }
 
     private async Task SendMessage()
     {
         if (string.IsNullOrWhiteSpace(inputText) || isSending || string.IsNullOrEmpty(conversationId))
+        {
+            Console.WriteLine($"❌ SendMessage blocked: inputText={inputText}, isSending={isSending}, conversationId={conversationId}");
             return;
+        }
 
         string messageText = inputText.Trim();
         inputText = string.Empty;
+        errorMessage = string.Empty;
         isSending = true;
+
+        Console.WriteLine($"🟡 Sending message: '{messageText}' to conversation: {conversationId}");
 
         messages.Add(new ChatMessage
         {
+            ConversationId = conversationId,
+            UserId = userId,
             Text = messageText,
             Role = "user",
             Timestamp = DateTime.Now
@@ -151,6 +215,8 @@
 
         messages.Add(new ChatMessage
         {
+            ConversationId = conversationId,
+            UserId = userId,
             Role = "assistant",
             IsTyping = true,
             Timestamp = DateTime.Now
@@ -162,39 +228,56 @@
         {
             HttpResponseMessage response = await Http.PostAsJsonAsync($"/api/conversation/{conversationId}/message", new
             {
-                userId = "user",
+                conversationId = conversationId,
+                userId = userId,
                 text = messageText
             });
 
+            Console.WriteLine($"🟡 Message sent, response status: {response.StatusCode}");
+
             if (!response.IsSuccessStatusCode)
             {
+                string errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"❌ Morgana error: {errorContent}");
+                
+                // Remove typing indicator and show error
                 ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
                 if (typingMessage != null)
                 {
                     messages.Remove(typingMessage);
                     messages.Add(new ChatMessage
                     {
+                        ConversationId = conversationId,
+                        UserId = userId,
                         Text = "Mi dispiace, si è verificato un errore. Riprova.",
                         Role = "assistant",
                         Timestamp = DateTime.Now,
                         IsError = true
                     });
                 }
+                
+                errorMessage = $"Errore nell'invio: {response.StatusCode}";
             }
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"❌ SendMessage exception: {ex.Message}");
+
             ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
             if (typingMessage != null)
             {
                 messages.Remove(typingMessage);
                 messages.Add(new ChatMessage
                 {
+                    ConversationId = conversationId,
+                    UserId = userId,
                     Text = $"Errore di connessione: {ex.Message}",
                     Role = "assistant",
                     Timestamp = DateTime.Now,
                     IsError = true
                 });
+
+                errorMessage = $"Errore: {ex.Message}";
             }
         }
         finally
@@ -204,10 +287,15 @@
         }
     }
 
-    private async void HandleMessageReceived(string conversationId, string text, DateTime timestamp)
+    private async void HandleMessageReceived(string conversationId, string userId, string text, DateTime timestamp)
     {
+        Console.WriteLine($"🟣 Message received for conversation: {conversationId}");
+
         if (this.conversationId != conversationId)
+        {
+            Console.WriteLine($"⚠️ Message for different conversation, ignoring");
             return;
+        }
 
         ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
         if (typingMessage != null)
@@ -217,15 +305,14 @@
 
         messages.Add(new ChatMessage
         {
+            ConversationId = conversationId,
+            UserId = userId,
             Text = text,
             Role = "assistant",
             Timestamp = timestamp
         });
 
-        await InvokeAsync(() =>
-        {
-            StateHasChanged();
-        });
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task HandleKeyPress(KeyboardEventArgs e)
@@ -240,20 +327,5 @@
     {
         SignalRService.OnMessageReceived -= HandleMessageReceived;
         await SignalRService.StopAsync();
-    }
-
-    private class ChatMessage
-    {
-        public string Text { get; set; } = string.Empty;
-        public string Role { get; set; } = "user";
-        public DateTime Timestamp { get; set; }
-        public bool IsTyping { get; set; }
-        public bool IsError { get; set; }
-    }
-
-    private class ConversationStartResponse
-    {
-        public string ConversationId { get; set; } = string.Empty;
-        public string Message { get; set; } = string.Empty;
     }
 }

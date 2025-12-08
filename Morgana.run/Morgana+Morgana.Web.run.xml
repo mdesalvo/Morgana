@@ -1,5 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Morgana+Morgana.Web" type="com.intellij.execution.configurations.multilaunch" factoryName="MultiLaunchConfiguration">
+    <option name="activateToolWindows" value="true" />
     <rows>
       <ExecutableRowSnapshot>
         <option name="condition">

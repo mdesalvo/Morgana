@@ -1,3 +1,3 @@
 namespace Morgana.Messages;
 
-public record TerminateConversation(string ConversationId);
+public record TerminateConversation(string ConversationId, string UserId);
