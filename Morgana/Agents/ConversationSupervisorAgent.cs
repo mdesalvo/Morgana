@@ -58,7 +58,7 @@ public class ConversationSupervisorAgent : MorganaAgent
                 new ExecuteRequest(msg.UserId, msg.ConversationId, msg.Text, classificationResult));
 
             // 4. Archive conversation
-            archiverAgent.Tell(new ArchiveRequest(msg.UserId, msg.ConversationId, msg.Text, executeResponse.Response, classificationResult));
+            //archiverAgent.Tell(new ArchiveRequest(msg.UserId, msg.ConversationId, msg.Text, executeResponse.Response, classificationResult));
 
             // 5. Return response
             originalSender.Tell(new ConversationResponse(

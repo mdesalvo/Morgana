@@ -30,8 +30,7 @@ public class ContractCancellationExecutorAgent : MorganaAgent
         {
             logger.LogInformation($"Executing contract operation for user {req.UserId}");
 
-            AgentThread thread = aiAgent.GetNewThread();
-            AgentRunResponse response = await aiAgent.RunAsync(req.Content, thread: thread);
+            AgentRunResponse response = await aiAgent.RunAsync(req.Content);
 
             originalSender.Tell(new ExecuteResponse(response.Text ?? "Operazione contrattuale completata."));
         }

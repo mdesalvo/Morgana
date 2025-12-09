@@ -30,8 +30,7 @@ public class HardwareTroubleshootingExecutorAgent : MorganaAgent
         {
             logger.LogInformation($"Executing troubleshooting for user {req.UserId}");
 
-            AgentThread thread = aiAgent.GetNewThread();
-            AgentRunResponse response = await aiAgent.RunAsync(req.Content, thread: thread);
+            AgentRunResponse response = await aiAgent.RunAsync(req.Content);
 
             Sender.Tell(new ExecuteResponse(response.Text ?? "Diagnostica completata."));
         }
