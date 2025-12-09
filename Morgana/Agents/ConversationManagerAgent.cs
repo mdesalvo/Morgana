@@ -76,7 +76,7 @@ public class ConversationManagerAgent : MorganaAgent, IWithTimers
 
         ConversationResponse conversationResponse = await supervisorAgent.Ask<ConversationResponse>(msg);
 
-        _ = signalRBridge.SendMessageToConversationAsync(conversationId, userId, conversationResponse.Response);
+        await signalRBridge.SendMessageToConversationAsync(conversationId, userId, conversationResponse.Response);
     }
 
     private Task HandleTimeoutAsync(ConversationTimeout msg)
