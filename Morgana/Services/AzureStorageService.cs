@@ -25,7 +25,7 @@ public class AzureStorageService : IStorageService
         await tableClient.CreateIfNotExistsAsync();
         return tableClient;
     }
-    
+
     public async Task SaveConversationAsync(ConversationEntry entry)
     {
         try

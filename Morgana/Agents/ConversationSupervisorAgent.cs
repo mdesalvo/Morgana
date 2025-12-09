@@ -34,7 +34,7 @@ public class ConversationSupervisorAgent : MorganaAgent
         try
         {
             GuardCheckResponse? guardCheckResponse = await guardAgent.Ask<GuardCheckResponse>(new GuardCheckRequest(msg.UserId, msg.Text));
-            if (!guardCheckResponse.IsCompliant)
+            if (!guardCheckResponse.Compliant)
             {
                 ConversationResponse response = new ConversationResponse(
                     $"La prego di mantenere un tono professionale. {guardCheckResponse.Violation}",

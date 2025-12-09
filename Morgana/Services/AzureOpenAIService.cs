@@ -1,5 +1,5 @@
+using Azure;
 using Azure.AI.OpenAI;
-using Azure.Identity;
 using Microsoft.Extensions.AI;
 using Morgana.Interfaces;
 
@@ -14,9 +14,9 @@ public class AzureOpenAIService : ILLMService
     {
         this.configuration = configuration;
 
-        Uri endpoint = new Uri(this.configuration["Azure:OpenAI:Endpoint"]!);
-        AzureCliCredential credential = new AzureCliCredential();
-        AzureOpenAIClient azureClient = new AzureOpenAIClient(endpoint, credential);
+        AzureOpenAIClient azureClient = new AzureOpenAIClient(
+            new Uri(this.configuration["Azure:OpenAI:Endpoint"]!),
+            new AzureKeyCredential(this.configuration["Azure:OpenAI:ApiKey"]!));
         string deploymentName = this.configuration["Azure:OpenAI:DeploymentName"]!;
 
         chatClient = azureClient.GetChatClient(deploymentName).AsIChatClient();
@@ -25,16 +25,7 @@ public class AzureOpenAIService : ILLMService
     public IChatClient GetChatClient() => chatClient;
 
     public async Task<string> CompleteAsync(string prompt)
-    {
-        List<ChatMessage> messages =
-        [
-            new(ChatRole.System, "Sei un assistente utile e professionale."),
-            new(ChatRole.User, prompt)
-        ];
-
-        ChatResponse response = await chatClient.GetResponseAsync(messages);
-        return response.Text;
-    }
+        => await CompleteWithSystemPromptAsync("Sei un assistente utile e professionale.", prompt);
 
     public async Task<string> CompleteWithSystemPromptAsync(string systemPrompt, string userPrompt)
     {

@@ -24,14 +24,14 @@ public class MorganaSignalRService : IAsyncDisposable
             return;
 
         string apiBaseUrl = _configuration["Morgana:BaseUrl"]!;
-        
+
         _hubConnection = new HubConnectionBuilder()
             .WithUrl($"{apiBaseUrl}/conversationHub")
             .WithAutomaticReconnect(
             [
-                TimeSpan.Zero, 
-                TimeSpan.FromSeconds(2), 
-                TimeSpan.FromSeconds(5), 
+                TimeSpan.Zero,
+                TimeSpan.FromSeconds(2),
+                TimeSpan.FromSeconds(5),
                 TimeSpan.FromSeconds(10)
             ])
             .Build();

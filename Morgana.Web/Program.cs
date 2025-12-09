@@ -7,8 +7,8 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
 // Configurazione API endpoint
-builder.Services.AddScoped(sp => new HttpClient 
-{ 
+builder.Services.AddScoped(sp => new HttpClient
+{
     BaseAddress = new Uri(builder.Configuration["Morgana:BaseUrl"]!)  //Morgana
 });
 

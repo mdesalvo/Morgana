@@ -18,7 +18,7 @@ public class SignalRBridgeService : ISignalRBridgeService
     public async Task SendMessageToConversationAsync(string conversationId, string userId, string text, string? errorReason = null)
     {
         _logger.LogInformation($"Sending message to conversation {conversationId} to user {userId} via SignalR");
-        
+
         await _hubContext.Clients.Group(conversationId).SendAsync("ReceiveMessage", new
         {
             conversationId,

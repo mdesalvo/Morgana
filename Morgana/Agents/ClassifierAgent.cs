@@ -18,10 +18,18 @@ public class ClassifierAgent : MorganaAgent
 
         // Crea un agente dedicato alla classificazione
         aiAgent = llmService.GetChatClient().CreateAIAgent(
-            instructions: @"Sei un classificatore esperto di richieste clienti.
-                Classifica ogni richiesta in 'informative' (richiesta informazioni) o 'dispositive' (richiesta azione).
-                Identifica anche l'intento specifico tra: billing_retrieval, hardware_troubleshooting, contract_cancellation, contract_info, service_info.
-                Rispondi SOLO in formato JSON valido senza preamble.",
+            instructions:
+"""
+Sei un classificatore esperto di richieste clienti.
+Classifica ogni richiesta in 'informative' (richiesta informazioni) o 'dispositive' (richiesta azione).
+Identifica anche l'intento specifico tra: billing_retrieval, hardware_troubleshooting, contract_cancellation, other.
+Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preamble):
+{
+    "category": "informative|dispositive",
+    "intent": "billing_retrieval|hardware_troubleshooting|contract_cancellation|other",
+    "confidence": numero tra 0 e 1 che esprime il livello di confidenza della valutazione
+}
+""",
             name: "ClassifierAgent");
 
         ReceiveAsync<UserMessage>(ClassifyMessageAsync);
@@ -33,16 +41,7 @@ public class ClassifierAgent : MorganaAgent
 
         try
         {
-            string prompt = $@"Classifica questa richiesta cliente:
-
-Richiesta: {msg.Text}
-
-Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preamble):
-{{
-  ""category"": ""informative o dispositive"",
-  ""intent"": ""billing_retrieval|hardware_troubleshooting|contract_cancellation|contract_info|service_info"",
-  ""confidence"": 0.95
-}}";
+            string prompt = $"Classifica questa richiesta del cliente: {msg.Text}";
 
             AgentRunResponse response = await aiAgent.RunAsync(prompt);
             string jsonText = response.Text?.Trim() ?? "{}";
@@ -51,11 +50,11 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
             ClassificationResponse? result = JsonSerializer.Deserialize<ClassificationResponse>(jsonText);
             ClassificationResult classification = new ClassificationResult(
                 result?.Category ?? "informative",
-                result?.Intent ?? "service_info",
+                result?.Intent ?? "other",
                 new Dictionary<string, string>
                 {
                     ["confidence"] = (result?.Confidence ?? 0.5).ToString("F2"),
-                    ["intent"] = result?.Intent ?? "service_info"
+                    ["intent"] = result?.Intent ?? "other"
                 });
 
             originalSender.Tell(classification);
@@ -67,7 +66,7 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
             // Fallback classification
             ClassificationResult fallback = new ClassificationResult(
                 "informative",
-                "service_info",
+                "other",
                 new Dictionary<string, string> { ["confidence"] = "0.00", ["error"] = "classification_failed" });
 
             originalSender.Tell(fallback);

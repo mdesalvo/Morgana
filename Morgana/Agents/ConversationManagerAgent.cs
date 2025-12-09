@@ -17,7 +17,7 @@ public class ConversationManagerAgent : MorganaAgent, IWithTimers
     public ConversationManagerAgent(string conversationId, string userId, ISignalRBridgeService signalRBridge) : base(conversationId, userId)
     {
         this.signalRBridge = signalRBridge;
-        
+
         ReceiveAsync<UserMessage>(HandleUserMessageAsync);
         ReceiveAsync<ConversationTimeout>(HandleTimeoutAsync);
         ReceiveAsync<CreateConversation>(HandleCreateConversationAsync);
@@ -32,7 +32,7 @@ public class ConversationManagerAgent : MorganaAgent, IWithTimers
         IActorRef originalSender = Sender;
 
         logger.Info($"Creating conversation {msg.ConversationId} for user {msg.UserId}");
-        
+
         Props? props = DependencyResolver.For(Context.System)
                                          .Props<ConversationManagerAgent>(msg.ConversationId, msg.UserId);
 
@@ -41,7 +41,7 @@ public class ConversationManagerAgent : MorganaAgent, IWithTimers
         Context.Watch(manager);
 
         logger.Info($"Created conversation: {manager.Path}");
-        
+
         originalSender.Tell(new ConversationCreated(msg.ConversationId, msg.UserId));
 
         return Task.CompletedTask;
@@ -50,10 +50,10 @@ public class ConversationManagerAgent : MorganaAgent, IWithTimers
     private Task HandleTerminateConversationAsync(TerminateConversation msg)
     {
         logger.Info($"Terminating conversation {msg.ConversationId} for user {msg.UserId}");
-        
+
         Props? props = DependencyResolver.For(Context.System)
                                          .Props<ConversationManagerAgent>(msg.ConversationId, msg.UserId);
-        
+
         IActorRef? manager = Context.ActorOf(props, $"manager-{msg.ConversationId}");
 
         Context.Stop(manager);
@@ -71,7 +71,7 @@ public class ConversationManagerAgent : MorganaAgent, IWithTimers
 
         Props? props = DependencyResolver.For(Context.System)
                                          .Props<ConversationSupervisorAgent>(msg.ConversationId, msg.UserId);
-        
+
         IActorRef? supervisorAgent = Context.ActorOf(props, $"supervisor-{msg.ConversationId}");
 
         ConversationResponse conversationResponse = await supervisorAgent.Ask<ConversationResponse>(msg);

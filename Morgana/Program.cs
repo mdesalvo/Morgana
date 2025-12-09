@@ -41,7 +41,7 @@ builder.Services.AddSingleton(sp =>
     BootstrapSetup bootstrap = BootstrapSetup.Create();
     DependencyResolverSetup di = DependencyResolverSetup.Create(sp);
     ActorSystemSetup actorSystemSetup = bootstrap.And(di);
-    
+
     ActorSystem actorSystem = ActorSystem.Create("Morgana", actorSystemSetup);
     return actorSystem;
 });

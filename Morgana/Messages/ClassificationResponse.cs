@@ -1,3 +1,8 @@
-﻿namespace Morgana.Messages;
+﻿using System.Text.Json.Serialization;
 
-public record ClassificationResponse(string Category, string Intent, double Confidence);
+namespace Morgana.Messages;
+
+public record ClassificationResponse(
+    [property: JsonPropertyName("category")] string Category,
+    [property: JsonPropertyName("intent")] string Intent,
+    [property: JsonPropertyName("confidence")] double Confidence);

@@ -16,7 +16,7 @@ public class ConversationController : ControllerBase
     private readonly ActorSystem actorSystem;
     private readonly ILogger<ConversationController> logger;
     private readonly IHubContext<ConversationHub> hubContext;
-    
+
     public ConversationController(
         ActorSystem actorSystem,
         ILogger<ConversationController> logger,
@@ -26,7 +26,7 @@ public class ConversationController : ControllerBase
         this.logger = logger;
         this.hubContext = hubContext;
     }
-    
+
     [HttpPost("start")]
     public async Task<IActionResult> StartConversation([FromBody] StartConversationRequest request)
     {
@@ -36,12 +36,12 @@ public class ConversationController : ControllerBase
 
             Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(request.ConversationId, request.UserId);
             IActorRef manager = actorSystem.ActorOf(managerProps);
-            
+
             ConversationCreated? conversationCreated = await manager.Ask<ConversationCreated>(
                 new CreateConversation(request.ConversationId, request.UserId));
-            
+
             logger.LogInformation($"Started conversation {conversationCreated.ConversationId} for user {conversationCreated.UserId}");
-            
+
             return Ok(new
             {
                 conversationId = conversationCreated.ConversationId,
@@ -88,16 +88,16 @@ public class ConversationController : ControllerBase
 
             Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(request.ConversationId, request.UserId);
             IActorRef manager = actorSystem.ActorOf(managerProps);
-            
+
             manager.Tell(new UserMessage(
                 request.ConversationId,
                 request.UserId,
                 request.Text,
                 DateTime.UtcNow
             ));
-            
+
             logger.LogInformation($"Message sent to conversation {request.ConversationId} to user {request.UserId}");
-            
+
             return Accepted(new
             {
                 conversationId = request.ConversationId,
@@ -116,8 +116,8 @@ public class ConversationController : ControllerBase
     [HttpGet("health")]
     public IActionResult Health()
     {
-        return Ok(new 
-        { 
+        return Ok(new
+        {
             status = "healthy",
             timestamp = DateTime.UtcNow,
             actorSystem = actorSystem.WhenTerminated.IsCompleted ? "terminated" : "running"

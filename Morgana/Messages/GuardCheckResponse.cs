@@ -1,3 +1,7 @@
+using System.Text.Json.Serialization;
+
 namespace Morgana.Messages;
 
-public record GuardCheckResponse(bool IsCompliant, string? Violation);
+public record GuardCheckResponse(
+    [property: JsonPropertyName("compliant")] bool Compliant,
+    [property: JsonPropertyName("violation")] string? Violation);
