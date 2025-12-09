@@ -33,8 +33,7 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Starting conversation {request.ConversationId} for user {request.UserId}");
 
-            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(request.ConversationId, request.UserId);
-            IActorRef manager = actorSystem.ActorOf(managerProps);
+            IActorRef manager = await GetOrCreateManager(request.ConversationId, request.UserId);
 
             ConversationCreated? conversationCreated = await manager.Ask<ConversationCreated>(
                 new CreateConversation(request.ConversationId, request.UserId));
@@ -62,8 +61,7 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Ending conversation {conversationId} for user {userId}");
 
-            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(conversationId, userId);
-            IActorRef manager = actorSystem.ActorOf(managerProps);
+            IActorRef manager = await GetOrCreateManager(conversationId, userId);
 
             manager.Tell(new TerminateConversation(conversationId, userId));
 
@@ -85,8 +83,7 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Sending message conversation {request.ConversationId} to user {request.UserId}");
 
-            Props managerProps = DependencyResolver.For(actorSystem).Props<ConversationManagerAgent>(request.ConversationId, request.UserId);
-            IActorRef manager = actorSystem.ActorOf(managerProps);
+            IActorRef manager = await GetOrCreateManager(request.ConversationId, request.UserId);
 
             manager.Tell(new UserMessage(
                 request.ConversationId,
@@ -121,5 +118,25 @@ public class ConversationController : ControllerBase
             timestamp = DateTime.UtcNow,
             actorSystem = actorSystem.WhenTerminated.IsCompleted ? "terminated" : "running"
         });
+    }
+    
+    private async Task<IActorRef> GetOrCreateManager(string conversationId, string userId)
+    {
+        string managerName = $"manager-{conversationId}";
+        string path = $"/user/{managerName}";
+
+        try
+        {
+            // se esiste, lo recuperiamo
+            return await actorSystem.ActorSelection(path).ResolveOne(TimeSpan.FromMilliseconds(200));
+        }
+        catch
+        {
+            // altrimenti lo creiamo
+            Props props = DependencyResolver.For(actorSystem)
+                .Props<ConversationManagerAgent>(conversationId, userId);
+
+            return actorSystem.ActorOf(props, managerName);
+        }
     }
 }

@@ -19,19 +19,27 @@ public class DispositiveAgent : MorganaAgent
 
     private async Task RouteToExecutorAsync(ExecuteRequest req)
     {
-        IActorRef originalSender = Sender;
+        IActorRef? senderRef = Sender;
 
-        IActorRef? executorAgent = _executors.ContainsKey(req.Classification.Intent)
-            ? _executors[req.Classification.Intent]
-            : Self; // fallback
-
-        if (executorAgent.Equals(Self))
+        if (req.Classification == null)
         {
-            Sender.Tell(new ExecuteResponse("Mi dispiace, non posso gestire questa richiesta dispositiva al momento."));
+            senderRef.Tell(new ExecuteResponse("Errore interno: classificazione mancante.", true));
             return;
         }
 
-        ExecuteResponse? response = await executorAgent.Ask<ExecuteResponse>(req);
-        originalSender.Tell(response);
+        if (!_executors.TryGetValue(req.Classification.Intent, out IActorRef? executor))
+        {
+            senderRef.Tell(new ExecuteResponse("Intent non gestito.", true));
+            return;
+        }
+
+        ExecuteResponse? execResp = await executor.Ask<ExecuteResponse>(req);
+
+        senderRef.Tell(new InternalExecuteResponse(
+            execResp.Response,
+            execResp.IsCompleted,
+            executor
+        ));
     }
+
 }

@@ -1,14 +1,10 @@
 ﻿using System.Text.Json.Serialization;
+using Akka.Actor;
 
 namespace Morgana
 {
     public static class Records
     {
-        public record BotResponse(
-            string ConversationId,
-            string Text,
-            string? ErrorReason);
-
         public record ClassificationResponse(
             [property: JsonPropertyName("category")] string Category,
             [property: JsonPropertyName("intent")] string Intent,
@@ -19,26 +15,14 @@ namespace Morgana
             string Intent,
             Dictionary<string, string> Metadata);
 
-        public record ClearContextRequest;
-
-        public record ClearContextResponse(bool Success);
-
         public record ConversationCreated(
             string ConversationId,
             string UserId);
 
         public record ConversationResponse(
             string Response,
-            string Classification,
-            Dictionary<string, string> Metadata);
-
-        public record ConversationState(
-            string ActiveAgentKey,
-            string PendingToolName,
-            Dictionary<string, object> CollectedParams
-        );
-
-        public record ConversationTimeout();
+            string? Classification,
+            Dictionary<string, string>? Metadata);
 
         public record CreateConversation(
             string ConversationId,
@@ -47,10 +31,12 @@ namespace Morgana
         public record ExecuteRequest(
             string UserId,
             string SessionId,
-            string Content,
-            ClassificationResult Classification);
+            string? Content,
+            ClassificationResult? Classification);
 
-        public record ExecuteResponse(string Response);
+        public record ExecuteResponse(
+            string Response,
+            bool IsCompleted = true);
 
         public record GuardCheckRequest(
             string UserId,
@@ -60,9 +46,11 @@ namespace Morgana
             [property: JsonPropertyName("compliant")] bool Compliant,
             [property: JsonPropertyName("violation")] string? Violation);
 
-        public record QueryContextRequest;
-        public record QueryContextResponse(ConversationState? State);
-
+        public record InternalExecuteResponse(
+            string Response,
+            bool IsCompleted,
+            IActorRef ExecutorRef);
+        
         public record SendMessageRequest(
             string ConversationId,
             string UserId,
@@ -79,20 +67,11 @@ namespace Morgana
             string ConversationId,
             string UserId);
 
-        public record UpdateContextRequest(ConversationState NewState);
-
-        public record UpdateContextResponse(bool Success);
-
         public record UserMessage(
             string ConversationId,
             string UserId,
             string Text,
             DateTime Timestamp
         );
-
-        public record UserMessageRequest(
-            string UserId,
-            string SessionId,
-            string Message);
     }
 }

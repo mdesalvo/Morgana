@@ -20,19 +20,30 @@ public class InformativeAgent : MorganaAgent
 
     private async Task RouteToExecutorAsync(ExecuteRequest req)
     {
-        IActorRef originalSender = Sender;
+        IActorRef? originalSender = Sender;
 
-        IActorRef? executorAgent = _executors.ContainsKey(req.Classification.Intent)
-            ? _executors[req.Classification.Intent]
-            : Self; // fallback
-
-        if (executorAgent.Equals(Self))
+        // Se non c’è classificazione → questo non è un turno valido per InformativeAgent
+        if (req.Classification == null)
         {
-            Sender.Tell(new ExecuteResponse("Mi dispiace, non posso gestire questa richiesta informativa al momento."));
+            originalSender.Tell(new ExecuteResponse("Errore interno: classificazione mancante.", true));
             return;
         }
 
-        ExecuteResponse? response = await executorAgent.Ask<ExecuteResponse>(req);
-        originalSender.Tell(response);
+        if (!_executors.TryGetValue(req.Classification.Intent, out IActorRef? executor))
+        {
+            originalSender.Tell(new ExecuteResponse("Intent non gestito.", true));
+            return;
+        }
+
+        // Chiede all'executor concreto
+        ExecuteResponse? execResp = await executor.Ask<ExecuteResponse>(req);
+
+        // Risponde al supervisore con il riferimento dell'executor reale
+        originalSender.Tell(new InternalExecuteResponse(
+            execResp.Response,
+            execResp.IsCompleted,
+            executor
+        ));
     }
+
 }

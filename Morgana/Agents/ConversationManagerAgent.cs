@@ -6,24 +6,19 @@ using static Morgana.Records;
 
 namespace Morgana.Agents;
 
-public class ConversationManagerAgent : MorganaAgent, IWithTimers
+public class ConversationManagerAgent : MorganaAgent
 {
     private readonly ISignalRBridgeService signalRBridge;
     private readonly ILoggingAdapter logger = Context.GetLogger();
-
-    public ITimerScheduler Timers { get; set; } = null!;
+    private IActorRef? supervisor;
 
     public ConversationManagerAgent(string conversationId, string userId, ISignalRBridgeService signalRBridge) : base(conversationId, userId)
     {
         this.signalRBridge = signalRBridge;
 
         ReceiveAsync<UserMessage>(HandleUserMessageAsync);
-        ReceiveAsync<ConversationTimeout>(HandleTimeoutAsync);
         ReceiveAsync<CreateConversation>(HandleCreateConversationAsync);
         ReceiveAsync<TerminateConversation>(HandleTerminateConversationAsync);
-
-        // Timer per timeout conversazione
-        Timers.StartSingleTimer("timeout", new ConversationTimeout(), TimeSpan.FromMinutes(15));
     }
 
     private Task HandleCreateConversationAsync(CreateConversation msg)
@@ -32,14 +27,14 @@ public class ConversationManagerAgent : MorganaAgent, IWithTimers
 
         logger.Info($"Creating conversation {msg.ConversationId} for user {msg.UserId}");
 
-        Props? props = DependencyResolver.For(Context.System)
-                                         .Props<ConversationManagerAgent>(msg.ConversationId, msg.UserId);
-
-        IActorRef? manager = Context.ActorOf(props, $"manager-{msg.ConversationId}");
-
-        Context.Watch(manager);
-
-        logger.Info($"Created conversation: {manager.Path}");
+        if (supervisor == null)
+        {
+            DependencyResolver? resolver = DependencyResolver.For(Context.System);
+            Props? supProps = resolver.Props<ConversationSupervisorAgent>(msg.ConversationId, msg.UserId);
+            supervisor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
+            Context.Watch(supervisor);
+            logger.Info("Supervisor created: {0}", supervisor.Path);
+        }
 
         originalSender.Tell(new ConversationCreated(msg.ConversationId, msg.UserId));
 
@@ -50,14 +45,12 @@ public class ConversationManagerAgent : MorganaAgent, IWithTimers
     {
         logger.Info($"Terminating conversation {msg.ConversationId} for user {msg.UserId}");
 
-        Props? props = DependencyResolver.For(Context.System)
-                                         .Props<ConversationManagerAgent>(msg.ConversationId, msg.UserId);
-
-        IActorRef? manager = Context.ActorOf(props, $"manager-{msg.ConversationId}");
-
-        Context.Stop(manager);
-
-        logger.Info($"Terminated conversation manager: {manager.Path}");
+        if (supervisor != null)
+        {
+            Context.Stop(supervisor);
+            logger.Info("Supervisor stopped for conversation {0}", msg.ConversationId);
+            supervisor = null;
+        }
 
         return Task.CompletedTask;
     }
@@ -66,25 +59,38 @@ public class ConversationManagerAgent : MorganaAgent, IWithTimers
     {
         logger.Info($"Received message in conversation {conversationId} from user {userId}: {msg.Text}");
 
-        Timers.StartSingleTimer("timeout", new ConversationTimeout(), TimeSpan.FromMinutes(15));
+        if (supervisor == null)
+        {
+            // fallback preventivo
+            DependencyResolver? resolver = DependencyResolver.For(Context.System);
+            Props? supProps = resolver.Props<ConversationSupervisorAgent>(msg.ConversationId, msg.UserId);
+            supervisor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
+            Context.Watch(supervisor);
+            logger.Warning("Supervisor was missing; created new supervisor: {0}", supervisor.Path);
+        }
 
-        Props? props = DependencyResolver.For(Context.System)
-                                         .Props<ConversationSupervisorAgent>(msg.ConversationId, msg.UserId);
+        logger.Info("Forwarding message to supervisor at {0}", supervisor.Path);
 
-        IActorRef? supervisorAgent = Context.ActorOf(props, $"supervisor-{msg.ConversationId}");
+        ConversationResponse conversationResponse;
+        try
+        {
+            conversationResponse = await supervisor.Ask<ConversationResponse>(msg, TimeSpan.FromSeconds(30));
+        }
+        catch (Exception ex)
+        {
+            logger.Error(ex, "Supervisor did not reply in time");
+            conversationResponse = new ConversationResponse("Si è verificato un errore interno.", "error", []);
+        }
 
-        ConversationResponse conversationResponse = await supervisorAgent.Ask<ConversationResponse>(msg);
-
-        await signalRBridge.SendMessageToConversationAsync(conversationId, userId, conversationResponse.Response);
-    }
-
-    private Task HandleTimeoutAsync(ConversationTimeout msg)
-    {
-        logger.Info($"Conversation {conversationId} for user {userId} timed out");
-        Context.Parent.Tell(new TerminateConversation(conversationId, userId));
-        Context.Stop(Self);
-
-        return Task.CompletedTask;
+        // invia al client via SignalR (bridge)
+        try
+        {
+            await signalRBridge.SendMessageToConversationAsync(conversationId, userId, conversationResponse.Response);
+        }
+        catch (Exception ex)
+        {
+            logger.Error(ex, "Failed to send SignalR message");
+        }
     }
 
     protected override void PreStart()
