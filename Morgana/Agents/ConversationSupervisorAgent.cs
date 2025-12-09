@@ -10,7 +10,6 @@ public class ConversationSupervisorAgent : MorganaAgent
     private readonly IActorRef informativeAgent;
     private readonly IActorRef dispositiveAgent;
     private readonly IActorRef guardAgent;
-    private readonly IActorRef archiverAgent;
     private readonly ILogger<ConversationSupervisorAgent> logger;
 
     public ConversationSupervisorAgent(string conversationId, string userId, ILogger<ConversationSupervisorAgent> logger) : base(conversationId, userId)
@@ -22,7 +21,6 @@ public class ConversationSupervisorAgent : MorganaAgent
         informativeAgent = Context.ActorOf(dependencyResolver.Props<InformativeAgent>(conversationId, userId), $"informative-{conversationId}");
         dispositiveAgent = Context.ActorOf(dependencyResolver.Props<DispositiveAgent>(conversationId, userId), $"dispositive-{conversationId}");
         guardAgent = Context.ActorOf(dependencyResolver.Props<GuardAgent>(conversationId, userId), $"guard-{conversationId}");
-        archiverAgent = Context.ActorOf(dependencyResolver.Props<ArchiverAgent>(conversationId, userId), $"archiver-{conversationId}");
 
         ReceiveAsync<UserMessage>(HandleUserMessageAsync);
     }
@@ -33,6 +31,7 @@ public class ConversationSupervisorAgent : MorganaAgent
 
         try
         {
+            // 1. Guardrail
             GuardCheckResponse? guardCheckResponse = await guardAgent.Ask<GuardCheckResponse>(new GuardCheckRequest(msg.UserId, msg.Text));
             if (!guardCheckResponse.Compliant)
             {
@@ -57,10 +56,7 @@ public class ConversationSupervisorAgent : MorganaAgent
             ExecuteResponse? executeResponse = await executorAgent.Ask<ExecuteResponse>(
                 new ExecuteRequest(msg.UserId, msg.ConversationId, msg.Text, classificationResult));
 
-            // 4. Archive conversation
-            //archiverAgent.Tell(new ArchiveRequest(msg.UserId, msg.ConversationId, msg.Text, executeResponse.Response, classificationResult));
-
-            // 5. Return response
+            // 4. Return response
             originalSender.Tell(new ConversationResponse(
                 executeResponse.Response,
                 classificationResult.Category,

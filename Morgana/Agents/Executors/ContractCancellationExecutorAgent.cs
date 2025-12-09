@@ -12,12 +12,12 @@ public class ContractCancellationExecutorAgent : MorganaAgent
     private readonly ILogger<ContractCancellationExecutorAgent> logger;
 
     public ContractCancellationExecutorAgent(string conversationId, string userId, ILLMService llmService,
-        IStorageService storageService, ILogger<ContractCancellationExecutorAgent> logger) : base(conversationId, userId)
+        ILogger<ContractCancellationExecutorAgent> logger) : base(conversationId, userId)
     {
         this.logger = logger;
 
         AgentExecutorAdapter adapter = new AgentExecutorAdapter(llmService.GetChatClient());
-        aiAgent = adapter.CreateContractAgent(storageService);
+        aiAgent = adapter.CreateContractAgent();
 
         ReceiveAsync<ExecuteRequest>(ExecuteCancellationAsync);
     }

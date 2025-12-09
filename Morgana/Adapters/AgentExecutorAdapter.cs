@@ -1,6 +1,5 @@
 ﻿using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Morgana.Interfaces;
 using Morgana.Tools;
 
 namespace Morgana.Adapters;
@@ -14,7 +13,7 @@ public class AgentExecutorAdapter
         this.chatClient = chatClient;
     }
 
-    public AIAgent CreateBillingAgent(IStorageService storageService)
+    public AIAgent CreateBillingAgent()
     {
         BillingTool billingTool = new BillingTool();
 
@@ -31,7 +30,7 @@ public class AgentExecutorAdapter
             ]);
     }
 
-    public AIAgent CreateContractAgent(IStorageService storageService)
+    public AIAgent CreateContractAgent()
     {
         ContractTool contractTool = new ContractTool();
 

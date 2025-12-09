@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Morgana.Hubs;
 using Morgana.Messages;
-using Morgana.Interfaces;
 using Akka.DependencyInjection;
 using Morgana.Agents;
 

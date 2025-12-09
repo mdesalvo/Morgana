@@ -1,7 +1,6 @@
 using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
-using Morgana.Agents;
 using Morgana.Hubs;
 using Morgana.Interfaces;
 using Morgana.Services;
@@ -27,12 +26,8 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Application Insights
-builder.Services.AddApplicationInsightsTelemetry();
-
 // Services
 builder.Services.AddSingleton<ILLMService, AzureOpenAIService>();
-builder.Services.AddSingleton<IStorageService, AzureStorageService>();
 builder.Services.AddSingleton<ISignalRBridgeService, SignalRBridgeService>();
 
 // Akka.NET Actor System
@@ -41,9 +36,7 @@ builder.Services.AddSingleton(sp =>
     BootstrapSetup bootstrap = BootstrapSetup.Create();
     DependencyResolverSetup di = DependencyResolverSetup.Create(sp);
     ActorSystemSetup actorSystemSetup = bootstrap.And(di);
-
-    ActorSystem actorSystem = ActorSystem.Create("Morgana", actorSystemSetup);
-    return actorSystem;
+    return ActorSystem.Create("Morgana", actorSystemSetup);
 });
 
 // Hosted service per lifecycle Akka.NET
@@ -56,7 +49,6 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthorization();
-
 app.MapControllers();
 app.MapHub<ConversationHub>("/conversationHub"); // SignalR Hub
 

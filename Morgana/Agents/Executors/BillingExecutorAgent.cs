@@ -12,12 +12,12 @@ public class BillingExecutorAgent : MorganaAgent
     private readonly ILogger<BillingExecutorAgent> logger;
 
     public BillingExecutorAgent(string conversationId, string userId, ILLMService llmService,
-        IStorageService storageService, ILogger<BillingExecutorAgent> logger) : base(conversationId, userId)
+        ILogger<BillingExecutorAgent> logger) : base(conversationId, userId)
     {
         this.logger = logger;
 
         AgentExecutorAdapter adapter = new AgentExecutorAdapter(llmService.GetChatClient());
-        aiAgent = adapter.CreateBillingAgent(storageService);
+        aiAgent = adapter.CreateBillingAgent();
 
         ReceiveAsync<ExecuteRequest>(ExecuteBillingAsync);
     }
