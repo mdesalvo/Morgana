@@ -1,8 +1,8 @@
 using Akka.Actor;
 using Morgana.Adapters;
-using Morgana.Messages;
 using Morgana.Interfaces;
 using Microsoft.Agents.AI;
+using static Morgana.Records;
 
 namespace Morgana.Agents.Executors;
 

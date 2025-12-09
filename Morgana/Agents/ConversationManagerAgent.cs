@@ -2,7 +2,7 @@ using Akka.Actor;
 using Akka.DependencyInjection;
 using Akka.Event;
 using Morgana.Interfaces;
-using Morgana.Messages;
+using static Morgana.Records;
 
 namespace Morgana.Agents;
 

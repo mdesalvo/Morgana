@@ -1,7 +1,7 @@
 using Akka.Actor;
-using Morgana.Messages;
 using Morgana.Interfaces;
 using System.Text.Json;
+using static Morgana.Records;
 
 namespace Morgana.Agents;
 

@@ -1,6 +1,6 @@
 using Akka.Actor;
 using Akka.DependencyInjection;
-using Morgana.Messages;
+using static Morgana.Records;
 
 namespace Morgana.Agents;
 
