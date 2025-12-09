@@ -86,7 +86,7 @@ public class MorganaSignalRService : IAsyncDisposable
 
     public async Task StopAsync()
     {
-        if (_hubConnection != null)
+        if (_hubConnection?.ConnectionId != null)
         {
             await _hubConnection.StopAsync();
         }
