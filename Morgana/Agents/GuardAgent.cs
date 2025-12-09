@@ -32,13 +32,13 @@ public class GuardAgent : MorganaAgent
         }
 
         // Advanced LLM-based policy check
-        string prompt = $@"Verifica se questo messaggio viola policy aziendali (spam, phishing, contenuti offensivi):
+        const string systemPrompt =
+"""
+Verifica se il messaggio del cliente viola policy aziendali (spam, phishing, violenza, parolacce, insulti, contenuti offensivi)
+Rispondi JSON: {{""compliant"": true/false, ""violation"": ""motivo o null""}}
+""";
 
-Messaggio: {req.Message}
-
-Rispondi JSON: {{""compliant"": true/false, ""violation"": ""motivo o null""}}";
-
-        string response = await _llmService.CompleteAsync(prompt);
+        string response = await _llmService.CompleteWithSystemPromptAsync(systemPrompt, req.Message);
         GuardCheckResponse? result = JsonSerializer.Deserialize<GuardCheckResponse>(response);
 
         originalSender.Tell(new GuardCheckResponse(result.IsCompliant, result.Violation));
