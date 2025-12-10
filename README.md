@@ -35,21 +35,27 @@ Traditional chatbot systems often struggle with complexity—they either become 
 ### High-Level Component Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         User Request                                │
-└──────────────────────────────┬──────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                         User Request                           │
+└──────────────────────────────┬─────────────────────────────────┘
                                │
                                ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    ConversationSupervisor                           │
-│  (Orchestrates the entire conversation lifecycle)                   │
-└───┬───────────┬──────────────┬────────────────┬─────────────────┬───┘
-    │           │              │                │                 │
-    ▼           ▼              ▼                ▼                 ▼
-┌───────┐  ┌──────────┐  ┌───────────┐  ┌──────────────┐   ┌──────────┐
-│ Guard │  │Classifier│  │Information│  │ Disposition  │   │ Archiver │
-│ Agent │  │  Agent   │  │   Agent   │  │    Agent     │   │  Agent   │
-└───────┘  └──────────┘  └───────────┘  └──────────────┘   └──────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                  ConversationManagerAgent                      │
+│ (Coordinates, routes and manages stateful conversational flow) │
+└──────────────────────────────┬─────────────────────────────────┘
+                               │
+                               ▼
+┌────────────────────────────────────────────────────────────────┐
+│               ConversationSupervisorAgent                      │
+│  (Orchestrates the entire multi-turn conversation lifecycle)   │
+└───┬───────────┬──────────────┬────────────────┬────────────────┘
+    │           │              │                │        
+    ▼           ▼              ▼                ▼        
+┌───────┐  ┌──────────┐  ┌───────────┐  ┌──────────────┐
+│ Guard │  │Classifier│  │Information│  │ Dispositive  │
+│ Agent │  │  Agent   │  │   Agent   │  │    Agent     │
+└───────┘  └──────────┘  └───────────┘  └──────────────┘
                │               │                │
                │               ▼                ▼
                │         ┌──────────┐     ┌────────────┐
@@ -112,8 +118,7 @@ The classifier identifies specific intents such as:
 - `billing_retrieval`: Fetch invoices or payment history
 - `hardware_troubleshooting`: Diagnose connectivity or device issues
 - `contract_cancellation`: Initiate service termination
-- `contract_info`: Query contract terms and conditions
-- `service_info`: General service inquiries
+- `other`: General service inquiries
 
 **Metadata Enrichment:**
 Each classification includes confidence scores and contextual metadata that downstream agents can use for decision-making.
@@ -149,21 +154,6 @@ Specialized agents with domain-specific knowledge and tool access.
 - **Purpose**: Handle contract modifications and termination requests
 - **Example**: "I want to cancel my service" → Explains process → Initiates formal cancellation
 
-#### 6. **ArchiverAgent**
-A persistence agent that records every conversation turn with rich metadata.
-
-**Stored Data:**
-- User messages and bot responses
-- Classification results (category + intent)
-- Session and user identifiers
-- Timestamps for audit trails
-- Sentiment and satisfaction indicators (future enhancement)
-
-**Storage Backend:**
-- Azure Table Storage for structured conversation logs
-- Azure Blob Storage for attachments or large payloads
-- Partitioned by session ID for efficient retrieval
-
 ## Technology Stack
 
 ### Core Framework
@@ -175,12 +165,6 @@ A persistence agent that records every conversation turn with rich metadata.
 - **Microsoft.Extensions.AI**: Unified abstraction over chat completions with `IChatClient` interface
 - **Microsoft Agent Framework**: Declarative agent definition with built-in tool calling support
 - **Azure OpenAI Service**: GPT-4 powered language understanding and generation
-
-### Cloud & Infrastructure
-- **Azure Table Storage**: Structured conversation logs with millisecond query performance
-- **Azure Blob Storage**: Large payload storage (documents, images, attachments)
-- **Azure Application Insights**: Distributed tracing, performance monitoring, and diagnostics
-- **Azure Identity**: Managed identity for secure, credential-free service access
 
 ### Tool & Function Calling
 Tools are defined as C# methods with descriptive attributes that LLMs can discover and invoke:
@@ -240,192 +224,5 @@ var response1 = await agent.RunAsync("What's my balance?", thread: thread);
 var response2 = await agent.RunAsync("When is it due?", thread: thread);
 ```
 The LLM retains context across turns, enabling natural follow-up questions.
-
-### 6. **Fault Tolerance & Resilience**
-Akka.NET provides:
-- **Supervision strategies**: Parent actors can restart failed children
-- **Message buffering**: Messages aren't lost during actor restarts
-- **Circuit breakers**: Prevents cascade failures to external services
-- **Backpressure handling**: Graceful degradation under load
-
-## Configuration
-
-### appsettings.json
-```json
-{
-  "Azure": {
-    "StorageConnectionString": "DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net",
-    "AppInsightsConnectionString": "InstrumentationKey=...;IngestionEndpoint=https://...;LiveEndpoint=https://...",
-    "OpenAI": {
-      "Endpoint": "https://YOUR-RESOURCE.openai.azure.com",
-      "DeploymentName": "gpt-4o-mini"
-    }
-  }
-}
-```
-
-### Environment Variables (Production)
-For security, use managed identities and Key Vault:
-```bash
-AZURE_CLIENT_ID=<managed-identity-client-id>
-AZURE_TENANT_ID=<tenant-id>
-AZURE_KEYVAULT_URI=https://your-keyvault.vault.azure.net/
-```
-
-## API Reference
-
-### POST /api/conversation/message
-Send a user message to Morgana.
-
-**Request:**
-```json
-{
-  "userId": "user-12345",
-  "sessionId": "session-abc-xyz",
-  "message": "What were my charges last month?"
-}
-```
-
-**Response:**
-```json
-{
-  "response": "Your November 2024 invoice totaled €150.00, due December 15, 2024. This includes your Premium 100Mbps plan and no additional charges.",
-  "classification": "informative",
-  "metadata": {
-    "confidence": "0.98",
-    "intent": "billing_retrieval"
-  }
-}
-```
-
-## Deployment
-
-### Local Development
-```bash
-dotnet restore
-dotnet build
-dotnet run --project src/Morgana
-```
-
-### Docker Container
-```dockerfile
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
-WORKDIR /app
-EXPOSE 80
-
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
-COPY . .
-RUN dotnet restore
-RUN dotnet publish -c Release -o /app/publish
-
-FROM base AS final
-WORKDIR /app
-COPY --from=build /app/publish .
-ENTRYPOINT ["dotnet", "Morgana.dll"]
-```
-
-### Azure App Service
-```bash
-az webapp create --resource-group morgana-rg --plan morgana-plan --name morgana --runtime "DOTNET:10"
-az webapp config appsettings set --resource-group morgana-rg --name morgana --settings @appsettings.json
-az webapp deployment source config-zip --resource-group morgana-rg --name morgana --src publish.zip
-```
-
-### Kubernetes (AKS)
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: morgana
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: morgana
-  template:
-    metadata:
-      labels:
-        app: morgana
-    spec:
-      containers:
-      - name: morgana
-        image: youracr.azurecr.io/morgana:latest
-        ports:
-        - containerPort: 80
-        env:
-        - name: AZURE_CLIENT_ID
-          valueFrom:
-            secretKeyRef:
-              name: azure-identity
-              key: client-id
-```
-
-## Extensibility
-
-### Adding New Executors
-1. **Create Tool Class:**
-```csharp
-public class NewDomainTool
-{
-    [Description("Performs specific domain operation")]
-    public async Task<string> DoSomething([Description("Parameter")] string input)
-    {
-        // Implementation
-    }
-}
-```
-
-2. **Create Executor Agent:**
-```csharp
-public class NewDomainExecutorAgent : ReceiveActor
-{
-    private readonly AIAgent _agent;
-
-    public NewDomainExecutorAgent(ILlmService llmService)
-    {
-        var adapter = new AgentExecutorAdapter(llmService.GetChatClient());
-        _agent = adapter.CreateNewDomainAgent();
-        ReceiveAsync<ExecuteRequest>(Execute);
-    }
-}
-```
-
-3. **Register in Coordinator:**
-```csharp
-_executors["new_intent"] = Context.ActorOf(resolver.Props<NewDomainExecutorAgent>(), "new-executor");
-```
-
-### Custom Guard Policies
-Extend `GuardAgent` with custom rules:
-```csharp
-private async Task<bool> CheckCustomPolicy(string message)
-{
-    // Implement domain-specific validation
-    if (message.Contains("sensitive_term"))
-        return false;
-    
-    return await _llmService.CompleteAsync($"Is this compliant? {message}");
-}
-```
-
-## Performance Considerations
-
-### Akka.NET Actor Pool
-For high-throughput scenarios, use router patterns:
-```csharp
-var props = Props.Create<BillingExecutorAgent>().WithRouter(new RoundRobinPool(10));
-```
-
-### LLM Call Optimization
-- **Caching**: Cache classification results for similar queries
-- **Batching**: Group multiple tool calls in single LLM request
-- **Streaming**: Use `RunStreamAsync()` for faster perceived response times
-
-### Storage Partitioning
-Partition Azure Table Storage by:
-- **Session ID**: Efficient single-session retrieval
-- **User ID + Date**: Aggregate user history queries
-- **Intent**: Analytics on request distribution
 
 **Built with ❤️ using .NET 10, Akka.NET, and Microsoft Agent Framework**
