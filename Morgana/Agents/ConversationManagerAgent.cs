@@ -74,7 +74,7 @@ public class ConversationManagerAgent : MorganaAgent
         ConversationResponse conversationResponse;
         try
         {
-            conversationResponse = await supervisor.Ask<ConversationResponse>(msg, TimeSpan.FromSeconds(30));
+            conversationResponse = await supervisor.Ask<ConversationResponse>(msg);
         }
         catch (Exception ex)
         {

@@ -44,45 +44,40 @@ public class ConversationSupervisorAgent : MorganaAgent
 
     private async Task HandleUserMessageAsync(Records.UserMessage msg)
     {
-        IActorRef? senderRef = Sender;
+        IActorRef? originalSender = Sender;
 
-        //
         // 🔥 1) SE ABBIAMO UN EXECUTOR ATTIVO → bypassa classifier e agenti intermedi
-        //
         if (_activeExecutor != null)
         {
             logger.LogInformation(
                 "Supervisor: follow-up detected, redirecting to active executor → {0}",
                 _activeExecutor.Path);
 
-            Records.ExecuteResponse followup;
+            Records.ExecuteResponse executorFollowup;
             try
             {
-                followup = await _activeExecutor.Ask<Records.ExecuteResponse>(
-                    new Records.ExecuteRequest(msg.UserId, msg.ConversationId, msg.Text, null),
-                    TimeSpan.FromSeconds(30));
+                executorFollowup = await _activeExecutor.Ask<Records.ExecuteResponse>(
+                    new Records.ExecuteRequest(msg.UserId, msg.ConversationId, msg.Text, null));
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Active follow-up executor did not reply.");
-                senderRef.Tell(new Records.ConversationResponse("Si è verificato un errore interno.", null, null));
+                originalSender.Tell(new Records.ConversationResponse("Si è verificato un errore interno.", null, null));
                 _activeExecutor = null;
                 return;
             }
 
-            if (followup.IsCompleted)
+            if (executorFollowup.IsCompleted)
             {
                 logger.LogInformation("Executor signaled completion → clearing active executor.");
                 _activeExecutor = null;
             }
 
-            senderRef.Tell(new Records.ConversationResponse(followup.Response, null, null));
+            originalSender.Tell(new Records.ConversationResponse(executorFollowup.Response, null, null));
             return;
         }
 
-        //
-        // 🔥 2) PRIMO TURNO: Classificazione → Routing → Executor concreto
-        //
+        // 🔥 2) PRIMO TURNO: Guardia → Classificazione → Routing → Executor concreto
         try
         {
             Records.GuardCheckResponse? guardCheckResponse = await guardAgent.Ask<Records.GuardCheckResponse>(new Records.GuardCheckRequest(msg.UserId, msg.Text));
@@ -92,80 +87,72 @@ public class ConversationSupervisorAgent : MorganaAgent
                     $"La prego di mantenere un tono professionale. {guardCheckResponse.Violation}",
                     "guard_violation",
                     []);
-                senderRef.Tell(response);
+                originalSender.Tell(response);
                 return;
             }
             
             Records.ClassificationResult? classification = await classifierAgent.Ask<Records.ClassificationResult>(msg);
-
-            IActorRef intermediate = classification.Category?.ToLower() switch
+            IActorRef routingAgent = classification.Category?.ToLower() switch
             {
                 "informative" => informativeAgent,
                 "dispositive" => dispositiveAgent,
                 _ => informativeAgent
             };
 
-            logger.LogInformation("Supervisor: routing to agent {0}", intermediate.Path);
+            logger.LogInformation("Supervisor: routing to agent {0}", routingAgent.Path);
 
             // Risposta polimorfica: può essere InternalExecuteResponse o ExecuteResponse
-            object? execRespObj = await intermediate.Ask<object>(
-                new Records.ExecuteRequest(msg.UserId, msg.ConversationId, msg.Text, classification),
-                TimeSpan.FromSeconds(30));
+            object? executorResponse = await routingAgent.Ask<object>(
+                new Records.ExecuteRequest(msg.UserId, msg.ConversationId, msg.Text, classification));
 
-            //
-            // Caso 1: InternalExecuteResponse → proveniente da InformativeAgent/DispositiveAgent
-            //
-            if (execRespObj is Records.InternalExecuteResponse internalResp)
+            // Caso 1: InternalExecuteResponse → proveniente dall'agente di routing (InformativeAgent/DispositiveAgent)
+            if (executorResponse is Records.InternalExecuteResponse internalExecuteResponse)
             {
-                logger.LogInformation("Supervisor received InternalExecuteResponse from {0}", internalResp.ExecutorRef.Path);
+                logger.LogInformation("Supervisor received InternalExecuteResponse from {0}", internalExecuteResponse.ExecutorRef.Path);
 
                 // Se multi-turno → imposta executor concreto
-                if (!internalResp.IsCompleted)
+                if (!internalExecuteResponse.IsCompleted)
                 {
-                    _activeExecutor = internalResp.ExecutorRef;
+                    _activeExecutor = internalExecuteResponse.ExecutorRef;
                     logger.LogInformation("Supervisor: active executor set to {0}", _activeExecutor.Path);
                 }
 
-                senderRef.Tell(new Records.ConversationResponse(
-                    internalResp.Response,
+                originalSender.Tell(new Records.ConversationResponse(
+                    internalExecuteResponse.Response,
                     classification.Category,
                     classification.Metadata));
 
                 return;
             }
 
-            //
             // Caso 2: ExecuteResponse diretto (fallback, dovrebbe essere raro)
-            //
-            if (execRespObj is Records.ExecuteResponse simpleResp)
+            if (executorResponse is Records.ExecuteResponse directExecuteResponse)
             {
-                logger.LogWarning("Supervisor received simple ExecuteResponse instead of internal one.");
+                logger.LogWarning("Supervisor received direct ExecuteResponse instead of internal one.");
 
-                if (!simpleResp.IsCompleted)
+                if (!directExecuteResponse.IsCompleted)
                 {
                     // fallback: usa l'agente intermedio come executor attivo (non ideale, ma evita blocchi)
-                    _activeExecutor = intermediate;
-                    logger.LogWarning("Supervisor: fallback active executor = {0}", intermediate.Path);
+                    _activeExecutor = routingAgent;
+                    logger.LogWarning("Supervisor: fallback active executor = {0}", routingAgent.Path);
                 }
 
-                senderRef.Tell(new Records.ConversationResponse(
-                    simpleResp.Response,
+                originalSender.Tell(new Records.ConversationResponse(
+                    directExecuteResponse.Response,
                     classification.Category,
                     classification.Metadata));
 
                 return;
             }
 
-            //
             // Caso 3: risposta inattesa
-            //
-            logger.LogError("Supervisor received unexpected message type: {0}", execRespObj?.GetType());
-            senderRef.Tell(new Records.ConversationResponse("Errore interno imprevisto.", null, null));
+            logger.LogError("Supervisor received unexpected message type: {0}", executorResponse?.GetType());
+            originalSender.Tell(new Records.ConversationResponse("Errore interno imprevisto.", null, null));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Errore nel gestire il primo turno.");
-            senderRef.Tell(new Records.ConversationResponse("Si è verificato un errore interno.", null, null));
+            originalSender.Tell(new Records.ConversationResponse("Si è verificato un errore interno.", null, null));
         }
     }
 }
