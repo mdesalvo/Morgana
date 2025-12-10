@@ -77,7 +77,24 @@ Traditional chatbot systems often struggle with complexity—they either become 
 
 ### Agent Hierarchy
 
-#### 1. **ConversationSupervisor**
+#### 1. ConversationManagerAgent
+
+**Role:**  
+Coordinates and owns the lifecycle of a single user conversation session.
+
+**Responsibilities:**  
+- Creates and supervises the `ConversationSupervisorAgent` for the associated conversation.  
+- Acts as the stable entry point for all user messages belonging to one conversation ID.  
+- Forwards user messages to the supervisor and returns structured responses via SignalR.  
+- Ensures that each conversation maintains isolation and state continuity across requests.  
+- Terminates or resets session actors upon explicit user request or system shutdown.
+
+**Key Characteristics:**  
+- One `ConversationManagerAgent` per conversation/session.  
+- Persists for the entire life of the conversation unless explicitly terminated.  
+- Prevents accidental re-creation of supervisors or cross-session contamination.
+
+#### 2. **ConversationSupervisor**
 The orchestrator that manages the entire conversation lifecycle. It coordinates all child agents and ensures proper message flow.
 
 **Responsibilities:**
@@ -88,7 +105,7 @@ The orchestrator that manages the entire conversation lifecycle. It coordinates 
 - Triggers conversation archival
 - Handles error recovery and timeout scenarios
 
-#### 2. **GuardAgent**
+#### 3. **GuardAgent**
 A policy enforcement agent that validates every user message against business rules, brand guidelines, and safety policies.
 
 **Capabilities:**
@@ -106,7 +123,7 @@ A policy enforcement agent that validates every user message against business ru
 - Compliance with regional regulations
 ```
 
-#### 3. **ClassifierAgent**
+#### 4. **ClassifierAgent**
 An intelligent routing agent that analyzes user intent and determines the appropriate handling path.
 
 **Classification Categories:**
@@ -123,7 +140,7 @@ The classifier identifies specific intents such as:
 **Metadata Enrichment:**
 Each classification includes confidence scores and contextual metadata that downstream agents can use for decision-making.
 
-#### 4. **InformativeAgent & DispositiveAgent**
+#### 5. **InformativeAgent & DispositiveAgent**
 Coordinator agents that maintain mappings of intents to specialized executor agents.
 
 These agents act as smart routers:
@@ -136,7 +153,7 @@ DispositiveAgent:
   - contract_cancellation → ContractCancellationExecutorAgent
 ```
 
-#### 5. **Executor Agents**
+#### 6. **Executor Agents**
 Specialized agents with domain-specific knowledge and tool access.
 
 **BillingExecutorAgent**
