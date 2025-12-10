@@ -78,8 +78,6 @@ Traditional chatbot systems often struggle with complexity—they either become 
 ### Agent Hierarchy
 
 #### 1. ConversationManagerAgent
-
-**Role:**  
 Coordinates and owns the lifecycle of a single user conversation session.
 
 **Responsibilities:**  
