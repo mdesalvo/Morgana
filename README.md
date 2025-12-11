@@ -18,7 +18,7 @@
 
 Morgana is an advanced conversational AI system designed to handle complex customer service scenarios through a sophisticated multi-agent architecture. Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET, Morgana orchestrates specialized AI agents that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness.
 
-The system is powered by Microsoft's Agent Framework, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails, policy enforcement, and comprehensive conversation archival.
+The system is powered by Microsoft's Agent Framework, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
 ## Core Philosophy
 
@@ -200,44 +200,6 @@ The Agent Framework automatically:
 3. Invokes the appropriate method
 4. Returns results to the LLM for natural language synthesis
 
-## Key Features
-
-### 1. **Intelligent Request Classification**
-Every user message is analyzed by a specialized classifier that:
-- Understands intent through semantic analysis
-- Distinguishes between information requests and action requests
-- Enriches requests with metadata for downstream agents
-- Maintains classification confidence scores
-
-### 2. **Specialized Agent Execution**
-Each domain (billing, troubleshooting, contracts) has a dedicated executor with:
-- Domain-specific system prompts
-- Access to relevant tools and APIs
-- Contextual conversation history
-- Tailored response formatting
-
-### 3. **Real-Time Policy Enforcement**
-The GuardAgent runs on every message to:
-- Block inappropriate or harmful content
-- Ensure brand voice consistency
-- Detect and prevent abuse patterns
-- Comply with regulatory requirements
-
-### 4. **Comprehensive Conversation Archival**
-Every interaction is permanently stored with:
-- Full message history
-- Classification metadata
-- Timestamp and session tracking
-- User and agent identifiers
-- Enables compliance audits, quality assurance, and ML training data collection
-
-### 5. **Multi-Turn Conversation Support**
-Agents maintain conversation threads via `AgentThread`:
-```csharp
-var thread = agent.GetNewThread();
-var response1 = await agent.RunAsync("What's my balance?", thread: thread);
-var response2 = await agent.RunAsync("When is it due?", thread: thread);
-```
 The LLM retains context across turns, enabling natural follow-up questions.
 
 **Built with ❤️ using .NET 10, Akka.NET, and Microsoft Agent Framework**
