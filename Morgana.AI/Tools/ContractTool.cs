@@ -2,7 +2,7 @@
 
 namespace Morgana.AI.Tools;
 
-public class ContractCancellationTool
+public class ContractTool
 {
     [Description("Recupera i dettagli del contratto attivo dell'utente")]
     public async Task<string> GetContractDetails(

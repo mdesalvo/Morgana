@@ -5,15 +5,15 @@ using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Agents;
 
-public class BillingAgent : MorganaAgent
+public class TroubleshootingAgent : MorganaAgent
 {
-    public BillingAgent(
+    public TroubleshootingAgent(
         string conversationId,
         ILLMService llmService,
-        ILogger<BillingAgent> logger) : base(conversationId, llmService, logger)
+        ILogger<TroubleshootingAgent> logger) : base(conversationId, llmService, logger)
     {
         AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient());
-        aiAgent = adapter.CreateBillingAgent();
+        aiAgent = adapter.CreateTroubleshootingAgent();
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }

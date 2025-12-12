@@ -2,7 +2,7 @@
 
 namespace Morgana.AI.Tools;
 
-public class HardwareTroubleshootingTool
+public class TroubleshootingTool
 {
     [Description("Esegue diagnostica sulla connessione dell'utente")]
     public async Task<string> RunDiagnostics(

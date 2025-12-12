@@ -1,7 +1,7 @@
 using Akka.Actor;
 using Akka.DependencyInjection;
 using Akka.Event;
-using Morgana.AI.Actors;
+using Morgana.AI.Abstractions;
 using Morgana.Interfaces;
 using static Morgana.Records;
 

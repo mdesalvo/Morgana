@@ -1,6 +1,6 @@
 using Akka.Actor;
 using Akka.DependencyInjection;
-using Morgana.AI.Actors;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Agents;
 
 namespace Morgana.Actors;
@@ -14,9 +14,9 @@ public class RouterActor : MorganaActor
         DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
 
         //Tutte le tipologie di agente registrate che devono poter lavorare in tandem con il classificatore
-        agents["billing_retrieval"] = Context.ActorOf(dependencyResolver.Props<BillingAgent>(conversationId), $"billing-agent-{conversationId}");
-        agents["hardware_troubleshooting"] = Context.ActorOf(dependencyResolver.Props<HardwareTroubleshootingAgent>(conversationId), $"hardware-agent-{conversationId}");
-        agents["contract_cancellation"] = Context.ActorOf(dependencyResolver.Props<ContractCancellationAgent>(conversationId), $"contractcancellation-agent-{conversationId}");
+        agents["billing"] = Context.ActorOf(dependencyResolver.Props<BillingAgent>(conversationId), $"billing-agent-{conversationId}");
+        agents["contract"] = Context.ActorOf(dependencyResolver.Props<ContractAgent>(conversationId), $"contract-agent-{conversationId}");
+        agents["troubleshooting"] = Context.ActorOf(dependencyResolver.Props<TroubleshootingAgent>(conversationId), $"troubleshooting-agent-{conversationId}");
 
         ReceiveAsync<Morgana.AI.Records.AgentRequest>(RouteToAgentAsync);
     }
@@ -34,7 +34,7 @@ public class RouterActor : MorganaActor
 
         if (!agents.TryGetValue(req.Classification.Intent, out IActorRef? agent))
         {
-            senderRef.Tell(new Morgana.AI.Records.AgentResponse("Mi dispiace,non sono ancora in grado di gestire l'intento di richiesta.", true));
+            senderRef.Tell(new Morgana.AI.Records.AgentResponse("Mi dispiace,non sono ancora in grado di gestire questo tipo di richiesta.", true));
             return;
         }
 

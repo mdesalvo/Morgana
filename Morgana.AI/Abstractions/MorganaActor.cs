@@ -1,12 +1,12 @@
 using Akka.Actor;
 
-namespace Morgana.AI.Actors;
+namespace Morgana.AI.Abstractions;
 
 public class MorganaActor : ReceiveActor
 {
     protected readonly string conversationId;
 
-    public MorganaActor(string conversationId)
+    protected MorganaActor(string conversationId)
     {
         this.conversationId = conversationId;
     }

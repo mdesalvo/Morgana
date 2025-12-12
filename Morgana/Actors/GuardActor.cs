@@ -1,7 +1,7 @@
-using Akka.Actor;
-using Morgana.AI.Actors;
-using Morgana.AI.Interfaces;
 using System.Text.Json;
+using Akka.Actor;
+using Morgana.AI.Abstractions;
+using Morgana.AI.Interfaces;
 using static Morgana.Records;
 
 namespace Morgana.Actors;

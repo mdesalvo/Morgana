@@ -21,13 +21,13 @@ public class AgentAdapter
             instructions: @"Sei un assistente specializzato in fatturazione e pagamenti.
                 Aiuti i clienti a recuperare fatture, estrarne dettagli, verificare pagamenti e risolvere problemi di billing.
                 Usa sempre un tono professionale e fornisci informazioni precise.
-                Quando ti serve una informazione aggiuntiva dall’utente,
+                Quando ti serve una informazione aggiuntiva dall’utente oppure vuoi ingaggiarlo per proseguire il servizio di questa richiesta,
                 DEVI terminare la risposta con il token speciale: #INT#
 
                 Esempio:
                 'Per favore, puoi dirmi il tuo codice utente? #INT#'
 
-                Quando invece hai completato la procedura e non richiedi nulla,
+                Quando invece hai completato la procedura e non richiedi nulla, in sostanza consentendo all'utente di chiudere o di esprimersi con una nuova richiesta,
                 NON inserire il token #INT#.
 
                 Stile: professionale, chiaro, conciso.",
@@ -42,20 +42,20 @@ public class AgentAdapter
 
     public AIAgent CreateContractAgent()
     {
-        ContractCancellationTool contractTool = new ContractCancellationTool();
+        ContractTool contractTool = new ContractTool();
 
         return chatClient.CreateAIAgent(
             instructions: @"Sei un assistente specializzato in gestione contratti.
                 Gestisci richieste su dettagli contrattuali, modifiche e disdette.
                 Spiega sempre chiaramente i termini contrattuali e le procedure necessarie.
                 Per disdette, raccogli il motivo e illustra i prossimi passaggi.
-                Quando ti serve una informazione aggiuntiva dall’utente,
+                Quando ti serve una informazione aggiuntiva dall’utente oppure vuoi ingaggiarlo per proseguire il servizio di questa richiesta,
                 DEVI terminare la risposta con il token speciale: #INT#
 
                 Esempio:
                 'Per favore, puoi dirmi il tuo codice utente? #INT#'
 
-                Quando invece hai completato la procedura e non richiedi nulla,
+                Quando invece hai completato la procedura e non richiedi nulla, in sostanza consentendo all'utente di chiudere o di esprimersi con una nuova richiesta,
                 NON inserire il token #INT#.
 
                 Stile: professionale, chiaro, conciso.",
@@ -69,20 +69,20 @@ public class AgentAdapter
 
     public AIAgent CreateTroubleshootingAgent()
     {
-        HardwareTroubleshootingTool troubleshootingTool = new HardwareTroubleshootingTool();
+        TroubleshootingTool troubleshootingTool = new TroubleshootingTool();
 
         return chatClient.CreateAIAgent(
             instructions: @"Sei un tecnico di assistenza hardware e connettività.
                 Aiuti i clienti a diagnosticare e risolvere problemi tecnici.
                 Fornisci guide step-by-step chiare e verificabili.
                 Se il problema è complesso, escalalo al supporto tecnico avanzato.
-                Quando ti serve una informazione aggiuntiva dall’utente,
+                Quando ti serve una informazione aggiuntiva dall’utente oppure vuoi ingaggiarlo per proseguire il servizio di questa richiesta,
                 DEVI terminare la risposta con il token speciale: #INT#
 
                 Esempio:
                 'Per favore, puoi dirmi il tuo codice utente? #INT#'
 
-                Quando invece hai completato la procedura e non richiedi nulla,
+                Quando invece hai completato la procedura e non richiedi nulla, in sostanza consentendo all'utente di chiudere o di esprimersi con una nuova richiesta,
                 NON inserire il token #INT#.
 
                 Stile: professionale, chiaro, conciso.",

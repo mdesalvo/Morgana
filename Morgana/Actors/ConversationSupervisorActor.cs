@@ -2,7 +2,7 @@ using Akka.Actor;
 using Akka.DependencyInjection;
 using Morgana;
 using Morgana.Actors;
-using Morgana.AI.Actors;
+using Morgana.AI.Abstractions;
 
 public class ConversationSupervisorActor : MorganaActor
 {
@@ -11,7 +11,7 @@ public class ConversationSupervisorActor : MorganaActor
     private readonly IActorRef routerActor;
     private readonly ILogger<ConversationSupervisorActor> logger;
 
-    // Agente attivo in multi-turno (BillingAgent, HardwareTroubleshootingAgent, ecc.)
+    // Eventuale agente ancora attivo in multi-turno
     private IActorRef? activeAgent = null;
 
     public ConversationSupervisorActor(string conversationId, ILogger<ConversationSupervisorActor> logger) : base(conversationId)
@@ -20,17 +20,9 @@ public class ConversationSupervisorActor : MorganaActor
 
         DependencyResolver? resolver = DependencyResolver.For(Context.System);
 
-        guardActor = Context.ActorOf(
-            resolver.Props<GuardActor>(conversationId),
-            $"guard-{conversationId}");
-
-        classifierActor = Context.ActorOf(
-            resolver.Props<ClassifierActor>(conversationId),
-            $"classifier-{conversationId}");
-
-        routerActor = Context.ActorOf(
-            resolver.Props<RouterActor>(conversationId),
-            $"router-{conversationId}");
+        guardActor = Context.ActorOf(resolver.Props<GuardActor>(conversationId), $"guard-{conversationId}");
+        classifierActor = Context.ActorOf(resolver.Props<ClassifierActor>(conversationId), $"classifier-{conversationId}");
+        routerActor = Context.ActorOf(resolver.Props<RouterActor>(conversationId), $"router-{conversationId}");
 
         ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
     }
@@ -39,7 +31,7 @@ public class ConversationSupervisorActor : MorganaActor
     {
         IActorRef? senderRef = Sender;
 
-        // 🔥 1) SE ABBIAMO UN AGENTE ATTIVO → bypassa classifierActor e agenti intermedi
+        // If we have an active agent still serving its use-case, bypass classifier and router
         if (activeAgent != null)
         {
             logger.LogInformation("Supervisor: follow-up detected, redirecting to active agent → {0}", activeAgent.Path);
@@ -69,7 +61,7 @@ public class ConversationSupervisorActor : MorganaActor
             return;
         }
 
-        // 🔥 2) PRIMO TURNO: Guardia → Classificazione → Router → Agente concreto
+        // Otherwise we can start a new service request: guard → classifier → router → agent+LLM
         try
         {
             Records.GuardCheckResponse? guardCheckResponse = await guardActor.Ask<Records.GuardCheckResponse>(

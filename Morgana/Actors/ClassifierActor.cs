@@ -1,11 +1,11 @@
-using Akka.Actor;
 using System.Text.Json;
+using Akka.Actor;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using static Morgana.Records;
-using Morgana.AI.Actors;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using static Morgana.AI.Records;
+using static Morgana.Records;
 
 namespace Morgana.Actors;
 
@@ -27,14 +27,14 @@ public class ClassifierActor : MorganaActor
 """
 Sei un classificatore esperto di richieste clienti.
 Classifica ogni richiesta del cliente determinandone l'intento, ovvero la tematica sottesa.
-Tieni conto che al momento sei in grado di assolvere compiti inerenti tematiche di (elenco degli intenti "noti"):
-- billing_retrieval (richieste di visualizzazione dell'elenco di fatture o di estrazione di dettagli da una di esse)
-- hardware_troubleshooting (richieste di soluzione di problemi tecnici dovuti a guatsi o disservizi)
-- contract_cancellation (richieste di informazioni sul processo di cancellazione del contratto del cliente)
+Tieni conto che al momento sei in grado di assolvere compiti inerenti tematiche di questo (breve) elenco:
+- billing (richieste di visualizzazione dell'elenco di fatture o di spiegazione di voci di dettaglio specifiche)
+- troubleshooting (richieste di soluzione di problemi tecnici dovuti a guasti che ingenerano disservizio)
+- contract (richieste di informazioni sul contratto del cliente)
 - other (qualsiasi altra tematica non espressamente intercettata)
 Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preamble):
 {
-    "intent": "billing_retrieval|hardware_troubleshooting|contract_cancellation|other",
+    "intent": "billing|contract|troubleshooting|other",
     "confidence": numero tra 0 e 1 che esprime il livello di confidenza della valutazione
 }
 """,
@@ -49,22 +49,24 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
 
         try
         {
-            string prompt = $"Classifica questa richiesta del cliente: {msg.Text}";
+            string prompt = $"Classifica questa richiesta del cliente secondo le direttive che ti ho dato: {msg.Text}";
 
-            AgentRunResponse response = await classifierAgent.RunAsync(prompt);
-            string jsonText = response.Text?.Trim() ?? "{}";
-            jsonText = jsonText.Replace("```json", "").Replace("```", "").Trim();
+            AgentRunResponse agentResponse = await classifierAgent.RunAsync(prompt);
+            string jsonText = agentResponse.Text?.Trim()
+                                            .Replace("```json", "")
+                                            .Replace("```", "")
+                                            .Trim() ?? "{}";
 
-            ClassificationResponse? result = JsonSerializer.Deserialize<ClassificationResponse>(jsonText);
-            ClassificationResult classification = new ClassificationResult(
-                result?.Intent ?? "other",
+            ClassificationResponse? classificationResponse = JsonSerializer.Deserialize<ClassificationResponse>(jsonText);
+            ClassificationResult classificationResult = new ClassificationResult(
+                classificationResponse?.Intent ?? "other",
                 new Dictionary<string, string>
                 {
-                    ["intent"] = result?.Intent ?? "other",
-                    ["confidence"] = (result?.Confidence ?? 0.5).ToString("F2")
+                    ["intent"] = classificationResponse?.Intent ?? "other",
+                    ["confidence"] = (classificationResponse?.Confidence ?? 0.5).ToString("F2")
                 });
 
-            senderRef.Tell(classification);
+            senderRef.Tell(classificationResult);
         }
         catch (Exception ex)
         {

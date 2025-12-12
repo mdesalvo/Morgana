@@ -1,9 +1,9 @@
 using Akka.Actor;
+using Akka.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using Morgana.Hubs;
-using Akka.DependencyInjection;
 using Morgana.Actors;
+using Morgana.Hubs;
 using static Morgana.Records;
 
 namespace Morgana.Controllers;

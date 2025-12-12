@@ -1,5 +1,5 @@
-﻿using Akka.Actor;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
+using Akka.Actor;
 
 namespace Morgana.AI
 {
