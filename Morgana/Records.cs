@@ -1,18 +1,9 @@
 ﻿using System.Text.Json.Serialization;
-using Akka.Actor;
 
 namespace Morgana
 {
     public static class Records
     {
-        public record ClassificationResponse(
-            [property: JsonPropertyName("intent")] string Intent,
-            [property: JsonPropertyName("confidence")] double Confidence);
-
-        public record ClassificationResult(
-            string Intent,
-            Dictionary<string, string> Metadata);
-
         public record ConversationCreated(
             string ConversationId);
 
@@ -24,15 +15,6 @@ namespace Morgana
         public record CreateConversation(
             string ConversationId);
 
-        public record ExecuteRequest(
-            string ConversationId,
-            string? Content,
-            ClassificationResult? Classification);
-
-        public record AgentResponse(
-            string Response,
-            bool IsCompleted = true);
-
         public record GuardCheckRequest(
             string ConversationId,
             string Message);
@@ -40,11 +22,6 @@ namespace Morgana
         public record GuardCheckResponse(
             [property: JsonPropertyName("compliant")] bool Compliant,
             [property: JsonPropertyName("violation")] string? Violation);
-
-        public record InternalAgentResponse(
-            string Response,
-            bool IsCompleted,
-            IActorRef AgentRef);
 
         public record SendMessageRequest(
             string ConversationId,

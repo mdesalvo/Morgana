@@ -1,6 +1,7 @@
 using Akka.Actor;
 using Akka.DependencyInjection;
 using Akka.Event;
+using Morgana.AI.Actors;
 using Morgana.Interfaces;
 using static Morgana.Records;
 
@@ -12,9 +13,11 @@ public class ConversationManagerActor : MorganaActor
     private readonly ILoggingAdapter logger = Context.GetLogger();
 
     // Supervisor attivo
-    private IActorRef? supervisor;
+    private IActorRef? supervisorActor;
 
-    public ConversationManagerActor(string conversationId, ISignalRBridgeService signalRBridge) : base(conversationId)
+    public ConversationManagerActor(
+        string conversationId,
+        ISignalRBridgeService signalRBridge) : base(conversationId)
     {
         this.signalRBridge = signalRBridge;
 
@@ -29,13 +32,13 @@ public class ConversationManagerActor : MorganaActor
 
         logger.Info($"Creating conversation {msg.ConversationId}");
 
-        if (supervisor == null)
+        if (supervisorActor == null)
         {
             Props? supProps = DependencyResolver.For(Context.System)
                 .Props<ConversationSupervisorActor>(msg.ConversationId);
-            supervisor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
-            Context.Watch(supervisor);
-            logger.Info("Supervisor created: {0}", supervisor.Path);
+            supervisorActor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
+            Context.Watch(supervisorActor);
+            logger.Info("Supervisor created: {0}", supervisorActor.Path);
         }
 
         senderRef.Tell(new ConversationCreated(msg.ConversationId));
@@ -47,11 +50,11 @@ public class ConversationManagerActor : MorganaActor
     {
         logger.Info($"Terminating conversation {msg.ConversationId}");
 
-        if (supervisor != null)
+        if (supervisorActor != null)
         {
-            Context.Stop(supervisor);
+            Context.Stop(supervisorActor);
             logger.Info("Supervisor stopped for conversation {0}", msg.ConversationId);
-            supervisor = null;
+            supervisorActor = null;
         }
 
         return Task.CompletedTask;
@@ -61,22 +64,22 @@ public class ConversationManagerActor : MorganaActor
     {
         logger.Info($"Received message in conversation {conversationId}: {msg.Text}");
 
-        if (supervisor == null)
+        if (supervisorActor == null)
         {
             // fallback preventivo
             Props? supProps = DependencyResolver.For(Context.System)
                 .Props<ConversationSupervisorActor>(msg.ConversationId);
-            supervisor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
-            Context.Watch(supervisor);
-            logger.Warning("Supervisor was missing; created new supervisor: {0}", supervisor.Path);
+            supervisorActor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
+            Context.Watch(supervisorActor);
+            logger.Warning("Supervisor was missing; created new supervisor: {0}", supervisorActor.Path);
         }
 
-        logger.Info("Forwarding message to supervisor at {0}", supervisor.Path);
+        logger.Info("Forwarding message to supervisor at {0}", supervisorActor.Path);
 
         ConversationResponse conversationResponse;
         try
         {
-            conversationResponse = await supervisor.Ask<ConversationResponse>(msg);
+            conversationResponse = await supervisorActor.Ask<ConversationResponse>(msg);
         }
         catch (Exception ex)
         {

@@ -1,16 +1,19 @@
 using Akka.Actor;
-using Morgana.Interfaces;
+using Morgana.AI.Actors;
+using Morgana.AI.Interfaces;
 using System.Text.Json;
 using static Morgana.Records;
 
 namespace Morgana.Actors;
 
-public class GuardianActor : MorganaActor
+public class GuardActor : MorganaActor
 {
     private readonly ILLMService _llmService;
     private readonly string[] _prohibitedTerms = ["stupido", "idiota", "incapace", "inetto"];
 
-    public GuardianActor(string conversationId, ILLMService llmService) : base(conversationId)
+    public GuardActor(
+        string conversationId,
+        ILLMService llmService) : base(conversationId)
     {
         _llmService = llmService;
 

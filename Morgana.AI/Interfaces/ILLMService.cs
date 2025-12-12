@@ -1,6 +1,6 @@
 using Microsoft.Extensions.AI;
 
-namespace Morgana.Interfaces;
+namespace Morgana.AI.Interfaces;
 
 public interface ILLMService
 {

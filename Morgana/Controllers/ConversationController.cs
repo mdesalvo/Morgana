@@ -120,12 +120,11 @@ public class ConversationController : ControllerBase
     private async Task<IActorRef> GetOrCreateManager(string conversationId)
     {
         string managerName = $"manager-{conversationId}";
-        string path = $"/user/{managerName}";
 
         try
         {
             // se esiste, lo recuperiamo
-            return await actorSystem.ActorSelection(path)
+            return await actorSystem.ActorSelection($"/user/{managerName}")
                                     .ResolveOne(TimeSpan.FromMilliseconds(200));
         }
         catch

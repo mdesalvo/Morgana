@@ -1,6 +1,6 @@
 using Akka.Actor;
 
-namespace Morgana.Actors;
+namespace Morgana.AI.Actors;
 
 public class MorganaActor : ReceiveActor
 {

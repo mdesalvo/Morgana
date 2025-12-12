@@ -1,9 +1,10 @@
 using Azure;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.AI;
-using Morgana.Interfaces;
+using Microsoft.Extensions.Configuration;
+using Morgana.AI.Interfaces;
 
-namespace Morgana.Services;
+namespace Morgana.AI.Services;
 
 public class AzureOpenAIService : ILLMService
 {

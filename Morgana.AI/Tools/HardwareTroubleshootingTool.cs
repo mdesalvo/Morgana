@@ -5,7 +5,8 @@ namespace Morgana.AI.Tools;
 public class HardwareTroubleshootingTool
 {
     [Description("Esegue diagnostica sulla connessione dell'utente")]
-    public async Task<string> RunDiagnostics([Description("ID dell'utente")] string userId)
+    public async Task<string> RunDiagnostics(
+        [Description("Identificativo alfanumerico dell'utente")] string userId)
     {
         await Task.Delay(300);
         return "Diagnostica completata:\n✓ Modem: Online\n✓ Connessione: Stabile\n✓ Velocità: 98Mbps (target: 100Mbps)\n⚠ Latenza leggermente alta: 25ms";

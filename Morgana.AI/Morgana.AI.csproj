@@ -1,44 +1,35 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
+    <Nullable>enable</Nullable>
+    <Title>Morgana.AI</Title>
     <Version>0.1.0</Version>
-    <Title>Morgana</Title>
     <Authors>Marco De Salvo</Authors>
+    <Company>Marco De Salvo</Company>
+    <Product>Morgana</Product>
     <Description>Morgana is an advanced conversational AI system designed to handle complex customer service scenarios through a sophisticated multi-agent architecture. Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET, Morgana orchestrates specialized AI agents that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness.
 
 The system is powered by Microsoft's Agent Framework, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails, policy enforcement, and comprehensive conversation archival.</Description>
     <Copyright>Marco De Salvo</Copyright>
     <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
-    <PackageLicenseUrl>https://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
-    <PackageIcon>morgana-avatar.png</PackageIcon>
     <RepositoryUrl>https://github.com/mdesalvo/Morgana.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>actor-model agentic-ai chatbot dotnet</PackageTags>
-    <Company>Marco De Salvo</Company>
-    <AssemblyVersion>0.1.0</AssemblyVersion>
-    <PackageId>Morgana</PackageId>
+    <PackageId>Morgana.AI</PackageId>
   </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Akka" Version="1.5.57" />
     <PackageReference Include="Akka.DependencyInjection" Version="1.5.57" />
     <PackageReference Include="Azure.AI.OpenAI" Version="2.7.0-beta.2" />
-    <PackageReference Include="Azure.Identity" Version="1.17.1" />
     <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-preview.251204.1" />
     <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.0.0-preview.251204.1" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.1.0" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.1.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.1.0-preview.1.25608.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.1" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Morgana.AI\Morgana.AI.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Update="morgana-avatar.png">
-      <Pack>True</Pack>
-      <PackagePath></PackagePath>
-    </None>
-  </ItemGroup>
+
 </Project>

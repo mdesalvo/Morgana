@@ -1,9 +1,10 @@
 using Akka.Actor;
 using System.Text;
 using Microsoft.Agents.AI;
-using Morgana.Interfaces;
-using Morgana.Actors;
 using Morgana.AI.Adapters;
+using Microsoft.Extensions.Logging;
+using Morgana.AI.Interfaces;
+using Morgana.AI.Actors;
 
 namespace Morgana.AI.Agents;
 
@@ -25,10 +26,10 @@ public class BillingAgent : MorganaActor
         AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient());
         aiAgent = adapter.CreateBillingAgent();
 
-        ReceiveAsync<Records.ExecuteRequest>(ExecuteBillingAsync);
+        ReceiveAsync<Records.AgentRequest>(ExecuteBillingAsync);
     }
 
-    private async Task ExecuteBillingAsync(Records.ExecuteRequest req)
+    private async Task ExecuteBillingAsync(Records.AgentRequest req)
     {
         IActorRef? senderRef = Sender;
 

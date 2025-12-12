@@ -1,9 +1,9 @@
 using Akka.Actor;
-using Morgana.Interfaces;
 using Microsoft.Agents.AI;
-using static Morgana.Records;
-using Morgana.Actors;
 using Morgana.AI.Adapters;
+using Morgana.AI.Actors;
+using Morgana.AI.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace Morgana.AI.Agents;
 
@@ -12,7 +12,9 @@ public class ContractCancellationAgent : MorganaActor
     private readonly AIAgent aiAgent;
     private readonly ILogger<ContractCancellationAgent> logger;
 
-    public ContractCancellationAgent(string conversationId, ILLMService llmService,
+    public ContractCancellationAgent(
+        string conversationId,
+        ILLMService llmService,
         ILogger<ContractCancellationAgent> logger) : base(conversationId)
     {
         this.logger = logger;
@@ -20,10 +22,10 @@ public class ContractCancellationAgent : MorganaActor
         AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient());
         aiAgent = adapter.CreateContractAgent();
 
-        ReceiveAsync<ExecuteRequest>(ExecuteCancellationAsync);
+        ReceiveAsync<Records.AgentRequest>(ExecuteCancellationAsync);
     }
 
-    private async Task ExecuteCancellationAsync(ExecuteRequest req)
+    private async Task ExecuteCancellationAsync(Records.AgentRequest req)
     {
         IActorRef senderRef = Sender;
 
@@ -33,12 +35,12 @@ public class ContractCancellationAgent : MorganaActor
 
             AgentRunResponse response = await aiAgent.RunAsync(req.Content);
 
-            senderRef.Tell(new AgentResponse(response.Text ?? "Operazione contrattuale completata."));
+            senderRef.Tell(new Records.AgentResponse(response.Text ?? "Operazione contrattuale completata."));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error executing contract agent");
-            senderRef.Tell(new AgentResponse("Errore nell'operazione. Contatti l'ufficio contratti."));
+            senderRef.Tell(new Records.AgentResponse("Errore nell'operazione. Contatti l'ufficio contratti."));
         }
     }
 }

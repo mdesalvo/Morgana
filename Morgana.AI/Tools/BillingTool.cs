@@ -6,7 +6,7 @@ public class BillingTool
 {
     [Description("Recupera le fatture dell'utente per un periodo specificato")]
     public async Task<string> GetInvoices(
-        [Description("ID dell'utente")] string userId,
+        [Description("Identificativo alfanumerico dell'utente")] string userId,
         [Description("Numero di fatture recenti da recuperare (default: 3)")] int count = 3)
     {
         // Simulazione recupero da storage/database

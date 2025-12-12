@@ -5,15 +5,16 @@ namespace Morgana.AI.Tools;
 public class ContractCancellationTool
 {
     [Description("Recupera i dettagli del contratto attivo dell'utente")]
-    public async Task<string> GetContractDetails([Description("ID dell'utente")] string userId)
+    public async Task<string> GetContractDetails(
+        [Description("Identificativo alfanumerico dell'utente")] string userId)
     {
         await Task.Delay(100);
         return "Contratto attivo:\n- Piano: Premium 100Mbps\n- Inizio: 01/01/2024\n- Scadenza: 31/12/2024\n- Canone mensile: €150.00";
     }
 
-    [Description("Inizia procedura di disdetta contratto")]
+    [Description("Inizia una procedura di disdetta contratto")]
     public async Task<string> InitiateCancellation(
-        [Description("ID dell'utente")] string userId,
+        [Description("Identificativo alfanumerico dell'utente")] string userId,
         [Description("Motivo della disdetta")] string reason)
     {
         await Task.Delay(200);

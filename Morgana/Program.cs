@@ -1,6 +1,8 @@
 using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
+using Morgana.AI.Interfaces;
+using Morgana.AI.Services;
 using Morgana.Hubs;
 using Morgana.Interfaces;
 using Morgana.Services;

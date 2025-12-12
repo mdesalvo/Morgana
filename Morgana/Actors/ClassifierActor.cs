@@ -1,9 +1,11 @@
 using Akka.Actor;
-using Morgana.Interfaces;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using static Morgana.Records;
+using Morgana.AI.Actors;
+using Morgana.AI.Interfaces;
+using static Morgana.AI.Records;
 
 namespace Morgana.Actors;
 
@@ -12,7 +14,10 @@ public class ClassifierActor : MorganaActor
     private readonly AIAgent classifierAgent;
     private readonly ILogger<ClassifierActor> logger;
 
-    public ClassifierActor(string conversationId, ILLMService llmService, ILogger<ClassifierActor> logger) : base(conversationId)
+    public ClassifierActor(
+        string conversationId,
+        ILLMService llmService,
+        ILogger<ClassifierActor> logger) : base(conversationId)
     {
         this.logger = logger;
 
