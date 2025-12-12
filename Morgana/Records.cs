@@ -6,12 +6,10 @@ namespace Morgana
     public static class Records
     {
         public record ClassificationResponse(
-            [property: JsonPropertyName("category")] string Category,
             [property: JsonPropertyName("intent")] string Intent,
             [property: JsonPropertyName("confidence")] double Confidence);
 
         public record ClassificationResult(
-            string Category,
             string Intent,
             Dictionary<string, string> Metadata);
 
@@ -31,7 +29,7 @@ namespace Morgana
             string? Content,
             ClassificationResult? Classification);
 
-        public record ExecuteResponse(
+        public record AgentResponse(
             string Response,
             bool IsCompleted = true);
 
@@ -43,10 +41,10 @@ namespace Morgana
             [property: JsonPropertyName("compliant")] bool Compliant,
             [property: JsonPropertyName("violation")] string? Violation);
 
-        public record InternalExecuteResponse(
+        public record InternalAgentResponse(
             string Response,
             bool IsCompleted,
-            IActorRef ExecutorRef);
+            IActorRef AgentRef);
 
         public record SendMessageRequest(
             string ConversationId,

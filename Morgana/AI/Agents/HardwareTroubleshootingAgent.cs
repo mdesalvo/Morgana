@@ -1,9 +1,9 @@
 using Akka.Actor;
-using Morgana.Adapters;
 using Morgana.Interfaces;
 using Microsoft.Agents.AI;
 using static Morgana.Records;
 using Morgana.Actors;
+using Morgana.AI.Adapters;
 
 namespace Morgana.AI.Agents;
 
@@ -33,12 +33,12 @@ public class HardwareTroubleshootingAgent : MorganaActor
 
             AgentRunResponse response = await aiAgent.RunAsync(req.Content);
 
-            Sender.Tell(new ExecuteResponse(response.Text ?? "Diagnostica completata."));
+            Sender.Tell(new AgentResponse(response.Text ?? "Diagnostica completata."));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error executing troubleshooting agent");
-            Sender.Tell(new ExecuteResponse("Errore durante la diagnostica. Contatti il supporto tecnico."));
+            Sender.Tell(new AgentResponse("Errore durante la diagnostica. Contatti il supporto tecnico."));
         }
     }
 }

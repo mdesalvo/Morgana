@@ -1,9 +1,9 @@
 using Akka.Actor;
-using Morgana.Adapters;
 using Morgana.Interfaces;
 using Microsoft.Agents.AI;
 using static Morgana.Records;
 using Morgana.Actors;
+using Morgana.AI.Adapters;
 
 namespace Morgana.AI.Agents;
 
@@ -33,12 +33,12 @@ public class ContractCancellationAgent : MorganaActor
 
             AgentRunResponse response = await aiAgent.RunAsync(req.Content);
 
-            senderRef.Tell(new ExecuteResponse(response.Text ?? "Operazione contrattuale completata."));
+            senderRef.Tell(new AgentResponse(response.Text ?? "Operazione contrattuale completata."));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error executing contract agent");
-            senderRef.Tell(new ExecuteResponse("Errore nell'operazione. Contatti l'ufficio contratti."));
+            senderRef.Tell(new AgentResponse("Errore nell'operazione. Contatti l'ufficio contratti."));
         }
     }
 }

@@ -5,13 +5,12 @@ using Morgana.Actors;
 
 public class ConversationSupervisorActor : MorganaActor
 {
-    private readonly IActorRef classifierActor;
-    private readonly IActorRef guardianActor;
-    private readonly IActorRef informativeActor;
-    private readonly IActorRef dispositiveActor;
+    private readonly IActorRef guardian;
+    private readonly IActorRef classifier;
+    private readonly IActorRef router;
     private readonly ILogger<ConversationSupervisorActor> logger;
 
-    // Agente attivo in multi-turno (BillingAgent, HardwareTroubleShootingAgent, ecc.)
+    // Agente attivo in multi-turno (BillingAgent, HardwareTroubleshootingAgent, ecc.)
     private IActorRef? activeAgent = null;
 
     public ConversationSupervisorActor(string conversationId, ILogger<ConversationSupervisorActor> logger) : base(conversationId)
@@ -20,21 +19,17 @@ public class ConversationSupervisorActor : MorganaActor
 
         DependencyResolver? resolver = DependencyResolver.For(Context.System);
 
-        guardianActor = Context.ActorOf(
+        guardian = Context.ActorOf(
             resolver.Props<Morgana.Actors.GuardianActor>(conversationId),
             $"guardian-{conversationId}");
 
-        classifierActor = Context.ActorOf(
+        classifier = Context.ActorOf(
             resolver.Props<ClassifierActor>(conversationId),
             $"classifier-{conversationId}");
 
-        informativeActor = Context.ActorOf(
-            resolver.Props<InformativeActor>(conversationId),
-            $"informative-{conversationId}");
-
-        dispositiveActor = Context.ActorOf(
-            resolver.Props<DispositiveActor>(conversationId),
-            $"dispositive-{conversationId}");
+        router = Context.ActorOf(
+            resolver.Props<RouterActor>(conversationId),
+            $"router-{conversationId}");
 
         ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
     }
@@ -43,42 +38,40 @@ public class ConversationSupervisorActor : MorganaActor
     {
         IActorRef? senderRef = Sender;
 
-        // 🔥 1) SE ABBIAMO UN EXECUTOR ATTIVO → bypassa classifier e agenti intermedi
+        // 🔥 1) SE ABBIAMO UN AGENTE ATTIVO → bypassa classifier e agenti intermedi
         if (activeAgent != null)
         {
-            logger.LogInformation(
-                "Supervisor: follow-up detected, redirecting to active executor → {0}",
-                activeAgent.Path);
+            logger.LogInformation("Supervisor: follow-up detected, redirecting to active agent → {0}", activeAgent.Path);
 
-            Records.ExecuteResponse executorFollowup;
+            Records.AgentResponse agentFollowup;
             try
             {
-                executorFollowup = await activeAgent.Ask<Records.ExecuteResponse>(
+                agentFollowup = await activeAgent.Ask<Records.AgentResponse>(
                     new Records.ExecuteRequest(msg.ConversationId, msg.Text, null));
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Active follow-up executor did not reply.");
+                logger.LogError(ex, "Active follow-up agent did not reply.");
                 activeAgent = null;
 
                 senderRef.Tell(new Records.ConversationResponse("Si è verificato un errore interno.", null, null));
                 return;
             }
 
-            if (executorFollowup.IsCompleted)
+            if (agentFollowup.IsCompleted)
             {
-                logger.LogInformation("Executor signaled completion → clearing active executor.");
+                logger.LogInformation("Agent signaled completion → clearing active agent.");
                 activeAgent = null;
             }
 
-            senderRef.Tell(new Records.ConversationResponse(executorFollowup.Response, null, null));
+            senderRef.Tell(new Records.ConversationResponse(agentFollowup.Response, null, null));
             return;
         }
 
-        // 🔥 2) PRIMO TURNO: Guardia → Classificazione → Routing → Executor concreto
+        // 🔥 2) PRIMO TURNO: Guardia → Classificazione → Router → Agente concreto
         try
         {
-            Records.GuardCheckResponse? guardCheckResponse = await guardianActor.Ask<Records.GuardCheckResponse>(
+            Records.GuardCheckResponse? guardCheckResponse = await guardian.Ask<Records.GuardCheckResponse>(
                 new Records.GuardCheckRequest(msg.ConversationId, msg.Text));
             if (!guardCheckResponse.Compliant)
             {
@@ -90,62 +83,55 @@ public class ConversationSupervisorActor : MorganaActor
                 return;
             }
 
-            Records.ClassificationResult? classification = await classifierActor.Ask<Records.ClassificationResult>(msg);
-            IActorRef routingAgent = classification.Category?.ToLower() switch
+            Records.ClassificationResult? classificationResult = await classifier.Ask<Records.ClassificationResult>(msg);
+            logger.LogInformation("Supervisor got classification result: {0}", classificationResult.Intent);
+
+            // Risposta polimorfica: può essere InternalAgentResponse o AgentResponse
+            object? agentResponse = await router.Ask<object>(
+                new Records.ExecuteRequest(msg.ConversationId, msg.Text, classificationResult));
+
+            // Caso 1: InternalAgentResponse → proveniente dall'agente di routing
+            if (agentResponse is Records.InternalAgentResponse internalAgentResponse)
             {
-                "informative" => informativeActor,
-                "dispositive" => dispositiveActor,
-                _ => informativeActor
-            };
+                logger.LogInformation("Supervisor received InternalAgentResponse from {0}", internalAgentResponse.AgentRef.Path);
 
-            logger.LogInformation("Supervisor: routing to agent {0}", routingAgent.Path);
-
-            // Risposta polimorfica: può essere InternalExecuteResponse o ExecuteResponse
-            object? executorResponse = await routingAgent.Ask<object>(
-                new Records.ExecuteRequest(msg.ConversationId, msg.Text, classification));
-
-            // Caso 1: InternalExecuteResponse → proveniente dall'agente di routing (InformativeActor/DispositiveActor)
-            if (executorResponse is Records.InternalExecuteResponse internalExecuteResponse)
-            {
-                logger.LogInformation("Supervisor received InternalExecuteResponse from {0}", internalExecuteResponse.ExecutorRef.Path);
-
-                // Se multi-turno → imposta executor concreto
-                if (!internalExecuteResponse.IsCompleted)
+                // Se multi-turno → imposta agente concreto
+                if (!internalAgentResponse.IsCompleted)
                 {
-                    activeAgent = internalExecuteResponse.ExecutorRef;
-                    logger.LogInformation("Supervisor: active executor set to {0}", activeAgent.Path);
+                    activeAgent = internalAgentResponse.AgentRef;
+                    logger.LogInformation("Supervisor: active agent set to {0}", activeAgent.Path);
                 }
 
                 senderRef.Tell(new Records.ConversationResponse(
-                    internalExecuteResponse.Response,
-                    classification.Category,
-                    classification.Metadata));
+                    internalAgentResponse.Response,
+                    classificationResult.Intent,
+                    classificationResult.Metadata));
 
                 return;
             }
 
-            // Caso 2: ExecuteResponse diretto (fallback, dovrebbe essere raro)
-            if (executorResponse is Records.ExecuteResponse directExecuteResponse)
+            // Caso 2: AgentResponse diretto (fallback, dovrebbe essere raro)
+            if (agentResponse is Records.AgentResponse directAgentResponse)
             {
-                logger.LogWarning("Supervisor received direct ExecuteResponse instead of internal one.");
+                logger.LogWarning("Supervisor received direct AgentResponse instead of internal one.");
 
-                if (!directExecuteResponse.IsCompleted)
+                if (!directAgentResponse.IsCompleted)
                 {
-                    // fallback: usa l'agente intermedio come executor attivo (non ideale, ma evita blocchi)
-                    activeAgent = routingAgent;
-                    logger.LogWarning("Supervisor: fallback active executor = {0}", routingAgent.Path);
+                    // fallback: usa direttamente l'attore di routing come agente attivo (non ideale, ma evita blocchi)
+                    activeAgent = router;
+                    logger.LogWarning("Supervisor: fallback active agent = {0}", router.Path);
                 }
 
                 senderRef.Tell(new Records.ConversationResponse(
-                    directExecuteResponse.Response,
-                    classification.Category,
-                    classification.Metadata));
+                    directAgentResponse.Response,
+                    classificationResult.Intent,
+                    classificationResult.Metadata));
 
                 return;
             }
 
             // Caso 3: risposta inattesa
-            logger.LogError("Supervisor received unexpected message type: {0}", executorResponse?.GetType());
+            logger.LogError("Supervisor received unexpected message type: {0}", agentResponse?.GetType());
             senderRef.Tell(new Records.ConversationResponse("Errore interno imprevisto.", null, null));
         }
         catch (Exception ex)

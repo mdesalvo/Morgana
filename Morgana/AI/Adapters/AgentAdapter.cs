@@ -2,7 +2,7 @@
 using Microsoft.Extensions.AI;
 using Morgana.AI.Tools;
 
-namespace Morgana.Adapters;
+namespace Morgana.AI.Adapters;
 
 public class AgentAdapter
 {
@@ -19,7 +19,7 @@ public class AgentAdapter
 
         return chatClient.CreateAIAgent(
             instructions: @"Sei un assistente specializzato in fatturazione e pagamenti.
-                Aiuti i clienti a recuperare fatture, verificare pagamenti e risolvere problemi di billing.
+                Aiuti i clienti a recuperare fatture, estrarne dettagli, verificare pagamenti e risolvere problemi di billing.
                 Usa sempre un tono professionale e fornisci informazioni precise.
                 Quando ti serve una informazione aggiuntiva dall’utente,
                 DEVI terminare la risposta con il token speciale: #INT#

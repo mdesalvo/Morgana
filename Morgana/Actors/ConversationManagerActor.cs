@@ -12,7 +12,7 @@ public class ConversationManagerActor : MorganaActor
     private readonly ILoggingAdapter logger = Context.GetLogger();
 
     // Supervisor attivo
-    private IActorRef? supervisorActor;
+    private IActorRef? supervisor;
 
     public ConversationManagerActor(string conversationId, ISignalRBridgeService signalRBridge) : base(conversationId)
     {
@@ -29,13 +29,13 @@ public class ConversationManagerActor : MorganaActor
 
         logger.Info($"Creating conversation {msg.ConversationId}");
 
-        if (supervisorActor == null)
+        if (supervisor == null)
         {
             Props? supProps = DependencyResolver.For(Context.System)
                 .Props<ConversationSupervisorActor>(msg.ConversationId);
-            supervisorActor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
-            Context.Watch(supervisorActor);
-            logger.Info("Supervisor created: {0}", supervisorActor.Path);
+            supervisor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
+            Context.Watch(supervisor);
+            logger.Info("Supervisor created: {0}", supervisor.Path);
         }
 
         senderRef.Tell(new ConversationCreated(msg.ConversationId));
@@ -47,11 +47,11 @@ public class ConversationManagerActor : MorganaActor
     {
         logger.Info($"Terminating conversation {msg.ConversationId}");
 
-        if (supervisorActor != null)
+        if (supervisor != null)
         {
-            Context.Stop(supervisorActor);
+            Context.Stop(supervisor);
             logger.Info("Supervisor stopped for conversation {0}", msg.ConversationId);
-            supervisorActor = null;
+            supervisor = null;
         }
 
         return Task.CompletedTask;
@@ -61,22 +61,22 @@ public class ConversationManagerActor : MorganaActor
     {
         logger.Info($"Received message in conversation {conversationId}: {msg.Text}");
 
-        if (supervisorActor == null)
+        if (supervisor == null)
         {
             // fallback preventivo
             Props? supProps = DependencyResolver.For(Context.System)
                 .Props<ConversationSupervisorActor>(msg.ConversationId);
-            supervisorActor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
-            Context.Watch(supervisorActor);
-            logger.Warning("Supervisor was missing; created new supervisor: {0}", supervisorActor.Path);
+            supervisor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
+            Context.Watch(supervisor);
+            logger.Warning("Supervisor was missing; created new supervisor: {0}", supervisor.Path);
         }
 
-        logger.Info("Forwarding message to supervisorActor at {0}", supervisorActor.Path);
+        logger.Info("Forwarding message to supervisor at {0}", supervisor.Path);
 
         ConversationResponse conversationResponse;
         try
         {
-            conversationResponse = await supervisorActor.Ask<ConversationResponse>(msg);
+            conversationResponse = await supervisor.Ask<ConversationResponse>(msg);
         }
         catch (Exception ex)
         {

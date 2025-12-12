@@ -1,9 +1,9 @@
 using Akka.Actor;
-using Morgana.Adapters;
 using System.Text;
 using Microsoft.Agents.AI;
 using Morgana.Interfaces;
 using Morgana.Actors;
+using Morgana.AI.Adapters;
 
 namespace Morgana.AI.Agents;
 
@@ -13,7 +13,7 @@ public class BillingAgent : MorganaActor
     private readonly ILogger<BillingAgent> logger;
 
     // memoria conversazionale locale
-    private readonly List<(string role, string text)> history = new();
+    private readonly List<(string role, string text)> history = [];
 
     public BillingAgent(
         string conversationId,
@@ -52,13 +52,13 @@ public class BillingAgent : MorganaActor
             history.Add(("assistant", cleanText));
 
             // completed = false se serve input aggiuntivo
-            senderRef.Tell(new Records.ExecuteResponse(cleanText, !requiresMoreInput));
+            senderRef.Tell(new Records.AgentResponse(cleanText, !requiresMoreInput));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Errore in BillingAgent");
 
-            senderRef.Tell(new Records.ExecuteResponse(
+            senderRef.Tell(new Records.AgentResponse(
                 "Si è verificato un errore. La preghiamo di riprovare.",
                 true
             ));
