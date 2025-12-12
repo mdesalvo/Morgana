@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel;
 
-namespace Morgana.Tools;
+namespace Morgana.AI.Tools;
 
-public class TroubleshootingTool
+public class HardwareTroubleshootingTool
 {
     [Description("Esegue diagnostica sulla connessione dell'utente")]
     public async Task<string> RunDiagnostics([Description("ID dell'utente")] string userId)

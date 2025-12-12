@@ -3,20 +3,21 @@ using Morgana.Adapters;
 using Morgana.Interfaces;
 using Microsoft.Agents.AI;
 using static Morgana.Records;
+using Morgana.Actors;
 
-namespace Morgana.Agents.Executors;
+namespace Morgana.AI.Agents;
 
-public class HardwareTroubleshootingExecutorAgent : MorganaAgent
+public class HardwareTroubleshootingAgent : MorganaActor
 {
     private readonly AIAgent aiAgent;
-    private readonly ILogger<HardwareTroubleshootingExecutorAgent> logger;
+    private readonly ILogger<HardwareTroubleshootingAgent> logger;
 
-    public HardwareTroubleshootingExecutorAgent(string conversationId, string userId, ILLMService llmService,
-        ILogger<HardwareTroubleshootingExecutorAgent> logger) : base(conversationId, userId)
+    public HardwareTroubleshootingAgent(string conversationId, ILLMService llmService,
+        ILogger<HardwareTroubleshootingAgent> logger) : base(conversationId)
     {
         this.logger = logger;
 
-        AgentExecutorAdapter adapter = new AgentExecutorAdapter(llmService.GetChatClient());
+        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient());
         aiAgent = adapter.CreateTroubleshootingAgent();
 
         ReceiveAsync<ExecuteRequest>(ExecuteTroubleshootingAsync);
@@ -24,11 +25,11 @@ public class HardwareTroubleshootingExecutorAgent : MorganaAgent
 
     private async Task ExecuteTroubleshootingAsync(ExecuteRequest req)
     {
-        IActorRef originalSender = Sender;
+        IActorRef senderRef = Sender;
 
         try
         {
-            logger.LogInformation($"Executing troubleshooting for user {req.UserId}");
+            logger.LogInformation($"Executing troubleshooting for conversation {req.ConversationId}");
 
             AgentRunResponse response = await aiAgent.RunAsync(req.Content);
 

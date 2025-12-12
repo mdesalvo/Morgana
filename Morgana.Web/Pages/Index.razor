@@ -106,7 +106,6 @@
     private List<ChatMessage> messages = new();
     private string inputText = string.Empty;
     private string conversationId = string.Empty;
-    private string userId = string.Empty;
     private bool isConnected = false;
     private bool isSending = false;
     private bool isInitialized = false;
@@ -154,8 +153,7 @@
 
             HttpResponseMessage response = await Http.PostAsJsonAsync("/api/conversation/start", new
             {
-                conversationId = Guid.NewGuid().ToString("N"),
-                userId = "User" //TODO: from config
+                conversationId = Guid.NewGuid().ToString("N")
             });
 
             Console.WriteLine($"🟢 Morgana Response Status: {response.StatusCode}");
@@ -164,14 +162,13 @@
             {
                 ConversationStartResponse? result = await response.Content.ReadFromJsonAsync<ConversationStartResponse>();
                 conversationId = result?.ConversationId ?? string.Empty;
-                userId = result?.UserId ?? string.Empty;
 
                 Console.WriteLine($"🟢 ConversationId received: {conversationId}");
 
                 if (string.IsNullOrEmpty(conversationId))
                     throw new Exception("ConversationId is empty!");
 
-                await SignalRService.JoinConversation(conversationId, userId);
+                await SignalRService.JoinConversation(conversationId);
 
                 Console.WriteLine($"🟢 Joined SignalR group: {conversationId}");
             }
@@ -207,7 +204,6 @@
         messages.Add(new ChatMessage
         {
             ConversationId = conversationId,
-            UserId = userId,
             Text = messageText,
             Role = "user",
             Timestamp = DateTime.Now
@@ -216,7 +212,6 @@
         messages.Add(new ChatMessage
         {
             ConversationId = conversationId,
-            UserId = userId,
             Role = "assistant",
             IsTyping = true,
             Timestamp = DateTime.Now
@@ -229,7 +224,6 @@
             HttpResponseMessage response = await Http.PostAsJsonAsync($"/api/conversation/{conversationId}/message", new
             {
                 conversationId = conversationId,
-                userId = userId,
                 text = messageText
             });
 
@@ -248,7 +242,6 @@
                     messages.Add(new ChatMessage
                     {
                         ConversationId = conversationId,
-                        UserId = userId,
                         Text = "Mi dispiace, si è verificato un errore. Riprova.",
                         Role = "assistant",
                         Timestamp = DateTime.Now,
@@ -270,7 +263,6 @@
                 messages.Add(new ChatMessage
                 {
                     ConversationId = conversationId,
-                    UserId = userId,
                     Text = $"Errore di connessione: {ex.Message}",
                     Role = "assistant",
                     Timestamp = DateTime.Now,
@@ -287,7 +279,7 @@
         }
     }
 
-    private async void HandleMessageReceived(string conversationId, string userId, string text, DateTime timestamp)
+    private async void HandleMessageReceived(string conversationId, string text, DateTime timestamp)
     {
         Console.WriteLine($"🟣 Message received for conversation: {conversationId}");
 
@@ -306,7 +298,6 @@
         messages.Add(new ChatMessage
         {
             ConversationId = conversationId,
-            UserId = userId,
             Text = text,
             Role = "assistant",
             Timestamp = timestamp

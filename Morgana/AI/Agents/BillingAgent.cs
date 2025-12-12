@@ -2,27 +2,27 @@ using Akka.Actor;
 using Morgana.Adapters;
 using System.Text;
 using Microsoft.Agents.AI;
-using Morgana;
-using Morgana.Agents;
 using Morgana.Interfaces;
+using Morgana.Actors;
 
-public class BillingExecutorAgent : MorganaAgent
+namespace Morgana.AI.Agents;
+
+public class BillingAgent : MorganaActor
 {
     private readonly AIAgent aiAgent;
-    private readonly ILogger<BillingExecutorAgent> logger;
+    private readonly ILogger<BillingAgent> logger;
 
     // memoria conversazionale locale
     private readonly List<(string role, string text)> history = new();
 
-    public BillingExecutorAgent(
+    public BillingAgent(
         string conversationId,
-        string userId,
         ILLMService llmService,
-        ILogger<BillingExecutorAgent> logger) : base(conversationId, userId)
+        ILogger<BillingAgent> logger) : base(conversationId)
     {
         this.logger = logger;
 
-        AgentExecutorAdapter adapter = new AgentExecutorAdapter(llmService.GetChatClient());
+        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient());
         aiAgent = adapter.CreateBillingAgent();
 
         ReceiveAsync<Records.ExecuteRequest>(ExecuteBillingAsync);
@@ -30,7 +30,7 @@ public class BillingExecutorAgent : MorganaAgent
 
     private async Task ExecuteBillingAsync(Records.ExecuteRequest req)
     {
-        IActorRef? originalSender = Sender;
+        IActorRef? senderRef = Sender;
 
         try
         {
@@ -52,13 +52,13 @@ public class BillingExecutorAgent : MorganaAgent
             history.Add(("assistant", cleanText));
 
             // completed = false se serve input aggiuntivo
-            originalSender.Tell(new Records.ExecuteResponse(cleanText, !requiresMoreInput));
+            senderRef.Tell(new Records.ExecuteResponse(cleanText, !requiresMoreInput));
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Errore in BillingExecutorAgent");
+            logger.LogError(ex, "Errore in BillingAgent");
 
-            originalSender.Tell(new Records.ExecuteResponse(
+            senderRef.Tell(new Records.ExecuteResponse(
                 "Si è verificato un errore. La preghiamo di riprovare.",
                 true
             ));

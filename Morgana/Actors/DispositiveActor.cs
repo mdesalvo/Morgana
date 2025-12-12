@@ -1,18 +1,18 @@
 using Akka.Actor;
 using Akka.DependencyInjection;
-using Morgana.Agents.Executors;
+using Morgana.AI.Agents;
 using static Morgana.Records;
 
-namespace Morgana.Agents;
+namespace Morgana.Actors;
 
-public class DispositiveAgent : MorganaAgent
+public class DispositiveActor : MorganaActor
 {
-    private readonly Dictionary<string, IActorRef> _executors = [];
+    private readonly Dictionary<string, IActorRef> agents = [];
 
-    public DispositiveAgent(string conversationId, string userId) : base(conversationId, userId)
+    public DispositiveActor(string conversationId) : base(conversationId)
     {
         DependencyResolver? resolver = DependencyResolver.For(Context.System);
-        _executors["contract_cancellation"] = Context.ActorOf(resolver.Props<ContractCancellationExecutorAgent>(conversationId, userId), $"cancellation-executor-{conversationId}");
+        agents["contract_cancellation"] = Context.ActorOf(resolver.Props<ContractCancellationAgent>(conversationId), $"cancellation-agent-{conversationId}");
 
         ReceiveAsync<ExecuteRequest>(RouteToExecutorAsync);
     }
@@ -27,7 +27,7 @@ public class DispositiveAgent : MorganaAgent
             return;
         }
 
-        if (!_executors.TryGetValue(req.Classification.Intent, out IActorRef? executor))
+        if (!agents.TryGetValue(req.Classification.Intent, out IActorRef? executor))
         {
             senderRef.Tell(new ExecuteResponse("Intent non gestito.", true));
             return;

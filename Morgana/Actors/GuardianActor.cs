@@ -3,14 +3,14 @@ using Morgana.Interfaces;
 using System.Text.Json;
 using static Morgana.Records;
 
-namespace Morgana.Agents;
+namespace Morgana.Actors;
 
-public class GuardAgent : MorganaAgent
+public class GuardianActor : MorganaActor
 {
     private readonly ILLMService _llmService;
     private readonly string[] _prohibitedTerms = ["stupido", "idiota", "incapace", "inetto"];
 
-    public GuardAgent(string conversationId, string userId, ILLMService llmService) : base(conversationId, userId)
+    public GuardianActor(string conversationId, ILLMService llmService) : base(conversationId)
     {
         _llmService = llmService;
 
@@ -19,14 +19,14 @@ public class GuardAgent : MorganaAgent
 
     private async Task CheckComplianceAsync(GuardCheckRequest req)
     {
-        IActorRef originalSender = Sender;
+        IActorRef senderRef = Sender;
 
         // Basic profanity check
         foreach (string term in _prohibitedTerms)
         {
             if (req.Message.Contains(term, StringComparison.OrdinalIgnoreCase))
             {
-                originalSender.Tell(new GuardCheckResponse(false, "Linguaggio inappropriato rilevato."));
+                senderRef.Tell(new GuardCheckResponse(false, "Linguaggio inappropriato rilevato."));
                 return;
             }
         }
@@ -41,6 +41,6 @@ Rispondi JSON: {"compliant": true/false, "violation": "motivo o null"}
         string response = await _llmService.CompleteWithSystemPromptAsync(systemPrompt, req.Message);
         GuardCheckResponse? result = JsonSerializer.Deserialize<GuardCheckResponse>(response);
 
-        originalSender.Tell(new GuardCheckResponse(result.Compliant, result.Violation));
+        senderRef.Tell(new GuardCheckResponse(result.Compliant, result.Violation));
     }
 }

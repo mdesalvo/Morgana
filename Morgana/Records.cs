@@ -16,8 +16,7 @@ namespace Morgana
             Dictionary<string, string> Metadata);
 
         public record ConversationCreated(
-            string ConversationId,
-            string UserId);
+            string ConversationId);
 
         public record ConversationResponse(
             string Response,
@@ -25,12 +24,10 @@ namespace Morgana
             Dictionary<string, string>? Metadata);
 
         public record CreateConversation(
-            string ConversationId,
-            string UserId);
+            string ConversationId);
 
         public record ExecuteRequest(
-            string UserId,
-            string SessionId,
+            string ConversationId,
             string? Content,
             ClassificationResult? Classification);
 
@@ -39,7 +36,7 @@ namespace Morgana
             bool IsCompleted = true);
 
         public record GuardCheckRequest(
-            string UserId,
+            string ConversationId,
             string Message);
 
         public record GuardCheckResponse(
@@ -50,26 +47,22 @@ namespace Morgana
             string Response,
             bool IsCompleted,
             IActorRef ExecutorRef);
-        
+
         public record SendMessageRequest(
             string ConversationId,
-            string UserId,
             string Text,
             Dictionary<string, object>? Metadata = null
         );
 
         public record StartConversationRequest(
             string ConversationId,
-            string UserId,
             string? InitialContext = null);
 
         public record TerminateConversation(
-            string ConversationId,
-            string UserId);
+            string ConversationId);
 
         public record UserMessage(
             string ConversationId,
-            string UserId,
             string Text,
             DateTime Timestamp
         );

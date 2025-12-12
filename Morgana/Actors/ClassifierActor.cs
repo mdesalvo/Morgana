@@ -5,19 +5,19 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using static Morgana.Records;
 
-namespace Morgana.Agents;
+namespace Morgana.Actors;
 
-public class ClassifierAgent : MorganaAgent
+public class ClassifierActor : MorganaActor
 {
-    private readonly AIAgent aiAgent;
-    private readonly ILogger<ClassifierAgent> logger;
+    private readonly AIAgent classifierAgent;
+    private readonly ILogger<ClassifierActor> logger;
 
-    public ClassifierAgent(string conversationId, string userId, ILLMService llmService, ILogger<ClassifierAgent> logger) : base(conversationId, userId)
+    public ClassifierActor(string conversationId, ILLMService llmService, ILogger<ClassifierActor> logger) : base(conversationId)
     {
         this.logger = logger;
 
         // Crea un agente dedicato alla classificazione
-        aiAgent = llmService.GetChatClient().CreateAIAgent(
+        classifierAgent = llmService.GetChatClient().CreateAIAgent(
             instructions:
 """
 Sei un classificatore esperto di richieste clienti.
@@ -30,20 +30,20 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
     "confidence": numero tra 0 e 1 che esprime il livello di confidenza della valutazione
 }
 """,
-            name: "ClassifierAgent");
+            name: "ClassifierActor");
 
         ReceiveAsync<UserMessage>(ClassifyMessageAsync);
     }
 
     private async Task ClassifyMessageAsync(UserMessage msg)
     {
-        IActorRef originalSender = Sender;
+        IActorRef senderRef = Sender;
 
         try
         {
             string prompt = $"Classifica questa richiesta del cliente: {msg.Text}";
 
-            AgentRunResponse response = await aiAgent.RunAsync(prompt);
+            AgentRunResponse response = await classifierAgent.RunAsync(prompt);
             string jsonText = response.Text?.Trim() ?? "{}";
             jsonText = jsonText.Replace("```json", "").Replace("```", "").Trim();
 
@@ -57,7 +57,7 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
                     ["intent"] = result?.Intent ?? "other"
                 });
 
-            originalSender.Tell(classification);
+            senderRef.Tell(classification);
         }
         catch (Exception ex)
         {
@@ -69,7 +69,7 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
                 "other",
                 new Dictionary<string, string> { ["confidence"] = "0.00", ["error"] = "classification_failed" });
 
-            originalSender.Tell(fallback);
+            senderRef.Tell(fallback);
         }
     }
 }

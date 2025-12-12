@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Morgana.Hubs;
 using Akka.DependencyInjection;
-using Morgana.Agents;
+using Morgana.Actors;
 using static Morgana.Records;
 
 namespace Morgana.Controllers;
@@ -31,19 +31,18 @@ public class ConversationController : ControllerBase
     {
         try
         {
-            logger.LogInformation($"Starting conversation {request.ConversationId} for user {request.UserId}");
+            logger.LogInformation($"Starting conversation {request.ConversationId}");
 
-            IActorRef manager = await GetOrCreateManager(request.ConversationId, request.UserId);
+            IActorRef manager = await GetOrCreateManager(request.ConversationId);
 
             ConversationCreated? conversationCreated = await manager.Ask<ConversationCreated>(
-                new CreateConversation(request.ConversationId, request.UserId));
+                new CreateConversation(request.ConversationId));
 
-            logger.LogInformation($"Started conversation {conversationCreated.ConversationId} for user {conversationCreated.UserId}");
+            logger.LogInformation($"Started conversation {conversationCreated.ConversationId}");
 
             return Ok(new
             {
                 conversationId = conversationCreated.ConversationId,
-                userId = conversationCreated.UserId,
                 message = "Conversation started successfully"
             });
         }
@@ -55,17 +54,17 @@ public class ConversationController : ControllerBase
     }
 
     [HttpPost("{conversationId}/end")]
-    public async Task<IActionResult> EndConversation(string conversationId, string userId)
+    public async Task<IActionResult> EndConversation(string conversationId)
     {
         try
         {
-            logger.LogInformation($"Ending conversation {conversationId} for user {userId}");
+            logger.LogInformation($"Ending conversation {conversationId}");
 
-            IActorRef manager = await GetOrCreateManager(conversationId, userId);
+            IActorRef manager = await GetOrCreateManager(conversationId);
 
-            manager.Tell(new TerminateConversation(conversationId, userId));
+            manager.Tell(new TerminateConversation(conversationId));
 
-            logger.LogInformation($"Ended conversation {conversationId} for user {userId}");
+            logger.LogInformation($"Ended conversation {conversationId}");
 
             return Ok(new { message = "Conversation ended" });
         }
@@ -81,30 +80,28 @@ public class ConversationController : ControllerBase
     {
         try
         {
-            logger.LogInformation($"Sending message conversation {request.ConversationId} to user {request.UserId}");
+            logger.LogInformation($"Sending message conversation {request.ConversationId}");
 
-            IActorRef manager = await GetOrCreateManager(request.ConversationId, request.UserId);
+            IActorRef manager = await GetOrCreateManager(request.ConversationId);
 
             manager.Tell(new UserMessage(
                 request.ConversationId,
-                request.UserId,
                 request.Text,
                 DateTime.UtcNow
             ));
 
-            logger.LogInformation($"Message sent to conversation {request.ConversationId} to user {request.UserId}");
+            logger.LogInformation($"Message sent to conversation {request.ConversationId}");
 
             return Accepted(new
             {
                 conversationId = request.ConversationId,
-                userId = request.UserId,
                 message = "Message processing started",
                 note = "Response will be sent via SignalR"
             });
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to send message to conversation {request.ConversationId} to user {request.UserId}");
+            logger.LogError(ex, $"Failed to send message to conversation {request.ConversationId}");
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -119,8 +116,8 @@ public class ConversationController : ControllerBase
             actorSystem = actorSystem.WhenTerminated.IsCompleted ? "terminated" : "running"
         });
     }
-    
-    private async Task<IActorRef> GetOrCreateManager(string conversationId, string userId)
+
+    private async Task<IActorRef> GetOrCreateManager(string conversationId)
     {
         string managerName = $"manager-{conversationId}";
         string path = $"/user/{managerName}";
@@ -128,13 +125,14 @@ public class ConversationController : ControllerBase
         try
         {
             // se esiste, lo recuperiamo
-            return await actorSystem.ActorSelection(path).ResolveOne(TimeSpan.FromMilliseconds(200));
+            return await actorSystem.ActorSelection(path)
+                                    .ResolveOne(TimeSpan.FromMilliseconds(200));
         }
         catch
         {
             // altrimenti lo creiamo
             Props props = DependencyResolver.For(actorSystem)
-                .Props<ConversationManagerAgent>(conversationId, userId);
+                .Props<ConversationManagerActor>(conversationId);
 
             return actorSystem.ActorOf(props, managerName);
         }

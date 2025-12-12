@@ -1,14 +1,14 @@
 ﻿using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Morgana.Tools;
+using Morgana.AI.Tools;
 
 namespace Morgana.Adapters;
 
-public class AgentExecutorAdapter
+public class AgentAdapter
 {
     private readonly IChatClient chatClient;
 
-    public AgentExecutorAdapter(IChatClient chatClient)
+    public AgentAdapter(IChatClient chatClient)
     {
         this.chatClient = chatClient;
     }
@@ -42,7 +42,7 @@ public class AgentExecutorAdapter
 
     public AIAgent CreateContractAgent()
     {
-        ContractTool contractTool = new ContractTool();
+        ContractCancellationTool contractTool = new ContractCancellationTool();
 
         return chatClient.CreateAIAgent(
             instructions: @"Sei un assistente specializzato in gestione contratti.
@@ -69,7 +69,7 @@ public class AgentExecutorAdapter
 
     public AIAgent CreateTroubleshootingAgent()
     {
-        TroubleshootingTool troubleshootingTool = new TroubleshootingTool();
+        HardwareTroubleshootingTool troubleshootingTool = new HardwareTroubleshootingTool();
 
         return chatClient.CreateAIAgent(
             instructions: @"Sei un tecnico di assistenza hardware e connettività.

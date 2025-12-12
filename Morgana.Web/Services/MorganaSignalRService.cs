@@ -8,7 +8,7 @@ public class MorganaSignalRService : IAsyncDisposable
     private HubConnection? _hubConnection;
     private readonly IConfiguration _configuration;
 
-    public event Action<string, string, string, DateTime>? OnMessageReceived;
+    public event Action<string, string, DateTime>? OnMessageReceived;
     public event Action<bool>? OnConnectionStateChanged;
 
     public bool IsConnected => _hubConnection?.State == HubConnectionState.Connected;
@@ -40,7 +40,6 @@ public class MorganaSignalRService : IAsyncDisposable
         {
             OnMessageReceived?.Invoke(
                 message.ConversationId,
-                message.UserId,
                 message.Text,
                 message.Timestamp
             );
@@ -68,19 +67,19 @@ public class MorganaSignalRService : IAsyncDisposable
         OnConnectionStateChanged?.Invoke(true);
     }
 
-    public async Task JoinConversation(string conversationId, string userId)
+    public async Task JoinConversation(string conversationId)
     {
         if (_hubConnection?.State == HubConnectionState.Connected)
         {
-            await _hubConnection.InvokeAsync("JoinConversation", conversationId, userId);
+            await _hubConnection.InvokeAsync("JoinConversation", conversationId);
         }
     }
 
-    public async Task LeaveConversation(string conversationId, string userId)
+    public async Task LeaveConversation(string conversationId)
     {
         if (_hubConnection?.State == HubConnectionState.Connected)
         {
-            await _hubConnection.InvokeAsync("LeaveConversation", conversationId, userId);
+            await _hubConnection.InvokeAsync("LeaveConversation", conversationId);
         }
     }
 

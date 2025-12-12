@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace Morgana.Tools;
+namespace Morgana.AI.Tools;
 
 public class BillingTool
 {

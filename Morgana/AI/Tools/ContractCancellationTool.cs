@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel;
 
-namespace Morgana.Tools;
+namespace Morgana.AI.Tools;
 
-public class ContractTool
+public class ContractCancellationTool
 {
     [Description("Recupera i dettagli del contratto attivo dell'utente")]
     public async Task<string> GetContractDetails([Description("ID dell'utente")] string userId)
