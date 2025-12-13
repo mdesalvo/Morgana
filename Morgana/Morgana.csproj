@@ -35,12 +35,8 @@ The system is powered by Microsoft's Agent Framework, enabling seamless integrat
     <ProjectReference Include="..\Morgana.AI\Morgana.AI.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Update="morgana-avatar.png">
+    <None Include="wwwroot\images\morgana-avatar.png">
       <Pack>True</Pack>
-      <PackagePath></PackagePath>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="wwwroot\" />
   </ItemGroup>
 </Project>
