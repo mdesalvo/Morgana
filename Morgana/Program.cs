@@ -21,7 +21,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
     {
-        policy.WithOrigins("https://localhost:5002", "http://localhost:5003") //Morgana.Web
+        policy.WithOrigins(builder.Configuration["Morgana.Web:BaseUrl"]!) //Morgana.Web
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
