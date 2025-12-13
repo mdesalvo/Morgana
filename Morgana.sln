@@ -5,8 +5,6 @@ VisualStudioVersion = 18.0.11222.15
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Morgana", "Morgana\Morgana.csproj", "{C3333333-3333-3333-3333-333333333333}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Morgana.Web", "Morgana.Web\Morgana.Web.csproj", "{0503CEC0-F0C5-4066-9177-9B4BEB6E756D}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Morgana.AI", "Morgana.AI\Morgana.AI.csproj", "{A9B349C4-4EAA-4B04-A355-C67A4C962439}"
 EndProject
 Global
@@ -19,10 +17,6 @@ Global
 		{C3333333-3333-3333-3333-333333333333}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C3333333-3333-3333-3333-333333333333}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C3333333-3333-3333-3333-333333333333}.Release|Any CPU.Build.0 = Release|Any CPU
-		{0503CEC0-F0C5-4066-9177-9B4BEB6E756D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0503CEC0-F0C5-4066-9177-9B4BEB6E756D}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0503CEC0-F0C5-4066-9177-9B4BEB6E756D}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0503CEC0-F0C5-4066-9177-9B4BEB6E756D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{A9B349C4-4EAA-4B04-A355-C67A4C962439}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{A9B349C4-4EAA-4B04-A355-C67A4C962439}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A9B349C4-4EAA-4B04-A355-C67A4C962439}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -33,8 +27,5 @@ Global
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0AAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}
-	EndGlobalSection
-	GlobalSection(RiderSharedRunConfigurations) = postSolution
-		File = Morgana.run\Morgana+Morgana.Web.run.xml
 	EndGlobalSection
 EndGlobal
