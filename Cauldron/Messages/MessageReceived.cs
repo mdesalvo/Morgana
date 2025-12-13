@@ -1,4 +1,4 @@
-namespace Morgana.Web.Messages;
+namespace Cauldron.Messages;
 
 public class MessageReceived
 {

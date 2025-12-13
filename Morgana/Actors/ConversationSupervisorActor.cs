@@ -69,7 +69,7 @@ public class ConversationSupervisorActor : MorganaActor
             if (!guardCheckResponse.Compliant)
             {
                 Records.ConversationResponse response = new Records.ConversationResponse(
-                    $"La prego di mantenere un tono professionale. {guardCheckResponse.Violation}", "guard_violation", []);
+                    $"Ti chiedo di mantenere un tono rispettoso. {guardCheckResponse.Violation}", "guard_violation", []);
 
                 senderRef.Tell(response);
                 return;

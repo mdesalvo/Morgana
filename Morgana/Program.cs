@@ -16,12 +16,12 @@ builder.Services.AddEndpointsApiExplorer();
 // SignalR per comunicazione real-time
 builder.Services.AddSignalR();
 
-// CORS per Morgana.Web
+// CORS per Cauldron
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
     {
-        policy.WithOrigins(builder.Configuration["Morgana.Web:BaseUrl"]!) //Morgana.Web
+        policy.WithOrigins(builder.Configuration["Cauldron:BaseUrl"]!) //Cauldron
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();

@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.0.11222.15
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Morgana.Web", "Morgana.Web\Morgana.Web.csproj", "{0503CEC0-F0C5-4066-9177-9B4BEB6E756D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cauldron", "Cauldron\Cauldron.csproj", "{0503CEC0-F0C5-4066-9177-9B4BEB6E756D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

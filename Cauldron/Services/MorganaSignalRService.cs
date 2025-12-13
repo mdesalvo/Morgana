@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.SignalR.Client;
-using Morgana.Web.Messages;
+using Cauldron.Messages;
 
-namespace Morgana.Web.Services;
+namespace Cauldron.Services;
 
 public class MorganaSignalRService : IAsyncDisposable
 {
