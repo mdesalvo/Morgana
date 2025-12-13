@@ -22,7 +22,7 @@
     </div>
 
     <!-- Messages Area -->
-    <div class="messages-container" @ref="messagesContainer">
+    <div class="messages-container">
         @if (!isInitialized)
         {
             <div class="welcome-message">
@@ -70,12 +70,9 @@
     <!-- Input Area -->
     <div class="input-container">
         <textarea 
-            @ref="textareaRef"
             @bind="inputText" 
             @bind:event="oninput"
-            @bind:after="OnInputChange"
             @onkeyup="HandleKeyPress"
-            @onfocus="OnTextareaFocus"
             placeholder="Scrivi un messaggio..."
             rows="1"
             disabled="@IsTextareaDisabled"
@@ -118,9 +115,7 @@
 </div>
 
 @code {
-    private ElementReference messagesContainer;
-    private ElementReference textareaRef;
-    private List<ChatMessage> messages = new();
+    private List<ChatMessage> messages = [];
     private string inputText = string.Empty;
     private string conversationId = string.Empty;
     private bool isConnected = false;
@@ -214,11 +209,11 @@
             return;
         }
 
-        string messageText = inputText.Trim();
+        string messageText = inputText.Trim().TrimEnd('\0');
         inputText = string.Empty;
         errorMessage = string.Empty;
         isSending = true;
-        
+
         StateHasChanged();
 
         Console.WriteLine($"🟡 Sending message: '{messageText}' to conversation: {conversationId}");
@@ -239,7 +234,7 @@
             Timestamp = DateTime.Now
         });
 
-        StateHasChanged(); // Necessario: abbiamo modificato messages
+        StateHasChanged();
 
         try
         {
@@ -268,7 +263,7 @@
                         Timestamp = DateTime.Now,
                         IsError = true
                     });
-                    StateHasChanged(); // Necessario: abbiamo modificato messages
+                    StateHasChanged();
                 }
                 
                 errorMessage = $"Errore nell'invio: {response.StatusCode}";
@@ -292,13 +287,13 @@
                 });
 
                 errorMessage = $"Errore: {ex.Message}";
-                StateHasChanged(); // Necessario: abbiamo modificato messages ed errorMessage
+                StateHasChanged();
             }
         }
         finally
         {
             isSending = false;
-            StateHasChanged(); // Necessario: aggiorna lo stato del pulsante
+            StateHasChanged();
         }
     }
 
@@ -328,7 +323,7 @@
                 Timestamp = timestamp
             });
 
-            await InvokeAsync(StateHasChanged); // Necessario: callback da SignalR (thread diverso)
+            await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
@@ -342,17 +337,6 @@
         {
             await SendMessage();
         }
-    }
-
-    private void OnInputChange()
-    {
-        // StateHasChanged viene già chiamato automaticamente da @bind:after
-        // Questa funzione esiste solo come hook se servisse logica aggiuntiva
-    }
-
-    private void OnTextareaFocus()
-    {
-        StateHasChanged();
     }
 
     private bool IsButtonDisabled => 

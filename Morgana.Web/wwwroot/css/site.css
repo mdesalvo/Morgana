@@ -217,7 +217,7 @@ body {
 
 .message-input {
     flex: 1;
-    padding: 14px 18px;
+    padding: 18px 18px;
     border: 2px solid var(--surface-light);
     border-radius: 24px;
     background: var(--bg-color);
