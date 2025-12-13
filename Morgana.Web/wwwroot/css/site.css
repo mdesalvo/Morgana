@@ -146,6 +146,7 @@ body {
     background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .message {
@@ -230,24 +231,564 @@ body {
     outline: none;
 }
 
+/* ======================
+   CAULDRON SEND BUTTON 
+   ====================== */
+
 .send-button {
-    width: 52px;
-    height: 52px;
+    width: 64px;
+    height: 64px;
     border: none;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-    color: white;
-    font-size: 20px;
+    background: radial-gradient(circle at center,
+    rgba(30, 27, 75, 0.4) 0%,
+    rgba(15, 23, 42, 0.8) 100%);
+    border: 2px solid rgba(139, 92, 246, 0.4);
     cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: visible;
+    padding: 0;
+    box-shadow: inset 0 0 20px rgba(139, 92, 246, 0.1);
 }
 
 .send-button:hover:not(:disabled) {
-    transform: scale(1.05);
+    transform: scale(1.1);
+    border-color: rgba(139, 92, 246, 0.7);
+    box-shadow:
+            0 0 25px rgba(139, 92, 246, 0.5),
+            inset 0 0 30px rgba(139, 92, 246, 0.15);
+    background: radial-gradient(circle at center,
+    rgba(40, 35, 95, 0.5) 0%,
+    rgba(15, 23, 42, 0.9) 100%);
 }
 
 .send-button:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
+}
+
+.cauldron-wrapper {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.cauldron-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -40%);
+    width: 36px;
+    height: 36px;
+    z-index: 3;
+}
+
+.cauldron-body {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 34px;
+    height: 28px;
+    background: linear-gradient(180deg, #252538 0%, #16161f 40%, #0d0d15 100%);
+    border: 2.5px solid #8b5cf6;
+    border-radius: 45% 45% 50% 50%;
+    box-shadow:
+            inset 0 4px 12px rgba(139, 92, 246, 0.4),
+            inset 0 -3px 8px rgba(0, 0, 0, 0.9),
+            inset 2px 0 6px rgba(0, 0, 0, 0.5),
+            inset -2px 0 6px rgba(0, 0, 0, 0.5),
+            0 3px 10px rgba(0, 0, 0, 0.6);
+}
+
+.cauldron-body::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 32px;
+    height: 4px;
+    background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+    border-radius: 50%;
+    box-shadow:
+            0 0 8px rgba(139, 92, 246, 0.8),
+            inset 0 -1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.brew-surface {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 26px;
+    height: 11px;
+    background: radial-gradient(ellipse,
+    rgba(167, 139, 250, 0.9) 0%,
+    rgba(139, 92, 246, 0.7) 40%,
+    rgba(109, 40, 217, 0.5) 70%,
+    transparent 100%);
+    border-radius: 50%;
+    animation: brewGlow 2s ease-in-out infinite;
+    box-shadow:
+            0 0 10px rgba(167, 139, 250, 0.6),
+            inset 0 -1px 3px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes brewGlow {
+    0%, 100% {
+        opacity: 0.6;
+        transform: translateX(-50%) scale(0.95);
+    }
+    50% {
+        opacity: 1;
+        transform: translateX(-50%) scale(1.05);
+    }
+}
+
+.bubble {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.9), rgba(167, 139, 250, 0.6));
+    border-radius: 50%;
+    opacity: 0;
+    z-index: 1;
+    box-shadow: 0 0 4px rgba(167, 139, 250, 0.8);
+}
+
+.bubble.b1 {
+    bottom: 14px;
+    left: 35%;
+    animation: bubbleRise1 3s ease-in-out infinite;
+}
+
+.bubble.b2 {
+    bottom: 14px;
+    left: 50%;
+    animation: bubbleRise2 3.5s ease-in-out infinite;
+    animation-delay: 0.5s;
+}
+
+.bubble.b3 {
+    bottom: 14px;
+    left: 65%;
+    animation: bubbleRise3 3.2s ease-in-out infinite;
+    animation-delay: 1s;
+}
+
+.bubble.b4 {
+    bottom: 14px;
+    left: 42%;
+    animation: bubbleRise1 3.8s ease-in-out infinite;
+    animation-delay: 1.5s;
+}
+
+@keyframes bubbleRise1 {
+    0%, 100% {
+        opacity: 0;
+        transform: translateY(0) scale(0.5);
+    }
+    20% {
+        opacity: 1;
+        transform: translateY(-3px) scale(1);
+    }
+    80% {
+        opacity: 0.8;
+        transform: translateY(-10px) scale(0.8);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-14px) scale(0.3);
+    }
+}
+
+@keyframes bubbleRise2 {
+    0%, 100% {
+        opacity: 0;
+        transform: translateY(0) scale(0.4);
+    }
+    25% {
+        opacity: 1;
+        transform: translateY(-4px) scale(1.1);
+    }
+    75% {
+        opacity: 0.7;
+        transform: translateY(-12px) scale(0.7);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-16px) scale(0.2);
+    }
+}
+
+@keyframes bubbleRise3 {
+    0%, 100% {
+        opacity: 0;
+        transform: translateY(0) scale(0.6);
+    }
+    30% {
+        opacity: 1;
+        transform: translateY(-5px) scale(1);
+    }
+    70% {
+        opacity: 0.6;
+        transform: translateY(-11px) scale(0.6);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-15px) scale(0.2);
+    }
+}
+
+.steam {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: radial-gradient(circle, rgba(167, 139, 250, 0.5), transparent 70%);
+    border-radius: 50%;
+    opacity: 0;
+    filter: blur(1px);
+}
+
+.steam.st1 {
+    bottom: 34px;
+    left: 40%;
+    animation: steamRise1 4s ease-out infinite;
+}
+
+.steam.st2 {
+    bottom: 34px;
+    left: 55%;
+    animation: steamRise2 4.5s ease-out infinite;
+    animation-delay: 1s;
+}
+
+.steam.st3 {
+    bottom: 34px;
+    left: 48%;
+    animation: steamRise3 4.2s ease-out infinite;
+    animation-delay: 2s;
+}
+
+@keyframes steamRise1 {
+    0% {
+        opacity: 0;
+        transform: translateY(0) scale(0.5);
+    }
+    20% {
+        opacity: 0.6;
+        transform: translateY(-8px) scale(1);
+    }
+    80% {
+        opacity: 0.3;
+        transform: translateY(-25px) scale(1.5);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-35px) scale(2);
+    }
+}
+
+@keyframes steamRise2 {
+    0% {
+        opacity: 0;
+        transform: translateY(0) translateX(0) scale(0.6);
+    }
+    25% {
+        opacity: 0.7;
+        transform: translateY(-10px) translateX(3px) scale(1.1);
+    }
+    75% {
+        opacity: 0.2;
+        transform: translateY(-28px) translateX(5px) scale(1.8);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-38px) translateX(6px) scale(2.2);
+    }
+}
+
+@keyframes steamRise3 {
+    0% {
+        opacity: 0;
+        transform: translateY(0) translateX(0) scale(0.5);
+    }
+    30% {
+        opacity: 0.5;
+        transform: translateY(-12px) translateX(-4px) scale(1);
+    }
+    70% {
+        opacity: 0.25;
+        transform: translateY(-30px) translateX(-6px) scale(1.6);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-40px) translateX(-8px) scale(2);
+    }
+}
+
+.magic-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 56px;
+    height: 56px;
+    background: radial-gradient(circle,
+    rgba(167, 139, 250, 0.6) 0%,
+    rgba(139, 92, 246, 0.4) 40%,
+    transparent 70%);
+    border-radius: 50%;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    filter: blur(4px);
+}
+
+.magic-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 70px;
+    height: 70px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    z-index: 0;
+    opacity: 0;
+}
+
+.sparkle {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    background: radial-gradient(circle, #ffffff 0%, #e9d5ff 50%, transparent 100%);
+    border-radius: 50%;
+    opacity: 0;
+    z-index: 2;
+    box-shadow:
+            0 0 8px rgba(255, 255, 255, 0.9),
+            0 0 12px rgba(167, 139, 250, 0.6);
+}
+
+.sparkle.s1 {
+    top: 12%;
+    left: 18%;
+}
+
+.sparkle.s2 {
+    top: 18%;
+    right: 15%;
+}
+
+.sparkle.s3 {
+    bottom: 20%;
+    left: 15%;
+}
+
+.sparkle.s4 {
+    top: 25%;
+    left: 45%;
+}
+
+.sparkle.s5 {
+    bottom: 28%;
+    right: 20%;
+}
+
+.sparkle.s6 {
+    top: 35%;
+    right: 12%;
+}
+
+.send-button.sending {
+    animation: buttonPulse 1.5s ease-in-out infinite;
+    border-color: rgba(167, 139, 250, 1);
+    box-shadow:
+            0 0 40px rgba(139, 92, 246, 0.8),
+            0 0 80px rgba(139, 92, 246, 0.4),
+            inset 0 0 20px rgba(139, 92, 246, 0.2);
+}
+
+@keyframes buttonPulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow:
+                0 0 40px rgba(139, 92, 246, 0.8),
+                0 0 80px rgba(139, 92, 246, 0.4);
+    }
+    50% {
+        transform: scale(1.08);
+        box-shadow:
+                0 0 60px rgba(167, 139, 250, 1),
+                0 0 120px rgba(167, 139, 250, 0.6);
+    }
+}
+
+.send-button.sending .magic-glow {
+    opacity: 1;
+    animation: glowPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.7;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.6);
+        opacity: 1;
+    }
+}
+
+.send-button.sending .magic-ring {
+    opacity: 1;
+    animation: ringExpand 2s ease-out infinite;
+}
+
+@keyframes ringExpand {
+    0% {
+        transform: translate(-50%, -50%) scale(0.8) rotate(0deg);
+        opacity: 0;
+        border-color: rgba(167, 139, 250, 0.8);
+    }
+    50% {
+        opacity: 0.6;
+        border-color: rgba(139, 92, 246, 0.6);
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.3) rotate(180deg);
+        opacity: 0;
+        border-color: rgba(109, 40, 217, 0);
+    }
+}
+
+.send-button.sending .cauldron-icon {
+    animation: cauldronShake 1.5s ease-in-out infinite;
+}
+
+@keyframes cauldronShake {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+    }
+    25% {
+        transform: translate(-50%, -50%) scale(1.08) rotate(-3deg);
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.05);
+    }
+    75% {
+        transform: translate(-50%, -50%) scale(1.08) rotate(3deg);
+    }
+}
+
+.send-button.sending .brew-surface {
+    animation: brewIntense 1s ease-in-out infinite;
+}
+
+@keyframes brewIntense {
+    0%, 100% {
+        opacity: 0.9;
+        transform: translateX(-50%) scale(1);
+        box-shadow:
+                0 0 12px rgba(167, 139, 250, 0.9),
+                inset 0 -1px 3px rgba(0, 0, 0, 0.3);
+    }
+    50% {
+        opacity: 1;
+        transform: translateX(-50%) scale(1.15);
+        box-shadow:
+                0 0 20px rgba(167, 139, 250, 1),
+                0 0 30px rgba(139, 92, 246, 0.6),
+                inset 0 -1px 3px rgba(0, 0, 0, 0.3);
+    }
+}
+
+.send-button.sending .bubble.b1 {
+    animation: bubbleRise1 1.2s ease-in-out infinite;
+}
+
+.send-button.sending .bubble.b2 {
+    animation: bubbleRise2 1.4s ease-in-out infinite;
+    animation-delay: 0.2s;
+}
+
+.send-button.sending .bubble.b3 {
+    animation: bubbleRise3 1.3s ease-in-out infinite;
+    animation-delay: 0.4s;
+}
+
+.send-button.sending .bubble.b4 {
+    animation: bubbleRise1 1.5s ease-in-out infinite;
+    animation-delay: 0.6s;
+}
+
+.send-button.sending .steam.st1 {
+    animation: steamRise1 2s ease-out infinite;
+}
+
+.send-button.sending .steam.st2 {
+    animation: steamRise2 2.2s ease-out infinite;
+    animation-delay: 0.5s;
+}
+
+.send-button.sending .steam.st3 {
+    animation: steamRise3 2.1s ease-out infinite;
+    animation-delay: 1s;
+}
+
+.send-button.sending .sparkle {
+    animation: sparkleFloat 1.8s ease-out infinite;
+}
+
+.send-button.sending .sparkle.s1 {
+    animation-delay: 0s;
+}
+
+.send-button.sending .sparkle.s2 {
+    animation-delay: 0.3s;
+}
+
+.send-button.sending .sparkle.s3 {
+    animation-delay: 0.6s;
+}
+
+.send-button.sending .sparkle.s4 {
+    animation-delay: 0.9s;
+}
+
+.send-button.sending .sparkle.s5 {
+    animation-delay: 1.2s;
+}
+
+.send-button.sending .sparkle.s6 {
+    animation-delay: 1.5s;
+}
+
+@keyframes sparkleFloat {
+    0% {
+        opacity: 0;
+        transform: translate(0, 0) scale(0) rotate(0deg);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(0, 0) scale(1.2) rotate(90deg);
+    }
+    40% {
+        opacity: 1;
+        transform: translate(0, -12px) scale(1) rotate(180deg);
+    }
+    70% {
+        opacity: 0.8;
+        transform: translate(0, -28px) scale(0.8) rotate(270deg);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(0, -40px) scale(0.3) rotate(360deg);
+    }
 }
 
 .spinner {

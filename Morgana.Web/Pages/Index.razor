@@ -81,15 +81,28 @@
         <button 
             @onclick="SendMessage" 
             disabled="@(!isConnected || isSending || string.IsNullOrWhiteSpace(inputText) || !isInitialized)"
-            class="send-button">
-            @if (isSending)
-            {
-                <span class="spinner"></span>
-            }
-            else
-            {
-                <span>📤</span>
-            }
+            class="send-button @(isSending ? "sending" : "")">
+            <span class="cauldron-wrapper">
+                <span class="cauldron-icon">
+                    <span class="cauldron-body"></span>
+                    <span class="brew-surface"></span>
+                    <span class="bubble b1"></span>
+                    <span class="bubble b2"></span>
+                    <span class="bubble b3"></span>
+                    <span class="bubble b4"></span>
+                    <span class="steam st1"></span>
+                    <span class="steam st2"></span>
+                    <span class="steam st3"></span>
+                </span>
+                <span class="magic-glow"></span>
+                <span class="magic-ring"></span>
+                <span class="sparkle s1"></span>
+                <span class="sparkle s2"></span>
+                <span class="sparkle s3"></span>
+                <span class="sparkle s4"></span>
+                <span class="sparkle s5"></span>
+                <span class="sparkle s6"></span>
+            </span>
         </button>
     </div>
 
@@ -234,7 +247,6 @@
                 string errorContent = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"❌ Morgana error: {errorContent}");
                 
-                // Remove typing indicator and show error
                 ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
                 if (typingMessage != null)
                 {
