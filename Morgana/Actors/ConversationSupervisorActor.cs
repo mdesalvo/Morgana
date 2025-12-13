@@ -1,8 +1,8 @@
 using Akka.Actor;
 using Akka.DependencyInjection;
-using Morgana;
-using Morgana.Actors;
 using Morgana.AI.Abstractions;
+
+namespace Morgana.Actors;
 
 public class ConversationSupervisorActor : MorganaActor
 {
@@ -81,50 +81,53 @@ public class ConversationSupervisorActor : MorganaActor
             // Risposta polimorfica: può essere InternalAgentResponse o AgentResponse
             object? agentResponse = await routerActor.Ask<object>(
                 new Morgana.AI.Records.AgentRequest(msg.ConversationId, msg.Text, classificationResult));
-
-            // Caso 1: InternalAgentResponse → proveniente dall'agente di routing
-            if (agentResponse is Morgana.AI.Records.InternalAgentResponse internalAgentResponse)
+            switch (agentResponse)
             {
-                logger.LogInformation("Supervisor received InternalAgentResponse from {0}", internalAgentResponse.AgentRef.Path);
-
-                // Se multi-turno → imposta agente concreto
-                if (!internalAgentResponse.IsCompleted)
+                // Caso 1: InternalAgentResponse → proveniente dall'agente di routing
+                case Morgana.AI.Records.InternalAgentResponse internalAgentResponse:
                 {
-                    activeAgent = internalAgentResponse.AgentRef;
-                    logger.LogInformation("Supervisor: active agent set to {0}", activeAgent.Path);
+                    logger.LogInformation("Supervisor received InternalAgentResponse from {0}", internalAgentResponse.AgentRef.Path);
+
+                    // Se multi-turno → imposta agente concreto
+                    if (!internalAgentResponse.IsCompleted)
+                    {
+                        activeAgent = internalAgentResponse.AgentRef;
+                        logger.LogInformation("Supervisor: active agent set to {0}", activeAgent.Path);
+                    }
+
+                    senderRef.Tell(new Records.ConversationResponse(
+                        internalAgentResponse.Response,
+                        classificationResult.Intent,
+                        classificationResult.Metadata));
+
+                    break;
                 }
-
-                senderRef.Tell(new Records.ConversationResponse(
-                    internalAgentResponse.Response,
-                    classificationResult.Intent,
-                    classificationResult.Metadata));
-
-                return;
-            }
-
-            // Caso 2: AgentResponse diretto (fallback, dovrebbe essere raro)
-            if (agentResponse is Morgana.AI.Records.AgentResponse directAgentResponse)
-            {
-                logger.LogWarning("Supervisor received direct AgentResponse instead of internal one.");
-
-                if (!directAgentResponse.IsCompleted)
+                // Caso 2: AgentResponse diretto (fallback, dovrebbe essere raro)
+                case Morgana.AI.Records.AgentResponse directAgentResponse:
                 {
-                    // fallback: usa direttamente l'attore di routing come agente attivo (non ideale, ma evita blocchi)
-                    activeAgent = routerActor;
-                    logger.LogWarning("Supervisor: fallback active agent = {0}", routerActor.Path);
+                    logger.LogWarning("Supervisor received direct AgentResponse instead of internal one.");
+
+                    if (!directAgentResponse.IsCompleted)
+                    {
+                        // fallback: usa direttamente l'attore di routing come agente attivo (non ideale, ma evita blocchi)
+                        activeAgent = routerActor;
+                        logger.LogWarning("Supervisor: fallback active agent = {0}", routerActor.Path);
+                    }
+
+                    senderRef.Tell(new Records.ConversationResponse(
+                        directAgentResponse.Response,
+                        classificationResult.Intent,
+                        classificationResult.Metadata));
+
+                    break;
                 }
+                default:
+                    // Caso 3: risposta inattesa
+                    logger.LogError("Supervisor received unexpected message type: {0}", agentResponse?.GetType());
 
-                senderRef.Tell(new Records.ConversationResponse(
-                    directAgentResponse.Response,
-                    classificationResult.Intent,
-                    classificationResult.Metadata));
-
-                return;
+                    senderRef.Tell(new Records.ConversationResponse("Errore interno imprevisto.", null, null));
+                    break;
             }
-
-            // Caso 3: risposta inattesa
-            logger.LogError("Supervisor received unexpected message type: {0}", agentResponse?.GetType());
-            senderRef.Tell(new Records.ConversationResponse("Errore interno imprevisto.", null, null));
         }
         catch (Exception ex)
         {

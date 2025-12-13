@@ -40,4 +40,7 @@ The system is powered by Microsoft's Agent Framework, enabling seamless integrat
       <PackagePath></PackagePath>
     </None>
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="wwwroot\" />
+  </ItemGroup>
 </Project>

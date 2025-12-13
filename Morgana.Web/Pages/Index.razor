@@ -305,7 +305,7 @@
 
             if (this.conversationId != conversationId)
             {
-                Console.WriteLine($"⚠️ Message for different conversation, ignoring");
+                Console.WriteLine("⚠️ Message for different conversation, ignoring");
                 return;
             }
 
@@ -333,7 +333,7 @@
 
     private async Task HandleKeyPress(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !e.ShiftKey)
+        if (e is { Key: "Enter", ShiftKey: false })
         {
             await SendMessage();
         }
