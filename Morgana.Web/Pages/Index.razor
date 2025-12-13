@@ -3,6 +3,7 @@
 @using Morgana.Web.Services
 @inject MorganaSignalRService SignalRService
 @inject HttpClient Http
+@inject IJSRuntime JSRuntime
 @implements IAsyncDisposable
 
 <PageTitle>Morgana - AI Assistant</PageTitle>
@@ -70,17 +71,20 @@
     <!-- Input Area -->
     <div class="input-container">
         <textarea 
+            @ref="textareaRef"
             @bind="inputText" 
             @bind:event="oninput"
-            @onkeydown="HandleKeyPress"
+            @bind:after="OnInputChange"
+            @onkeyup="HandleKeyPress"
+            @onfocus="OnTextareaFocus"
             placeholder="Scrivi un messaggio..."
             rows="1"
-            disabled="@(!isConnected || isSending || !isInitialized || messages.Any(m => m.IsTyping))"
+            disabled="@IsTextareaDisabled"
             class="message-input"
         ></textarea>
         <button 
             @onclick="SendMessage" 
-            disabled="@(!isConnected || isSending || string.IsNullOrWhiteSpace(inputText) || !isInitialized || messages.Any(m => m.IsTyping))"
+            disabled="@IsButtonDisabled"
             class="send-button @(isSending ? "sending" : "")">
             <span class="cauldron-wrapper">
                 <span class="cauldron-icon">
@@ -116,6 +120,7 @@
 
 @code {
     private ElementReference messagesContainer;
+    private ElementReference textareaRef;
     private List<ChatMessage> messages = new();
     private string inputText = string.Empty;
     private string conversationId = string.Empty;
@@ -134,12 +139,15 @@
             isConnected = SignalRService.IsConnected;
             Console.WriteLine($"🔵 SignalR connected: {isConnected}");
 
-            SignalRService.OnMessageReceived += HandleMessageReceived;
+            SignalRService.OnMessageReceived += async (conversationId, text, timestamp) => 
+            {
+                await HandleMessageReceived(conversationId, text, timestamp);
+            };
             SignalRService.OnConnectionStateChanged += (connected) =>
             {
                 isConnected = connected;
                 Console.WriteLine($"🔵 Connection state changed: {connected}");
-                InvokeAsync(StateHasChanged);
+                InvokeAsync(StateHasChanged); // Necessario: callback da thread diverso
             };
 
             await StartConversation();
@@ -211,6 +219,8 @@
         inputText = string.Empty;
         errorMessage = string.Empty;
         isSending = true;
+        
+        StateHasChanged();
 
         Console.WriteLine($"🟡 Sending message: '{messageText}' to conversation: {conversationId}");
 
@@ -230,7 +240,7 @@
             Timestamp = DateTime.Now
         });
 
-        StateHasChanged();
+        StateHasChanged(); // Necessario: abbiamo modificato messages
 
         try
         {
@@ -259,6 +269,7 @@
                         Timestamp = DateTime.Now,
                         IsError = true
                     });
+                    StateHasChanged(); // Necessario: abbiamo modificato messages
                 }
                 
                 errorMessage = $"Errore nell'invio: {response.StatusCode}";
@@ -282,40 +293,48 @@
                 });
 
                 errorMessage = $"Errore: {ex.Message}";
+                StateHasChanged(); // Necessario: abbiamo modificato messages ed errorMessage
             }
         }
         finally
         {
             isSending = false;
-            StateHasChanged();
+            StateHasChanged(); // Necessario: aggiorna lo stato del pulsante
         }
     }
 
-    private async void HandleMessageReceived(string conversationId, string text, DateTime timestamp)
+    private async Task HandleMessageReceived(string conversationId, string text, DateTime timestamp)
     {
-        Console.WriteLine($"🟣 Message received for conversation: {conversationId}");
-
-        if (this.conversationId != conversationId)
+        try
         {
-            Console.WriteLine($"⚠️ Message for different conversation, ignoring");
-            return;
+            Console.WriteLine($"🟣 Message received for conversation: {conversationId}");
+
+            if (this.conversationId != conversationId)
+            {
+                Console.WriteLine($"⚠️ Message for different conversation, ignoring");
+                return;
+            }
+
+            ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
+            if (typingMessage != null)
+            {
+                messages.Remove(typingMessage);
+            }
+
+            messages.Add(new ChatMessage
+            {
+                ConversationId = conversationId,
+                Text = text,
+                Role = "assistant",
+                Timestamp = timestamp
+            });
+
+            await InvokeAsync(StateHasChanged); // Necessario: callback da SignalR (thread diverso)
         }
-
-        ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
-        if (typingMessage != null)
+        catch (Exception ex)
         {
-            messages.Remove(typingMessage);
+            Console.WriteLine($"❌ Error in HandleMessageReceived: {ex.Message}");
         }
-
-        messages.Add(new ChatMessage
-        {
-            ConversationId = conversationId,
-            Text = text,
-            Role = "assistant",
-            Timestamp = timestamp
-        });
-
-        await InvokeAsync(StateHasChanged);
     }
 
     private async Task HandleKeyPress(KeyboardEventArgs e)
@@ -326,9 +345,36 @@
         }
     }
 
+    private void OnInputChange()
+    {
+        // StateHasChanged viene già chiamato automaticamente da @bind:after
+        // Questa funzione esiste solo come hook se servisse logica aggiuntiva
+    }
+
+    private void OnTextareaFocus()
+    {
+        StateHasChanged();
+    }
+
+    private bool IsButtonDisabled => 
+        !isConnected || 
+        isSending || 
+        string.IsNullOrWhiteSpace(inputText) || 
+        !isInitialized || 
+        messages.Any(m => m.IsTyping);
+
+    private bool IsTextareaDisabled => 
+        !isConnected || 
+        isSending || 
+        !isInitialized || 
+        messages.Any(m => m.IsTyping);
+
     public async ValueTask DisposeAsync()
     {
-        SignalRService.OnMessageReceived -= HandleMessageReceived;
+        SignalRService.OnMessageReceived -= async (conversationId, text, timestamp) => 
+        {
+            await HandleMessageReceived(conversationId, text, timestamp);
+        };
         await SignalRService.StopAsync();
     }
 }
