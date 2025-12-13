@@ -75,12 +75,12 @@
             @onkeydown="HandleKeyPress"
             placeholder="Scrivi un messaggio..."
             rows="1"
-            disabled="@(!isConnected || isSending || !isInitialized)"
+            disabled="@(!isConnected || isSending || !isInitialized || messages.Any(m => m.IsTyping))"
             class="message-input"
         ></textarea>
         <button 
             @onclick="SendMessage" 
-            disabled="@(!isConnected || isSending || string.IsNullOrWhiteSpace(inputText) || !isInitialized)"
+            disabled="@(!isConnected || isSending || string.IsNullOrWhiteSpace(inputText) || !isInitialized || messages.Any(m => m.IsTyping))"
             class="send-button @(isSending ? "sending" : "")">
             <span class="cauldron-wrapper">
                 <span class="cauldron-icon">
