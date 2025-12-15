@@ -23,64 +23,88 @@ public class AgentAdapter
     public AIAgent CreateBillingAgent()
     {
         BillingTool billingTool = new BillingTool();
-
-        ToolMethodRegistry billingToolMethodRegistry = new ToolMethodRegistry()
-            .AddTool(nameof(BillingTool.GetInvoices), billingTool.GetInvoices)
-            .AddTool(nameof(BillingTool.GetInvoiceDetails), billingTool.GetInvoiceDetails);
+        ToolMethodRegistry billingToolRegistry = new ToolMethodRegistry();
 
         Prompt billingPrompt = promptResolverService.ResolveAsync("Billing")
-            .GetAwaiter()
-            .GetResult();
+                                                    .GetAwaiter()
+                                                    .GetResult();
 
         ToolDefinition[]? billingTools = JsonSerializer.Deserialize<ToolDefinition[]>(
-            billingPrompt.AdditionalProperties["tools"]); // JSON → DTO
+            billingPrompt.AdditionalProperties["tools"]);
+        foreach (ToolDefinition billingToolDefinition in billingTools ?? [])
+        {
+            Delegate billingToolImplementation = billingToolDefinition.Name switch
+            {
+                nameof(BillingTool.GetInvoices) => billingTool.GetInvoices,
+                nameof(BillingTool.GetInvoiceDetails) => billingTool.GetInvoiceDetails,
+                _ => throw new InvalidOperationException($"Tool '{billingToolDefinition.Name}' non supportato")
+            };
+
+            billingToolRegistry.AddTool(billingToolDefinition.Name, billingToolImplementation, billingToolDefinition);
+        }
 
         return chatClient.CreateAIAgent(
             instructions: $"{billingPrompt.Content}\n{billingPrompt.Instructions}",
             name: nameof(BillingAgent),
-            tools: [.. billingTools?.Select(tool => tool.ToAIFunction(billingToolMethodRegistry.ResolveTool(tool.Name))) ?? []]);
+            tools: [.. billingToolRegistry.CreateAllFunctions()]);
     }
 
     public AIAgent CreateContractAgent()
     {
         ContractTool contractTool = new ContractTool();
-
-        ToolMethodRegistry contractToolMethodRegistry = new ToolMethodRegistry()
-            .AddTool(nameof(ContractTool.GetContractDetails), contractTool.GetContractDetails)
-            .AddTool(nameof(ContractTool.InitiateCancellation), contractTool.InitiateCancellation);
+        ToolMethodRegistry contractToolRegistry = new ToolMethodRegistry();
 
         Prompt contractPrompt = promptResolverService.ResolveAsync("Contract")
-            .GetAwaiter()
-            .GetResult();
+                                                     .GetAwaiter()
+                                                     .GetResult();
 
         ToolDefinition[]? contractTools = JsonSerializer.Deserialize<ToolDefinition[]>(
-            contractPrompt.AdditionalProperties["tools"]); // JSON → DTO
+            contractPrompt.AdditionalProperties["tools"]);
+        foreach (ToolDefinition contractToolDefinition in contractTools ?? [])
+        {
+            Delegate contractToolImplementation = contractToolDefinition.Name switch
+            {
+                nameof(ContractTool.GetContractDetails) => contractTool.GetContractDetails,
+                nameof(ContractTool.InitiateCancellation) => contractTool.InitiateCancellation,
+                _ => throw new InvalidOperationException($"Tool '{contractToolDefinition.Name}' non supportato")
+            };
+
+            contractToolRegistry.AddTool(contractToolDefinition.Name, contractToolImplementation, contractToolDefinition);
+        }
 
         return chatClient.CreateAIAgent(
             instructions: $"{contractPrompt.Content}\n{contractPrompt.Instructions}",
             name: nameof(ContractAgent),
-            tools: [.. contractTools?.Select(tool => tool.ToAIFunction(contractToolMethodRegistry.ResolveTool(tool.Name))) ?? []]);
+            tools: [.. contractToolRegistry.CreateAllFunctions()]);
     }
 
     public AIAgent CreateTroubleshootingAgent()
     {
         TroubleshootingTool troubleshootingTool = new TroubleshootingTool();
-
-        ToolMethodRegistry troubleshootingToolMethodRegistry = new ToolMethodRegistry()
-            .AddTool(nameof(TroubleshootingTool.RunDiagnostics), troubleshootingTool.RunDiagnostics)
-            .AddTool(nameof(TroubleshootingTool.GetTroubleshootingGuide), troubleshootingTool.GetTroubleshootingGuide);
+        ToolMethodRegistry troubleshootingToolRegistry = new ToolMethodRegistry();
 
         Prompt troubleshootingPrompt = promptResolverService.ResolveAsync("Troubleshooting")
-            .GetAwaiter()
-            .GetResult();
+                                                            .GetAwaiter()
+                                                            .GetResult();
 
         ToolDefinition[]? troubleshootingTools = JsonSerializer.Deserialize<ToolDefinition[]>(
-            troubleshootingPrompt.AdditionalProperties["tools"]); // JSON → DTO
+            troubleshootingPrompt.AdditionalProperties["tools"]);
+        foreach (ToolDefinition troubleshootingToolDefinition in troubleshootingTools ?? [])
+        {
+            Delegate troubleshootingToolImplementation = troubleshootingToolDefinition.Name switch
+            {
+                nameof(TroubleshootingTool.RunDiagnostics) => troubleshootingTool.RunDiagnostics,
+                nameof(TroubleshootingTool.GetTroubleshootingGuide) => troubleshootingTool.GetTroubleshootingGuide,
+                _ => throw new InvalidOperationException($"Tool '{troubleshootingToolDefinition.Name}' non supportato")
+            };
+
+            troubleshootingToolRegistry.AddTool(troubleshootingToolDefinition.Name, troubleshootingToolImplementation, troubleshootingToolDefinition);
+        }
 
         return chatClient.CreateAIAgent(
             instructions: $"{troubleshootingPrompt.Content}\n{troubleshootingPrompt.Instructions}",
             name: nameof(TroubleshootingAgent),
-            tools: [.. troubleshootingTools?.Select(tool => tool.ToAIFunction(troubleshootingToolMethodRegistry.ResolveTool(tool.Name))) ?? []]);
+            tools: [.. troubleshootingToolRegistry.CreateAllFunctions()]);
     }
 }
 
@@ -107,19 +131,55 @@ public static class JsonToolFactory
 public class ToolMethodRegistry
 {
     private readonly Dictionary<string, Delegate> toolMethods = [];
+    private readonly Dictionary<string, ToolDefinition> toolDefinitions = [];
 
-    public ToolMethodRegistry AddTool<TDelegate>(string toolName, TDelegate toolMethod)
+    public ToolMethodRegistry AddTool(string toolName, Delegate toolMethod, ToolDefinition definition)
     {
-        if (toolMethod is not Delegate del)
-            throw new ArgumentException("toolMethod deve essere un delegate", nameof(toolMethod));
+        if (!toolMethods.TryAdd(toolName, toolMethod))
+            throw new InvalidOperationException($"Tool '{toolName}' già registrato");
 
-        return toolMethods.TryAdd(toolName, del)
-            ? this
-            : throw new InvalidOperationException($"Tool '{toolName}' non inserito");
+        ValidateToolDefinition(toolMethod, definition);
+        toolDefinitions[toolName] = definition;
+
+        return this;
     }
 
     public Delegate ResolveTool(string toolName)
-        => toolMethods.TryGetValue(toolName, out var method)
+        => toolMethods.TryGetValue(toolName, out Delegate? method)
             ? method
             : throw new InvalidOperationException($"Tool '{toolName}' non registrato");
+
+    public AIFunction CreateFunction(string toolName)
+    {
+        Delegate implementation = ResolveTool(toolName);
+        ToolDefinition definition = toolDefinitions.TryGetValue(toolName, out ToolDefinition? def)
+            ? def
+            : throw new InvalidOperationException($"Tool definition '{toolName}' non trovata");
+
+        return AIFunctionFactory.Create(implementation, definition.Name, definition.Description);
+    }
+
+    public IEnumerable<AIFunction> CreateAllFunctions()
+        => toolMethods.Keys.Select(CreateFunction);
+
+    private void ValidateToolDefinition(Delegate implementation, ToolDefinition definition)
+    {
+        ParameterInfo[] methodParams = implementation.Method.GetParameters();
+        List<ToolParameter> definitionParams = [.. definition.Parameters];
+
+        if (methodParams.Length != definitionParams.Count)
+            throw new ArgumentException($"Parameter count mismatch: method has {methodParams.Length}, definition has {definitionParams.Count}");
+
+        for (int i = 0; i < methodParams.Length; i++)
+        {
+            ParameterInfo methodParam = methodParams[i];
+            ToolParameter defParam = definitionParams.FirstOrDefault(p => p.Name == methodParam.Name)
+                                        ?? throw new ArgumentException($"Parameter '{methodParam.Name}' non trovato nella definition");
+
+            // Valida required vs optional
+            bool isOptional = methodParam.HasDefaultValue;
+            if (defParam.Required && isOptional)
+                throw new ArgumentException($"Parameter '{methodParam.Name}' è required nella definition ma optional nel metodo");
+        }
+    }
 }
