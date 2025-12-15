@@ -12,32 +12,24 @@ namespace Morgana.Actors;
 public class ClassifierActor : MorganaActor
 {
     private readonly AIAgent classifierAgent;
+    private readonly IPromptResolverService promptResolverService;
     private readonly ILogger<ClassifierActor> logger;
 
     public ClassifierActor(
         string conversationId,
         ILLMService llmService,
+        IPromptResolverService promptResolverService,
         ILogger<ClassifierActor> logger) : base(conversationId)
     {
         this.logger = logger;
+        this.promptResolverService = promptResolverService;
 
-        // Crea un agente dedicato alla classificazione
+        Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
+        IntentCollection intentCollection = ((JsonElement)classifierPrompt.AdditionalProperties["Intents"]).Deserialize<IntentCollection>()!;
+        string formattedIntents = string.Join("|", intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
+        string classifierPromptContent = $"{classifierPrompt.Content.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
         classifierAgent = llmService.GetChatClient().CreateAIAgent(
-            instructions:
-"""
-Sei un classificatore esperto di richieste clienti.
-Classifica ogni richiesta del cliente determinandone l'intento, ovvero la tematica sottesa.
-Tieni conto che al momento sei in grado di assolvere compiti inerenti tematiche di questo (breve) elenco:
-- billing (richieste di visualizzazione dell'elenco di fatture o di spiegazione di voci di dettaglio specifiche)
-- troubleshooting (richieste di soluzione di problemi tecnici dovuti a guasti che ingenerano disservizio)
-- contract (richieste di informazioni sul contratto del cliente)
-- other (qualsiasi altra tematica non espressamente intercettata)
-Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preamble):
-{
-    "intent": "billing|contract|troubleshooting|other",
-    "confidence": numero tra 0 e 1 che esprime il livello di confidenza della valutazione
-}
-""",
+            instructions: classifierPromptContent,
             name: "ClassifierActor");
 
         ReceiveAsync<UserMessage>(ClassifyMessageAsync);
@@ -49,9 +41,7 @@ Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preambl
 
         try
         {
-            string prompt = $"Classifica questa richiesta del cliente secondo le direttive che ti ho dato: {msg.Text}";
-
-            AgentRunResponse agentResponse = await classifierAgent.RunAsync(prompt);
+            AgentRunResponse agentResponse = await classifierAgent.RunAsync(msg.Text);
             string jsonText = agentResponse.Text?.Trim()
                                             .Replace("```json", "")
                                             .Replace("```", "")

@@ -33,7 +33,7 @@ public class GuardActor : MorganaActor
         {
             if (req.Message.Contains(term, StringComparison.OrdinalIgnoreCase))
             {
-                senderRef.Tell(new GuardCheckResponse(false, guardPrompt.AdditionalProperties["LanguageViolation"]));
+                senderRef.Tell(new GuardCheckResponse(false, (string)guardPrompt.AdditionalProperties["LanguageViolation"]));
                 return;
             }
         }

@@ -35,7 +35,7 @@ namespace Morgana.AI
             [property: JsonPropertyName("instructions")] string Instructions,
             [property: JsonPropertyName("language")] string Language,
             [property: JsonPropertyName("version")] string Version,
-            [property: JsonPropertyName("additionalProperties")] Dictionary<string, string> AdditionalProperties);
+            [property: JsonPropertyName("additionalProperties")] Dictionary<string, object> AdditionalProperties);
 
         public record ToolDefinition(
             [property: JsonPropertyName("name")] string Name,
@@ -47,5 +47,24 @@ namespace Morgana.AI
             [property: JsonPropertyName("description")] string Description,
             [property: JsonPropertyName("required")] bool Required);
 
+        public record IntentCollection
+        {
+            [JsonPropertyName("intents")] public List<Dictionary<string, string>> Intents { get; set; }
+
+            public Dictionary<string, string> AsDictionary()
+            {
+                Dictionary<string, string> result = [];
+        
+                foreach (Dictionary<string, string> intentDict in Intents)
+                {
+                    foreach (KeyValuePair<string, string> kvp in intentDict)
+                    {
+                        result[kvp.Key] = kvp.Value;
+                    }
+                }
+        
+                return result;
+            }
+        }
     }
 }

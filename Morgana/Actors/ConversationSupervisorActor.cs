@@ -76,7 +76,7 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 AI.Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
                 Records.ConversationResponse response = new Records.ConversationResponse(
-                    guardPrompt.AdditionalProperties["GuardAnswer"].Replace("{{violation}}", guardCheckResponse.Violation), "guard_violation", []);
+                    ((string)guardPrompt.AdditionalProperties["GuardAnswer"]).Replace("{{violation}}", guardCheckResponse.Violation), "guard_violation", []);
 
                 senderRef.Tell(response);
                 return;

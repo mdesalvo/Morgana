@@ -30,7 +30,7 @@ public class AgentAdapter
                                                     .GetResult();
 
         ToolDefinition[]? billingTools = JsonSerializer.Deserialize<ToolDefinition[]>(
-            billingPrompt.AdditionalProperties["tools"]);
+            (JsonElement)billingPrompt.AdditionalProperties["tools"]);
         foreach (ToolDefinition billingToolDefinition in billingTools ?? [])
         {
             Delegate billingToolImplementation = billingToolDefinition.Name switch
@@ -59,7 +59,7 @@ public class AgentAdapter
                                                      .GetResult();
 
         ToolDefinition[]? contractTools = JsonSerializer.Deserialize<ToolDefinition[]>(
-            contractPrompt.AdditionalProperties["tools"]);
+            (JsonElement)contractPrompt.AdditionalProperties["tools"]);
         foreach (ToolDefinition contractToolDefinition in contractTools ?? [])
         {
             Delegate contractToolImplementation = contractToolDefinition.Name switch
@@ -88,7 +88,7 @@ public class AgentAdapter
                                                             .GetResult();
 
         ToolDefinition[]? troubleshootingTools = JsonSerializer.Deserialize<ToolDefinition[]>(
-            troubleshootingPrompt.AdditionalProperties["tools"]);
+            (JsonElement)troubleshootingPrompt.AdditionalProperties["tools"]);
         foreach (ToolDefinition troubleshootingToolDefinition in troubleshootingTools ?? [])
         {
             Delegate troubleshootingToolImplementation = troubleshootingToolDefinition.Name switch
