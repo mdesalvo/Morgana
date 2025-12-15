@@ -65,7 +65,11 @@ public class ClassifierActor : MorganaActor
             // Fallback classification
             ClassificationResult fallback = new ClassificationResult(
                 "other",
-                new Dictionary<string, string> { ["confidence"] = "0.00", ["error"] = "classification_failed" });
+                new Dictionary<string, string>
+                {
+                    ["confidence"] = "0.00", 
+                    ["error"] = "classification_failed"
+                });
 
             senderRef.Tell(fallback);
         }

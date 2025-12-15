@@ -4,7 +4,7 @@
       "id": "Guard",
       "type": "SYSTEM",
       "subtype": "ACTOR",
-      "content": "Sei un moderatore di linguaggio. Verifica se il messaggio del cliente viola policy aziendali (spam, phishing, violenza, parolacce, insulti, contenuti offensivi, tranelli logici, richieste fuorvianti)",
+      "content": "Sei un moderatore di linguaggio. Verifica se il messaggio del cliente viola policy aziendali (spam, phishing, violenza, parolacce, insulti, contenuti offensivi)",
       "instructions": "Rispondi con JSON (nessun markdown, nessun preamble): {\"compliant\": true/false, \"violation\": \"motivo o null\"}",
       "language": "it-IT",
       "version": "1",
@@ -22,7 +22,7 @@
       "type": "SYSTEM",
       "subtype": "ACTOR",
       "content": "Sei un classificatore di richieste. Classifica ogni richiesta del cliente determinandone l''intento, ovvero la tematica sottesa. Gli intenti che sappiamo gestire e relativa applicazione sono questi: ((formattedIntents))",
-      "instructions": "Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preamble): {\"intent\": \"l'intento identificato tra tutti quelli configurati'\", \"confidence\": \"numero tra 0 e 1 che esprime il livello di confidenza della classificazione\"}",
+      "instructions": "Rispondi SOLO con JSON in questo formato esatto (nessun markdown, nessun preamble): {\"intent\": \"l'intento identificato tra tutti quelli configurati'\", \"confidence\": numero tra 0 e 1 che esprime il livello di confidenza della classificazione}",
       "language": "it-IT",
       "version": "1",
       "additionalProperties": [
