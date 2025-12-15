@@ -4,17 +4,13 @@ namespace Morgana.AI.Tools;
 
 public class TroubleshootingTool
 {
-    [Description("Esegue diagnostica sulla connessione dell'utente")]
-    public async Task<string> RunDiagnostics(
-        [Description("Identificativo alfanumerico dell'utente")] string userId)
+    public async Task<string> RunDiagnostics(string userId)
     {
         await Task.Delay(300);
         return "Diagnostica completata:\n✓ Modem: Online\n✓ Connessione: Stabile\n✓ Velocità: 98Mbps (target: 100Mbps)\n⚠ Latenza leggermente alta: 25ms";
     }
 
-    [Description("Fornisce una guida step-by-step per risolvere un problema comune")]
-    public async Task<string> GetTroubleshootingGuide(
-        [Description("Tipo di problema (es: 'no-internet', 'slow-connection', 'wifi-issues')")] string issueType)
+    public async Task<string> GetTroubleshootingGuide(string issueType)
     {
         await Task.Delay(100);
 

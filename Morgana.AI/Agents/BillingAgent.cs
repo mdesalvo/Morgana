@@ -10,9 +10,10 @@ public class BillingAgent : MorganaAgent
     public BillingAgent(
         string conversationId,
         ILLMService llmService,
+        IPromptResolverService promptResolverService,
         ILogger<BillingAgent> logger) : base(conversationId, llmService, logger)
     {
-        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient());
+        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService);
         aiAgent = adapter.CreateBillingAgent();
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);

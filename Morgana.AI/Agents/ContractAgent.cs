@@ -10,9 +10,10 @@ public class ContractAgent : MorganaAgent
     public ContractAgent(
         string conversationId,
         ILLMService llmService,
+        IPromptResolverService promptResolverService,
         ILogger<ContractAgent> logger) : base(conversationId, llmService, logger)
     {
-        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient());
+        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService);
         aiAgent = adapter.CreateContractAgent();
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);

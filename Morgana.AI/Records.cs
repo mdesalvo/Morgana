@@ -35,6 +35,17 @@ namespace Morgana.AI
             [property: JsonPropertyName("instructions")] string Instructions,
             [property: JsonPropertyName("language")] string Language,
             [property: JsonPropertyName("version")] string Version,
-            [property: JsonPropertyName("additionalProperties")] Dictionary<string, object> AdditionalProperties);
+            [property: JsonPropertyName("additionalProperties")] Dictionary<string, string> AdditionalProperties);
+
+        public record ToolDefinition(
+            [property: JsonPropertyName("name")] string Name,
+            [property: JsonPropertyName("description")] string Description,
+            [property: JsonPropertyName("parameters")] IReadOnlyList<ToolParameter> Parameters);
+
+        public record ToolParameter(
+            [property: JsonPropertyName("name")] string Name,
+            [property: JsonPropertyName("description")] string Description,
+            [property: JsonPropertyName("required")] bool Required);
+
     }
 }

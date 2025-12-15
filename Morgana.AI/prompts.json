@@ -45,21 +45,31 @@
         {
           "tools": [
             {
-              "BillingTool.GetInvoices": {
-                "Description": "Recupera le fatture del cliente per un periodo specificato",
-                "Parameters": [
-                  { "userId": "Identificativo alfanumerico del cliente" },
-                  { "count": "Opzionale numero di fatture recenti da recuperare (default: 3)" }
-                ]
-              }
+              "name": "BillingTool.GetInvoices",
+              "description": "Recupera le fatture del cliente per un periodo specificato",
+              "parameters": [
+                {
+                  "name": "userId",
+                  "description": "Identificativo alfanumerico del cliente",
+                  "required": true
+                },
+                {
+                  "name": "count",
+                  "description": "Numero di fatture recenti da recuperare",
+                  "required": false
+                }
+              ]
             },
             {
-              "BillingTool.GetInvoiceDetails": {
-                "Description": "Recupera i dettagli di una specifica fattura del cliente",
-                "Parameters": [
-                  { "invoiceId": "Identificativo alfanumerico della fattura da recuperare" }
-                ]
-              }
+              "name": "BillingTool.GetInvoiceDetails",
+              "description": "Recupera i dettagli di una specifica fattura del cliente",
+              "parameters": [
+                {
+                  "name": "invoiceId",
+                  "description": "Identificativo alfanumerico della fattura da recuperare",
+                  "required": true
+                }
+              ]
             }
           ]
         }
@@ -77,21 +87,31 @@
         {
           "tools": [
             {
-              "ContractTool.GetContractDetails": {
-                "Description": "Recupera i principali termini contrattuali del cliente",
-                "Parameters": [
-                  { "userId": "Identificativo alfanumerico del cliente" }
-                ]
-              }
+              "name": "ContractTool.GetContractDetails",
+              "description": "Recupera i principali termini contrattuali del cliente",
+              "parameters": [
+                {
+                  "name": "userId",
+                  "description": "Identificativo alfanumerico del cliente",
+                  "required": true
+                }
+              ]
             },
             {
-              "ContractTool.InitiateCancellation": {
-                "Description": "Dopo il consenso del cliente, avvia la procedura di disdetta del suo contratto",
-                "Parameters": [
-                  { "userId": "Identificativo alfanumerico del cliente" },
-                  { "reason": "Motivo della disdetta, raccolto dal cliente prima della richiesta di conferma a procedere" }
-                ]
-              }
+              "name": "ContractTool.InitiateCancellation",
+              "description": "Dopo il consenso del cliente, avvia la procedura di disdetta del suo contratto",
+              "parameters": [
+                {
+                  "name": "userId",
+                  "description": "Identificativo alfanumerico del cliente",
+                  "required": true
+                },
+                {
+                  "name": "reason",
+                  "description": "Motivo della disdetta, raccolto dal cliente prima della richiesta di conferma a procedere",
+                  "required": true
+                }
+              ]
             }
           ]
         }
@@ -110,20 +130,26 @@
         {
           "tools": [
             {
-              "TroubleshootingTool.RunDiagnostics": {
-                "Description": "Esegue una diagnostica sulla connessione del cliente",
-                "Parameters": [
-                  { "userId": "Identificativo alfanumerico del cliente" }
-                ]
-              }
+              "name": "TroubleshootingTool.RunDiagnostics",
+              "description": "Esegue una diagnostica sulla connessione del cliente",
+              "parameters": [
+                {
+                  "name": "userId",
+                  "description": "Identificativo alfanumerico del cliente",
+                  "required": true
+                }
+              ]
             },
             {
-              "TroubleshootingTool.GetTroubleshootingGuide": {
-                "Description": "Fornisce una guida passo per passo per risolvere un problema abbastanza comune",
-                "Parameters": [
-                  { "issueType": "La tipologia di problema lamentato (ad esempio: 'no-internet', 'slow-connection', 'wifi-issues', 'other')" }
-                ]
-              }
+              "name": "TroubleshootingTool.GetTroubleshootingGuide",
+              "description": "Fornisce una guida passo per passo per risolvere un problema abbastanza comune",
+              "parameters": [
+                {
+                  "name": "issueType",
+                  "description": "La tipologia di problema lamentato (ad esempio: 'no-internet', 'slow-connection', 'wifi-issues', 'other')",
+                  "required": true
+                }
+              ]
             }
           ]
         }

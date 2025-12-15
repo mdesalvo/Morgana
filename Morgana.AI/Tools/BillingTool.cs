@@ -4,10 +4,7 @@ namespace Morgana.AI.Tools;
 
 public class BillingTool
 {
-    [Description("Recupera le fatture dell'utente per un periodo specificato")]
-    public async Task<string> GetInvoices(
-        [Description("Identificativo alfanumerico dell'utente")] string userId,
-        [Description("Numero di fatture recenti da recuperare (default: 3)")] int count = 3)
+    public async Task<string> GetInvoices(string userId, int count)
     {
         // Simulazione recupero da storage/database
         await Task.Delay(50);
@@ -22,9 +19,7 @@ public class BillingTool
         return string.Join("\n", invoices.Take(count));
     }
 
-    [Description("Recupera i dettagli di una specifica fattura")]
-    public async Task<string> GetInvoiceDetails(
-        [Description("ID della fattura")] string invoiceId)
+    public async Task<string> GetInvoiceDetails(string invoiceId)
     {
         // Simulazione recupero da storage/database
         await Task.Delay(50);
