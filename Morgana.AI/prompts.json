@@ -48,7 +48,7 @@
         {
           "tools": [
             {
-              "name": "BillingTool.GetInvoices",
+              "name": "GetInvoices",
               "description": "Recupera le fatture del cliente per un periodo specificato",
               "parameters": [
                 {
@@ -64,7 +64,7 @@
               ]
             },
             {
-              "name": "BillingTool.GetInvoiceDetails",
+              "name": "GetInvoiceDetails",
               "description": "Recupera i dettagli di una specifica fattura del cliente",
               "parameters": [
                 {
@@ -90,7 +90,7 @@
         {
           "tools": [
             {
-              "name": "ContractTool.GetContractDetails",
+              "name": "GetContractDetails",
               "description": "Recupera i principali termini contrattuali del cliente",
               "parameters": [
                 {
@@ -101,7 +101,7 @@
               ]
             },
             {
-              "name": "ContractTool.InitiateCancellation",
+              "name": "InitiateCancellation",
               "description": "Dopo il consenso del cliente, avvia la procedura di disdetta del suo contratto",
               "parameters": [
                 {
@@ -132,7 +132,7 @@
         {
           "tools": [
             {
-              "name": "TroubleshootingTool.RunDiagnostics",
+              "name": "RunDiagnostics",
               "description": "Esegue una diagnostica sulla connessione del cliente",
               "parameters": [
                 {
@@ -143,7 +143,7 @@
               ]
             },
             {
-              "name": "TroubleshootingTool.GetTroubleshootingGuide",
+              "name": "GetTroubleshootingGuide",
               "description": "Fornisce una guida passo per passo per risolvere un problema abbastanza comune",
               "parameters": [
                 {

@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 using Akka.Actor;
 
 namespace Morgana.AI
@@ -30,12 +31,32 @@ namespace Morgana.AI
         public record Prompt(
             [property: JsonPropertyName("id")] string ID,
             [property: JsonPropertyName("type")] string Type,
-            [property: JsonPropertyName("subtype")] string SubType,
-            [property: JsonPropertyName("content")] string Content,
-            [property: JsonPropertyName("instructions")] string Instructions,
-            [property: JsonPropertyName("language")] string Language,
-            [property: JsonPropertyName("version")] string Version,
-            [property: JsonPropertyName("additionalProperties")] Dictionary<string, object> AdditionalProperties);
+            [property: JsonPropertyName("subtype")]
+            string SubType,
+            [property: JsonPropertyName("content")]
+            string Content,
+            [property: JsonPropertyName("instructions")]
+            string Instructions,
+            [property: JsonPropertyName("language")]
+            string Language,
+            [property: JsonPropertyName("version")]
+            string Version,
+            [property: JsonPropertyName("additionalProperties")]
+            List<Dictionary<string, object>> AdditionalProperties)
+        {
+            public T GetAdditionalProperty<T>(string additionalPropertyName)
+            {
+                foreach (var dict in AdditionalProperties)
+                {
+                    if (dict.ContainsKey(additionalPropertyName))
+                    {
+                        JsonElement element = (JsonElement)dict[additionalPropertyName];
+                        return element.Deserialize<T>();
+                    }
+                }
+                return default;
+            }
+        }
 
         public record ToolDefinition(
             [property: JsonPropertyName("name")] string Name,
@@ -50,6 +71,12 @@ namespace Morgana.AI
         public record IntentCollection
         {
             [JsonPropertyName("intents")] public List<Dictionary<string, string>> Intents { get; set; }
+
+            public IntentCollection() { }
+            public IntentCollection(List<Dictionary<string, string>> intents)
+            {
+                Intents = intents;
+            }
 
             public Dictionary<string, string> AsDictionary()
             {
