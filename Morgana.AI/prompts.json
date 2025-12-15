@@ -10,7 +10,8 @@
       "version": "1",
       "additionalProperties": [
         {
-          "Answer": "Linguaggio inappropriato rilevato. Sono qui per aiutarti, ti chiedo di mantenere un tono cortese."
+          "LanguageViolation": "Linguaggio inappropriato rilevato.",
+          "GuardAnswer": "{{violation}} Ti chiedo di mantenere un tono rispettoso: sono qui per aiutarti."
         }
       ]
     },

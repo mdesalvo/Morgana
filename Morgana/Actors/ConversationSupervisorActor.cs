@@ -1,6 +1,7 @@
 using Akka.Actor;
 using Akka.DependencyInjection;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Interfaces;
 
 namespace Morgana.Actors;
 
@@ -9,13 +10,18 @@ public class ConversationSupervisorActor : MorganaActor
     private readonly IActorRef guardActor;
     private readonly IActorRef classifierActor;
     private readonly IActorRef routerActor;
+    private readonly IPromptResolverService promptResolverService;
     private readonly ILogger<ConversationSupervisorActor> logger;
 
     // Eventuale agente ancora attivo in multi-turno
     private IActorRef? activeAgent = null;
 
-    public ConversationSupervisorActor(string conversationId, ILogger<ConversationSupervisorActor> logger) : base(conversationId)
+    public ConversationSupervisorActor(
+        string conversationId,
+        IPromptResolverService promptResolverService,
+        ILogger<ConversationSupervisorActor> logger) : base(conversationId)
     {
+        this.promptResolverService = promptResolverService;
         this.logger = logger;
 
         DependencyResolver? resolver = DependencyResolver.For(Context.System);
@@ -68,8 +74,9 @@ public class ConversationSupervisorActor : MorganaActor
                 new Records.GuardCheckRequest(msg.ConversationId, msg.Text));
             if (!guardCheckResponse.Compliant)
             {
+                AI.Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
                 Records.ConversationResponse response = new Records.ConversationResponse(
-                    $"Ti chiedo di mantenere un tono rispettoso. {guardCheckResponse.Violation}", "guard_violation", []);
+                    guardPrompt.AdditionalProperties["GuardAnswer"].Replace("{{violation}}", guardCheckResponse.Violation), "guard_violation", []);
 
                 senderRef.Tell(response);
                 return;
