@@ -38,7 +38,7 @@ public class AgentAdapter
         return chatClient.CreateAIAgent(
             instructions: $"{billingPrompt.Content}\n{billingPrompt.Instructions}",
             name: nameof(BillingAgent),
-            tools: [.. billingTools?.Select(t => JsonToolFactory.Create(t, billingToolMethodRegistry.ResolveTool(t.Name))) ?? []]);
+            tools: [.. billingTools?.Select(tool => tool.ToAIFunction(billingToolMethodRegistry.ResolveTool(tool.Name))) ?? []]);
     }
 
     public AIAgent CreateContractAgent()
@@ -59,7 +59,7 @@ public class AgentAdapter
         return chatClient.CreateAIAgent(
             instructions: $"{contractPrompt.Content}\n{contractPrompt.Instructions}",
             name: nameof(ContractAgent),
-            tools: [.. contractTools?.Select(t => JsonToolFactory.Create(t, contractToolMethodRegistry.ResolveTool(t.Name))) ?? []]);
+            tools: [.. contractTools?.Select(tool => tool.ToAIFunction(contractToolMethodRegistry.ResolveTool(tool.Name))) ?? []]);
     }
 
     public AIAgent CreateTroubleshootingAgent()
@@ -80,33 +80,27 @@ public class AgentAdapter
         return chatClient.CreateAIAgent(
             instructions: $"{troubleshootingPrompt.Content}\n{troubleshootingPrompt.Instructions}",
             name: nameof(TroubleshootingAgent),
-            tools: [.. troubleshootingTools?.Select(t => JsonToolFactory.Create(t, troubleshootingToolMethodRegistry.ResolveTool(t.Name))) ?? []]);
+            tools: [.. troubleshootingTools?.Select(tool => tool.ToAIFunction(troubleshootingToolMethodRegistry.ResolveTool(tool.Name))) ?? []]);
     }
 }
 
 public static class JsonToolFactory
 {
-    public static AIFunction Create(ToolDefinition tool, Delegate implementation)
+    public static AIFunction ToAIFunction(this ToolDefinition tool, Delegate implementation)
     {
-        MethodInfo methodInfo = implementation.Method;
+        var metadata = new
+        {
+            tool.Name,
+            tool.Description,
+            Parameters = tool.Parameters.Select(p => new
+            {
+                p.Name,
+                p.Description,
+                p.Required
+            }).ToList()
+        };
 
-        var definition = new AIFunctionDefinition(
-            name: tool.Name,
-            description: tool.Description,
-            parameters: tool.Parameters
-                            .Select(p =>
-                            {
-                                ParameterInfo clrParameter = methodInfo.GetParameters().Single(x => x.Name == p.Name);
-                                return new AIFunctionParameterDefinition(
-                                    name: p.Name,
-                                    type: clrParameter.ParameterType,
-                                    description: p.Description,
-                                    isRequired: p.Required
-                                );
-                            }).ToList()
-        );
-
-        return AIFunctionFactory.Create(definition, implementation);
+        return AIFunctionFactory.Create(implementation, tool.Name, tool.Description);
     }
 }
 
