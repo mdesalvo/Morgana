@@ -4,11 +4,11 @@ using System.Text.Json;
 
 namespace Morgana.AI.Services
 {
-    public class AppSettingsPromptResolverService : IPromptResolverService
+    public class ConfigurationPromptResolverService : IPromptResolverService
     {
         private readonly Lazy<Records.Prompt[]> configuredPrompts;
 
-        public AppSettingsPromptResolverService()
+        public ConfigurationPromptResolverService()
         {
             configuredPrompts = new Lazy<Records.Prompt[]>(LoadPrompts);
         }
