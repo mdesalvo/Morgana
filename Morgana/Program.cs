@@ -30,6 +30,7 @@ builder.Services.AddCors(options =>
 
 // Services
 builder.Services.AddSingleton<ILLMService, AzureOpenAIService>();
+builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 builder.Services.AddSingleton<ISignalRBridgeService, SignalRBridgeService>();
 
 // Akka.NET Actor System

@@ -26,5 +26,15 @@ namespace Morgana.AI
            string Response,
            bool IsCompleted,
            IActorRef AgentRef);
+
+        public record Prompt(
+            [property: JsonPropertyName("id")] string ID,
+            [property: JsonPropertyName("type")] string Type,
+            [property: JsonPropertyName("subtype")] string SubType,
+            [property: JsonPropertyName("content")] string Content,
+            [property: JsonPropertyName("instructions")] string Instructions,
+            [property: JsonPropertyName("language")] string Language,
+            [property: JsonPropertyName("version")] string Version,
+            [property: JsonPropertyName("additionalProperties")] Dictionary<string, object> AdditionalProperties);
     }
 }
