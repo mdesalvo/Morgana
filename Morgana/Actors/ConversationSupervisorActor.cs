@@ -26,9 +26,9 @@ public class ConversationSupervisorActor : MorganaActor
 
         DependencyResolver? resolver = DependencyResolver.For(Context.System);
 
-        guardActor = Context.ActorOf(resolver.Props<GuardActor>(conversationId), $"guard-{conversationId}");
-        classifierActor = Context.ActorOf(resolver.Props<ClassifierActor>(conversationId), $"classifier-{conversationId}");
-        routerActor = Context.ActorOf(resolver.Props<RouterActor>(conversationId), $"router-{conversationId}");
+        guardActor = Context.ActorOf(resolver.Props<GuardActor>(conversationId, promptResolverService), $"guard-{conversationId}");
+        classifierActor = Context.ActorOf(resolver.Props<ClassifierActor>(conversationId, promptResolverService), $"classifier-{conversationId}");
+        routerActor = Context.ActorOf(resolver.Props<RouterActor>(conversationId, promptResolverService), $"router-{conversationId}");
 
         ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
     }

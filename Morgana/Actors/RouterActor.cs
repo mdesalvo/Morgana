@@ -2,21 +2,26 @@ using Akka.Actor;
 using Akka.DependencyInjection;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Agents;
+using Morgana.AI.Interfaces;
 
 namespace Morgana.Actors;
 
 public class RouterActor : MorganaActor
 {
+    private readonly IPromptResolverService promptResolverService;
     private readonly Dictionary<string, IActorRef> agents = [];
 
-    public RouterActor(string conversationId) : base(conversationId)
+    public RouterActor(
+        string conversationId,
+        IPromptResolverService promptResolverService) : base(conversationId)
     {
-        DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
+        this.promptResolverService = promptResolverService;
 
         //Tutte le tipologie di agente registrate che devono poter lavorare in tandem con il classificatore
-        agents["billing"] = Context.ActorOf(dependencyResolver.Props<BillingAgent>(conversationId), $"billing-agent-{conversationId}");
-        agents["contract"] = Context.ActorOf(dependencyResolver.Props<ContractAgent>(conversationId), $"contract-agent-{conversationId}");
-        agents["troubleshooting"] = Context.ActorOf(dependencyResolver.Props<TroubleshootingAgent>(conversationId), $"troubleshooting-agent-{conversationId}");
+        DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
+        agents["billing"] = Context.ActorOf(dependencyResolver.Props<BillingAgent>(conversationId, promptResolverService), $"billing-agent-{conversationId}");
+        agents["contract"] = Context.ActorOf(dependencyResolver.Props<ContractAgent>(conversationId, promptResolverService), $"contract-agent-{conversationId}");
+        agents["troubleshooting"] = Context.ActorOf(dependencyResolver.Props<TroubleshootingAgent>(conversationId, promptResolverService), $"troubleshooting-agent-{conversationId}");
 
         ReceiveAsync<Morgana.AI.Records.AgentRequest>(RouteToAgentAsync);
     }
