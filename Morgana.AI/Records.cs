@@ -28,6 +28,9 @@ namespace Morgana.AI
            bool IsCompleted,
            IActorRef AgentRef);
 
+        public record PromptCollection(
+            Prompt[] Prompts);
+        
         public record Prompt(
             [property: JsonPropertyName("id")] string ID,
             [property: JsonPropertyName("type")] string Type,
@@ -40,15 +43,15 @@ namespace Morgana.AI
         {
             public T GetAdditionalProperty<T>(string additionalPropertyName)
             {
-                foreach (var dict in AdditionalProperties)
+                foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
                 {
-                    if (dict.ContainsKey(additionalPropertyName))
+                    if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
                     {
-                        JsonElement element = (JsonElement)dict[additionalPropertyName];
+                        JsonElement element = (JsonElement)value;
                         return element.Deserialize<T>();
                     }
                 }
-                return default;
+                throw new KeyNotFoundException($"AdditionalProperty with key '{additionalPropertyName}' was not found in the prompt with id='{ID}'");
             }
         }
 
@@ -66,7 +69,6 @@ namespace Morgana.AI
         {
             [JsonPropertyName("intents")] public List<Dictionary<string, string>> Intents { get; set; }
 
-            public IntentCollection() { }
             public IntentCollection(List<Dictionary<string, string>> intents)
             {
                 Intents = intents;
@@ -76,9 +78,9 @@ namespace Morgana.AI
             {
                 Dictionary<string, string> result = [];
         
-                foreach (Dictionary<string, string> intentDict in Intents)
+                foreach (Dictionary<string, string> intentsDictionary in Intents)
                 {
-                    foreach (KeyValuePair<string, string> kvp in intentDict)
+                    foreach (KeyValuePair<string, string> kvp in intentsDictionary)
                     {
                         result[kvp.Key] = kvp.Value;
                     }

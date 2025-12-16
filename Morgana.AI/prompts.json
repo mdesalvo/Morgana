@@ -41,6 +41,16 @@
       ]
     },
     {
+      "id": "Morgana",
+      "type": "SYSTEM",
+      "subtype": "AGENT",
+      "content": "Conversazione in corso tra utente e assistente.",
+      "instructions": "Mantieni coerenza con lo storico e con le politiche definite nelle istruzioni del servizio di questa richiesta, prestando particolare attenzione alla regola del token speciale #INT#.",
+      "language": "it-IT",
+      "version": "1",
+      "additionalProperties": []
+    },
+    {
       "id": "Billing",
       "type": "INTENT",
       "subtype": "AGENT",

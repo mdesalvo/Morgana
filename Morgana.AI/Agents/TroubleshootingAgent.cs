@@ -11,7 +11,7 @@ public class TroubleshootingAgent : MorganaAgent
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<TroubleshootingAgent> logger) : base(conversationId, llmService, logger)
+        ILogger<TroubleshootingAgent> logger) : base(conversationId, llmService, promptResolverService,logger)
     {
         AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService);
         aiAgent = adapter.CreateTroubleshootingAgent();

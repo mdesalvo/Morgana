@@ -14,13 +14,11 @@ namespace Morgana.AI.Services
         }
 
         public Task<Records.Prompt[]> GetAllPromptsAsync()
-        {
-            return Task.FromResult(configuredPrompts.Value);
-        }
+            => Task.FromResult(configuredPrompts.Value);
 
         public Task<Records.Prompt> ResolveAsync(string promptID)
         {
-            Records.Prompt? prompt = configuredPrompts.Value.FirstOrDefault(p => p.ID == promptID);
+            Records.Prompt? prompt = configuredPrompts.Value.SingleOrDefault(p => string.Equals(p.ID, promptID, StringComparison.OrdinalIgnoreCase));
 
             if (prompt == null)
                 throw new KeyNotFoundException($"Prompt con ID '{promptID}' non trovato.");
@@ -32,17 +30,12 @@ namespace Morgana.AI.Services
         {
             Assembly assembly = Assembly.GetExecutingAssembly();
             string resourceName = assembly.GetManifestResourceNames()
-                                          .First(n => n.EndsWith("prompts.json", StringComparison.Ordinal));
+                                          .First(n => n.EndsWith("prompts.json", StringComparison.OrdinalIgnoreCase));
 
             using Stream? stream = assembly.GetManifestResourceStream(resourceName)
                                     ?? throw new FileNotFoundException("Risorsa prompts.json non trovata nell'assembly.");
-            PromptRoot? promptsRoot = JsonSerializer.Deserialize<PromptRoot>(stream, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            return promptsRoot?.Prompts ?? [];
-        }
-
-        private class PromptRoot
-        {
-            public Records.Prompt[] Prompts { get; set; } = [];
+            Records.PromptCollection? promptsCollection = JsonSerializer.Deserialize<Records.PromptCollection>(stream, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return promptsCollection?.Prompts ?? [];
         }
     }
 }

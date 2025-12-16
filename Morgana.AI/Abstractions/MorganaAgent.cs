@@ -10,14 +10,20 @@ public class MorganaAgent : MorganaActor
 {
     protected AIAgent aiAgent;
     protected ILLMService llmService;
+    protected IPromptResolverService promptResolverService;
     protected readonly ILogger<MorganaAgent> logger;
-    
+
     //Local conversational memory (to be dismissed when the framework will support memories)
     protected readonly List<(string role, string text)> history = [];
 
-    public MorganaAgent(string conversationId, ILLMService llmService,  ILogger<MorganaAgent> logger) : base(conversationId)
+    public MorganaAgent(
+        string conversationId,
+        ILLMService llmService,
+        IPromptResolverService promptResolverService,
+        ILogger<MorganaAgent> logger) : base(conversationId)
     {
         this.llmService = llmService;
+        this.promptResolverService = promptResolverService;
         this.logger = logger;
     }
 
@@ -28,9 +34,9 @@ public class MorganaAgent : MorganaActor
         try
         {
             // aggiungi messaggio utente allo storico
-            history.Add(("user", req.Content));
+            history.Add((role: "user", text: req.Content!));
 
-            string prompt = BuildPrompt(history);
+            string prompt = await BuildPromptAsync(history);
 
             AgentRunResponse llmResponse = await aiAgent.RunAsync(prompt);
             string text = llmResponse.Text ?? "";
@@ -42,7 +48,7 @@ public class MorganaAgent : MorganaActor
             string cleanText = text.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim();
 
             // aggiungi risposta assistente allo storico
-            history.Add(("assistant", cleanText));
+            history.Add((role: "assistant", text: cleanText));
 
             // completed = false se serve input aggiuntivo
             senderRef.Tell(new Records.AgentResponse(cleanText, !requiresMoreInput));
@@ -55,12 +61,14 @@ public class MorganaAgent : MorganaActor
         }
     }
 
-    protected string BuildPrompt(List<(string role, string text)> hist)
+    protected async Task<string> BuildPromptAsync(List<(string role, string text)> hist)
     {
         StringBuilder sb = new StringBuilder();
 
-        sb.AppendLine("Conversazione in corso tra utente e assistente.");
-        sb.AppendLine("Mantieni coerenza con lo storico e con le politiche definite nelle istruzioni.");
+        Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync("Morgana");
+        
+        sb.AppendLine(morganaPrompt.Content);
+        sb.AppendLine(morganaPrompt.Instructions);
 
         foreach ((string role, string text) in hist)
             sb.AppendLine($"{role}: {text}");
