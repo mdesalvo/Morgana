@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Introduced **Morgana.AI** project to decouple AI-related capabilities from Morgana
 
 ### Changed
-- Unified InformativeAgent and DispositiveAgent under a new RouterAgent
+- Unified InformativeAgent and DispositiveAgent under a new **RouterAgent**
 - Removed userId information from the basic fields sent to every actor/agent 
 - Send button has been properly styled as a "magic witch's cauldron" with glowing effects
 
