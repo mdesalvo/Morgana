@@ -15,18 +15,15 @@ public class ConversationController : ControllerBase
 {
     private readonly ActorSystem actorSystem;
     private readonly ILogger<ConversationController> logger;
-    private readonly IPromptResolverService promptResolverService;
     private readonly IHubContext<ConversationHub> hubContext;
 
     public ConversationController(
         ActorSystem actorSystem,
         ILogger<ConversationController> logger,
-        IPromptResolverService promptResolverService,
         IHubContext<ConversationHub> hubContext)
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
-        this.promptResolverService = promptResolverService;
         this.hubContext = hubContext;
     }
 
@@ -135,7 +132,7 @@ public class ConversationController : ControllerBase
         {
             // altrimenti lo creiamo
             Props props = DependencyResolver.For(actorSystem)
-                .Props<ConversationManagerActor>(conversationId, promptResolverService);
+                .Props<ConversationManagerActor>(conversationId);
 
             return actorSystem.ActorOf(props, managerName);
         }

@@ -39,7 +39,8 @@ public class GuardActor : MorganaActor
         }
 
         // Advanced LLM-based policy check
-        string response = await llmService.CompleteWithSystemPromptAsync($"{guardPrompt.Content}\n{guardPrompt.Instructions}", req.Message);
+        string response = await llmService.CompleteWithSystemPromptAsync(
+            $"{guardPrompt.Content}\n{guardPrompt.Instructions}", req.Message);
         GuardCheckResponse? result = JsonSerializer.Deserialize<GuardCheckResponse>(response);
 
         senderRef.Tell(new GuardCheckResponse(result.Compliant, result.Violation));

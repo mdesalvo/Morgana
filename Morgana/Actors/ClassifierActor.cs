@@ -43,9 +43,9 @@ public class ClassifierActor : MorganaActor
         {
             AgentRunResponse agentResponse = await classifierAgent.RunAsync(msg.Text);
             string jsonText = agentResponse.Text?.Trim()
-                                            .Replace("```json", "")
-                                            .Replace("```", "")
-                                            .Trim() ?? "{}";
+                                                 .Replace("```json", "")
+                                                 .Replace("```", "")
+                                                 .Trim() ?? "{}";
 
             ClassificationResponse? classificationResponse = JsonSerializer.Deserialize<ClassificationResponse>(jsonText);
             ClassificationResult classificationResult = new ClassificationResult(
@@ -67,7 +67,7 @@ public class ClassifierActor : MorganaActor
                 "other",
                 new Dictionary<string, string>
                 {
-                    ["confidence"] = "0.00", 
+                    ["confidence"] = "0.00",
                     ["error"] = "classification_failed"
                 });
 

@@ -26,9 +26,9 @@ public class ConversationSupervisorActor : MorganaActor
 
         DependencyResolver? resolver = DependencyResolver.For(Context.System);
 
-        guardActor = Context.ActorOf(resolver.Props<GuardActor>(conversationId, promptResolverService), $"guard-{conversationId}");
-        classifierActor = Context.ActorOf(resolver.Props<ClassifierActor>(conversationId, promptResolverService), $"classifier-{conversationId}");
-        routerActor = Context.ActorOf(resolver.Props<RouterActor>(conversationId, promptResolverService), $"router-{conversationId}");
+        guardActor = Context.ActorOf(resolver.Props<GuardActor>(conversationId), $"guard-{conversationId}");
+        classifierActor = Context.ActorOf(resolver.Props<ClassifierActor>(conversationId), $"classifier-{conversationId}");
+        routerActor = Context.ActorOf(resolver.Props<RouterActor>(conversationId), $"router-{conversationId}");
 
         ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
     }
@@ -42,11 +42,11 @@ public class ConversationSupervisorActor : MorganaActor
         {
             logger.LogInformation("Supervisor: follow-up detected, redirecting to active agent → {0}", activeAgent.Path);
 
-            Morgana.AI.Records.AgentResponse agentFollowup;
+            AI.Records.AgentResponse agentFollowup;
             try
             {
-                agentFollowup = await activeAgent.Ask<Morgana.AI.Records.AgentResponse>(
-                    new Morgana.AI.Records.AgentRequest(msg.ConversationId, msg.Text, null));
+                agentFollowup = await activeAgent.Ask<AI.Records.AgentResponse>(
+                    new AI.Records.AgentRequest(msg.ConversationId, msg.Text, null));
             }
             catch (Exception ex)
             {
@@ -82,16 +82,16 @@ public class ConversationSupervisorActor : MorganaActor
                 return;
             }
 
-            Morgana.AI.Records.ClassificationResult? classificationResult = await classifierActor.Ask<Morgana.AI.Records.ClassificationResult>(msg);
+            AI.Records.ClassificationResult? classificationResult = await classifierActor.Ask<AI.Records.ClassificationResult>(msg);
             logger.LogInformation("Supervisor got classification result: {0}", classificationResult.Intent);
 
             // Risposta polimorfica: può essere InternalAgentResponse o AgentResponse
             object? agentResponse = await routerActor.Ask<object>(
-                new Morgana.AI.Records.AgentRequest(msg.ConversationId, msg.Text, classificationResult));
+                new AI.Records.AgentRequest(msg.ConversationId, msg.Text, classificationResult));
             switch (agentResponse)
             {
                 // Caso 1: InternalAgentResponse → proveniente dall'agente di routing
-                case Morgana.AI.Records.InternalAgentResponse internalAgentResponse:
+                case AI.Records.InternalAgentResponse internalAgentResponse:
                 {
                     logger.LogInformation("Supervisor received InternalAgentResponse from {0}", internalAgentResponse.AgentRef.Path);
 
@@ -110,7 +110,7 @@ public class ConversationSupervisorActor : MorganaActor
                     break;
                 }
                 // Caso 2: AgentResponse diretto (fallback, dovrebbe essere raro)
-                case Morgana.AI.Records.AgentResponse directAgentResponse:
+                case AI.Records.AgentResponse directAgentResponse:
                 {
                     logger.LogWarning("Supervisor received direct AgentResponse instead of internal one.");
 

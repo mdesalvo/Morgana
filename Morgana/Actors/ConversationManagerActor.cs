@@ -11,7 +11,6 @@ namespace Morgana.Actors;
 public class ConversationManagerActor : MorganaActor
 {
     private readonly ISignalRBridgeService signalRBridge;
-    private readonly IPromptResolverService promptResolverService;
     private readonly ILoggingAdapter logger = Context.GetLogger();
 
     // Supervisor attivo
@@ -19,11 +18,9 @@ public class ConversationManagerActor : MorganaActor
 
     public ConversationManagerActor(
         string conversationId,
-        ISignalRBridgeService signalRBridge,
-        IPromptResolverService promptResolverService) : base(conversationId)
+        ISignalRBridgeService signalRBridge) : base(conversationId)
     {
         this.signalRBridge = signalRBridge;
-        this.promptResolverService = promptResolverService;
 
         ReceiveAsync<UserMessage>(HandleUserMessageAsync);
         ReceiveAsync<CreateConversation>(HandleCreateConversationAsync);
@@ -39,7 +36,7 @@ public class ConversationManagerActor : MorganaActor
         if (supervisorActor == null)
         {
             Props? supProps = DependencyResolver.For(Context.System)
-                .Props<ConversationSupervisorActor>(msg.ConversationId, promptResolverService);
+                .Props<ConversationSupervisorActor>(msg.ConversationId);
             supervisorActor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
             Context.Watch(supervisorActor);
             logger.Info("Supervisor created: {0}", supervisorActor.Path);
@@ -72,7 +69,7 @@ public class ConversationManagerActor : MorganaActor
         {
             // fallback preventivo
             Props? supProps = DependencyResolver.For(Context.System)
-                .Props<ConversationSupervisorActor>(msg.ConversationId, promptResolverService);
+                .Props<ConversationSupervisorActor>(msg.ConversationId);
             supervisorActor = Context.ActorOf(supProps, $"supervisor-{msg.ConversationId}");
             Context.Watch(supervisorActor);
             logger.Warning("Supervisor was missing; created new supervisor: {0}", supervisorActor.Path);

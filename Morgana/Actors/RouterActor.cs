@@ -19,9 +19,9 @@ public class RouterActor : MorganaActor
 
         //Tutte le tipologie di agente registrate che devono poter lavorare in tandem con il classificatore
         DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
-        agents["billing"] = Context.ActorOf(dependencyResolver.Props<BillingAgent>(conversationId, promptResolverService), $"billing-agent-{conversationId}");
-        agents["contract"] = Context.ActorOf(dependencyResolver.Props<ContractAgent>(conversationId, promptResolverService), $"contract-agent-{conversationId}");
-        agents["troubleshooting"] = Context.ActorOf(dependencyResolver.Props<TroubleshootingAgent>(conversationId, promptResolverService), $"troubleshooting-agent-{conversationId}");
+        agents["billing"] = Context.ActorOf(dependencyResolver.Props<BillingAgent>(conversationId), $"billing-agent-{conversationId}");
+        agents["contract"] = Context.ActorOf(dependencyResolver.Props<ContractAgent>(conversationId), $"contract-agent-{conversationId}");
+        agents["troubleshooting"] = Context.ActorOf(dependencyResolver.Props<TroubleshootingAgent>(conversationId), $"troubleshooting-agent-{conversationId}");
 
         ReceiveAsync<Morgana.AI.Records.AgentRequest>(RouteToAgentAsync);
     }
@@ -33,21 +33,21 @@ public class RouterActor : MorganaActor
         // Se non c’è classificazione → questo non è un turno valido per RouterActor
         if (req.Classification == null)
         {
-            senderRef.Tell(new Morgana.AI.Records.AgentResponse("Errore interno: classificazione mancante.", true));
+            senderRef.Tell(new AI.Records.AgentResponse("Errore interno: classificazione mancante.", true));
             return;
         }
 
         if (!agents.TryGetValue(req.Classification.Intent, out IActorRef? agent))
         {
-            senderRef.Tell(new Morgana.AI.Records.AgentResponse("Mi dispiace,non sono ancora in grado di gestire questo tipo di richiesta.", true));
+            senderRef.Tell(new AI.Records.AgentResponse("Mi dispiace,non sono ancora in grado di gestire questo tipo di richiesta.", true));
             return;
         }
 
         // Chiede all'agente concreto
-        Morgana.AI.Records.AgentResponse? agentResponse = await agent.Ask<Morgana.AI.Records.AgentResponse>(req);
+        AI.Records.AgentResponse? agentResponse = await agent.Ask<AI.Records.AgentResponse>(req);
 
         // Risponde al supervisore con il riferimento dell'agente reale
-        senderRef.Tell(new Morgana.AI.Records.InternalAgentResponse(
+        senderRef.Tell(new AI.Records.InternalAgentResponse(
             agentResponse.Response,
             agentResponse.IsCompleted,
             agent
