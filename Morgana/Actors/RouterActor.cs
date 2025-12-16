@@ -3,6 +3,7 @@ using Akka.DependencyInjection;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Agents;
 using Morgana.AI.Interfaces;
+using static Morgana.AI.Records;
 
 namespace Morgana.Actors;
 
@@ -23,12 +24,13 @@ public class RouterActor : MorganaActor
         agents["contract"] = Context.ActorOf(dependencyResolver.Props<ContractAgent>(conversationId), $"contract-agent-{conversationId}");
         agents["troubleshooting"] = Context.ActorOf(dependencyResolver.Props<TroubleshootingAgent>(conversationId), $"troubleshooting-agent-{conversationId}");
 
-        ReceiveAsync<Morgana.AI.Records.AgentRequest>(RouteToAgentAsync);
+        ReceiveAsync<AI.Records.AgentRequest>(RouteToAgentAsync);
     }
 
-    private async Task RouteToAgentAsync(Morgana.AI.Records.AgentRequest req)
+    private async Task RouteToAgentAsync(AI.Records.AgentRequest req)
     {
         IActorRef? senderRef = Sender;
+        Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
 
         // Se non c’è classificazione → questo non è un turno valido per RouterActor
         if (req.Classification == null)
@@ -39,7 +41,7 @@ public class RouterActor : MorganaActor
 
         if (!agents.TryGetValue(req.Classification.Intent, out IActorRef? agent))
         {
-            senderRef.Tell(new AI.Records.AgentResponse("Mi dispiace,non sono ancora in grado di gestire questo tipo di richiesta.", true));
+            senderRef.Tell(new AI.Records.AgentResponse(classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentAnswer"), true));
             return;
         }
 

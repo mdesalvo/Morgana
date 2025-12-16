@@ -36,7 +36,8 @@
             { "troubleshooting": "richieste di soluzione a problemi tecnici o malfunzionamenti, probabilmente dovuti a guasti hardware o difetti software, che ingenerano disservizio al cliente" },
             { "other": "qualsiasi altra tematica non espressamente intercettata da intenti noti" }
           ]
-        }
+        },
+        { "UnrecognizedIntentAnswer": "Mi dispiace,non sono ancora in grado di gestire questo tipo di richiesta" }
       ]
     },
     {
