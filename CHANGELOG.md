@@ -16,7 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unified InformativeAgent and DispositiveAgent under a new intent-driven **RouterAgent**
 - Removed userId information from the basic fields sent to every actor/agent 
 - Send button has been properly styled as a "magic witch's cauldron" with glowing effects
-- Updated NuGet dependencies (Microsoft.Extensions.AI, Microsoft.Agents.AI, Azure.AI.OpenAI)
 
 ### Fixed
 - Resolved corner cases of multi-message which could be sent to Morgana
