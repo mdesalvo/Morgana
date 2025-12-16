@@ -10,6 +10,9 @@
       "version": "1",
       "additionalProperties": [
         {
+          "ProfanityTerms": [ "stupido", "idiota", "incapace", "inetto", "scemo", "sei inutile" ]
+        },
+        {
           "GuardAnswer": "((violation)) Ti chiedo di mantenere un tono rispettoso: sono qui per aiutarti."
         },
         {

@@ -10,7 +10,6 @@ public class GuardActor : MorganaActor
 {
     private readonly ILLMService llmService;
     private readonly IPromptResolverService promptResolverService;
-    private readonly string[] prohibitedTerms = ["stupido", "idiota", "incapace", "inetto", "scemo"];
 
     public GuardActor(
         string conversationId,
@@ -29,7 +28,7 @@ public class GuardActor : MorganaActor
         AI.Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
 
         // Basic profanity check
-        foreach (string term in prohibitedTerms)
+        foreach (string term in guardPrompt.GetAdditionalProperty<List<string>>("ProfanityTerms"))
         {
             if (req.Message.Contains(term, StringComparison.OrdinalIgnoreCase))
             {
