@@ -6,12 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] - UNDER DEVELOPMENT
 ### Added
-- Introduce IPromptResolverService to decouple prompt maintenance from actors/agents
-- Give IPromptResolverService a default implementation based on built-in prompts.json
-- Decoupled Morgana (chatbot engine) from Cauldron (SignalR frontend for user interaction)
+- Introduced **IPromptResolverService** to decouple prompt handling and maintenance from actors/agents
+- Give IPromptResolverService a default implementation based on JSON configuration (prompts.json)
+- Decoupled **Morgana** (chatbot engine) from **Cauldron** (SignalR frontend for user interaction)
+- Introduced **Morgana.AI** project to decouple AI-related capabilities from Morgana
 
 ### Changed
+- Unified InformativeAgent and DispositiveAgent under a new RouterAgent
+- Removed userId information from the basic fields sent to every actor/agent 
 - Send button has been properly styled as a "magic witch's cauldron" with glowing effects
+
+### Fixed
+- Resolved corner cases of multi-message which could be sent to Morgana
 
 ## [0.1.0] - 2025-12-10
 ### Added
