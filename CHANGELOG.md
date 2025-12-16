@@ -6,8 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] - UNDER DEVELOPMENT
 ### Added
-- Introduced **IPromptResolverService** to decouple prompt handling and maintenance from actors/agents
-- Give IPromptResolverService a default implementation based on JSON configuration (prompts.json)
+- Introduced **IPromptResolverService** to decouple prompt resolution and maintenance from actors/agents
+- Give IPromptResolverService a default implementation based on JSON configuration (**prompts.json**)
 - Decoupled **Morgana** (chatbot engine) from **Cauldron** (SignalR frontend for user interaction)
 - Introduced **Morgana.AI** project to decouple AI-related capabilities from Morgana
 
