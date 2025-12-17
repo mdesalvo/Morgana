@@ -34,7 +34,10 @@ public class ClassifierActor : MorganaActor
 
         try
         {
-            string response = await llmService.CompleteWithSystemPromptAsync(classifierPromptContent, msg.Text);
+            string response = await llmService.CompleteWithSystemPromptAsync(
+                conversationId,
+                classifierPromptContent,
+                msg.Text);
             ClassificationResponse? classificationResponse = JsonSerializer.Deserialize<ClassificationResponse>(response);
             ClassificationResult classificationResult = new ClassificationResult(
                 classificationResponse?.Intent ?? "other",

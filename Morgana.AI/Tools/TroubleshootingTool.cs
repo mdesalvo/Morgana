@@ -1,6 +1,4 @@
-﻿using System.ComponentModel;
-
-namespace Morgana.AI.Tools;
+﻿namespace Morgana.AI.Tools;
 
 public class TroubleshootingTool
 {

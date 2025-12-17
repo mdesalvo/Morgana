@@ -1,8 +1,9 @@
-using System.Text;
 using Akka.Actor;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
+using System.Text;
 
 namespace Morgana.AI.Abstractions;
 
@@ -26,51 +27,43 @@ public class MorganaAgent : MorganaActor
     protected async Task ExecuteAgentAsync(Records.AgentRequest req)
     {
         IActorRef? senderRef = Sender;
+        Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync("Morgana");
 
         try
         {
+            // aggiungi messaggio di sistema in testa allo storico
+            if (history.Count == 0)
+                history.Add((role: nameof(ChatRole.System), text: morganaPrompt.Content));
+
             // aggiungi messaggio utente allo storico
-            history.Add((role: "user", text: req.Content!));
+            history.Add((role: nameof(ChatRole.User), text: req.Content!));
 
-            string prompt = await BuildPromptAsync(history);
+            StringBuilder sb = new StringBuilder();
+            foreach ((string role, string msg) in history)
+                sb.AppendLine($"{role}: {msg}");
 
-            AgentRunResponse llmResponse = await aiAgent.RunAsync(prompt);
-            string text = llmResponse.Text ?? "";
+            AgentRunResponse llmResponse = await aiAgent.RunAsync(sb.ToString());
+            string llmResponseText = llmResponse.Text ?? "";
 
             // verifica placeholder #INT#
-            bool requiresMoreInput = text.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
-
-            // pulizia testo prima di mandarlo al client
-            string cleanText = text.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim();
+            bool requiresMoreInput = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
 
             // aggiungi risposta assistente allo storico
-            history.Add((role: "assistant", text: cleanText));
+            history.Add((role: nameof(ChatRole.Assistant), text: llmResponseText));
 
-            // completed = false se serve input aggiuntivo
+            // aggiungi messaggio di sistema per consistenza dello storico
+            if (requiresMoreInput)
+                history.Add((role: nameof(ChatRole.System), text: morganaPrompt.Instructions));
+
+            // completed = false se serve input aggiuntivo (rimuovi placeholder #INT#)
+            string cleanText = llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim();
             senderRef.Tell(new Records.AgentResponse(cleanText, !requiresMoreInput));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, $"Errore in {GetType().Name}");
 
-            senderRef.Tell(new Records.AgentResponse("Si è verificato un errore. La preghiamo di riprovare.", true));
+            senderRef.Tell(new Records.AgentResponse(morganaPrompt.GetAdditionalProperty<string>("GenericErrorAnswer"), true));
         }
-    }
-
-    protected async Task<string> BuildPromptAsync(List<(string role, string text)> hist)
-    {
-        StringBuilder sb = new StringBuilder();
-
-        Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync("Morgana");
-        
-        sb.AppendLine(morganaPrompt.Content);
-        sb.AppendLine(morganaPrompt.Instructions);
-
-        foreach ((string role, string text) in hist)
-            sb.AppendLine($"{role}: {text}");
-
-        sb.AppendLine("assistant:");
-
-        return sb.ToString();
     }
 }
