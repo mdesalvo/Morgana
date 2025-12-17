@@ -6,15 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] - UNDER DEVELOPMENT
 ### Added
-- Introduced **MorganaAgent** abstraction to characterize actors requiring an AIAgent-based interaction with ILLMService
-- Introduced **IPromptResolverService** to decouple prompt maintenance burden from Morgana actors/agents
+- Decoupled **Morgana** (chatbot) from **Cauldron** (SignalR frontend)
+- Introduced **Morgana.AI** project to decouple AI-related capabilities from **Morgana**
+- Introduced **MorganaAgent** abstraction to specialize actors requiring an AIAgent-based LLM interaction
+- Introduced **IPromptResolverService** to decouple prompt maintenance burden from Morgana actors
 - Given IPromptResolverService a default implementation based on JSON configuration (**prompts.json**)
 - Introduced **IAgentRegistryService** for automatic discovery of Morgana agents at application startup
 - Given IAgentRegistryService a default implementation based on reflection done via **HandlesIntent** attribute
-- Enforced bidirectional validation of classifier prompt's intents VS discovered Morgana agents
+- Enforced bidirectional validation of classifier prompt's intents VS declarative Morgana.AI agents
 - Introduced **ToolAdapter** to ease the creation of AIFunction directly from tool definitions 
-- Decoupled **Morgana** (chatbot engine) from **Cauldron** (SignalR frontend for user interaction)
-- Introduced **Morgana.AI** project to decouple AI-related capabilities from Morgana
 
 ### Changed
 - Unified InformativeAgent and DispositiveAgent under a new intent-driven **RouterAgent**
