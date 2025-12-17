@@ -5,7 +5,7 @@
     </td>
     <td>
       <h1>Morgana</h1>
-      <p><strong>A multi-agent conversational system for enterprise customer service</strong></p>
+      <p><strong>A multi-agent, flexible, intent-driven conversational system</strong></p>
       <p>
         <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10"/>
         <img src="https://img.shields.io/badge/Akka.NET-1.5-00ADD8?logo=akka" alt="Akka.NET"/>
