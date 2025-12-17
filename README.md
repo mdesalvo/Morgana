@@ -202,4 +202,4 @@ The Agent Framework automatically:
 
 The LLM retains context across turns, enabling natural follow-up questions.
 
-**Built with ❤️ using .NET 10, Akka.NET, and Microsoft Agent Framework**
+**Built with ❤️ using .NET 10, Akka.NET and Microsoft.Agents**
