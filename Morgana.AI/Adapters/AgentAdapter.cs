@@ -105,26 +105,6 @@ public class AgentAdapter
     }
 }
 
-public static class JsonToolFactory
-{
-    public static AIFunction ToAIFunction(this ToolDefinition tool, Delegate implementation)
-    {
-        var metadata = new
-        {
-            tool.Name,
-            tool.Description,
-            Parameters = tool.Parameters.Select(p => new
-            {
-                p.Name,
-                p.Description,
-                p.Required
-            }).ToList()
-        };
-
-        return AIFunctionFactory.Create(implementation, tool.Name, tool.Description);
-    }
-}
-
 public class ToolMethodRegistry
 {
     private readonly Dictionary<string, Delegate> toolMethods = [];
