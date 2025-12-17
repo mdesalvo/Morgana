@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - UNDER DEVELOPMENT
 ### Added
 - Introduced **IPromptResolverService** to decouple prompt maintenance burden from Morgana actors/agents
-- Given IPromptResolverService a default implementation based on JSON configuration (**Morgana.AI.prompts.json**)
+- Given IPromptResolverService a default implementation based on JSON configuration (**prompts.json**)
 - Introduced **IAgentRegistryService** for automatic startup discovery of Morgana agents
 - Given IAgentRegistryService a default implementation based on reflection done on new **HandlesIntent** attribute
 - Enforced bidirectional validation of classifier prompt's intents VS discovered Morgana agents 
