@@ -25,7 +25,7 @@ public class ClassifierActor : MorganaActor
         this.promptResolverService = promptResolverService;
 
         Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
-        IntentCollection intentCollection = new IntentCollection(classifierPrompt.GetAdditionalProperty<List<Dictionary<string, string>>>("intents"));
+        IntentCollection intentCollection = new IntentCollection(classifierPrompt.GetAdditionalProperty<List<Dictionary<string, string>>>("Intents"));
         string formattedIntents = string.Join("|", intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
         string classifierPromptContent = $"{classifierPrompt.Content.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
         classifierAgent = llmService.GetChatClient().CreateAIAgent(

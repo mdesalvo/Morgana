@@ -30,16 +30,16 @@ namespace Morgana.AI
 
         public record PromptCollection(
             Prompt[] Prompts);
-        
+
         public record Prompt(
-            [property: JsonPropertyName("id")] string ID,
-            [property: JsonPropertyName("type")] string Type,
-            [property: JsonPropertyName("subtype")] string SubType,
-            [property: JsonPropertyName("content")] string Content,
-            [property: JsonPropertyName("instructions")] string Instructions,
-            [property: JsonPropertyName("language")] string Language,
-            [property: JsonPropertyName("version")] string Version,
-            [property: JsonPropertyName("additionalProperties")] List<Dictionary<string, object>> AdditionalProperties)
+            string ID,
+            string Type,
+            string SubType,
+            string Content,
+            string Instructions,
+            string Language,
+            string Version,
+            List<Dictionary<string, object>> AdditionalProperties)
         {
             public T GetAdditionalProperty<T>(string additionalPropertyName)
             {
@@ -56,18 +56,18 @@ namespace Morgana.AI
         }
 
         public record ToolDefinition(
-            [property: JsonPropertyName("name")] string Name,
-            [property: JsonPropertyName("description")] string Description,
-            [property: JsonPropertyName("parameters")] IReadOnlyList<ToolParameter> Parameters);
+            string Name,
+            string Description,
+            IReadOnlyList<ToolParameter> Parameters);
 
         public record ToolParameter(
-            [property: JsonPropertyName("name")] string Name,
-            [property: JsonPropertyName("description")] string Description,
-            [property: JsonPropertyName("required")] bool Required);
+            string Name,
+            string Description,
+            bool Required);
 
         public record IntentCollection
         {
-            [JsonPropertyName("intents")] public List<Dictionary<string, string>> Intents { get; set; }
+            public List<Dictionary<string, string>> Intents { get; set; }
 
             public IntentCollection(List<Dictionary<string, string>> intents)
             {
@@ -77,7 +77,7 @@ namespace Morgana.AI
             public Dictionary<string, string> AsDictionary()
             {
                 Dictionary<string, string> result = [];
-        
+
                 foreach (Dictionary<string, string> intentsDictionary in Intents)
                 {
                     foreach (KeyValuePair<string, string> kvp in intentsDictionary)
@@ -85,7 +85,7 @@ namespace Morgana.AI
                         result[kvp.Key] = kvp.Value;
                     }
                 }
-        
+
                 return result;
             }
         }

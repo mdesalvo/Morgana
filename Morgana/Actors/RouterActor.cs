@@ -20,14 +20,14 @@ public class RouterActor : MorganaActor
 
         //Tutte le tipologie di agente registrate che devono poter lavorare in tandem con il classificatore
         DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
-        agents["billing"] = Context.ActorOf(dependencyResolver.Props<BillingAgent>(conversationId), $"billing-agent-{conversationId}");
-        agents["contract"] = Context.ActorOf(dependencyResolver.Props<ContractAgent>(conversationId), $"contract-agent-{conversationId}");
-        agents["troubleshooting"] = Context.ActorOf(dependencyResolver.Props<TroubleshootingAgent>(conversationId), $"troubleshooting-agent-{conversationId}");
+        agents["billing"] = Context.ActorOf(dependencyResolver.Props<BillingAgent>(conversationId), $"billing-{conversationId}");
+        agents["contract"] = Context.ActorOf(dependencyResolver.Props<ContractAgent>(conversationId), $"contract-{conversationId}");
+        agents["troubleshooting"] = Context.ActorOf(dependencyResolver.Props<TroubleshootingAgent>(conversationId), $"troubleshooting-{conversationId}");
 
-        ReceiveAsync<AI.Records.AgentRequest>(RouteToAgentAsync);
+        ReceiveAsync<AgentRequest>(RouteToAgentAsync);
     }
 
-    private async Task RouteToAgentAsync(AI.Records.AgentRequest req)
+    private async Task RouteToAgentAsync(AgentRequest req)
     {
         IActorRef? senderRef = Sender;
         Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
@@ -35,24 +35,24 @@ public class RouterActor : MorganaActor
         // Se non c’è classificazione → questo non è un turno valido per RouterActor
         if (req.Classification == null)
         {
-            senderRef.Tell(new AI.Records.AgentResponse("Errore interno: classificazione mancante.", true));
+            senderRef.Tell(new AgentResponse("Errore interno: classificazione mancante.", true));
             return;
         }
 
-        if (!agents.TryGetValue(req.Classification.Intent, out IActorRef? agent))
+        if (!agents.TryGetValue(req.Classification.Intent, out IActorRef? selectedAgent))
         {
-            senderRef.Tell(new AI.Records.AgentResponse(classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentAnswer"), true));
+            senderRef.Tell(new AgentResponse(classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentAnswer"), true));
             return;
         }
 
-        // Chiede all'agente concreto
-        AI.Records.AgentResponse? agentResponse = await agent.Ask<AI.Records.AgentResponse>(req);
+        // Chiede all'agente selezionato
+        AgentResponse? agentResponse = await selectedAgent.Ask<AgentResponse>(req);
 
         // Risponde al supervisore con il riferimento dell'agente reale
-        senderRef.Tell(new AI.Records.InternalAgentResponse(
+        senderRef.Tell(new InternalAgentResponse(
             agentResponse.Response,
             agentResponse.IsCompleted,
-            agent
+            selectedAgent
         ));
     }
 

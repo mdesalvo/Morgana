@@ -29,7 +29,7 @@ public class AgentAdapter
                                                     .GetAwaiter()
                                                     .GetResult();
 
-        ToolDefinition[]? billingTools = billingPrompt.GetAdditionalProperty<ToolDefinition[]>("tools");
+        ToolDefinition[]? billingTools = billingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
         foreach (ToolDefinition billingToolDefinition in billingTools ?? [])
         {
             Delegate billingToolImplementation = billingToolDefinition.Name switch
@@ -57,7 +57,7 @@ public class AgentAdapter
                                                      .GetAwaiter()
                                                      .GetResult();
 
-        ToolDefinition[]? contractTools = contractPrompt.GetAdditionalProperty<ToolDefinition[]>("tools");
+        ToolDefinition[]? contractTools = contractPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
         foreach (ToolDefinition contractToolDefinition in contractTools ?? [])
         {
             Delegate contractToolImplementation = contractToolDefinition.Name switch
@@ -85,7 +85,7 @@ public class AgentAdapter
                                                             .GetAwaiter()
                                                             .GetResult();
 
-        ToolDefinition[]? troubleshootingTools = troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("tools");
+        ToolDefinition[]? troubleshootingTools = troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
         foreach (ToolDefinition troubleshootingToolDefinition in troubleshootingTools ?? [])
         {
             Delegate troubleshootingToolImplementation = troubleshootingToolDefinition.Name switch
