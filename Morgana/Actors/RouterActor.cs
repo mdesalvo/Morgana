@@ -1,7 +1,6 @@
 using Akka.Actor;
 using Akka.DependencyInjection;
 using Morgana.AI.Abstractions;
-using Morgana.AI.Agents;
 using Morgana.AI.Interfaces;
 using static Morgana.AI.Records;
 
@@ -14,12 +13,19 @@ public class RouterActor : MorganaActor
     public RouterActor(
         string conversationId,
         ILLMService llmService,
-        IPromptResolverService promptResolverService) : base(conversationId, llmService, promptResolverService)
+        IPromptResolverService promptResolverService,
+        IAgentRegistryService agentRegistryService) : base(conversationId, llmService, promptResolverService)
     {
         DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
-        agents["billing"] = Context.ActorOf(dependencyResolver.Props<BillingAgent>(conversationId), $"billing-{conversationId}");
-        agents["contract"] = Context.ActorOf(dependencyResolver.Props<ContractAgent>(conversationId), $"contract-{conversationId}");
-        agents["troubleshooting"] = Context.ActorOf(dependencyResolver.Props<TroubleshootingAgent>(conversationId), $"troubleshooting-{conversationId}");
+        foreach (string intent in agentRegistryService.GetRegisteredIntents())
+        {
+            Type? agentType = agentRegistryService.GetAgentType(intent);
+            if (agentType != null)
+            {
+                Props props = dependencyResolver.Props(agentType, conversationId);
+                agents[intent] = Context.ActorOf(props, $"{intent}-{conversationId}");
+            }
+        }
 
         ReceiveAsync<AgentRequest>(RouteToAgentAsync);
     }
@@ -32,13 +38,13 @@ public class RouterActor : MorganaActor
         // Se non c’è classificazione → questo non è un turno valido per RouterActor
         if (req.Classification == null)
         {
-            senderRef.Tell(new AgentResponse("Errore interno: classificazione mancante.", true));
+            senderRef.Tell(new AgentResponse(classifierPrompt.GetAdditionalProperty<string>("MissingClassificationError"), true));
             return;
         }
 
         if (!agents.TryGetValue(req.Classification.Intent, out IActorRef? selectedAgent))
         {
-            senderRef.Tell(new AgentResponse(classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentAnswer"), true));
+            senderRef.Tell(new AgentResponse(classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), true));
             return;
         }
 

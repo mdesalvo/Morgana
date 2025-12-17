@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
+using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Agents;
 
+[HandlesIntent("billing")]
 public class BillingAgent : MorganaAgent
 {
     public BillingAgent(

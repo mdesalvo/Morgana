@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
+using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Agents;
 
+[HandlesIntent("contract")]
 public class ContractAgent : MorganaAgent
 {
     public ContractAgent(

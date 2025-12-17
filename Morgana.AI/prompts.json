@@ -49,7 +49,8 @@
             { "other": "qualsiasi altra tematica non espressamente intercettata da intenti noti" }
           ]
         },
-        { "UnrecognizedIntentAnswer": "Mi dispiace,non sono ancora in grado di gestire questo tipo di richiesta" }
+        { "MissingClassificationError": "Errore interno: classificazione mancante" }
+        { "UnrecognizedIntentError": "Mi dispiace,non sono ancora in grado di gestire questo tipo di richiesta" }
       ]
     },
     {

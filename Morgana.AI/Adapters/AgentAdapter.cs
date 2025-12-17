@@ -1,16 +1,19 @@
 ﻿using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Morgana.AI.Agents;
+using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Tools;
+using System.Reflection;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Adapters;
 
 public class AgentAdapter
 {
-    private readonly IChatClient chatClient;
-    private readonly IPromptResolverService promptResolverService;
+    protected readonly IPromptResolverService promptResolverService;
+    protected readonly IChatClient chatClient;
+    private const string ToolDefinitionAccessor = "Tools";
 
     public AgentAdapter(IChatClient chatClient, IPromptResolverService promptResolverService)
     {
@@ -23,11 +26,12 @@ public class AgentAdapter
         BillingTool billingTool = new BillingTool();
         ToolAdapter billingToolAdapter = new ToolAdapter();
 
-        Prompt billingPrompt = promptResolverService.ResolveAsync("Billing")
+        string billingIntent = typeof(BillingAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
+        Prompt billingPrompt = promptResolverService.ResolveAsync(billingIntent)
                                                     .GetAwaiter()
                                                     .GetResult();
 
-        ToolDefinition[]? billingTools = billingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
+        ToolDefinition[]? billingTools = billingPrompt.GetAdditionalProperty<ToolDefinition[]>(ToolDefinitionAccessor);
         foreach (ToolDefinition billingToolDefinition in billingTools ?? [])
         {
             Delegate billingToolImplementation = billingToolDefinition.Name switch
@@ -42,7 +46,7 @@ public class AgentAdapter
 
         return chatClient.CreateAIAgent(
             instructions: $"{billingPrompt.Content}\n{billingPrompt.Instructions}",
-            name: nameof(BillingAgent),
+            name: billingIntent,
             tools: [.. billingToolAdapter.CreateAllFunctions()]);
     }
 
@@ -51,11 +55,12 @@ public class AgentAdapter
         ContractTool contractTool = new ContractTool();
         ToolAdapter contractToolAdapter = new ToolAdapter();
 
-        Prompt contractPrompt = promptResolverService.ResolveAsync("Contract")
+        string contractIntent = typeof(ContractAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
+        Prompt contractPrompt = promptResolverService.ResolveAsync(contractIntent)
                                                      .GetAwaiter()
                                                      .GetResult();
 
-        ToolDefinition[]? contractTools = contractPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
+        ToolDefinition[]? contractTools = contractPrompt.GetAdditionalProperty<ToolDefinition[]>(ToolDefinitionAccessor);
         foreach (ToolDefinition contractToolDefinition in contractTools ?? [])
         {
             Delegate contractToolImplementation = contractToolDefinition.Name switch
@@ -70,7 +75,7 @@ public class AgentAdapter
 
         return chatClient.CreateAIAgent(
             instructions: $"{contractPrompt.Content}\n{contractPrompt.Instructions}",
-            name: nameof(ContractAgent),
+            name: contractIntent,
             tools: [.. contractToolAdapter.CreateAllFunctions()]);
     }
 
@@ -79,11 +84,12 @@ public class AgentAdapter
         TroubleshootingTool troubleshootingTool = new TroubleshootingTool();
         ToolAdapter troubleshootingToolAdapter = new ToolAdapter();
 
-        Prompt troubleshootingPrompt = promptResolverService.ResolveAsync("Troubleshooting")
+        string troubleShootingIntent = typeof(TroubleshootingAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
+        Prompt troubleshootingPrompt = promptResolverService.ResolveAsync(troubleShootingIntent)
                                                             .GetAwaiter()
                                                             .GetResult();
 
-        ToolDefinition[]? troubleshootingTools = troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
+        ToolDefinition[]? troubleshootingTools = troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>(ToolDefinitionAccessor);
         foreach (ToolDefinition troubleshootingToolDefinition in troubleshootingTools ?? [])
         {
             Delegate troubleshootingToolImplementation = troubleshootingToolDefinition.Name switch
@@ -98,7 +104,7 @@ public class AgentAdapter
 
         return chatClient.CreateAIAgent(
             instructions: $"{troubleshootingPrompt.Content}\n{troubleshootingPrompt.Instructions}",
-            name: nameof(TroubleshootingAgent),
+            name: troubleShootingIntent,
             tools: [.. troubleshootingToolAdapter.CreateAllFunctions()]);
     }
 }
