@@ -9,8 +9,6 @@ namespace Morgana.AI.Abstractions;
 public class MorganaAgent : MorganaActor
 {
     protected AIAgent aiAgent;
-    protected ILLMService llmService;
-    protected IPromptResolverService promptResolverService;
     protected readonly ILogger<MorganaAgent> logger;
 
     //Local conversational memory (to be dismissed when the framework will support memories)
@@ -20,10 +18,8 @@ public class MorganaAgent : MorganaActor
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<MorganaAgent> logger) : base(conversationId)
+        ILogger<MorganaAgent> logger) : base(conversationId, llmService, promptResolverService)
     {
-        this.llmService = llmService;
-        this.promptResolverService = promptResolverService;
         this.logger = logger;
     }
 

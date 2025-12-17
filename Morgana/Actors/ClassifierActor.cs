@@ -1,7 +1,5 @@
 using System.Text.Json;
 using Akka.Actor;
-using Microsoft.Agents.AI;
-using Microsoft.Extensions.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using static Morgana.AI.Records;
@@ -11,26 +9,21 @@ namespace Morgana.Actors;
 
 public class ClassifierActor : MorganaActor
 {
-    private readonly AIAgent classifierAgent;
-    private readonly IPromptResolverService promptResolverService;
+    private readonly string classifierPromptContent;
     private readonly ILogger<ClassifierActor> logger;
 
     public ClassifierActor(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<ClassifierActor> logger) : base(conversationId)
+        ILogger<ClassifierActor> logger) : base(conversationId, llmService, promptResolverService)
     {
         this.logger = logger;
-        this.promptResolverService = promptResolverService;
 
         Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
         IntentCollection intentCollection = new IntentCollection(classifierPrompt.GetAdditionalProperty<List<Dictionary<string, string>>>("Intents"));
         string formattedIntents = string.Join("|", intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
-        string classifierPromptContent = $"{classifierPrompt.Content.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
-        classifierAgent = llmService.GetChatClient().CreateAIAgent(
-            instructions: classifierPromptContent,
-            name: "ClassifierActor");
+        classifierPromptContent = $"{classifierPrompt.Content.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
 
         ReceiveAsync<UserMessage>(ClassifyMessageAsync);
     }
@@ -41,13 +34,8 @@ public class ClassifierActor : MorganaActor
 
         try
         {
-            AgentRunResponse agentResponse = await classifierAgent.RunAsync(msg.Text);
-            string jsonText = agentResponse.Text?.Trim()
-                                                 .Replace("```json", "")
-                                                 .Replace("```", "")
-                                                 .Trim() ?? "{}";
-
-            ClassificationResponse? classificationResponse = JsonSerializer.Deserialize<ClassificationResponse>(jsonText);
+            string response = await llmService.CompleteWithSystemPromptAsync(classifierPromptContent, msg.Text);
+            ClassificationResponse? classificationResponse = JsonSerializer.Deserialize<ClassificationResponse>(response);
             ClassificationResult classificationResult = new ClassificationResult(
                 classificationResponse?.Intent ?? "other",
                 new Dictionary<string, string>

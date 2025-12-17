@@ -3,7 +3,6 @@ using Akka.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Morgana.Actors;
-using Morgana.AI.Interfaces;
 using Morgana.Hubs;
 using static Morgana.Records;
 
@@ -15,16 +14,16 @@ public class ConversationController : ControllerBase
 {
     private readonly ActorSystem actorSystem;
     private readonly ILogger<ConversationController> logger;
-    private readonly IHubContext<ConversationHub> hubContext;
+    private readonly IHubContext<ConversationHub> signalrContext;
 
     public ConversationController(
         ActorSystem actorSystem,
         ILogger<ConversationController> logger,
-        IHubContext<ConversationHub> hubContext)
+        IHubContext<ConversationHub> signalrContext)
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
-        this.hubContext = hubContext;
+        this.signalrContext = signalrContext;
     }
 
     [HttpPost("start")]

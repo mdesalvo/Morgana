@@ -8,17 +8,11 @@ namespace Morgana.Actors;
 
 public class GuardActor : MorganaActor
 {
-    private readonly ILLMService llmService;
-    private readonly IPromptResolverService promptResolverService;
-
     public GuardActor(
         string conversationId,
         ILLMService llmService,
-        IPromptResolverService promptResolverService) : base(conversationId)
+        IPromptResolverService promptResolverService) : base(conversationId, llmService, promptResolverService)
     {
-        this.llmService = llmService;
-        this.promptResolverService = promptResolverService;
-
         ReceiveAsync<GuardCheckRequest>(CheckComplianceAsync);
     }
 

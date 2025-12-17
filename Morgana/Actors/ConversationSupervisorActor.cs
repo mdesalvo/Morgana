@@ -10,7 +10,6 @@ public class ConversationSupervisorActor : MorganaActor
     private readonly IActorRef guardActor;
     private readonly IActorRef classifierActor;
     private readonly IActorRef routerActor;
-    private readonly IPromptResolverService promptResolverService;
     private readonly ILogger<ConversationSupervisorActor> logger;
 
     // Eventuale agente ancora attivo in multi-turno
@@ -18,10 +17,10 @@ public class ConversationSupervisorActor : MorganaActor
 
     public ConversationSupervisorActor(
         string conversationId,
+        ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<ConversationSupervisorActor> logger) : base(conversationId)
+        ILogger<ConversationSupervisorActor> logger) : base(conversationId, llmService, promptResolverService)
     {
-        this.promptResolverService = promptResolverService;
         this.logger = logger;
 
         DependencyResolver? resolver = DependencyResolver.For(Context.System);

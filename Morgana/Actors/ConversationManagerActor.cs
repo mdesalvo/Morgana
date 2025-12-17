@@ -10,7 +10,7 @@ namespace Morgana.Actors;
 
 public class ConversationManagerActor : MorganaActor
 {
-    private readonly ISignalRBridgeService signalRBridge;
+    private readonly ISignalRBridgeService signalRBridgeService;
     private readonly ILoggingAdapter logger = Context.GetLogger();
 
     // Supervisor attivo
@@ -18,9 +18,11 @@ public class ConversationManagerActor : MorganaActor
 
     public ConversationManagerActor(
         string conversationId,
-        ISignalRBridgeService signalRBridge) : base(conversationId)
+        ISignalRBridgeService signalRBridgeService,
+        ILLMService llmService,
+        IPromptResolverService promptResolverService) : base(conversationId, llmService, promptResolverService)
     {
-        this.signalRBridge = signalRBridge;
+        this.signalRBridgeService = signalRBridgeService;
 
         ReceiveAsync<UserMessage>(HandleUserMessageAsync);
         ReceiveAsync<CreateConversation>(HandleCreateConversationAsync);
@@ -91,7 +93,7 @@ public class ConversationManagerActor : MorganaActor
         // invia al client via SignalR (bridge)
         try
         {
-            await signalRBridge.SendMessageToConversationAsync(conversationId, conversationResponse.Response);
+            await signalRBridgeService.SendMessageToConversationAsync(conversationId, conversationResponse.Response);
         }
         catch (Exception ex)
         {

@@ -9,16 +9,13 @@ namespace Morgana.Actors;
 
 public class RouterActor : MorganaActor
 {
-    private readonly IPromptResolverService promptResolverService;
     private readonly Dictionary<string, IActorRef> agents = [];
 
     public RouterActor(
         string conversationId,
-        IPromptResolverService promptResolverService) : base(conversationId)
+        ILLMService llmService,
+        IPromptResolverService promptResolverService) : base(conversationId, llmService, promptResolverService)
     {
-        this.promptResolverService = promptResolverService;
-
-        //Tutte le tipologie di agente registrate che devono poter lavorare in tandem con il classificatore
         DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
         agents["billing"] = Context.ActorOf(dependencyResolver.Props<BillingAgent>(conversationId), $"billing-{conversationId}");
         agents["contract"] = Context.ActorOf(dependencyResolver.Props<ContractAgent>(conversationId), $"contract-{conversationId}");
@@ -55,5 +52,4 @@ public class RouterActor : MorganaActor
             selectedAgent
         ));
     }
-
 }
