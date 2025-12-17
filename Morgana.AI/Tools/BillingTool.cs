@@ -2,17 +2,17 @@
 
 public class BillingTool
 {
+    private readonly string[] invoices =
+    [
+        "A555 - Periodo: Ott 2025 / Nov 2025 - Importo: €130 - Stato: Da pagare (entro il 15/12/2025)",
+        "B222 - Periodo: Set 2025 / Ott 2025 - Importo: €150 - Stato: Pagata (in data 14/11/2025)",
+        "C333 - Periodo: Giu 2025 / Set 2025 - Importo: €125 - Stato: Pagata (in data 13/10/2025)"
+    ];
+
     public async Task<string> GetInvoices(string userId, int count)
     {
         // Simulazione recupero da storage/database
         await Task.Delay(50);
-
-        string[] invoices =
-        [
-            "Fattura A555 - Nov 2024: €150.00 - Scadenza: 15/12/2024",
-            "Fattura B222 - Ott 2024: €150.00 - Pagata il: 14/11/2024",
-            "Fattura C333 - Set 2024: €150.00 - Pagata il: 13/10/2024"
-        ];
 
         return string.Join("\n", invoices.Take(count));
     }
@@ -22,6 +22,7 @@ public class BillingTool
         // Simulazione recupero da storage/database
         await Task.Delay(50);
 
-        return $"Fattura {invoiceId}:\n- Importo: €150.00\n- Periodo: Nov 2024\n- Scadenza: 15/12/2024\n- Stato: Da pagare";
+        return invoices.FirstOrDefault(inv => inv.StartsWith(invoiceId, StringComparison.OrdinalIgnoreCase))
+                ?? $"Non ho trovato alcuna fattura con identificativo {invoiceId}";
     }
 }

@@ -7,7 +7,7 @@ public class ContractTool
     public async Task<string> GetContractDetails(string userId)
     {
         await Task.Delay(100);
-        return "Contratto attivo:\n- Piano: Premium 100Mbps\n- Inizio: 01/01/2024\n- Scadenza: 31/12/2024\n- Canone mensile: €150.00";
+        return "Contratto attivo:\n- Piano: Premium 100Mbps\n- Limitazione di traffico: 250GB/mese\n- Inizio: 01/01/2025\n- Scadenza: 31/12/2025\n- Canone mensile: €150.00";
     }
 
     public async Task<string> InitiateCancellation(string userId, string reason)
