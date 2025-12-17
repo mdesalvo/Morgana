@@ -9,7 +9,9 @@
       "Language": "it-IT",
       "Version": "1",
       "AdditionalProperties": [
-        { "GenericErrorAnswer": "Si è verificato un errore nel servizio della richiesta. Ti chiedo gentilmente di esprimerla nuovamente." }
+        {
+          "GenericErrorAnswer": "Si è verificato un errore nel servizio della richiesta. Ti chiedo gentilmente di esprimerla nuovamente."
+        }
       ]
     },
     {
@@ -49,7 +51,7 @@
             { "other": "qualsiasi altra tematica non espressamente intercettata da intenti noti" }
           ]
         },
-        { "MissingClassificationError": "Errore interno: classificazione mancante" }
+        { "MissingClassificationError": "Errore interno: classificazione mancante" },
         { "UnrecognizedIntentError": "Mi dispiace,non sono ancora in grado di gestire questo tipo di richiesta" }
       ]
     },

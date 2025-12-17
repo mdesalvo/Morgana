@@ -9,21 +9,39 @@ namespace Morgana.AI.Services
     {
         private readonly Dictionary<string, Type> intentToAgentType = [];
 
-        public AgentRegistryService()
+        public AgentRegistryService(IPromptResolverService promptResolverService)
         {
-            IEnumerable<Type> agentTypes = Assembly
+            // Discovery of available agents with their declared intent
+
+            IEnumerable<Type> morganaAgentTypes = Assembly
                 .GetExecutingAssembly()
                 .GetTypes()
                 .Where(t => t.IsClass && !t.IsAbstract && t.IsSubclassOf(typeof(MorganaAgent)));
 
-            foreach (Type? agentType in agentTypes)
+            foreach (Type? morganaAgentType in morganaAgentTypes)
             {
-                HandlesIntentAttribute? attr = agentType.GetCustomAttribute<HandlesIntentAttribute>();
-                if (attr != null)
-                {
-                    intentToAgentType[attr.Intent] = agentType;
-                }
+                HandlesIntentAttribute? handlesIntentAttribute = morganaAgentType.GetCustomAttribute<HandlesIntentAttribute>();
+                if (handlesIntentAttribute != null)
+                    intentToAgentType[handlesIntentAttribute.Intent] = morganaAgentType;
             }
+
+            // Bidirectional validation of Morgana agents and classifiable intents
+
+            Records.Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
+            HashSet<string> classifierIntents =
+                [.. classifierPrompt.GetAdditionalProperty<List<Dictionary<string, string>>>("Intents")
+                                    .SelectMany(dict => dict.Keys)
+                                    .Where(key => !string.Equals(key, "other", StringComparison.OrdinalIgnoreCase))];
+
+            HashSet<string> registeredIntents = [.. intentToAgentType.Keys];
+
+            List<string> unregisteredClassifierIntents = [.. classifierIntents.Except(registeredIntents)];
+            if (unregisteredClassifierIntents.Count > 0)
+                throw new InvalidOperationException($"There are classifier intents not handled by any Morgana agent: {string.Join(", ", unregisteredClassifierIntents)}");
+
+            List<string> unconfiguredAgentIntents = [.. registeredIntents.Except(classifierIntents)];
+            if (unconfiguredAgentIntents.Count > 0)
+                throw new InvalidOperationException($"There are Morgana agents not configuring their intent for classification: {string.Join(", ", unconfiguredAgentIntents)}");
         }
 
         public Type? GetAgentType(string intent)

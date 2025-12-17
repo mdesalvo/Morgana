@@ -13,7 +13,6 @@ public class AgentAdapter
 {
     protected readonly IPromptResolverService promptResolverService;
     protected readonly IChatClient chatClient;
-    private const string ToolDefinitionAccessor = "Tools";
 
     public AgentAdapter(IChatClient chatClient, IPromptResolverService promptResolverService)
     {
@@ -31,7 +30,7 @@ public class AgentAdapter
                                                     .GetAwaiter()
                                                     .GetResult();
 
-        ToolDefinition[]? billingTools = billingPrompt.GetAdditionalProperty<ToolDefinition[]>(ToolDefinitionAccessor);
+        ToolDefinition[]? billingTools = billingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
         foreach (ToolDefinition billingToolDefinition in billingTools ?? [])
         {
             Delegate billingToolImplementation = billingToolDefinition.Name switch
@@ -60,7 +59,7 @@ public class AgentAdapter
                                                      .GetAwaiter()
                                                      .GetResult();
 
-        ToolDefinition[]? contractTools = contractPrompt.GetAdditionalProperty<ToolDefinition[]>(ToolDefinitionAccessor);
+        ToolDefinition[]? contractTools = contractPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
         foreach (ToolDefinition contractToolDefinition in contractTools ?? [])
         {
             Delegate contractToolImplementation = contractToolDefinition.Name switch
@@ -89,7 +88,7 @@ public class AgentAdapter
                                                             .GetAwaiter()
                                                             .GetResult();
 
-        ToolDefinition[]? troubleshootingTools = troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>(ToolDefinitionAccessor);
+        ToolDefinition[]? troubleshootingTools = troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
         foreach (ToolDefinition troubleshootingToolDefinition in troubleshootingTools ?? [])
         {
             Delegate troubleshootingToolImplementation = troubleshootingToolDefinition.Name switch
