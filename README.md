@@ -60,10 +60,10 @@ Traditional chatbot systems often struggle with complexity—they either become 
 └───────┘  └──────────┘   └───────────┘  
     │           │               │        
     │           │               ▼        
-    │           │         ┌─────────┐   
-    │           │         │ Morgana │   
-    │           │         │  Agent  │   
-    │           │         └─────────┘
+    │           │         ┌───────────┐   
+    │           │         │  Morgana  │   
+    │           │         │   Agent   │   
+    │           │         └───────────┘
     │           │               │_____________________________...fully extensible intent-focused agents
     │           │               │              │             │
     │           │               ▼              ▼             ▼
