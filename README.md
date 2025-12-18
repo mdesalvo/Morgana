@@ -49,7 +49,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
                                │
                                ▼
 ┌────────────────────────────────────────────────────────────────┐
-│               ConversationSupervisorActor                      │
+│                  ConversationSupervisorActor                   │
 │  (Orchestrates the entire multi-turn conversation lifecycle)   │
 └───┬───────────┬───────────────┬────────────────────────────────┘
     │           │               │                        
