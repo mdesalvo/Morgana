@@ -63,23 +63,23 @@ Traditional chatbot systems often struggle with complexity—they either become 
     │           │         │ Morgana  │   
     │           │         │  Agent   │   
     │           │         └──────────┘
-    │           │               │____________________________________________ fully extensible domain-specific intent-focused agents
-    │           │               │              │                   │
-    │           │               ▼              ▼                   ▼
-    │           │         ┌──────────┐   ┌───────────┐   ┌──────────────────┐
+    │           │               │__________________________________... fully extensible domain-specific intent-focused agents
+    │           │               │              │                 │
+    │           │               ▼              ▼                 ▼
+    │           │         ┌──────────┐   ┌───────────┐   ┌──────────────────┐ * Built-in example agents
     │           │         │ Billing* │   │ Contract* │   │ Troubleshooting* │
     │           │         │  Agent   │   │   Agent   │   │      Agent       │
     │           │         │          │   │           │   │                  │
     │           │         └──────────┘   └───────────┘   └──────────────────┘
-    │           │
-    │           │         * Built-in example agents
-    │___________│
-                │
-                ▼
-         ┌──────────────────────────────┐
-         │      Large Language Model    │
-         │ (Guardrail & Classification) │
-         └──────────────────────────────┘
+    │           │              │               │                 │
+    │           │              │               │                 │
+    └─────┬─────┘              └───────────────┬─────────────────┘
+          │                                    │ 
+          ▼                                    ▼
+         ┌─────────────────────────────────────────┐
+         │               ILLMService               │
+         │  (Guardrail, Classification, Tooling)   │
+         └─────────────────────────────────────────┘
 ```
 
 ### Actors Hierarchy
