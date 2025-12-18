@@ -50,6 +50,8 @@ public class AzureOpenAIService : ILLMService
         };
 
         ChatResponse response = await chatClient.GetResponseAsync(messages, chatOptions);
-        return response.Text;
+        return response.Text
+            .Replace("```json", string.Empty)
+            .Replace("```", string.Empty);
     }
 }
