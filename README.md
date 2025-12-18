@@ -111,7 +111,7 @@ The orchestrator that manages the entire conversation lifecycle. It coordinates 
 - Handles error recovery and timeout scenarios
 
 #### 3. GuardActor
-A policy enforcement agent that validates every user message against business rules, brand guidelines, and safety policies.
+A policy enforcement actor that validates every user message against business rules, brand guidelines and safety policies.
 
 **Capabilities:**
 - Profanity and inappropriate content detection
@@ -124,25 +124,22 @@ A policy enforcement agent that validates every user message against business ru
 Guard behavior is defined in `prompts.json` with customizable violation terms and responses, making policy updates deployment-independent.
 
 #### 4. ClassifierActor
-An intelligent routing agent that analyzes user intent and determines the appropriate handling path.
-
-**Classification Categories:**
-- **Informative**: User seeks information (billing details, contract status, technical specs)
-- **Dispositive**: User requests action (contract cancellation, service modification, complaint filing)
+An intelligent classifier actor that analyzes user intent and determines the appropriate handling path.
 
 **Intent Recognition:**
-The classifier identifies specific intents configured in `prompts.json`. Default intents include:
+The classifier identifies specific intents configured in `prompts.json`. **Example** built-in intents include:
 - `billing`: Fetch invoices or payment history
 - `troubleshooting`: Diagnose connectivity or device issues
 - `contract`: Handle service contracts and cancellations
 - `other`: General service inquiries
-
+- ...
+  
 **Metadata Enrichment:**
 Each classification includes confidence scores and contextual metadata that downstream agents can use for decision-making.
 
 #### 5. RouterActor
 Coordinator actor that resolves mappings of intents to engage specialized executor agents.
-This actor works as a smart router, dynamically resolving the appropriate Morgan agent based on classified intent.
+This actor works as a smart router, dynamically resolving the appropriate Morgana agent based on classified intent.
 
 #### 6. Morgana Agents (Domain-Specific, Extensible!)
 Specialized agents with domain-specific knowledge and tool access. The system includes three built-in **example** agents, but **the architecture is fully extensible** to support any domain-specific intent.
