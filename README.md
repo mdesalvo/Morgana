@@ -64,9 +64,9 @@ Traditional chatbot systems often struggle with complexity—they either become 
     │           │         │ Morgana  │   
     │           │         │  Agent   │   
     │           │         └──────────┘
-    │           │               │_________________________________... fully extensible intent-focused agents
-    │           │               │              │                 │
-    │           │               ▼              ▼                 ▼
+    │           │               │______________________________...fully extensible intent-focused agents
+    │           │               │              │              │
+    │           │               ▼              ▼              ▼
     │           │         ┌──────────┐   ┌───────────┐   ┌──────────────────┐ * Built-in example agents
     │           │         │ Billing* │   │ Contract* │   │ Troubleshooting* │
     │           │         │  Agent   │   │   Agent   │   │      Agent       │
