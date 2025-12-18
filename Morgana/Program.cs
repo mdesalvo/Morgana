@@ -29,8 +29,19 @@ builder.Services.AddCors(options =>
 });
 
 // Morgana.AI Services
-builder.Services.AddSingleton<ILLMService, AzureOpenAIService>();
-//builder.Services.AddSingleton<ILLMService, AnthropicService>();
+string llmProvider = builder.Configuration["LLM:Provider"]!;
+builder.Services.AddSingleton<ILLMService>(sp =>
+{
+    IConfiguration config = sp.GetRequiredService<IConfiguration>();
+    IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
+
+    return llmProvider.ToLowerInvariant() switch
+    {
+        "anthropic" => new AnthropicService(config, promptResolver),
+        "azureopenai" => new AzureOpenAIService(config, promptResolver),
+        _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' non supportato. Valori validi: 'AzureOpenAI', 'Anthropic'")
+    };
+});
 builder.Services.AddSingleton<IAgentResolverService, HandlesIntentAgentResolverService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 

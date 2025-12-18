@@ -24,9 +24,9 @@ public class AnthropicService : ILLMService
         AnthropicClient anthropicClient = new AnthropicClient(
             new ClientOptions
             {
-                APIKey = this.configuration["Anthropic:ApiKey"]!
+                APIKey = this.configuration["LLM:Anthropic:ApiKey"]!
             });
-        string anthropicModel = this.configuration["Anthropic:Model"]!;
+        string anthropicModel = this.configuration["LLM:Anthropic:Model"]!;
 
         chatClient = anthropicClient.AsIChatClient(anthropicModel);
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();

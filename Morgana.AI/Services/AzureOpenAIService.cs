@@ -22,9 +22,9 @@ public class AzureOpenAIService : ILLMService
         this.promptResolverService = promptResolverService;
 
         AzureOpenAIClient azureClient = new AzureOpenAIClient(
-            new Uri(this.configuration["Azure:OpenAI:Endpoint"]!),
-            new AzureKeyCredential(this.configuration["Azure:OpenAI:ApiKey"]!));
-        string deploymentName = this.configuration["Azure:OpenAI:DeploymentName"]!;
+            new Uri(this.configuration["LLM:AzureOpenAI:Endpoint"]!),
+            new AzureKeyCredential(this.configuration["LLM:AzureOpenAI:ApiKey"]!));
+        string deploymentName = this.configuration["LLM:AzureOpenAI:DeploymentName"]!;
 
         chatClient = azureClient.GetChatClient(deploymentName).AsIChatClient();
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
