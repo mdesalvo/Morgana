@@ -52,22 +52,22 @@ Traditional chatbot systems often struggle with complexity—they either become 
 │                  ConversationSupervisorActor                   │
 │  (Orchestrates the entire multi-turn conversation lifecycle)   │
 └───┬───────────┬───────────────┬────────────────────────────────┘
-    │           │               │                        
-    ▼           ▼               ▼                        
-┌───────┐  ┌──────────┐   ┌───────────┐  
-│ Guard │  │Classifier│   │   Router  │  
-│ Actor │  │  Actor   │   │   Actor   │  
-└───────┘  └──────────┘   └───────────┘  
-    │           │               │        
-    │           │               ▼        
-    │           │         ┌───────────┐   
-    │           │         │  Morgana  │   
-    │           │         │   Agent   │   
+    │           │               │
+    ▼           ▼               ▼
+┌───────┐  ┌──────────┐   ┌───────────┐
+│ Guard │  │Classifier│   │   Router  │
+│ Actor │  │  Actor   │   │   Actor   │
+└───────┘  └──────────┘   └───────────┘
+    │           │               │
+    │           │               ▼
+    │           │         ┌───────────┐
+    │           │         │  Morgana  │
+    │           │         │   Agent   │
     │           │         └───────────┘
-    │           │               │____________________________...fully extensible intent-focused agents
-    │           │               │              │            │
-    │           │               ▼              ▼            ▼
-    │           │         ┌──────────┐   ┌───────────┐  ┌──────────────────┐ * Built-in example agents
+    │           │               │___________________________...fully extensible intent-focused agents
+    │           │               │             │            │
+    │           │               ▼             ▼            ▼
+    │           │         ┌──────────┐   ┌───────────┐  ┌──────────────────┐ *Built-in example agents
     │           │         │ Billing* │   │ Contract* │  │ Troubleshooting* │
     │           │         │  Agent   │   │   Agent   │  │      Agent       │
     │           │         │          │   │           │  │                  │
@@ -75,7 +75,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
     │           │              │               │            │
     │           │              │               │            │
     └─────┬─────┘              └───────────────┬────────────┘
-          │                                    │ 
+          │                                    │
           ▼                                    ▼
          ┌──────────────────────────────────────────────┐
          │                  ILLMService                 │
@@ -320,8 +320,8 @@ Agents use a special token `#INT#` to signal when additional user input is requi
 This enables natural back-and-forth dialogues within a single intent execution.
 
 **Future Enhancement:**
-The in-memory history is a temporary solution until the Agent Framework provides native memory support.
+The in-memory history is a temporary solution until the Agents Framework provides native memory support.
 
 ---
 
-**Built with ❤️ using .NET 10, Akka.NET, Microsoft.Agents.AI and Microsoft.Extensions.AI**
+**Built with ❤️ using .NET 10, Akka.NET and Microsoft.Agents.AI
