@@ -43,7 +43,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
                                │
                                ▼
 ┌────────────────────────────────────────────────────────────────┐
-│                  ConversationManagerActor                      │
+│                   ConversationManagerActor                     │
 │ (Coordinates, routes and manages stateful conversational flow) │
 └──────────────────────────────┬─────────────────────────────────┘
                                │
