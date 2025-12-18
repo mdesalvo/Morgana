@@ -89,12 +89,12 @@ public class ConversationSupervisorActor : MorganaActor
                 new AI.Records.AgentRequest(msg.ConversationId, msg.Text, classificationResult));
             switch (agentResponse)
             {
-                // Caso 1: InternalAgentResponse → proveniente dall'agente di routing
+                // Caso 1: InternalAgentResponse → proveniente dall'agente
                 case AI.Records.InternalAgentResponse internalAgentResponse:
                 {
                     logger.LogInformation("Supervisor received InternalAgentResponse from {0}", internalAgentResponse.AgentRef.Path);
 
-                    // Se multi-turno → imposta agente concreto
+                    // Se multi-turno → imposta agente attivo
                     if (!internalAgentResponse.IsCompleted)
                     {
                         activeAgent = internalAgentResponse.AgentRef;
@@ -108,27 +108,27 @@ public class ConversationSupervisorActor : MorganaActor
 
                     break;
                 }
-                // Caso 2: AgentResponse diretto (fallback, dovrebbe essere raro)
-                case AI.Records.AgentResponse directAgentResponse:
+                // Caso 2: AgentResponse → proveniente dal router
+                case AI.Records.AgentResponse routerResponse:
                 {
-                    logger.LogWarning("Supervisor received direct AgentResponse instead of internal one.");
+                    logger.LogWarning("Supervisor received AgentResponse instead of InternalAgentResponse!");
 
-                    if (!directAgentResponse.IsCompleted)
+                    // Se multi-turno → imposta agente attivo = router (non ideale, ma evita blocchi)
+                    if (!routerResponse.IsCompleted)
                     {
-                        // fallback: usa direttamente l'attore di routing come agente attivo (non ideale, ma evita blocchi)
                         activeAgent = routerActor;
                         logger.LogWarning("Supervisor: fallback active agent = {0}", routerActor.Path);
                     }
 
                     senderRef.Tell(new Records.ConversationResponse(
-                        directAgentResponse.Response,
+                        routerResponse.Response,
                         classificationResult.Intent,
                         classificationResult.Metadata));
 
                     break;
                 }
+                // Caso 3: risposta inattesa
                 default:
-                    // Caso 3: risposta inattesa
                     logger.LogError("Supervisor received unexpected message type: {0}", agentResponse?.GetType());
 
                     senderRef.Tell(new Records.ConversationResponse("Errore interno imprevisto.", null, null));
