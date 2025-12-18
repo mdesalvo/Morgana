@@ -5,11 +5,11 @@ using System.Reflection;
 
 namespace Morgana.AI.Services
 {
-    public class AgentRegistryService : IAgentRegistryService
+    public class HandlesIntentAgentResolverService : IAgentResolverService
     {
         private readonly Dictionary<string, Type> intentToAgentType = [];
 
-        public AgentRegistryService(IPromptResolverService promptResolverService)
+        public HandlesIntentAgentResolverService(IPromptResolverService promptResolverService)
         {
             // Discovery of available agents with their declared intent
 
@@ -44,10 +44,10 @@ namespace Morgana.AI.Services
                 throw new InvalidOperationException($"There are Morgana agents not configuring their intent for classification: {string.Join(", ", unconfiguredAgentIntents)}");
         }
 
-        public Type? GetAgentType(string intent)
+        public Type? ResolveAgentType(string intent)
             => intentToAgentType.GetValueOrDefault(intent);
 
-        public IEnumerable<string> GetRegisteredIntents()
+        public IEnumerable<string> ResolveIntents()
             => intentToAgentType.Keys;
     }
 }

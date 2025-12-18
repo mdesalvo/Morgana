@@ -9,14 +9,14 @@ using Morgana.Services;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// SignalR per comunicazione real-time
+// SignalR
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<ISignalRBridgeService, SignalRBridgeService>();
 
-// CORS per Cauldron
+// CORS (Blazor for Cauldron)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
@@ -28,13 +28,12 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Services
+// Morgana.AI Services
 builder.Services.AddSingleton<ILLMService, AzureOpenAIService>();
+builder.Services.AddSingleton<IAgentResolverService, HandlesIntentAgentResolverService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
-builder.Services.AddSingleton<ISignalRBridgeService, SignalRBridgeService>();
-builder.Services.AddSingleton<IAgentRegistryService, AgentRegistryService>();
 
-// Akka.NET Actor System
+// Akka.NET Services
 builder.Services.AddSingleton(sp =>
 {
     BootstrapSetup bootstrap = BootstrapSetup.Create();
@@ -42,8 +41,6 @@ builder.Services.AddSingleton(sp =>
     ActorSystemSetup actorSystemSetup = bootstrap.And(di);
     return ActorSystem.Create("Morgana", actorSystemSetup);
 });
-
-// Hosted service per lifecycle Akka.NET
 builder.Services.AddHostedService<AkkaHostedService>();
 
 WebApplication app = builder.Build();
@@ -54,6 +51,6 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<ConversationHub>("/conversationHub"); // SignalR Hub
+app.MapHub<ConversationHub>("/conversationHub");
 
 await app.RunAsync();

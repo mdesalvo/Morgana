@@ -14,12 +14,12 @@ public class RouterActor : MorganaActor
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        IAgentRegistryService agentRegistryService) : base(conversationId, llmService, promptResolverService)
+        IAgentResolverService agentResolverService) : base(conversationId, llmService, promptResolverService)
     {
         DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
-        foreach (string intent in agentRegistryService.GetRegisteredIntents())
+        foreach (string intent in agentResolverService.ResolveIntents())
         {
-            Type? agentType = agentRegistryService.GetAgentType(intent);
+            Type? agentType = agentResolverService.ResolveAgentType(intent);
             if (agentType != null)
             {
                 Props props = dependencyResolver.Props(agentType, conversationId);
