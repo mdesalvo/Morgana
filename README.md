@@ -27,7 +27,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
 1. **Agent Specialization**: Each agent has a single, well-defined responsibility with access to specific tools
 2. **Actor-Based Concurrency**: Akka.NET provides fault tolerance, message-driven architecture, and natural scalability
 3. **Intelligent Routing**: Requests are classified and routed to the most appropriate specialist agent
-4. **Policy Enforcement**: A dedicated guard agent ensures all interactions comply with business rules and brand guidelines
+4. **Policy Enforcement**: A dedicated guard actor ensures all interactions comply with business rules and brand guidelines
 5. **Declarative Configuration**: Prompts and agent behaviors are externalized as first-class project artifacts
 6. **Automatic Discovery**: Agents self-register through attributes, eliminating manual configuration
 
