@@ -55,15 +55,15 @@ Traditional chatbot systems often struggle with complexity—they either become 
     │           │               │                        
     ▼           ▼               ▼                        
 ┌───────┐  ┌──────────┐   ┌───────────┐  
-│ Guard │  │Classifier│   │RouterActor│  
-│ Actor │  │  Actor   │   │           │  
+│ Guard │  │Classifier│   │   Router  │  
+│ Actor │  │  Actor   │   │   Actor   │  
 └───────┘  └──────────┘   └───────────┘  
     │           │               │        
     │           │               ▼        
-    │           │         ┌──────────┐   
-    │           │         │ Morgana  │   
-    │           │         │  Agent   │   
-    │           │         └──────────┘
+    │           │         ┌─────────┐   
+    │           │         │ Morgana │   
+    │           │         │  Agent  │   
+    │           │         └─────────┘
     │           │               │_____________________________...fully extensible intent-focused agents
     │           │               │              │             │
     │           │               ▼              ▼             ▼
@@ -77,10 +77,10 @@ Traditional chatbot systems often struggle with complexity—they either become 
     └─────┬─────┘              └───────────────┬─────────────┘
           │                                    │ 
           ▼                                    ▼
-         ┌─────────────────────────────────────────┐
-         │               ILLMService               │
-         │  (Guardrail, Classification, Tooling)   │
-         └─────────────────────────────────────────┘
+         ┌──────────────────────────────────────────────┐
+         │                  ILLMService                 │
+         │  (Guardrail, Intent Classification, Tooling) │
+         └──────────────────────────────────────────────┘
 ```
 
 ### Actors Hierarchy
