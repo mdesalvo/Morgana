@@ -8,7 +8,8 @@
       <p><strong>A modern and flexible multi-agent, intent-driven conversational AI system</strong></p>
       <p>
         <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10"/>
-        <img src="https://img.shields.io/badge/Akka.NET-1.5-00ADD8?logo=akka" alt="Akka.NET"/>
+        <img src="https://img.shields.io/badge/Akka.NET-512BD4?logo=nuget" alt="Akka.NET"/>
+        <img src="https://img.shields.io/badge/Microsoft.Agents.AI-512BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
       </p>
     </td>
   </tr>
