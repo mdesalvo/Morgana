@@ -324,4 +324,4 @@ The in-memory history is a temporary solution until the Agents Framework provide
 
 ---
 
-**Built with ❤️ using .NET 10, Akka.NET and Microsoft.Agents.AI
+**Built with ❤️ using .NET 10, Akka.NET and Microsoft.Agents.AI**
