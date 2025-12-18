@@ -30,6 +30,7 @@ builder.Services.AddCors(options =>
 
 // Morgana.AI Services
 builder.Services.AddSingleton<ILLMService, AzureOpenAIService>();
+//builder.Services.AddSingleton<ILLMService, AnthropicService>();
 builder.Services.AddSingleton<IAgentResolverService, HandlesIntentAgentResolverService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 
