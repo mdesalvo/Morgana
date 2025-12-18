@@ -64,23 +64,23 @@ Traditional chatbot systems often struggle with complexity—they either become 
     │           │         │  Morgana  │
     │           │         │   Agent   │
     │           │         └───────────┘
-    │           │               │___________________________...fully extensible intent-focused agents
-    │           │               │             │            │
-    │           │               ▼             ▼            ▼
-    │           │         ┌──────────┐   ┌───────────┐  ┌──────────────────┐ *Built-in example agents
-    │           │         │ Billing* │   │ Contract* │  │ Troubleshooting* │
-    │           │         │  Agent   │   │   Agent   │  │      Agent       │
-    │           │         │          │   │           │  │                  │
-    │           │         └──────────┘   └───────────┘  └──────────────────┘
+    │           │               └──────────────┬────────────┬─...fully extensible intent-based agents
+    │           │               │              │            │
+    │           │               ▼              ▼            ▼
+    │           │         ┌──────────┐   ┌───────────┐  ┌─────────────────┐ * Built-in example agents
+    │           │         │ Billing* │   │ Contract* │  │Troubleshooting* │
+    │           │         │  Agent   │   │   Agent   │  │     Agent       │
+    │           │         │          │   │           │  │                 │
+    │           │         └──────────┘   └───────────┘  └─────────────────┘
     │           │              │               │            │
     │           │              │               │            │
     └─────┬─────┘              └───────────────┬────────────┘
           │                                    │
           ▼                                    ▼
-         ┌──────────────────────────────────────────────┐
-         │                  ILLMService                 │
-         │  (Guardrail, Intent Classification, Tooling) │
-         └──────────────────────────────────────────────┘
+         ┌─────────────────────────────────────────────────┐
+         │                    ILLMService                  │
+         │    (Guardrail, Intent Classification, Tooling)  │
+         └─────────────────────────────────────────────────┘
 ```
 
 ### Actors Hierarchy
