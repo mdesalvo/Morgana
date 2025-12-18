@@ -7,13 +7,17 @@ namespace Morgana.Actors;
 
 public class ConversationSupervisorActor : MorganaActor
 {
+    private enum SupervisorState { Idle, ActiveAgent, PostCompletion }
+
     private readonly IActorRef guardActor;
     private readonly IActorRef classifierActor;
     private readonly IActorRef routerActor;
     private readonly ILogger<ConversationSupervisorActor> logger;
 
-    // Eventuale agente ancora attivo in multi-turno
+    // State management
+    private SupervisorState state = SupervisorState.Idle;
     private IActorRef? activeAgent = null;
+    private string? previousIntent = null;
 
     public ConversationSupervisorActor(
         string conversationId,
@@ -34,12 +38,14 @@ public class ConversationSupervisorActor : MorganaActor
 
     private async Task HandleUserMessageAsync(Records.UserMessage msg)
     {
-        IActorRef? senderRef = Sender;
+        IActorRef senderRef = Sender;
 
-        // If we have an active agent still serving its use-case, bypass classifier and router
+        // ═══════════════════════════════════════════════════════════
+        // CASO 1: Agente Attivo (Multi-Turn in corso)
+        // ═══════════════════════════════════════════════════════════
         if (activeAgent != null)
         {
-            logger.LogInformation("Supervisor: follow-up detected, redirecting to active agent → {0}", activeAgent.Path);
+            logger.LogInformation("Follow-up detected, redirecting to active agent: {0}", activeAgent.Path);
 
             AI.Records.AgentResponse agentFollowup;
             try
@@ -49,16 +55,22 @@ public class ConversationSupervisorActor : MorganaActor
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Active follow-up agent did not reply.");
+                logger.LogError(ex, "Active agent did not reply");
                 activeAgent = null;
+                state = SupervisorState.Idle;
+                previousIntent = null;
 
-                senderRef.Tell(new Records.ConversationResponse("Si è verificato un errore interno.", null, null));
+                senderRef.Tell(new Records.ConversationResponse(
+                    "Si è verificato un errore interno.", null, null));
                 return;
             }
 
+            // Se l'agente ha completato → Transizione a PostCompletion
             if (agentFollowup.IsCompleted)
             {
-                logger.LogInformation("Agent signaled completion → clearing active agent.");
+                logger.LogInformation("Agent completed - transitioning to PostCompletion state");
+                state = SupervisorState.PostCompletion;
+                // previousIntent già impostato quando l'agente è stato attivato
                 activeAgent = null;
             }
 
@@ -66,79 +78,218 @@ public class ConversationSupervisorActor : MorganaActor
             return;
         }
 
-        // Otherwise we can start a new service request: guard → classifier → router → agent+LLM
-        try
+        // ═══════════════════════════════════════════════════════════
+        // CASO 2: Post-Completion Cooldown (1 Solo Turno!)
+        // ═══════════════════════════════════════════════════════════
+        if (state == SupervisorState.PostCompletion)
         {
-            Records.GuardCheckResponse? guardCheckResponse = await guardActor.Ask<Records.GuardCheckResponse>(
-                new Records.GuardCheckRequest(msg.ConversationId, msg.Text));
-            if (!guardCheckResponse.Compliant)
-            {
-                AI.Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
-                Records.ConversationResponse response = new Records.ConversationResponse(
-                    guardPrompt.GetAdditionalProperty<string>("GuardAnswer").Replace("((violation))", guardCheckResponse.Violation), "guard_violation", []);
+            string lastIntent = previousIntent!;
 
-                senderRef.Tell(response);
+            // RESETTA SEMPRE lo stato dopo questo turno (single-turn!)
+            state = SupervisorState.Idle;
+            previousIntent = null;
+
+            // Valutazione LLM: è un acknowledgment/chiusura cortese?
+            bool isAcknowledgment = await IsLikelyAcknowledgmentAsync(msg.Text, lastIntent);
+
+            if (isAcknowledgment)
+            {
+                logger.LogInformation(
+                    "Acknowledgment detected after intent '{0}' - routing to Morgana",
+                    lastIntent);
+
+                try
+                {
+                    string morganaResponse = await HandleMorganaAcknowledgmentAsync(msg.Text, lastIntent);
+
+                    senderRef.Tell(new Records.ConversationResponse(
+                        morganaResponse,
+                        "acknowledgment",
+                        new Dictionary<string, string>
+                        {
+                            ["previous_intent"] = lastIntent
+                        }));
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Morgana acknowledgment failed");
+                    senderRef.Tell(new Records.ConversationResponse(
+                        "Sono qui se hai bisogno di altro!", null, null));
+                }
+
                 return;
             }
 
-            AI.Records.ClassificationResult? classificationResult = await classifierActor.Ask<AI.Records.ClassificationResult>(msg);
-            logger.LogInformation("Supervisor got classification result: {0}", classificationResult.Intent);
+            // NON è un acknowledgment → Messaggio sostanziale
+            logger.LogInformation(
+                "Substantial message during cooldown - proceeding with normal classification");
 
-            // Risposta polimorfica: può essere InternalAgentResponse o AgentResponse
-            object? agentResponse = await routerActor.Ask<object>(
-                new AI.Records.AgentRequest(msg.ConversationId, msg.Text, classificationResult));
+            // Fall-through al CASO 3 (classificazione normale)
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // CASO 3: Idle - Nuovo Intent (Guard → Classifier → Router)
+        // ═══════════════════════════════════════════════════════════
+        try
+        {
+            // Guard check
+            Records.GuardCheckResponse guardCheck = await guardActor.Ask<Records.GuardCheckResponse>(
+                new Records.GuardCheckRequest(msg.ConversationId, msg.Text));
+
+            if (!guardCheck.Compliant)
+            {
+                AI.Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
+                senderRef.Tell(new Records.ConversationResponse(
+                    guardPrompt.GetAdditionalProperty<string>("GuardAnswer")
+                        .Replace("((violation))", guardCheck.Violation!),
+                    "guard_violation",
+                    null));
+                return;
+            }
+
+            // Classification
+            AI.Records.ClassificationResult classification =
+                await classifierActor.Ask<AI.Records.ClassificationResult>(msg);
+
+            logger.LogInformation("Classification result: {0}", classification.Intent);
+
+            // Router → Agent
+            object agentResponse = await routerActor.Ask<object>(
+                new AI.Records.AgentRequest(msg.ConversationId, msg.Text, classification));
+
             switch (agentResponse)
             {
-                // Caso 1: InternalAgentResponse → proveniente dall'agente
-                case AI.Records.InternalAgentResponse internalAgentResponse:
-                {
-                    logger.LogInformation("Supervisor received InternalAgentResponse from {0}", internalAgentResponse.AgentRef.Path);
+                case AI.Records.InternalAgentResponse internalResponse:
+                    logger.LogInformation(
+                        "Received InternalAgentResponse from {0}",
+                        internalResponse.AgentRef.Path);
 
-                    // Se multi-turno → imposta agente attivo
-                    if (!internalAgentResponse.IsCompleted)
+                    // Se multi-turno → Imposta agente attivo
+                    if (!internalResponse.IsCompleted)
                     {
-                        activeAgent = internalAgentResponse.AgentRef;
-                        logger.LogInformation("Supervisor: active agent set to {0}", activeAgent.Path);
+                        activeAgent = internalResponse.AgentRef;
+                        previousIntent = classification.Intent;
+                        state = SupervisorState.ActiveAgent;
+
+                        logger.LogInformation(
+                            "Active agent set to {0} for intent '{1}'",
+                            activeAgent.Path, previousIntent);
+                    }
+                    else
+                    {
+                        // Single-turn completato → PostCompletion
+                        state = SupervisorState.PostCompletion;
+                        previousIntent = classification.Intent;
+
+                        logger.LogInformation(
+                            "Single-turn intent '{0}' completed - entering PostCompletion",
+                            previousIntent);
                     }
 
                     senderRef.Tell(new Records.ConversationResponse(
-                        internalAgentResponse.Response,
-                        classificationResult.Intent,
-                        classificationResult.Metadata));
-
+                        internalResponse.Response,
+                        classification.Intent,
+                        classification.Metadata));
                     break;
-                }
-                // Caso 2: AgentResponse → proveniente dal router
-                case AI.Records.AgentResponse routerResponse:
-                {
-                    logger.LogWarning("Supervisor received AgentResponse instead of InternalAgentResponse!");
 
-                    // Se multi-turno → imposta agente attivo = router (non ideale, ma evita blocchi)
-                    if (!routerResponse.IsCompleted)
-                    {
-                        activeAgent = routerActor;
-                        logger.LogWarning("Supervisor: fallback active agent = {0}", routerActor.Path);
-                    }
+                case AI.Records.AgentResponse routerResponse:
+                    logger.LogWarning(
+                        "Received AgentResponse instead of InternalAgentResponse");
+
+                    // Fallback: tratta come single-turn
+                    state = SupervisorState.PostCompletion;
+                    previousIntent = classification.Intent;
 
                     senderRef.Tell(new Records.ConversationResponse(
                         routerResponse.Response,
-                        classificationResult.Intent,
-                        classificationResult.Metadata));
-
+                        classification.Intent,
+                        classification.Metadata));
                     break;
-                }
-                // Caso 3: risposta inattesa
-                default:
-                    logger.LogError("Supervisor received unexpected message type: {0}", agentResponse?.GetType());
 
-                    senderRef.Tell(new Records.ConversationResponse("Errore interno imprevisto.", null, null));
+                default:
+                    logger.LogError(
+                        "Unexpected response type: {0}",
+                        agentResponse?.GetType());
+
+                    senderRef.Tell(new Records.ConversationResponse(
+                        "Si è verificato un errore interno.", null, null));
                     break;
             }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Errore nel gestire il primo turno.");
-            senderRef.Tell(new Records.ConversationResponse("Si è verificato un errore interno.", null, null));
+            logger.LogError(ex, "Error handling message");
+
+            // Reset completo in caso di errore
+            state = SupervisorState.Idle;
+            activeAgent = null;
+            previousIntent = null;
+
+            senderRef.Tell(new Records.ConversationResponse(
+                "Si è verificato un errore interno.", null, null));
         }
+    }
+
+    private async Task<bool> IsLikelyAcknowledgmentAsync(string userText, string completedIntent)
+    {
+        try
+        {
+            AI.Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync("Morgana");
+
+            string systemPrompt = $@"{morganaPrompt.Content}
+
+CONTESTO: Il cliente ha appena completato un'interazione relativa a '{completedIntent}'.
+
+COMPITO: Valuta se il seguente messaggio è un semplice acknowledgment/chiusura cortese (es: 'grazie', 'ok', 'va bene', 'perfetto') oppure una nuova richiesta sostanziale.
+
+RISPOSTA RICHIESTA: Rispondi SOLO con 'true' se è un acknowledgment, 'false' se è una richiesta sostanziale.
+Nessun altro testo, nessuna spiegazione, solo 'true' o 'false'.";
+
+            string response = await llmService.CompleteWithSystemPromptAsync(
+                conversationId,
+                systemPrompt,
+                userText);
+
+            string normalized = response.Trim().ToLowerInvariant();
+            return normalized.Contains("true");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error evaluating acknowledgment - defaulting to false");
+            return false; // In caso di errore, assume sia una richiesta sostanziale
+        }
+    }
+
+    private async Task<string> HandleMorganaAcknowledgmentAsync(string userText, string completedIntent)
+    {
+        AI.Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync("Morgana");
+
+        string systemPrompt = $@"{morganaPrompt.Content}
+
+CONTESTO SPECIALE: Il cliente ha appena completato un'interazione relativa a '{completedIntent}'.
+Il suo messaggio sembra essere una conferma o chiusura cortese.
+
+ISTRUZIONI:
+1. Se è un semplice ringraziamento o conferma → Rispondi con cortesia e disponibilità futura
+2. Mantieni la risposta BREVE (1-2 frasi max)
+3. Non chiedere attivamente se ha altre domande (l'ha già fatto l'agente precedente)
+4. Tono cordiale ma non invadente";
+
+        return await llmService.CompleteWithSystemPromptAsync(
+            conversationId,
+            systemPrompt,
+            userText);
+    }
+
+    protected override void PreStart()
+    {
+        logger.LogInformation("ConversationSupervisorActor started for {0}", conversationId);
+        base.PreStart();
+    }
+
+    protected override void PostStop()
+    {
+        logger.LogInformation("ConversationSupervisorActor stopped for {0}", conversationId);
+        base.PostStop();
     }
 }
