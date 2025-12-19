@@ -2,56 +2,22 @@ using Azure;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
-using static Morgana.AI.Records;
 
 namespace Morgana.AI.Services;
 
-public class AzureOpenAIService : ILLMService
+public class AzureOpenAIService : MorganaLLMService
 {
-    private readonly IConfiguration configuration;
-    private readonly IChatClient chatClient;
-    private readonly IPromptResolverService promptResolverService;
-    private readonly Prompt morganaPrompt;
-
     public AzureOpenAIService(
         IConfiguration configuration,
-        IPromptResolverService promptResolverService)
+        IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
     {
-        this.configuration = configuration;
-        this.promptResolverService = promptResolverService;
-
         AzureOpenAIClient azureClient = new AzureOpenAIClient(
             new Uri(this.configuration["LLM:AzureOpenAI:Endpoint"]!),
             new AzureKeyCredential(this.configuration["LLM:AzureOpenAI:ApiKey"]!));
         string deploymentName = this.configuration["LLM:AzureOpenAI:DeploymentName"]!;
 
         chatClient = azureClient.GetChatClient(deploymentName).AsIChatClient();
-        morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
-    }
-
-    public IChatClient GetChatClient() => chatClient;
-    public IPromptResolverService GetPromptResolverService() => promptResolverService;
-
-    public async Task<string> CompleteAsync(string conversationId, string prompt)
-        => await CompleteWithSystemPromptAsync(conversationId, morganaPrompt.Content, prompt);
-
-    public async Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt)
-    {
-        List<ChatMessage> messages =
-        [
-            new(ChatRole.System, systemPrompt),
-            new(ChatRole.User, userPrompt)
-        ];
-
-        ChatOptions chatOptions = new ChatOptions
-        {
-            ConversationId = conversationId,
-        };
-
-        ChatResponse response = await chatClient.GetResponseAsync(messages, chatOptions);
-        return response.Text
-            .Replace("```json", string.Empty)
-            .Replace("```", string.Empty);
     }
 }
