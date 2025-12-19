@@ -48,8 +48,8 @@ public class RouterActor : MorganaActor
         // Chiede all'agente selezionato
         AgentResponse? agentResponse = await selectedAgent.Ask<AgentResponse>(req);
 
-        // Risponde al supervisore con il riferimento dell'agente reale
-        senderRef.Tell(new InternalAgentResponse(
+        // Risponde al supervisore con il riferimento dell'agente attivo
+        senderRef.Tell(new ActiveAgentResponse(
             agentResponse.Response,
             agentResponse.IsCompleted,
             selectedAgent

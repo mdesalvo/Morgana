@@ -23,7 +23,7 @@ namespace Morgana.AI
             string Intent,
             Dictionary<string, string> Metadata);
 
-        public record InternalAgentResponse(
+        public record ActiveAgentResponse(
            string Response,
            bool IsCompleted,
            IActorRef AgentRef);

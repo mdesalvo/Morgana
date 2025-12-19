@@ -58,7 +58,7 @@ namespace Morgana
             AI.Records.ClassificationResult Classification,
             IActorRef OriginalSender);
         public record AgentResponseReceived(
-            AI.Records.InternalAgentResponse Response,
+            AI.Records.ActiveAgentResponse Response,
             AI.Records.ClassificationResult Classification,
             IActorRef OriginalSender);
     }

@@ -44,10 +44,10 @@ public class ConversationSupervisorActor : MorganaActor
             return Task.CompletedTask;
         });
         ReceiveAsync<InitiateNewRequest>(EngageGuardForNewRequestAsync);
+        ReceiveAsync<ContinueActiveSession>(EngageActiveAgentInFollowupAsync);
         ReceiveAsync<GuardCheckPassed>(EngageClassifierAfterGuardCheckPassedAsync);
         ReceiveAsync<ClassificationReady>(EngageRouterAfterClassificationAsync);
         ReceiveAsync<AgentResponseReceived>(DeliverAgentResponseAsync);
-        ReceiveAsync<ContinueActiveSession>(EngageActiveAgentInFollowupAsync);
     }
 
     private async Task EngageGuardForNewRequestAsync(InitiateNewRequest msg)
@@ -103,22 +103,22 @@ public class ConversationSupervisorActor : MorganaActor
             object agentResponse = await router.Ask<object>(
                 new AI.Records.AgentRequest(msg.Message.ConversationId, msg.Message.Text, msg.Classification));
 
-            if (agentResponse is AI.Records.InternalAgentResponse internalAgentResponse)
+            if (agentResponse is AI.Records.ActiveAgentResponse activeAgentResponse)
             {
-                Self.Tell(new AgentResponseReceived(internalAgentResponse, msg.Classification, msg.OriginalSender));
+                Self.Tell(new AgentResponseReceived(activeAgentResponse, msg.Classification, msg.OriginalSender));
             }
-            else if (agentResponse is AI.Records.AgentResponse routerResponse)
+            else if (agentResponse is AI.Records.AgentResponse routerFallbackResponse)
             {
-                logger.LogWarning("Received AgentResponse instead of InternalAgentResponse");
+                logger.LogWarning("Received AgentResponse instead of ActiveAgentResponse");
 
-                if (!routerResponse.IsCompleted)
+                if (!routerFallbackResponse.IsCompleted)
                 {
                     activeAgent = router;
                     logger.LogWarning("Fallback active agent = {0}", router.Path);
                 }
 
                 msg.OriginalSender.Tell(new ConversationResponse(
-                    routerResponse.Response,
+                    routerFallbackResponse.Response,
                     msg.Classification.Intent,
                     msg.Classification.Metadata));
             }
@@ -137,7 +137,7 @@ public class ConversationSupervisorActor : MorganaActor
 
     private Task DeliverAgentResponseAsync(AgentResponseReceived msg)
     {
-        logger.LogInformation("Received InternalAgentResponse from {0}", msg.Response.AgentRef.Path);
+        logger.LogInformation("Received ActiveAgentResponse from {0}", msg.Response.AgentRef.Path);
 
         if (!msg.Response.IsCompleted)
         {
