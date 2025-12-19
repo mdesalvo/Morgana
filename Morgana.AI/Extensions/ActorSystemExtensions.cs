@@ -24,5 +24,23 @@ namespace Morgana.AI.Extensions
                 return actorSystem.ActorOf(props, actorName);
             }
         }
+
+        public static async Task<IActorRef> GetOrCreateAgent(this ActorSystem actorSystem,
+            Type agentType, string actorSuffix, string conversationId)
+        {
+            string agentName = $"{actorSuffix}-{conversationId}";
+            try
+            {
+                return await actorSystem.ActorSelection($"/user/{agentName}")
+                    .ResolveOne(TimeSpan.FromMilliseconds(250));
+            }
+            catch
+            {
+                Props props = DependencyResolver.For(actorSystem)
+                    .Props(agentType, conversationId);
+
+                return actorSystem.ActorOf(props, agentName);
+            }
+        }
     }
 }

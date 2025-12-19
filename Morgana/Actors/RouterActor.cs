@@ -1,6 +1,6 @@
 using Akka.Actor;
-using Akka.DependencyInjection;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using static Morgana.AI.Records;
 
@@ -16,15 +16,12 @@ public class RouterActor : MorganaActor
         IPromptResolverService promptResolverService,
         IAgentRegistryService agentResolverService) : base(conversationId, llmService, promptResolverService)
     {
-        DependencyResolver? dependencyResolver = DependencyResolver.For(Context.System);
+        //Autodiscovery of routable agents
         foreach (string intent in agentResolverService.GetAllIntents())
         {
             Type? agentType = agentResolverService.ResolveAgentFromIntent(intent);
             if (agentType != null)
-            {
-                Props props = dependencyResolver.Props(agentType, conversationId);
-                agents[intent] = Context.ActorOf(props, $"{intent}-{conversationId}");
-            }
+                agents[intent] = Context.System.GetOrCreateAgent(agentType, intent, conversationId).GetAwaiter().GetResult();
         }
 
         ReceiveAsync<AgentRequest>(RouteToAgentAsync);
