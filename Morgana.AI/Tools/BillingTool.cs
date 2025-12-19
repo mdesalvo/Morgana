@@ -6,7 +6,8 @@ public class BillingTool
     [
         "A555 - Periodo: Ott 2025 / Nov 2025 - Importo: €130 - Stato: Da pagare (entro il 15/12/2025)",
         "B222 - Periodo: Set 2025 / Ott 2025 - Importo: €150 - Stato: Pagata (in data 14/11/2025)",
-        "C333 - Periodo: Giu 2025 / Set 2025 - Importo: €125 - Stato: Pagata (in data 13/10/2025)"
+        "C333 - Periodo: Giu 2025 / Set 2025 - Importo: €125 - Stato: Pagata (in data 13/10/2025)",
+        "Z999 - Periodo: Mag 2025 / Giu 2025 - Importo: €100 - Stato: Pagata (in data 13/09/2025)"
     ];
 
     public async Task<string> GetInvoices(string userId, int count)

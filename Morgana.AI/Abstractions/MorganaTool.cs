@@ -2,7 +2,12 @@
 
 public class MorganaTool
 {
-    private readonly Dictionary<string, object> Context = [];
+    private readonly Dictionary<string, object> Context;
+
+    public MorganaTool(Dictionary<string, object> context)
+    {
+        Context = context;
+    }
 
     public async Task<object> GetContextVariable(string variableName)
         => Context.TryGetValue(variableName, out object? value)

@@ -13,7 +13,10 @@ public class MorganaAgent : MorganaActor
     protected readonly ILogger<MorganaAgent> logger;
 
     //Local conversational memory (to be dismissed when the framework will support memories)
-    protected readonly List<(string role, string text)> history = [];
+    protected readonly List<(string role, string text)> MessageHistory = [];
+
+    //Local conversational context
+    protected readonly Dictionary<string, object> AgentContext = [];
 
     public MorganaAgent(
         string conversationId,
@@ -32,14 +35,14 @@ public class MorganaAgent : MorganaActor
         try
         {
             // aggiungi messaggio di sistema in testa allo storico
-            if (history.Count == 0)
-                history.Add((role: nameof(ChatRole.System), text: morganaPrompt.Content));
+            if (MessageHistory.Count == 0)
+                MessageHistory.Add((role: nameof(ChatRole.System), text: morganaPrompt.Content));
 
             // aggiungi messaggio utente allo storico
-            history.Add((role: nameof(ChatRole.User), text: req.Content!));
+            MessageHistory.Add((role: nameof(ChatRole.User), text: req.Content!));
 
             StringBuilder sb = new StringBuilder();
-            foreach ((string role, string msg) in history)
+            foreach ((string role, string msg) in MessageHistory)
                 sb.AppendLine($"{role}: {msg}");
 
             AgentRunResponse llmResponse = await aiAgent.RunAsync(sb.ToString());
@@ -49,11 +52,11 @@ public class MorganaAgent : MorganaActor
             bool requiresMoreInput = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
 
             // aggiungi risposta assistente allo storico
-            history.Add((role: nameof(ChatRole.Assistant), text: llmResponseText));
+            MessageHistory.Add((role: nameof(ChatRole.Assistant), text: llmResponseText));
 
             // aggiungi messaggio di sistema per consistenza dello storico
             if (requiresMoreInput)
-                history.Add((role: nameof(ChatRole.System), text: morganaPrompt.Instructions));
+                MessageHistory.Add((role: nameof(ChatRole.System), text: morganaPrompt.Instructions));
 
             // completed = false se serve input aggiuntivo (rimuovi placeholder #INT#)
             string cleanText = llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim();

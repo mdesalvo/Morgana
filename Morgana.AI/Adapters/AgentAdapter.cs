@@ -20,9 +20,9 @@ public class AgentAdapter
         this.promptResolverService = promptResolverService;
     }
 
-    public AIAgent CreateBillingAgent()
+    public AIAgent CreateBillingAgent(Dictionary<string, object> agentContext)
     {
-        MorganaTool morganaTool = new MorganaTool();
+        MorganaTool morganaTool = new MorganaTool(agentContext);
         BillingTool billingTool = new BillingTool();
         ToolAdapter billingToolAdapter = new ToolAdapter();
 
@@ -56,9 +56,9 @@ public class AgentAdapter
             tools: [.. billingToolAdapter.CreateAllFunctions()]);
     }
 
-    public AIAgent CreateContractAgent()
+    public AIAgent CreateContractAgent(Dictionary<string, object> agentContext)
     {
-        MorganaTool morganaTool = new MorganaTool();
+        MorganaTool morganaTool = new MorganaTool(agentContext);
         ContractTool contractTool = new ContractTool();
         ToolAdapter contractToolAdapter = new ToolAdapter();
 
@@ -92,9 +92,9 @@ public class AgentAdapter
             tools: [.. contractToolAdapter.CreateAllFunctions()]);
     }
 
-    public AIAgent CreateTroubleshootingAgent()
+    public AIAgent CreateTroubleshootingAgent(Dictionary<string, object> agentContext)
     {
-        MorganaTool morganaTool = new MorganaTool();
+        MorganaTool morganaTool = new MorganaTool(agentContext);
         TroubleshootingTool troubleshootingTool = new TroubleshootingTool();
         ToolAdapter troubleshootingToolAdapter = new ToolAdapter();
 

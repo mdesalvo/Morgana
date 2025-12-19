@@ -16,7 +16,7 @@ public class BillingAgent : MorganaAgent
         ILogger<BillingAgent> logger) : base(conversationId, llmService, promptResolverService, logger)
     {
         AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService);
-        aiAgent = adapter.CreateBillingAgent();
+        aiAgent = adapter.CreateBillingAgent(AgentContext);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }
