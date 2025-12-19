@@ -4,7 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <Title>Morgana</Title>
     <Authors>Marco De Salvo</Authors>

@@ -4,7 +4,7 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
-        <Version>0.2.1</Version>
+        <Version>0.3.0</Version>
         <AssemblyVersion>$(Version)</AssemblyVersion>
         <Title>Cauldron</Title>
         <Authors>Marco De Salvo</Authors>
