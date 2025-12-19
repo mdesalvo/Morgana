@@ -1,7 +1,12 @@
-﻿namespace Morgana.AI.Tools;
+﻿using Microsoft.Extensions.Logging;
+using Morgana.AI.Abstractions;
 
-public class BillingTool
+namespace Morgana.AI.Tools;
+
+public class BillingTool : MorganaTool
 {
+    public BillingTool(ILogger<MorganaAgent> logger, Dictionary<string, object> context) : base(logger, context) { }
+
     private readonly string[] invoices =
     [
         "A555 - Periodo: Ott 2025 / Nov 2025 - Importo: €130 - Stato: Da pagare (entro il 15/12/2025)",

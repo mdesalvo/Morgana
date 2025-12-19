@@ -1,7 +1,12 @@
-﻿namespace Morgana.AI.Tools;
+﻿using Microsoft.Extensions.Logging;
+using Morgana.AI.Abstractions;
 
-public class ContractTool
+namespace Morgana.AI.Tools;
+
+public class ContractTool : MorganaTool
 {
+    public ContractTool(ILogger<MorganaAgent> logger, Dictionary<string, object> context) : base(logger, context) { }
+
     public async Task<string> GetContractDetails(string userId)
     {
         await Task.Delay(100);

@@ -5,6 +5,8 @@ using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Tools;
 using System.Reflection;
+using Microsoft.Extensions.Logging;
+using Morgana.AI.Abstractions;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Adapters;
@@ -13,24 +15,25 @@ public class AgentAdapter
 {
     protected readonly IPromptResolverService promptResolverService;
     protected readonly IChatClient chatClient;
+    protected readonly ILogger<MorganaAgent> logger;
+    protected readonly Prompt morganaPrompt;
 
-    public AgentAdapter(IChatClient chatClient, IPromptResolverService promptResolverService)
+    public AgentAdapter(IChatClient chatClient, IPromptResolverService promptResolverService, ILogger<MorganaAgent> logger)
     {
         this.chatClient = chatClient;
         this.promptResolverService = promptResolverService;
+        this.logger = logger;
+
+        morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
     }
 
     public AIAgent CreateBillingAgent(Dictionary<string, object> agentContext)
     {
-        MorganaTool morganaTool = new MorganaTool(agentContext);
-        BillingTool billingTool = new BillingTool();
+        BillingTool billingTool = new BillingTool(logger, agentContext);
         ToolAdapter billingToolAdapter = new ToolAdapter();
 
         string billingIntent = typeof(BillingAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
         Prompt billingPrompt = promptResolverService.ResolveAsync(billingIntent)
-                                                    .GetAwaiter()
-                                                    .GetResult();
-        Prompt morganaPrompt = promptResolverService.ResolveAsync("Morgana")
                                                     .GetAwaiter()
                                                     .GetResult();
 
@@ -40,8 +43,8 @@ public class AgentAdapter
         {
             Delegate billingToolImplementation = billingToolDefinition.Name switch
             {
-                nameof(MorganaTool.GetContextVariable) => morganaTool.GetContextVariable,
-                nameof(MorganaTool.SetContextVariable) => morganaTool.SetContextVariable,
+                nameof(BillingTool.GetContextVariable) => billingTool.GetContextVariable,
+                nameof(BillingTool.SetContextVariable) => billingTool.SetContextVariable,
                 nameof(BillingTool.GetInvoices) => billingTool.GetInvoices,
                 nameof(BillingTool.GetInvoiceDetails) => billingTool.GetInvoiceDetails,
                 _ => throw new InvalidOperationException($"Tool '{billingToolDefinition.Name}' non supportato")
@@ -58,17 +61,13 @@ public class AgentAdapter
 
     public AIAgent CreateContractAgent(Dictionary<string, object> agentContext)
     {
-        MorganaTool morganaTool = new MorganaTool(agentContext);
-        ContractTool contractTool = new ContractTool();
+        ContractTool contractTool = new ContractTool(logger, agentContext);
         ToolAdapter contractToolAdapter = new ToolAdapter();
 
         string contractIntent = typeof(ContractAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
         Prompt contractPrompt = promptResolverService.ResolveAsync(contractIntent)
                                                      .GetAwaiter()
                                                      .GetResult();
-        Prompt morganaPrompt = promptResolverService.ResolveAsync("Morgana")
-                                                    .GetAwaiter()
-                                                    .GetResult();
 
         ToolDefinition[]? contractTools = [.. contractPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                                 .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
@@ -76,8 +75,8 @@ public class AgentAdapter
         {
             Delegate contractToolImplementation = contractToolDefinition.Name switch
             {
-                nameof(MorganaTool.GetContextVariable) => morganaTool.GetContextVariable,
-                nameof(MorganaTool.SetContextVariable) => morganaTool.SetContextVariable,
+                nameof(ContractTool.GetContextVariable) => contractTool.GetContextVariable,
+                nameof(ContractTool.SetContextVariable) => contractTool.SetContextVariable,
                 nameof(ContractTool.GetContractDetails) => contractTool.GetContractDetails,
                 nameof(ContractTool.InitiateCancellation) => contractTool.InitiateCancellation,
                 _ => throw new InvalidOperationException($"Tool '{contractToolDefinition.Name}' non supportato")
@@ -94,17 +93,13 @@ public class AgentAdapter
 
     public AIAgent CreateTroubleshootingAgent(Dictionary<string, object> agentContext)
     {
-        MorganaTool morganaTool = new MorganaTool(agentContext);
-        TroubleshootingTool troubleshootingTool = new TroubleshootingTool();
+        TroubleshootingTool troubleshootingTool = new TroubleshootingTool(logger, agentContext);
         ToolAdapter troubleshootingToolAdapter = new ToolAdapter();
 
         string troubleShootingIntent = typeof(TroubleshootingAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
         Prompt troubleshootingPrompt = promptResolverService.ResolveAsync(troubleShootingIntent)
                                                             .GetAwaiter()
                                                             .GetResult();
-        Prompt morganaPrompt = promptResolverService.ResolveAsync("Morgana")
-                                                    .GetAwaiter()
-                                                    .GetResult();
 
         ToolDefinition[]? troubleshootingTools = [.. troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                                        .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
@@ -112,8 +107,8 @@ public class AgentAdapter
         {
             Delegate troubleshootingToolImplementation = troubleshootingToolDefinition.Name switch
             {
-                nameof(MorganaTool.GetContextVariable) => morganaTool.GetContextVariable,
-                nameof(MorganaTool.SetContextVariable) => morganaTool.SetContextVariable,
+                nameof(TroubleshootingTool.GetContextVariable) => troubleshootingTool.GetContextVariable,
+                nameof(TroubleshootingTool.SetContextVariable) => troubleshootingTool.SetContextVariable,
                 nameof(TroubleshootingTool.RunDiagnostics) => troubleshootingTool.RunDiagnostics,
                 nameof(TroubleshootingTool.GetTroubleshootingGuide) => troubleshootingTool.GetTroubleshootingGuide,
                 _ => throw new InvalidOperationException($"Tool '{troubleshootingToolDefinition.Name}' non supportato")

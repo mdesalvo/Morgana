@@ -18,7 +18,8 @@ namespace Morgana.AI.Abstractions
         {
             this.configuration = configuration;
             this.promptResolverService = promptResolverService;
-            this.morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
+
+            morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
         }
 
         public IChatClient GetChatClient() => chatClient;
@@ -40,10 +41,18 @@ namespace Morgana.AI.Abstractions
                 ConversationId = conversationId
             };
 
-            ChatResponse response = await chatClient.GetResponseAsync(messages, chatOptions);
-            return response.Text
-                .Replace("```json", string.Empty)
-                .Replace("```", string.Empty);
+            try
+            {
+                ChatResponse response = await chatClient.GetResponseAsync(messages, chatOptions);
+                return response.Text
+                    .Replace("```json", string.Empty)
+                    .Replace("```", string.Empty);
+            }
+            catch (Exception ex)
+            {
+                return morganaPrompt.GetAdditionalProperty<string>("LLMServiceErrorAnswer")
+                    .Replace("((llm_error))", ex.Message);
+            }
         }
     }
 }
