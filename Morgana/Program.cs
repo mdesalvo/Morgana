@@ -42,7 +42,7 @@ builder.Services.AddSingleton<ILLMService>(sp =>
         _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' non supportato. Valori validi: 'AzureOpenAI', 'Anthropic'")
     };
 });
-builder.Services.AddSingleton<IAgentResolverService, HandlesIntentAgentResolverService>();
+builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 
 // Akka.NET Services
