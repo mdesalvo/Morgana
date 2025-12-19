@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using Akka.Actor;
+using System.Text.Json.Serialization;
 
 namespace Morgana
 {
@@ -39,7 +40,26 @@ namespace Morgana
         public record UserMessage(
             string ConversationId,
             string Text,
-            DateTime Timestamp
-        );
+            DateTime Timestamp);
+
+        //Supervisor
+
+        public record InitiateNewRequest(
+            UserMessage Message,
+            IActorRef OriginalSender);
+        public record ContinueActiveSession(
+            UserMessage Message,
+            IActorRef OriginalSender);
+        public record GuardCheckPassed(
+            UserMessage Message,
+            IActorRef OriginalSender);
+        public record ClassificationReady(
+            UserMessage Message,
+            AI.Records.ClassificationResult Classification,
+            IActorRef OriginalSender);
+        public record AgentResponseReceived(
+            AI.Records.InternalAgentResponse Response,
+            AI.Records.ClassificationResult Classification,
+            IActorRef OriginalSender);
     }
 }
