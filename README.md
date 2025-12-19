@@ -37,21 +37,21 @@ Traditional chatbot systems often struggle with complexity—they either become 
 ### High-Level Component Flow
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                         User Request                           │
-└──────────────────────────────┬─────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                         User Request                          │
+└──────────────────────────────┬────────────────────────────────┘
                                │
                                ▼
-┌────────────────────────────────────────────────────────────────┐
-│                   ConversationManagerActor                     │
-│ (Coordinates, routes and manages stateful conversational flow) │
-└──────────────────────────────┬─────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                   ConversationManagerActor                    │
+│  (Coordinates, routes, manages stateful conversational flow)  │
+└──────────────────────────────┬────────────────────────────────┘
                                │
                                ▼
-┌────────────────────────────────────────────────────────────────┐
-│                  ConversationSupervisorActor                   │
-│  (Orchestrates the entire multi-turn conversation lifecycle)   │
-└───┬───────────┬───────────────┬────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                  ConversationSupervisorActor                  │
+│  (Orchestrates the entire multi-turn conversation lifecycle)  │
+└───┬───────────┬───────────────┬───────────────────────────────┘
     │           │               │
     ▼           ▼               ▼
 ┌───────┐  ┌──────────┐   ┌───────────┐
@@ -67,10 +67,9 @@ Traditional chatbot systems often struggle with complexity—they either become 
     │           │               └──────────────┬────────────┬─...fully extensible intent-based agents
     │           │               │              │            │
     │           │               ▼              ▼            ▼
-    │           │         ┌──────────┐   ┌───────────┐  ┌─────────────────┐ * Built-in example agents
-    │           │         │ Billing* │   │ Contract* │  │Troubleshooting* │
+    │           │         ┌──────────┐   ┌───────────┐  ┌─────────────────┐
+    │           │         │ Billing* │   │ Contract* │  │ Troubleshooting*│ * Built-in example agents
     │           │         │  Agent   │   │   Agent   │  │     Agent       │
-    │           │         │          │   │           │  │                 │
     │           │         └──────────┘   └───────────┘  └─────────────────┘
     │           │              │               │            │
     │           │              │               │            │
@@ -78,9 +77,15 @@ Traditional chatbot systems often struggle with complexity—they either become 
           │                                    │
           ▼                                    ▼
          ┌─────────────────────────────────────────────────┐
-         │                    ILLMService                  │
+         │                 MorganaLLMService               │
          │    (Guardrail, Intent Classification, Tooling)  │
-         └─────────────────────────────────────────────────┘
+         └─────────────────────────┬───────────────────────┘
+                                   |
+                                   ▼
+                   ┌───────────────────────────────┐
+                   |             LLM               |
+                   | (AzureOpenAI, Anthropic, ...) |
+                   └───────────────────────────────┘
 ```
 
 ### Actors Hierarchy
@@ -272,7 +277,33 @@ This **fail-fast approach** ensures configuration errors are caught at startup, 
 ### AI & Agent Framework
 - **Microsoft.Extensions.AI**: Unified abstraction over chat completions with `IChatClient` interface
 - **Microsoft.Agents.AI**: Declarative agent definition with built-in tool calling support
+- **Azure OpenAI Service / Anthropic Claude**: Multi-provider LLM support through configurable implementations
+
+### LLM Provider Support
+
+Morgana provides native support for multiple LLM providers through a pluggable architecture:
+
+**MorganaLLMService**
+- Abstract base class for all LLM service implementations
+- Defines the contract for guardrail validation, intent classification, and agent tool execution
+- Ensures consistent behavior across different provider implementations
+
+**Supported Providers:**
 - **Azure OpenAI Service**: GPT-4 powered language understanding and generation
+- **Anthropic Claude**: Claude Sonnet 4.5 with advanced reasoning capabilities
+
+**Configuration:**
+LLM provider selection is managed through `appsettings.json`:
+
+```json
+{
+  "LLM": {
+    "Provider": "AzureOpenAI"  // or "Anthropic"
+  }
+}
+```
+
+The dependency injection container automatically resolves the appropriate `ILLMService` implementation based on the configured provider, allowing seamless switching between LLM backends without code changes.
 
 ### Tool & Function Calling
 
