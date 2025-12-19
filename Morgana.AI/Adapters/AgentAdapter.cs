@@ -22,6 +22,7 @@ public class AgentAdapter
 
     public AIAgent CreateBillingAgent()
     {
+        MorganaTool morganaTool = new MorganaTool();
         BillingTool billingTool = new BillingTool();
         ToolAdapter billingToolAdapter = new ToolAdapter();
 
@@ -29,12 +30,18 @@ public class AgentAdapter
         Prompt billingPrompt = promptResolverService.ResolveAsync(billingIntent)
                                                     .GetAwaiter()
                                                     .GetResult();
+        Prompt morganaPrompt = promptResolverService.ResolveAsync("Morgana")
+                                                    .GetAwaiter()
+                                                    .GetResult();
 
-        ToolDefinition[]? billingTools = billingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
+        ToolDefinition[]? billingTools = [.. billingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
+                                                .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
         foreach (ToolDefinition billingToolDefinition in billingTools ?? [])
         {
             Delegate billingToolImplementation = billingToolDefinition.Name switch
             {
+                nameof(MorganaTool.GetContextVariable) => morganaTool.GetContextVariable,
+                nameof(MorganaTool.SetContextVariable) => morganaTool.SetContextVariable,
                 nameof(BillingTool.GetInvoices) => billingTool.GetInvoices,
                 nameof(BillingTool.GetInvoiceDetails) => billingTool.GetInvoiceDetails,
                 _ => throw new InvalidOperationException($"Tool '{billingToolDefinition.Name}' non supportato")
@@ -51,6 +58,7 @@ public class AgentAdapter
 
     public AIAgent CreateContractAgent()
     {
+        MorganaTool morganaTool = new MorganaTool();
         ContractTool contractTool = new ContractTool();
         ToolAdapter contractToolAdapter = new ToolAdapter();
 
@@ -58,12 +66,18 @@ public class AgentAdapter
         Prompt contractPrompt = promptResolverService.ResolveAsync(contractIntent)
                                                      .GetAwaiter()
                                                      .GetResult();
+        Prompt morganaPrompt = promptResolverService.ResolveAsync("Morgana")
+                                                    .GetAwaiter()
+                                                    .GetResult();
 
-        ToolDefinition[]? contractTools = contractPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
+        ToolDefinition[]? contractTools = [.. contractPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
+                                                .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
         foreach (ToolDefinition contractToolDefinition in contractTools ?? [])
         {
             Delegate contractToolImplementation = contractToolDefinition.Name switch
             {
+                nameof(MorganaTool.GetContextVariable) => morganaTool.GetContextVariable,
+                nameof(MorganaTool.SetContextVariable) => morganaTool.SetContextVariable,
                 nameof(ContractTool.GetContractDetails) => contractTool.GetContractDetails,
                 nameof(ContractTool.InitiateCancellation) => contractTool.InitiateCancellation,
                 _ => throw new InvalidOperationException($"Tool '{contractToolDefinition.Name}' non supportato")
@@ -80,6 +94,7 @@ public class AgentAdapter
 
     public AIAgent CreateTroubleshootingAgent()
     {
+        MorganaTool morganaTool = new MorganaTool();
         TroubleshootingTool troubleshootingTool = new TroubleshootingTool();
         ToolAdapter troubleshootingToolAdapter = new ToolAdapter();
 
@@ -87,12 +102,18 @@ public class AgentAdapter
         Prompt troubleshootingPrompt = promptResolverService.ResolveAsync(troubleShootingIntent)
                                                             .GetAwaiter()
                                                             .GetResult();
+        Prompt morganaPrompt = promptResolverService.ResolveAsync("Morgana")
+                                                    .GetAwaiter()
+                                                    .GetResult();
 
-        ToolDefinition[]? troubleshootingTools = troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools");
+        ToolDefinition[]? troubleshootingTools = [.. troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
+                                                       .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
         foreach (ToolDefinition troubleshootingToolDefinition in troubleshootingTools ?? [])
         {
             Delegate troubleshootingToolImplementation = troubleshootingToolDefinition.Name switch
             {
+                nameof(MorganaTool.GetContextVariable) => morganaTool.GetContextVariable,
+                nameof(MorganaTool.SetContextVariable) => morganaTool.SetContextVariable,
                 nameof(TroubleshootingTool.RunDiagnostics) => troubleshootingTool.RunDiagnostics,
                 nameof(TroubleshootingTool.GetTroubleshootingGuide) => troubleshootingTool.GetTroubleshootingGuide,
                 _ => throw new InvalidOperationException($"Tool '{troubleshootingToolDefinition.Name}' non supportato")
