@@ -255,7 +255,7 @@ At startup, it verifies:
 
 **4. Runtime Resolution**
 ```csharp
-Type? agentType = agentRegistryService.GetAgentType("billing");
+Type? agentType = agentRegistryService.ResolveAgentFromIntent("billing");
 // Returns typeof(BillingAgent)
 ```
 
