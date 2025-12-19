@@ -1,8 +1,8 @@
 using Akka.Actor;
-using Akka.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Morgana.Actors;
+using Morgana.AI.Extensions;
 using Morgana.Hubs;
 using static Morgana.Records;
 
@@ -33,7 +33,7 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Starting conversation {request.ConversationId}");
 
-            IActorRef manager = await GetOrCreateManager(request.ConversationId);
+            IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>("manager", request.ConversationId);
 
             ConversationCreated? conversationCreated = await manager.Ask<ConversationCreated>(
                 new CreateConversation(request.ConversationId));
@@ -60,7 +60,7 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Ending conversation {conversationId}");
 
-            IActorRef manager = await GetOrCreateManager(conversationId);
+            IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>("manager", conversationId);
 
             manager.Tell(new TerminateConversation(conversationId));
 
@@ -82,7 +82,7 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Sending message conversation {request.ConversationId}");
 
-            IActorRef manager = await GetOrCreateManager(request.ConversationId);
+            IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>("manager", request.ConversationId);
 
             manager.Tell(new UserMessage(
                 request.ConversationId,
@@ -115,25 +115,5 @@ public class ConversationController : ControllerBase
             timestamp = DateTime.UtcNow,
             actorSystem = actorSystem.WhenTerminated.IsCompleted ? "terminated" : "running"
         });
-    }
-
-    private async Task<IActorRef> GetOrCreateManager(string conversationId)
-    {
-        string managerName = $"manager-{conversationId}";
-
-        try
-        {
-            // se esiste, lo recuperiamo
-            return await actorSystem.ActorSelection($"/user/{managerName}")
-                                    .ResolveOne(TimeSpan.FromMilliseconds(200));
-        }
-        catch
-        {
-            // altrimenti lo creiamo
-            Props props = DependencyResolver.For(actorSystem)
-                .Props<ConversationManagerActor>(conversationId);
-
-            return actorSystem.ActorOf(props, managerName);
-        }
     }
 }

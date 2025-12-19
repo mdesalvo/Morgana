@@ -1,6 +1,7 @@
 using Akka.Actor;
 using Akka.DependencyInjection;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 
 namespace Morgana.Actors;
@@ -9,9 +10,9 @@ public class ConversationSupervisorActor : MorganaActor
 {
     private enum SupervisorState { Idle, ActiveAgent, PostCompletion }
 
-    private readonly IActorRef guardActor;
-    private readonly IActorRef classifierActor;
-    private readonly IActorRef routerActor;
+    private readonly IActorRef guard;
+    private readonly IActorRef classifier;
+    private readonly IActorRef router;
     private readonly ILogger<ConversationSupervisorActor> logger;
 
     // State management
@@ -29,9 +30,9 @@ public class ConversationSupervisorActor : MorganaActor
 
         DependencyResolver? resolver = DependencyResolver.For(Context.System);
 
-        guardActor = Context.ActorOf(resolver.Props<GuardActor>(conversationId), $"guard-{conversationId}");
-        classifierActor = Context.ActorOf(resolver.Props<ClassifierActor>(conversationId), $"classifier-{conversationId}");
-        routerActor = Context.ActorOf(resolver.Props<RouterActor>(conversationId), $"router-{conversationId}");
+        guard = Context.System.GetOrCreateActor<GuardActor>("guard", conversationId).GetAwaiter().GetResult();
+        classifier = Context.System.GetOrCreateActor<ClassifierActor>("classifier", conversationId).GetAwaiter().GetResult();
+        router = Context.System.GetOrCreateActor<RouterActor>("router", conversationId).GetAwaiter().GetResult();
 
         ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
     }
@@ -133,7 +134,7 @@ public class ConversationSupervisorActor : MorganaActor
         try
         {
             // Guard check
-            Records.GuardCheckResponse guardCheck = await guardActor.Ask<Records.GuardCheckResponse>(
+            Records.GuardCheckResponse guardCheck = await guard.Ask<Records.GuardCheckResponse>(
                 new Records.GuardCheckRequest(msg.ConversationId, msg.Text));
 
             if (!guardCheck.Compliant)
@@ -149,12 +150,12 @@ public class ConversationSupervisorActor : MorganaActor
 
             // Classification
             AI.Records.ClassificationResult classification =
-                await classifierActor.Ask<AI.Records.ClassificationResult>(msg);
+                await classifier.Ask<AI.Records.ClassificationResult>(msg);
 
             logger.LogInformation("Classification result: {0}", classification.Intent);
 
             // Router → Agent
-            object agentResponse = await routerActor.Ask<object>(
+            object agentResponse = await router.Ask<object>(
                 new AI.Records.AgentRequest(msg.ConversationId, msg.Text, classification));
 
             switch (agentResponse)
