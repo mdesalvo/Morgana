@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added ILLMService implementation for **Anthropic** -> Morgana is now able to talk with **Claude**
 - Added support for configuring ILLMService implementation with setting "LLM:Provider" (_AzureOpenAI_, _Anthropic_)
 - Introduced abstraction of **MorganaLLMService** to factorize ILLMService implementations
+- Introduced abstraction of **MorganaTool** to give each MorganaAgent a context for persisting session data
 
 ### Changed
+- ConversationSupervisorActor has been refactored in order to act as a message-driven state machine 
 - Introduced ActorSystemExtensions to ease and centralize Akka.NET actor resolution
   
 ### Fixed
