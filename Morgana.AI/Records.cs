@@ -63,7 +63,8 @@ namespace Morgana.AI
         public record ToolParameter(
             string Name,
             string Description,
-            bool Required);
+            bool Required,
+            string Scope);
 
         public record IntentCollection
         {

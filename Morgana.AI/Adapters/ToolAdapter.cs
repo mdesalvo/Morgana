@@ -32,7 +32,25 @@ namespace Morgana.AI.Adapters
                 ? def
                 : throw new InvalidOperationException($"Tool definition '{toolName}' non trovata");
 
-            return AIFunctionFactory.Create(implementation, definition.Name, definition.Description);
+            Dictionary<string, object?> additionalProperties = [];
+            foreach (ToolParameter parameter in definition.Parameters)
+            {
+                string parameterGuidance = parameter.Scope?.ToLowerInvariant() switch
+                {
+                    "context" => $"{parameter.Description}. CONTESTO: Prima controlla se esiste con GetContextVariable. Se manca, chiedilo all'utente e salvalo con SetContextVariable per usi futuri",
+                    "request" => $"{parameter.Description}. RICHIESTA DIRETTA: Questo valore deve essere fornito dall'utente nel messaggio attuale, non usare il contesto",
+                    _ => parameter.Description // Fallback se Scope non è valorizzato o ha valore inatteso
+                };
+        
+                additionalProperties[parameter.Name] = parameterGuidance;
+            }
+
+            return AIFunctionFactory.Create(implementation, new AIFunctionFactoryOptions
+            {
+                Name = definition.Name,
+                Description = definition.Description,
+                AdditionalProperties = new AdditionalPropertiesDictionary(additionalProperties)
+            });
         }
 
         public IEnumerable<AIFunction> CreateAllFunctions()
