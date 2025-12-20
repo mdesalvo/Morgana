@@ -24,7 +24,7 @@ public class ConversationSupervisorActor : MorganaActor
     {
         this.logger = logger;
 
-        DependencyResolver? resolver = DependencyResolver.For(Context.System);
+        //Create dependant Morgana actors
         guard = Context.System.GetOrCreateActor<GuardActor>("guard", conversationId).GetAwaiter().GetResult();
         classifier = Context.System.GetOrCreateActor<ClassifierActor>("classifier", conversationId).GetAwaiter().GetResult();
         router = Context.System.GetOrCreateActor<RouterActor>("router", conversationId).GetAwaiter().GetResult();
