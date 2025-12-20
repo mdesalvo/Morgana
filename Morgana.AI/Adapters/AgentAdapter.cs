@@ -30,7 +30,7 @@ public class AgentAdapter
     public AIAgent CreateBillingAgent(Dictionary<string, object> agentContext)
     {
         BillingTool billingTool = new BillingTool(logger, agentContext);
-        ToolAdapter billingToolAdapter = new ToolAdapter();
+        ToolAdapter billingToolAdapter = new ToolAdapter(morganaPrompt);
 
         string billingIntent = typeof(BillingAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
         Prompt billingPrompt = promptResolverService.ResolveAsync(billingIntent)
@@ -62,7 +62,7 @@ public class AgentAdapter
     public AIAgent CreateContractAgent(Dictionary<string, object> agentContext)
     {
         ContractTool contractTool = new ContractTool(logger, agentContext);
-        ToolAdapter contractToolAdapter = new ToolAdapter();
+        ToolAdapter contractToolAdapter = new ToolAdapter(morganaPrompt);
 
         string contractIntent = typeof(ContractAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
         Prompt contractPrompt = promptResolverService.ResolveAsync(contractIntent)
@@ -94,7 +94,7 @@ public class AgentAdapter
     public AIAgent CreateTroubleshootingAgent(Dictionary<string, object> agentContext)
     {
         TroubleshootingTool troubleshootingTool = new TroubleshootingTool(logger, agentContext);
-        ToolAdapter troubleshootingToolAdapter = new ToolAdapter();
+        ToolAdapter troubleshootingToolAdapter = new ToolAdapter(morganaPrompt);
 
         string troubleShootingIntent = typeof(TroubleshootingAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
         Prompt troubleshootingPrompt = promptResolverService.ResolveAsync(troubleShootingIntent)

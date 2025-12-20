@@ -8,6 +8,12 @@ namespace Morgana.AI.Adapters
     {
         private readonly Dictionary<string, Delegate> toolMethods = [];
         private readonly Dictionary<string, ToolDefinition> toolDefinitions = [];
+        private readonly Prompt morganaPrompt;
+        
+        public ToolAdapter(Prompt morganaPrompt)
+        {
+            this.morganaPrompt = morganaPrompt;
+        }
 
         public ToolAdapter AddTool(string toolName, Delegate toolMethod, ToolDefinition definition)
         {
@@ -37,8 +43,8 @@ namespace Morgana.AI.Adapters
             {
                 string parameterGuidance = parameter.Scope?.ToLowerInvariant() switch
                 {
-                    "context" => $"{parameter.Description}. CONTESTO: Prima controlla se esiste con GetContextVariable. Se manca, chiedilo all'utente e salvalo con SetContextVariable per usi futuri",
-                    "request" => $"{parameter.Description}. RICHIESTA DIRETTA: Questo valore deve essere fornito dall'utente nel messaggio attuale, non usare il contesto",
+                    "context" => $"{parameter.Description}. {morganaPrompt.GetAdditionalProperty<string>("ContextToolParameterGuidance")}",
+                    "request" => $"{parameter.Description}. {morganaPrompt.GetAdditionalProperty<string>("RequestToolParameterGuidance")}",
                     _ => parameter.Description // Fallback se Scope non è valorizzato o ha valore inatteso
                 };
         

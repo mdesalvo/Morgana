@@ -10,10 +10,16 @@
       "Version": "1",
       "AdditionalProperties": [
         {
-          "GenericErrorAnswer": "Si è verificato un errore nel servizio della richiesta. Ti chiedo gentilmente di esprimerla nuovamente."
+          "GenericErrorAnswer": "Mi dispiace, si è verificato un errore nel servizio della richiesta."
         },
         {
-          "LLMServiceErrorAnswer": "Il servizio LLM ha generato un errore imprevisto: ((llm_error))"
+          "LLMServiceErrorAnswer": "Mi dispiace, il servizio di intelligenza artificiale ha generato un errore imprevisto: ((llm_error))"
+        },
+        {
+          "ContextToolParameterGuidance": "CONTESTO: Prima controlla se esiste con GetContextVariable. Se manca, chiedilo all'utente e salvalo con SetContextVariable per usi futuri"
+        },
+        {
+          "RequestToolParameterGuidance": "RICHIESTA DIRETTA: Questo valore deve essere fornito dall'utente nel messaggio attuale, non usare il contesto"
         },
         {
           "Tools": [
