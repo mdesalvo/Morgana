@@ -31,6 +31,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
 4. **Policy Enforcement**: A dedicated guard actor ensures all interactions comply with business rules and brand guidelines
 5. **Declarative Configuration**: Prompts and agent behaviors are externalized as first-class project artifacts
 6. **Automatic Discovery**: Agents self-register through attributes, eliminating manual configuration
+7. **P2P Context Synchronization**: Agents share contextual information seamlessly through a message bus architecture
 
 ## Architecture
 
@@ -55,7 +56,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
     │           │               │
     ▼           ▼               ▼
 ┌───────┐  ┌──────────┐   ┌───────────┐
-│ Guard │  │Classifier│   │   Router  │
+│ Guard │  │Classifier│   │   Router  │ ← Context Sync Bus
 │ Actor │  │  Actor   │   │   Actor   │
 └───────┘  └──────────┘   └───────────┘
     │           │               │
@@ -69,23 +70,26 @@ Traditional chatbot systems often struggle with complexity—they either become 
     │           │               ▼              ▼            ▼
     │           │         ┌──────────┐   ┌───────────┐  ┌─────────────────┐
     │           │         │ Billing* │   │ Contract* │  │ Troubleshooting*│ * Built-in example agents
-    │           │         │  Agent   │   │   Agent   │  │     Agent       │
+    │           │         │  Agent   │   │   Agent   │  │     Agent       │   with Shared Context
     │           │         └──────────┘   └───────────┘  └─────────────────┘
     │           │              │               │            │
-    │           │              │               │            │
-    └─────┬─────┘              └───────────────┬────────────┘
-          │                                    │
-          ▼                                    ▼
-         ┌─────────────────────────────────────────────────┐
-         │                 MorganaLLMService               │
-         │    (Guardrail, Intent Classification, Tooling)  │
-         └─────────────────────────┬───────────────────────┘
-                                   |
-                                   ▼
-                   ┌───────────────────────────────┐
-                   |             LLM               |
-                   | (AzureOpenAI, Anthropic, ...) |
-                   └───────────────────────────────┘
+    │           │              └───────────────┴────────────┘
+    │           │                       │
+    │           │                       │ Context Sync (P2P via RouterActor)
+    │           │                       │
+    └─────┬─────┘              ┌────────┴────────┐
+          │                    │  Shared Context │
+          ▼                    │  (userId, etc.) │
+         ┌─────────────────────┴─────────────────┴───────┐
+         │                 MorganaLLMService             │
+         │    (Guardrail, Intent Classification, Tool)   │
+         └─────────────────────┬─────────────────────────┘
+                               |
+                               ▼
+               ┌───────────────────────────────┐
+               |             LLM               |
+               | (AzureOpenAI, Anthropic, ...) |
+               └───────────────────────────────┘
 ```
 
 ### Actors Hierarchy
@@ -147,6 +151,9 @@ Each classification includes confidence scores and contextual metadata that down
 Coordinator actor that resolves mappings of intents to engage specialized executor agents.
 This actor works as a smart router, dynamically resolving the appropriate Morgana agent based on classified intent.
 
+**Context Synchronization Bus:**
+RouterActor also serves as the **message bus for P2P context synchronization** between agents. When an agent updates a shared context variable, RouterActor broadcasts the update to all other agents, ensuring seamless information sharing across the system.
+
 #### 6. Morgana Agents (Domain-Specific, Extensible!)
 Specialized agents with domain-specific knowledge and tool access. The system includes three built-in **example** agents, but **the architecture is fully extensible** to support any domain-specific intent.
 
@@ -175,6 +182,157 @@ To add a new agent for your domain:
 
 The `AgentRegistryService` automatically discovers and validates all agents at startup.
 
+## Context Synchronization System
+
+Morgana implements a sophisticated **P2P context synchronization** mechanism that allows agents to share contextual information seamlessly, eliminating redundant user interactions.
+
+### The Problem
+
+Without context synchronization, each specialized agent maintains its own isolated context. This leads to frustrating user experiences:
+
+```
+User → BillingAgent: "Show me my invoices"
+BillingAgent: "What's your customer ID?"
+User: "USER99"
+BillingAgent: [Shows invoices]
+
+User → ContractAgent: "Show me my contract"
+ContractAgent: "What's your customer ID?" ← User already provided this!
+User: "USER99" ← Frustrating repetition
+```
+
+### The Solution: Shared Context with P2P Broadcast
+
+Morgana's context system allows agents to declare which parameters should be **shared** across the system. When one agent collects this information, it's automatically broadcast to all other agents.
+
+### Architecture
+
+#### 1. Declarative Configuration
+Parameters are marked as `Shared: true` in `prompts.json`:
+
+```json
+{
+  "Name": "userId",
+  "Description": "Customer identifier",
+  "Required": true,
+  "Scope": "context",
+  "Shared": true
+}
+```
+
+- **`Scope: "context"`**: Parameter is stored in agent context (checked via `GetContextVariable`)
+- **`Scope: "request"`**: Parameter must be provided by user in current message
+- **`Shared: true`**: Parameter is broadcast to all agents when set
+- **`Shared: false`**: Parameter remains private to the agent
+
+#### 2. RouterActor as Message Bus
+
+RouterActor serves dual purposes:
+1. **Intent Routing**: Routes requests to appropriate agents
+2. **Context Bus**: Broadcasts shared context updates to all agents
+
+When an agent updates a shared variable:
+```
+BillingAgent → SetContextVariable("userId", "USER99")
+    ↓
+MorganaTool detects userId is Shared
+    ↓
+Broadcasts to RouterActor via ActorSelection
+    ↓
+RouterActor → Tell(ContractAgent, ReceiveContextUpdate)
+RouterActor → Tell(TroubleshootingAgent, ReceiveContextUpdate)
+```
+
+#### 3. Intelligent Merge Strategy
+
+Agents use **first-write-wins** for context merging:
+- If agent doesn't have the variable → accepts the broadcast value
+- If agent already has the variable → ignores the update (preserves local state)
+
+This prevents conflicts and ensures stability.
+
+### Implementation Flow
+
+```
+1. User → BillingAgent: "Show invoices"
+2. BillingAgent → GetContextVariable("userId") → MISS
+3. BillingAgent → User: "What's your customer ID?"
+4. User: "USER99"
+5. BillingAgent → SetContextVariable("userId", "USER99")
+6. MorganaTool (BillingTool):
+   - Detects userId is Shared
+   - Invokes callback → OnSharedContextUpdated
+7. BillingAgent → ActorSelection("/user/router-{conversationId}")
+8. RouterActor → Broadcast to all agents except sender:
+   - Tell(ContractAgent, ReceiveContextUpdate("userId", "USER99"))
+   - Tell(TroubleshootingAgent, ReceiveContextUpdate("userId", "USER99"))
+9. ContractAgent & TroubleshootingAgent:
+   - Receive update
+   - Merge into AgentContext (if not already present)
+10. User → ContractAgent: "Show my contract"
+11. ContractAgent → GetContextVariable("userId") → HIT! "USER99"
+12. ContractAgent → Uses USER99 without asking ✅
+```
+
+### Key Components
+
+**MorganaTool**
+- Maintains `HashSet<string> sharedVariables` extracted from tool definitions
+- Checks if a variable is shared before broadcast
+- Invokes callback to notify agent of shared updates
+
+**MorganaAgent**
+- Implements `OnSharedContextUpdated` to broadcast via ActorSelection
+- Implements `HandleContextUpdate` to receive and merge updates
+- Maintains local `AgentContext` dictionary
+
+**AgentAdapter**
+- Extracts shared variables from `ToolDefinition` parameters
+- Passes shared variable names to tool constructors
+- Registers callback for shared context updates
+
+**RouterActor**
+- Receives `BroadcastContextUpdate` messages
+- Broadcasts `ReceiveContextUpdate` to all agents except sender
+- Logs broadcast activity for observability
+
+### Benefits
+
+1. **Seamless UX**: Users provide information once, all agents benefit
+2. **P2P Architecture**: No central bottleneck, agents communicate via message bus
+3. **Declarative**: Shared vs private is configured in JSON, not code
+4. **Fault Tolerant**: Fire-and-forget messages, agents don't block on sync
+5. **Scalable**: Adding new agents or shared parameters requires only configuration
+6. **Flexible**: Agents can have both shared and private context variables
+
+### Example Configuration
+
+```json
+{
+  "ID": "Billing",
+  "Tools": [
+    {
+      "Name": "GetInvoices",
+      "Parameters": [
+        {
+          "Name": "userId",
+          "Scope": "context",
+          "Shared": true
+        },
+        {
+          "Name": "count",
+          "Scope": "request"
+        }
+      ]
+    }
+  ]
+}
+```
+
+In this example:
+- `userId` will be shared across all agents when collected
+- `count` is request-specific and never shared
+
 ## Prompt Management System
 
 Morgana treats prompts as **first-class project artifacts**, not hardcoded strings. The `IPromptResolverService` provides a flexible, maintainable approach to prompt engineering.
@@ -192,7 +350,7 @@ Morgana treats prompts as **first-class project artifacts**, not hardcoded strin
 - Parses structured prompt definitions including:
   - System instructions
   - Tool definitions
-  - Additional properties (guard terms, error messages)
+  - Additional properties (guard terms, error messages, context guidance)
   - Language and versioning metadata
 
 **Prompt Structure**
@@ -216,6 +374,32 @@ Morgana treats prompts as **first-class project artifacts**, not hardcoded strin
   ]
 }
 ```
+
+### Agent Instructions Composition
+
+Each agent receives comprehensive instructions at creation time:
+
+```csharp
+instructions: $"{morganaPrompt.Content}\n{morganaPrompt.Instructions}\n\n{agentPrompt.Content}\n{agentPrompt.Instructions}"
+```
+
+This ensures:
+1. **Global Rules**: Morgana's system-wide instructions (context handling, tone, policies)
+2. **Agent-Specific Behavior**: Specialized instructions for the domain (billing, troubleshooting, etc.)
+3. **No Duplication**: Instructions are set once at agent creation, not repeated in conversation history
+
+### Context Handling Guidance
+
+The system provides parameter-level guidance through `AdditionalProperties`:
+
+```json
+{
+  "ContextToolParameterGuidance": "CONTEXT: First check if it exists with GetContextVariable. If missing, ask the user",
+  "RequestToolParameterGuidance": "DIRECT REQUEST: This value must be provided by the user in the current message, do not use context"
+}
+```
+
+These templates are automatically applied to tool parameters based on their `Scope` attribute, ensuring consistent LLM behavior.
 
 ### Benefits
 - **Separation of Concerns**: Prompt engineering decoupled from application logic
