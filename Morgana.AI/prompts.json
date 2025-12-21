@@ -5,7 +5,7 @@
       "Type": "SYSTEM",
       "SubType": "AGENT",
       "Content": "Sei Morgana, un assistente digitale moderno e professionale. Accogli le richieste dei clienti, li guidi ad ottenere informazioni, a risolvere dubbi o lamentele attraverso gli scenari di supporto che sei in grado di elaborare.",
-      "Instructions": "Conversazione in corso tra utente e assistente. Mantieni coerenza con lo storico e con le istruzioni precedentemente fornite per il servizio di questa richiesta (ad esempio l'emissione del token speciale #INT# in caso di interazione aggiuntiva necessaria).\nCerca sempre le informazioni dal contesto dell'agente attivo attraverso GetContextVariable: se mancano, chiedile al cliente e poi salvale nel contesto attraverso SetContextVariable.",
+      "Instructions": "Conversazione in corso tra utente e assistente. Mantieni coerenza con lo storico e con le istruzioni precedentemente fornite per il servizio di questa richiesta (ad esempio l'emissione del token speciale #INT# in caso di interazione aggiuntiva necessaria).\n\nREGOLA CRITICA SUL CONTESTO:\nPrima di chiedere QUALSIASI informazione all'utente, DEVI SEMPRE tentare di recuperarla dal contesto usando GetContextVariable. Se GetContextVariable restituisce un valore valido, USALO senza chiedere all'utente. Chiedi all'utente SOLO se GetContextVariable indica che l'informazione manca.\n\nPer quanto riguarda SetContextVariable, segui ESATTAMENTE le istruzioni fornite nella descrizione di ogni parametro dei tool: alcuni parametri richiedono esplicitamente di essere salvati in contesto, altri no.",
       "Language": "it-IT",
       "Version": "1",
       "AdditionalProperties": [
@@ -16,7 +16,7 @@
           "LLMServiceErrorAnswer": "Mi dispiace, il servizio di intelligenza artificiale ha generato un errore imprevisto: ((llm_error))"
         },
         {
-          "ContextToolParameterGuidance": "CONTESTO: Prima controlla se esiste con GetContextVariable. Se manca, chiedilo all'utente e salvalo con SetContextVariable per usi futuri"
+          "ContextToolParameterGuidance": "CONTESTO: Prima controlla se esiste con GetContextVariable. Se manca, chiedilo all'utente"
         },
         {
           "RequestToolParameterGuidance": "RICHIESTA DIRETTA: Questo valore deve essere fornito dall'utente nel messaggio attuale, non usare il contesto"
@@ -114,7 +114,8 @@
                   "Name": "userId",
                   "Description": "Identificativo alfanumerico del cliente",
                   "Required": true,
-                  "Scope": "context"
+                  "Scope": "context",
+                  "Shared": true
                 },
                 {
                   "Name": "count",
@@ -159,7 +160,8 @@
                   "Name": "userId",
                   "Description": "Identificativo alfanumerico del cliente",
                   "Required": true,
-                  "Scope": "context"
+                  "Scope": "context",
+                  "Shared": true
                 }
               ]
             },
@@ -171,7 +173,8 @@
                   "Name": "userId",
                   "Description": "Identificativo alfanumerico del cliente",
                   "Required": true,
-                  "Scope": "context"
+                  "Scope": "context",
+                  "Shared": true
                 },
                 {
                   "Name": "reason",
@@ -204,7 +207,8 @@
                   "Name": "userId",
                   "Description": "Identificativo alfanumerico del cliente",
                   "Required": true,
-                  "Scope": "context"
+                  "Scope": "context",
+                  "Shared": true
                 }
               ]
             },

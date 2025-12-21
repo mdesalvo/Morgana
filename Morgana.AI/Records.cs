@@ -15,6 +15,14 @@ namespace Morgana.AI
             string Response,
             bool IsCompleted = true);
 
+        public record BroadcastContextUpdate(
+            string SourceAgentIntent,
+            Dictionary<string, object> UpdatedValues);
+
+        public record ReceiveContextUpdate(
+            string SourceAgentIntent,
+            Dictionary<string, object> UpdatedValues);
+        
         public record ClassificationResponse(
             [property: JsonPropertyName("intent")] string Intent,
             [property: JsonPropertyName("confidence")] double Confidence);
@@ -64,7 +72,8 @@ namespace Morgana.AI
             string Name,
             string Description,
             bool Required,
-            string Scope);
+            string Scope,
+            bool Shared = false);
 
         public record IntentCollection
         {

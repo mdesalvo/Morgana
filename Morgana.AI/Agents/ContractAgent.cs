@@ -16,7 +16,7 @@ public class ContractAgent : MorganaAgent
         ILogger<ContractAgent> logger) : base(conversationId, llmService, promptResolverService, logger)
     {
         AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger);
-        aiAgent = adapter.CreateContractAgent(AgentContext);
+        aiAgent = adapter.CreateContractAgent(AgentContext, OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }

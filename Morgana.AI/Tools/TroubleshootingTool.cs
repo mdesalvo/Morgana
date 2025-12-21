@@ -5,7 +5,10 @@ namespace Morgana.AI.Tools;
 
 public class TroubleshootingTool : MorganaTool
 {
-    public TroubleshootingTool(ILogger<MorganaAgent> logger, Dictionary<string, object> context) : base(logger, context) { }
+    public TroubleshootingTool(
+        ILogger<MorganaAgent> logger,
+        Dictionary<string, object> context,
+        IEnumerable<string>? sharedVariableNames=null) : base(logger, context, sharedVariableNames) { }
 
     private readonly Dictionary<string, string> guides = new Dictionary<string, string>
     {

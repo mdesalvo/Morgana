@@ -18,7 +18,10 @@ public class AgentAdapter
     protected readonly ILogger<MorganaAgent> logger;
     protected readonly Prompt morganaPrompt;
 
-    public AgentAdapter(IChatClient chatClient, IPromptResolverService promptResolverService, ILogger<MorganaAgent> logger)
+    public AgentAdapter(
+        IChatClient chatClient,
+        IPromptResolverService promptResolverService,
+        ILogger<MorganaAgent> logger)
     {
         this.chatClient = chatClient;
         this.promptResolverService = promptResolverService;
@@ -27,18 +30,54 @@ public class AgentAdapter
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
     }
 
-    public AIAgent CreateBillingAgent(Dictionary<string, object> agentContext)
+    // NUOVO: Helper per estrarre variabili shared da ToolDefinition
+    private List<string> ExtractSharedVariables(IEnumerable<ToolDefinition> tools)
     {
-        BillingTool billingTool = new BillingTool(logger, agentContext);
-        ToolAdapter billingToolAdapter = new ToolAdapter(morganaPrompt);
+        return tools
+            .SelectMany(t => t.Parameters)
+            .Where(p => p.Shared && string.Equals(p.Scope, "context", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Name)
+            .Distinct()
+            .ToList();
+    }
 
+    // NUOVO: Helper per logging delle shared variables estratte
+    private void LogSharedVariables(string agentName, List<string> sharedVariables)
+    {
+        if (sharedVariables.Count > 0)
+        {
+            logger.LogInformation($"Agent '{agentName}' has {sharedVariables.Count} shared variables: {string.Join(", ", sharedVariables)}");
+        }
+        else
+        {
+            logger.LogInformation($"Agent '{agentName}' has NO shared variables");
+        }
+    }
+
+    public AIAgent CreateBillingAgent(
+        Dictionary<string, object> agentContext,
+        Action<string, object>? sharedContextCallback = null)
+    {
         string billingIntent = typeof(BillingAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
         Prompt billingPrompt = promptResolverService.ResolveAsync(billingIntent)
                                                     .GetAwaiter()
                                                     .GetResult();
 
-        ToolDefinition[]? billingTools = [.. billingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
-                                                .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
+        ToolDefinition[] billingTools = [.. billingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
+                                              .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
+
+        // Estrai variabili shared
+        List<string> sharedVariables = ExtractSharedVariables(billingTools);
+        LogSharedVariables(billingIntent, sharedVariables);
+
+        BillingTool billingTool = new BillingTool(logger, agentContext, sharedVariables);
+        
+        // NUOVO: registra callback se fornito
+        if (sharedContextCallback != null)
+            billingTool.RegisterSharedContextUpdateCallback(sharedContextCallback);
+
+        ToolAdapter billingToolAdapter = new ToolAdapter(morganaPrompt);
+
         foreach (ToolDefinition billingToolDefinition in billingTools ?? [])
         {
             Delegate billingToolImplementation = billingToolDefinition.Name switch
@@ -54,23 +93,34 @@ public class AgentAdapter
         }
 
         return chatClient.CreateAIAgent(
-            instructions: $"{billingPrompt.Content}\n{billingPrompt.Instructions}",
+            instructions: $"{morganaPrompt.Content}\n{morganaPrompt.Instructions}\n\n{billingPrompt.Content}\n{billingPrompt.Instructions}",
             name: billingIntent,
             tools: [.. billingToolAdapter.CreateAllFunctions()]);
     }
 
-    public AIAgent CreateContractAgent(Dictionary<string, object> agentContext)
+    public AIAgent CreateContractAgent(
+        Dictionary<string, object> agentContext,
+        Action<string, object>? sharedContextCallback = null)  // NUOVO parametro
     {
-        ContractTool contractTool = new ContractTool(logger, agentContext);
-        ToolAdapter contractToolAdapter = new ToolAdapter(morganaPrompt);
-
         string contractIntent = typeof(ContractAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
         Prompt contractPrompt = promptResolverService.ResolveAsync(contractIntent)
                                                      .GetAwaiter()
                                                      .GetResult();
 
-        ToolDefinition[]? contractTools = [.. contractPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
+        ToolDefinition[] contractTools = [.. contractPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                                 .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
+
+        // Estrai variabili shared
+        IEnumerable<string> sharedVariables = ExtractSharedVariables(contractTools);
+
+        ContractTool contractTool = new ContractTool(logger, agentContext, sharedVariables);
+        
+        // NUOVO: registra callback se fornito
+        if (sharedContextCallback != null)
+            contractTool.RegisterSharedContextUpdateCallback(sharedContextCallback);
+
+        ToolAdapter contractToolAdapter = new ToolAdapter(morganaPrompt);
+
         foreach (ToolDefinition contractToolDefinition in contractTools ?? [])
         {
             Delegate contractToolImplementation = contractToolDefinition.Name switch
@@ -86,23 +136,34 @@ public class AgentAdapter
         }
 
         return chatClient.CreateAIAgent(
-            instructions: $"{contractPrompt.Content}\n{contractPrompt.Instructions}",
+            instructions: $"{morganaPrompt.Content}\n{morganaPrompt.Instructions}\n\n{contractPrompt.Content}\n{contractPrompt.Instructions}",
             name: contractIntent,
             tools: [.. contractToolAdapter.CreateAllFunctions()]);
     }
 
-    public AIAgent CreateTroubleshootingAgent(Dictionary<string, object> agentContext)
+    public AIAgent CreateTroubleshootingAgent(
+        Dictionary<string, object> agentContext,
+        Action<string, object>? sharedContextCallback = null)  // NUOVO parametro
     {
-        TroubleshootingTool troubleshootingTool = new TroubleshootingTool(logger, agentContext);
-        ToolAdapter troubleshootingToolAdapter = new ToolAdapter(morganaPrompt);
-
         string troubleShootingIntent = typeof(TroubleshootingAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
         Prompt troubleshootingPrompt = promptResolverService.ResolveAsync(troubleShootingIntent)
                                                             .GetAwaiter()
                                                             .GetResult();
 
-        ToolDefinition[]? troubleshootingTools = [.. troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
+        ToolDefinition[] troubleshootingTools = [.. troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                                        .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
+
+        // Estrai variabili shared
+        IEnumerable<string> sharedVariables = ExtractSharedVariables(troubleshootingTools);
+
+        TroubleshootingTool troubleshootingTool = new TroubleshootingTool(logger, agentContext, sharedVariables);
+        
+        // NUOVO: registra callback se fornito
+        if (sharedContextCallback != null)
+            troubleshootingTool.RegisterSharedContextUpdateCallback(sharedContextCallback);
+
+        ToolAdapter troubleshootingToolAdapter = new ToolAdapter(morganaPrompt);
+
         foreach (ToolDefinition troubleshootingToolDefinition in troubleshootingTools ?? [])
         {
             Delegate troubleshootingToolImplementation = troubleshootingToolDefinition.Name switch
@@ -118,7 +179,7 @@ public class AgentAdapter
         }
 
         return chatClient.CreateAIAgent(
-            instructions: $"{troubleshootingPrompt.Content}\n{troubleshootingPrompt.Instructions}",
+            instructions: $"{morganaPrompt.Content}\n{morganaPrompt.Instructions}\n\n{troubleshootingPrompt.Content}\n{troubleshootingPrompt.Instructions}",
             name: troubleShootingIntent,
             tools: [.. troubleshootingToolAdapter.CreateAllFunctions()]);
     }

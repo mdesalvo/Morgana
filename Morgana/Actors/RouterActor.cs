@@ -1,4 +1,5 @@
 using Akka.Actor;
+using Akka.Event;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
@@ -25,6 +26,7 @@ public class RouterActor : MorganaActor
         }
 
         ReceiveAsync<AgentRequest>(RouteToAgentAsync);
+        Receive<BroadcastContextUpdate>(HandleBroadcastContextUpdate);
     }
 
     private async Task RouteToAgentAsync(AgentRequest req)
@@ -54,5 +56,28 @@ public class RouterActor : MorganaActor
             agentResponse.IsCompleted,
             selectedAgent
         ));
+    }
+
+    private void HandleBroadcastContextUpdate(BroadcastContextUpdate msg)
+    {
+        Context.GetLogger().Info(
+            $"RouterActor broadcasting context update from '{msg.SourceAgentIntent}': {string.Join(", ", msg.UpdatedValues.Keys)}");
+
+        int broadcastCount = 0;
+        
+        // Broadcast a TUTTI gli agenti TRANNE il sender
+        foreach (KeyValuePair<string, IActorRef> kvp in agents)
+        {
+            if (kvp.Key != msg.SourceAgentIntent)
+            {
+                kvp.Value.Tell(new ReceiveContextUpdate(
+                    msg.SourceAgentIntent,
+                    msg.UpdatedValues));
+
+                broadcastCount++;
+            }
+        }
+
+        Context.GetLogger().Info($"Context broadcast sent to {broadcastCount} agents (excluding sender '{msg.SourceAgentIntent}')");
     }
 }

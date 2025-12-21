@@ -16,7 +16,7 @@ public class TroubleshootingAgent : MorganaAgent
         ILogger<TroubleshootingAgent> logger) : base(conversationId, llmService, promptResolverService,logger)
     {
         AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger);
-        aiAgent = adapter.CreateTroubleshootingAgent(AgentContext);
+        aiAgent = adapter.CreateTroubleshootingAgent(AgentContext, OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }

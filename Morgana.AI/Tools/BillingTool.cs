@@ -5,7 +5,10 @@ namespace Morgana.AI.Tools;
 
 public class BillingTool : MorganaTool
 {
-    public BillingTool(ILogger<MorganaAgent> logger, Dictionary<string, object> context) : base(logger, context) { }
+    public BillingTool(
+        ILogger<MorganaAgent> logger,
+        Dictionary<string, object> context,
+        IEnumerable<string>? sharedVariableNames=null) : base(logger, context, sharedVariableNames) { }
 
     private readonly string[] invoices =
     [
