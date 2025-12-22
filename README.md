@@ -33,6 +33,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
 6. **Automatic Discovery**: Agents self-register through attributes, eliminating manual configuration
 7. **P2P Context Synchronization**: Agents share contextual information seamlessly through a message bus architecture
 8. **Native Memory Management**: Context and conversation history managed by Microsoft.Agents.AI framework
+9. **Personality-Driven Interactions**: Layered personality system with global and agent-specific traits
 
 ## Architecture
 
@@ -511,6 +512,116 @@ In this example:
 - `userId` will be shared across all agents when collected
 - `count` is request-specific and never shared
 
+## Personality System
+
+Morgana implements a **layered personality architecture** that creates consistent yet contextually appropriate conversational experiences. The system combines a global personality with agent-specific traits to ensure brand coherence while allowing specialized behavior.
+
+### Architecture
+
+**Two-Tier Personality Model:**
+
+1. **Global Personality (Morgana)**: Base character and tone applied to all interactions
+2. **Agent-Specific Personality**: Specialized traits that complement the global personality
+
+### Configuration
+
+**Global Personality** (`prompts.json` - Morgana prompt):
+```json
+{
+    "ID": "Morgana",
+    "Content": "You are a modern and effective digital assistant...",
+    "Instructions": "Ongoing conversation with the user. Stay consistent...",
+    "Personality": "Your name is Morgana: you are a 'good witch' who uses your knowledge of magic to formulate potions and spells to help the user..."
+}
+```
+
+**Agent-Specific Personality** (example - Billing prompt):
+```json
+{
+    "ID": "Billing",
+    "Content": "You're familiar with the book of potions and spells called 'Billing and Payments'...",
+    "Instructions": "NEVER invent procedures or information...",
+    "Personality": "Be consistent with your character: let's say that in this specific role, you could be a fairly traditional witch who favors concreteness and pragmatism..."
+}
+```
+
+### Instruction Composition
+
+The `AgentAdapter` composes instructions in a specific order to ensure proper personality layering:
+
+```csharp
+private string ComposeAgentInstructions(Prompt agentPrompt)
+{
+    var sb = new StringBuilder();
+    
+    // 1. Global role and capabilities
+    sb.AppendLine(morganaPrompt.Content);
+    
+    // 2. Global personality (Morgana's character)
+    if (!string.IsNullOrEmpty(morganaPrompt.Personality))
+    {
+        sb.AppendLine(morganaPrompt.Personality);
+        sb.AppendLine();
+    }
+
+    // 3. Global policies (context handling, interaction rules)
+    sb.AppendLine(formattedPolicies);
+    sb.AppendLine();
+    
+    // 4. Global operational instructions
+    sb.AppendLine(morganaPrompt.Instructions);
+    sb.AppendLine();
+    
+    // 5. Agent-specific role and domain
+    sb.AppendLine(agentPrompt.Content);
+
+    // 6. Agent-specific personality (specialized traits)
+    if (!string.IsNullOrEmpty(agentPrompt.Personality))
+    {
+        sb.AppendLine(agentPrompt.Personality);
+        sb.AppendLine();
+    }
+
+    // 7. Agent-specific instructions
+    sb.Append(agentPrompt.Instructions);
+
+    return sb.ToString();
+}
+```
+
+### Personality Examples
+
+**BillingAgent**:
+- **Global**: Helpful, slightly mysterious, uses magical metaphors
+- **Agent-Specific**: Traditional, pragmatic, concrete (because nobody likes dealing with bills)
+
+**ContractAgent**:
+- **Global**: Helpful, slightly mysterious, uses magical metaphors
+- **Agent-Specific**: Patient, professional, accustomed to cancellation requests
+
+**TroubleshootingAgent**:
+- **Global**: Helpful, slightly mysterious, uses magical metaphors
+- **Agent-Specific**: Technical but graceful, oriented to results, empathetic with frustrated users
+
+### Benefits
+
+1. **Brand Consistency**: All interactions maintain Morgana's core character
+2. **Contextual Adaptation**: Each agent adapts personality to domain appropriateness
+3. **Natural Handoffs**: Personality continuity across agent transitions
+4. **Declarative Configuration**: No code changes needed to adjust personalities
+5. **Subordination Principle**: Agent personalities complement, never contradict, global personality
+6. **Domain Empathy**: Agents can express understanding appropriate to context (e.g., billing frustration, technical issues)
+
+### Design Philosophy
+
+The personality system follows a **subordination principle**: agent-specific personalities enhance and contextualize the global personality without conflicting. This creates:
+
+- **Vertical Consistency**: Same core character across all interactions
+- **Horizontal Variation**: Appropriate tone adjustments per domain
+- **Seamless Experience**: Users interact with "Morgana" who happens to be specialized in different areas
+
+The system avoids creating disconnected personas—users always feel they're talking to the same assistant, just with domain-appropriate expertise and empathy.
+
 ## Prompt Management System
 
 Morgana treats prompts as **first-class project artifacts**, not hardcoded strings. The `IPromptResolverService` provides a flexible, maintainable approach to prompt engineering.
@@ -527,8 +638,11 @@ Morgana treats prompts as **first-class project artifacts**, not hardcoded strin
 - Loads prompts from embedded `prompts.json` resource
 - Parses structured prompt definitions including:
   - System instructions
+  - Personality definitions
+  - Global policies
   - Tool definitions
-  - Additional properties (guard terms, error messages, context guidance)
+  - Error messages
+  - Additional properties
   - Language and versioning metadata
 
 **Prompt Structure**
@@ -537,54 +651,117 @@ Morgana treats prompts as **first-class project artifacts**, not hardcoded strin
   "ID": "billing",
   "Type": "INTENT",
   "SubType": "AGENT",
-  "Content": "Agent personality and role description",
-  "Instructions": "Behavioral rules and token conventions",
+  "Content": "Agent role and domain description",
+  "Personality": "Agent-specific character traits",
+  "Instructions": "Behavioral rules and operational guidelines",
   "AdditionalProperties": [
     {
-      "Tools": [
-        {
-          "Name": "GetInvoices",
-          "Description": "Retrieves user invoices",
-          "Parameters": [...]
-        }
-      ]
+      "GlobalPolicies": [...],
+      "ErrorAnswers": [...],
+      "Tools": [...]
     }
   ]
 }
 ```
 
-### Agent Instructions Composition
+### Global Policies
 
-Each agent receives comprehensive instructions at creation time:
-
-```csharp
-instructions: $"{morganaPrompt.Content}\n{morganaPrompt.Instructions}\n\n{agentPrompt.Content}\n{agentPrompt.Instructions}"
-```
-
-This ensures:
-1. **Global Rules**: Morgana's system-wide instructions (context handling, tone, policies)
-2. **Agent-Specific Behavior**: Specialized instructions for the domain (billing, troubleshooting, etc.)
-3. **No Duplication**: Instructions are set once at agent creation, not repeated in conversation history
-
-### Context Handling Guidance
-
-The system provides parameter-level guidance through `AdditionalProperties`:
+Global policies define system-wide behavioral rules that apply to all agents:
 
 ```json
 {
-  "ContextToolParameterGuidance": "CONTEXT: First check if it exists with GetContextVariable. If missing, ask the user",
-  "RequestToolParameterGuidance": "DIRECT REQUEST: This value must be provided by the user in the current message, do not use context"
+  "GlobalPolicies": [
+    {
+      "Name": "ContextHandling",
+      "Description": "CRITICAL CONTEXT RULE - Before asking...",
+      "Type": "Critical"
+    },
+    {
+      "Name": "InteractiveToken",
+      "Description": "OPERATIONAL RULE ON INTERACTION TOKEN...",
+      "Type": "Operational"
+    },
+    {
+      "Name": "ToolParameterContextGuidance",
+      "Description": "OPERATIONAL RULE ON CONTEXT PARAMETERS...",
+      "Type": "Operational"
+    }
+  ]
 }
 ```
 
-These templates are automatically applied to tool parameters based on their `Scope` attribute, ensuring consistent LLM behavior.
+**Policy Types:**
+- **Critical**: Core rules that must never be violated
+- **Operational**: Procedural guidelines for consistent behavior
+
+**Policy Formatting:**
+The `AgentAdapter` formats policies preserving order and structure:
+
+```csharp
+private string FormatGlobalPolicies(List<GlobalPolicy> policies)
+{
+    var sb = new StringBuilder();
+    foreach (var policy in policies)
+    {
+        sb.AppendLine($"{policy.Name}: {policy.Description}");
+    }
+    return sb.ToString().TrimEnd();
+}
+```
+
+### Error Messages
+
+Centralized error message management for consistent user experience:
+
+```json
+{
+    "ErrorAnswers": [
+      {
+        "Name": "GenericError",
+        "Content": "Sorry, an error occurred while servicing your request."
+      },
+      {
+        "Name": "LLMServiceError",
+        "Content": "Sorry, the AI ​​service generated an unexpected error: ((llm_error))"
+      }
+    ]
+}
+```
+
+Error messages support template placeholders (e.g., `((llm_error))`) for dynamic content injection.
+
+### Tool Parameter Guidance
+
+Parameter-level guidance is dynamically applied based on `Scope`:
+
+```json
+{
+  "Parameters": [
+    {
+      "Name": "userId",
+      "Scope": "context",
+      "Shared": true
+    },
+    {
+      "Name": "count",
+      "Scope": "request"
+    }
+  ]
+}
+```
+
+The `ToolAdapter` enriches descriptions with appropriate guidance:
+- **`Scope: "context"`**: Adds `ToolParameterContextGuidance` policy
+- **`Scope: "request"`**: Adds `ToolParameterRequestGuidance` policy
 
 ### Benefits
 - **Separation of Concerns**: Prompt engineering decoupled from application logic
 - **Rapid Iteration**: Update agent behavior without recompiling
-- **Consistency**: Single source of truth for agent instructions
+- **Consistency**: Single source of truth for agent instructions and policies
 - **Auditability**: Version-controlled prompt evolution
 - **Localization Ready**: Multi-language support built-in
+- **Policy Centralization**: Global rules applied uniformly across all agents
+- **Error Consistency**: Standardized error messaging across the system
 
 ## Agent Registration & Discovery
 
@@ -729,4 +906,4 @@ The Agent Framework automatically:
 
 ---
 
-Morgana is developed in **Italy/Milan 🇮🇹** so you might find prompts and some code comments in Italian: just translate what's necessary...and you're ready **to fly on the broomstick with Morgana 🧙‍♀️**
+Morgana is developed in **Italy/Milan 🇮🇹**: we apologize if you find prompts and some code comments in Italian...but we invite you **at flying on the broomstick with Morgana 🧙‍♀️**
