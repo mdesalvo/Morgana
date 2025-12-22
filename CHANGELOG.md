@@ -14,7 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Global Policies Framework**: Centralized policy management system for system-wide behavioral rules
   - `GlobalPolicy` record type with `Name`, `Description`, and `Type` (Critical/Operational)
   - Policies automatically injected into all agent instructions
-  - Policy formatting preserves configured order without arbitrary categorization
 - **Tool Parameter Guidance Policies**: Declarative guidance for tool parameter handling
   - `ToolParameterContextGuidance`: Rules for context-scoped parameters
   - `ToolParameterRequestGuidance`: Rules for request-scoped parameters
