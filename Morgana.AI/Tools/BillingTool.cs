@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Providers;
 
 namespace Morgana.AI.Tools;
 
@@ -7,8 +8,7 @@ public class BillingTool : MorganaTool
 {
     public BillingTool(
         ILogger<MorganaAgent> logger,
-        Dictionary<string, object> context,
-        IEnumerable<string>? sharedVariableNames=null) : base(logger, context, sharedVariableNames) { }
+        Func<MorganaContextProvider> getContextProvider) : base(logger, getContextProvider) { }
 
     private readonly string[] invoices =
     [
@@ -32,6 +32,6 @@ public class BillingTool : MorganaTool
         await Task.Delay(50);
 
         return invoices.FirstOrDefault(inv => inv.StartsWith(invoiceId, StringComparison.OrdinalIgnoreCase))
-                ?? $"Non ho trovato alcuna fattura con identificativo {invoiceId}";
+               ?? $"Non ho trovato alcuna fattura con identificativo {invoiceId}";
     }
 }

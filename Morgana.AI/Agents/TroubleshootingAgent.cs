@@ -3,6 +3,7 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Providers;
 
 namespace Morgana.AI.Agents;
 
@@ -13,10 +14,13 @@ public class TroubleshootingAgent : MorganaAgent
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<TroubleshootingAgent> logger) : base(conversationId, llmService, promptResolverService,logger)
+        ILogger<TroubleshootingAgent> logger,
+        ILogger<MorganaContextProvider> contextProviderLogger) : base(conversationId, llmService, promptResolverService, logger)
     {
-        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger);
-        aiAgent = adapter.CreateTroubleshootingAgent(AgentContext, OnSharedContextUpdate);
+        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger, contextProviderLogger);
+        
+        // Crea agente e context provider
+        (aiAgent, contextProvider) = adapter.CreateTroubleshootingAgent(OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }

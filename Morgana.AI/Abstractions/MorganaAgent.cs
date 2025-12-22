@@ -1,24 +1,19 @@
 using Akka.Actor;
 using Microsoft.Agents.AI;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Providers;
 using System.Reflection;
-using System.Text;
 
 namespace Morgana.AI.Abstractions;
 
 public class MorganaAgent : MorganaActor
 {
     protected AIAgent aiAgent;
+    protected AgentThread aiAgentThread;
+    protected MorganaContextProvider contextProvider;
     protected readonly ILogger<MorganaAgent> logger;
-
-    //Local conversational memory (to be dismissed when the framework will support memories)
-    protected readonly List<(string role, string text)> MessageHistory = [];
-
-    //Local conversational context
-    protected readonly Dictionary<string, object> AgentContext = [];
 
     public MorganaAgent(
         string conversationId,
@@ -28,11 +23,14 @@ public class MorganaAgent : MorganaActor
     {
         this.logger = logger;
 
-        // NUOVO: handler per ricevere context updates da altri agenti
+        // Handler per ricevere context updates da altri agenti
         Receive<Records.ReceiveContextUpdate>(HandleContextUpdate);
     }
 
-    // NUOVO: Callback invocato quando un tool setta una variabile shared
+    /// <summary>
+    /// Callback invocato quando un tool setta una variabile shared
+    /// Broadcast della variabile a tutti gli altri agenti via RouterActor
+    /// </summary>
     protected void OnSharedContextUpdate(string key, object value)
     {
         string intent = GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent ?? "unknown";
@@ -47,35 +45,24 @@ public class MorganaAgent : MorganaActor
             ));
     }
 
-    // NUOVO: Handler per ricevere context updates da altri agenti via RouterActor
+    /// <summary>
+    /// Handler per ricevere context updates da altri agenti via RouterActor
+    /// Merge intelligente: accetta solo variabili non già presenti (first-write-wins)
+    /// </summary>
     private void HandleContextUpdate(Records.ReceiveContextUpdate msg)
     {
         string myIntent = GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent ?? "unknown";
 
-        logger.LogWarning($">>> Agent '{myIntent}' HandleContextUpdate START - Current context: [{string.Join(", ", AgentContext.Keys)}]");
+        logger.LogInformation(
+            $"Agent '{myIntent}' received shared context from '{msg.SourceAgentIntent}': {string.Join(", ", msg.UpdatedValues.Keys)}");
 
-        foreach (var kvp in msg.UpdatedValues)
-        {
-            // Merge intelligente: aggiungi solo se NON esiste già (first-write-wins)
-            if (!AgentContext.ContainsKey(kvp.Key))
-            {
-                AgentContext[kvp.Key] = kvp.Value;
-                logger.LogInformation(
-                    $"Agent '{myIntent}' received shared context '{kvp.Key}' = '{kvp.Value}' from '{msg.SourceAgentIntent}'"
-                );
-            }
-            else
-            {
-                logger.LogDebug(
-                    $"Agent '{myIntent}' ignored context update for '{kvp.Key}' " +
-                    $"(already set to '{AgentContext[kvp.Key]}', source was '{msg.SourceAgentIntent}')"
-                );
-            }
-        }
-
-        logger.LogWarning($">>> Agent '{myIntent}' HandleContextUpdate END - Updated context: [{string.Join(", ", AgentContext.Keys)}]");
+        contextProvider.MergeSharedContext(msg.UpdatedValues);
     }
 
+    /// <summary>
+    /// Esegue l'agente utilizzando AgentThread per la gestione automatica
+    /// della cronologia conversazionale e del contesto
+    /// </summary>
     protected async Task ExecuteAgentAsync(Records.AgentRequest req)
     {
         IActorRef? senderRef = Sender;
@@ -83,40 +70,25 @@ public class MorganaAgent : MorganaActor
 
         try
         {
-            // Aggiungi messaggio utente allo storico
-            MessageHistory.Add((role: nameof(ChatRole.User), text: req.Content!));
+            // Lazy initialization del thread (una sola volta per agente)
+            aiAgentThread ??= aiAgent.GetNewThread();
 
-            StringBuilder sb = new StringBuilder();
-            foreach ((string role, string msg) in MessageHistory)
-                sb.AppendLine($"{role}: {msg}");
-
-            AgentRunResponse llmResponse = await aiAgent.RunAsync(sb.ToString());
+            // Esegui agente con thread (gestione automatica cronologia)
+            AgentRunResponse llmResponse = await aiAgent.RunAsync(req.Content!, aiAgentThread);
             string llmResponseText = llmResponse.Text ?? "";
 
-            // verifica placeholder #INT#
+            // Verifica placeholder #INT# per determinare se serve più input
             bool requiresMoreInput = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
-
-            // aggiungi risposta assistente allo storico
-            MessageHistory.Add((role: nameof(ChatRole.Assistant), text: llmResponseText));
-
-            // aggiungi messaggio di sistema per consistenza dello storico (solo se serve più input)
-            if (requiresMoreInput)
-            {
-                // Usa solo le Instructions specifiche dell'agente, non tutto il prompt Morgana
-                string myIntent = GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent ?? "other";
-                Records.Prompt myPrompt = await promptResolverService.ResolveAsync(myIntent);
-                MessageHistory.Add((role: nameof(ChatRole.System), text: myPrompt.Instructions));
-            }
-
-            // completed = false se serve input aggiuntivo (rimuovi placeholder #INT#)
             string cleanText = llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim();
+
             senderRef.Tell(new Records.AgentResponse(cleanText, !requiresMoreInput));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, $"Errore in {GetType().Name}");
 
-            senderRef.Tell(new Records.AgentResponse(morganaPrompt.GetAdditionalProperty<string>("GenericErrorAnswer"), true));
+            senderRef.Tell(new Records.AgentResponse(
+                morganaPrompt.GetAdditionalProperty<string>("GenericErrorAnswer"), true));
         }
     }
 }

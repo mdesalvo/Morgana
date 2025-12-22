@@ -3,6 +3,7 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Providers;
 
 namespace Morgana.AI.Agents;
 
@@ -13,10 +14,13 @@ public class ContractAgent : MorganaAgent
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<ContractAgent> logger) : base(conversationId, llmService, promptResolverService, logger)
+        ILogger<ContractAgent> logger,
+        ILogger<MorganaContextProvider> contextProviderLogger) : base(conversationId, llmService, promptResolverService, logger)
     {
-        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger);
-        aiAgent = adapter.CreateContractAgent(AgentContext, OnSharedContextUpdate);
+        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger, contextProviderLogger);
+        
+        // Crea agente e context provider
+        (aiAgent, contextProvider) = adapter.CreateContractAgent(OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }

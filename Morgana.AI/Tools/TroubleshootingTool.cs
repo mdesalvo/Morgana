@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Providers;
 
 namespace Morgana.AI.Tools;
 
@@ -7,8 +8,7 @@ public class TroubleshootingTool : MorganaTool
 {
     public TroubleshootingTool(
         ILogger<MorganaAgent> logger,
-        Dictionary<string, object> context,
-        IEnumerable<string>? sharedVariableNames=null) : base(logger, context, sharedVariableNames) { }
+        Func<MorganaContextProvider> getContextProvider) : base(logger, getContextProvider) { }
 
     private readonly Dictionary<string, string> guides = new Dictionary<string, string>
     {

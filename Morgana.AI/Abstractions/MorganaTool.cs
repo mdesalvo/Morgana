@@ -1,57 +1,55 @@
 ﻿using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Providers;
 
 namespace Morgana.AI.Tools;
 
 public class MorganaTool
 {
     protected readonly ILogger<MorganaAgent> logger;
-
-    protected readonly Dictionary<string, object> agentContext;
-    protected readonly HashSet<string> sharedContextVariables;
-    protected Action<string, object>? onSharedContextUpdate;
+    protected readonly Func<MorganaContextProvider> getContextProvider;
 
     public MorganaTool(
         ILogger<MorganaAgent> logger,
-        Dictionary<string, object> agentContext,
-        IEnumerable<string>? sharedVariableNames=null)
+        Func<MorganaContextProvider> getContextProvider)
     {
         this.logger = logger;
-        this.agentContext = agentContext;
-        sharedContextVariables = [.. sharedVariableNames ?? []];
+        this.getContextProvider = getContextProvider;
     }
 
-    public void RegisterSharedContextUpdateCallback(Action<string, object> sharedContextUpdateCallback)
-        => onSharedContextUpdate = sharedContextUpdateCallback;
-
+    /// <summary>
+    /// Recupera una variabile dal contesto dell'agente via MorganaContextProvider
+    /// </summary>
     public Task<object> GetContextVariable(string variableName)
     {
-        if (agentContext.TryGetValue(variableName, out object? value))
+        MorganaContextProvider provider = getContextProvider();
+        object? value = provider.GetVariable(variableName);
+
+        if (value != null)
         {
-            logger.LogInformation($"MorganaTool ({GetType().Name}) HIT variable {variableName} from agent context. Value is: {value}");
+            logger.LogInformation(
+                $"MorganaTool ({GetType().Name}) HIT variable '{variableName}' from agent context. Value is: {value}");
 
             return Task.FromResult(value);
         }
 
-        logger.LogInformation($"MorganaTool ({GetType().Name}) MISS variable {variableName} from agent context.");
-        return Task.FromResult<object>($"Informazione {variableName} non disponibile nel contesto: devi ingaggiare SetContextVariable per valorizzarla.");
+        logger.LogInformation(
+            $"MorganaTool ({GetType().Name}) MISS variable '{variableName}' from agent context.");
+
+        return Task.FromResult<object>(
+            $"Informazione {variableName} non disponibile nel contesto: devi ingaggiare SetContextVariable per valorizzarla.");
     }
 
+    /// <summary>
+    /// Imposta una variabile nel contesto dell'agente via MorganaContextProvider
+    /// Se la variabile è shared, il provider notificherà automaticamente RouterActor
+    /// </summary>
     public Task<object> SetContextVariable(string variableName, string variableValue)
     {
-        agentContext[variableName] = variableValue;
+        MorganaContextProvider provider = getContextProvider();
+        provider.SetVariable(variableName, variableValue);
 
-        if (sharedContextVariables.Contains(variableName))
-        {
-            onSharedContextUpdate?.Invoke(variableName, variableValue);
-
-            logger.LogInformation($"MorganaTool ({GetType().Name}) SET SHARED variable {variableName} to agent context. Value is: {variableValue}");
-        }
-        else
-        {
-            logger.LogInformation($"MorganaTool ({GetType().Name}) SET PRIVATE variable {variableName} to agent context. Value is: {variableValue}");
-        }
-
-        return Task.FromResult<object>($"Informazione {variableName} inserita nel contesto con valore: {variableValue}");
+        return Task.FromResult<object>(
+            $"Informazione {variableName} inserita nel contesto con valore: {variableValue}");
     }
 }

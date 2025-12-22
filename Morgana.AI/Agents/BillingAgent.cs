@@ -3,6 +3,7 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Providers;
 
 namespace Morgana.AI.Agents;
 
@@ -13,10 +14,13 @@ public class BillingAgent : MorganaAgent
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<BillingAgent> logger) : base(conversationId, llmService, promptResolverService, logger)
+        ILogger<BillingAgent> logger,
+        ILogger<MorganaContextProvider> contextProviderLogger) : base(conversationId, llmService, promptResolverService, logger)
     {
-        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger);
-        aiAgent = adapter.CreateBillingAgent(AgentContext, OnSharedContextUpdate);
+        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger, contextProviderLogger);
+
+        // Crea agente e context provider
+        (aiAgent, contextProvider) = adapter.CreateBillingAgent(OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }
