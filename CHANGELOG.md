@@ -23,10 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
-### 📚 Documentation
-
-### 🔧 Migration Notes
-
 ## [0.3.0] - 2024-12-22
 
 ### ✨ Added
@@ -57,19 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ToolParameter` informations were not sent to AIFunction, so LLM was not truly aware of them
 - Context variable state synchronization across multiple agents
 - Memory leaks from manual history management
-
-### 📚 Documentation
-- Updated architecture diagram showing `MorganaContextProvider` integration with `AIContextProvider`
-- Completely rewritten "Conversational Memory & Context Management" section in README
-- Updated "Context Synchronization System" section with MorganaContextProvider implementation details
-- Updated "Technology Stack" section highlighting `AgentThread` and `AIContextProvider`
-- Added detailed explanation of lazy `context provider accessor` pattern in tools
-
-### 🔧 Migration Notes
-- Agents no longer maintain manual conversation history - use AgentThread for automatic management
-- Update custom tools to accept `Func<MorganaContextProvider>` in constructor
-- Context access moved from direct dictionary to provider methods (`GetVariable`, `SetVariable`)
-- Shared context variables must be declared with `Shared: true` in prompts.json tool parameters
 
 ## [0.2.0] - 2025-12-17
 ### ✨ Added
