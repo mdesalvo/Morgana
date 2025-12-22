@@ -726,3 +726,7 @@ The Agent Framework automatically:
 ---
 
 **Built with ❤️ using .NET 10, Akka.NET and Microsoft.Agents.AI**
+
+---
+
+Morgana is developed in **Italy/Milan 🇮🇹** so you might find prompts and some code comments in Italian: just translate what's necessary...and you're ready **to fly on the broomstick with Morgana 🧙‍♀️**
