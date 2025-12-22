@@ -117,7 +117,6 @@ The orchestrator that manages the entire conversation lifecycle. It coordinates 
 - Coordinates guard checks before processing
 - Routes classification requests
 - Delegates to appropriate coordinator agents
-- Triggers conversation archival
 - Handles error recovery and timeout scenarios
 
 #### 3. GuardActor
