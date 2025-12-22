@@ -23,7 +23,6 @@ public class MorganaAgent : MorganaActor
     {
         this.logger = logger;
 
-        // Handler per ricevere context updates da altri agenti
         Receive<Records.ReceiveContextUpdate>(HandleContextUpdate);
     }
 
@@ -37,7 +36,6 @@ public class MorganaAgent : MorganaActor
 
         logger.LogInformation($"Agent {intent} broadcasting shared context variable: {key}");
 
-        // Usa ActorSelection per trovare il RouterActor dinamicamente
         Context.ActorSelection($"/user/router-{conversationId}")
             .Tell(new Records.BroadcastContextUpdate(
                 intent,
@@ -70,14 +68,11 @@ public class MorganaAgent : MorganaActor
 
         try
         {
-            // Lazy initialization del thread (una sola volta per agente)
             aiAgentThread ??= aiAgent.GetNewThread();
 
-            // Esegui agente con thread (gestione automatica cronologia)
             AgentRunResponse llmResponse = await aiAgent.RunAsync(req.Content!, aiAgentThread);
             string llmResponseText = llmResponse.Text ?? "";
 
-            // Verifica placeholder #INT# per determinare se serve più input
             bool requiresMoreInput = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
             string cleanText = llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim();
 
@@ -87,8 +82,10 @@ public class MorganaAgent : MorganaActor
         {
             logger.LogError(ex, $"Errore in {GetType().Name}");
 
-            senderRef.Tell(new Records.AgentResponse(
-                morganaPrompt.GetAdditionalProperty<string>("GenericErrorAnswer"), true));
+            List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>("ErrorAnswers");
+            Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
+
+            senderRef.Tell(new Records.AgentResponse(genericError?.Content ?? "Si è verificato un errore interno.", true));
         }
     }
 }

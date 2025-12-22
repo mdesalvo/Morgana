@@ -6,6 +6,7 @@ using Morgana.AI.Interfaces;
 using Morgana.AI.Tools;
 using Morgana.AI.Providers;
 using System.Reflection;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using static Morgana.AI.Records;
@@ -32,6 +33,61 @@ public class AgentAdapter
         this.contextProviderLogger = contextProviderLogger;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Formatta le GlobalPolicies in testo strutturato
+    /// </summary>
+    private string FormatGlobalPolicies(List<GlobalPolicy> policies)
+    {
+        StringBuilder sb = new StringBuilder();
+
+        foreach (GlobalPolicy policy in policies)
+        {
+            sb.AppendLine($"{policy.Name}: {policy.Description}");
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Compone le istruzioni complete per un agente
+    /// </summary>
+    private string ComposeAgentInstructions(Prompt agentPrompt)
+    {
+        List<GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<GlobalPolicy>>("GlobalPolicies");
+        string formattedPolicies = FormatGlobalPolicies(globalPolicies);
+
+        StringBuilder sb = new StringBuilder();
+        
+        //Morgana
+
+        sb.AppendLine(morganaPrompt.Content);
+        
+        if (!string.IsNullOrEmpty(morganaPrompt.Personality))
+        {
+            sb.AppendLine(morganaPrompt.Personality);
+            sb.AppendLine();
+        }
+
+        sb.AppendLine(formattedPolicies);
+        sb.AppendLine();
+        sb.AppendLine(morganaPrompt.Instructions);
+        sb.AppendLine();
+
+        //Agent
+
+        sb.AppendLine(agentPrompt.Content);
+
+        if (!string.IsNullOrEmpty(agentPrompt.Personality))
+        {
+            sb.AppendLine(agentPrompt.Personality);
+            sb.AppendLine();
+        }
+
+        sb.Append(agentPrompt.Instructions);
+
+        return sb.ToString();
     }
 
     /// <summary>
@@ -69,7 +125,6 @@ public class AgentAdapter
 
         MorganaContextProvider provider = new MorganaContextProvider(contextProviderLogger, sharedVariables);
 
-        // Registra callback per shared context updates
         if (sharedContextCallback != null)
             provider.OnSharedContextUpdate = sharedContextCallback;
 
@@ -87,17 +142,16 @@ public class AgentAdapter
         ToolDefinition[] billingTools = [.. billingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                               .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
 
-        // Crea context provider
         MorganaContextProvider contextProvider = CreateContextProvider(
             billingIntent, 
             billingTools, 
             sharedContextCallback);
 
-        // Crea tool con lazy access al provider
         BillingTool billingTool = new BillingTool(logger, () => contextProvider);
 
-        // Crea tool adapter
-        ToolAdapter billingToolAdapter = new ToolAdapter(morganaPrompt);
+        List<GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<GlobalPolicy>>("GlobalPolicies");
+        
+        ToolAdapter billingToolAdapter = new ToolAdapter(globalPolicies);
         foreach (ToolDefinition billingToolDefinition in billingTools ?? [])
         {
             Delegate billingToolImplementation = billingToolDefinition.Name switch
@@ -112,8 +166,10 @@ public class AgentAdapter
             billingToolAdapter.AddTool(billingToolDefinition.Name, billingToolImplementation, billingToolDefinition);
         }
 
+        string instructions = ComposeAgentInstructions(billingPrompt);
+
         AIAgent agent = chatClient.CreateAIAgent(
-            instructions: $"{morganaPrompt.Content}\n{morganaPrompt.Instructions}\n\n{billingPrompt.Content}\n{billingPrompt.Instructions}",
+            instructions: instructions,
             name: billingIntent,
             tools: [.. billingToolAdapter.CreateAllFunctions()]);
 
@@ -131,17 +187,16 @@ public class AgentAdapter
         ToolDefinition[] contractTools = [.. contractPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                                 .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
 
-        // Crea context provider
         MorganaContextProvider contextProvider = CreateContextProvider(
             contractIntent, 
             contractTools, 
             sharedContextCallback);
 
-        // Crea tool con lazy access al provider
         ContractTool contractTool = new ContractTool(logger, () => contextProvider);
 
-        // Crea tool adapter
-        ToolAdapter contractToolAdapter = new ToolAdapter(morganaPrompt);
+        List<GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<GlobalPolicy>>("GlobalPolicies");
+        
+        ToolAdapter contractToolAdapter = new ToolAdapter(globalPolicies);
         foreach (ToolDefinition contractToolDefinition in contractTools ?? [])
         {
             Delegate contractToolImplementation = contractToolDefinition.Name switch
@@ -156,8 +211,10 @@ public class AgentAdapter
             contractToolAdapter.AddTool(contractToolDefinition.Name, contractToolImplementation, contractToolDefinition);
         }
 
+        string instructions = ComposeAgentInstructions(contractPrompt);
+
         AIAgent agent = chatClient.CreateAIAgent(
-            instructions: $"{morganaPrompt.Content}\n{morganaPrompt.Instructions}\n\n{contractPrompt.Content}\n{contractPrompt.Instructions}",
+            instructions: instructions,
             name: contractIntent,
             tools: [.. contractToolAdapter.CreateAllFunctions()]);
 
@@ -175,17 +232,16 @@ public class AgentAdapter
         ToolDefinition[] troubleshootingTools = [.. troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                                        .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
 
-        // Crea context provider
         MorganaContextProvider contextProvider = CreateContextProvider(
             troubleShootingIntent, 
             troubleshootingTools, 
             sharedContextCallback);
 
-        // Crea tool con lazy access al provider
         TroubleshootingTool troubleshootingTool = new TroubleshootingTool(logger, () => contextProvider);
 
-        // Crea tool adapter
-        ToolAdapter troubleshootingToolAdapter = new ToolAdapter(morganaPrompt);
+        List<GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<GlobalPolicy>>("GlobalPolicies");
+        
+        ToolAdapter troubleshootingToolAdapter = new ToolAdapter(globalPolicies);
         foreach (ToolDefinition troubleshootingToolDefinition in troubleshootingTools ?? [])
         {
             Delegate troubleshootingToolImplementation = troubleshootingToolDefinition.Name switch
@@ -200,8 +256,10 @@ public class AgentAdapter
             troubleshootingToolAdapter.AddTool(troubleshootingToolDefinition.Name, troubleshootingToolImplementation, troubleshootingToolDefinition);
         }
 
+        string instructions = ComposeAgentInstructions(troubleshootingPrompt);
+
         AIAgent agent = chatClient.CreateAIAgent(
-            instructions: $"{morganaPrompt.Content}\n{morganaPrompt.Instructions}\n\n{troubleshootingPrompt.Content}\n{troubleshootingPrompt.Instructions}",
+            instructions: instructions,
             name: troubleShootingIntent,
             tools: [.. troubleshootingToolAdapter.CreateAllFunctions()]);
 

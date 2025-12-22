@@ -8,11 +8,11 @@ namespace Morgana.AI.Adapters
     {
         private readonly Dictionary<string, Delegate> toolMethods = [];
         private readonly Dictionary<string, ToolDefinition> toolDefinitions = [];
-        private readonly Prompt morganaPrompt;
+        private readonly List<GlobalPolicy> globalPolicies;
         
-        public ToolAdapter(Prompt morganaPrompt)
+        public ToolAdapter(List<GlobalPolicy> globalPolicies)
         {
-            this.morganaPrompt = morganaPrompt;
+            this.globalPolicies = globalPolicies;
         }
 
         public ToolAdapter AddTool(string toolName, Delegate toolMethod, ToolDefinition definition)
@@ -38,14 +38,19 @@ namespace Morgana.AI.Adapters
                 ? def
                 : throw new InvalidOperationException($"Tool definition '{toolName}' non trovata");
 
+            string contextGuidance = globalPolicies.FirstOrDefault(p =>
+                string.Equals(p.Name, "ToolParameterContextGuidance", StringComparison.OrdinalIgnoreCase))?.Description ?? "";
+            string requestGuidance = globalPolicies.FirstOrDefault(p =>
+                string.Equals(p.Name, "ToolParameterRequestGuidance", StringComparison.OrdinalIgnoreCase))?.Description ?? "";
+
             Dictionary<string, object?> additionalProperties = [];
             foreach (ToolParameter parameter in definition.Parameters)
             {
-                string parameterGuidance = parameter.Scope?.ToLowerInvariant() switch
+                string parameterGuidance = parameter.Scope?.ToLowerInvariant().Trim() switch
                 {
-                    "context" => $"{parameter.Description}. {morganaPrompt.GetAdditionalProperty<string>("ContextToolParameterGuidance")}",
-                    "request" => $"{parameter.Description}. {morganaPrompt.GetAdditionalProperty<string>("RequestToolParameterGuidance")}",
-                    _ => parameter.Description // Fallback se Scope non è valorizzato o ha valore inatteso
+                    "context" => $"{parameter.Description}. {contextGuidance}",
+                    "request" => $"{parameter.Description}. {requestGuidance}",
+                    _ => parameter.Description
                 };
         
                 additionalProperties[parameter.Name] = parameterGuidance;
@@ -76,7 +81,6 @@ namespace Morgana.AI.Adapters
                 ToolParameter defParam = definitionParams.FirstOrDefault(p => p.Name == methodParam.Name)
                                             ?? throw new ArgumentException($"Parameter '{methodParam.Name}' non trovato nella definition");
 
-                // Valida required vs optional
                 bool isOptional = methodParam.HasDefaultValue;
                 if (defParam.Required && isOptional)
                     throw new ArgumentException($"Parameter '{methodParam.Name}' è required nella definition ma optional nel metodo");

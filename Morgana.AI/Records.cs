@@ -45,6 +45,7 @@ namespace Morgana.AI
             string SubType,
             string Content,
             string Instructions,
+            string? Personality,
             string Language,
             string Version,
             List<Dictionary<string, object>> AdditionalProperties)
@@ -62,6 +63,15 @@ namespace Morgana.AI
                 throw new KeyNotFoundException($"AdditionalProperty with key '{additionalPropertyName}' was not found in the prompt with id='{ID}'");
             }
         }
+
+        public record GlobalPolicy(
+            string Name,
+            string Description,
+            string Type);
+
+        public record ErrorAnswer(
+            string Name,
+            string Content);
 
         public record ToolDefinition(
             string Name,

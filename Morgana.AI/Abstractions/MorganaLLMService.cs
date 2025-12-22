@@ -50,8 +50,11 @@ namespace Morgana.AI.Abstractions
             }
             catch (Exception ex)
             {
-                return morganaPrompt.GetAdditionalProperty<string>("LLMServiceErrorAnswer")
-                    .Replace("((llm_error))", ex.Message);
+                List<ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<ErrorAnswer>>("ErrorAnswers");
+                ErrorAnswer? llmError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "LLMServiceError", StringComparison.OrdinalIgnoreCase));
+                
+                return llmError?.Content.Replace("((llm_error))", ex.Message) 
+                    ?? $"Errore del servizio LLM: {ex.Message}";
             }
         }
     }
