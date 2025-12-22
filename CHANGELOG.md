@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - UNDER DEVELOPMENT
+
+### ✨ Added
+- **Layered Personality System**: Introduced two-tier personality architecture with global (Morgana) and agent-specific personalities
+  - Global personality applied consistently across all agent interactions
+  - Agent-specific personalities complement global traits for domain-appropriate behavior
+  - Personality composition respects subordination principle (agents never contradict global character)
+- **Global Policies Framework**: Centralized policy management system for system-wide behavioral rules
+  - `GlobalPolicy` record type with `Name`, `Description`, and `Type` (Critical/Operational)
+  - Policies automatically injected into all agent instructions
+  - Policy formatting preserves configured order without arbitrary categorization
+- **Tool Parameter Guidance Policies**: Declarative guidance for tool parameter handling
+  - `ToolParameterContextGuidance`: Rules for context-scoped parameters
+  - `ToolParameterRequestGuidance`: Rules for request-scoped parameters
+  - Guidance automatically applied based on parameter `Scope` attribute
+
+### 🔄 Changed
+
+### 🐛 Fixed
+
+### 📚 Documentation
+
+### 🔧 Migration Notes
+
 ## [0.3.0] - 2024-12-22
 
 ### ✨ Added
