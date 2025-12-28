@@ -87,7 +87,7 @@
       "Version": "1",
       "AdditionalProperties": [
         {
-          "ProfanityTerms": [ "stupido", "idiota", "incapace", "inetto", "scemo", "sei inutile" ]
+          "ProfanityTerms": [ "stupida", "idiota", "incapace", "inetta", "scema", "sei inutile" ]
         },
         {
           "GuardAnswer": "((violation)). Ti chiedo di mantenere un tono rispettoso: sono qui per aiutarti."

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Akka.Actor;
+using Akka.Event;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using static Morgana.AI.Records;
@@ -10,27 +11,32 @@ namespace Morgana.Actors;
 public class ClassifierActor : MorganaActor
 {
     private readonly string classifierPromptContent;
-    private readonly ILogger<ClassifierActor> logger;
 
     public ClassifierActor(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<ClassifierActor> logger) : base(conversationId, llmService, promptResolverService)
+        ILogger<ClassifierActor> _) : base(conversationId, llmService, promptResolverService)
     {
-        this.logger = logger;
-
         Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
-        IntentCollection intentCollection = new IntentCollection(classifierPrompt.GetAdditionalProperty<List<Dictionary<string, string>>>("Intents"));
-        string formattedIntents = string.Join("|", intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
+        IntentCollection intentCollection = new IntentCollection(
+            classifierPrompt.GetAdditionalProperty<List<Dictionary<string, string>>>("Intents"));
+        
+        string formattedIntents = string.Join("|", 
+            intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
+        
         classifierPromptContent = $"{classifierPrompt.Content.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
 
         ReceiveAsync<UserMessage>(ClassifyMessageAsync);
+        Receive<AI.Records.ClassificationContext>(HandleClassificationResult);
+        Receive<Status.Failure>(HandleFailure);
     }
 
     private async Task ClassifyMessageAsync(UserMessage msg)
     {
-        IActorRef senderRef = Sender;
+        IActorRef originalSender = Sender;
+
+        actorLogger.Info($"Classifying message: '{msg.Text.Substring(0, Math.Min(50, msg.Text.Length))}...'");
 
         try
         {
@@ -38,8 +44,10 @@ public class ClassifierActor : MorganaActor
                 conversationId,
                 classifierPromptContent,
                 msg.Text);
+
             ClassificationResponse? classificationResponse = JsonSerializer.Deserialize<ClassificationResponse>(response);
-            ClassificationResult classificationResult = new ClassificationResult(
+            
+            ClassificationResult result = new ClassificationResult(
                 classificationResponse?.Intent ?? "other",
                 new Dictionary<string, string>
                 {
@@ -47,13 +55,13 @@ public class ClassifierActor : MorganaActor
                     ["confidence"] = (classificationResponse?.Confidence ?? 0.5).ToString("F2")
                 });
 
-            senderRef.Tell(classificationResult);
+            AI.Records.ClassificationContext ctx = new AI.Records.ClassificationContext(result, originalSender);
+            Self.Tell(ctx);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error classifying message");
+            actorLogger.Error(ex, "Error classifying message");
 
-            // Fallback classification
             ClassificationResult fallback = new ClassificationResult(
                 "other",
                 new Dictionary<string, string>
@@ -62,7 +70,29 @@ public class ClassifierActor : MorganaActor
                     ["error"] = "classification_failed"
                 });
 
-            senderRef.Tell(fallback);
+            AI.Records.ClassificationContext ctx = new AI.Records.ClassificationContext(fallback, originalSender);
+            Self.Tell(ctx);
         }
+    }
+
+    private void HandleClassificationResult(AI.Records.ClassificationContext ctx)
+    {
+        actorLogger.Info($"Classification complete: intent='{ctx.Result.Intent}', confidence={ctx.Result.Metadata.GetValueOrDefault("confidence", "N/A")}");
+        ctx.OriginalSender.Tell(ctx.Result);
+    }
+
+    private void HandleFailure(Status.Failure failure)
+    {
+        actorLogger.Error(failure.Cause, "Classification pipeline failed");
+
+        ClassificationResult fallback = new ClassificationResult(
+            "other",
+            new Dictionary<string, string>
+            {
+                ["confidence"] = "0.00",
+                ["error"] = "classification_pipeline_failed"
+            });
+
+        Sender.Tell(fallback);
     }
 }

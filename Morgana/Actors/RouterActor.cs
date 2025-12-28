@@ -17,7 +17,7 @@ public class RouterActor : MorganaActor
         IPromptResolverService promptResolverService,
         IAgentRegistryService agentResolverService) : base(conversationId, llmService, promptResolverService)
     {
-        //Autodiscovery of routable agents
+        // Autodiscovery of routable agents
         foreach (string intent in agentResolverService.GetAllIntents())
         {
             Type? agentType = agentResolverService.ResolveAgentFromIntent(intent);
@@ -26,46 +26,67 @@ public class RouterActor : MorganaActor
         }
 
         ReceiveAsync<AgentRequest>(RouteToAgentAsync);
+        Receive<Records.AgentResponseContext>(HandleAgentResponse);
+        Receive<Status.Failure>(HandleFailure);
         Receive<BroadcastContextUpdate>(HandleBroadcastContextUpdate);
     }
 
     private async Task RouteToAgentAsync(AgentRequest req)
     {
-        IActorRef? senderRef = Sender;
+        IActorRef originalSender = Sender;
         Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
 
-        // Se non c’è classificazione → questo non è un turno valido per RouterActor
         if (req.Classification == null)
         {
-            senderRef.Tell(new AgentResponse(classifierPrompt.GetAdditionalProperty<string>("MissingClassificationError"), true));
+            originalSender.Tell(new AgentResponse(
+                classifierPrompt.GetAdditionalProperty<string>("MissingClassificationError"), 
+                true));
             return;
         }
 
         if (!agents.TryGetValue(req.Classification.Intent, out IActorRef? selectedAgent))
         {
-            senderRef.Tell(new AgentResponse(classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), true));
+            originalSender.Tell(new AgentResponse(
+                classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), 
+                true));
             return;
         }
 
-        // Chiede all'agente selezionato
-        AgentResponse? agentResponse = await selectedAgent.Ask<AgentResponse>(req);
+        actorLogger.Info($"Routing intent '{req.Classification.Intent}' to agent {selectedAgent.Path}");
 
-        // Risponde al supervisore con il riferimento dell'agente attivo
-        senderRef.Tell(new ActiveAgentResponse(
-            agentResponse.Response,
-            agentResponse.IsCompleted,
-            selectedAgent
+        selectedAgent.Ask<AgentResponse>(req, TimeSpan.FromSeconds(60))
+            .PipeTo(Self, 
+                success: response => new Records.AgentResponseContext(response, selectedAgent, originalSender),
+                failure: ex => new Status.Failure(ex));
+    }
+
+    private void HandleAgentResponse(Records.AgentResponseContext ctx)
+    {
+        actorLogger.Info($"Received response from agent {ctx.AgentRef.Path}, completed: {ctx.Response.IsCompleted}");
+
+        ctx.OriginalSender.Tell(new ActiveAgentResponse(
+            ctx.Response.Response,
+            ctx.Response.IsCompleted,
+            ctx.AgentRef
         ));
+    }
+
+    private void HandleFailure(Status.Failure failure)
+    {
+        actorLogger.Error(failure.Cause, "Agent routing failed");
+        
+        Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
+        Sender.Tell(new AgentResponse(
+            classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), 
+            true));
     }
 
     private void HandleBroadcastContextUpdate(BroadcastContextUpdate msg)
     {
-        Context.GetLogger().Info(
-            $"RouterActor broadcasting context update from '{msg.SourceAgentIntent}': {string.Join(", ", msg.UpdatedValues.Keys)}");
+        actorLogger.Info($"Broadcasting context from '{msg.SourceAgentIntent}': {string.Join(", ", msg.UpdatedValues.Keys)}");
 
         int broadcastCount = 0;
         
-        // Broadcast a TUTTI gli agenti TRANNE il sender
         foreach (KeyValuePair<string, IActorRef> kvp in agents)
         {
             if (kvp.Key != msg.SourceAgentIntent)
@@ -78,6 +99,6 @@ public class RouterActor : MorganaActor
             }
         }
 
-        Context.GetLogger().Info($"Context broadcast sent to {broadcastCount} agents (excluding sender '{msg.SourceAgentIntent}')");
+        actorLogger.Info($"Context broadcast sent to {broadcastCount} agents");
     }
 }

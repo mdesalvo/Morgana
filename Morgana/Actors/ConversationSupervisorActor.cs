@@ -1,5 +1,5 @@
 using Akka.Actor;
-using Akka.DependencyInjection;
+using Akka.Event;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
@@ -12,7 +12,6 @@ public class ConversationSupervisorActor : MorganaActor
     private readonly IActorRef guard;
     private readonly IActorRef classifier;
     private readonly IActorRef router;
-    private readonly ILogger<ConversationSupervisorActor> logger;
 
     private IActorRef? activeAgent = null;
 
@@ -20,161 +19,237 @@ public class ConversationSupervisorActor : MorganaActor
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<ConversationSupervisorActor> logger) : base(conversationId, llmService, promptResolverService)
+        ILogger<ConversationSupervisorActor> _) : base(conversationId, llmService, promptResolverService)
     {
-        this.logger = logger;
-
-        //Create dependant Morgana actors
         guard = Context.System.GetOrCreateActor<GuardActor>("guard", conversationId).GetAwaiter().GetResult();
         classifier = Context.System.GetOrCreateActor<ClassifierActor>("classifier", conversationId).GetAwaiter().GetResult();
         router = Context.System.GetOrCreateActor<RouterActor>("router", conversationId).GetAwaiter().GetResult();
 
-        //Supervisor organizes its work as a state machine:
-        //UserMessage → [activeAgent? ContinueActiveSession : InitiateNewRequest]
-        //            → GuardCheckPassed
-        //            → ClassificationReady
-        //            → AgentResponseReceived
-        //            → ConversationResponse
-        ReceiveAsync<UserMessage>(msg =>
-        {
-            if (activeAgent is null)
-                Self.Tell(new InitiateNewRequest(msg, Sender)); 
-            else
-                Self.Tell(new ContinueActiveSession(msg, Sender));
-            return Task.CompletedTask;
-        });
-        ReceiveAsync<InitiateNewRequest>(EngageGuardForNewRequestAsync);
-        ReceiveAsync<ContinueActiveSession>(EngageActiveAgentInFollowupAsync);
-        ReceiveAsync<GuardCheckPassed>(EngageClassifierAfterGuardCheckPassedAsync);
-        ReceiveAsync<ClassificationReady>(EngageRouterAfterClassificationAsync);
-        ReceiveAsync<AgentResponseReceived>(DeliverAgentResponseAsync);
+        Idle();
     }
 
-    private async Task EngageGuardForNewRequestAsync(InitiateNewRequest msg)
+    #region State Behaviors
+
+    private void Idle()
     {
-        try
+        actorLogger.Info("→ State: Idle");
+
+        ReceiveAsync<UserMessage>(async msg =>
         {
-            GuardCheckResponse guardCheckResponse = await guard.Ask<GuardCheckResponse>(
-                new GuardCheckRequest(msg.Message.ConversationId, msg.Message.Text));
+            IActorRef originalSender = Sender;
 
-            if (!guardCheckResponse.Compliant)
+            if (activeAgent != null)
             {
-                AI.Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
+                actorLogger.Info("Active agent detected, routing to follow-up flow");
+                await EngageActiveAgentInFollowupAsync(msg, originalSender);
+            }
+            else
+            {
+                actorLogger.Info("No active agent, starting new request flow");
+                ProcessingContext ctx = new ProcessingContext(msg, originalSender);
 
-                msg.OriginalSender.Tell(new ConversationResponse(
-                    guardPrompt.GetAdditionalProperty<string>("GuardAnswer").Replace("((violation))", guardCheckResponse.Violation),
+                guard.Ask<GuardCheckResponse>(
+                    new GuardCheckRequest(msg.ConversationId, msg.Text),
+                    TimeSpan.FromSeconds(60))
+                .PipeTo(Self,
+                    success: response => new GuardCheckContext(response, ctx),
+                    failure: ex => new Status.Failure(ex));
+
+                Become(() => AwaitingGuardCheck(ctx));
+            }
+        });
+
+        Receive<Status.Failure>(HandleUnexpectedFailure);
+    }
+
+    private void AwaitingGuardCheck(ProcessingContext ctx)
+    {
+        actorLogger.Info("→ State: AwaitingGuardCheck");
+
+        ReceiveAsync<GuardCheckContext>(async wrapper =>
+        {
+            if (!wrapper.Response.Compliant)
+            {
+                actorLogger.Warning($"Guard violation: {wrapper.Response.Violation}");
+
+                AI.Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
+                wrapper.Context.OriginalSender.Tell(new ConversationResponse(
+                    guardPrompt.GetAdditionalProperty<string>("GuardAnswer")
+                        .Replace("((violation))", wrapper.Response.Violation),
                     "guard_violation",
                     []));
 
+                Become(Idle);
                 return;
             }
 
-            Self.Tell(new GuardCheckPassed(msg.Message, msg.OriginalSender));
-        }
-        catch (Exception ex)
+            actorLogger.Info("Guard check passed, proceeding to classification");
+
+            classifier.Ask<AI.Records.ClassificationResult>(
+                wrapper.Context.OriginalMessage,
+                TimeSpan.FromSeconds(60))
+            .PipeTo(Self,
+                success: result => new ClassificationContext(result, wrapper.Context),
+                failure: ex => new Status.Failure(ex));
+
+            Become(() => AwaitingClassification(wrapper.Context));
+        });
+
+        Receive<Status.Failure>(failure =>
         {
-            logger.LogError(ex, "Guard check failed");
-            msg.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
-        }
+            actorLogger.Error(failure.Cause, "Guard check failed");
+            ctx.OriginalSender.Tell(new ConversationResponse(
+                "Si è verificato un errore interno.", null, null));
+            Become(Idle);
+        });
     }
 
-    private async Task EngageClassifierAfterGuardCheckPassedAsync(GuardCheckPassed msg)
+    private void AwaitingClassification(ProcessingContext ctx)
     {
-        try
-        {
-            AI.Records.ClassificationResult classificationResult =
-                await classifier.Ask<AI.Records.ClassificationResult>(msg.Message);
+        actorLogger.Info("→ State: AwaitingClassification");
 
-            logger.LogInformation("Classification result: {0}", classificationResult.Intent);
-
-            Self.Tell(new ClassificationReady(msg.Message, classificationResult, msg.OriginalSender));
-        }
-        catch (Exception ex)
+        ReceiveAsync<ClassificationContext>(async wrapper =>
         {
-            logger.LogError(ex, "Classification failed");
-            msg.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
-        }
+            actorLogger.Info($"Classification result: {wrapper.Classification.Intent}");
+
+            ProcessingContext updatedCtx = ctx with { Classification = wrapper.Classification };
+
+            router.Ask<object>(
+                new AI.Records.AgentRequest(
+                    wrapper.Context.OriginalMessage.ConversationId,
+                    wrapper.Context.OriginalMessage.Text,
+                    wrapper.Classification),
+                TimeSpan.FromSeconds(60))
+            .PipeTo(Self,
+                success: response => new AgentContext(response, updatedCtx),
+                failure: ex => new Status.Failure(ex));
+
+            Become(() => AwaitingAgentResponse(updatedCtx));
+        });
+
+        Receive<Status.Failure>(failure =>
+        {
+            actorLogger.Error(failure.Cause, "Classification failed");
+            ctx.OriginalSender.Tell(new ConversationResponse(
+                "Si è verificato un errore interno.", null, null));
+            Become(Idle);
+        });
     }
 
-    private async Task EngageRouterAfterClassificationAsync(ClassificationReady msg)
+    private void AwaitingAgentResponse(ProcessingContext ctx)
     {
-        try
-        {
-            object agentResponse = await router.Ask<object>(
-                new AI.Records.AgentRequest(msg.Message.ConversationId, msg.Message.Text, msg.Classification));
+        actorLogger.Info("→ State: AwaitingAgentResponse");
 
-            if (agentResponse is AI.Records.ActiveAgentResponse activeAgentResponse)
+        ReceiveAsync<AgentContext>(async wrapper =>
+        {
+            if (wrapper.Response is AI.Records.ActiveAgentResponse activeAgentResponse)
             {
-                Self.Tell(new AgentResponseReceived(activeAgentResponse, msg.Classification, msg.OriginalSender));
+                actorLogger.Info($"Received ActiveAgentResponse from {activeAgentResponse.AgentRef.Path}, completed: {activeAgentResponse.IsCompleted}");
+
+                if (!activeAgentResponse.IsCompleted)
+                {
+                    activeAgent = activeAgentResponse.AgentRef;
+                    actorLogger.Info($"Active agent set to {activeAgent.Path}");
+                }
+                else
+                {
+                    activeAgent = null;
+                }
+
+                wrapper.Context.OriginalSender.Tell(new ConversationResponse(
+                    activeAgentResponse.Response,
+                    wrapper.Context.Classification?.Intent,
+                    wrapper.Context.Classification?.Metadata));
+
+                Become(Idle);
             }
-            else if (agentResponse is AI.Records.AgentResponse routerFallbackResponse)
+            else if (wrapper.Response is AI.Records.AgentResponse routerFallbackResponse)
             {
-                logger.LogWarning("Received AgentResponse instead of ActiveAgentResponse");
+                actorLogger.Warning("Received AgentResponse instead of ActiveAgentResponse (router fallback)");
 
                 if (!routerFallbackResponse.IsCompleted)
                 {
                     activeAgent = router;
-                    logger.LogWarning("Fallback active agent = {0}", router.Path);
+                    actorLogger.Warning($"Fallback active agent = {router.Path}");
                 }
 
-                msg.OriginalSender.Tell(new ConversationResponse(
+                wrapper.Context.OriginalSender.Tell(new ConversationResponse(
                     routerFallbackResponse.Response,
-                    msg.Classification.Intent,
-                    msg.Classification.Metadata));
+                    wrapper.Context.Classification?.Intent,
+                    wrapper.Context.Classification?.Metadata));
+
+                Become(Idle);
             }
             else
             {
-                logger.LogError("Unexpected message type: {0}", agentResponse?.GetType());
-                msg.OriginalSender.Tell(new ConversationResponse("Errore interno imprevisto.", null, null));
+                actorLogger.Error($"Unexpected message type: {wrapper.Response?.GetType()}");
+                wrapper.Context.OriginalSender.Tell(new ConversationResponse(
+                    "Errore interno imprevisto.", null, null));
+                Become(Idle);
             }
-        }
-        catch (Exception ex)
+        });
+
+        Receive<Status.Failure>(failure =>
         {
-            logger.LogError(ex, "Router request failed");
-            msg.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
-        }
+            actorLogger.Error(failure.Cause, "Router request failed");
+            ctx.OriginalSender.Tell(new ConversationResponse(
+                "Si è verificato un errore interno.", null, null));
+            Become(Idle);
+        });
     }
 
-    private Task DeliverAgentResponseAsync(AgentResponseReceived msg)
+    private void AwaitingFollowUpResponse(IActorRef originalSender)
     {
-        logger.LogInformation("Received ActiveAgentResponse from {0}", msg.Response.AgentRef.Path);
+        actorLogger.Info("→ State: AwaitingFollowUpResponse");
 
-        if (!msg.Response.IsCompleted)
+        ReceiveAsync<FollowUpContext>(async wrapper =>
         {
-            activeAgent = msg.Response.AgentRef;
-            logger.LogInformation("Active agent set to {0}", activeAgent.Path);
-        }
-
-        msg.OriginalSender.Tell(new ConversationResponse(
-            msg.Response.Response,
-            msg.Classification.Intent,
-            msg.Classification.Metadata));
-
-        return Task.CompletedTask;
-    }
-
-    private async Task EngageActiveAgentInFollowupAsync(ContinueActiveSession msg)
-    {
-        logger.LogInformation("Follow-up detected, redirecting to active agent → {0}", activeAgent!.Path);
-
-        try
-        {
-            AI.Records.AgentResponse agentFollowup = await activeAgent.Ask<AI.Records.AgentResponse>(
-                new AI.Records.AgentRequest(msg.Message.ConversationId, msg.Message.Text, null));
-
-            if (agentFollowup.IsCompleted)
+            if (wrapper.Response.IsCompleted)
             {
-                logger.LogInformation("Active agent signaled completion → clearing active agent");
+                actorLogger.Info("Active agent signaled completion, clearing active agent");
                 activeAgent = null;
             }
 
-            msg.OriginalSender.Tell(new ConversationResponse(agentFollowup.Response, null, null));
-        }
-        catch (Exception ex)
+            wrapper.OriginalSender.Tell(new ConversationResponse(
+                wrapper.Response.Response, null, null));
+
+            Become(Idle);
+        });
+
+        Receive<Status.Failure>(failure =>
         {
-            logger.LogError(ex, "Active follow-up agent did not reply");
+            actorLogger.Error(failure.Cause, "Active follow-up agent did not reply");
             activeAgent = null;
-            msg.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
-        }
+            originalSender.Tell(new ConversationResponse(
+                "Si è verificato un errore interno.", null, null));
+            Become(Idle);
+        });
     }
+
+    #endregion
+
+    #region Helper Methods
+
+    private async Task EngageActiveAgentInFollowupAsync(UserMessage msg, IActorRef originalSender)
+    {
+        actorLogger.Info($"Follow-up detected, redirecting to active agent → {activeAgent!.Path}");
+
+        activeAgent.Ask<AI.Records.AgentResponse>(
+            new AI.Records.AgentRequest(msg.ConversationId, msg.Text, null),
+            TimeSpan.FromSeconds(60))
+        .PipeTo(Self,
+            success: response => new FollowUpContext(response, originalSender),
+            failure: ex => new Status.Failure(ex));
+
+        Become(() => AwaitingFollowUpResponse(originalSender));
+    }
+
+    private void HandleUnexpectedFailure(Status.Failure failure)
+    {
+        actorLogger.Error(failure.Cause, "Unexpected failure in ConversationSupervisorActor");
+        Sender.Tell(new ConversationResponse(
+            "Si è verificato un errore interno.", null, null));
+    }
+
+    #endregion
 }

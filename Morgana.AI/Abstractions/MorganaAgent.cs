@@ -13,15 +13,15 @@ public class MorganaAgent : MorganaActor
     protected AIAgent aiAgent;
     protected AgentThread aiAgentThread;
     protected MorganaContextProvider contextProvider;
-    protected readonly ILogger<MorganaAgent> logger;
+    protected readonly ILogger<MorganaAgent> agentLogger;
 
     public MorganaAgent(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<MorganaAgent> logger) : base(conversationId, llmService, promptResolverService)
+        ILogger<MorganaAgent> agentLogger) : base(conversationId, llmService, promptResolverService)
     {
-        this.logger = logger;
+        this.agentLogger = agentLogger;
 
         Receive<Records.ReceiveContextUpdate>(HandleContextUpdate);
     }
@@ -34,7 +34,7 @@ public class MorganaAgent : MorganaActor
     {
         string intent = GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent ?? "unknown";
 
-        logger.LogInformation($"Agent {intent} broadcasting shared context variable: {key}");
+        agentLogger.LogInformation($"Agent {intent} broadcasting shared context variable: {key}");
 
         Context.ActorSelection($"/user/router-{conversationId}")
             .Tell(new Records.BroadcastContextUpdate(
@@ -51,7 +51,7 @@ public class MorganaAgent : MorganaActor
     {
         string myIntent = GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent ?? "unknown";
 
-        logger.LogInformation(
+        agentLogger.LogInformation(
             $"Agent '{myIntent}' received shared context from '{msg.SourceAgentIntent}': {string.Join(", ", msg.UpdatedValues.Keys)}");
 
         contextProvider.MergeSharedContext(msg.UpdatedValues);
@@ -80,7 +80,7 @@ public class MorganaAgent : MorganaActor
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Errore in {GetType().Name}");
+            agentLogger.LogError(ex, $"Errore in {GetType().Name}");
 
             List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>("ErrorAnswers");
             Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));

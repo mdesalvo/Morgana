@@ -109,5 +109,11 @@ namespace Morgana.AI
                 return result;
             }
         }
+
+        // Context wrapper for Become/PipeTo pattern (ClassifierActor)
+        
+        public record ClassificationContext(
+            ClassificationResult Result,
+            IActorRef OriginalSender);
     }
 }

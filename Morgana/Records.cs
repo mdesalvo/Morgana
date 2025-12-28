@@ -42,24 +42,64 @@ namespace Morgana
             string Text,
             DateTime Timestamp);
 
-        //Supervisor
+        // Supervisor
 
         public record InitiateNewRequest(
             UserMessage Message,
             IActorRef OriginalSender);
+
         public record ContinueActiveSession(
             UserMessage Message,
             IActorRef OriginalSender);
+
         public record GuardCheckPassed(
             UserMessage Message,
             IActorRef OriginalSender);
+
         public record ClassificationReady(
             UserMessage Message,
             AI.Records.ClassificationResult Classification,
             IActorRef OriginalSender);
+
         public record AgentResponseReceived(
             AI.Records.ActiveAgentResponse Response,
             AI.Records.ClassificationResult Classification,
+            IActorRef OriginalSender);
+
+        // Context wrappers for Become/PipeTo pattern (ConversationSupervisorActor)
+
+        public record ProcessingContext(
+            UserMessage OriginalMessage,
+            IActorRef OriginalSender,
+            AI.Records.ClassificationResult? Classification = null);
+
+        public record GuardCheckContext(
+            GuardCheckResponse Response,
+            ProcessingContext Context);
+
+        public record ClassificationContext(
+            AI.Records.ClassificationResult Classification,
+            ProcessingContext Context);
+
+        public record AgentContext(
+            object Response,
+            ProcessingContext Context);
+
+        public record FollowUpContext(
+            AI.Records.AgentResponse Response,
+            IActorRef OriginalSender);
+
+        // Context wrappers for Become/PipeTo pattern (RouterActor)
+
+        public record AgentResponseContext(
+            AI.Records.AgentResponse Response,
+            IActorRef AgentRef,
+            IActorRef OriginalSender);
+
+        // Context wrappers for Become/PipeTo pattern (GuardActor)
+
+        public record LLMCheckContext(
+            GuardCheckResponse Response,
             IActorRef OriginalSender);
     }
 }
