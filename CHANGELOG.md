@@ -6,22 +6,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] - UNDER DEVELOPMENT
 
+### 🎯 Major Refactoring: Actor Model Best Practices
+This release represents a fundamental architectural improvement, transforming Morgana from an "ASP.NET with actors on top" into a **production-ready actor-based system** fully aligned with Akka.NET best practices.
+
 ### ✨ Added
-- **Layered Personality System**: Introduced two-tier personality architecture with global (Morgana) and agent-specific personalities
-  - Global personality applied consistently across all agent interactions
-  - Agent-specific personalities complement global traits for domain-appropriate behavior
-  - Personality composition respects subordination principle (agents never contradict global character)
-- **Global Policies Framework**: Centralized policy management system for system-wide behavioral rules
-  - `GlobalPolicy` record type with `Name`, `Description`, and `Type` (Critical/Operational)
-  - Policies automatically injected into all agent instructions
-- **Tool Parameter Guidance Policies**: Declarative guidance for tool parameter handling
-  - `ToolParameterContextGuidance`: Rules for context-scoped parameters
-  - `ToolParameterRequestGuidance`: Rules for request-scoped parameters
-  - Guidance automatically applied based on parameter `Scope` attribute
+
+**Layered Personality System**
+- Two-tier personality architecture: global (Morgana) + agent-specific personalities
+- Subordination principle: agent personalities complement, never contradict global traits
+- Domain-appropriate behavior while maintaining brand coherence
+
+**Global Policies Framework**
+- Centralized policy management with `GlobalPolicy` record (`Name`, `Description`, `Type`)
+- Policy types: Critical (inviolable rules) and Operational (procedural guidelines)
+- Automatic injection into all agent instructions
+- Tool parameter guidance policies: `ToolParameterContextGuidance` and `ToolParameterRequestGuidance` applied based on parameter `Scope`
+
+**Actor Base Classes**
+- `MorganaActor`: Base for all Akka.NET actors
+  - Built-in `ILoggingAdapter logger` for infrastructure logging
+  - Default 60-second receive timeout with virtual `HandleReceiveTimeout`
+- `MorganaAgent`: Specialized base for AI agents
+  - Dual-level logging: `logger` (Akka) + `agentLogger` (ILogger<T>)
+  - Inherits timeout and infrastructure logging from `MorganaActor`
+
+**State Machine Behaviors (ConversationSupervisorActor)**
+- Explicit state machine with 5 behaviors: `Idle`, `AwaitingGuardCheck`, `AwaitingClassification`, `AwaitingAgentResponse`, `AwaitingFollowUpResponse`
+- Per-state handlers for success, failure, and timeout scenarios
+- State transition logging: `→ State: [StateName]`
+
+**Context Wrapper Records**
+- `Morgana.Records`: `ProcessingContext`, `GuardCheckContext`, `ClassificationContext`, `AgentContext`, `FollowUpContext`, `AgentResponseContext`, `LLMCheckContext`
+- `Morgana.AI.Records`: `ClassificationContext` (ClassifierActor)
+- Preserve sender context through async operations and state transitions
+
+**Error Handling & Resilience**
+- Per-state `Status.Failure` handlers with explicit fallback responses
+- Fail-open GuardActor (assumes compliant on LLM errors)
+- Fail-safe ClassifierActor (defaults to "other" intent on errors)
+- Automatic state recovery on timeout
+
+**Enhanced Observability**
+- Intent routing with agent path visibility
+- Context synchronization broadcast tracking
+- Guard violation detection with specific term logging
+- Classification confidence metrics
+- Agent completion status tracking
+
+**PipeTo Pattern Integration**
+- Success/failure handlers for all async actor operations
+- Automatic `Status.Failure` propagation on faults
+- Non-blocking message processing across actor hierarchy
 
 ### 🔄 Changed
 
+**Actor Pattern Migration**
+- **BREAKING**: Replaced `Ask<T>` with `Become/PipeTo` pattern in all actors
+- Eliminated temporary actors and lifecycle leaks
+- Explicit sender preservation through context wrappers
+
+**Architecture Improvements**
+- ConversationSupervisorActor: Implicit → explicit state machine
+- RouterActor: Blocking → non-blocking routing
+- GuardActor: Synchronous → async LLM policy checks
+- ClassifierActor: Fire-and-forget → structured fallback pipeline
+
+**Infrastructure Consolidation**
+- Centralized logging in `MorganaActor` (eliminated duplication across 6 actors)
+- Unified timeout handling (60s default, overridable per actor)
+- Context wrappers organized by project namespace (`Morgana.Records` vs `Morgana.AI.Records`)
+
 ### 🐛 Fixed
+- Fixed actor lifecycle leaks from temporary `Ask<T>` actors
+- Fixed sender context loss in async operations
+- Fixed inconsistent error handling across actors
+- Fixed timeout behavior inconsistencies
+
+### 🚀 Future Enablement
+This refactoring unlocks:
+- Akka.Persistence for event sourcing
+- Akka.Cluster for distributed deployment
+- Akka.Streams for high-throughput pipelines
+- Custom supervision hierarchies
+- Production monitoring dashboards
+- Per-state circuit breakers
+
+### ⚠️ Migration Notes
+- **APIs**: No breaking changes to REST endpoints or SignalR contracts
+- **Logging**: Output format unchanged but more detailed
+- **Performance**: Reduced memory footprint from eliminated temporary actors
+- **Observability**: Structured state transition logs for better debugging
 
 ## [0.3.0] - 2024-12-22
 
