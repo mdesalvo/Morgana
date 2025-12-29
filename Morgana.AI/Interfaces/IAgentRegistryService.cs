@@ -1,8 +1,7 @@
-﻿namespace Morgana.AI.Interfaces
+﻿namespace Morgana.AI.Interfaces;
+
+public interface IAgentRegistryService
 {
-    public interface IAgentRegistryService
-    {
-        Type? ResolveAgentFromIntent(string intent);
-        IEnumerable<string> GetAllIntents();
-    }
+    Type? ResolveAgentFromIntent(string intent);
+    IEnumerable<string> GetAllIntents();
 }

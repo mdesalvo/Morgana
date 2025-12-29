@@ -2,12 +2,14 @@
 using Akka.DependencyInjection;
 using Morgana.AI.Abstractions;
 
-namespace Morgana.AI.Extensions
+namespace Morgana.AI.Extensions;
+
+public static class ActorSystemExtensions
 {
-    public static class ActorSystemExtensions
+    extension(ActorSystem actorSystem)
     {
-        public static async Task<IActorRef> GetOrCreateActor<T>(this ActorSystem actorSystem,
-            string actorSuffix, string conversationId) where T : MorganaActor
+        public async Task<IActorRef> GetOrCreateActor<T>(string actorSuffix, string conversationId)
+            where T : MorganaActor
         {
             string actorName = $"{actorSuffix}-{conversationId}";
 
@@ -25,10 +27,10 @@ namespace Morgana.AI.Extensions
             }
         }
 
-        public static async Task<IActorRef> GetOrCreateAgent(this ActorSystem actorSystem,
-            Type agentType, string actorSuffix, string conversationId)
+        public async Task<IActorRef> GetOrCreateAgent(Type agentType, string actorSuffix, string conversationId)
         {
             string agentName = $"{actorSuffix}-{conversationId}";
+
             try
             {
                 return await actorSystem.ActorSelection($"/user/{agentName}")

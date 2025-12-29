@@ -42,7 +42,9 @@ public class AgentAdapter
     {
         StringBuilder sb = new StringBuilder();
 
-        foreach (GlobalPolicy policy in policies)
+        //Order the policies by type (Critical, Operational) the by priority (the lower is the most important)
+        foreach (GlobalPolicy policy in policies.OrderBy(p => p.Type)
+                                                .ThenBy(p => p.Priority))
         {
             sb.AppendLine($"{policy.Name}: {policy.Description}");
         }
@@ -113,15 +115,10 @@ public class AgentAdapter
     {
         List<string> sharedVariables = ExtractSharedVariables(tools);
 
-        if (sharedVariables.Count > 0)
-        {
-            logger.LogInformation(
-                $"Agent '{agentName}' has {sharedVariables.Count} shared variables: {string.Join(", ", sharedVariables)}");
-        }
-        else
-        {
-            logger.LogInformation($"Agent '{agentName}' has NO shared variables");
-        }
+        logger.LogInformation(
+            sharedVariables.Count > 0
+                ? $"Agent '{agentName}' has {sharedVariables.Count} shared variables: {string.Join(", ", sharedVariables)}"
+                : $"Agent '{agentName}' has NO shared variables");
 
         MorganaContextProvider provider = new MorganaContextProvider(contextProviderLogger, sharedVariables);
 

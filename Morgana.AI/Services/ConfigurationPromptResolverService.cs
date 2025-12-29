@@ -2,40 +2,38 @@
 using System.Reflection;
 using System.Text.Json;
 
-namespace Morgana.AI.Services
+namespace Morgana.AI.Services;
+
+public class ConfigurationPromptResolverService : IPromptResolverService
 {
-    public class ConfigurationPromptResolverService : IPromptResolverService
+    private readonly Lazy<Records.Prompt[]> configuredPrompts;
+
+    public ConfigurationPromptResolverService()
     {
-        private readonly Lazy<Records.Prompt[]> configuredPrompts;
+        configuredPrompts = new Lazy<Records.Prompt[]>(LoadPrompts);
+    }
 
-        public ConfigurationPromptResolverService()
-        {
-            configuredPrompts = new Lazy<Records.Prompt[]>(LoadPrompts);
-        }
+    public Task<Records.Prompt[]> GetAllPromptsAsync()
+        => Task.FromResult(configuredPrompts.Value);
 
-        public Task<Records.Prompt[]> GetAllPromptsAsync()
-            => Task.FromResult(configuredPrompts.Value);
+    public Task<Records.Prompt> ResolveAsync(string promptID)
+    {
+        Records.Prompt? prompt = configuredPrompts.Value.SingleOrDefault(p => string.Equals(p.ID, promptID, StringComparison.OrdinalIgnoreCase));
 
-        public Task<Records.Prompt> ResolveAsync(string promptID)
-        {
-            Records.Prompt? prompt = configuredPrompts.Value.SingleOrDefault(p => string.Equals(p.ID, promptID, StringComparison.OrdinalIgnoreCase));
+        return prompt == null
+            ? throw new KeyNotFoundException($"Prompt con ID '{promptID}' non trovato.")
+            : Task.FromResult(prompt);
+    }
 
-            if (prompt == null)
-                throw new KeyNotFoundException($"Prompt con ID '{promptID}' non trovato.");
+    private static Records.Prompt[] LoadPrompts()
+    {
+        Assembly assembly = Assembly.GetExecutingAssembly();
+        string resourceName = assembly.GetManifestResourceNames()
+            .First(n => n.EndsWith("prompts.json", StringComparison.OrdinalIgnoreCase));
 
-            return Task.FromResult(prompt);
-        }
-
-        private static Records.Prompt[] LoadPrompts()
-        {
-            Assembly assembly = Assembly.GetExecutingAssembly();
-            string resourceName = assembly.GetManifestResourceNames()
-                                          .First(n => n.EndsWith("prompts.json", StringComparison.OrdinalIgnoreCase));
-
-            using Stream? stream = assembly.GetManifestResourceStream(resourceName)
-                                    ?? throw new FileNotFoundException("Risorsa prompts.json non trovata nell'assembly.");
-            Records.PromptCollection? promptsCollection = JsonSerializer.Deserialize<Records.PromptCollection>(stream, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            return promptsCollection?.Prompts ?? [];
-        }
+        using Stream? stream = assembly.GetManifestResourceStream(resourceName)
+                               ?? throw new FileNotFoundException("Risorsa prompts.json non trovata nell'assembly.");
+        Records.PromptCollection? promptsCollection = JsonSerializer.Deserialize<Records.PromptCollection>(stream, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        return promptsCollection?.Prompts ?? [];
     }
 }

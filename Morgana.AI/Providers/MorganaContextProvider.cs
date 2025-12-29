@@ -69,7 +69,7 @@ public class MorganaContextProvider : AIContextProvider
     {
         foreach (KeyValuePair<string, object> kvp in sharedContext)
         {
-            if (!AgentContext.ContainsKey(kvp.Key))
+            if (!AgentContext.TryGetValue(kvp.Key, out object? value))
             {
                 AgentContext[kvp.Key] = kvp.Value;
 
@@ -79,7 +79,7 @@ public class MorganaContextProvider : AIContextProvider
             else
             {
                 logger.LogInformation(
-                    $"MorganaContextProvider IGNORED shared context '{kvp.Key}' (already set to '{AgentContext[kvp.Key]}')");
+                    $"MorganaContextProvider IGNORED shared context '{kvp.Key}' (already set to '{value}')");
             }
         }
     }

@@ -71,11 +71,17 @@ public class MorganaAgent : MorganaActor
             aiAgentThread ??= aiAgent.GetNewThread();
 
             AgentRunResponse llmResponse = await aiAgent.RunAsync(req.Content!, aiAgentThread);
-            string llmResponseText = llmResponse.Text ?? "";
+            string llmResponseText = llmResponse.Text;
 
+            //Detect if LLM has emitted the special token for continuing the conversation
+            //with an input request for the user. This will be needed by the supervisor.
             bool requiresMoreInput = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
-            string cleanText = llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim();
-
+            #if DEBUG
+                string cleanText = llmResponseText;
+            #else
+                string cleanText = llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim();
+            #endif
+                
             senderRef.Tell(new Records.AgentResponse(cleanText, !requiresMoreInput));
         }
         catch (Exception ex)

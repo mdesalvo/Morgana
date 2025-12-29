@@ -13,7 +13,7 @@ public class ConversationSupervisorActor : MorganaActor
     private readonly IActorRef classifier;
     private readonly IActorRef router;
 
-    private IActorRef? activeAgent = null;
+    private IActorRef? activeAgent;
 
     public ConversationSupervisorActor(
         string conversationId,
@@ -49,8 +49,7 @@ public class ConversationSupervisorActor : MorganaActor
                 ProcessingContext ctx = new ProcessingContext(msg, originalSender);
 
                 guard.Ask<GuardCheckResponse>(
-                    new GuardCheckRequest(msg.ConversationId, msg.Text),
-                    TimeSpan.FromSeconds(60))
+                    new GuardCheckRequest(msg.ConversationId, msg.Text), TimeSpan.FromSeconds(60))
                 .PipeTo(Self,
                     success: response => new GuardCheckContext(response, ctx),
                     failure: ex => new Status.Failure(ex));
@@ -86,8 +85,7 @@ public class ConversationSupervisorActor : MorganaActor
             actorLogger.Info("Guard check passed, proceeding to classification");
 
             classifier.Ask<AI.Records.ClassificationResult>(
-                wrapper.Context.OriginalMessage,
-                TimeSpan.FromSeconds(60))
+                wrapper.Context.OriginalMessage, TimeSpan.FromSeconds(60))
             .PipeTo(Self,
                 success: result => new ClassificationContext(result, wrapper.Context),
                 failure: ex => new Status.Failure(ex));
@@ -98,8 +96,7 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Status.Failure>(failure =>
         {
             actorLogger.Error(failure.Cause, "Guard check failed");
-            ctx.OriginalSender.Tell(new ConversationResponse(
-                "Si è verificato un errore interno.", null, null));
+            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
             Become(Idle);
         });
     }
@@ -118,8 +115,7 @@ public class ConversationSupervisorActor : MorganaActor
                 new AI.Records.AgentRequest(
                     wrapper.Context.OriginalMessage.ConversationId,
                     wrapper.Context.OriginalMessage.Text,
-                    wrapper.Classification),
-                TimeSpan.FromSeconds(60))
+                    wrapper.Classification), TimeSpan.FromSeconds(60))
             .PipeTo(Self,
                 success: response => new AgentContext(response, updatedCtx),
                 failure: ex => new Status.Failure(ex));
@@ -130,8 +126,8 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Status.Failure>(failure =>
         {
             actorLogger.Error(failure.Cause, "Classification failed");
-            ctx.OriginalSender.Tell(new ConversationResponse(
-                "Si è verificato un errore interno.", null, null));
+            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
+
             Become(Idle);
         });
     }
@@ -142,58 +138,59 @@ public class ConversationSupervisorActor : MorganaActor
 
         ReceiveAsync<AgentContext>(async wrapper =>
         {
-            if (wrapper.Response is AI.Records.ActiveAgentResponse activeAgentResponse)
+            switch (wrapper.Response)
             {
-                actorLogger.Info($"Received ActiveAgentResponse from {activeAgentResponse.AgentRef.Path}, completed: {activeAgentResponse.IsCompleted}");
-
-                if (!activeAgentResponse.IsCompleted)
+                case AI.Records.ActiveAgentResponse activeAgentResponse:
                 {
-                    activeAgent = activeAgentResponse.AgentRef;
-                    actorLogger.Info($"Active agent set to {activeAgent.Path}");
+                    actorLogger.Info($"Received ActiveAgentResponse from {activeAgentResponse.AgentRef.Path}, completed: {activeAgentResponse.IsCompleted}");
+
+                    if (!activeAgentResponse.IsCompleted)
+                    {
+                        activeAgent = activeAgentResponse.AgentRef;
+                        actorLogger.Info($"Active agent set to {activeAgent.Path}");
+                    }
+                    else
+                    {
+                        activeAgent = null;
+                    }
+
+                    wrapper.Context.OriginalSender.Tell(new ConversationResponse(
+                        activeAgentResponse.Response,
+                        wrapper.Context.Classification?.Intent,
+                        wrapper.Context.Classification?.Metadata));
+
+                    break;
                 }
-                else
+                case AI.Records.AgentResponse routerFallbackResponse:
                 {
-                    activeAgent = null;
+                    actorLogger.Warning("Received AgentResponse instead of ActiveAgentResponse (router fallback)");
+
+                    if (!routerFallbackResponse.IsCompleted)
+                    {
+                        activeAgent = router;
+                        actorLogger.Warning($"Fallback active agent = {router.Path}");
+                    }
+
+                    wrapper.Context.OriginalSender.Tell(new ConversationResponse(
+                        routerFallbackResponse.Response,
+                        wrapper.Context.Classification?.Intent,
+                        wrapper.Context.Classification?.Metadata));
+
+                    break;
                 }
-
-                wrapper.Context.OriginalSender.Tell(new ConversationResponse(
-                    activeAgentResponse.Response,
-                    wrapper.Context.Classification?.Intent,
-                    wrapper.Context.Classification?.Metadata));
-
-                Become(Idle);
+                default:
+                    actorLogger.Error($"Unexpected message type: {wrapper.Response?.GetType()}");
+                    wrapper.Context.OriginalSender.Tell(new ConversationResponse("Errore interno imprevisto.", null, null));
+                    break;
             }
-            else if (wrapper.Response is AI.Records.AgentResponse routerFallbackResponse)
-            {
-                actorLogger.Warning("Received AgentResponse instead of ActiveAgentResponse (router fallback)");
 
-                if (!routerFallbackResponse.IsCompleted)
-                {
-                    activeAgent = router;
-                    actorLogger.Warning($"Fallback active agent = {router.Path}");
-                }
-
-                wrapper.Context.OriginalSender.Tell(new ConversationResponse(
-                    routerFallbackResponse.Response,
-                    wrapper.Context.Classification?.Intent,
-                    wrapper.Context.Classification?.Metadata));
-
-                Become(Idle);
-            }
-            else
-            {
-                actorLogger.Error($"Unexpected message type: {wrapper.Response?.GetType()}");
-                wrapper.Context.OriginalSender.Tell(new ConversationResponse(
-                    "Errore interno imprevisto.", null, null));
-                Become(Idle);
-            }
+            Become(Idle);
         });
 
         Receive<Status.Failure>(failure =>
         {
             actorLogger.Error(failure.Cause, "Router request failed");
-            ctx.OriginalSender.Tell(new ConversationResponse(
-                "Si è verificato un errore interno.", null, null));
+            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
             Become(Idle);
         });
     }
@@ -220,8 +217,7 @@ public class ConversationSupervisorActor : MorganaActor
         {
             actorLogger.Error(failure.Cause, "Active follow-up agent did not reply");
             activeAgent = null;
-            originalSender.Tell(new ConversationResponse(
-                "Si è verificato un errore interno.", null, null));
+            originalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
             Become(Idle);
         });
     }
@@ -235,8 +231,7 @@ public class ConversationSupervisorActor : MorganaActor
         actorLogger.Info($"Follow-up detected, redirecting to active agent → {activeAgent!.Path}");
 
         activeAgent.Ask<AI.Records.AgentResponse>(
-            new AI.Records.AgentRequest(msg.ConversationId, msg.Text, null),
-            TimeSpan.FromSeconds(60))
+            new AI.Records.AgentRequest(msg.ConversationId, msg.Text, null), TimeSpan.FromSeconds(60))
         .PipeTo(Self,
             success: response => new FollowUpContext(response, originalSender),
             failure: ex => new Status.Failure(ex));
@@ -247,8 +242,7 @@ public class ConversationSupervisorActor : MorganaActor
     private void HandleUnexpectedFailure(Status.Failure failure)
     {
         actorLogger.Error(failure.Cause, "Unexpected failure in ConversationSupervisorActor");
-        Sender.Tell(new ConversationResponse(
-            "Si è verificato un errore interno.", null, null));
+        Sender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
     }
 
     #endregion

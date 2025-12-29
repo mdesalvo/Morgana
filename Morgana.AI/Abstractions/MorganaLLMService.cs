@@ -3,59 +3,58 @@ using Microsoft.Extensions.Configuration;
 using Morgana.AI.Interfaces;
 using static Morgana.AI.Records;
 
-namespace Morgana.AI.Abstractions
+namespace Morgana.AI.Abstractions;
+
+public class MorganaLLMService : ILLMService
 {
-    public class MorganaLLMService : ILLMService
+    protected readonly IConfiguration configuration;
+    protected readonly IPromptResolverService promptResolverService;
+    protected readonly Prompt morganaPrompt;
+    protected IChatClient chatClient;
+
+    public MorganaLLMService(
+        IConfiguration configuration,
+        IPromptResolverService promptResolverService)
     {
-        protected readonly IConfiguration configuration;
-        protected readonly IPromptResolverService promptResolverService;
-        protected readonly Prompt morganaPrompt;
-        protected IChatClient chatClient;
+        this.configuration = configuration;
+        this.promptResolverService = promptResolverService;
 
-        public MorganaLLMService(
-            IConfiguration configuration,
-            IPromptResolverService promptResolverService)
+        morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
+    }
+
+    public IChatClient GetChatClient() => chatClient;
+    public IPromptResolverService GetPromptResolverService() => promptResolverService;
+
+    public async Task<string> CompleteAsync(string conversationId, string prompt)
+        => await CompleteWithSystemPromptAsync(conversationId, morganaPrompt.Content, prompt);
+
+    public async Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt)
+    {
+        List<ChatMessage> messages =
+        [
+            new ChatMessage(ChatRole.System, systemPrompt),
+            new ChatMessage(ChatRole.User, userPrompt)
+        ];
+
+        ChatOptions chatOptions = new ChatOptions
         {
-            this.configuration = configuration;
-            this.promptResolverService = promptResolverService;
+            ConversationId = conversationId
+        };
 
-            morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
+        try
+        {
+            ChatResponse response = await chatClient.GetResponseAsync(messages, chatOptions);
+            return response.Text
+                .Replace("```json", string.Empty)
+                .Replace("```", string.Empty);
         }
-
-        public IChatClient GetChatClient() => chatClient;
-        public IPromptResolverService GetPromptResolverService() => promptResolverService;
-
-        public async Task<string> CompleteAsync(string conversationId, string prompt)
-            => await CompleteWithSystemPromptAsync(conversationId, morganaPrompt.Content, prompt);
-
-        public async Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt)
+        catch (Exception ex)
         {
-            List<ChatMessage> messages =
-            [
-                new ChatMessage(ChatRole.System, systemPrompt),
-                new ChatMessage(ChatRole.User, userPrompt)
-            ];
-
-            ChatOptions chatOptions = new ChatOptions
-            {
-                ConversationId = conversationId
-            };
-
-            try
-            {
-                ChatResponse response = await chatClient.GetResponseAsync(messages, chatOptions);
-                return response.Text
-                    .Replace("```json", string.Empty)
-                    .Replace("```", string.Empty);
-            }
-            catch (Exception ex)
-            {
-                List<ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<ErrorAnswer>>("ErrorAnswers");
-                ErrorAnswer? llmError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "LLMServiceError", StringComparison.OrdinalIgnoreCase));
+            List<ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<ErrorAnswer>>("ErrorAnswers");
+            ErrorAnswer? llmError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "LLMServiceError", StringComparison.OrdinalIgnoreCase));
                 
-                return llmError?.Content.Replace("((llm_error))", ex.Message) 
-                    ?? $"Errore del servizio LLM: {ex.Message}";
-            }
+            return llmError?.Content.Replace("((llm_error))", ex.Message) 
+                   ?? $"Errore del servizio LLM: {ex.Message}";
         }
     }
 }

@@ -39,16 +39,14 @@ public class RouterActor : MorganaActor
         if (req.Classification == null)
         {
             originalSender.Tell(new AgentResponse(
-                classifierPrompt.GetAdditionalProperty<string>("MissingClassificationError"), 
-                true));
+                classifierPrompt.GetAdditionalProperty<string>("MissingClassificationError"), true));
             return;
         }
 
         if (!agents.TryGetValue(req.Classification.Intent, out IActorRef? selectedAgent))
         {
             originalSender.Tell(new AgentResponse(
-                classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), 
-                true));
+                classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), true));
             return;
         }
 

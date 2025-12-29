@@ -36,7 +36,7 @@ public class ClassifierActor : MorganaActor
     {
         IActorRef originalSender = Sender;
 
-        actorLogger.Info($"Classifying message: '{msg.Text.Substring(0, Math.Min(50, msg.Text.Length))}...'");
+        actorLogger.Info($"Classifying message: '{msg.Text[..Math.Min(50, msg.Text.Length)]}...'");
 
         try
         {
