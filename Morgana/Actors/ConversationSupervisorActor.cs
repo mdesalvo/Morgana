@@ -1,8 +1,10 @@
+using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
+using Morgana.Interfaces;
 using static Morgana.Records;
 
 namespace Morgana.Actors;
@@ -12,15 +14,20 @@ public class ConversationSupervisorActor : MorganaActor
     private readonly IActorRef guard;
     private readonly IActorRef classifier;
     private readonly IActorRef router;
+    private readonly ISignalRBridgeService signalRBridgeService;
 
     private IActorRef? activeAgent;
+    private bool hasPresented = false;
 
     public ConversationSupervisorActor(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
+        ISignalRBridgeService signalRBridgeService,
         ILogger<ConversationSupervisorActor> _) : base(conversationId, llmService, promptResolverService)
     {
+        this.signalRBridgeService = signalRBridgeService;
+        
         guard = Context.System.GetOrCreateActor<GuardActor>("guard", conversationId).GetAwaiter().GetResult();
         classifier = Context.System.GetOrCreateActor<ClassifierActor>("classifier", conversationId).GetAwaiter().GetResult();
         router = Context.System.GetOrCreateActor<RouterActor>("router", conversationId).GetAwaiter().GetResult();
@@ -33,6 +40,10 @@ public class ConversationSupervisorActor : MorganaActor
     private void Idle()
     {
         actorLogger.Info("→ State: Idle");
+
+        // Handle presentation request
+        ReceiveAsync<GeneratePresentationMessage>(HandlePresentationRequestAsync);
+        ReceiveAsync<PresentationContext>(HandlePresentationGenerated);
 
         ReceiveAsync<UserMessage>(async msg =>
         {
@@ -61,6 +72,123 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Status.Failure>(HandleUnexpectedFailure);
     }
 
+    private async Task HandlePresentationRequestAsync(GeneratePresentationMessage _)
+    {
+        if (hasPresented)
+        {
+            actorLogger.Info("Presentation already shown, skipping");
+            return;
+        }
+
+        hasPresented = true;
+        actorLogger.Info("Generating LLM-driven presentation message");
+
+        try
+        {
+            // Load presentation prompt and classifier intents from prompts.json
+            AI.Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync("Presentation");
+            AI.Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
+            
+            // Parse structured intents
+            List<AI.Records.IntentDefinition> allIntents = classifierPrompt
+                .GetAdditionalProperty<List<AI.Records.IntentDefinition>>("Intents");
+            
+            AI.Records.IntentCollection intentCollection = new AI.Records.IntentCollection(allIntents);
+            List<AI.Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
+
+            // Format intents for LLM
+            string formattedIntents = string.Join("\n", 
+                displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
+
+            // Build LLM prompt from prompts.json
+            string systemPrompt = $"{presentationPrompt.Content}\n\n{presentationPrompt.Instructions}"
+                .Replace("((intents))", formattedIntents);
+
+            actorLogger.Info("Calling LLM for presentation generation");
+
+            // Call LLM to generate structured JSON
+            string llmResponse = await llmService.CompleteWithSystemPromptAsync(
+                conversationId,
+                systemPrompt,
+                "Genera il messaggio di presentazione");
+
+            actorLogger.Info($"LLM raw response: {llmResponse}");
+
+            // Parse LLM response
+            AI.Records.PresentationResponse? presentationResponse = 
+                JsonSerializer.Deserialize<AI.Records.PresentationResponse>(llmResponse);
+
+            if (presentationResponse == null)
+            {
+                throw new InvalidOperationException("LLM returned null presentation response");
+            }
+
+            actorLogger.Info($"LLM generated presentation with {presentationResponse.QuickReplies.Count} quick replies");
+
+            // Convert to internal format
+            Self.Tell(new PresentationContext(presentationResponse.Message, displayableIntents)
+            {
+                LlmQuickReplies = presentationResponse.QuickReplies
+            });
+        }
+        catch (Exception ex)
+        {
+            actorLogger.Error(ex, "LLM presentation generation failed, using fallback from prompts.json");
+
+            // Fallback: Generate from classifier intents directly
+            AI.Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync("Presentation");
+            AI.Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
+            
+            string fallbackMessage = presentationPrompt.GetAdditionalProperty<string>("FallbackMessage");
+            
+            // Build fallback quick replies from classifier intents
+            List<AI.Records.IntentDefinition> allIntents = classifierPrompt
+                .GetAdditionalProperty<List<AI.Records.IntentDefinition>>("Intents");
+            
+            AI.Records.IntentCollection intentCollection = new AI.Records.IntentCollection(allIntents);
+            List<AI.Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
+            
+            List<AI.Records.QuickReplyDefinition> fallbackReplies = displayableIntents
+                .Select(intent => new AI.Records.QuickReplyDefinition(
+                    intent.Name,
+                    intent.Label ?? intent.Name,
+                    intent.DefaultValue ?? $"Aiutami con {intent.Name}"))
+                .ToList();
+
+            actorLogger.Info($"Using fallback presentation with {fallbackReplies.Count} quick replies generated from intents");
+
+            Self.Tell(new PresentationContext(fallbackMessage, displayableIntents)
+            {
+                LlmQuickReplies = fallbackReplies
+            });
+        }
+    }
+
+    private async Task HandlePresentationGenerated(PresentationContext ctx)
+    {
+        actorLogger.Info("Sending presentation to client via SignalR");
+
+        // Convert LLM-generated quick replies to SignalR format
+        List<QuickReply> quickReplies = ctx.LlmQuickReplies?
+            .Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value))
+            .ToList() ?? [];
+
+        try
+        {
+            await signalRBridgeService.SendStructuredMessageAsync(
+                conversationId,
+                ctx.Message,
+                "presentation",
+                quickReplies);
+
+            actorLogger.Info($"Presentation sent successfully with {quickReplies.Count} quick replies");
+        }
+        catch (Exception ex)
+        {
+            actorLogger.Error(ex, "Failed to send presentation via SignalR");
+        }
+    }
+
     private void AwaitingGuardCheck(ProcessingContext ctx)
     {
         actorLogger.Info("→ State: AwaitingGuardCheck");
@@ -74,7 +202,7 @@ public class ConversationSupervisorActor : MorganaActor
                 AI.Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
                 wrapper.Context.OriginalSender.Tell(new ConversationResponse(
                     guardPrompt.GetAdditionalProperty<string>("GuardAnswer")
-                        .Replace("((violation))", wrapper.Response.Violation),
+                        .Replace("((violation))", wrapper.Response.Violation ?? "Contenuto non appropriato"),
                     "guard_violation",
                     []));
 

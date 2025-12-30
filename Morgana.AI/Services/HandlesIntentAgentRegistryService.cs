@@ -28,10 +28,15 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // Bidirectional validation of Morgana agents and classifiable intents
 
         Records.Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
-        HashSet<string> classifierIntents =
-        [.. classifierPrompt.GetAdditionalProperty<List<Dictionary<string, string>>>("Intents")
-            .SelectMany(dict => dict.Keys)
-            .Where(key => !string.Equals(key, "other", StringComparison.OrdinalIgnoreCase))];
+        
+        // Parse structured IntentDefinition objects
+        List<Records.IntentDefinition> allIntents = classifierPrompt.GetAdditionalProperty<List<Records.IntentDefinition>>("Intents");
+        
+        // Extract intent names, excluding "other"
+        HashSet<string> classifierIntents = allIntents
+            .Where(intent => !string.Equals(intent.Name, "other", StringComparison.OrdinalIgnoreCase))
+            .Select(intent => intent.Name)
+            .ToHashSet();
 
         HashSet<string> registeredIntents = [.. intentToAgentType.Keys];
 

@@ -59,6 +59,26 @@
                         else
                         {
                             <div class="message-text">@message.Text</div>
+                            
+                            @if (message.QuickReplies != null && message.QuickReplies.Count > 0)
+                            {
+                                <div class="quick-replies @(message.SelectedQuickReplyId != null ? "disabled" : "")">
+                                    @foreach (var reply in message.QuickReplies)
+                                    {
+                                        <button 
+                                            class="quick-reply-btn @(message.SelectedQuickReplyId == reply.Id ? "selected" : "")"
+                                            @onclick="() => SelectQuickReply(reply, message)"
+                                            disabled="@(message.SelectedQuickReplyId != null)">
+                                            @reply.Label
+                                            @if (message.SelectedQuickReplyId == reply.Id)
+                                            {
+                                                <span class="checkmark">✓</span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            
                             <div class="message-time">@message.Timestamp.ToString("HH:mm")</div>
                         }
                     </div>
@@ -69,8 +89,8 @@
 
     <!-- Input Area -->
     <div class="input-container">
-        <textarea 
-            @bind="inputText" 
+        <textarea
+            @bind="inputText"
             @bind:event="oninput"
             @onkeyup="HandleKeyPress"
             placeholder="Scrivi un messaggio..."
@@ -78,8 +98,8 @@
             disabled="@IsTextareaDisabled"
             class="message-input"
         ></textarea>
-        <button 
-            @onclick="SendMessage" 
+        <button
+            @onclick="SendMessage"
             disabled="@IsButtonDisabled"
             class="send-button @(isSending ? "sending" : "")">
             <span class="cauldron-wrapper">
@@ -133,9 +153,9 @@
             isConnected = SignalRService.IsConnected;
             Console.WriteLine($"🔵 SignalR connected: {isConnected}");
 
-            SignalRService.OnMessageReceived += async (conversationId, text, timestamp) => 
+            SignalRService.OnMessageReceived += async (conversationId, text, timestamp, quickReplies) =>
             {
-                await HandleMessageReceived(conversationId, text, timestamp);
+                await HandleMessageReceived(conversationId, text, timestamp, quickReplies);
             };
             SignalRService.OnConnectionStateChanged += (connected) =>
             {
@@ -250,7 +270,7 @@
             {
                 string errorContent = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"❌ Morgana error: {errorContent}");
-                
+
                 ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
                 if (typingMessage != null)
                 {
@@ -265,7 +285,7 @@
                     });
                     StateHasChanged();
                 }
-                
+
                 errorMessage = $"Errore nell'invio: {response.StatusCode}";
             }
         }
@@ -297,11 +317,12 @@
         }
     }
 
-    private async Task HandleMessageReceived(string conversationId, string text, DateTime timestamp)
+    private async Task HandleMessageReceived(string conversationId, string text, DateTime timestamp, List<QuickReply>? quickReplies)
     {
         try
         {
             Console.WriteLine($"🟣 Message received for conversation: {conversationId}");
+            Console.WriteLine($"🟣 QuickReplies count: {quickReplies?.Count ?? 0}");
 
             if (this.conversationId != conversationId)
             {
@@ -320,7 +341,8 @@
                 ConversationId = conversationId,
                 Text = text,
                 Role = "assistant",
-                Timestamp = timestamp
+                Timestamp = timestamp,
+                QuickReplies = quickReplies
             });
 
             await InvokeAsync(StateHasChanged);
@@ -339,24 +361,44 @@
         }
     }
 
-    private bool IsButtonDisabled => 
-        !isConnected || 
-        isSending || 
-        string.IsNullOrWhiteSpace(inputText) || 
-        !isInitialized || 
+    private async Task SelectQuickReply(QuickReply reply, ChatMessage message)
+    {
+        if (message.SelectedQuickReplyId != null) return;
+        
+        Console.WriteLine($"🟡 Quick reply selected: {reply.Label}");
+        
+        message.SelectedQuickReplyId = reply.Id;
+        StateHasChanged();
+        
+        await Task.Delay(300); // Visual feedback
+        
+        inputText = reply.Value;
+        await SendMessage();
+    }
+
+    private bool HasActiveQuickReplies() =>
+        messages.Any(m => m.QuickReplies != null && m.SelectedQuickReplyId == null);
+
+    private bool IsButtonDisabled =>
+        !isConnected ||
+        isSending ||
+        string.IsNullOrWhiteSpace(inputText) ||
+        !isInitialized ||
+        HasActiveQuickReplies() ||
         messages.Any(m => m.IsTyping);
 
-    private bool IsTextareaDisabled => 
-        !isConnected || 
-        isSending || 
-        !isInitialized || 
+    private bool IsTextareaDisabled =>
+        !isConnected ||
+        isSending ||
+        !isInitialized ||
+        HasActiveQuickReplies() ||
         messages.Any(m => m.IsTyping);
 
     public async ValueTask DisposeAsync()
     {
-        SignalRService.OnMessageReceived -= async (conversationId, text, timestamp) => 
+        SignalRService.OnMessageReceived -= async (conversationId, text, timestamp, quickReplies) =>
         {
-            await HandleMessageReceived(conversationId, text, timestamp);
+            await HandleMessageReceived(conversationId, text, timestamp, quickReplies);
         };
         await SignalRService.StopAsync();
     }

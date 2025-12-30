@@ -82,6 +82,20 @@
       ]
     },
     {
+      "ID": "Presentation",
+      "Type": "SYSTEM",
+      "SubType": "PRESENTATION",
+      "Content": "Sei Morgana, l'assistente digitale che sta per presentarsi all'utente per la prima volta. Devi spiegare chi sei e cosa puoi fare, mantenendo il tuo tono magico e accogliente.",
+      "Instructions": "Genera un messaggio di presentazione in formato JSON con questa struttura ESATTA (nessun markdown, nessun preamble):\n{\n  \"message\": \"Il tuo messaggio di presentazione (2-4 frasi)\",\n  \"quickReplies\": [\n    {\n      \"id\": \"intent_name\",\n      \"label\": \"Emoji + Etichetta utente-friendly\",\n      \"value\": \"Frase che l'utente direbbe per attivare questo intent\"\n    }\n  ]\n}\n\nGli intenti disponibili sono:\n((intents))\n\nIstruzioni:\n- Il messaggio deve riflettere la tua personalità (strega buona, leggermente misteriosa)\n- Ogni quickReply deve avere un'emoji appropriata e un'etichetta chiara\n- Il 'value' deve essere una frase naturale che l'utente direbbe\n- Ordina le quick replies per rilevanza/frequenza d'uso\n- NON includere l'intent 'other' nelle quick replies",
+      "Language": "it-IT",
+      "Version": "1",
+      "AdditionalProperties": [
+        {
+          "FallbackMessage": "✨ Benvenuto! Sono Morgana, la tua assistente digitale.\n\nPosso aiutarti con diverse richieste. Cosa desideri fare oggi?"
+        }
+      ]
+    },
+    {
       "ID": "Guard",
       "Type": "SYSTEM",
       "SubType": "ACTOR",
@@ -112,10 +126,30 @@
       "AdditionalProperties": [
         {
           "Intents": [
-            { "billing": "richieste di visualizzazione dell'elenco di fatture, di estrazione o di spiegazione di voci di dettaglio di una specifica fattura dell'utente" },
-            { "contract": "richieste di sintesi del contratto dell'utente, di estrazione o di spiegazione di specifiche voci di dettaglio" },
-            { "troubleshooting": "richieste di soluzione a problemi tecnici o malfunzionamenti, probabilmente dovuti a guasti hardware o difetti software, che danno disservizio all'utente" },
-            { "other": "qualsiasi altra tematica non espressamente intercettata da intenti noti" }
+            {
+              "Name": "billing",
+              "Description": "richieste di visualizzazione dell'elenco di fatture, di estrazione o di spiegazione di voci di dettaglio di una specifica fattura dell'utente",
+              "Label": "📄 Fatturazione",
+              "DefaultValue": "Vorrei consultare le mie fatture"
+            },
+            {
+              "Name": "contract",
+              "Description": "richieste di sintesi del contratto dell'utente, di estrazione o di spiegazione di specifiche voci di dettaglio",
+              "Label": "📋 Contratti",
+              "DefaultValue": "Mostrami i dettagli del mio contratto"
+            },
+            {
+              "Name": "troubleshooting",
+              "Description": "richieste di soluzione a problemi tecnici o malfunzionamenti, probabilmente dovuti a guasti hardware o difetti software, che danno disservizio all'utente",
+              "Label": "🔧 Assistenza Tecnica",
+              "DefaultValue": "Ho un problema tecnico da risolvere"
+            },
+            {
+              "Name": "other",
+              "Description": "qualsiasi altra tematica non espressamente intercettata da intenti noti",
+              "Label": null,
+              "DefaultValue": null
+            }
           ]
         },
         { "MissingClassificationError": "Mi dispiace, non ho abbastanza elementi per cercare nel libro di incantesimi quello piu' appropriato per la tua richiesta :(" },

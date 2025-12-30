@@ -7,15 +7,17 @@ public class MorganaSignalRService : IAsyncDisposable
 {
     private HubConnection? _hubConnection;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<MorganaSignalRService> _logger;
 
-    public event Action<string, string, DateTime>? OnMessageReceived;
+    public event Action<string, string, DateTime, List<QuickReply>?>? OnMessageReceived;
     public event Action<bool>? OnConnectionStateChanged;
 
     public bool IsConnected => _hubConnection?.State == HubConnectionState.Connected;
 
-    public MorganaSignalRService(IConfiguration configuration)
+    public MorganaSignalRService(IConfiguration configuration, ILogger<MorganaSignalRService> logger)
     {
         _configuration = configuration;
+        _logger = logger;
     }
 
     public async Task StartAsync()
@@ -38,33 +40,40 @@ public class MorganaSignalRService : IAsyncDisposable
 
         _hubConnection.On<MessageReceived>("ReceiveMessage", (message) =>
         {
+            _logger.LogInformation($"📩 Message received - Type: {message.MessageType}, QuickReplies: {message.QuickReplies?.Count ?? 0}");
+            
             OnMessageReceived?.Invoke(
                 message.ConversationId,
                 message.Text,
-                message.Timestamp
+                message.Timestamp,
+                message.QuickReplies
             );
         });
 
         _hubConnection.Reconnecting += (error) =>
         {
+            _logger.LogWarning("SignalR reconnecting...");
             OnConnectionStateChanged?.Invoke(false);
             return Task.CompletedTask;
         };
 
         _hubConnection.Reconnected += (connectionId) =>
         {
+            _logger.LogInformation($"SignalR reconnected: {connectionId}");
             OnConnectionStateChanged?.Invoke(true);
             return Task.CompletedTask;
         };
 
         _hubConnection.Closed += (error) =>
         {
+            _logger.LogError($"SignalR closed: {error?.Message}");
             OnConnectionStateChanged?.Invoke(false);
             return Task.CompletedTask;
         };
 
         await _hubConnection.StartAsync();
         OnConnectionStateChanged?.Invoke(true);
+        _logger.LogInformation("SignalR started successfully");
     }
 
     public async Task JoinConversation(string conversationId)
@@ -72,6 +81,7 @@ public class MorganaSignalRService : IAsyncDisposable
         if (_hubConnection?.State == HubConnectionState.Connected)
         {
             await _hubConnection.InvokeAsync("JoinConversation", conversationId);
+            _logger.LogInformation($"Joined conversation: {conversationId}");
         }
     }
 

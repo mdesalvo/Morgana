@@ -1,0 +1,48 @@
+@namespace Cauldron.Components
+@using Cauldron.Messages
+
+<div class="quick-replies @(IsDisabled ? "disabled" : "")">
+    @if (Replies != null)
+    {
+        @foreach (var reply in Replies.Select((r, i) => new { Reply = r, Index = i }))
+        {
+            <button class="quick-reply-btn @(IsReplySelected(reply.Reply.Id) ? "selected" : "") @(IsDisabled ? "disabled" : "")" 
+                    style="animation-delay: @(reply.Index * 0.1)s"
+                    disabled="@IsDisabled"
+                    @onclick="() => OnReplyClick(reply.Reply)">
+                <span class="label">@reply.Reply.Label</span>
+                @if (IsReplySelected(reply.Reply.Id))
+                {
+                    <span class="checkmark">✓</span>
+                }
+            </button>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public List<QuickReply>? Replies { get; set; }
+    
+    [Parameter]
+    public EventCallback<QuickReply> OnSelect { get; set; }
+    
+    [Parameter]
+    public bool IsDisabled { get; set; }
+    
+    [Parameter]
+    public string? SelectedReplyId { get; set; }
+    
+    private bool IsReplySelected(string replyId)
+    {
+        return !string.IsNullOrEmpty(SelectedReplyId) && SelectedReplyId == replyId;
+    }
+    
+    private async Task OnReplyClick(QuickReply reply)
+    {
+        if (!IsDisabled)
+        {
+            await OnSelect.InvokeAsync(reply);
+        }
+    }
+}

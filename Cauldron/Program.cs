@@ -6,6 +6,9 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
+// Register HttpClient for API calls
+builder.Services.AddHttpClient();
+
 // Configurazione API endpoint
 builder.Services.AddScoped(sp => new HttpClient
 {

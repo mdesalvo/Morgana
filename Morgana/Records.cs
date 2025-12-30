@@ -42,6 +42,33 @@ public static class Records
         string Text,
         DateTime Timestamp);
 
+    // Quick reply system
+
+    public record QuickReply(
+        string Id,
+        string Label,
+        string Value);
+
+    public record StructuredMessage(
+        string ConversationId,
+        string Text,
+        DateTime Timestamp,
+        string MessageType,
+        List<QuickReply>? QuickReplies = null,
+        string? ErrorReason = null);
+
+    // Presentation flow messages
+
+    public record GeneratePresentationMessage();
+
+    public record PresentationContext(
+        string Message,
+        List<AI.Records.IntentDefinition> Intents)
+    {
+        // LLM-generated quick replies (takes precedence over Intents)
+        public List<AI.Records.QuickReplyDefinition>? LlmQuickReplies { get; init; }
+    }
+
     // Supervisor
 
     public record InitiateNewRequest(

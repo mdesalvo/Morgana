@@ -86,30 +86,47 @@ public static class Records
         string Scope,
         bool Shared = false);
 
+    public record IntentDefinition(
+        [property: JsonPropertyName("Name")] string Name,
+        [property: JsonPropertyName("Description")] string Description,
+        [property: JsonPropertyName("Label")] string? Label,
+        [property: JsonPropertyName("DefaultValue")] string? DefaultValue = null);
+
     public record IntentCollection
     {
-        public List<Dictionary<string, string>> Intents { get; set; }
+        public List<IntentDefinition> Intents { get; set; }
 
-        public IntentCollection(List<Dictionary<string, string>> intents)
+        public IntentCollection(List<IntentDefinition> intents)
         {
             Intents = intents;
         }
 
+        // Get all intents as Dictionary<name, description> for classification
         public Dictionary<string, string> AsDictionary()
         {
-            Dictionary<string, string> result = [];
+            return Intents.ToDictionary(i => i.Name, i => i.Description);
+        }
 
-            foreach (Dictionary<string, string> intentsDictionary in Intents)
-            {
-                foreach (KeyValuePair<string, string> kvp in intentsDictionary)
-                {
-                    result[kvp.Key] = kvp.Value;
-                }
-            }
-
-            return result;
+        // Get displayable intents (exclude "other" and those without labels)
+        public List<IntentDefinition> GetDisplayableIntents()
+        {
+            return Intents
+                .Where(i => !string.Equals(i.Name, "other", StringComparison.OrdinalIgnoreCase) 
+                              && !string.IsNullOrEmpty(i.Label))
+                .ToList();
         }
     }
+
+    // Presentation flow records
+
+    public record PresentationResponse(
+        [property: JsonPropertyName("message")] string Message,
+        [property: JsonPropertyName("quickReplies")] List<QuickReplyDefinition> QuickReplies);
+
+    public record QuickReplyDefinition(
+        [property: JsonPropertyName("id")] string Id,
+        [property: JsonPropertyName("label")] string Label,
+        [property: JsonPropertyName("value")] string Value);
 
     // Context wrapper for Become/PipeTo pattern (ClassifierActor)
         

@@ -19,8 +19,11 @@ public class ClassifierActor : MorganaActor
         ILogger<ClassifierActor> _) : base(conversationId, llmService, promptResolverService)
     {
         Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
-        IntentCollection intentCollection = new IntentCollection(
-            classifierPrompt.GetAdditionalProperty<List<Dictionary<string, string>>>("Intents"));
+        
+        // Parse structured intents
+        List<IntentDefinition> intents = classifierPrompt.GetAdditionalProperty<List<IntentDefinition>>("Intents");
+        
+        IntentCollection intentCollection = new IntentCollection(intents);
         
         string formattedIntents = string.Join("|", 
             intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
