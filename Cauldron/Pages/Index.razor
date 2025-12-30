@@ -75,10 +75,10 @@
                         {
                             <div class="message-text">@message.Text</div>
                             
-                            @if (message.QuickReplies != null && message.QuickReplies.Count > 0)
+                            @if (message.QuickReplies is { Count: > 0 })
                             {
                                 <div class="quick-replies @(message.SelectedQuickReplyId != null ? "disabled" : "")">
-                                    @foreach (var reply in message.QuickReplies)
+                                    @foreach (QuickReply reply in message.QuickReplies)
                                     {
                                         <button 
                                             class="quick-reply-btn @(message.SelectedQuickReplyId == reply.Id ? "selected" : "")"
@@ -392,7 +392,7 @@
     }
 
     private bool HasActiveQuickReplies() =>
-        messages.Any(m => m.QuickReplies != null && m.SelectedQuickReplyId == null);
+        messages.Any(m => m is { QuickReplies: not null, SelectedQuickReplyId: null });
 
     private bool IsButtonDisabled =>
         !isConnected ||
