@@ -42,7 +42,7 @@ public class AgentAdapter
     {
         StringBuilder sb = new StringBuilder();
 
-        //Order the policies by type (Critical, Operational) the by priority (the lower is the most important)
+        //Order the policies by type (Critical, Operational) then by priority (the lower is the most important)
         foreach (GlobalPolicy policy in policies.OrderBy(p => p.Type)
                                                 .ThenBy(p => p.Priority))
         {
