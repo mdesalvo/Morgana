@@ -674,17 +674,26 @@ Global policies define system-wide behavioral rules that apply to all agents:
     {
       "Name": "ContextHandling",
       "Description": "CRITICAL CONTEXT RULE - Before asking...",
-      "Type": "Critical"
+      "Type": "Critical",
+      "Priority": 0
     },
     {
       "Name": "InteractiveToken",
-      "Description": "OPERATIONAL RULE ON INTERACTION TOKEN...",
-      "Type": "Operational"
+      "Description": "OPERATIONAL RULE INTERACTION TOKEN '#INT#' - You operate....",
+      "Type": "Operational",
+      "Priority": 0
     },
     {
       "Name": "ToolParameterContextGuidance",
-      "Description": "OPERATIONAL RULE ON CONTEXT PARAMETERS...",
-      "Type": "Operational"
+      "Description": "OPERATION RULE ON AGENT TOOLS CONTEXT PARAMETERS - Operates...",
+      "Type": "Operational",
+      "Priority": 1
+    },
+    {
+      "Name": "ToolParameterRequestGuidance",
+      "Description": "OPERATIONAL RULE ON DIRECT REQUEST PARAMETERS OF AGENT TOOLS - Operate...",
+      "Type": "Operational",
+      "Priority": 2
     }
   ]
 }
@@ -698,7 +707,8 @@ Global policies define system-wide behavioral rules that apply to all agents:
 The `AgentAdapter` formats policies preserving order and structure:
 
 ```csharp
-private string FormatGlobalPolicies(List<GlobalPolicy> policies)
+//Order the policies by type (Critical, Operational) then by priority (the lower is the most important)
+foreach (GlobalPolicy policy in policies.OrderBy(p => p.Type).ThenBy(p => p.Priority))
 {
     var sb = new StringBuilder();
     foreach (var policy in policies)
