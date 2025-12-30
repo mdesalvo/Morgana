@@ -5,7 +5,7 @@
     </td>
     <td>
       <h1>Morgana</h1>
-      <p><strong>A modern and flexible multi-agent, intent-driven conversational AI system</strong></p>
+      <p><strong>A modern and flexible multi-agent, intent-driven conversational AI framework</strong></p>
       <p>
         <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10"/>
         <img src="https://img.shields.io/badge/Akka.NET-512BD4?logo=nuget" alt="Akka.NET"/>
@@ -17,7 +17,7 @@
 
 ## Overview
 
-Morgana is a modern conversational AI system designed to handle complex scenarios through a sophisticated multi-agent intent-driven architecture. Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET, Morgana orchestrates specialized AI agents that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness.
+Morgana is a modern conversational AI framework designed to handle complex scenarios through a sophisticated multi-agent intent-driven architecture. Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET, Morgana orchestrates specialized AI agents that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness.
 
 The system is powered by Microsoft.Agents.AI framework, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
