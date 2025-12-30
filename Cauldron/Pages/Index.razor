@@ -3,6 +3,7 @@
 @using Cauldron.Services
 @inject MorganaSignalRService SignalRService
 @inject HttpClient Http
+@inject IConfiguration Configuration
 @implements IAsyncDisposable
 
 <PageTitle>Morgana - AI Assistant</PageTitle>
@@ -23,19 +24,33 @@
 
     <!-- Messages Area -->
     <div class="messages-container">
-        @if (!isInitialized)
+        @if (!isInitialized || messages.Count == 0)
         {
-            <div class="welcome-message">
-                <div class="spinner"></div>
-                <p>Inizializzazione in corso...</p>
-            </div>
-        }
-        else if (messages.Count == 0)
-        {
-            <div class="welcome-message">
-                <img src="images/morgana-avatar.png" alt="Morgana" class="welcome-avatar" />
-                <h2>Benvenuto! Sono Morgana 🧙‍♀️</h2>
-                <p>Come posso aiutarti oggi?</p>
+            <div class="magical-loader">
+                <div class="spell-book">
+                    <div class="book-cover"></div>
+                    <div class="book-pages">
+                        <div class="page page-left"></div>
+                        <div class="page page-right"></div>
+                    </div>
+                    <div class="magic-runes">
+                        <span class="rune r1">✦</span>
+                        <span class="rune r2">✧</span>
+                        <span class="rune r3">✦</span>
+                        <span class="rune r4">✧</span>
+                    </div>
+                </div>
+                <div class="sparkles-container">
+                    <div class="sparkle sp1"></div>
+                    <div class="sparkle sp2"></div>
+                    <div class="sparkle sp3"></div>
+                    <div class="sparkle sp4"></div>
+                    <div class="sparkle sp5"></div>
+                    <div class="sparkle sp6"></div>
+                    <div class="sparkle sp7"></div>
+                    <div class="sparkle sp8"></div>
+                </div>
+                <p class="loading-text">@(Configuration["Morgana:LandingMessage"])</p>
             </div>
         }
         else

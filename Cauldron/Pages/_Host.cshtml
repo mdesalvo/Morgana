@@ -3,18 +3,26 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 <!DOCTYPE html>
-<html lang="it">
+<html>
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <base href="~/" />
         <title>Morgana - AI Assistant</title>
+            
+        <!-- Favicon -->
+        <link rel="icon" type="image/x-icon" href="~/favicon.ico" />
+        <link rel="shortcut icon" href="~/favicon.ico">
+        <link rel="icon" type="image/png" sizes="32x32" href="~/images/morgana-avatar.png" />
+        <link rel="apple-touch-icon" href="~/images/morgana-avatar.png" />
+            
+        <!-- CSS -->
         <link href="css/site.css" rel="stylesheet" />
     </head>
     <body>
         <component type="typeof(App)" render-mode="Server" />
 
-        <div id="blazor-error-ui">
+        <div id="blazor-error-ui" style="display: none;">
             Si è verificato un errore.
             <a href="" class="reload">Ricarica</a>
             <a class="dismiss">🗙</a>
