@@ -4,7 +4,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] - UNDER DEVELOPMENT
+## [0.5.0] - UNDER DEVELOPMENT
+
+### 🎯 Major Feature: Proactive Conversational Paradigm
+This release represents a fundamental shift in user interaction: **Morgana now initiates conversations** rather than waiting passively for user input. She automatically presents herself with capabilities aligned to classified intents, creating a more engaging and guided experience.
+
+### ✨ Added
+
+**Proactive Presentation System**
+- Automatic presentation generation triggered by `ConversationManagerActor` on conversation creation
+- LLM-driven presentation message with dynamic quick reply buttons
+- Structured `IntentDefinition` configuration with `Label` and `DefaultValue` for UI rendering
+- Fallback mechanism: LLM-generated presentation → prompts.json fallback message on error
+
+**Quick Reply Interactive System**
+- Client-side quick reply button rendering with emoji-enhanced labels
+- Click-to-send workflow: button selection → visual feedback → automatic message submission
+- State management: buttons disabled after selection with visual confirmation (checkmark)
+- `SelectedQuickReplyId` tracking in `ChatMessage` for UI state persistence
+- Textarea and send button disabled when quick replies are active
+- Animated slide-in presentation with staggered button appearance
+
+**Structured Message Protocol**
+- `SendStructuredMessageAsync()` in `ISignalRBridgeService` supporting `messageType` and `quickReplies`
+- `MessageType` enum: `User`, `Assistant`, `Presentation`, `Error`
+- `StructuredMessage` record extending basic message with metadata
+- SignalR message format enhanced with `messageType` and `quickReplies` array
+
+**Configuration-Driven Presentation**
+- `Presentation` prompt in prompts.json with system instructions for LLM generation
+- Intent-to-capability mapping through declarative `IntentDefinition.Label`/`DefaultValue`
+- `FallbackMessage` configuration for error scenarios
+- Separation of displayable intents (user-facing) vs. classification intents (backend)
+
+### 📄 Changed
+
+**Actor Flow Modifications**
+- `ConversationManagerActor.HandleCreateConversationAsync()` now triggers `GeneratePresentationMessage`
+- `ConversationSupervisorActor` enhanced with presentation generation and handling states
+
+**Prompt Structure Enhancements**
+- `IntentDefinition` record now includes `Label` (UI display) and `DefaultValue` (button value)
+- prompts.json `Classifier.Intents` array supports full intent metadata
+- Intent configuration serves dual purpose: classification (backend) + presentation (frontend)
+
+### 🐛 Fixed
+**Blazor Server Render Mode Issue**
+- Fixed double SignalR connection caused by `InteractiveServer` render-mode in `App.razor`
+  - Root cause: Blazor pre-rendered component on server, then re-initialized on client, creating two parallel conversations
+  - Symptom: Two `ConversationId` instances, first disconnected immediately after LLM presentation call
+  - Impact: Wasted LLM tokens, orphaned actor hierarchies (ConversationManagerActor → ConversationSupervisorActor → Guard/Classifier/Router)
+  - Solution: Changed to `Server` render-mode (non-interactive) ensuring single conversation lifecycle
+  - Result: Eliminated duplicate initialization, reduced memory footprint, prevented race conditions
+
+### 🚀 Future Enablement
+This proactive paradigm unlocks:
+- Personalized greetings based on user history
+- Context-aware capability suggestions
+- Multi-language presentation support
+- A/B testing of presentation strategies
+- Analytics on intent selection patterns
+- Guided onboarding flows for new users
+
+### ⚠️ Migration Notes
+- **APIs**: No breaking changes to existing REST endpoints
+- **Frontend**: Quick reply system is opt-in per message (backward compatible)
+- **Configuration**: New optional `Morgana:LandingMessage` setting (has default)
+- **Prompts**: Existing intents work without `Label`/`DefaultValue` (not displayed as quick replies)
+
+## [0.4.0] - 2024-12-28
 
 ### 🎯 Major Refactoring: Actor Model Best Practices
 This release represents a fundamental architectural improvement, transforming Morgana from an "ASP.NET with actors on top" into a **production-ready actor-based system** fully aligned with Akka.NET best practices.
