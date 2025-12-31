@@ -35,8 +35,8 @@ Traditional chatbot systems often struggle with complexity—they either become 
 7. **P2P Context Synchronization**: Agents share contextual information seamlessly through a message bus architecture
 8. **Native Memory Management**: Context and conversation history managed by Microsoft.Agents.AI framework
 9. **Personality-Driven Interactions**: Layered personality system with global and agent-specific traits
-10. **🆕 MCP Protocol Integration**: Dynamic capability expansion through declarative server dependencies
-11. **🆕 Registry-Based Validation**: Fail-fast MCP server configuration validation at startup
+10. **MCP Protocol Integration**: Dynamic capability expansion through declarative server dependencies
+11. **Registry-Based Validation**: Fail-fast MCP server configuration validation at startup
 
 ## Architecture
 
