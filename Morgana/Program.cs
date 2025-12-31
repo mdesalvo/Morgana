@@ -46,16 +46,15 @@ builder.Services.AddSingleton<ILLMService>(sp =>
         _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' non supportato. Valori validi: 'AzureOpenAI', 'Anthropic'")
     };
 });
-builder.Services.AddSingleton<IChatClient>(sp =>
-    sp.GetRequiredService<ILLMService>().GetChatClient());
+builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMService>().GetChatClient());
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 
-// MCP Protocol Support
+// MCP Protocol Support (includes IMCPServerRegistryService registration)
 builder.Services.AddMCPProtocol(builder.Configuration);
 builder.Services.AddSingleton<IMCPToolProvider, MorganaMCPToolProvider>();
 
-// AgentAdapter
+// AgentAdapter (now requires IMCPServerRegistryService)
 builder.Services.AddTransient<AgentAdapter>();
 
 // Akka.NET Services

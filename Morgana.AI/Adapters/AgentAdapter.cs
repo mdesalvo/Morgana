@@ -19,6 +19,7 @@ public class AgentAdapter
     protected readonly ILogger<MorganaAgent> logger;
     protected readonly ILogger<MorganaContextProvider> contextProviderLogger;
     protected readonly IMCPToolProvider? mcpToolProvider;
+    protected readonly IMCPServerRegistryService? mcpServerRegistryService;
     protected readonly Prompt morganaPrompt;
 
     public AgentAdapter(
@@ -26,13 +27,15 @@ public class AgentAdapter
         IPromptResolverService promptResolverService,
         ILogger<MorganaAgent> logger,
         ILogger<MorganaContextProvider> contextProviderLogger,
-        IMCPToolProvider? mcpToolProvider = null)
+        IMCPToolProvider? mcpToolProvider = null,
+        IMCPServerRegistryService? mcpServerRegistryService = null)
     {
         this.chatClient = chatClient;
         this.promptResolverService = promptResolverService;
         this.logger = logger;
         this.contextProviderLogger = contextProviderLogger;
         this.mcpToolProvider = mcpToolProvider;
+        this.mcpServerRegistryService = mcpServerRegistryService;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
     }
@@ -177,19 +180,21 @@ public class AgentAdapter
 
     /// <summary>
     /// Generic agent creation method - replaces CreateBillingAgent, CreateContractAgent, CreateTroubleshootingAgent.
-    /// Automatically loads MCP tools from servers declared in UsesMCPServersAttribute.
+    /// Automatically loads MCP tools from servers declared via IMCPServerRegistryService.
     /// </summary>
     public (AIAgent agent, MorganaContextProvider provider) CreateAgent(
         Type agentType,
         Action<string, object>? sharedContextCallback = null)
     {
-        // Extract intent and MCP servers from attributes
+        // Extract intent from attribute
         HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>();
         if (intentAttribute == null)
             throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
 
         string intent = intentAttribute.Intent;
-        string[] mcpServerNames = agentType.GetCustomAttribute<UsesMCPServersAttribute>()?.ServerNames ?? [];
+
+        // Get MCP server names from registry instead of direct reflection
+        string[] mcpServerNames = mcpServerRegistryService?.GetServerNamesForAgent(agentType) ?? [];
 
         logger.LogInformation($"Creating agent for intent '{intent}' with MCP servers: {(mcpServerNames.Length > 0 ? string.Join(", ", mcpServerNames) : "none")}");
 
@@ -204,7 +209,7 @@ public class AgentAdapter
 
         List<ToolDefinition> allToolDefinitions = agentTools.ToList();
 
-        // Load MCP tools ONLY from servers declared in UsesMCPServersAttribute
+        // Load MCP tools ONLY from servers declared in registry
         List<AIFunction> mcpTools = [];
         if (mcpToolProvider != null && mcpServerNames.Length > 0)
         {
