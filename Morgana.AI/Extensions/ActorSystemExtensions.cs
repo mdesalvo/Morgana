@@ -1,7 +1,6 @@
 ﻿using Akka.Actor;
 using Akka.DependencyInjection;
 using Morgana.AI.Abstractions;
-using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Extensions;
 

@@ -19,16 +19,22 @@ public class MorganaMCPToolProvider : IMCPToolProvider
         ILogger<MorganaMCPToolProvider> logger)
     {
         this.logger = logger;
-        mcpServers = servers.ToDictionary(s => s.ServerName, s => s);
+        
+        // Use case-insensitive dictionary for server name lookups
+        mcpServers = servers.ToDictionary(
+            s => s.ServerName, 
+            s => s, 
+            StringComparer.OrdinalIgnoreCase);
         
         logger.LogInformation($"MorganaMCPToolProvider initialized with {mcpServers.Count} servers: {string.Join(", ", mcpServers.Keys)}");
     }
     
     public async Task<IEnumerable<AIFunction>> LoadToolsFromServerAsync(string serverName)
     {
+        // TryGetValue now works case-insensitively thanks to StringComparer.OrdinalIgnoreCase
         if (!mcpServers.TryGetValue(serverName, out IMCPServer? server))
         {
-            logger.LogWarning($"MCP server not found: {serverName}");
+            logger.LogWarning($"MCP server not found: {serverName}. Available servers: {string.Join(", ", mcpServers.Keys)}");
             return [];
         }
         

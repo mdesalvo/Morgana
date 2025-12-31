@@ -266,7 +266,7 @@ public class SecurityCatalogMCPServer : MorganaMCPServer
     
     private Task<Records.MCPToolResult> GetSecurityDetailsAsync(Dictionary<string, object> parameters)
     {
-        string productName = parameters["nomeProdotto"].ToString()!;
+        string productName = parameters["nomeProdotto"]?.ToString()!;
         
         SecurityProduct? prod = catalog.FirstOrDefault(p => 
             p.ProductName.Equals(productName, StringComparison.OrdinalIgnoreCase));

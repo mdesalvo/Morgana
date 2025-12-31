@@ -8,6 +8,7 @@ using Morgana.AI.Providers;
 namespace Morgana.AI.Agents;
 
 [HandlesIntent("troubleshooting")]
+[UsesMCPServers("HardwareCatalog", "SecurityCatalog")]
 public class TroubleshootingAgent : MorganaAgent
 {
     public TroubleshootingAgent(
@@ -18,7 +19,8 @@ public class TroubleshootingAgent : MorganaAgent
         ILogger<MorganaContextProvider> contextProviderLogger,
         AgentAdapter agentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
-        (aiAgent, contextProvider) = agentAdapter.CreateTroubleshootingAgent(OnSharedContextUpdate);
+        // Generic agent creation - automatically loads MCP tools from UsesMCPServers attribute
+        (aiAgent, contextProvider) = agentAdapter.CreateAgent(GetType(), OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }
