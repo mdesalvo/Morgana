@@ -182,7 +182,6 @@ public static class Records
     public record MCPServerConfig(
         string Name,
         MCPServerType Type,
-        string ConnectionString,
         bool Enabled,
         Dictionary<string, string>? AdditionalSettings = null);
 
@@ -191,11 +190,6 @@ public static class Records
     /// </summary>
     public enum MCPServerType
     {
-        /// <summary>
-        /// Local SQLite database (mock/example servers)
-        /// </summary>
-        SQLite,
-        
         /// <summary>
         /// Remote HTTP MCP server (future implementation)
         /// </summary>

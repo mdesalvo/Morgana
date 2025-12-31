@@ -1,35 +1,133 @@
-using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 
 namespace Morgana.AI.Servers;
 
 /// <summary>
-/// Mock MCP server providing security software catalog.
-/// Complements hardware catalog for comprehensive troubleshooting.
+/// Mock MCP server providing security software catalog (in-memory).
 /// 
 /// IMPORTANT: This is a MOCK/EXAMPLE implementation for demonstration purposes.
 /// In production environments, customers should:
 /// - Connect to real security product databases
 /// - Integrate with threat intelligence feeds
 /// - Implement proper licensing and compliance checks
-/// - Add vendor API integrations for real-time pricing
 /// </summary>
 public class SecurityCatalogMCPServer : MorganaMCPServer
 {
-    private readonly string dbPath;
+    private readonly List<SecurityProduct> catalog;
     
     public SecurityCatalogMCPServer(
         Records.MCPServerConfig config,
         ILogger<SecurityCatalogMCPServer> logger) : base(config, logger)
     {
-        dbPath = config.ConnectionString;
+        // Initialize in-memory catalog
+        catalog =
+        [
+            // Antivirus
+            new SecurityProduct(
+                Type: "antivirus",
+                ProductName: "SecureShield Free",
+                Vendor: "ShieldTech",
+                Price: 0m,
+                Features: new Dictionary<string, string> { ["realtime"] = "yes", ["cloud"] = "no", ["auto_update"] = "yes", ["web_protection"] = "basic" },
+                ThreatCoverage: ["virus", "trojan", "worm"],
+                RecommendedFor: ["prestazioni_lente", "popup_pubblicitari"],
+                SystemRequirements: "Windows 10+, 2GB RAM",
+                Rating: 4),
+
+            new SecurityProduct(
+                Type: "antivirus",
+                ProductName: "TotalDefender Pro",
+                Vendor: "DefenderCorp",
+                Price: 49.99m,
+                Features: new Dictionary<string, string> { ["realtime"] = "yes", ["cloud"] = "yes", ["auto_update"] = "yes", ["web_protection"] = "advanced", ["ransomware_shield"] = "yes" },
+                ThreatCoverage: ["virus", "trojan", "worm", "ransomware", "malware", "adware"],
+                RecommendedFor: ["prestazioni_lente", "popup_pubblicitari", "redirect_browser"],
+                SystemRequirements: "Windows 10+, 4GB RAM",
+                Rating: 5),
+
+            new SecurityProduct(
+                Type: "antivirus",
+                ProductName: "UltraSafe Premium",
+                Vendor: "SecureSoft",
+                Price: 79.99m,
+                Features: new Dictionary<string, string> { ["realtime"] = "yes", ["cloud"] = "yes", ["auto_update"] = "yes", ["web_protection"] = "advanced", ["ransomware_shield"] = "yes", ["ai_detection"] = "yes" },
+                ThreatCoverage: ["virus", "trojan", "worm", "ransomware", "malware", "adware", "spyware", "rootkit"],
+                RecommendedFor: ["prestazioni_lente", "popup_pubblicitari", "redirect_browser", "abuso_rete"],
+                SystemRequirements: "Windows 10+, 8GB RAM",
+                Rating: 5),
+
+            // Anti-malware
+            new SecurityProduct(
+                Type: "anti-malware",
+                ProductName: "MalwareKiller Free",
+                Vendor: "CleanTech",
+                Price: 0m,
+                Features: new Dictionary<string, string> { ["scan_on_demand"] = "yes", ["quarantine"] = "yes", ["scheduled_scan"] = "no" },
+                ThreatCoverage: ["malware", "adware", "pup"],
+                RecommendedFor: ["popup_pubblicitari", "redirect_browser"],
+                SystemRequirements: "Windows 10+, 2GB RAM",
+                Rating: 3),
+
+            new SecurityProduct(
+                Type: "anti-malware",
+                ProductName: "DeepClean Pro",
+                Vendor: "CleanTech",
+                Price: 39.99m,
+                Features: new Dictionary<string, string> { ["scan_on_demand"] = "yes", ["quarantine"] = "yes", ["scheduled_scan"] = "yes", ["rootkit_scan"] = "yes" },
+                ThreatCoverage: ["malware", "adware", "pup", "rootkit", "spyware"],
+                RecommendedFor: ["popup_pubblicitari", "redirect_browser", "prestazioni_lente"],
+                SystemRequirements: "Windows 10+, 4GB RAM",
+                Rating: 4),
+
+            // Firewall
+            new SecurityProduct(
+                Type: "firewall",
+                ProductName: "NetGuard Basic",
+                Vendor: "NetSecure",
+                Price: 0m,
+                Features: new Dictionary<string, string> { ["bidirectional"] = "yes", ["application_control"] = "basic", ["intrusion_detection"] = "no" },
+                ThreatCoverage: ["network_attacks", "port_scan"],
+                RecommendedFor: ["abuso_rete"],
+                SystemRequirements: "Windows 10+, 1GB RAM",
+                Rating: 3),
+
+            new SecurityProduct(
+                Type: "firewall",
+                ProductName: "FirewallPro Advanced",
+                Vendor: "NetSecure",
+                Price: 59.99m,
+                Features: new Dictionary<string, string> { ["bidirectional"] = "yes", ["application_control"] = "advanced", ["intrusion_detection"] = "yes", ["geo_blocking"] = "yes" },
+                ThreatCoverage: ["network_attacks", "port_scan", "ddos", "intrusion"],
+                RecommendedFor: ["abuso_rete"],
+                SystemRequirements: "Windows 10+, 4GB RAM",
+                Rating: 5),
+
+            // VPN
+            new SecurityProduct(
+                Type: "vpn",
+                ProductName: "PrivacyVPN Free",
+                Vendor: "VPNGlobal",
+                Price: 0m,
+                Features: new Dictionary<string, string> { ["servers"] = "10", ["bandwidth"] = "10GB/month", ["encryption"] = "AES-128", ["kill_switch"] = "no" },
+                ThreatCoverage: ["tracking", "geo_restriction"],
+                RecommendedFor: ["redirect_browser"],
+                SystemRequirements: "Windows 10+, 1GB RAM",
+                Rating: 3),
+
+            new SecurityProduct(
+                Type: "vpn",
+                ProductName: "SecureVPN Premium",
+                Vendor: "VPNGlobal",
+                Price: 89.99m,
+                Features: new Dictionary<string, string> { ["servers"] = "100", ["bandwidth"] = "unlimited", ["encryption"] = "AES-256", ["kill_switch"] = "yes", ["ad_blocker"] = "yes" },
+                ThreatCoverage: ["tracking", "geo_restriction", "isp_throttling"],
+                RecommendedFor: ["redirect_browser", "abuso_rete"],
+                SystemRequirements: "Windows 10+, 2GB RAM",
+                Rating: 5)
+        ];
         
-        // Copy embedded database to disk if not exists
-        EnsureDatabaseFromEmbeddedResource("Morgana.AI.Servers.Data.security_catalog.db");
-        
-        logger.LogInformation($"SecurityCatalogMCPServer initialized: {dbPath}");
+        logger.LogInformation($"SecurityCatalogMCPServer initialized with {catalog.Count} products in-memory");
     }
     
     protected override Task<IEnumerable<Records.MCPToolDefinition>> RegisterToolsAsync()
@@ -63,8 +161,7 @@ public class SecurityCatalogMCPServer : MorganaMCPServer
             
             new Records.MCPToolDefinition(
                 Name: "OttieniDettagliSoftwareSicurezza",
-                Description: "Ottieni informazioni dettagliate su un prodotto software di sicurezza specifico. " +
-                            "Include funzionalità, copertura minacce e requisiti di sistema.",
+                Description: "Ottieni informazioni dettagliate su un prodotto software di sicurezza specifico.",
                 InputSchema: new Records.MCPInputSchema(
                     Type: "object",
                     Properties: new Dictionary<string, Records.MCPParameterSchema>
@@ -77,8 +174,7 @@ public class SecurityCatalogMCPServer : MorganaMCPServer
             
             new Records.MCPToolDefinition(
                 Name: "VerificaCompatibilitaMinaccia",
-                Description: "Verifica quali prodotti di sicurezza possono gestire una specifica firma o nome di minaccia. " +
-                            "Utile quando viene rilevato un malware/virus specifico.",
+                Description: "Verifica quali prodotti di sicurezza possono gestire una specifica firma o nome di minaccia.",
                 InputSchema: new Records.MCPInputSchema(
                     Type: "object",
                     Properties: new Dictionary<string, Records.MCPParameterSchema>
@@ -93,147 +189,147 @@ public class SecurityCatalogMCPServer : MorganaMCPServer
         return Task.FromResult<IEnumerable<Records.MCPToolDefinition>>(tools);
     }
     
-    protected override async Task<Records.MCPToolResult> ExecuteToolAsync(
+    protected override Task<Records.MCPToolResult> ExecuteToolAsync(
         string toolName,
         Dictionary<string, object> parameters)
     {
         return toolName switch
         {
-            "CercaSoftwareSicurezza" => await SearchSecuritySoftwareAsync(parameters),
-            "OttieniDettagliSoftwareSicurezza" => await GetSecurityDetailsAsync(parameters),
-            "VerificaCompatibilitaMinaccia" => await CheckThreatCompatibilityAsync(parameters),
-            _ => new Records.MCPToolResult(true, null, $"Tool sconosciuto: {toolName}")
+            "CercaSoftwareSicurezza" => SearchSecuritySoftwareAsync(parameters),
+            "OttieniDettagliSoftwareSicurezza" => GetSecurityDetailsAsync(parameters),
+            "VerificaCompatibilitaMinaccia" => CheckThreatCompatibilityAsync(parameters),
+            _ => Task.FromResult(new Records.MCPToolResult(true, null, $"Tool sconosciuto: {toolName}"))
         };
     }
     
-    private async Task<Records.MCPToolResult> SearchSecuritySoftwareAsync(Dictionary<string, object> parameters)
+    private Task<Records.MCPToolResult> SearchSecuritySoftwareAsync(Dictionary<string, object> parameters)
     {
         string softwareType = parameters["tipoSoftware"].ToString()!;
         string? threatType = parameters.GetValueOrDefault("tipoMinaccia")?.ToString();
         string? symptoms = parameters.GetValueOrDefault("sintomi")?.ToString();
         
-        using SqliteConnection connection = new SqliteConnection($"Data Source={dbPath}");
-        await connection.OpenAsync();
+        // Query in-memory catalog with scoring system
+        var scoredResults = catalog
+            .Where(p => p.Type == softwareType)
+            .Select(p => new
+            {
+                Product = p,
+                Score = CalculateRelevanceScore(p, threatType, symptoms)
+            })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .ThenByDescending(x => x.Product.Rating)
+            .Take(5)
+            .Select(x => x.Product);
         
-        SqliteCommand command = connection.CreateCommand();
-        command.CommandText = @"
-            SELECT product_name, vendor, price, features, threat_coverage
-            FROM security_products
-            WHERE type = $type
-            AND ($threat IS NULL OR threat_coverage LIKE '%' || $threat || '%')
-            AND ($symptom IS NULL OR recommended_for LIKE '%' || $symptom || '%')
-            ORDER BY rating DESC
-            LIMIT 5";
-        
-        command.Parameters.AddWithValue("$type", softwareType);
-        command.Parameters.AddWithValue("$threat", threatType ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("$symptom", symptoms ?? (object)DBNull.Value);
-        
-        List<string> results = [];
-        using SqliteDataReader reader = await command.ExecuteReaderAsync();
-        
-        while (await reader.ReadAsync())
+        List<string> formatted = [];
+        foreach (SecurityProduct prod in scoredResults)
         {
-            string product = reader.GetString(0);
-            string vendor = reader.GetString(1);
-            decimal price = reader.GetDecimal(2);
-            string features = reader.GetString(3);
-            
-            Dictionary<string, object>? featuresObj = JsonSerializer.Deserialize<Dictionary<string, object>>(features);
-            string featuresFormatted = string.Join(", ",
-                featuresObj?.Select(kvp => $"{kvp.Key}: {kvp.Value}") ?? []);
-            
-            string priceDisplay = price == 0 ? "Free" : $"€{price:F2}/year";
-            
-            results.Add($"• {product} ({vendor})\n  Price: {priceDisplay}\n  Features: {featuresFormatted}");
+            string featuresStr = string.Join(", ", prod.Features.Take(3).Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+            string priceStr = prod.Price == 0 ? "Gratuito" : $"€{prod.Price:F2}/anno";
+            formatted.Add($"• {prod.ProductName} ({prod.Vendor})\n  Prezzo: {priceStr}\n  Features: {featuresStr}");
         }
         
-        string content = results.Count > 0
-            ? $"Found {results.Count} {softwareType} solution(s):\n\n{string.Join("\n\n", results)}"
-            : $"No {softwareType} solutions found matching criteria";
+        string content = formatted.Count > 0
+            ? $"Trovate {formatted.Count} soluzioni {softwareType}:\n\n{string.Join("\n\n", formatted)}"
+            : $"Nessuna soluzione {softwareType} trovata. Prova senza filtri aggiuntivi.";
         
-        return new Records.MCPToolResult(false, content, null);
+        return Task.FromResult(new Records.MCPToolResult(false, content, null));
     }
     
-    private async Task<Records.MCPToolResult> GetSecurityDetailsAsync(Dictionary<string, object> parameters)
+    // Helper method to score product relevance
+    private int CalculateRelevanceScore(SecurityProduct product, string? threatType, string? symptoms)
+    {
+        int score = 10; // Base score for matching software type
+        
+        // Bonus for threat coverage match
+        if (!string.IsNullOrEmpty(threatType))
+        {
+            if (product.ThreatCoverage.Any(t => t.Equals(threatType, StringComparison.OrdinalIgnoreCase)))
+                score += 50; // Exact match
+            else if (product.ThreatCoverage.Any(t => t.Contains(threatType, StringComparison.OrdinalIgnoreCase)))
+                score += 30; // Partial match
+        }
+        
+        // Bonus for symptom match
+        if (!string.IsNullOrEmpty(symptoms))
+        {
+            if (product.RecommendedFor.Contains(symptoms, StringComparer.OrdinalIgnoreCase))
+                score += 40; // Exact match
+        }
+        
+        // Bonus for rating
+        score += product.Rating * 5;
+        
+        return score;
+    }
+    
+    private Task<Records.MCPToolResult> GetSecurityDetailsAsync(Dictionary<string, object> parameters)
     {
         string productName = parameters["nomeProdotto"].ToString()!;
         
-        using SqliteConnection connection = new SqliteConnection($"Data Source={dbPath}");
-        await connection.OpenAsync();
+        SecurityProduct? prod = catalog.FirstOrDefault(p => 
+            p.ProductName.Equals(productName, StringComparison.OrdinalIgnoreCase));
         
-        SqliteCommand command = connection.CreateCommand();
-        command.CommandText = @"
-            SELECT type, vendor, price, features, threat_coverage, system_requirements
-            FROM security_products
-            WHERE product_name = $product";
-        
-        command.Parameters.AddWithValue("$product", productName);
-        
-        using SqliteDataReader reader = await command.ExecuteReaderAsync();
-        
-        if (await reader.ReadAsync())
+        if (prod == null)
         {
-            string type = reader.GetString(0);
-            string vendor = reader.GetString(1);
-            decimal price = reader.GetDecimal(2);
-            string features = reader.GetString(3);
-            string threats = reader.GetString(4);
-            string requirements = reader.GetString(5);
-            
-            Dictionary<string, object>? featuresObj = JsonSerializer.Deserialize<Dictionary<string, object>>(features);
-            string featuresFormatted = string.Join("\n",
-                featuresObj?.Select(kvp => $"  • {kvp.Key}: {kvp.Value}") ?? []);
-            
-            string priceDisplay = price == 0 ? "Free" : $"€{price:F2}/year";
-            
-            string content = $@"Product: {productName}
-Vendor: {vendor}
-Type: {type}
-Price: {priceDisplay}
-
-Features:
-{featuresFormatted}
-
-Threat Coverage: {threats}
-System Requirements: {requirements}";
-            
-            return new Records.MCPToolResult(false, content, null);
+            return Task.FromResult(new Records.MCPToolResult(true, null, $"Prodotto '{productName}' non trovato nel catalogo"));
         }
         
-        return new Records.MCPToolResult(true, null, $"Security product '{productName}' not found");
+        string featuresFormatted = string.Join("\n", prod.Features.Select(kvp => $"  • {kvp.Key}: {kvp.Value}"));
+        
+        string priceStr = prod.Price == 0 ? "Gratuito" : $"€{prod.Price:F2}/anno";
+        string threatsStr = string.Join(", ", prod.ThreatCoverage);
+        
+        string content = $@"Prodotto: {prod.ProductName}
+Vendor: {prod.Vendor}
+Tipo: {prod.Type}
+Prezzo: {priceStr}
+
+Funzionalità:
+{featuresFormatted}
+
+Copertura minacce: {threatsStr}
+Requisiti di sistema: {prod.SystemRequirements}";
+        
+        return Task.FromResult(new Records.MCPToolResult(false, content, null));
     }
     
-    private async Task<Records.MCPToolResult> CheckThreatCompatibilityAsync(Dictionary<string, object> parameters)
+    private Task<Records.MCPToolResult> CheckThreatCompatibilityAsync(Dictionary<string, object> parameters)
     {
         string threatName = parameters["nomeMinaccia"].ToString()!;
         
-        using SqliteConnection connection = new SqliteConnection($"Data Source={dbPath}");
-        await connection.OpenAsync();
+        List<SecurityProduct> compatibleProducts = catalog
+            .Where(p => p.ThreatCoverage.Any(t => t.Contains(threatName, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(p => p.Rating)
+            .ToList();
         
-        SqliteCommand command = connection.CreateCommand();
-        command.CommandText = @"
-            SELECT product_name, vendor, threat_coverage
-            FROM security_products
-            WHERE threat_coverage LIKE '%' || $threat || '%'
-            ORDER BY rating DESC";
-        
-        command.Parameters.AddWithValue("$threat", threatName);
-        
-        List<string> results = [];
-        using SqliteDataReader reader = await command.ExecuteReaderAsync();
-        
-        while (await reader.ReadAsync())
+        if (compatibleProducts.Count == 0)
         {
-            string product = reader.GetString(0);
-            string vendor = reader.GetString(1);
-            results.Add($"• {product} by {vendor}");
+            return Task.FromResult(new Records.MCPToolResult(
+                false, 
+                $"Nessun prodotto di sicurezza trovato con copertura per '{threatName}'", 
+                null));
         }
         
-        string content = results.Count > 0
-            ? $"Products that can handle '{threatName}':\n{string.Join("\n", results)}"
-            : $"No security products found with coverage for '{threatName}'";
+        List<string> formatted = compatibleProducts
+            .Select(p => $"• {p.ProductName} di {p.Vendor}")
+            .ToList();
         
-        return new Records.MCPToolResult(false, content, null);
+        string content = $"Prodotti che possono gestire '{threatName}':\n{string.Join("\n", formatted)}";
+        
+        return Task.FromResult(new Records.MCPToolResult(false, content, null));
     }
+    
+    // Internal model
+    private record SecurityProduct(
+        string Type,
+        string ProductName,
+        string Vendor,
+        decimal Price,
+        Dictionary<string, string> Features,
+        List<string> ThreatCoverage,
+        List<string> RecommendedFor,
+        string SystemRequirements,
+        int Rating);
 }

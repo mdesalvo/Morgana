@@ -16,12 +16,9 @@ public class TroubleshootingAgent : MorganaAgent
         IPromptResolverService promptResolverService,
         ILogger<TroubleshootingAgent> logger,
         ILogger<MorganaContextProvider> contextProviderLogger,
-        IMCPToolProvider? mcpToolProvider=null) : base(conversationId, llmService, promptResolverService, logger)
+        AgentAdapter agentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
-        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger, contextProviderLogger, mcpToolProvider);
-        
-        // Crea agente e context provider
-        (aiAgent, contextProvider) = adapter.CreateTroubleshootingAgent(OnSharedContextUpdate);
+        (aiAgent, contextProvider) = agentAdapter.CreateTroubleshootingAgent(OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }

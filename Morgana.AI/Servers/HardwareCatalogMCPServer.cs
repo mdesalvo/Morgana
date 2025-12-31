@@ -1,35 +1,105 @@
-using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 
 namespace Morgana.AI.Servers;
 
 /// <summary>
-/// Mock MCP server providing hardware component catalog.
-/// Uses SQLite for persistence (example implementation).
+/// Mock MCP server providing hardware component catalog (in-memory).
 /// 
 /// IMPORTANT: This is a MOCK/EXAMPLE implementation for demonstration purposes.
 /// In production environments, customers should:
 /// - Connect to real inventory systems (ERP, CRM, databases)
 /// - Implement proper authentication and authorization
 /// - Add caching and performance optimizations
-/// - Handle concurrent access appropriately
 /// </summary>
 public class HardwareCatalogMCPServer : MorganaMCPServer
 {
-    private readonly string dbPath;
+    private readonly List<HardwareComponent> catalog;
     
     public HardwareCatalogMCPServer(
         Records.MCPServerConfig config,
         ILogger<HardwareCatalogMCPServer> logger) : base(config, logger)
     {
-        dbPath = config.ConnectionString;
+        // Initialize in-memory catalog
+        catalog =
+        [
+            // Routers
+            new HardwareComponent(
+                Type: "router",
+                Model: "FiberMax Pro",
+                Price: 89.99m,
+                Specs: new Dictionary<string, string> { ["speed"] = "1Gbps", ["wifi"] = "WiFi 6", ["ports"] = "4", ["mesh"] = "false" },
+                CompatibleWith: ["old_router_x", "basic_router"],
+                InStock: true,
+                RecommendedFor: ["connessione_lenta", "stabilita"]),
+
+            new HardwareComponent(
+                Type: "router",
+                Model: "UltraNet 5G",
+                Price: 149.99m,
+                Specs: new Dictionary<string, string> { ["speed"] = "5Gbps", ["wifi"] = "WiFi 6E", ["ports"] = "8", ["mesh"] = "true" },
+                CompatibleWith: ["*"],
+                InStock: true,
+                RecommendedFor: ["connessione_lenta", "copertura_wifi", "stabilita"]),
+
+            new HardwareComponent(
+                Type: "router",
+                Model: "GamerEdge Pro",
+                Price: 199.99m,
+                Specs: new Dictionary<string, string> { ["speed"] = "2.5Gbps", ["wifi"] = "WiFi 6E", ["ports"] = "6", ["qos"] = "gaming" },
+                CompatibleWith: ["*"],
+                InStock: true,
+                RecommendedFor: ["connessione_lenta", "stabilita"]),
+
+            // Modems
+            new HardwareComponent(
+                Type: "modem",
+                Model: "SpeedLink 5G",
+                Price: 129.99m,
+                Specs: new Dictionary<string, string> { ["speed"] = "5Gbps", ["ports"] = "4", ["docsis"] = "3.1" },
+                CompatibleWith: ["router_y", "ultranet", "fibermax"],
+                InStock: true,
+                RecommendedFor: ["connessione_lenta"]),
+
+            new HardwareComponent(
+                Type: "modem",
+                Model: "HyperFiber Max",
+                Price: 169.99m,
+                Specs: new Dictionary<string, string> { ["speed"] = "10Gbps", ["ports"] = "2", ["docsis"] = "4.0" },
+                CompatibleWith: ["*"],
+                InStock: true,
+                RecommendedFor: ["connessione_lenta"]),
+
+            // Extenders
+            new HardwareComponent(
+                Type: "extender",
+                Model: "SignalBoost Mini",
+                Price: 39.99m,
+                Specs: new Dictionary<string, string> { ["coverage"] = "100m2", ["wifi"] = "WiFi 6", ["mesh"] = "false" },
+                CompatibleWith: ["*"],
+                InStock: true,
+                RecommendedFor: ["copertura_wifi"]),
+
+            new HardwareComponent(
+                Type: "extender",
+                Model: "MegaRange Pro",
+                Price: 79.99m,
+                Specs: new Dictionary<string, string> { ["coverage"] = "250m2", ["wifi"] = "WiFi 6E", ["mesh"] = "true" },
+                CompatibleWith: ["*"],
+                InStock: true,
+                RecommendedFor: ["copertura_wifi"]),
+
+            new HardwareComponent(
+                Type: "extender",
+                Model: "PowerBeam Ultra",
+                Price: 119.99m,
+                Specs: new Dictionary<string, string> { ["coverage"] = "350m2", ["wifi"] = "WiFi 6E", ["mesh"] = "true", ["outdoor"] = "true" },
+                CompatibleWith: ["*"],
+                InStock: true,
+                RecommendedFor: ["copertura_wifi"])
+        ];
         
-        // Copy embedded database to disk if not exists
-        EnsureDatabaseFromEmbeddedResource("Morgana.AI.Servers.Data.hardware_catalog.db");
-        
-        logger.LogInformation($"HardwareCatalogMCPServer initialized: {dbPath}");
+        logger.LogInformation($"HardwareCatalogMCPServer initialized with {catalog.Count} products in-memory");
     }
     
     protected override Task<IEnumerable<Records.MCPToolDefinition>> RegisterToolsAsync()
@@ -62,8 +132,7 @@ public class HardwareCatalogMCPServer : MorganaMCPServer
             
             new Records.MCPToolDefinition(
                 Name: "OttieniSpecificheHardware",
-                Description: "Ottieni specifiche dettagliate, prezzi e disponibilità per un modello hardware specifico. " +
-                            "Utile per fornire informazioni dettagliate sul prodotto agli utenti.",
+                Description: "Ottieni specifiche dettagliate, prezzi e disponibilità per un modello hardware specifico.",
                 InputSchema: new Records.MCPInputSchema(
                     Type: "object",
                     Properties: new Dictionary<string, Records.MCPParameterSchema>
@@ -78,111 +147,87 @@ public class HardwareCatalogMCPServer : MorganaMCPServer
         return Task.FromResult<IEnumerable<Records.MCPToolDefinition>>(tools);
     }
     
-    protected override async Task<Records.MCPToolResult> ExecuteToolAsync(
+    protected override Task<Records.MCPToolResult> ExecuteToolAsync(
         string toolName,
         Dictionary<string, object> parameters)
     {
         return toolName switch
         {
-            "CercaHardwareCompatibile" => await SearchCompatibleHardwareAsync(parameters),
-            "OttieniSpecificheHardware" => await GetHardwareSpecsAsync(parameters),
-            _ => new Records.MCPToolResult(true, null, $"Tool sconosciuto: {toolName}")
+            "CercaHardwareCompatibile" => SearchCompatibleHardwareAsync(parameters),
+            "OttieniSpecificheHardware" => GetHardwareSpecsAsync(parameters),
+            _ => Task.FromResult(new Records.MCPToolResult(true, null, $"Tool sconosciuto: {toolName}"))
         };
     }
     
-    private async Task<Records.MCPToolResult> SearchCompatibleHardwareAsync(
-        Dictionary<string, object> parameters)
+    private Task<Records.MCPToolResult> SearchCompatibleHardwareAsync(Dictionary<string, object> parameters)
     {
         string componentType = parameters["tipoComponente"].ToString()!;
         string? currentModel = parameters.GetValueOrDefault("modelloAttuale")?.ToString();
         string? issueType = parameters.GetValueOrDefault("tipoProblema")?.ToString();
         
-        using SqliteConnection connection = new SqliteConnection($"Data Source={dbPath}");
-        await connection.OpenAsync();
+        // Query in-memory catalog
+        IEnumerable<HardwareComponent> results = catalog
+            .Where(c => c.Type == componentType)
+            .Where(c => c.InStock)
+            .Where(c => issueType == null || c.RecommendedFor.Contains(issueType))
+            .Where(c => currentModel == null || 
+                        c.CompatibleWith.Contains("*") || 
+                        c.CompatibleWith.Any(compat => compat.Contains(currentModel, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(c => c.Price)
+            .Take(5);
         
-        SqliteCommand command = connection.CreateCommand();
-        command.CommandText = @"
-            SELECT model, price, specs, in_stock, recommended_for
-            FROM hardware_components
-            WHERE type = $type
-            AND in_stock = 1
-            AND ($issue IS NULL OR recommended_for LIKE '%' || $issue || '%')
-            AND ($model IS NULL OR compatible_with LIKE '%' || $model || '%' OR compatible_with = '*')
-            ORDER BY price ASC
-            LIMIT 5";
-        
-        command.Parameters.AddWithValue("$type", componentType);
-        command.Parameters.AddWithValue("$model", currentModel ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("$issue", issueType ?? (object)DBNull.Value);
-        
-        List<string> results = [];
-        using SqliteDataReader reader = await command.ExecuteReaderAsync();
-        
-        while (await reader.ReadAsync())
+        List<string> formatted = [];
+        foreach (HardwareComponent hw in results)
         {
-            string model = reader.GetString(0);
-            decimal price = reader.GetDecimal(1);
-            string specs = reader.GetString(2);
-            bool inStock = reader.GetBoolean(3);
-            
-            // Parse specs JSON
-            Dictionary<string, object>? specsObj = JsonSerializer.Deserialize<Dictionary<string, object>>(specs);
-            string specsFormatted = string.Join(", ", 
-                specsObj?.Select(kvp => $"{kvp.Key}: {kvp.Value}") ?? []);
-            
-            results.Add($"• {model}: €{price:F2}\n  Specs: {specsFormatted}\n  Available: {(inStock ? "Yes" : "No")}");
+            string specsStr = string.Join(", ", hw.Specs.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+            formatted.Add($"• {hw.Model}: €{hw.Price:F2}\n  Specs: {specsStr}\n  Disponibile: Sì");
         }
         
-        string content = results.Count > 0
-            ? $"Found {results.Count} compatible {componentType}(s):\n\n{string.Join("\n\n", results)}"
-            : $"No compatible {componentType} found matching criteria";
+        string content = formatted.Count > 0
+            ? $"Trovati {formatted.Count} {componentType} compatibili:\n\n{string.Join("\n\n", formatted)}"
+            : $"Nessun {componentType} compatibile trovato con i criteri specificati";
         
-        return new Records.MCPToolResult(false, content, null);
+        return Task.FromResult(new Records.MCPToolResult(false, content, null));
     }
     
-    private async Task<Records.MCPToolResult> GetHardwareSpecsAsync(
-        Dictionary<string, object> parameters)
+    private Task<Records.MCPToolResult> GetHardwareSpecsAsync(Dictionary<string, object> parameters)
     {
         string model = parameters["modello"].ToString()!;
         
-        using SqliteConnection connection = new SqliteConnection($"Data Source={dbPath}");
-        await connection.OpenAsync();
+        HardwareComponent? hw = catalog.FirstOrDefault(c => 
+            c.Model.Equals(model, StringComparison.OrdinalIgnoreCase));
         
-        SqliteCommand command = connection.CreateCommand();
-        command.CommandText = @"
-            SELECT type, price, specs, in_stock, compatible_with
-            FROM hardware_components
-            WHERE model = $model";
-        
-        command.Parameters.AddWithValue("$model", model);
-        
-        using SqliteDataReader reader = await command.ExecuteReaderAsync();
-        
-        if (await reader.ReadAsync())
+        if (hw == null)
         {
-            string type = reader.GetString(0);
-            decimal price = reader.GetDecimal(1);
-            string specs = reader.GetString(2);
-            bool inStock = reader.GetBoolean(3);
-            string compatibleWith = reader.GetString(4);
-            
-            Dictionary<string, object>? specsObj = JsonSerializer.Deserialize<Dictionary<string, object>>(specs);
-            string specsFormatted = string.Join("\n", 
-                specsObj?.Select(kvp => $"  • {kvp.Key}: {kvp.Value}") ?? []);
-            
-            string content = $@"Hardware: {model}
-Type: {type}
-Price: €{price:F2}
-Available: {(inStock ? "Disponibile" : "Non disponibile")}
-
-Specifications:
-{specsFormatted}
-
-Compatible with: {compatibleWith}";
-            
-            return new Records.MCPToolResult(false, content, null);
+            return Task.FromResult(new Records.MCPToolResult(true, null, $"Modello hardware '{model}' non trovato nel catalogo"));
         }
         
-        return new Records.MCPToolResult(true, null, $"Hardware model '{model}' not found in catalog");
+        string specsFormatted = string.Join("\n", hw.Specs.Select(kvp => $"  • {kvp.Key}: {kvp.Value}"));
+        
+        string compatibleWith = hw.CompatibleWith.Contains("*") 
+            ? "Tutti i modelli" 
+            : string.Join(", ", hw.CompatibleWith);
+        
+        string content = $@"Hardware: {hw.Model}
+Tipo: {hw.Type}
+Prezzo: €{hw.Price:F2}
+Disponibilità: {(hw.InStock ? "Disponibile" : "Non disponibile")}
+
+Specifiche:
+{specsFormatted}
+
+Compatibile con: {compatibleWith}";
+        
+        return Task.FromResult(new Records.MCPToolResult(false, content, null));
     }
+    
+    // Internal model
+    private record HardwareComponent(
+        string Type,
+        string Model,
+        decimal Price,
+        Dictionary<string, string> Specs,
+        List<string> CompatibleWith,
+        bool InStock,
+        List<string> RecommendedFor);
 }

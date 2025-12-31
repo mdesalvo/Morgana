@@ -21,15 +21,14 @@ public static class ActorSystemExtensions
             }
             catch
             {
-                Props props = DependencyResolver.For(actorSystem)
+                Props actorProps = DependencyResolver.For(actorSystem)
                     .Props<T>(conversationId);
 
-                return actorSystem.ActorOf(props, actorName);
+                return actorSystem.ActorOf(actorProps, actorName);
             }
         }
 
-        public async Task<IActorRef> GetOrCreateAgent(Type agentType, string actorSuffix, string conversationId,
-            IMCPToolProvider? mcpToolProvider=null)
+        public async Task<IActorRef> GetOrCreateAgent(Type agentType, string actorSuffix, string conversationId)
         {
             string agentName = $"{actorSuffix}-{conversationId}";
 
@@ -40,10 +39,10 @@ public static class ActorSystemExtensions
             }
             catch
             {
-                Props props = DependencyResolver.For(actorSystem)
-                    .Props(agentType, conversationId, mcpToolProvider);
+                Props agentProps = DependencyResolver.For(actorSystem)
+                    .Props(agentType, conversationId);
 
-                return actorSystem.ActorOf(props, agentName);
+                return actorSystem.ActorOf(agentProps, agentName);
             }
         }
     }
