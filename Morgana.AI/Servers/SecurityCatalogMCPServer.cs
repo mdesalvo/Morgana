@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 
@@ -18,7 +19,8 @@ public class SecurityCatalogMCPServer : MorganaMCPServer
     
     public SecurityCatalogMCPServer(
         Records.MCPServerConfig config,
-        ILogger<SecurityCatalogMCPServer> logger) : base(config, logger)
+        ILogger<SecurityCatalogMCPServer> logger,
+        IConfiguration configuration) : base(config, logger, configuration)
     {
         // Initialize in-memory catalog
         catalog =
@@ -204,12 +206,22 @@ public class SecurityCatalogMCPServer : MorganaMCPServer
     
     private Task<Records.MCPToolResult> SearchSecuritySoftwareAsync(Dictionary<string, object> parameters)
     {
-        string softwareType = parameters["tipoSoftware"].ToString()!;
-        string? threatType = parameters.GetValueOrDefault("tipoMinaccia")?.ToString();
-        string? symptoms = parameters.GetValueOrDefault("sintomi")?.ToString();
+        // Use TryGetNormalizedParameter for LLM-tolerant parameter extraction
+        if (!TryGetNormalizedParameter(parameters, "tipoSoftware", out object? softwareTypeObj))
+        {
+            return Task.FromResult(new Records.MCPToolResult(true, null, "Parametro 'tipoSoftware' mancante"));
+        }
+        
+        string softwareType = softwareTypeObj?.ToString() ?? "";
+        
+        TryGetNormalizedParameter(parameters, "tipoMinaccia", out object? threatTypeObj);
+        string? threatType = threatTypeObj?.ToString();
+        
+        TryGetNormalizedParameter(parameters, "sintomi", out object? symptomsObj);
+        string? symptoms = symptomsObj?.ToString();
         
         // Query in-memory catalog with scoring system
-        var scoredResults = catalog
+        IEnumerable<SecurityProduct> scoredResults = catalog
             .Where(p => p.Type == softwareType)
             .Select(p => new
             {
@@ -266,7 +278,14 @@ public class SecurityCatalogMCPServer : MorganaMCPServer
     
     private Task<Records.MCPToolResult> GetSecurityDetailsAsync(Dictionary<string, object> parameters)
     {
-        string productName = parameters["nomeProdotto"]?.ToString()!;
+        // Use TryGetNormalizedParameter - handles "nomeProdotto", "nome_prodotto", "NomeProdotto", etc.
+        if (!TryGetNormalizedParameter(parameters, "nomeProdotto", out object? productNameObj))
+        {
+            logger.LogWarning($"Parameter 'nomeProdotto' not found. Available parameters: {string.Join(", ", parameters.Keys)}");
+            return Task.FromResult(new Records.MCPToolResult(true, null, "Parametro 'nomeProdotto' mancante"));
+        }
+        
+        string productName = productNameObj?.ToString() ?? "";
         
         SecurityProduct? prod = catalog.FirstOrDefault(p => 
             p.ProductName.Equals(productName, StringComparison.OrdinalIgnoreCase));
@@ -297,7 +316,13 @@ Requisiti di sistema: {prod.SystemRequirements}";
     
     private Task<Records.MCPToolResult> CheckThreatCompatibilityAsync(Dictionary<string, object> parameters)
     {
-        string threatName = parameters["nomeMinaccia"].ToString()!;
+        // Use TryGetNormalizedParameter
+        if (!TryGetNormalizedParameter(parameters, "nomeMinaccia", out object? threatNameObj))
+        {
+            return Task.FromResult(new Records.MCPToolResult(true, null, "Parametro 'nomeMinaccia' mancante"));
+        }
+        
+        string threatName = threatNameObj?.ToString() ?? "";
         
         List<SecurityProduct> compatibleProducts = catalog
             .Where(p => p.ThreatCoverage.Any(t => t.Contains(threatName, StringComparison.OrdinalIgnoreCase)))

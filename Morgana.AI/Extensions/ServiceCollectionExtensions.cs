@@ -42,11 +42,9 @@ public static class ServiceCollectionExtensions
             {
                 services.AddSingleton<IMCPServer>(sp =>
                 {
-                    ILogger<MorganaMCPServer> logger = sp.GetRequiredService<ILogger<MorganaMCPServer>>();
-                
                     return serverConfig.Type switch
                     {
-                        Records.MCPServerType.InProcess => CreateInProcessServer(serverConfig, logger, sp),
+                        Records.MCPServerType.InProcess => CreateInProcessServer(serverConfig, sp),
                         Records.MCPServerType.HTTP => throw new NotImplementedException("HTTP MCP client not yet implemented (planned for v0.6+)"),
                         _ => throw new InvalidOperationException($"Unknown MCP server type: {serverConfig.Type}")
                     };
@@ -142,12 +140,10 @@ public static class ServiceCollectionExtensions
     /// Discovers server implementations from all loaded assemblies by scanning for MorganaMCPServer derivatives.
     /// </summary>
     /// <param name="config">Server configuration</param>
-    /// <param name="logger">Logger instance</param>
     /// <param name="serviceProvider">Service provider for DI</param>
     /// <returns>Initialized IMCPServer instance</returns>
     private static IMCPServer CreateInProcessServer(
         Records.MCPServerConfig config,
-        ILogger<MorganaMCPServer> logger,
         IServiceProvider serviceProvider)
     {
         // Find all types that inherit from MorganaMCPServer across all loaded assemblies
@@ -191,9 +187,9 @@ public static class ServiceCollectionExtensions
                 $"Available MCP servers: {availableList}");
         }
 
-        logger.LogInformation($"Found MCP server: {mcpServerType.FullName}");
-
         // Instantiate with DI (constructor injection)
+        // ActivatorUtilities will resolve: ILogger<T>, IConfiguration from DI
+        // We pass only: config (non-DI parameter)
         return (IMCPServer)ActivatorUtilities.CreateInstance(
             serviceProvider,
             mcpServerType,

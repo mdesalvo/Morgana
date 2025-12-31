@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 
@@ -18,7 +19,8 @@ public class HardwareCatalogMCPServer : MorganaMCPServer
     
     public HardwareCatalogMCPServer(
         Records.MCPServerConfig config,
-        ILogger<HardwareCatalogMCPServer> logger) : base(config, logger)
+        ILogger<HardwareCatalogMCPServer> logger,
+        IConfiguration configuration) : base(config, logger, configuration)
     {
         // Initialize in-memory catalog
         catalog =
@@ -161,9 +163,19 @@ public class HardwareCatalogMCPServer : MorganaMCPServer
     
     private Task<Records.MCPToolResult> SearchCompatibleHardwareAsync(Dictionary<string, object> parameters)
     {
-        string componentType = parameters["tipoComponente"].ToString()!;
-        string? currentModel = parameters.GetValueOrDefault("modelloAttuale")?.ToString();
-        string? issueType = parameters.GetValueOrDefault("tipoProblema")?.ToString();
+        // Use TryGetNormalizedParameter for LLM-tolerant parameter extraction
+        if (!TryGetNormalizedParameter(parameters, "tipoComponente", out object? componentTypeObj))
+        {
+            return Task.FromResult(new Records.MCPToolResult(true, null, "Parametro 'tipoComponente' mancante"));
+        }
+        
+        string componentType = componentTypeObj?.ToString() ?? "";
+        
+        TryGetNormalizedParameter(parameters, "modelloAttuale", out object? currentModelObj);
+        string? currentModel = currentModelObj?.ToString();
+        
+        TryGetNormalizedParameter(parameters, "tipoProblema", out object? issueTypeObj);
+        string? issueType = issueTypeObj?.ToString();
         
         // Query in-memory catalog
         IEnumerable<HardwareComponent> results = catalog
@@ -192,7 +204,14 @@ public class HardwareCatalogMCPServer : MorganaMCPServer
     
     private Task<Records.MCPToolResult> GetHardwareSpecsAsync(Dictionary<string, object> parameters)
     {
-        string model = parameters["modello"].ToString()!;
+        // Use TryGetNormalizedParameter - handles "modello", "Modello", etc.
+        if (!TryGetNormalizedParameter(parameters, "modello", out object? modelObj))
+        {
+            logger.LogWarning($"Parameter 'modello' not found. Available parameters: {string.Join(", ", parameters.Keys)}");
+            return Task.FromResult(new Records.MCPToolResult(true, null, "Parametro 'modello' mancante"));
+        }
+        
+        string model = modelObj?.ToString() ?? "";
         
         HardwareComponent? hw = catalog.FirstOrDefault(c => 
             c.Model.Equals(model, StringComparison.OrdinalIgnoreCase));
