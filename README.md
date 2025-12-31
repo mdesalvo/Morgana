@@ -450,7 +450,7 @@ public class HardwareCatalogMCPServer : MorganaMCPServer
 - ✅ Configuration validation with fail-fast checks
 - ✅ Example catalog servers (Hardware, Security)
 
-**v0.6.0 (Planned - Q2 2025)**
+**v0.6.0 (Planned - Jan 2026)**
 - 🔜 HTTP MCP client implementation
 - 🔜 Remote MCP server integration
 - 🔜 Third-party MCP provider support
