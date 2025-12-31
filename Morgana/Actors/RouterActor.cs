@@ -15,14 +15,15 @@ public class RouterActor : MorganaActor
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        IAgentRegistryService agentResolverService) : base(conversationId, llmService, promptResolverService)
+        IAgentRegistryService agentResolverService,
+        IMCPToolProvider? mcpToolProvider=null) : base(conversationId, llmService, promptResolverService)
     {
         // Autodiscovery of routable agents
         foreach (string intent in agentResolverService.GetAllIntents())
         {
             Type? agentType = agentResolverService.ResolveAgentFromIntent(intent);
             if (agentType != null)
-                agents[intent] = Context.System.GetOrCreateAgent(agentType, intent, conversationId).GetAwaiter().GetResult();
+                agents[intent] = Context.System.GetOrCreateAgent(agentType, intent, conversationId, mcpToolProvider).GetAwaiter().GetResult();
         }
 
         ReceiveAsync<AgentRequest>(RouteToAgentAsync);

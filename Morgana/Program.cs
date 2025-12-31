@@ -1,6 +1,9 @@
 using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
+using Microsoft.Extensions.AI;
+using Morgana.AI.Adapters;
+using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.Hubs;
@@ -42,8 +45,12 @@ builder.Services.AddSingleton<ILLMService>(sp =>
         _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' non supportato. Valori validi: 'AzureOpenAI', 'Anthropic'")
     };
 });
+builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMService>().GetChatClient());
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
+
+// MCP Protocol Support
+builder.Services.AddMCPProtocol(builder.Configuration);
 
 // Akka.NET Services
 builder.Services.AddSingleton(sp =>

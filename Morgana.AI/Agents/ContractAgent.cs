@@ -15,9 +15,10 @@ public class ContractAgent : MorganaAgent
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         ILogger<ContractAgent> logger,
-        ILogger<MorganaContextProvider> contextProviderLogger) : base(conversationId, llmService, promptResolverService, logger)
+        ILogger<MorganaContextProvider> contextProviderLogger,
+        IMCPToolProvider? mcpToolProvider=null) : base(conversationId, llmService, promptResolverService, logger)
     {
-        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger, contextProviderLogger);
+        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger, contextProviderLogger, mcpToolProvider);
         
         // Crea agente e context provider
         (aiAgent, contextProvider) = adapter.CreateContractAgent(OnSharedContextUpdate);

@@ -1,6 +1,7 @@
 ﻿using Akka.Actor;
 using Akka.DependencyInjection;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Extensions;
 
@@ -27,7 +28,8 @@ public static class ActorSystemExtensions
             }
         }
 
-        public async Task<IActorRef> GetOrCreateAgent(Type agentType, string actorSuffix, string conversationId)
+        public async Task<IActorRef> GetOrCreateAgent(Type agentType, string actorSuffix, string conversationId,
+            IMCPToolProvider? mcpToolProvider=null)
         {
             string agentName = $"{actorSuffix}-{conversationId}";
 
@@ -39,7 +41,7 @@ public static class ActorSystemExtensions
             catch
             {
                 Props props = DependencyResolver.For(actorSystem)
-                    .Props(agentType, conversationId);
+                    .Props(agentType, conversationId, mcpToolProvider);
 
                 return actorSystem.ActorOf(props, agentName);
             }

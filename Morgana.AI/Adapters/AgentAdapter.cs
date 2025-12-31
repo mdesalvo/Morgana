@@ -19,18 +19,21 @@ public class AgentAdapter
     protected readonly IChatClient chatClient;
     protected readonly ILogger<MorganaAgent> logger;
     protected readonly ILogger<MorganaContextProvider> contextProviderLogger;
+    protected readonly IMCPToolProvider? mcpToolProvider;
     protected readonly Prompt morganaPrompt;
 
     public AgentAdapter(
         IChatClient chatClient,
         IPromptResolverService promptResolverService,
         ILogger<MorganaAgent> logger,
-        ILogger<MorganaContextProvider> contextProviderLogger)
+        ILogger<MorganaContextProvider> contextProviderLogger,
+        IMCPToolProvider mcpToolProvider=null)
     {
         this.chatClient = chatClient;
         this.promptResolverService = promptResolverService;
         this.logger = logger;
         this.contextProviderLogger = contextProviderLogger;
+        this.mcpToolProvider = mcpToolProvider;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
     }
@@ -139,10 +142,7 @@ public class AgentAdapter
         ToolDefinition[] billingTools = [.. billingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                               .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
 
-        MorganaContextProvider contextProvider = CreateContextProvider(
-            billingIntent, 
-            billingTools, 
-            sharedContextCallback);
+        MorganaContextProvider contextProvider = CreateContextProvider(billingIntent, billingTools, sharedContextCallback);
 
         BillingTool billingTool = new BillingTool(logger, () => contextProvider);
 
@@ -228,37 +228,69 @@ public class AgentAdapter
 
         ToolDefinition[] troubleshootingTools = [.. troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                                        .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
+        List<ToolDefinition> allToolDefinitions = troubleshootingTools.ToList();
+
+        // Load MCP tools if provider available
+        List<AIFunction> mcpTools = [];
+        if (mcpToolProvider != null)
+        {
+            // Load from all configured MCP servers
+            List<AIFunction> allMCPTools = mcpToolProvider.LoadAllToolsAsync().GetAwaiter().GetResult()?.ToList() ?? [];
+
+            mcpTools.AddRange(allMCPTools);
+
+            foreach (AIFunction mcpTool in allMCPTools)
+            {
+                ToolParameter[] mcpToolParameters = mcpTool.AdditionalProperties?
+                    .Select(kvp => new ToolParameter(
+                        Name: kvp.Key,
+                        Description: kvp.Value.ToString(),
+                        Required: true,
+                        Scope: "request",
+                        Shared: false))
+                    .ToArray() ?? [];
+
+                allToolDefinitions.Add(new ToolDefinition(
+                    mcpTool.Name,
+                    mcpTool.Description,
+                    mcpToolParameters));
+            }
+        }
 
         MorganaContextProvider contextProvider = CreateContextProvider(
-            troubleShootingIntent, 
-            troubleshootingTools, 
+            troubleShootingIntent,
+            allToolDefinitions,
             sharedContextCallback);
 
         TroubleshootingTool troubleshootingTool = new TroubleshootingTool(logger, () => contextProvider);
 
         List<GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<GlobalPolicy>>("GlobalPolicies");
-        
-        ToolAdapter troubleshootingToolAdapter = new ToolAdapter(globalPolicies);
-        foreach (ToolDefinition troubleshootingToolDefinition in troubleshootingTools ?? [])
+
+        ToolAdapter toolAdapter = new ToolAdapter(globalPolicies);
+        foreach (ToolDefinition toolDefinition in troubleshootingTools)
         {
-            Delegate troubleshootingToolImplementation = troubleshootingToolDefinition.Name switch
+            Delegate toolImplementation = toolDefinition.Name switch
             {
                 nameof(TroubleshootingTool.GetContextVariable) => troubleshootingTool.GetContextVariable,
                 nameof(TroubleshootingTool.SetContextVariable) => troubleshootingTool.SetContextVariable,
                 nameof(TroubleshootingTool.RunDiagnostics) => troubleshootingTool.RunDiagnostics,
                 nameof(TroubleshootingTool.GetTroubleshootingGuide) => troubleshootingTool.GetTroubleshootingGuide,
-                _ => throw new InvalidOperationException($"Tool '{troubleshootingToolDefinition.Name}' non supportato")
+                _ => throw new InvalidOperationException($"Tool '{toolDefinition.Name}' not supported")
             };
 
-            troubleshootingToolAdapter.AddTool(troubleshootingToolDefinition.Name, troubleshootingToolImplementation, troubleshootingToolDefinition);
+            toolAdapter.AddTool(toolDefinition.Name, toolImplementation, toolDefinition);
         }
 
         string instructions = ComposeAgentInstructions(troubleshootingPrompt);
 
+        IEnumerable<AIFunction> allFunctions = toolAdapter
+           .CreateAllFunctions()
+           .Concat(mcpTools);
+        
         AIAgent agent = chatClient.CreateAIAgent(
             instructions: instructions,
             name: troubleShootingIntent,
-            tools: [.. troubleshootingToolAdapter.CreateAllFunctions()]);
+            tools: [.. allFunctions]);
 
         return (agent, contextProvider);
     }
