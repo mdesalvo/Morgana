@@ -20,10 +20,10 @@ public static class ActorSystemExtensions
             }
             catch
             {
-                Props props = DependencyResolver.For(actorSystem)
+                Props actorProps = DependencyResolver.For(actorSystem)
                     .Props<T>(conversationId);
 
-                return actorSystem.ActorOf(props, actorName);
+                return actorSystem.ActorOf(actorProps, actorName);
             }
         }
 
@@ -38,10 +38,10 @@ public static class ActorSystemExtensions
             }
             catch
             {
-                Props props = DependencyResolver.For(actorSystem)
+                Props agentProps = DependencyResolver.For(actorSystem)
                     .Props(agentType, conversationId);
 
-                return actorSystem.ActorOf(props, agentName);
+                return actorSystem.ActorOf(agentProps, agentName);
             }
         }
     }

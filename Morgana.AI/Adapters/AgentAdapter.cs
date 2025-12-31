@@ -1,6 +1,5 @@
 ﻿using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Morgana.AI.Agents;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Tools;
@@ -19,18 +18,21 @@ public class AgentAdapter
     protected readonly IChatClient chatClient;
     protected readonly ILogger<MorganaAgent> logger;
     protected readonly ILogger<MorganaContextProvider> contextProviderLogger;
+    protected readonly IMCPToolProvider? mcpToolProvider;
     protected readonly Prompt morganaPrompt;
 
     public AgentAdapter(
         IChatClient chatClient,
         IPromptResolverService promptResolverService,
         ILogger<MorganaAgent> logger,
-        ILogger<MorganaContextProvider> contextProviderLogger)
+        ILogger<MorganaContextProvider> contextProviderLogger,
+        IMCPToolProvider? mcpToolProvider = null)
     {
         this.chatClient = chatClient;
         this.promptResolverService = promptResolverService;
         this.logger = logger;
         this.contextProviderLogger = contextProviderLogger;
+        this.mcpToolProvider = mcpToolProvider;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
     }
@@ -128,137 +130,141 @@ public class AgentAdapter
         return provider;
     }
 
-    public (AIAgent agent, MorganaContextProvider provider) CreateBillingAgent(
-        Action<string, object>? sharedContextCallback = null)
+    /// <summary>
+    /// Crea ToolAdapter specifico per un intent, registrando i tool nativi dell'agent
+    /// </summary>
+    private ToolAdapter CreateToolAdapterForIntent(
+        string intent,
+        ToolDefinition[] tools,
+        MorganaContextProvider contextProvider)
     {
-        string billingIntent = typeof(BillingAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
-        Prompt billingPrompt = promptResolverService.ResolveAsync(billingIntent)
-                                                    .GetAwaiter()
-                                                    .GetResult();
-
-        ToolDefinition[] billingTools = [.. billingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
-                                              .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
-
-        MorganaContextProvider contextProvider = CreateContextProvider(
-            billingIntent, 
-            billingTools, 
-            sharedContextCallback);
-
-        BillingTool billingTool = new BillingTool(logger, () => contextProvider);
-
         List<GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<GlobalPolicy>>("GlobalPolicies");
-        
-        ToolAdapter billingToolAdapter = new ToolAdapter(globalPolicies);
-        foreach (ToolDefinition billingToolDefinition in billingTools ?? [])
-        {
-            Delegate billingToolImplementation = billingToolDefinition.Name switch
-            {
-                nameof(BillingTool.GetContextVariable) => billingTool.GetContextVariable,
-                nameof(BillingTool.SetContextVariable) => billingTool.SetContextVariable,
-                nameof(BillingTool.GetInvoices) => billingTool.GetInvoices,
-                nameof(BillingTool.GetInvoiceDetails) => billingTool.GetInvoiceDetails,
-                _ => throw new InvalidOperationException($"Tool '{billingToolDefinition.Name}' non supportato")
-            };
+        ToolAdapter toolAdapter = new ToolAdapter(globalPolicies);
 
-            billingToolAdapter.AddTool(billingToolDefinition.Name, billingToolImplementation, billingToolDefinition);
+        // Crea tool instance in base all'intent
+        MorganaTool toolInstance = intent.ToLower() switch
+        {
+            "billing" => new BillingTool(logger, () => contextProvider),
+            "contract" => new ContractTool(logger, () => contextProvider),
+            "troubleshooting" => new TroubleshootingTool(logger, () => contextProvider),
+            _ => throw new InvalidOperationException($"Intent '{intent}' does not have native tools configured")
+        };
+
+        // Registra i tool tramite reflection o mapping esplicito
+        foreach (ToolDefinition toolDefinition in tools)
+        {
+            // Cerca metodo per nome nel tool instance
+            MethodInfo? method = toolInstance.GetType().GetMethod(toolDefinition.Name);
+            if (method == null)
+            {
+                logger.LogWarning($"Tool '{toolDefinition.Name}' declared in prompts.json but not found in {toolInstance.GetType().Name}");
+                continue;
+            }
+
+            // Crea delegate dal metodo
+            Delegate toolImplementation = Delegate.CreateDelegate(
+                System.Linq.Expressions.Expression.GetDelegateType(
+                    method.GetParameters().Select(p => p.ParameterType)
+                        .Concat([method.ReturnType]).ToArray()),
+                toolInstance,
+                method);
+
+            toolAdapter.AddTool(toolDefinition.Name, toolImplementation, toolDefinition);
         }
 
-        string instructions = ComposeAgentInstructions(billingPrompt);
-
-        AIAgent agent = chatClient.CreateAIAgent(
-            instructions: instructions,
-            name: billingIntent,
-            tools: [.. billingToolAdapter.CreateAllFunctions()]);
-
-        return (agent, contextProvider);
+        return toolAdapter;
     }
 
-    public (AIAgent agent, MorganaContextProvider provider) CreateContractAgent(
+    /// <summary>
+    /// Generic agent creation method - replaces CreateBillingAgent, CreateContractAgent, CreateTroubleshootingAgent.
+    /// Automatically loads MCP tools from servers declared in UsesMCPServersAttribute.
+    /// </summary>
+    public (AIAgent agent, MorganaContextProvider provider) CreateAgent(
+        Type agentType,
         Action<string, object>? sharedContextCallback = null)
     {
-        string contractIntent = typeof(ContractAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
-        Prompt contractPrompt = promptResolverService.ResolveAsync(contractIntent)
-                                                     .GetAwaiter()
-                                                     .GetResult();
+        // Extract intent and MCP servers from attributes
+        HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>();
+        if (intentAttribute == null)
+            throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
 
-        ToolDefinition[] contractTools = [.. contractPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
-                                                .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
+        string intent = intentAttribute.Intent;
+        string[] mcpServerNames = agentType.GetCustomAttribute<UsesMCPServersAttribute>()?.ServerNames ?? [];
 
-        MorganaContextProvider contextProvider = CreateContextProvider(
-            contractIntent, 
-            contractTools, 
-            sharedContextCallback);
+        logger.LogInformation($"Creating agent for intent '{intent}' with MCP servers: {(mcpServerNames.Length > 0 ? string.Join(", ", mcpServerNames) : "none")}");
 
-        ContractTool contractTool = new ContractTool(logger, () => contextProvider);
+        // Load agent prompt
+        Prompt agentPrompt = promptResolverService.ResolveAsync(intent)
+            .GetAwaiter()
+            .GetResult();
 
-        List<GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<GlobalPolicy>>("GlobalPolicies");
-        
-        ToolAdapter contractToolAdapter = new ToolAdapter(globalPolicies);
-        foreach (ToolDefinition contractToolDefinition in contractTools ?? [])
+        // Merge agent tools with global Morgana tools
+        ToolDefinition[] agentTools = [.. morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
+                                            .Union(agentPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
+
+        List<ToolDefinition> allToolDefinitions = agentTools.ToList();
+
+        // Load MCP tools ONLY from servers declared in UsesMCPServersAttribute
+        List<AIFunction> mcpTools = [];
+        if (mcpToolProvider != null && mcpServerNames.Length > 0)
         {
-            Delegate contractToolImplementation = contractToolDefinition.Name switch
+            foreach (string serverName in mcpServerNames)
             {
-                nameof(ContractTool.GetContextVariable) => contractTool.GetContextVariable,
-                nameof(ContractTool.SetContextVariable) => contractTool.SetContextVariable,
-                nameof(ContractTool.GetContractDetails) => contractTool.GetContractDetails,
-                nameof(ContractTool.InitiateCancellation) => contractTool.InitiateCancellation,
-                _ => throw new InvalidOperationException($"Tool '{contractToolDefinition.Name}' non supportato")
-            };
+                logger.LogInformation($"Loading MCP tools from server '{serverName}' for agent '{intent}'");
 
-            contractToolAdapter.AddTool(contractToolDefinition.Name, contractToolImplementation, contractToolDefinition);
+                List<AIFunction> serverTools = mcpToolProvider
+                    .LoadToolsFromServerAsync(serverName)
+                    .GetAwaiter()
+                    .GetResult()
+                    ?.ToList() ?? [];
+
+                mcpTools.AddRange(serverTools);
+
+                // Add MCP tool definitions to context provider metadata
+                foreach (AIFunction mcpTool in serverTools)
+                {
+                    ToolParameter[] mcpToolParameters = mcpTool.AdditionalProperties?
+                        .Select(kvp => new ToolParameter(
+                            Name: kvp.Key,
+                            Description: kvp.Value?.ToString() ?? "",
+                            Required: true,
+                            Scope: "request", //MCP tools are scoped to "request" by design
+                            Shared: false))
+                        .ToArray() ?? [];
+
+                    allToolDefinitions.Add(new ToolDefinition(
+                        mcpTool.Name,
+                        mcpTool.Description,
+                        mcpToolParameters));
+                }
+            }
+
+            logger.LogInformation(
+                $"Agent '{intent}' loaded {mcpTools.Count} MCP tools from {mcpServerNames.Length} server(s)");
         }
 
-        string instructions = ComposeAgentInstructions(contractPrompt);
-
-        AIAgent agent = chatClient.CreateAIAgent(
-            instructions: instructions,
-            name: contractIntent,
-            tools: [.. contractToolAdapter.CreateAllFunctions()]);
-
-        return (agent, contextProvider);
-    }
-
-    public (AIAgent agent, MorganaContextProvider provider) CreateTroubleshootingAgent(
-        Action<string, object>? sharedContextCallback = null)
-    {
-        string troubleShootingIntent = typeof(TroubleshootingAgent).GetCustomAttribute<HandlesIntentAttribute>()!.Intent;
-        Prompt troubleshootingPrompt = promptResolverService.ResolveAsync(troubleShootingIntent)
-                                                            .GetAwaiter()
-                                                            .GetResult();
-
-        ToolDefinition[] troubleshootingTools = [.. troubleshootingPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
-                                                       .Union(morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
-
+        // Create context provider with all tool definitions (native + MCP)
         MorganaContextProvider contextProvider = CreateContextProvider(
-            troubleShootingIntent, 
-            troubleshootingTools, 
+            intent,
+            allToolDefinitions,
             sharedContextCallback);
 
-        TroubleshootingTool troubleshootingTool = new TroubleshootingTool(logger, () => contextProvider);
+        // Create tool adapter and register native tools
+        ToolAdapter toolAdapter = CreateToolAdapterForIntent(intent, agentTools, contextProvider);
 
-        List<GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<GlobalPolicy>>("GlobalPolicies");
-        
-        ToolAdapter troubleshootingToolAdapter = new ToolAdapter(globalPolicies);
-        foreach (ToolDefinition troubleshootingToolDefinition in troubleshootingTools ?? [])
-        {
-            Delegate troubleshootingToolImplementation = troubleshootingToolDefinition.Name switch
-            {
-                nameof(TroubleshootingTool.GetContextVariable) => troubleshootingTool.GetContextVariable,
-                nameof(TroubleshootingTool.SetContextVariable) => troubleshootingTool.SetContextVariable,
-                nameof(TroubleshootingTool.RunDiagnostics) => troubleshootingTool.RunDiagnostics,
-                nameof(TroubleshootingTool.GetTroubleshootingGuide) => troubleshootingTool.GetTroubleshootingGuide,
-                _ => throw new InvalidOperationException($"Tool '{troubleshootingToolDefinition.Name}' non supportato")
-            };
+        // Compose full agent instructions
+        string instructions = ComposeAgentInstructions(agentPrompt);
 
-            troubleshootingToolAdapter.AddTool(troubleshootingToolDefinition.Name, troubleshootingToolImplementation, troubleshootingToolDefinition);
-        }
+        // Merge native AIFunctions + MCP AIFunctions
+        IEnumerable<AIFunction> allFunctions = toolAdapter
+            .CreateAllFunctions()
+            .Concat(mcpTools);
 
-        string instructions = ComposeAgentInstructions(troubleshootingPrompt);
-
+        // Create AIAgent with all tools
         AIAgent agent = chatClient.CreateAIAgent(
             instructions: instructions,
-            name: troubleShootingIntent,
-            tools: [.. troubleshootingToolAdapter.CreateAllFunctions()]);
+            name: intent,
+            tools: [.. allFunctions]);
 
         return (agent, contextProvider);
     }

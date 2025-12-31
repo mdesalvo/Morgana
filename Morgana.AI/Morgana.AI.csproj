@@ -11,7 +11,7 @@
     <Company>Marco De Salvo</Company>
     <Product>Morgana</Product>
     <Description>Morgana is an advanced conversational AI system designed to handle complex customer service scenarios through a sophisticated multi-agent architecture. Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET, Morgana orchestrates specialized AI agents that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness.
-The system is powered by Microsoft's Agent Framework, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails, policy enforcement, and comprehensive conversation archival.</Description>
+      The system is powered by Microsoft's Agent Framework, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails, policy enforcement, and comprehensive conversation archival.</Description>
     <Copyright>Marco De Salvo</Copyright>
     <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mdesalvo/Morgana.git</RepositoryUrl>
@@ -19,6 +19,7 @@ The system is powered by Microsoft's Agent Framework, enabling seamless integrat
     <PackageTags>actor-model agentic-ai chatbot dotnet</PackageTags>
     <PackageId>Morgana.AI</PackageId>
     <IsPackable>false</IsPackable>
+    <UserSecretsId>b8707ee3-d788-42bc-a7f0-5ac0ea147f6d</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,6 +37,7 @@ The system is powered by Microsoft's Agent Framework, enabling seamless integrat
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.1.1" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.1.1-preview.1.25612.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.1" />
   </ItemGroup>
 
 </Project>

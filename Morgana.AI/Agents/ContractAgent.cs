@@ -8,6 +8,7 @@ using Morgana.AI.Providers;
 namespace Morgana.AI.Agents;
 
 [HandlesIntent("contract")]
+// No MCP servers needed - uses only native tools
 public class ContractAgent : MorganaAgent
 {
     public ContractAgent(
@@ -15,12 +16,11 @@ public class ContractAgent : MorganaAgent
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         ILogger<ContractAgent> logger,
-        ILogger<MorganaContextProvider> contextProviderLogger) : base(conversationId, llmService, promptResolverService, logger)
+        ILogger<MorganaContextProvider> contextProviderLogger,
+        AgentAdapter agentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
-        AgentAdapter adapter = new AgentAdapter(llmService.GetChatClient(), promptResolverService, logger, contextProviderLogger);
-        
-        // Crea agente e context provider
-        (aiAgent, contextProvider) = adapter.CreateContractAgent(OnSharedContextUpdate);
+        // Generic agent creation - no MCP tools loaded (no UsesMCPServers attribute)
+        (aiAgent, contextProvider) = agentAdapter.CreateAgent(GetType(), OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }
