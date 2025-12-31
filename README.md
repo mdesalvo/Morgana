@@ -112,11 +112,11 @@ Traditional chatbot systems often struggle with complexity—they either become 
     │           │         │  • SecurityCatalogMCPServer          │
     │           │         │  • [Your Custom MCP Servers]         │
     │           │         │  • [HTTP Remote Servers - v0.6+]     │
-    │           │         └──────────────────────────────────────┘
-    │           │
-    └─────┬─────┘
-          │
-          ▼
+    │           │         └──────────────┬───────────────────────┘
+    │           │                        │
+    └─────┬─────┘                        │
+          │                              │
+          ▼                              ▼
          ┌─────────────────────────────────────────────┐
          │           MorganaLLMService                 │
          │  (Guardrail, Classification, Tool Calling)  │
