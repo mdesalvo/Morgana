@@ -1,5 +1,4 @@
 @page "/"
-@using Cauldron.Messages
 @using Cauldron.Services
 @inject MorganaSignalRService SignalRService
 @inject HttpClient Http
@@ -27,18 +26,11 @@
         @if (!isInitialized || messages.Count == 0)
         {
             <div class="magical-loader">
-                <div class="spell-book">
-                    <div class="book-cover"></div>
-                    <div class="book-pages">
-                        <div class="page page-left"></div>
-                        <div class="page page-right"></div>
-                    </div>
-                    <div class="magic-runes">
-                        <span class="rune r1">✦</span>
-                        <span class="rune r2">✧</span>
-                        <span class="rune r3">✦</span>
-                        <span class="rune r4">✧</span>
-                    </div>
+                <div class="magic-sparkle-core">
+                    <div class="glow-core"></div>
+                    <div class="glow-ring ring-1"></div>
+                    <div class="glow-ring ring-2"></div>
+                    <div class="glow-ring ring-3"></div>
                 </div>
                 <div class="sparkles-container">
                     <div class="sparkle sp1"></div>
@@ -49,6 +41,10 @@
                     <div class="sparkle sp6"></div>
                     <div class="sparkle sp7"></div>
                     <div class="sparkle sp8"></div>
+                    <div class="sparkle sp9"></div>
+                    <div class="sparkle sp10"></div>
+                    <div class="sparkle sp11"></div>
+                    <div class="sparkle sp12"></div>
                 </div>
                 <p class="loading-text">@(Configuration["Morgana:LandingMessage"])</p>
             </div>
