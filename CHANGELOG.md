@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🎯 Major Feature: Proactive Conversational Paradigm
 This release represents a fundamental shift in user interaction: **Morgana now initiates conversations** rather than waiting passively for user input. She automatically presents herself with capabilities aligned to classified intents, creating a more engaging and guided experience.
 
+### 🎯 Major Feature: Model Context Protocol (MCP) Integration
+Morgana now supports **dynamic tool expansion** through the Model Context Protocol, enabling agents to declare dependencies on external tool providers via attributes. This transforms Morgana into an **enterprise-grade extensible platform** where capabilities can be scaled declaratively without code changes.
+
 ### ✨ Added
 
 **Proactive Presentation System**
@@ -37,7 +40,20 @@ This release represents a fundamental shift in user interaction: **Morgana now i
 - `FallbackMessage` configuration for error scenarios
 - Separation of displayable intents (user-facing) vs. classification intents (backend)
 
-### 📄 Changed
+**Model Context Protocol (MCP) Support**
+- `[UsesMCPServers]` attribute for declarative agent-to-server dependency mapping
+- `IMCPServer` interface for local and remote MCP tool providers
+- `MorganaMCPServer` base class for in-process MCP server implementations
+- `IMCPToolProvider` orchestrating tool discovery and AIFunction conversion
+- `IMCPServerRegistryService` for agent-to-server mapping with fail-fast validation
+- `MorganaMCPToolProvider` implementing automatic tool loading from configured servers
+- Bidirectional validation: agents ↔ MCP server configurations (startup-time checks)
+- `TryGetNormalizedParameter()` in `MorganaMCPServer` for LLM-tolerant parameter name handling (camelCase, snake_case, partial matches)
+- Configuration-driven MCP server management via `appsettings.json` (`LLM:MCPServers`)
+- Example MCP servers: `HardwareCatalogMCPServer`, `SecurityCatalogMCPServer` with real product catalogs
+- Automatic merging of native tools + MCP tools in `AgentAdapter.CreateAgent()`
+
+### 🔄 Changed
 
 **Actor Flow Modifications**
 - `ConversationManagerActor.HandleCreateConversationAsync()` now triggers `GeneratePresentationMessage`
@@ -47,6 +63,17 @@ This release represents a fundamental shift in user interaction: **Morgana now i
 - `IntentDefinition` record now includes `Label` (UI display) and `DefaultValue` (button value)
 - prompts.json `Classifier.Intents` array supports full intent metadata
 - Intent configuration serves dual purpose: classification (backend) + presentation (frontend)
+
+**Agent Architecture Enhancements**
+- `AgentAdapter.CreateAgent()` now queries `IMCPServerRegistryService` for declared MCP servers
+- MCP tools automatically merged with native tools before agent initialization
+- `TroubleshootingAgent` enhanced with `[UsesMCPServers("HardwareCatalog", "SecurityCatalog")]`
+- Tool definitions extended to include MCP-sourced tools with `Scope: "request"` by design
+
+**MCP Protocol Infrastructure**
+- `ServiceCollectionExtensions.AddMCPProtocol()` registers MCP services with DI container
+- `CreateInProcessServer()` reflection-based discovery of `MorganaMCPServer` implementations
+- MCP server instantiation via `ActivatorUtilities` for constructor injection support
 
 ### 🐛 Fixed
 **Blazor Server Render Mode Issue**
@@ -58,19 +85,17 @@ This release represents a fundamental shift in user interaction: **Morgana now i
   - Result: Eliminated duplicate initialization, reduced memory footprint, prevented race conditions
 
 ### 🚀 Future Enablement
-This proactive paradigm unlocks:
-- Personalized greetings based on user history
-- Context-aware capability suggestions
-- Multi-language presentation support
-- A/B testing of presentation strategies
-- Analytics on intent selection patterns
-- Guided onboarding flows for new users
+This release unlocks:
+- **Proactive paradigm**: Personalized greetings, context-aware suggestions, guided onboarding, A/B testing, analytics
+- **MCP extensibility**: HTTP remote servers (v0.6+), third-party tool integrations, production-grade catalogs, external CRM/ERP/knowledge base connectivity
 
 ### ⚠️ Migration Notes
 - **APIs**: No breaking changes to existing REST endpoints
 - **Frontend**: Quick reply system is opt-in per message (backward compatible)
 - **Configuration**: New optional `Morgana:LandingMessage` setting (has default)
 - **Prompts**: Existing intents work without `Label`/`DefaultValue` (not displayed as quick replies)
+- **MCP**: In-process servers only in v0.5.0; HTTP support planned for v0.6.0
+- **Agents**: Existing agents work without `[UsesMCPServers]` (opt-in capability expansion)
 
 ## [0.4.0] - 2024-12-28
 
