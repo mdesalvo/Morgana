@@ -222,6 +222,7 @@ public static class Records
     /// Request model for tool invocation.
     /// </summary>
     public record InvokeToolRequest(
-        string ServerName,
-        Dictionary<string, object>? Parameters);
+        [property: JsonPropertyName("serverName")] string? ServerName,
+        [property: JsonPropertyName("toolName")] string? ToolName,
+        [property: JsonPropertyName("parameters")] Dictionary<string, object>? Parameters);
 }
