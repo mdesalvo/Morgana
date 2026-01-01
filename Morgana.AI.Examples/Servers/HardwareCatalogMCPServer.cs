@@ -2,7 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 
-namespace Morgana.AI.Servers;
+namespace Morgana.AI.Examples.Servers;
 
 /// <summary>
 /// Mock MCP server providing hardware component catalog (in-memory).

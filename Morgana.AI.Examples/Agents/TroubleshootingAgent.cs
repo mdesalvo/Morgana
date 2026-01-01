@@ -5,21 +5,21 @@ using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 
-namespace Morgana.AI.Agents;
+namespace Morgana.AI.Examples.Agents;
 
-[HandlesIntent("contract")]
-// No MCP servers needed - uses only native tools
-public class ContractAgent : MorganaAgent
+[HandlesIntent("troubleshooting")]
+[UsesMCPServers("HardwareCatalog", "SecurityCatalog")]
+public class TroubleshootingAgent : MorganaAgent
 {
-    public ContractAgent(
+    public TroubleshootingAgent(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<ContractAgent> logger,
+        ILogger<TroubleshootingAgent> logger,
         ILogger<MorganaContextProvider> contextProviderLogger,
         AgentAdapter agentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
-        // Generic agent creation - no MCP tools loaded (no UsesMCPServers attribute)
+        // Generic agent creation - automatically loads MCP tools from UsesMCPServers attribute
         (aiAgent, contextProvider) = agentAdapter.CreateAgent(GetType(), OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);

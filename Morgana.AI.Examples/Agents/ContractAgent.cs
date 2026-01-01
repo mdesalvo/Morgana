@@ -5,17 +5,17 @@ using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 
-namespace Morgana.AI.Agents;
+namespace Morgana.AI.Examples.Agents;
 
-[HandlesIntent("billing")]
+[HandlesIntent("contract")]
 // No MCP servers needed - uses only native tools
-public class BillingAgent : MorganaAgent
+public class ContractAgent : MorganaAgent
 {
-    public BillingAgent(
+    public ContractAgent(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<BillingAgent> logger,
+        ILogger<ContractAgent> logger,
         ILogger<MorganaContextProvider> contextProviderLogger,
         AgentAdapter agentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {

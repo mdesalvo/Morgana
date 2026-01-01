@@ -86,6 +86,14 @@ public static class Records
         string Scope,
         bool Shared = false);
 
+    /// <summary>
+    /// Result of tool registry validation.
+    /// </summary>
+    public record ToolRegistryValidationResult(
+        bool IsValid,
+        IReadOnlyList<string> Warnings,
+        IReadOnlyList<string> Errors);
+    
     public record IntentDefinition(
         [property: JsonPropertyName("Name")] string Name,
         [property: JsonPropertyName("Description")] string Description,
@@ -209,4 +217,11 @@ public static class Records
         string Name,
         string Version,
         List<string> Capabilities);
+    
+    /// <summary>
+    /// Request model for tool invocation.
+    /// </summary>
+    public record InvokeToolRequest(
+        string ServerName,
+        Dictionary<string, object>? Parameters);
 }

@@ -5,21 +5,25 @@ using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 
-namespace Morgana.AI.Agents;
+namespace Morgana.AI.Examples.Agents;
 
-[HandlesIntent("troubleshooting")]
-[UsesMCPServers("HardwareCatalog", "SecurityCatalog")]
-public class TroubleshootingAgent : MorganaAgent
+/// <summary>
+/// Example agent for handling billing-related queries.
+/// Uses BillingTool (native) for billing operations.
+/// No MCP servers required for this agent.
+/// </summary>
+[HandlesIntent("billing")]
+public class BillingAgent : MorganaAgent
 {
-    public TroubleshootingAgent(
+    public BillingAgent(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<TroubleshootingAgent> logger,
+        ILogger<BillingAgent> logger,
         ILogger<MorganaContextProvider> contextProviderLogger,
         AgentAdapter agentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
-        // Generic agent creation - automatically loads MCP tools from UsesMCPServers attribute
+        // Generic agent creation - automatically loads native tools via ToolRegistry
         (aiAgent, contextProvider) = agentAdapter.CreateAgent(GetType(), OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);

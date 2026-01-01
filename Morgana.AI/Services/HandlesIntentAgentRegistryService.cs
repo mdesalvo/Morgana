@@ -7,26 +7,47 @@ namespace Morgana.AI.Services;
 
 public class HandlesIntentAgentRegistryService : IAgentRegistryService
 {
-    private readonly Dictionary<string, Type> intentToAgentType = [];
+    private readonly IPromptResolverService promptResolverService;
+    private readonly Lazy<Dictionary<string, Type>> intentToAgentType;
 
     public HandlesIntentAgentRegistryService(IPromptResolverService promptResolverService)
     {
-        // Discovery of available agents with their declared intent
+        this.promptResolverService = promptResolverService;
+        
+        // Lazy initialization - scan assemblies only when first accessed
+        // This ensures all assemblies (including Morgana.AI.Examples) are loaded
+        intentToAgentType = new Lazy<Dictionary<string, Type>>(InitializeAgentRegistry);
+    }
 
-        IEnumerable<Type> morganaAgentTypes = Assembly
-            .GetExecutingAssembly()
-            .GetTypes()
+    private Dictionary<string, Type> InitializeAgentRegistry()
+    {
+        Dictionary<string, Type> registry = new();
+        
+        // Discovery of available agents with their declared intent
+        // Scan ALL loaded assemblies, not just executing assembly
+        IEnumerable<Type> morganaAgentTypes = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => !a.IsDynamic)
+            .SelectMany(a =>
+            {
+                try
+                {
+                    return a.GetTypes();
+                }
+                catch (ReflectionTypeLoadException)
+                {
+                    return [];
+                }
+            })
             .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)));
 
         foreach (Type? morganaAgentType in morganaAgentTypes)
         {
             HandlesIntentAttribute? handlesIntentAttribute = morganaAgentType.GetCustomAttribute<HandlesIntentAttribute>();
             if (handlesIntentAttribute != null)
-                intentToAgentType[handlesIntentAttribute.Intent] = morganaAgentType;
+                registry[handlesIntentAttribute.Intent] = morganaAgentType;
         }
 
         // Bidirectional validation of Morgana agents and classifiable intents
-
         Records.Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
         
         // Parse structured IntentDefinition objects
@@ -38,7 +59,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             .Select(intent => intent.Name)
             .ToHashSet();
 
-        HashSet<string> registeredIntents = [.. intentToAgentType.Keys];
+        HashSet<string> registeredIntents = [.. registry.Keys];
 
         List<string> unregisteredClassifierIntents = [.. classifierIntents.Except(registeredIntents)];
         if (unregisteredClassifierIntents.Count > 0)
@@ -47,11 +68,13 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         List<string> unconfiguredAgentIntents = [.. registeredIntents.Except(classifierIntents)];
         if (unconfiguredAgentIntents.Count > 0)
             throw new InvalidOperationException($"There are Morgana agents not configuring their intent for classification: {string.Join(", ", unconfiguredAgentIntents)}");
+        
+        return registry;
     }
 
     public Type? ResolveAgentFromIntent(string intent)
-        => intentToAgentType.GetValueOrDefault(intent);
+        => intentToAgentType.Value.GetValueOrDefault(intent);
 
     public IEnumerable<string> GetAllIntents()
-        => intentToAgentType.Keys;
+        => intentToAgentType.Value.Keys;
 }

@@ -1,9 +1,12 @@
 ﻿using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Attributes;
 using Morgana.AI.Providers;
+using Morgana.AI.Tools;
 
-namespace Morgana.AI.Tools;
+namespace Morgana.AI.Examples.Tools;
 
+[ProvidesToolForIntent("billing")]
 public class BillingTool : MorganaTool
 {
     public BillingTool(

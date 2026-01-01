@@ -5,7 +5,6 @@ using Microsoft.Extensions.AI;
 using Morgana.AI.Adapters;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Providers;
 using Morgana.AI.Services;
 using Morgana.Hubs;
 using Morgana.Interfaces;
@@ -50,11 +49,9 @@ builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMServi
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 
-// MCP Protocol Support (includes IMCPServerRegistryService registration)
+// MCP & Tooling
 builder.Services.AddMCPProtocol(builder.Configuration);
-builder.Services.AddSingleton<IMCPToolProvider, MorganaMCPToolProvider>();
-
-// AgentAdapter (now requires IMCPServerRegistryService)
+builder.Services.AddMorganaToolRegistry();
 builder.Services.AddTransient<AgentAdapter>();
 
 // Akka.NET Services

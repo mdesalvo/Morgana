@@ -20,6 +20,7 @@ public class AgentAdapter
     protected readonly ILogger<MorganaContextProvider> contextProviderLogger;
     protected readonly IMCPToolProvider? mcpToolProvider;
     protected readonly IMCPServerRegistryService? mcpServerRegistryService;
+    protected readonly IToolRegistryService? toolRegistryService;
     protected readonly Prompt morganaPrompt;
 
     public AgentAdapter(
@@ -28,7 +29,8 @@ public class AgentAdapter
         ILogger<MorganaAgent> logger,
         ILogger<MorganaContextProvider> contextProviderLogger,
         IMCPToolProvider? mcpToolProvider = null,
-        IMCPServerRegistryService? mcpServerRegistryService = null)
+        IMCPServerRegistryService? mcpServerRegistryService = null,
+        IToolRegistryService? toolRegistryService = null)
     {
         this.chatClient = chatClient;
         this.promptResolverService = promptResolverService;
@@ -36,6 +38,7 @@ public class AgentAdapter
         this.contextProviderLogger = contextProviderLogger;
         this.mcpToolProvider = mcpToolProvider;
         this.mcpServerRegistryService = mcpServerRegistryService;
+        this.toolRegistryService = toolRegistryService;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
     }
@@ -66,11 +69,11 @@ public class AgentAdapter
         string formattedPolicies = FormatGlobalPolicies(globalPolicies);
 
         StringBuilder sb = new StringBuilder();
-        
+
         //Morgana
 
         sb.AppendLine(morganaPrompt.Content);
-        
+
         if (!string.IsNullOrEmpty(morganaPrompt.Personality))
         {
             sb.AppendLine(morganaPrompt.Personality);
@@ -144,15 +147,47 @@ public class AgentAdapter
         List<GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<GlobalPolicy>>("GlobalPolicies");
         ToolAdapter toolAdapter = new ToolAdapter(globalPolicies);
 
-        // Crea tool instance in base all'intent
-        MorganaTool toolInstance = intent.ToLower() switch
+        // Use ToolRegistryService to find tool type
+        Type? toolType = toolRegistryService?.FindToolTypeForIntent(intent);
+        if (toolType == null)
         {
-            "billing" => new BillingTool(logger, () => contextProvider),
-            "contract" => new ContractTool(logger, () => contextProvider),
-            "troubleshooting" => new TroubleshootingTool(logger, () => contextProvider),
-            _ => throw new InvalidOperationException($"Intent '{intent}' does not have native tools configured")
-        };
+            // No native tool found for this intent (agent may use only MCP tools)
+            logger.LogInformation($"No native tool found for intent '{intent}' (agent may rely exclusively on MCP tools)");
+            return toolAdapter;
+        }
 
+        logger.LogInformation($"Found native tool: {toolType.Name} for intent '{intent}' via ToolRegistry");
+
+        // Instantiate tool via Activator
+        MorganaTool toolInstance;
+        try
+        {
+            toolInstance = (MorganaTool)Activator.CreateInstance(
+                toolType,
+                logger,
+                (Func<MorganaContextProvider>)(() => contextProvider))!;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, $"Failed to instantiate tool {toolType.Name} for intent '{intent}'");
+            throw new InvalidOperationException(
+                $"Could not create tool instance for intent '{intent}'. " +
+                $"Ensure {toolType.Name} has a constructor that accepts (ILogger<MorganaTool>, Func<MorganaContextProvider>).", ex);
+        }
+
+        // Register tools using existing logic
+        RegisterToolsInAdapter(toolAdapter, toolInstance, tools);
+        return toolAdapter;
+    }
+
+    /// <summary>
+    /// Registra i tool nel ToolAdapter tramite reflection
+    /// </summary>
+    private void RegisterToolsInAdapter(
+        ToolAdapter toolAdapter,
+        MorganaTool toolInstance,
+        ToolDefinition[] tools)
+    {
         // Registra i tool tramite reflection o mapping esplicito
         foreach (ToolDefinition toolDefinition in tools)
         {
@@ -174,8 +209,6 @@ public class AgentAdapter
 
             toolAdapter.AddTool(toolDefinition.Name, toolImplementation, toolDefinition);
         }
-
-        return toolAdapter;
     }
 
     /// <summary>
@@ -186,14 +219,14 @@ public class AgentAdapter
         Type agentType,
         Action<string, object>? sharedContextCallback = null)
     {
-        // Extract intent from attribute
+        // Extract intent from agent's attribute
         HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>();
         if (intentAttribute == null)
             throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
 
         string intent = intentAttribute.Intent;
 
-        // Get MCP server names from registry instead of direct reflection
+        // Get MCP server names from registry
         string[] mcpServerNames = mcpServerRegistryService?.GetServerNamesForAgent(agentType) ?? [];
 
         logger.LogInformation($"Creating agent for intent '{intent}' with MCP servers: {(mcpServerNames.Length > 0 ? string.Join(", ", mcpServerNames) : "none")}");

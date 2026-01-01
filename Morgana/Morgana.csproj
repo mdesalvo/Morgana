@@ -33,6 +33,7 @@ The system is powered by Microsoft's Agent Framework, enabling seamless integrat
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.1.1-preview.1.25612.2" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Morgana.AI.Examples\Morgana.AI.Examples.csproj" />
     <ProjectReference Include="..\Morgana.AI\Morgana.AI.csproj" />
   </ItemGroup>
   <ItemGroup>
