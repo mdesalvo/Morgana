@@ -54,6 +54,8 @@ Morgana now supports **dynamic tool expansion** through the Model Context Protoc
 - Automatic merging of native tools + MCP tools in `AgentAdapter.CreateAgent()`
 
 ### 🔄 Changed
+- **CSS Refactoring**: Split monolithic `site.css` into modular components (`site.css`, `cauldron.css`, `quick-reply.css`, `sparkle-loader.css`) for improved maintainability
+- **Sparkle Loader**: Introduced welcome animation with magical sparkle effect featuring purple-white gradient core, orbiting particles, and expanding rings
 
 **Actor Flow Modifications**
 - `ConversationManagerActor.HandleCreateConversationAsync()` now triggers `GeneratePresentationMessage`
