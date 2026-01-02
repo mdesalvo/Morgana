@@ -10,14 +10,14 @@ namespace Morgana.AI.Controllers;
 /// </summary>
 [ApiController]
 [Route("mcp")]
-public class MorganaHttpMCPServer : ControllerBase
+public class MorganaMCPController : ControllerBase
 {
     private readonly IEnumerable<IMCPServer> mcpServers;
-    private readonly ILogger<MorganaHttpMCPServer> logger;
+    private readonly ILogger<MorganaMCPController> logger;
     
-    public MorganaHttpMCPServer(
+    public MorganaMCPController(
         IEnumerable<IMCPServer> mcpServers,
-        ILogger<MorganaHttpMCPServer> logger)
+        ILogger<MorganaMCPController> logger)
     {
         this.mcpServers = mcpServers;
         this.logger = logger;

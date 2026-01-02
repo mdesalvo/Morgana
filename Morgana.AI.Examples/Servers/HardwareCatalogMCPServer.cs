@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Morgana.AI.Abstractions;
+using Morgana.AI.Servers;
 
 namespace Morgana.AI.Examples.Servers;
 
@@ -13,13 +13,13 @@ namespace Morgana.AI.Examples.Servers;
 /// - Implement proper authentication and authorization
 /// - Add caching and performance optimizations
 /// </summary>
-public class HardwareCatalogMCPServer : MorganaMCPServer
+public class HardwareCatalogMCPServer : MorganaInProcessMCPServer
 {
     private readonly List<HardwareComponent> catalog;
     
     public HardwareCatalogMCPServer(
         Records.MCPServerConfig config,
-        ILogger<HardwareCatalogMCPServer> logger,
+        ILogger<MorganaInProcessMCPServer> logger,
         IConfiguration configuration) : base(config, logger, configuration)
     {
         // Initialize in-memory catalog

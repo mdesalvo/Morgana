@@ -3,25 +3,24 @@ using System.Net.Http.Json;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
 
-namespace Morgana.AI.Adapters;
+namespace Morgana.AI.Servers;
 
 /// <summary>
-/// Adapter for remote HTTP MCP servers.
 /// Implements IMCPServer by forwarding calls to remote HTTP endpoints.
 /// Provides graceful degradation if remote server is unreachable.
 /// </summary>
-public class HttpMCPServerAdapter : IMCPServer
+public class MorganaHttpMCPServer : IMCPServer
 {
     private readonly Records.MCPServerConfig config;
-    private readonly ILogger<HttpMCPServerAdapter> logger;
+    private readonly ILogger<MorganaHttpMCPServer> logger;
     private readonly HttpClient httpClient;
     private readonly string baseUrl;
     
     public string ServerName => config.Name;
     
-    public HttpMCPServerAdapter(
+    public MorganaHttpMCPServer(
         Records.MCPServerConfig config,
-        ILogger<HttpMCPServerAdapter> logger,
+        ILogger<MorganaHttpMCPServer> logger,
         IHttpClientFactory httpClientFactory)
     {
         this.config = config;
@@ -51,7 +50,7 @@ public class HttpMCPServerAdapter : IMCPServer
         // Configure authentication if provided
         ConfigureAuthentication();
         
-        logger.LogInformation($"HttpMCPServerAdapter initialized for '{ServerName}' at {baseUrl}");
+        logger.LogInformation($"MorganaHttpMCPServer initialized for '{ServerName}' at {baseUrl}");
     }
     
     private void ConfigureAuthentication()

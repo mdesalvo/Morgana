@@ -4,7 +4,7 @@ using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
 using WireMock.Types;
-using Morgana.AI.Adapters;
+using Morgana.AI.Servers;
 using WireMock;
 using WireMock.Util;
 
@@ -13,21 +13,21 @@ namespace Morgana.AI.Examples.Servers;
 /// <summary>
 /// Security software catalog MCP server with embedded WireMock HTTP server.
 /// This server demonstrates how to create a mock HTTP MCP server that:
-/// 1. Extends HttpMCPServerAdapter (consumed via HTTP)
+/// 1. Extends MorganaHttpMCPServer (consumes MCP tools via HTTP)
 /// 2. Starts its own WireMock server in the constructor
 /// 3. Responds to MCP protocol endpoints with mock data
 /// 
 /// IMPORTANT: This is a MOCK/EXAMPLE implementation for demonstration purposes.
 /// In production, you would connect to real security product databases.
 /// </summary>
-public class SecurityCatalogMCPServer : HttpMCPServerAdapter
+public class SecurityCatalogMCPServer : MorganaHttpMCPServer
 {
     private readonly WireMockServer wireMockServer;
     private readonly SecurityCatalogData mockData;
     
     public SecurityCatalogMCPServer(
         Records.MCPServerConfig config,
-        ILogger<SecurityCatalogMCPServer> logger,
+        ILogger<MorganaHttpMCPServer> logger,
         IHttpClientFactory httpClientFactory) 
         : base(config, logger, httpClientFactory)
     {

@@ -2,24 +2,23 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
 
-namespace Morgana.AI.Abstractions;
+namespace Morgana.AI.Servers;
 
 /// <summary>
-/// Base class for Morgana MCP server implementations.
 /// Implements IMCPServer for local/in-process tool providers.
 /// Provides common infrastructure including error handling and logging.
 /// </summary>
-public abstract class MorganaMCPServer : IMCPServer
+public abstract class MorganaInProcessMCPServer : IMCPServer
 {
-    protected readonly ILogger<MorganaMCPServer> logger;
+    protected readonly ILogger<MorganaInProcessMCPServer> logger;
     protected readonly Records.MCPServerConfig config;
     protected readonly IConfiguration? configuration;
-    
+
     public string ServerName => config.Name;
-    
-    protected MorganaMCPServer(
+
+    protected MorganaInProcessMCPServer(
         Records.MCPServerConfig config,
-        ILogger<MorganaMCPServer> logger,
+        ILogger<MorganaInProcessMCPServer> logger,
         IConfiguration? configuration = null)
     {
         this.config = config;

@@ -3,10 +3,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
-using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
+using Morgana.AI.Servers;
 using Morgana.AI.Services;
 
 namespace Morgana.AI.Extensions;
@@ -226,7 +226,7 @@ public static class ServiceCollectionExtensions
     
     /// <summary>
     /// Create in-process MCP server instance via reflection.
-    /// Discovers server implementations from all loaded assemblies by scanning for MorganaMCPServer derivatives.
+    /// Discovers server implementations from all loaded assemblies by scanning for MorganaInProcessMCPServer derivatives.
     /// </summary>
     /// <param name="config">Server configuration</param>
     /// <param name="serviceProvider">Service provider for DI</param>
@@ -235,7 +235,7 @@ public static class ServiceCollectionExtensions
         Records.MCPServerConfig config,
         IServiceProvider serviceProvider)
     {
-        // Find all types that inherit from MorganaMCPServer across all loaded assemblies
+        // Find all types that inherit from MorganaInProcessMCPServer across all loaded assemblies
         Type? mcpServerType = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic) // Skip dynamic assemblies
             .SelectMany(a =>
@@ -249,7 +249,7 @@ public static class ServiceCollectionExtensions
                     return [];
                 }
             })
-            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaMCPServer)))
+            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaInProcessMCPServer)))
             .FirstOrDefault(t => t.Name.Equals($"{config.Name}MCPServer", StringComparison.OrdinalIgnoreCase));
 
         if (mcpServerType == null)
@@ -262,7 +262,7 @@ public static class ServiceCollectionExtensions
                     try { return a.GetTypes(); }
                     catch { return []; }
                 })
-                .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaMCPServer)))
+                .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaInProcessMCPServer)))
                 .Select(t => t.Name)
                 .ToList();
 
@@ -286,21 +286,20 @@ public static class ServiceCollectionExtensions
     }
     
     /// <summary>
-    /// Create HTTP remote MCP server adapter.
-    /// First attempts to find a custom HttpMCPServerAdapter derivative (e.g., SecurityCatalogMCPServer with embedded WireMock).
-    /// Falls back to standard HttpMCPServerAdapter if no custom implementation found.
+    /// Create HTTP MCP server instance via reflection.
+    /// First attempts to find a custom MorganaHttpMCPServer derivative.
+    /// Falls back to standard MorganaHttpMCPServer if no custom implementation found.
     /// </summary>
     /// <param name="config">Server configuration with Endpoint in AdditionalSettings</param>
     /// <param name="serviceProvider">Service provider for DI</param>
-    /// <returns>Initialized HttpMCPServerAdapter instance</returns>
+    /// <returns>Initialized MorganaHttpMCPServer instance</returns>
     private static IMCPServer CreateHttpRemoteServer(
         Records.MCPServerConfig config,
         IServiceProvider serviceProvider)
     {
         IHttpClientFactory httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
-        
-        // Try to find a custom HttpMCPServerAdapter derivative for this server
-        // Example: SecurityCatalogMCPServer extends HttpMCPServerAdapter with embedded WireMock
+
+        // Try to find a custom MorganaHttpMCPServer derivative
         Type? customHttpServerType = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic)
             .SelectMany(a =>
@@ -308,16 +307,14 @@ public static class ServiceCollectionExtensions
                 try { return a.GetTypes(); }
                 catch (ReflectionTypeLoadException) { return []; }
             })
-            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(HttpMCPServerAdapter)))
+            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaHttpMCPServer)))
             .FirstOrDefault(t => t.Name.Equals($"{config.Name}MCPServer", StringComparison.OrdinalIgnoreCase));
-        
         if (customHttpServerType != null)
         {
-            // Found custom HTTP server implementation (e.g., with embedded WireMock)
-            // Use reflection to get correct logger type
-            Type loggerType = typeof(ILogger<>).MakeGenericType(customHttpServerType);
-            object logger = serviceProvider.GetRequiredService(loggerType);
-            
+            // Found custom implementation - use it
+            ILogger<MorganaHttpMCPServer> logger = 
+                serviceProvider.GetRequiredService<ILogger<MorganaHttpMCPServer>>();
+        
             return (IMCPServer)ActivatorUtilities.CreateInstance(
                 serviceProvider,
                 customHttpServerType,
@@ -325,11 +322,11 @@ public static class ServiceCollectionExtensions
                 logger,
                 httpClientFactory);
         }
-        
-        // No custom implementation - use standard HttpMCPServerAdapter (pure HTTP client)
-        ILogger<HttpMCPServerAdapter> standardLogger = 
-            serviceProvider.GetRequiredService<ILogger<HttpMCPServerAdapter>>();
-        
-        return new HttpMCPServerAdapter(config, standardLogger, httpClientFactory);
+
+        // No custom implementation - use standard MorganaHttpMCPServer
+        ILogger<MorganaHttpMCPServer> standardLogger = 
+            serviceProvider.GetRequiredService<ILogger<MorganaHttpMCPServer>>();
+
+        return new MorganaHttpMCPServer(config, standardLogger, httpClientFactory);
     }
 }
