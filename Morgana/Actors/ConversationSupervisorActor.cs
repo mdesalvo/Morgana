@@ -15,6 +15,7 @@ public class ConversationSupervisorActor : MorganaActor
     private readonly IActorRef classifier;
     private readonly IActorRef router;
     private readonly ISignalRBridgeService signalRBridgeService;
+    private readonly IAgentConfigurationService agentConfigService;
 
     private IActorRef? activeAgent;
     private bool hasPresented = false;
@@ -23,9 +24,11 @@ public class ConversationSupervisorActor : MorganaActor
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ISignalRBridgeService signalRBridgeService) : base(conversationId, llmService, promptResolverService)
+        ISignalRBridgeService signalRBridgeService,
+        IAgentConfigurationService agentConfigService) : base(conversationId, llmService, promptResolverService)
     {
         this.signalRBridgeService = signalRBridgeService;
+        this.agentConfigService = agentConfigService;
         
         guard = Context.System.GetOrCreateActor<GuardActor>("guard", conversationId).GetAwaiter().GetResult();
         classifier = Context.System.GetOrCreateActor<ClassifierActor>("classifier", conversationId).GetAwaiter().GetResult();
@@ -58,10 +61,11 @@ public class ConversationSupervisorActor : MorganaActor
                 actorLogger.Info("No active agent, starting new request flow");
                 ProcessingContext ctx = new ProcessingContext(msg, originalSender);
 
-                guard.Ask<GuardCheckResponse>(new GuardCheckRequest(msg.ConversationId, msg.Text), TimeSpan.FromSeconds(60))
-                     .PipeTo(Self,
-                        success: response => new GuardCheckContext(response, ctx),
-                        failure: ex => new Status.Failure(ex));
+                guard.Ask<GuardCheckResponse>(
+                    new GuardCheckRequest(msg.ConversationId, msg.Text), TimeSpan.FromSeconds(60))
+                .PipeTo(Self,
+                    success: response => new GuardCheckContext(response, ctx),
+                    failure: ex => new Status.Failure(ex));
 
                 Become(() => AwaitingGuardCheck(ctx));
             }
@@ -83,13 +87,11 @@ public class ConversationSupervisorActor : MorganaActor
 
         try
         {
-            // Load presentation prompt and classifier intents from prompts.json
+            // Load presentation prompt from morgana.json (framework)
             AI.Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync("Presentation");
-            AI.Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
             
-            // Parse structured intents
-            List<AI.Records.IntentDefinition> allIntents = classifierPrompt
-                .GetAdditionalProperty<List<AI.Records.IntentDefinition>>("Intents");
+            // Load intents from domain
+            List<AI.Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
             
             AI.Records.IntentCollection intentCollection = new AI.Records.IntentCollection(allIntents);
             List<AI.Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
@@ -98,7 +100,7 @@ public class ConversationSupervisorActor : MorganaActor
             string formattedIntents = string.Join("\n", 
                 displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
 
-            // Build LLM prompt from prompts.json
+            // Build LLM prompt
             string systemPrompt = $"{presentationPrompt.Content}\n\n{presentationPrompt.Instructions}"
                 .Replace("((intents))", formattedIntents);
 
@@ -117,7 +119,9 @@ public class ConversationSupervisorActor : MorganaActor
                 JsonSerializer.Deserialize<AI.Records.PresentationResponse>(llmResponse);
 
             if (presentationResponse == null)
+            {
                 throw new InvalidOperationException("LLM returned null presentation response");
+            }
 
             actorLogger.Info($"LLM generated presentation with {presentationResponse.QuickReplies.Count} quick replies");
 
@@ -129,17 +133,15 @@ public class ConversationSupervisorActor : MorganaActor
         }
         catch (Exception ex)
         {
-            actorLogger.Error(ex, "LLM presentation generation failed, using fallback from prompts.json");
+            actorLogger.Error(ex, "LLM presentation generation failed, using fallback");
 
-            // Fallback: Generate from classifier intents directly
+            // Fallback: Generate from intents directly
             AI.Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync("Presentation");
-            AI.Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
             
             string fallbackMessage = presentationPrompt.GetAdditionalProperty<string>("FallbackMessage");
             
-            // Build fallback quick replies from classifier intents
-            List<AI.Records.IntentDefinition> allIntents = classifierPrompt
-                .GetAdditionalProperty<List<AI.Records.IntentDefinition>>("Intents");
+            // Build fallback quick replies from intents
+            List<AI.Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
             
             AI.Records.IntentCollection intentCollection = new AI.Records.IntentCollection(allIntents);
             List<AI.Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
@@ -151,7 +153,7 @@ public class ConversationSupervisorActor : MorganaActor
                     intent.DefaultValue ?? $"Aiutami con {intent.Name}"))
                 .ToList();
 
-            actorLogger.Info($"Using fallback presentation with {fallbackReplies.Count} quick replies generated from intents");
+            actorLogger.Info($"Using fallback presentation with {fallbackReplies.Count} quick replies");
 
             Self.Tell(new PresentationContext(fallbackMessage, displayableIntents)
             {
@@ -208,10 +210,11 @@ public class ConversationSupervisorActor : MorganaActor
 
             actorLogger.Info("Guard check passed, proceeding to classification");
 
-            classifier.Ask<AI.Records.ClassificationResult>(wrapper.Context.OriginalMessage, TimeSpan.FromSeconds(60))
-                      .PipeTo(Self,
-                         success: result => new ClassificationContext(result, wrapper.Context),
-                         failure: ex => new Status.Failure(ex));
+            classifier.Ask<AI.Records.ClassificationResult>(
+                wrapper.Context.OriginalMessage, TimeSpan.FromSeconds(60))
+            .PipeTo(Self,
+                success: result => new ClassificationContext(result, wrapper.Context),
+                failure: ex => new Status.Failure(ex));
 
             Become(() => AwaitingClassification(wrapper.Context));
         });

@@ -65,8 +65,7 @@ public class RouterActor : MorganaActor
         ctx.OriginalSender.Tell(new ActiveAgentResponse(
             ctx.Response.Response,
             ctx.Response.IsCompleted,
-            ctx.AgentRef
-        ));
+            ctx.AgentRef));
     }
 
     private void HandleFailure(Status.Failure failure)
@@ -75,8 +74,7 @@ public class RouterActor : MorganaActor
         
         Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
         Sender.Tell(new AgentResponse(
-            classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), 
-            true));
+            classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), true));
     }
 
     private void HandleBroadcastContextUpdate(BroadcastContextUpdate msg)

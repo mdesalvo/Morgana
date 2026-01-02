@@ -192,7 +192,7 @@ public class AgentAdapter
             MethodInfo? method = toolInstance.GetType().GetMethod(toolDefinition.Name);
             if (method == null)
             {
-                logger.LogWarning($"Tool '{toolDefinition.Name}' declared in prompts.json but not found in {toolInstance.GetType().Name}");
+                logger.LogWarning($"Tool '{toolDefinition.Name}' declared in morgana.json but not found in {toolInstance.GetType().Name}");
                 continue;
             }
 

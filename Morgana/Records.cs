@@ -24,6 +24,9 @@ public static class Records
         [property: JsonPropertyName("compliant")] bool Compliant,
         [property: JsonPropertyName("violation")] string? Violation);
 
+    public record SupervisorResponseContext(
+        ConversationResponse Response);
+
     public record SendMessageRequest(
         string ConversationId,
         string Text,

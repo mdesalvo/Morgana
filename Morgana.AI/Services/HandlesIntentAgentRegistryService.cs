@@ -7,12 +7,12 @@ namespace Morgana.AI.Services;
 
 public class HandlesIntentAgentRegistryService : IAgentRegistryService
 {
-    private readonly IPromptResolverService promptResolverService;
+    private readonly IAgentConfigurationService agentConfigService;
     private readonly Lazy<Dictionary<string, Type>> intentToAgentType;
 
-    public HandlesIntentAgentRegistryService(IPromptResolverService promptResolverService)
+    public HandlesIntentAgentRegistryService(IAgentConfigurationService agentConfigService)
     {
-        this.promptResolverService = promptResolverService;
+        this.agentConfigService = agentConfigService;
         
         // Lazy initialization - scan assemblies only when first accessed
         // This ensures all assemblies (including Morgana.AI.Examples) are loaded
@@ -48,10 +48,9 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         }
 
         // Bidirectional validation of Morgana agents and classifiable intents
-        Records.Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
-        
-        // Parse structured IntentDefinition objects
-        List<Records.IntentDefinition> allIntents = classifierPrompt.GetAdditionalProperty<List<Records.IntentDefinition>>("Intents");
+        // Load intents from agents.json (domain configuration)
+        List<Records.IntentDefinition> allIntents = agentConfigService.GetIntentsAsync()
+            .GetAwaiter().GetResult();
         
         // Extract intent names, excluding "other"
         HashSet<string> classifierIntents = allIntents
@@ -63,11 +62,13 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
         List<string> unregisteredClassifierIntents = [.. classifierIntents.Except(registeredIntents)];
         if (unregisteredClassifierIntents.Count > 0)
-            throw new InvalidOperationException($"There are classifier intents not handled by any Morgana agent: {string.Join(", ", unregisteredClassifierIntents)}");
+            throw new InvalidOperationException(
+                $"There are classifier intents (from agents.json) not handled by any Morgana agent: {string.Join(", ", unregisteredClassifierIntents)}");
 
         List<string> unconfiguredAgentIntents = [.. registeredIntents.Except(classifierIntents)];
         if (unconfiguredAgentIntents.Count > 0)
-            throw new InvalidOperationException($"There are Morgana agents not configuring their intent for classification: {string.Join(", ", unconfiguredAgentIntents)}");
+            throw new InvalidOperationException(
+                $"There are Morgana agents not configuring their intent in agents.json classifier intents: {string.Join(", ", unconfiguredAgentIntents)}");
         
         return registry;
     }

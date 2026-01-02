@@ -4,36 +4,53 @@ using System.Text.Json;
 
 namespace Morgana.AI.Services;
 
+/// <summary>
+/// Resolves prompts from two sources:
+/// 1. morgana.json (framework prompts: Morgana, Classifier, Guard, Presentation)
+/// 2. agents.json (domain prompts: billing, contract, troubleshooting, etc.)
+/// </summary>
 public class ConfigurationPromptResolverService : IPromptResolverService
 {
-    private readonly Lazy<Records.Prompt[]> configuredPrompts;
+    private readonly Lazy<Records.Prompt[]> morganaPrompts;
+    private readonly IAgentConfigurationService agentConfigService;
 
-    public ConfigurationPromptResolverService()
+    public ConfigurationPromptResolverService(IAgentConfigurationService agentConfigService)
     {
-        configuredPrompts = new Lazy<Records.Prompt[]>(LoadPrompts);
+        this.agentConfigService = agentConfigService;
+        morganaPrompts = new Lazy<Records.Prompt[]>(LoadMorganaPrompts);
     }
 
-    public Task<Records.Prompt[]> GetAllPromptsAsync()
-        => Task.FromResult(configuredPrompts.Value);
-
-    public Task<Records.Prompt> ResolveAsync(string promptID)
+    public async Task<Records.Prompt[]> GetAllPromptsAsync()
     {
-        Records.Prompt? prompt = configuredPrompts.Value.SingleOrDefault(p => string.Equals(p.ID, promptID, StringComparison.OrdinalIgnoreCase));
-
-        return prompt == null
-            ? throw new KeyNotFoundException($"Prompt con ID '{promptID}' non trovato.")
-            : Task.FromResult(prompt);
+        // Merge: morgana.json (framework) + domain
+        List<Records.Prompt> agentPrompts = await agentConfigService.GetAgentPromptsAsync();
+        return [..morganaPrompts.Value, ..agentPrompts];
     }
 
-    private static Records.Prompt[] LoadPrompts()
+    public async Task<Records.Prompt> ResolveAsync(string promptID)
     {
+        Records.Prompt[] allPrompts = await GetAllPromptsAsync();
+        
+        Records.Prompt? prompt = allPrompts
+            .SingleOrDefault(p => string.Equals(p.ID, promptID, StringComparison.OrdinalIgnoreCase));
+
+        return prompt ?? throw new KeyNotFoundException($"Prompt with ID '{promptID}' not found in morgana.json or agents.json.");
+    }
+
+    private static Records.Prompt[] LoadMorganaPrompts()
+    {
+        // Load only morgana.json (framework prompts: Morgana, Classifier, Guard, Presentation)
         Assembly assembly = Assembly.GetExecutingAssembly();
         string resourceName = assembly.GetManifestResourceNames()
-            .First(n => n.EndsWith("prompts.json", StringComparison.OrdinalIgnoreCase));
+            .First(n => n.EndsWith(".morgana.json", StringComparison.OrdinalIgnoreCase));
 
         using Stream? stream = assembly.GetManifestResourceStream(resourceName)
-                               ?? throw new FileNotFoundException("Risorsa prompts.json non trovata nell'assembly.");
-        Records.PromptCollection? promptsCollection = JsonSerializer.Deserialize<Records.PromptCollection>(stream, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            ?? throw new FileNotFoundException("Resource morgana.json not found in Morgana.AI assembly.");
+        
+        Records.PromptCollection? promptsCollection = JsonSerializer.Deserialize<Records.PromptCollection>(
+            stream, 
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        
         return promptsCollection?.Prompts ?? [];
     }
 }
