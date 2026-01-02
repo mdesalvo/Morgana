@@ -1,9 +1,13 @@
-﻿using Microsoft.Extensions.AI;
+﻿using Anthropic;
+using Anthropic.Core;
+using Azure;
+using Azure.AI.OpenAI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Morgana.AI.Interfaces;
 using static Morgana.AI.Records;
 
-namespace Morgana.AI.Abstractions;
+namespace Morgana.AI.Services;
 
 public class MorganaLLMService : ILLMService
 {
@@ -52,9 +56,41 @@ public class MorganaLLMService : ILLMService
         {
             List<ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<ErrorAnswer>>("ErrorAnswers");
             ErrorAnswer? llmError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "LLMServiceError", StringComparison.OrdinalIgnoreCase));
-                
-            return llmError?.Content.Replace("((llm_error))", ex.Message) 
-                   ?? $"Errore del servizio LLM: {ex.Message}";
+            return llmError?.Content.Replace("((llm_error))", ex.Message) ?? $"Errore del servizio LLM: {ex.Message}";
         }
+    }
+}
+
+/* Microsoft.Agents.AI (IChatClient) */
+
+public class AnthropicService : MorganaLLMService
+{
+    public AnthropicService(
+        IConfiguration configuration,
+        IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
+    {
+        AnthropicClient anthropicClient = new AnthropicClient(
+            new ClientOptions
+            {
+                APIKey = this.configuration["LLM:Anthropic:ApiKey"]!
+            });
+        string anthropicModel = this.configuration["LLM:Anthropic:Model"]!;
+
+        chatClient = anthropicClient.AsIChatClient(anthropicModel);
+    }
+}
+
+public class AzureOpenAIService : MorganaLLMService
+{
+    public AzureOpenAIService(
+        IConfiguration configuration,
+        IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
+    {
+        AzureOpenAIClient azureClient = new AzureOpenAIClient(
+            new Uri(this.configuration["LLM:AzureOpenAI:Endpoint"]!),
+            new AzureKeyCredential(this.configuration["LLM:AzureOpenAI:ApiKey"]!));
+        string deploymentName = this.configuration["LLM:AzureOpenAI:DeploymentName"]!;
+
+        chatClient = azureClient.GetChatClient(deploymentName).AsIChatClient();
     }
 }
