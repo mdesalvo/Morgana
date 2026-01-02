@@ -31,6 +31,10 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Logger
+builder.Services.AddSingleton<ILogger>(sp =>
+    sp.GetRequiredService<ILoggerFactory>().CreateLogger("Morgana"));
+
 // Morgana.AI Services
 string llmProvider = builder.Configuration["LLM:Provider"]!;
 builder.Services.AddSingleton<ILLMService>(sp =>
@@ -45,7 +49,8 @@ builder.Services.AddSingleton<ILLMService>(sp =>
         _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' non supportato. Valori validi: 'AzureOpenAI', 'Anthropic'")
     };
 });
-builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMService>().GetChatClient());
+builder.Services.AddSingleton<IChatClient>(sp =>
+    sp.GetRequiredService<ILLMService>().GetChatClient());
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 

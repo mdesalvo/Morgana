@@ -23,8 +23,7 @@ public class ConversationSupervisorActor : MorganaActor
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ISignalRBridgeService signalRBridgeService,
-        ILogger<ConversationSupervisorActor> _) : base(conversationId, llmService, promptResolverService)
+        ISignalRBridgeService signalRBridgeService) : base(conversationId, llmService, promptResolverService)
     {
         this.signalRBridgeService = signalRBridgeService;
         
@@ -59,11 +58,10 @@ public class ConversationSupervisorActor : MorganaActor
                 actorLogger.Info("No active agent, starting new request flow");
                 ProcessingContext ctx = new ProcessingContext(msg, originalSender);
 
-                guard.Ask<GuardCheckResponse>(
-                    new GuardCheckRequest(msg.ConversationId, msg.Text), TimeSpan.FromSeconds(60))
-                .PipeTo(Self,
-                    success: response => new GuardCheckContext(response, ctx),
-                    failure: ex => new Status.Failure(ex));
+                guard.Ask<GuardCheckResponse>(new GuardCheckRequest(msg.ConversationId, msg.Text), TimeSpan.FromSeconds(60))
+                     .PipeTo(Self,
+                        success: response => new GuardCheckContext(response, ctx),
+                        failure: ex => new Status.Failure(ex));
 
                 Become(() => AwaitingGuardCheck(ctx));
             }
@@ -119,9 +117,7 @@ public class ConversationSupervisorActor : MorganaActor
                 JsonSerializer.Deserialize<AI.Records.PresentationResponse>(llmResponse);
 
             if (presentationResponse == null)
-            {
                 throw new InvalidOperationException("LLM returned null presentation response");
-            }
 
             actorLogger.Info($"LLM generated presentation with {presentationResponse.QuickReplies.Count} quick replies");
 
@@ -212,11 +208,10 @@ public class ConversationSupervisorActor : MorganaActor
 
             actorLogger.Info("Guard check passed, proceeding to classification");
 
-            classifier.Ask<AI.Records.ClassificationResult>(
-                wrapper.Context.OriginalMessage, TimeSpan.FromSeconds(60))
-            .PipeTo(Self,
-                success: result => new ClassificationContext(result, wrapper.Context),
-                failure: ex => new Status.Failure(ex));
+            classifier.Ask<AI.Records.ClassificationResult>(wrapper.Context.OriginalMessage, TimeSpan.FromSeconds(60))
+                      .PipeTo(Self,
+                         success: result => new ClassificationContext(result, wrapper.Context),
+                         failure: ex => new Status.Failure(ex));
 
             Become(() => AwaitingClassification(wrapper.Context));
         });

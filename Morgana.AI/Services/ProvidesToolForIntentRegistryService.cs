@@ -13,11 +13,11 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class ProvidesToolForIntentRegistryService : IToolRegistryService
 {
-    private readonly ILogger<ProvidesToolForIntentRegistryService> logger;
+    private readonly ILogger logger;
     private readonly Lazy<Dictionary<string, Type>> intentToToolType;
     private readonly List<string> registrationErrors = [];
     
-    public ProvidesToolForIntentRegistryService(ILogger<ProvidesToolForIntentRegistryService> logger)
+    public ProvidesToolForIntentRegistryService(ILogger logger)
     {
         this.logger = logger;
         

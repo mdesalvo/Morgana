@@ -60,7 +60,7 @@ public static class ServiceCollectionExtensions
             // Register MorganaMCPToolProvider (orchestrator)
             services.AddSingleton<IMCPToolProvider>(sp =>
             {
-                ILogger<MorganaMCPToolProvider> logger = sp.GetRequiredService<ILogger<MorganaMCPToolProvider>>();
+                ILogger logger = sp.GetRequiredService<ILogger>();
                 IEnumerable<IMCPServer> servers = sp.GetServices<IMCPServer>();
                 return new MorganaMCPToolProvider(servers, logger);
             });
@@ -277,7 +277,7 @@ public static class ServiceCollectionExtensions
         }
 
         // Instantiate with DI (constructor injection)
-        // ActivatorUtilities will resolve: ILogger<T>, IConfiguration from DI
+        // ActivatorUtilities will resolve: ILogger, IConfiguration from DI
         // We pass only: config (non-DI parameter)
         return (IMCPServer)ActivatorUtilities.CreateInstance(
             serviceProvider,
@@ -298,6 +298,7 @@ public static class ServiceCollectionExtensions
         IServiceProvider serviceProvider)
     {
         IHttpClientFactory httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
+        ILogger logger = serviceProvider.GetRequiredService<ILogger>();
 
         // Try to find a custom MorganaHttpMCPServer derivative
         Type? customHttpServerType = AppDomain.CurrentDomain.GetAssemblies()
@@ -312,9 +313,6 @@ public static class ServiceCollectionExtensions
         if (customHttpServerType != null)
         {
             // Found custom implementation - use it
-            ILogger<MorganaHttpMCPServer> logger = 
-                serviceProvider.GetRequiredService<ILogger<MorganaHttpMCPServer>>();
-        
             return (IMCPServer)ActivatorUtilities.CreateInstance(
                 serviceProvider,
                 customHttpServerType,
@@ -324,9 +322,6 @@ public static class ServiceCollectionExtensions
         }
 
         // No custom implementation - use standard MorganaHttpMCPServer
-        ILogger<MorganaHttpMCPServer> standardLogger = 
-            serviceProvider.GetRequiredService<ILogger<MorganaHttpMCPServer>>();
-
-        return new MorganaHttpMCPServer(config, standardLogger, httpClientFactory);
+        return new MorganaHttpMCPServer(config, logger, httpClientFactory);
     }
 }

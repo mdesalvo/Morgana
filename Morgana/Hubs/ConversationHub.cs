@@ -4,36 +4,36 @@ namespace Morgana.Hubs;
 
 public class ConversationHub : Hub
 {
-    private readonly ILogger<ConversationHub> _logger;
+    private readonly ILogger logger;
 
-    public ConversationHub(ILogger<ConversationHub> logger)
+    public ConversationHub(ILogger logger)
     {
-        _logger = logger;
+        this.logger = logger;
     }
 
     public async Task JoinConversation(string conversationId)
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, conversationId);
 
-        _logger.LogInformation($"Client {Context.ConnectionId} joined conversation {conversationId}");
+        logger.LogInformation($"Client {Context.ConnectionId} joined conversation {conversationId}");
     }
 
     public async Task LeaveConversation(string conversationId)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId);
 
-        _logger.LogInformation($"Client {Context.ConnectionId} left conversation {conversationId}");
+        logger.LogInformation($"Client {Context.ConnectionId} left conversation {conversationId}");
     }
 
     public override async Task OnConnectedAsync()
     {
-        _logger.LogInformation($"Client connected: {Context.ConnectionId}");
+        logger.LogInformation($"Client connected: {Context.ConnectionId}");
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        _logger.LogInformation($"Client disconnected: {Context.ConnectionId}");
+        logger.LogInformation($"Client disconnected: {Context.ConnectionId}");
         await base.OnDisconnectedAsync(exception);
     }
 }

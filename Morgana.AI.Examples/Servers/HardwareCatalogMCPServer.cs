@@ -19,7 +19,7 @@ public class HardwareCatalogMCPServer : MorganaInProcessMCPServer
     
     public HardwareCatalogMCPServer(
         Records.MCPServerConfig config,
-        ILogger<MorganaInProcessMCPServer> logger,
+        ILogger logger,
         IConfiguration configuration) : base(config, logger, configuration)
     {
         // Initialize in-memory catalog

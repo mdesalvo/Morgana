@@ -10,7 +10,7 @@ namespace Morgana.AI.Servers;
 /// </summary>
 public abstract class MorganaInProcessMCPServer : IMCPServer
 {
-    protected readonly ILogger<MorganaInProcessMCPServer> logger;
+    protected readonly ILogger logger;
     protected readonly Records.MCPServerConfig config;
     protected readonly IConfiguration? configuration;
 
@@ -18,7 +18,7 @@ public abstract class MorganaInProcessMCPServer : IMCPServer
 
     protected MorganaInProcessMCPServer(
         Records.MCPServerConfig config,
-        ILogger<MorganaInProcessMCPServer> logger,
+        ILogger logger,
         IConfiguration? configuration = null)
     {
         this.config = config;

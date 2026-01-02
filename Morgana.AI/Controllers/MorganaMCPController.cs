@@ -13,11 +13,11 @@ namespace Morgana.AI.Controllers;
 public class MorganaMCPController : ControllerBase
 {
     private readonly IEnumerable<IMCPServer> mcpServers;
-    private readonly ILogger<MorganaMCPController> logger;
+    private readonly ILogger logger;
     
     public MorganaMCPController(
         IEnumerable<IMCPServer> mcpServers,
-        ILogger<MorganaMCPController> logger)
+        ILogger logger)
     {
         this.mcpServers = mcpServers;
         this.logger = logger;

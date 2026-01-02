@@ -15,8 +15,7 @@ public class ContractAgent : MorganaAgent
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<ContractAgent> logger,
-        ILogger<MorganaContextProvider> contextProviderLogger,
+        ILogger logger,
         AgentAdapter agentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
         // Generic agent creation - no MCP tools loaded (no UsesMCPServers attribute)

@@ -27,9 +27,8 @@ public class SecurityCatalogMCPServer : MorganaHttpMCPServer
     
     public SecurityCatalogMCPServer(
         Records.MCPServerConfig config,
-        ILogger<MorganaHttpMCPServer> logger,
-        IHttpClientFactory httpClientFactory) 
-        : base(config, logger, httpClientFactory)
+        ILogger logger,
+        IHttpClientFactory httpClientFactory) : base(config, logger, httpClientFactory)
     {
         // Initialize mock data
         mockData = new SecurityCatalogData();

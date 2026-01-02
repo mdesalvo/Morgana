@@ -10,8 +10,8 @@ namespace Morgana.AI.Examples.Tools;
 public class ContractTool : MorganaTool
 {
     public ContractTool(
-        ILogger<MorganaAgent> logger,
-        Func<MorganaContextProvider> getContextProvider) : base(logger, getContextProvider) { }
+        ILogger toolLogger,
+        Func<MorganaContextProvider> getContextProvider) : base(toolLogger, getContextProvider) { }
 
     public async Task<string> GetContractDetails(string userId)
     {

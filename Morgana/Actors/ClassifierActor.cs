@@ -15,8 +15,7 @@ public class ClassifierActor : MorganaActor
     public ClassifierActor(
         string conversationId,
         ILLMService llmService,
-        IPromptResolverService promptResolverService,
-        ILogger<ClassifierActor> _) : base(conversationId, llmService, promptResolverService)
+        IPromptResolverService promptResolverService) : base(conversationId, llmService, promptResolverService)
     {
         Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
         

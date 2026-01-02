@@ -15,8 +15,7 @@ public class TroubleshootingAgent : MorganaAgent
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<TroubleshootingAgent> logger,
-        ILogger<MorganaContextProvider> contextProviderLogger,
+        ILogger logger,
         AgentAdapter agentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
         // Generic agent creation - automatically loads MCP tools from UsesMCPServers attribute

@@ -10,8 +10,8 @@ namespace Morgana.AI.Examples.Tools;
 public class TroubleshootingTool : MorganaTool
 {
     public TroubleshootingTool(
-        ILogger<MorganaAgent> logger,
-        Func<MorganaContextProvider> getContextProvider) : base(logger, getContextProvider) { }
+        ILogger toolLogger,
+        Func<MorganaContextProvider> getContextProvider) : base(toolLogger, getContextProvider) { }
 
     private readonly Dictionary<string, string> guides = new Dictionary<string, string>
     {

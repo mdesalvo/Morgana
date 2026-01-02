@@ -12,11 +12,11 @@ namespace Morgana.AI.Providers;
 public class MorganaMCPToolProvider : IMCPToolProvider
 {
     private readonly Dictionary<string, IMCPServer> mcpServers;
-    private readonly ILogger<MorganaMCPToolProvider> logger;
+    private readonly ILogger logger;
     
     public MorganaMCPToolProvider(
         IEnumerable<IMCPServer> servers,
-        ILogger<MorganaMCPToolProvider> logger)
+        ILogger logger)
     {
         this.logger = logger;
         

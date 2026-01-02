@@ -6,14 +6,14 @@ namespace Morgana.AI.Tools;
 
 public class MorganaTool
 {
-    protected readonly ILogger<MorganaAgent> logger;
+    protected readonly ILogger toolLogger;
     protected readonly Func<MorganaContextProvider> getContextProvider;
 
     public MorganaTool(
-        ILogger<MorganaAgent> logger,
+        ILogger toolLogger,
         Func<MorganaContextProvider> getContextProvider)
     {
-        this.logger = logger;
+        this.toolLogger = toolLogger;
         this.getContextProvider = getContextProvider;
     }
 
@@ -27,13 +27,13 @@ public class MorganaTool
 
         if (value != null)
         {
-            logger.LogInformation(
+            toolLogger.LogInformation(
                 $"MorganaTool ({GetType().Name}) HIT variable '{variableName}' from agent context. Value is: {value}");
 
             return Task.FromResult(value);
         }
 
-        logger.LogInformation(
+        toolLogger.LogInformation(
             $"MorganaTool ({GetType().Name}) MISS variable '{variableName}' from agent context.");
 
         return Task.FromResult<object>(

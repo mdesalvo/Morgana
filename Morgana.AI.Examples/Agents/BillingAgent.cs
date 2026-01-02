@@ -19,8 +19,7 @@ public class BillingAgent : MorganaAgent
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<BillingAgent> logger,
-        ILogger<MorganaContextProvider> contextProviderLogger,
+        ILogger logger,
         AgentAdapter agentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
         // Generic agent creation - automatically loads native tools via ToolRegistry

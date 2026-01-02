@@ -13,13 +13,13 @@ public class MorganaAgent : MorganaActor
     protected AIAgent aiAgent;
     protected AgentThread aiAgentThread;
     protected MorganaContextProvider contextProvider;
-    protected readonly ILogger<MorganaAgent> agentLogger;
+    protected readonly ILogger agentLogger;
 
     public MorganaAgent(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ILogger<MorganaAgent> agentLogger) : base(conversationId, llmService, promptResolverService)
+        ILogger agentLogger) : base(conversationId, llmService, promptResolverService)
     {
         this.agentLogger = agentLogger;
 

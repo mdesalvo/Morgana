@@ -13,12 +13,12 @@ namespace Morgana.Controllers;
 public class ConversationController : ControllerBase
 {
     private readonly ActorSystem actorSystem;
-    private readonly ILogger<ConversationController> logger;
+    private readonly ILogger logger;
     private readonly IHubContext<ConversationHub> signalrContext;
 
     public ConversationController(
         ActorSystem actorSystem,
-        ILogger<ConversationController> logger,
+        ILogger logger,
         IHubContext<ConversationHub> signalrContext)
     {
         this.actorSystem = actorSystem;

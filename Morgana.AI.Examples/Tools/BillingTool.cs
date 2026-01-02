@@ -10,8 +10,8 @@ namespace Morgana.AI.Examples.Tools;
 public class BillingTool : MorganaTool
 {
     public BillingTool(
-        ILogger<MorganaAgent> logger,
-        Func<MorganaContextProvider> getContextProvider) : base(logger, getContextProvider) { }
+        ILogger toolLogger,
+        Func<MorganaContextProvider> getContextProvider) : base(toolLogger, getContextProvider) { }
 
     private readonly string[] invoices =
     [

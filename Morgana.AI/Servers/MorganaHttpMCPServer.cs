@@ -12,7 +12,7 @@ namespace Morgana.AI.Servers;
 public class MorganaHttpMCPServer : IMCPServer
 {
     private readonly Records.MCPServerConfig config;
-    private readonly ILogger<MorganaHttpMCPServer> logger;
+    private readonly ILogger logger;
     private readonly HttpClient httpClient;
     private readonly string baseUrl;
     
@@ -20,7 +20,7 @@ public class MorganaHttpMCPServer : IMCPServer
     
     public MorganaHttpMCPServer(
         Records.MCPServerConfig config,
-        ILogger<MorganaHttpMCPServer> logger,
+        ILogger logger,
         IHttpClientFactory httpClientFactory)
     {
         this.config = config;

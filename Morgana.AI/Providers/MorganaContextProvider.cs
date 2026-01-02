@@ -10,7 +10,7 @@ namespace Morgana.AI.Providers;
 /// </summary>
 public class MorganaContextProvider : AIContextProvider
 {
-    private readonly ILogger<MorganaContextProvider> logger;
+    private readonly ILogger logger;
     private readonly HashSet<string> sharedVariableNames;
 
     // Source of truth per le variabili di contesto
@@ -20,7 +20,7 @@ public class MorganaContextProvider : AIContextProvider
     public Action<string, object>? OnSharedContextUpdate { get; set; }
 
     public MorganaContextProvider(
-        ILogger<MorganaContextProvider> logger,
+        ILogger logger,
         IEnumerable<string>? sharedVariableNames = null)
     {
         this.logger = logger;
@@ -34,11 +34,13 @@ public class MorganaContextProvider : AIContextProvider
     {
         if (AgentContext.TryGetValue(variableName, out object? value))
         {
-            logger.LogInformation($"MorganaContextProvider GET '{variableName}' = '{value}'");
+            logger.LogInformation(
+                $"MorganaContextProvider GET '{variableName}' = '{value}'");
             return value;
         }
 
-        logger.LogInformation($"MorganaContextProvider MISS '{variableName}'");
+        logger.LogInformation(
+            $"MorganaContextProvider MISS '{variableName}'");
         return null;
     }
 
@@ -101,7 +103,7 @@ public class MorganaContextProvider : AIContextProvider
     /// </summary>
     public static MorganaContextProvider Deserialize(
         string json, 
-        ILogger<MorganaContextProvider> logger)
+        ILogger logger)
     {
         Dictionary<string, JsonElement>? data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
         

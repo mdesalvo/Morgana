@@ -16,8 +16,7 @@ public class AgentAdapter
 {
     protected readonly IPromptResolverService promptResolverService;
     protected readonly IChatClient chatClient;
-    protected readonly ILogger<MorganaAgent> logger;
-    protected readonly ILogger<MorganaContextProvider> contextProviderLogger;
+    protected readonly ILogger logger;
     protected readonly IMCPToolProvider? mcpToolProvider;
     protected readonly IMCPServerRegistryService? mcpServerRegistryService;
     protected readonly IToolRegistryService? toolRegistryService;
@@ -26,8 +25,7 @@ public class AgentAdapter
     public AgentAdapter(
         IChatClient chatClient,
         IPromptResolverService promptResolverService,
-        ILogger<MorganaAgent> logger,
-        ILogger<MorganaContextProvider> contextProviderLogger,
+        ILogger logger,
         IMCPToolProvider? mcpToolProvider = null,
         IMCPServerRegistryService? mcpServerRegistryService = null,
         IToolRegistryService? toolRegistryService = null)
@@ -35,7 +33,6 @@ public class AgentAdapter
         this.chatClient = chatClient;
         this.promptResolverService = promptResolverService;
         this.logger = logger;
-        this.contextProviderLogger = contextProviderLogger;
         this.mcpToolProvider = mcpToolProvider;
         this.mcpServerRegistryService = mcpServerRegistryService;
         this.toolRegistryService = toolRegistryService;
@@ -128,7 +125,7 @@ public class AgentAdapter
                 ? $"Agent '{agentName}' has {sharedVariables.Count} shared variables: {string.Join(", ", sharedVariables)}"
                 : $"Agent '{agentName}' has NO shared variables");
 
-        MorganaContextProvider provider = new MorganaContextProvider(contextProviderLogger, sharedVariables);
+        MorganaContextProvider provider = new MorganaContextProvider(logger, sharedVariables);
 
         if (sharedContextCallback != null)
             provider.OnSharedContextUpdate = sharedContextCallback;
@@ -172,7 +169,7 @@ public class AgentAdapter
             logger.LogError(ex, $"Failed to instantiate tool {toolType.Name} for intent '{intent}'");
             throw new InvalidOperationException(
                 $"Could not create tool instance for intent '{intent}'. " +
-                $"Ensure {toolType.Name} has a constructor that accepts (ILogger<MorganaTool>, Func<MorganaContextProvider>).", ex);
+                $"Ensure {toolType.Name} has a constructor that accepts (ILogger, Func<MorganaContextProvider>).", ex);
         }
 
         // Register tools using existing logic

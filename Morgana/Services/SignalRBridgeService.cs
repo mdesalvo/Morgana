@@ -7,13 +7,13 @@ namespace Morgana.Services;
 
 public class SignalRBridgeService : ISignalRBridgeService
 {
-    private readonly IHubContext<ConversationHub> _hubContext;
-    private readonly ILogger<SignalRBridgeService> _logger;
+    private readonly IHubContext<ConversationHub> hubContext;
+    private readonly ILogger logger;
 
-    public SignalRBridgeService(IHubContext<ConversationHub> hubContext, ILogger<SignalRBridgeService> logger)
+    public SignalRBridgeService(IHubContext<ConversationHub> hubContext, ILogger logger)
     {
-        _hubContext = hubContext;
-        _logger = logger;
+        this.hubContext = hubContext;
+        this.logger = logger;
     }
 
     public async Task SendMessageToConversationAsync(string conversationId, string text, string? errorReason = null)
@@ -28,7 +28,7 @@ public class SignalRBridgeService : ISignalRBridgeService
         List<QuickReply>? quickReplies = null,
         string? errorReason = null)
     {
-        _logger.LogInformation($"Sending {messageType} message to conversation {conversationId} via SignalR");
+        logger.LogInformation($"Sending {messageType} message to conversation {conversationId} via SignalR");
 
         StructuredMessage message = new StructuredMessage(
             conversationId,
@@ -38,7 +38,7 @@ public class SignalRBridgeService : ISignalRBridgeService
             quickReplies,
             errorReason);
 
-        await _hubContext.Clients.Group(conversationId).SendAsync("ReceiveMessage", new
+        await hubContext.Clients.Group(conversationId).SendAsync("ReceiveMessage", new
         {
             conversationId = message.ConversationId,
             text = message.Text,
