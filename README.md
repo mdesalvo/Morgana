@@ -5,7 +5,7 @@
     </td>
     <td>
       <h1>Morgana</h1>
-      <p><strong>A domain-agnostic multi-agent conversational AI framework with full MCP Protocol support</strong></p>
+      <p><strong>A modern, flexible, domain-agnostic multi-agent conversational AI framework with full MCP Protocol support</strong></p>
       <p>
         <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10"/>
         <img src="https://img.shields.io/badge/Akka.NET-512BD4?logo=nuget" alt="Akka.NET"/>
@@ -18,7 +18,7 @@
 
 ## Overview
 
-Morgana is a **domain-agnostic conversational AI framework** built on .NET 10 and Akka.NET actors. It orchestrates multi-agent workflows with full **Model Context Protocol (MCP)** integration, enabling specialized AI assistants to collaborate seamlessly across any business domain or use case.
+Morgana is a **modern, flexible, domain-agnostic conversational AI framework** built on .NET 10 and Akka.NET actors. It orchestrates multi-agent workflows with full **Model Context Protocol (MCP)** integration, enabling specialized AI assistants to collaborate seamlessly across any business domain or use case.
 
 The framework provides enterprise-grade capabilities for intent-driven conversations, dynamic tool discovery, and context-aware agent orchestration—all while remaining completely independent from specific business domains. MCP tools can be discovered and connected both natively through **in-process integration** and via **standard MCP protocol over HTTP**, providing flexible deployment options for AI capabilities.
 
