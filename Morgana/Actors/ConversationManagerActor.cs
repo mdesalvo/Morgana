@@ -92,7 +92,7 @@ public class ConversationManagerActor : MorganaActor
     private async Task HandleSupervisorResponseAsync(SupervisorResponseContext ctx)
     {
         actorLogger.Info(
-            $"Received response from supervisor (agent: {ctx.Response.AgentName ?? "unknown"}): " +
+            $"Received response from supervisor (agent: {ctx.Response.AgentName ?? "unknown"}, completed: {ctx.Response.AgentCompleted}): " +
             $"{ctx.Response.Response[..Math.Min(50, ctx.Response.Response.Length)]}...");
 
         // Send response to client via SignalR
@@ -104,7 +104,8 @@ public class ConversationManagerActor : MorganaActor
                 "assistant",
                 null,
                 null,
-                ctx.Response.AgentName);
+                ctx.Response.AgentName,
+                ctx.Response.AgentCompleted);
             
             actorLogger.Info("Response sent successfully to client via SignalR");
         }
@@ -121,7 +122,8 @@ public class ConversationManagerActor : MorganaActor
                     "assistant",
                     null,
                     "delivery_error",
-                    "Morgana");
+                    "Morgana",
+                    false);
             }
             catch (Exception fallbackEx)
             {
@@ -143,7 +145,8 @@ public class ConversationManagerActor : MorganaActor
                 "assistant",
                 null,
                 "supervisor_error",
-                "Morgana");
+                "Morgana",
+                false);
         }
         catch (Exception ex)
         {

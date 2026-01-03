@@ -7,5 +7,6 @@ public record MessageReceived(
     string? MessageType = null,
     List<QuickReply>? QuickReplies = null,
     string? ErrorReason = null,
-    string? AgentName = null
+    string? AgentName = null,
+    bool AgentCompleted = false
 );

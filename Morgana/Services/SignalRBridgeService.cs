@@ -18,7 +18,7 @@ public class SignalRBridgeService : ISignalRBridgeService
 
     public async Task SendMessageToConversationAsync(string conversationId, string text, string? errorReason = null)
     {
-        await SendStructuredMessageAsync(conversationId, text, "assistant", null, errorReason, "Morgana");
+        await SendStructuredMessageAsync(conversationId, text, "assistant", null, errorReason, "Morgana", false);
     }
 
     public async Task SendStructuredMessageAsync(
@@ -27,9 +27,10 @@ public class SignalRBridgeService : ISignalRBridgeService
         string messageType,
         List<QuickReply>? quickReplies = null,
         string? errorReason = null,
-        string? agentName = null)
+        string? agentName = null,
+        bool agentCompleted = false)
     {
-        logger.LogInformation($"Sending {messageType} message to conversation {conversationId} via SignalR");
+        logger.LogInformation($"Sending {messageType} message to conversation {conversationId} via SignalR (agent: {agentName ?? "Morgana"}, completed: {agentCompleted})");
 
         StructuredMessage message = new StructuredMessage(
             conversationId,
@@ -38,7 +39,8 @@ public class SignalRBridgeService : ISignalRBridgeService
             messageType,
             quickReplies,
             errorReason,
-            agentName ?? "Morgana");
+            agentName ?? "Morgana",
+            agentCompleted);
 
         await hubContext.Clients.Group(conversationId).SendAsync("ReceiveMessage", new
         {
@@ -53,7 +55,8 @@ public class SignalRBridgeService : ISignalRBridgeService
                 value = qr.Value
             }).ToList(),
             errorReason = message.ErrorReason,
-            agentName = message.AgentName
+            agentName = message.AgentName,
+            agentCompleted = message.AgentCompleted
         });
     }
 }

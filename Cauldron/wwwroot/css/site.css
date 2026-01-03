@@ -1,3 +1,6 @@
+/* Morgana Chat Styles - Updated with dynamic avatar borders */
+/* Last update: 2025-01-03 */
+
 :root {
     --primary-color: #8b5cf6;
     --primary-dark: #6d28d9;
@@ -62,8 +65,9 @@ body {
 }
 
 .chat-header {
-    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    background: var(--surface-color);
     padding: 20px 24px;
+    border-bottom: 1px solid var(--surface-light);
 }
 
 .header-content {
@@ -76,8 +80,9 @@ body {
     width: 64px;
     height: 64px;
     border-radius: 50%;
-    border: 3px solid rgba(255, 255, 255, 0.3);
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    transition: border-color 0.3s ease;
+    /* Il bordo è applicato inline per compatibilità Blazor SignalR */
 }
 
 .header-info h1 {
@@ -168,8 +173,9 @@ body {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    border: 2px solid var(--primary-color);
     flex-shrink: 0;
+    transition: border-color 0.3s ease;
+    /* Il bordo è applicato inline per compatibilità Blazor SignalR */
 }
 
 .message-bubble {
@@ -187,19 +193,15 @@ body {
     background: var(--surface-light);
 }
 
-.agent-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--primary-color);
-    margin-bottom: 6px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.agent-name::before {
-    content: '✨';
-    font-size: 12px;
+/* Stile speciale per testo di completamento */
+.message-text.completion-text {
+    font-style: italic;
+    color: var(--text-secondary);
+    font-size: 14px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(236, 72, 153, 0.05));
+    padding: 10px 14px;
+    border-radius: 8px;
+    border-left: 3px solid var(--secondary-color);
 }
 
 .typing-indicator {

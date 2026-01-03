@@ -181,7 +181,8 @@ public class ConversationSupervisorActor : MorganaActor
                 "presentation",
                 quickReplies,
                 null,
-                "Morgana");
+                "Morgana",
+                false);
 
             actorLogger.Info($"Presentation sent successfully with {quickReplies.Count} quick replies");
         }
@@ -207,7 +208,8 @@ public class ConversationSupervisorActor : MorganaActor
                         .Replace("((violation))", wrapper.Response.Violation ?? "Contenuto non appropriato"),
                     "guard_violation",
                     [],
-                    "Morgana"));
+                    "Morgana",
+                    false));
 
                 Become(Idle);
                 return;
@@ -227,7 +229,7 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Status.Failure>(failure =>
         {
             actorLogger.Error(failure.Cause, "Guard check failed");
-            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana"));
+            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana", false));
             Become(Idle);
         });
     }
@@ -257,7 +259,7 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Status.Failure>(failure =>
         {
             actorLogger.Error(failure.Cause, "Classification failed");
-            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana"));
+            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana", false));
 
             Become(Idle);
         });
@@ -270,6 +272,7 @@ public class ConversationSupervisorActor : MorganaActor
         ReceiveAsync<AgentContext>(async wrapper =>
         {
             string agentName = GetAgentDisplayName(wrapper.Response, ctx.Classification?.Intent);
+            bool agentCompleted = false;
 
             switch (wrapper.Response)
             {
@@ -285,15 +288,21 @@ public class ConversationSupervisorActor : MorganaActor
                     }
                     else
                     {
+                        // Agent has completed - mark for completion message if it was a specialized agent
+                        agentCompleted = activeAgentIntent != null;
+                        
                         activeAgent = null;
                         activeAgentIntent = null;
+                        
+                        actorLogger.Info("Agent completed and cleared");
                     }
 
                     wrapper.Context.OriginalSender.Tell(new ConversationResponse(
                         activeAgentResponse.Response,
                         wrapper.Context.Classification?.Intent,
                         wrapper.Context.Classification?.Metadata,
-                        agentName));
+                        agentName,
+                        agentCompleted));
 
                     break;
                 }
@@ -307,18 +316,25 @@ public class ConversationSupervisorActor : MorganaActor
                         activeAgentIntent = ctx.Classification?.Intent;
                         actorLogger.Warning($"Fallback active agent = {router.Path} with intent {activeAgentIntent}");
                     }
+                    else
+                    {
+                        agentCompleted = activeAgentIntent != null;
+                        activeAgent = null;
+                        activeAgentIntent = null;
+                    }
 
                     wrapper.Context.OriginalSender.Tell(new ConversationResponse(
                         routerFallbackResponse.Response,
                         wrapper.Context.Classification?.Intent,
                         wrapper.Context.Classification?.Metadata,
-                        agentName));
+                        agentName,
+                        agentCompleted));
 
                     break;
                 }
                 default:
                     actorLogger.Error($"Unexpected message type: {wrapper.Response?.GetType()}");
-                    wrapper.Context.OriginalSender.Tell(new ConversationResponse("Errore interno imprevisto.", null, null, "Morgana"));
+                    wrapper.Context.OriginalSender.Tell(new ConversationResponse("Errore interno imprevisto.", null, null, "Morgana", false));
                     break;
             }
 
@@ -328,7 +344,7 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Status.Failure>(failure =>
         {
             actorLogger.Error(failure.Cause, "Router request failed");
-            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana"));
+            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana", false));
             Become(Idle);
         });
     }
@@ -342,10 +358,16 @@ public class ConversationSupervisorActor : MorganaActor
             string agentName = activeAgentIntent != null 
                 ? GetAgentDisplayName(null, activeAgentIntent)
                 : "Morgana";
+            
+            bool agentCompleted = false;
 
             if (wrapper.Response.IsCompleted)
             {
                 actorLogger.Info("Active agent signaled completion, clearing active agent");
+                
+                // Mark completion only if it was a specialized agent
+                agentCompleted = activeAgentIntent != null;
+                
                 activeAgent = null;
                 activeAgentIntent = null;
             }
@@ -354,7 +376,8 @@ public class ConversationSupervisorActor : MorganaActor
                 wrapper.Response.Response, 
                 null, 
                 null,
-                agentName));
+                agentName,
+                agentCompleted));
 
             Become(Idle);
         });
@@ -364,7 +387,7 @@ public class ConversationSupervisorActor : MorganaActor
             actorLogger.Error(failure.Cause, "Active follow-up agent did not reply");
             activeAgent = null;
             activeAgentIntent = null;
-            originalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana"));
+            originalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana", false));
             Become(Idle);
         });
     }
@@ -389,7 +412,7 @@ public class ConversationSupervisorActor : MorganaActor
     private void HandleUnexpectedFailure(Status.Failure failure)
     {
         actorLogger.Error(failure.Cause, "Unexpected failure in ConversationSupervisorActor");
-        Sender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana"));
+        Sender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana", false));
     }
 
     private string GetAgentDisplayName(object? response, string? intent)

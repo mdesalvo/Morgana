@@ -12,7 +12,8 @@ public static class Records
         string Response,
         string? Classification,
         Dictionary<string, string>? Metadata,
-        string? AgentName = null);
+        string? AgentName = null,
+        bool AgentCompleted = false);
 
     public record CreateConversation(
         string ConversationId);
@@ -60,7 +61,8 @@ public static class Records
         string MessageType,
         List<QuickReply>? QuickReplies = null,
         string? ErrorReason = null,
-        string? AgentName = null);
+        string? AgentName = null,
+        bool AgentCompleted = false);
 
     // Presentation flow messages
 

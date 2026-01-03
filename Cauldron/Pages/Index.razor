@@ -11,9 +11,12 @@
     <!-- Header -->
     <div class="chat-header">
         <div class="header-content">
-            <img src="images/morgana-avatar.png" alt="Morgana" class="header-avatar" />
+            <img src="images/morgana-avatar.png" 
+                 alt="Morgana" 
+                 class="header-avatar"
+                 style="border: 3px solid @GetAvatarBorderColor(currentAgentName); !important" />
             <div class="header-info">
-                <h1>Morgana</h1>
+                <h1>@currentAgentName</h1>
                 <span class="status @(isConnected ? "online" : "offline")">
                     @(isConnected ? "Online" : "Offline")
                 </span>
@@ -56,7 +59,10 @@
                 <div class="message @message.Role">
                     @if (message.Role == "assistant")
                     {
-                        <img src="images/morgana-avatar.png" alt="@message.AgentName" class="message-avatar" />
+                        <img src="images/morgana-avatar.png" 
+                             alt="@message.AgentName" 
+                             class="message-avatar"
+                             style="border: 2px solid @GetAvatarBorderColor(message.AgentName);" />
                     }
                     <div class="message-bubble">
                         @if (message.IsTyping)
@@ -69,12 +75,9 @@
                         }
                         else
                         {
-                            @if (message.Role == "assistant" && !string.IsNullOrEmpty(message.AgentName))
-                            {
-                                <div class="agent-name">@message.AgentName</div>
-                            }
-                            
-                            <div class="message-text">@message.Text</div>
+                            <div class="message-text @(message.Type == MessageType.Presentation ? "completion-text" : "")">
+                                @message.Text
+                            </div>
                             
                             @if (message.QuickReplies is { Count: > 0 })
                             {
@@ -158,6 +161,7 @@
     private bool isSending = false;
     private bool isInitialized = false;
     private string errorMessage = string.Empty;
+    private string currentAgentName = "Morgana";
 
     protected override async Task OnInitializedAsync()
     {
@@ -169,9 +173,9 @@
             isConnected = SignalRService.IsConnected;
             Console.WriteLine($"🔵 SignalR connected: {isConnected}");
 
-            SignalRService.OnMessageReceived += async (conversationId, text, timestamp, quickReplies, agentName) =>
+            SignalRService.OnMessageReceived += async (conversationId, text, timestamp, quickReplies, agentName, agentCompleted) =>
             {
-                await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName);
+                await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
             };
             SignalRService.OnConnectionStateChanged += (connected) =>
             {
@@ -335,12 +339,12 @@
         }
     }
 
-    private async Task HandleMessageReceived(string conversationId, string text, DateTime timestamp, List<QuickReply>? quickReplies, string? agentName)
+    private async Task HandleMessageReceived(string conversationId, string text, DateTime timestamp, List<QuickReply>? quickReplies, string? agentName, bool agentCompleted)
     {
         try
         {
             Console.WriteLine($"🟣 Message received for conversation: {conversationId}");
-            Console.WriteLine($"🟣 Agent: {agentName ?? "Morgana"}");
+            Console.WriteLine($"🟣 Agent: {agentName ?? "Morgana"}, Completed: {agentCompleted}");
             Console.WriteLine($"🟣 QuickReplies count: {quickReplies?.Count ?? 0}");
 
             if (this.conversationId != conversationId)
@@ -355,6 +359,21 @@
                 messages.Remove(typingMessage);
             }
 
+            // Aggiorna il nome dell'agente nell'header
+            if (!string.IsNullOrEmpty(agentName))
+            {
+                currentAgentName = agentName;
+                Console.WriteLine($"🎨 Header updated: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
+            }
+
+            // Se l'agente ha completato, torna a Morgana
+            if (agentCompleted)
+            {
+                currentAgentName = "Morgana";
+                Console.WriteLine($"🎨 Header reset to: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
+            }
+
+            // Messaggio principale dall'agente
             messages.Add(new ChatMessage
             {
                 ConversationId = conversationId,
@@ -362,8 +381,24 @@
                 Role = "assistant",
                 Timestamp = timestamp,
                 QuickReplies = quickReplies,
-                AgentName = agentName ?? "Morgana"
+                AgentName = agentName ?? "Morgana",
+                AgentCompleted = false
             });
+
+            // Se l'agente ha completato E non è Morgana base, aggiungi un messaggio separato
+            if (agentCompleted && IsSpecializedAgent(agentName))
+            {
+                messages.Add(new ChatMessage
+                {
+                    ConversationId = conversationId,
+                    Text = GetCompletionMessage(agentName!),
+                    Role = "assistant",
+                    Timestamp = timestamp.AddSeconds(1),
+                    AgentName = "Morgana",
+                    AgentCompleted = false,
+                    Type = MessageType.Presentation
+                });
+            }
 
             await InvokeAsync(StateHasChanged);
         }
@@ -416,10 +451,29 @@
 
     public async ValueTask DisposeAsync()
     {
-        SignalRService.OnMessageReceived -= async (conversationId, text, timestamp, quickReplies, agentName) =>
+        SignalRService.OnMessageReceived -= async (conversationId, text, timestamp, quickReplies, agentName, agentCompleted) =>
         {
-            await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName);
+            await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
         };
         await SignalRService.StopAsync();
+    }
+
+    private bool IsSpecializedAgent(string agentName)
+    {
+        return agentName != null && agentName.Contains("(") && agentName.Contains(")");
+    }
+
+    private string GetAvatarBorderColor(string? agentName)
+    {
+        // Viola per Morgana base, Rosa per agenti specializzati
+        return IsSpecializedAgent(agentName ?? "Morgana") ? "var(--secondary-color)" : "var(--primary-color)";
+    }
+
+    private string GetCompletionMessage(string agentName)
+    {
+        if (agentName.Contains("(") && agentName.Contains(")"))
+            return string.Format(Configuration["Morgana:AgentExitMessage"]!, agentName);
+
+        return "🌸 L'incantesimo è stato completato";
     }
 }

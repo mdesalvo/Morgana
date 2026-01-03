@@ -10,6 +10,7 @@ public class ChatMessage
     public List<QuickReply>? QuickReplies { get; set; }
     public string? ErrorReason { get; set; }
     public string AgentName { get; set; } = "Morgana";
+    public bool AgentCompleted { get; set; } = false;
     
     // Track which quick reply was clicked (if any)
     public string? SelectedQuickReplyId { get; set; }

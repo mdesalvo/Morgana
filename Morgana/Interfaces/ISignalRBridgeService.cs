@@ -15,5 +15,6 @@ public interface ISignalRBridgeService
         string messageType,
         List<QuickReply>? quickReplies = null,
         string? errorReason = null,
-        string? agentName = null);
+        string? agentName = null,
+        bool agentCompleted = false);
 }
