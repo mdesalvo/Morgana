@@ -9,11 +9,11 @@ public class ChatMessage
     public MessageType Type { get; set; }
     public List<QuickReply>? QuickReplies { get; set; }
     public string? ErrorReason { get; set; }
+    public string AgentName { get; set; } = "Morgana";
     
     // Track which quick reply was clicked (if any)
     public string? SelectedQuickReplyId { get; set; }
     
-    // For backward compatibility with old Index.razor
     public string Role
     {
         get => Type switch

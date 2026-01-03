@@ -56,7 +56,7 @@
                 <div class="message @message.Role">
                     @if (message.Role == "assistant")
                     {
-                        <img src="images/morgana-avatar.png" alt="Morgana" class="message-avatar" />
+                        <img src="images/morgana-avatar.png" alt="@message.AgentName" class="message-avatar" />
                     }
                     <div class="message-bubble">
                         @if (message.IsTyping)
@@ -69,6 +69,11 @@
                         }
                         else
                         {
+                            @if (message.Role == "assistant" && !string.IsNullOrEmpty(message.AgentName))
+                            {
+                                <div class="agent-name">@message.AgentName</div>
+                            }
+                            
                             <div class="message-text">@message.Text</div>
                             
                             @if (message.QuickReplies is { Count: > 0 })
@@ -164,15 +169,15 @@
             isConnected = SignalRService.IsConnected;
             Console.WriteLine($"🔵 SignalR connected: {isConnected}");
 
-            SignalRService.OnMessageReceived += async (conversationId, text, timestamp, quickReplies) =>
+            SignalRService.OnMessageReceived += async (conversationId, text, timestamp, quickReplies, agentName) =>
             {
-                await HandleMessageReceived(conversationId, text, timestamp, quickReplies);
+                await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName);
             };
             SignalRService.OnConnectionStateChanged += (connected) =>
             {
                 isConnected = connected;
                 Console.WriteLine($"🔵 Connection state changed: {connected}");
-                InvokeAsync(StateHasChanged); // Necessario: callback da thread diverso
+                InvokeAsync(StateHasChanged);
             };
 
             await StartConversation();
@@ -292,7 +297,8 @@
                         Text = "Mi dispiace, si è verificato un errore. Riprova.",
                         Role = "assistant",
                         Timestamp = DateTime.Now,
-                        IsError = true
+                        IsError = true,
+                        AgentName = "Morgana"
                     });
                     StateHasChanged();
                 }
@@ -314,7 +320,8 @@
                     Text = $"Errore di connessione: {ex.Message}",
                     Role = "assistant",
                     Timestamp = DateTime.Now,
-                    IsError = true
+                    IsError = true,
+                    AgentName = "Morgana"
                 });
 
                 errorMessage = $"Errore: {ex.Message}";
@@ -328,11 +335,12 @@
         }
     }
 
-    private async Task HandleMessageReceived(string conversationId, string text, DateTime timestamp, List<QuickReply>? quickReplies)
+    private async Task HandleMessageReceived(string conversationId, string text, DateTime timestamp, List<QuickReply>? quickReplies, string? agentName)
     {
         try
         {
             Console.WriteLine($"🟣 Message received for conversation: {conversationId}");
+            Console.WriteLine($"🟣 Agent: {agentName ?? "Morgana"}");
             Console.WriteLine($"🟣 QuickReplies count: {quickReplies?.Count ?? 0}");
 
             if (this.conversationId != conversationId)
@@ -353,7 +361,8 @@
                 Text = text,
                 Role = "assistant",
                 Timestamp = timestamp,
-                QuickReplies = quickReplies
+                QuickReplies = quickReplies,
+                AgentName = agentName ?? "Morgana"
             });
 
             await InvokeAsync(StateHasChanged);
@@ -407,9 +416,9 @@
 
     public async ValueTask DisposeAsync()
     {
-        SignalRService.OnMessageReceived -= async (conversationId, text, timestamp, quickReplies) =>
+        SignalRService.OnMessageReceived -= async (conversationId, text, timestamp, quickReplies, agentName) =>
         {
-            await HandleMessageReceived(conversationId, text, timestamp, quickReplies);
+            await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName);
         };
         await SignalRService.StopAsync();
     }

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Attributes;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.Interfaces;
@@ -18,6 +19,7 @@ public class ConversationSupervisorActor : MorganaActor
     private readonly IAgentConfigurationService agentConfigService;
 
     private IActorRef? activeAgent;
+    private string? activeAgentIntent;
     private bool hasPresented = false;
 
     public ConversationSupervisorActor(
@@ -177,7 +179,9 @@ public class ConversationSupervisorActor : MorganaActor
                 conversationId,
                 ctx.Message,
                 "presentation",
-                quickReplies);
+                quickReplies,
+                null,
+                "Morgana");
 
             actorLogger.Info($"Presentation sent successfully with {quickReplies.Count} quick replies");
         }
@@ -202,7 +206,8 @@ public class ConversationSupervisorActor : MorganaActor
                     guardPrompt.GetAdditionalProperty<string>("GuardAnswer")
                         .Replace("((violation))", wrapper.Response.Violation ?? "Contenuto non appropriato"),
                     "guard_violation",
-                    []));
+                    [],
+                    "Morgana"));
 
                 Become(Idle);
                 return;
@@ -222,7 +227,7 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Status.Failure>(failure =>
         {
             actorLogger.Error(failure.Cause, "Guard check failed");
-            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
+            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana"));
             Become(Idle);
         });
     }
@@ -252,7 +257,7 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Status.Failure>(failure =>
         {
             actorLogger.Error(failure.Cause, "Classification failed");
-            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
+            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana"));
 
             Become(Idle);
         });
@@ -264,6 +269,8 @@ public class ConversationSupervisorActor : MorganaActor
 
         ReceiveAsync<AgentContext>(async wrapper =>
         {
+            string agentName = GetAgentDisplayName(wrapper.Response, ctx.Classification?.Intent);
+
             switch (wrapper.Response)
             {
                 case AI.Records.ActiveAgentResponse activeAgentResponse:
@@ -273,17 +280,20 @@ public class ConversationSupervisorActor : MorganaActor
                     if (!activeAgentResponse.IsCompleted)
                     {
                         activeAgent = activeAgentResponse.AgentRef;
-                        actorLogger.Info($"Active agent set to {activeAgent.Path}");
+                        activeAgentIntent = ctx.Classification?.Intent;
+                        actorLogger.Info($"Active agent set to {activeAgent.Path} with intent {activeAgentIntent}");
                     }
                     else
                     {
                         activeAgent = null;
+                        activeAgentIntent = null;
                     }
 
                     wrapper.Context.OriginalSender.Tell(new ConversationResponse(
                         activeAgentResponse.Response,
                         wrapper.Context.Classification?.Intent,
-                        wrapper.Context.Classification?.Metadata));
+                        wrapper.Context.Classification?.Metadata,
+                        agentName));
 
                     break;
                 }
@@ -294,19 +304,21 @@ public class ConversationSupervisorActor : MorganaActor
                     if (!routerFallbackResponse.IsCompleted)
                     {
                         activeAgent = router;
-                        actorLogger.Warning($"Fallback active agent = {router.Path}");
+                        activeAgentIntent = ctx.Classification?.Intent;
+                        actorLogger.Warning($"Fallback active agent = {router.Path} with intent {activeAgentIntent}");
                     }
 
                     wrapper.Context.OriginalSender.Tell(new ConversationResponse(
                         routerFallbackResponse.Response,
                         wrapper.Context.Classification?.Intent,
-                        wrapper.Context.Classification?.Metadata));
+                        wrapper.Context.Classification?.Metadata,
+                        agentName));
 
                     break;
                 }
                 default:
                     actorLogger.Error($"Unexpected message type: {wrapper.Response?.GetType()}");
-                    wrapper.Context.OriginalSender.Tell(new ConversationResponse("Errore interno imprevisto.", null, null));
+                    wrapper.Context.OriginalSender.Tell(new ConversationResponse("Errore interno imprevisto.", null, null, "Morgana"));
                     break;
             }
 
@@ -316,7 +328,7 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Status.Failure>(failure =>
         {
             actorLogger.Error(failure.Cause, "Router request failed");
-            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
+            ctx.OriginalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana"));
             Become(Idle);
         });
     }
@@ -327,14 +339,22 @@ public class ConversationSupervisorActor : MorganaActor
 
         ReceiveAsync<FollowUpContext>(async wrapper =>
         {
+            string agentName = activeAgentIntent != null 
+                ? GetAgentDisplayName(null, activeAgentIntent)
+                : "Morgana";
+
             if (wrapper.Response.IsCompleted)
             {
                 actorLogger.Info("Active agent signaled completion, clearing active agent");
                 activeAgent = null;
+                activeAgentIntent = null;
             }
 
             wrapper.OriginalSender.Tell(new ConversationResponse(
-                wrapper.Response.Response, null, null));
+                wrapper.Response.Response, 
+                null, 
+                null,
+                agentName));
 
             Become(Idle);
         });
@@ -343,7 +363,8 @@ public class ConversationSupervisorActor : MorganaActor
         {
             actorLogger.Error(failure.Cause, "Active follow-up agent did not reply");
             activeAgent = null;
-            originalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
+            activeAgentIntent = null;
+            originalSender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana"));
             Become(Idle);
         });
     }
@@ -368,7 +389,18 @@ public class ConversationSupervisorActor : MorganaActor
     private void HandleUnexpectedFailure(Status.Failure failure)
     {
         actorLogger.Error(failure.Cause, "Unexpected failure in ConversationSupervisorActor");
-        Sender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null));
+        Sender.Tell(new ConversationResponse("Si è verificato un errore interno.", null, null, "Morgana"));
+    }
+
+    private string GetAgentDisplayName(object? response, string? intent)
+    {
+        if (string.IsNullOrEmpty(intent))
+            return "Morgana";
+
+        // Capitalize first letter of intent for display
+        string capitalizedIntent = char.ToUpper(intent[0]) + intent.Substring(1);
+        
+        return $"Morgana ({capitalizedIntent})";
     }
 
     #endregion

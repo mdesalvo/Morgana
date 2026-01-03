@@ -11,7 +11,8 @@ public static class Records
     public record ConversationResponse(
         string Response,
         string? Classification,
-        Dictionary<string, string>? Metadata);
+        Dictionary<string, string>? Metadata,
+        string? AgentName = null);
 
     public record CreateConversation(
         string ConversationId);
@@ -58,7 +59,8 @@ public static class Records
         DateTime Timestamp,
         string MessageType,
         List<QuickReply>? QuickReplies = null,
-        string? ErrorReason = null);
+        string? ErrorReason = null,
+        string? AgentName = null);
 
     // Presentation flow messages
 
@@ -70,7 +72,7 @@ public static class Records
     {
         // LLM-generated quick replies (takes precedence over Intents)
         public List<AI.Records.QuickReplyDefinition>? LlmQuickReplies { get; init; }
-    }
+    };
 
     // Supervisor
 

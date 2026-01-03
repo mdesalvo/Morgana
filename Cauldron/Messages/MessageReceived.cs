@@ -6,5 +6,6 @@ public record MessageReceived(
     DateTime Timestamp,
     string? MessageType = null,
     List<QuickReply>? QuickReplies = null,
-    string? ErrorReason = null
+    string? ErrorReason = null,
+    string? AgentName = null
 );

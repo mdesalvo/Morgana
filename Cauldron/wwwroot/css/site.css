@@ -169,6 +169,7 @@ body {
     height: 40px;
     border-radius: 50%;
     border: 2px solid var(--primary-color);
+    flex-shrink: 0;
 }
 
 .message-bubble {
@@ -184,6 +185,21 @@ body {
 
 .message.assistant .message-bubble {
     background: var(--surface-light);
+}
+
+.agent-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.agent-name::before {
+    content: '✨';
+    font-size: 12px;
 }
 
 .typing-indicator {

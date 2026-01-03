@@ -92,15 +92,19 @@ public class ConversationManagerActor : MorganaActor
     private async Task HandleSupervisorResponseAsync(SupervisorResponseContext ctx)
     {
         actorLogger.Info(
-            $"Received response from supervisor: " +
+            $"Received response from supervisor (agent: {ctx.Response.AgentName ?? "unknown"}): " +
             $"{ctx.Response.Response[..Math.Min(50, ctx.Response.Response.Length)]}...");
 
         // Send response to client via SignalR
         try
         {
-            await signalRBridgeService.SendMessageToConversationAsync(
+            await signalRBridgeService.SendStructuredMessageAsync(
                 conversationId, 
-                ctx.Response.Response);
+                ctx.Response.Response,
+                "assistant",
+                null,
+                null,
+                ctx.Response.AgentName);
             
             actorLogger.Info("Response sent successfully to client via SignalR");
         }
@@ -111,10 +115,13 @@ public class ConversationManagerActor : MorganaActor
             // Attempt to send error notification to client
             try
             {
-                await signalRBridgeService.SendMessageToConversationAsync(
+                await signalRBridgeService.SendStructuredMessageAsync(
                     conversationId,
                     "Si è verificato un errore nell'invio della risposta.",
-                    "delivery_error");
+                    "assistant",
+                    null,
+                    "delivery_error",
+                    "Morgana");
             }
             catch (Exception fallbackEx)
             {
@@ -130,10 +137,13 @@ public class ConversationManagerActor : MorganaActor
         // Send error message to client via SignalR
         try
         {
-            await signalRBridgeService.SendMessageToConversationAsync(
+            await signalRBridgeService.SendStructuredMessageAsync(
                 conversationId,
                 "Si è verificato un errore interno.",
-                "supervisor_error");
+                "assistant",
+                null,
+                "supervisor_error",
+                "Morgana");
         }
         catch (Exception ex)
         {

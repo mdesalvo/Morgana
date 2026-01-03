@@ -18,7 +18,7 @@ public class SignalRBridgeService : ISignalRBridgeService
 
     public async Task SendMessageToConversationAsync(string conversationId, string text, string? errorReason = null)
     {
-        await SendStructuredMessageAsync(conversationId, text, "assistant", null, errorReason);
+        await SendStructuredMessageAsync(conversationId, text, "assistant", null, errorReason, "Morgana");
     }
 
     public async Task SendStructuredMessageAsync(
@@ -26,7 +26,8 @@ public class SignalRBridgeService : ISignalRBridgeService
         string text,
         string messageType,
         List<QuickReply>? quickReplies = null,
-        string? errorReason = null)
+        string? errorReason = null,
+        string? agentName = null)
     {
         logger.LogInformation($"Sending {messageType} message to conversation {conversationId} via SignalR");
 
@@ -36,7 +37,8 @@ public class SignalRBridgeService : ISignalRBridgeService
             DateTime.UtcNow,
             messageType,
             quickReplies,
-            errorReason);
+            errorReason,
+            agentName ?? "Morgana");
 
         await hubContext.Clients.Group(conversationId).SendAsync("ReceiveMessage", new
         {
@@ -50,7 +52,8 @@ public class SignalRBridgeService : ISignalRBridgeService
                 label = qr.Label,
                 value = qr.Value
             }).ToList(),
-            errorReason = message.ErrorReason
+            errorReason = message.ErrorReason,
+            agentName = message.AgentName
         });
     }
 }

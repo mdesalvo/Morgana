@@ -9,7 +9,7 @@ public class MorganaSignalRService : IAsyncDisposable
     private readonly IConfiguration _configuration;
     private readonly ILogger<MorganaSignalRService> _logger;
 
-    public event Action<string, string, DateTime, List<QuickReply>?>? OnMessageReceived;
+    public event Action<string, string, DateTime, List<QuickReply>?, string?>? OnMessageReceived;
     public event Action<bool>? OnConnectionStateChanged;
 
     public bool IsConnected => _hubConnection?.State == HubConnectionState.Connected;
@@ -40,13 +40,14 @@ public class MorganaSignalRService : IAsyncDisposable
 
         _hubConnection.On<MessageReceived>("ReceiveMessage", (message) =>
         {
-            _logger.LogInformation($"📩 Message received - Type: {message.MessageType}, QuickReplies: {message.QuickReplies?.Count ?? 0}");
+            _logger.LogInformation($"📩 Message received - Type: {message.MessageType}, QuickReplies: {message.QuickReplies?.Count ?? 0}, Agent: {message.AgentName ?? "Morgana"}");
             
             OnMessageReceived?.Invoke(
                 message.ConversationId,
                 message.Text,
                 message.Timestamp,
-                message.QuickReplies
+                message.QuickReplies,
+                message.AgentName ?? "Morgana"
             );
         });
 
