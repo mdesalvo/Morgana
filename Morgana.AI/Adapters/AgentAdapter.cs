@@ -209,7 +209,7 @@ public class AgentAdapter
     }
 
     /// <summary>
-    /// Generic agent creation method - replaces CreateBillingAgent, CreateContractAgent, CreateTroubleshootingAgent.
+    /// Generic agent creation method for both native and MCP tools.
     /// Automatically loads MCP tools from servers declared via IMCPServerRegistryService.
     /// </summary>
     public (AIAgent agent, MorganaContextProvider provider) CreateAgent(
@@ -233,7 +233,7 @@ public class AgentAdapter
             .GetAwaiter()
             .GetResult();
 
-        // Merge agent tools with global Morgana tools
+        // Merge Agent tools with Morgana tools for context
         ToolDefinition[] agentTools = [.. morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                             .Union(agentPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
 
