@@ -91,7 +91,7 @@
       "Version": "1",
       "AdditionalProperties": [
         {
-          "FallbackMessage": "✨ Benvenuto! Sono Morgana, la tua assistente digitale.\n\nPosso aiutarti con diverse richieste. Cosa desideri fare oggi?"
+          "FallbackMessage": "✨ Benvenuto! Sono Morgana, la tua assistente digitale magica.\n\nDimmi viandante, che cosa ti porta da me?"
         }
       ]
     },
