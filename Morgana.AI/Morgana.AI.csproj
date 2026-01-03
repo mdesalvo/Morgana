@@ -23,7 +23,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="prompts.json" />
+    <EmbeddedResource Include="morgana.json" />
   </ItemGroup>
 
   <ItemGroup>

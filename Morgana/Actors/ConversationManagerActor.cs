@@ -26,6 +26,10 @@ public class ConversationManagerActor : MorganaActor
         ReceiveAsync<UserMessage>(HandleUserMessageAsync);
         ReceiveAsync<CreateConversation>(HandleCreateConversationAsync);
         ReceiveAsync<TerminateConversation>(HandleTerminateConversationAsync);
+        
+        // Handle supervisor responses (PipeTo pattern)
+        ReceiveAsync<SupervisorResponseContext>(HandleSupervisorResponseAsync);
+        ReceiveAsync<Status.Failure>(HandleSupervisorFailureAsync);
     }
 
     private async Task HandleCreateConversationAsync(CreateConversation msg)
@@ -40,8 +44,8 @@ public class ConversationManagerActor : MorganaActor
 
             Context.Watch(supervisor);
             actorLogger.Info("Supervisor created: {0}", supervisor.Path);
-            
-            // NEW: Trigger automatic presentation
+
+            // Trigger automatic presentation
             supervisor.Tell(new GeneratePresentationMessage());
             actorLogger.Info("Presentation generation triggered");
         }
@@ -70,34 +74,70 @@ public class ConversationManagerActor : MorganaActor
 
         if (supervisor == null)
         {
-            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>(
-                "supervisor", msg.ConversationId);
-
+            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>("supervisor", msg.ConversationId);
             Context.Watch(supervisor);
+
             actorLogger.Warning("Supervisor was missing; created new supervisor: {0}", supervisor.Path);
         }
 
         actorLogger.Info("Forwarding message to supervisor at {0}", supervisor.Path);
 
-        ConversationResponse conversationResponse;
-        try
-        {
-            conversationResponse = await supervisor.Ask<ConversationResponse>(msg);
-        }
-        catch (Exception ex)
-        {
-            actorLogger.Error(ex, "Supervisor did not reply in time");
-            conversationResponse = new ConversationResponse("Si è verificato un errore interno.", "error", []);
-        }
+        // PipeTo pattern: non-blocking, with timeout
+        supervisor.Ask<ConversationResponse>(msg, TimeSpan.FromSeconds(60))
+            .PipeTo(Self,
+                success: response => new SupervisorResponseContext(response),
+                failure: ex => new Status.Failure(ex));
+    }
 
-        // invia al client via SignalR (bridge)
+    private async Task HandleSupervisorResponseAsync(SupervisorResponseContext ctx)
+    {
+        actorLogger.Info(
+            $"Received response from supervisor: " +
+            $"{ctx.Response.Response[..Math.Min(50, ctx.Response.Response.Length)]}...");
+
+        // Send response to client via SignalR
         try
         {
-            await signalRBridgeService.SendMessageToConversationAsync(conversationId, conversationResponse.Response);
+            await signalRBridgeService.SendMessageToConversationAsync(
+                conversationId, 
+                ctx.Response.Response);
+            
+            actorLogger.Info("Response sent successfully to client via SignalR");
         }
         catch (Exception ex)
         {
-            actorLogger.Error(ex, "Failed to send SignalR message");
+            actorLogger.Error(ex, "Failed to send SignalR message to client");
+            
+            // Attempt to send error notification to client
+            try
+            {
+                await signalRBridgeService.SendMessageToConversationAsync(
+                    conversationId,
+                    "Si è verificato un errore nell'invio della risposta.",
+                    "delivery_error");
+            }
+            catch (Exception fallbackEx)
+            {
+                actorLogger.Error(fallbackEx, "Failed to send error notification to client");
+            }
+        }
+    }
+
+    private async Task HandleSupervisorFailureAsync(Status.Failure failure)
+    {
+        actorLogger.Error(failure.Cause, "Supervisor did not reply in time or failed");
+
+        // Send error message to client via SignalR
+        try
+        {
+            await signalRBridgeService.SendMessageToConversationAsync(
+                conversationId,
+                "Si è verificato un errore interno.",
+                "supervisor_error");
+        }
+        catch (Exception ex)
+        {
+            actorLogger.Error(ex, "Failed to send error message to client");
         }
     }
 

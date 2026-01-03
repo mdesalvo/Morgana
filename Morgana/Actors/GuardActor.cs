@@ -30,9 +30,7 @@ public class GuardActor : MorganaActor
             if (req.Message.Contains(term, StringComparison.OrdinalIgnoreCase))
             {
                 actorLogger.Info($"Profanity detected: '{term}'");
-                originalSender.Tell(new GuardCheckResponse(
-                    false, 
-                    guardPrompt.GetAdditionalProperty<string>("LanguageViolation")));
+                originalSender.Tell(new GuardCheckResponse(false, guardPrompt.GetAdditionalProperty<string>("LanguageViolation")));
                 return;
             }
         }
@@ -48,10 +46,8 @@ public class GuardActor : MorganaActor
                 req.Message);
 
             GuardCheckResponse? result = JsonSerializer.Deserialize<GuardCheckResponse>(response);
-            
-            LLMCheckContext ctx = new LLMCheckContext(
-                result ?? new GuardCheckResponse(true, null),
-                originalSender);
+
+            LLMCheckContext ctx = new LLMCheckContext(result ?? new GuardCheckResponse(true, null), originalSender);
 
             Self.Tell(ctx);
         }
@@ -60,9 +56,7 @@ public class GuardActor : MorganaActor
             actorLogger.Error(ex, "LLM policy check failed");
             
             // Fallback su errore
-            LLMCheckContext ctx = new LLMCheckContext(
-                new GuardCheckResponse(true, null),
-                originalSender);
+            LLMCheckContext ctx = new LLMCheckContext(new GuardCheckResponse(true, null), originalSender);
 
             Self.Tell(ctx);
         }

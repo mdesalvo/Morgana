@@ -15,12 +15,21 @@ public class ClassifierActor : MorganaActor
     public ClassifierActor(
         string conversationId,
         ILLMService llmService,
-        IPromptResolverService promptResolverService) : base(conversationId, llmService, promptResolverService)
+        IPromptResolverService promptResolverService,
+        IAgentConfigurationService agentConfigService) : base(conversationId, llmService, promptResolverService)
     {
         Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
         
-        // Parse structured intents
-        List<IntentDefinition> intents = classifierPrompt.GetAdditionalProperty<List<IntentDefinition>>("Intents");
+        // Load intents from domain
+        List<IntentDefinition> intents = agentConfigService.GetIntentsAsync().GetAwaiter().GetResult();
+        if (intents.Count == 0)
+        {
+            actorLogger.Info("No intents loaded from domain. Classifier will have no intents to classify.");
+        }
+        else
+        {
+            actorLogger.Info($"Loaded {intents.Count} intents from domain for classification");
+        }
         
         IntentCollection intentCollection = new IntentCollection(intents);
         
