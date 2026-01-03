@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - UNDER DEVELOPMENT
+
+### 🎯 Major Feature: Support for HTTP MCP servers
+This release enhances MCP support with ability to interact with **HTTP MCP** servers, in addition to already implemented **InProcess MCP** servers.
+
+### 🎯 Major Feature: Morgana as agnostic conversational AI framework
+This release represents a fundamental shift in enterprise readyness: **Morgana is now fully decoupled from any domain-specific agents**, becoming a true **conversational AI framework**.
+
+### ✨ Added
+
+- Implemented support for `MorganaHttpMCPServer` in addition to the existing `MorganaInProcessMCPServer`: MCP tools can be discovered and connected both natively through in-process integration and via standard MCP protocol over HTTP, providing flexible deployment options for AI capabilities.
+
+### 🔄 Changed
+
+- Improved visual cues for the active agent: name displayed in the header with a distinctive color scheme (purple for basic Morgana, pink for specialized agents).
+- Extracted example agents, tools and servers into a new, separate "educational" project `Morgana.AI.Examples` to keep the core framework clean and reusable.
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+
+This release unlocks:
+- Multi-modal support (voice, images, documents) through MCP standardization
+- Hot-reload of MCP servers without application restart
+- Custom UI themes/skins with dynamic branding
+
 ## [0.5.0] - 2026-01-01
 
 ### 🎯 Major Feature: Proactive Conversational Paradigm
