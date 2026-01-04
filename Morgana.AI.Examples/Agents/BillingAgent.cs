@@ -7,11 +7,6 @@ using Morgana.AI.Providers;
 
 namespace Morgana.AI.Examples.Agents;
 
-/// <summary>
-/// Example agent for handling billing-related queries.
-/// Uses BillingTool (native) for billing operations.
-/// No MCP servers required for this agent.
-/// </summary>
 [HandlesIntent("billing")]
 public class BillingAgent : MorganaAgent
 {
@@ -22,7 +17,6 @@ public class BillingAgent : MorganaAgent
         ILogger logger,
         AgentAdapter agentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
-        // Generic agent creation - automatically loads native tools via ToolRegistry
         (aiAgent, contextProvider) = agentAdapter.CreateAgent(GetType(), OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);

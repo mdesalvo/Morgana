@@ -7,24 +7,25 @@ namespace Morgana.AI.Services;
 /// <summary>
 /// Resolves prompts from two sources:
 /// 1. morgana.json (framework prompts: Morgana, Classifier, Guard, Presentation)
-/// 2. agents.json (domain prompts: billing, contract, troubleshooting, etc.)
+/// 2. IAgentConfigurationService (domain prompts: billing, contract, troubleshooting, etc.)
 /// </summary>
 public class ConfigurationPromptResolverService : IPromptResolverService
 {
-    private readonly Lazy<Records.Prompt[]> morganaPrompts;
+    private readonly Records.Prompt[] morganaPrompts;
     private readonly IAgentConfigurationService agentConfigService;
 
     public ConfigurationPromptResolverService(IAgentConfigurationService agentConfigService)
     {
         this.agentConfigService = agentConfigService;
-        morganaPrompts = new Lazy<Records.Prompt[]>(LoadMorganaPrompts);
+
+        morganaPrompts = LoadMorganaPrompts();
     }
 
     public async Task<Records.Prompt[]> GetAllPromptsAsync()
     {
-        // Merge: morgana.json (framework) + domain
+        // Merge: morgana.json + domain
         List<Records.Prompt> agentPrompts = await agentConfigService.GetAgentPromptsAsync();
-        return [..morganaPrompts.Value, ..agentPrompts];
+        return [..morganaPrompts, ..agentPrompts];
     }
 
     public async Task<Records.Prompt> ResolveAsync(string promptID)
