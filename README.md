@@ -34,6 +34,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
 7. **P2P Context Synchronization**: Agents share contextual information seamlessly through a message bus architecture
 8. **Native Memory Management**: Context and conversation history managed by Microsoft.Agents.AI framework
 9. **Personality-Driven Interactions**: Layered personality system with global and agent-specific traits
+10. **Plugin Architecture**: Domain agents dynamically loaded at runtime, enabling complete framework/domain decoupling
 
 ## Architecture
 
@@ -70,12 +71,16 @@ Traditional chatbot systems often struggle with complexity—they either become 
    │           │               └──────────────┬────────────┬─...fully extensible
    │           │               │              │            │
    │           │               ▼              ▼            ▼
-   │           │         ┌──────────┐   ┌───────────┐  ┌─────────────────┐
-   │           │         │ Billing* │   │ Contract* │  │ Troubleshooting*│
-   │           │         │  Agent   │   │   Agent   │  │     Agent       │
-   │           │         └──────────┘   └───────────┘  └─────────────────┘
-   │           │              │               │            │
-   │           │              │   ┌───────────┴────────────┘
+   │           │      ╔════════════════════════════════════════════════╗
+   │           │      ║      DYNAMIC DOMAIN AGENTS (Plugin-Loaded)     ║ * Example domain agents loaded dynamically via Plugin System
+   │           │      ╠════════════════════════════════════════════════╣
+   │           │      ║  ┌──────────┐   ┌───────────┐  ┌─────────────┐ ║
+   │           │      ║  │ Billing* │   │ Contract* │  │Troubleshoot*│ ║
+   │           │      ║  │  Agent   │   │   Agent   │  │    Agent    │ ║
+   │           │      ║  └──────────┘   └───────────┘  └─────────────┘ ║
+   │           │      ║       │               │              │         ║
+   │           │      ╚═══════┼───────────────┼──────────────┼═════════╝
+   │           │              │   ┌───────────┴──────────────┘
    │           │              │   │
    │           │              ▼   ▼
    │           │         ┌──────────────────────┐
@@ -249,22 +254,22 @@ Tools interact with context through `MorganaContextProvider`:
 ```csharp
 public class MorganaTool
 {
-protected readonly Func<MorganaContextProvider> getContextProvider;
+  protected readonly Func<MorganaContextProvider> getContextProvider;
 
-public Task<object> GetContextVariable(string variableName)
-{
-MorganaContextProvider provider = getContextProvider();
-object? value = provider.GetVariable(variableName);
-       // Returns value or "not available" message
-   }
+  public Task<object> GetContextVariable(string variableName)
+  {
+    MorganaContextProvider provider = getContextProvider();
+    object? value = provider.GetVariable(variableName);
+    // Returns value or "not available" message
+  }
 
-public Task<object> SetContextVariable(string variableName, string variableValue)
-{
-MorganaContextProvider provider = getContextProvider();
-provider.SetVariable(variableName, variableValue);
+  public Task<object> SetContextVariable(string variableName, string variableValue)
+  {
+    MorganaContextProvider provider = getContextProvider();
+    provider.SetVariable(variableName, variableValue);
 
-       // If variable is shared, provider automatically triggers broadcast
-   }
+    // If variable is shared, provider automatically triggers broadcast
+  }
 }
 ```
 
@@ -342,13 +347,13 @@ private readonly HashSet<string> sharedVariableNames;
 
 public void SetVariable(string variableName, object variableValue)
 {
-AgentContext[variableName] = variableValue;
+  AgentContext[variableName] = variableValue;
 
-if (sharedVariableNames.Contains(variableName))
-{
-       // Trigger broadcast callback
-       OnSharedContextUpdate?.Invoke(variableName, variableValue);
-}
+  if (sharedVariableNames.Contains(variableName))
+  {
+    // Trigger broadcast callback
+    OnSharedContextUpdate?.Invoke(variableName, variableValue);
+  }
 }
 ```
 
@@ -356,14 +361,14 @@ if (sharedVariableNames.Contains(variableName))
 ```csharp
 public void MergeSharedContext(Dictionary<string, object> sharedContext)
 {
-foreach (var kvp in sharedContext)
-{
-       // First-write-wins: accept only if not already present
-       if (!AgentContext.ContainsKey(kvp.Key))
-{
-AgentContext[kvp.Key] = kvp.Value;
-}
-}
+  foreach (var kvp in sharedContext)
+  {
+    // First-write-wins: accept only if not already present
+    if (!AgentContext.ContainsKey(kvp.Key))
+    {
+      AgentContext[kvp.Key] = kvp.Value;
+    }
+  }
 }
 ```
 
@@ -397,24 +402,23 @@ Each `MorganaAgent` registers the broadcast callback during initialization:
 ```csharp
 // In AgentAdapter.CreateContextProvider()
 MorganaContextProvider provider = new MorganaContextProvider(
-contextProviderLogger, 
-sharedVariables);
+  contextProviderLogger, sharedVariables);
 
 if (sharedContextCallback != null)
-provider.OnSharedContextUpdate = sharedContextCallback;
+  provider.OnSharedContextUpdate = sharedContextCallback;
 
 // In MorganaAgent
 protected void OnSharedContextUpdate(string key, object value)
 {
-string intent = GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent;
+  string intent = GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent;
 
-Context.ActorSelection($"/user/router-{conversationId}")
-.Tell(new BroadcastContextUpdate(intent, new Dictionary<string, object> { [key] = value }));
+  Context.ActorSelection($"/user/router-{conversationId}")
+         .Tell(new BroadcastContextUpdate(intent, new Dictionary<string, object> { [key] = value }));
 }
 
 private void HandleContextUpdate(ReceiveContextUpdate msg)
 {
-contextProvider.MergeSharedContext(msg.UpdatedValues);
+  contextProvider.MergeSharedContext(msg.UpdatedValues);
 }
 ```
 
@@ -552,40 +556,40 @@ The `AgentAdapter` composes instructions in a specific order to ensure proper pe
 ```csharp
 private string ComposeAgentInstructions(Prompt agentPrompt)
 {
-var sb = new StringBuilder();
+   var sb = new StringBuilder();
 
    // 1. Global role and capabilities
    sb.AppendLine(morganaPrompt.Content);
 
    // 2. Global personality (Morgana's character)
    if (!string.IsNullOrEmpty(morganaPrompt.Personality))
-{
-sb.AppendLine(morganaPrompt.Personality);
-sb.AppendLine();
-}
+   {
+     sb.AppendLine(morganaPrompt.Personality);
+     sb.AppendLine();
+   }
 
    // 3. Global policies (context handling, interaction rules)
    sb.AppendLine(formattedPolicies);
-sb.AppendLine();
+   sb.AppendLine();
 
    // 4. Global operational instructions
    sb.AppendLine(morganaPrompt.Instructions);
-sb.AppendLine();
+   sb.AppendLine();
 
    // 5. Agent-specific role and domain
    sb.AppendLine(agentPrompt.Content);
 
    // 6. Agent-specific personality (specialized traits)
    if (!string.IsNullOrEmpty(agentPrompt.Personality))
-{
-sb.AppendLine(agentPrompt.Personality);
-sb.AppendLine();
-}
+   {
+     sb.AppendLine(agentPrompt.Personality);
+     sb.AppendLine();
+   }
 
    // 7. Agent-specific instructions
    sb.Append(agentPrompt.Instructions);
 
-return sb.ToString();
+   return sb.ToString();
 }
 ```
 
@@ -738,8 +742,6 @@ Centralized error message management for consistent user experience:
 }
 ```
 
-Error messages support template placeholders (e.g., `((llm_error))`) for dynamic content injection.
-
 ### Tool Parameter Guidance
 
 Parameter-level guidance is dynamically applied based on `Scope`:
@@ -815,6 +817,51 @@ The system throws explicit exceptions if:
 - Tool definitions mismatch between prompts and implementations
 
 This **fail-fast approach** ensures configuration errors are caught at startup, not during customer interactions.
+
+## Plugin System
+
+The system dynamically loads domain assemblies configured in `appsettings.json` under `Plugins:Assemblies`. At bootstrap, `PluginLoader` validates that each assembly contains at least one class extending `MorganaAgent`, otherwise it's skipped with a warning. This enables complete decoupling between framework (Morgana.AI) and application domains (e.g., Morgana.AI.Examples), while maintaining automatic discovery of agents and tools via reflection.
+
+### Configuration
+
+**appsettings.json:**
+```json
+{
+  "Plugins": {
+    "Assemblies": [
+      "Morgana.AI.Examples.dll" // Exposes 3 demo agents
+    ]
+  }
+}
+```
+
+### Project Setup
+
+Domain assemblies are referenced with `ReferenceOutputAssembly=false` to ensure they're copied to output without creating compile-time dependencies:
+
+```xml
+<ItemGroup>
+  <ProjectReference Include="..\Morgana.AI.Examples\Morgana.AI.Examples.csproj">
+    <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+  </ProjectReference>
+</ItemGroup>
+```
+
+### Bootstrap Process
+
+1. **PluginLoader** reads `Plugins:Assemblies` from configuration
+2. Each assembly is loaded via `Assembly.Load()`
+3. Validation ensures assembly contains at least one `MorganaAgent` subclass
+4. Valid assemblies are loaded; invalid ones are skipped with warnings
+5. Agent and tool discovery proceeds via reflection across all loaded assemblies
+
+### Benefits
+
+- **Zero Compile-Time Coupling**: Framework has no direct dependencies on domain code
+- **Runtime Extensibility**: Add new domains by dropping assemblies and updating configuration
+- **Validation at Startup**: Invalid plugins are caught early with clear diagnostics
+- **Multi-Domain Support**: Load multiple domain assemblies simultaneously
+- **Clean Separation**: Framework (Morgana.AI) and domains (*.Examples, *.YourDomain) remain independent
 
 ## Technology Stack
 
