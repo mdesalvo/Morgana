@@ -91,13 +91,30 @@ public class ConversationSupervisorActor : MorganaActor
         {
             // Load presentation prompt from morgana.json (framework)
             AI.Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync("Presentation");
-            
+
             // Load intents from domain
             List<AI.Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
             
             AI.Records.IntentCollection intentCollection = new AI.Records.IntentCollection(allIntents);
             List<AI.Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
 
+            if (displayableIntents.Count == 0)
+            {
+                actorLogger.Warning("No displayable intents available, sending presentation without quick replies");
+
+                await signalRBridgeService.SendStructuredMessageAsync(
+                    conversationId,
+                    presentationPrompt.GetAdditionalProperty<string>("NoAgentsMessage"),
+                    "presentation",
+                    null, // No quick replies
+                    null,
+                    "Morgana",
+                    false);
+    
+                hasPresented = true;
+                return;
+            }
+            
             // Format intents for LLM
             string formattedIntents = string.Join("\n", 
                 displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));

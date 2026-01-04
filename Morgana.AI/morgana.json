@@ -92,6 +92,9 @@
       "AdditionalProperties": [
         {
           "FallbackMessage": "✨ Benvenuto! Sono Morgana, la tua assistente digitale magica.\n\nDimmi viandante, che cosa ti porta da me?"
+        },
+        {
+          "NoAgentsMessage": "✨ Benvenuto! Sono Morgana, la tua assistente digitale magica.\n\nAl momento non ho incantesimi configurati per aiutarti, ma il mio creatore può aggiungerne presto!"
         }
       ]
     },
