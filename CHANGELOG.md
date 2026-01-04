@@ -21,6 +21,8 @@ This release represents a fundamental shift in enterprise readyness: **Morgana i
 
 ### 🐛 Fixed
 
+- Morgana presents with invented quick-replies when no intent is available from the domain
+
 ### 🚀 Future Enablement
 
 This release unlocks:
