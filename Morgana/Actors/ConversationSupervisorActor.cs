@@ -417,11 +417,11 @@ public class ConversationSupervisorActor : MorganaActor
 
     private string GetAgentDisplayName(object? response, string? intent)
     {
-        if (string.IsNullOrEmpty(intent))
+        if (string.IsNullOrEmpty(intent) || string.Equals(intent, "other", StringComparison.OrdinalIgnoreCase))
             return "Morgana";
 
         // Capitalize first letter of intent for display
-        string capitalizedIntent = char.ToUpper(intent[0]) + intent.Substring(1);
+        string capitalizedIntent = char.ToUpper(intent[0]) + intent[1..];
         
         return $"Morgana ({capitalizedIntent})";
     }
