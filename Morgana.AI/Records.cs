@@ -86,14 +86,6 @@ public static class Records
         string Scope,
         bool Shared = false);
 
-    /// <summary>
-    /// Result of tool registry validation.
-    /// </summary>
-    public record ToolRegistryValidationResult(
-        bool IsValid,
-        IReadOnlyList<string> Warnings,
-        IReadOnlyList<string> Errors);
-    
     public record IntentDefinition(
         [property: JsonPropertyName("Name")] string Name,
         [property: JsonPropertyName("Description")] string Description,

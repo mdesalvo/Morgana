@@ -12,17 +12,10 @@ public interface IToolRegistryService
     /// <param name="intent">The intent to find a tool for (case-insensitive)</param>
     /// <returns>The Type of the MorganaTool, or null if no tool found for this intent</returns>
     Type? FindToolTypeForIntent(string intent);
-    
+
     /// <summary>
     /// Gets all registered tool types with their associated intents.
     /// </summary>
     /// <returns>Dictionary mapping intent names to tool types</returns>
     IReadOnlyDictionary<string, Type> GetAllRegisteredTools();
-    
-    /// <summary>
-    /// Validates that all agents with HandlesIntentAttribute have corresponding native tools.
-    /// Logs warnings for agents without native tools.
-    /// </summary>
-    /// <returns>Validation results with any warnings or errors</returns>
-    Records.ToolRegistryValidationResult ValidateAgentToolMapping();
 }

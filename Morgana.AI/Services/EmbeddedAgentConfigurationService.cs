@@ -12,23 +12,24 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 {
-    private readonly Lazy<AgentConfiguration> configuration;
+    private readonly AgentConfiguration configuration;
     private readonly ILogger logger;
     
     public EmbeddedAgentConfigurationService(ILogger logger)
     {
         this.logger = logger;
-        configuration = new Lazy<AgentConfiguration>(LoadAgentConfiguration);
+
+        configuration = LoadAgentConfiguration();
     }
     
     public Task<List<Records.IntentDefinition>> GetIntentsAsync()
     {
-        return Task.FromResult(configuration.Value.Intents);
+        return Task.FromResult(configuration.Intents);
     }
     
     public Task<List<Records.Prompt>> GetAgentPromptsAsync()
     {
-        return Task.FromResult(configuration.Value.Agents);
+        return Task.FromResult(configuration.Agents);
     }
     
     private AgentConfiguration LoadAgentConfiguration()

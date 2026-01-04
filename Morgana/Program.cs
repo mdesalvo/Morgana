@@ -3,7 +3,6 @@ using Akka.Actor.Setup;
 using Akka.DependencyInjection;
 using Microsoft.Extensions.AI;
 using Morgana.AI.Adapters;
-using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.Hubs;
@@ -34,12 +33,18 @@ builder.Services.AddCors(options =>
 // Logger
 builder.Services.AddSingleton<ILogger>(sp => sp.GetRequiredService<ILoggerFactory>().CreateLogger("Morgana"));
 
+// Force load Examples assembly for agents.json discovery and tool scanning (TODO: REMOVE)
+_ = typeof(Morgana.AI.Examples.Agents.BillingAgent).Assembly;
+
 // Morgana.AI Services
-string llmProvider = builder.Configuration["LLM:Provider"]!;
-builder.Services.AddSingleton<ILLMService>(sp =>
-{
+builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistryService>();
+builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
+builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
+builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
+builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
+    string llmProvider = builder.Configuration["LLM:Provider"]!;
 
     return llmProvider.ToLowerInvariant() switch
     {
@@ -49,10 +54,9 @@ builder.Services.AddSingleton<ILLMService>(sp =>
     };
 });
 builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMService>().GetChatClient());
-builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
-builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
-builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
-builder.Services.AddMorganaToolRegistry();
+
+// Agent Adapter
+builder.Services.AddSingleton<AgentAdapter>();
 
 // Akka.NET Services
 builder.Services.AddSingleton(sp =>
