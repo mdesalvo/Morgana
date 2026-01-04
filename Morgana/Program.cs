@@ -33,8 +33,10 @@ builder.Services.AddCors(options =>
 // Logger
 builder.Services.AddSingleton<ILogger>(sp => sp.GetRequiredService<ILoggerFactory>().CreateLogger("Morgana"));
 
-// Force load Examples assembly for agents.json discovery and tool scanning (TODO: REMOVE)
-_ = typeof(Morgana.AI.Examples.Agents.BillingAgent).Assembly;
+// Plugin Loading - Load domain assemblies dynamically
+PluginLoaderService pluginLoaderService = new PluginLoaderService(
+    builder.Configuration, builder.Services.BuildServiceProvider().GetRequiredService<ILogger>());
+pluginLoaderService.LoadPluginAssemblies();
 
 // Morgana.AI Services
 builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistryService>();
