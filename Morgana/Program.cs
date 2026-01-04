@@ -33,10 +33,14 @@ builder.Services.AddCors(options =>
 // Logger
 builder.Services.AddSingleton<ILogger>(sp => sp.GetRequiredService<ILoggerFactory>().CreateLogger("Morgana"));
 
-// Plugin Loading - Load domain assemblies dynamically
-PluginLoaderService pluginLoaderService = new PluginLoaderService(
-    builder.Configuration, builder.Services.BuildServiceProvider().GetRequiredService<ILogger>());
-pluginLoaderService.LoadPluginAssemblies();
+// Plugin Loading - Load domain agents dynamically
+using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddConsole()))
+{
+    PluginLoaderService pluginLoaderService = new PluginLoaderService(
+        builder.Configuration,
+        bootstrapLoggerFactory.CreateLogger<PluginLoaderService>());
+    pluginLoaderService.LoadPluginAssemblies();
+}
 
 // Morgana.AI Services
 builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistryService>();
