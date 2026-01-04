@@ -91,17 +91,15 @@ public class MorganaHttpMCPServer : IMCPServer
         {
             logger.LogInformation($"Discovering tools from remote MCP server: {ServerName}");
             
-            HttpResponseMessage response = await httpClient.GetAsync(
-                "mcp/tools", 
-                cancellationToken);
-            
+            HttpResponseMessage response = await httpClient.GetAsync("mcp/tools", cancellationToken);
+
             response.EnsureSuccessStatusCode();
-            
+
             Records.MCPToolDefinition[]? tools = await response.Content
                 .ReadFromJsonAsync<Records.MCPToolDefinition[]>(cancellationToken);
-            
+
             logger.LogInformation($"✅ Discovered {tools?.Length ?? 0} tools from remote server '{ServerName}'");
-            
+
             return tools ?? [];
         }
         catch (HttpRequestException ex)
@@ -135,23 +133,20 @@ public class MorganaHttpMCPServer : IMCPServer
         try
         {
             logger.LogInformation($"🔧 Invoking remote tool '{toolName}' on server '{ServerName}'");
-            
+
             var request = new
             {
                 toolName,
                 parameters
             };
-            
-            HttpResponseMessage response = await httpClient.PostAsJsonAsync(
-                $"mcp/tools/{toolName}",
-                request,
-                cancellationToken);
-            
+
+            HttpResponseMessage response = await httpClient.PostAsJsonAsync($"mcp/tools/{toolName}", request, cancellationToken);
+
             response.EnsureSuccessStatusCode();
-            
+
             Records.MCPToolResult? result = await response.Content
                 .ReadFromJsonAsync<Records.MCPToolResult>(cancellationToken);
-            
+
             if (result == null)
             {
                 logger.LogError($"Remote server '{ServerName}' returned null result for tool '{toolName}'");
@@ -160,7 +155,7 @@ public class MorganaHttpMCPServer : IMCPServer
                     Content: null,
                     ErrorMessage: "Remote server returned invalid response");
             }
-            
+
             logger.LogInformation(
                 $"✅ Remote tool '{toolName}' completed successfully (IsError: {result.IsError})");
             

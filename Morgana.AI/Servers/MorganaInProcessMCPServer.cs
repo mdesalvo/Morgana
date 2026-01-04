@@ -173,8 +173,11 @@ public abstract class MorganaInProcessMCPServer : IMCPServer
         try
         {
             logger.LogInformation($"Listing tools from MCP server: {ServerName}");
+
             IEnumerable<Records.MCPToolDefinition> tools = await RegisterToolsAsync();
+
             logger.LogInformation($"Found {tools.Count()} tools in server: {ServerName}");
+
             return tools;
         }
         catch (Exception ex)
