@@ -102,11 +102,13 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 actorLogger.Warning("No displayable intents available, sending presentation without quick replies");
 
+                await Task.Delay(750); //Give SignalR time to join conversation
+
                 await signalRBridgeService.SendStructuredMessageAsync(
                     conversationId,
                     presentationPrompt.GetAdditionalProperty<string>("NoAgentsMessage"),
                     "presentation",
-                    null, // No quick replies
+                    [], // No quick replies
                     null,
                     "Morgana",
                     false);
