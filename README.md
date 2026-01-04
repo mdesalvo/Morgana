@@ -1,16 +1,20 @@
 <table style="border:none;">
-<tr>
-<td width="256">
- <img src="https://github.com/mdesalvo/Morgana/blob/master/Morgana.jpg" alt="Morgana Logo" width="256"/>
-</td>
-<td>
- <h1>Morgana</h1>
-      <p><strong>A modern and flexible multi-agent, intent-driven conversational AI system</strong></p>
-      <p><strong>A modern and flexible multi-agent, intent-driven conversational AI framework</strong></p>
- <p>
-   <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10"/>
-   <img src="https://img.shields.io/badge/Akka.NET-512BD4?logo=nuget" alt="Akka.NET"/>
-@@ -17,903 +17,903 @@
+  <tr>
+    <td width="256">
+      <img src="https://github.com/mdesalvo/Morgana/blob/master/Morgana.jpg" alt="Morgana Logo" width="256"/>
+    </td>
+    <td>
+      <h1>Morgana</h1>
+      <p><strong>A modern, flexible, domain-agnostic multi-agent conversational AI framework with full MCP Protocol support</strong></p>
+      <p>
+        <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10"/>
+        <img src="https://img.shields.io/badge/Akka.NET-512BD4?logo=nuget" alt="Akka.NET"/>
+        <img src="https://img.shields.io/badge/Microsoft.Agents.AI-512BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
+        <img src="https://img.shields.io/badge/MCP-Protocol-512BD4" alt="MCP Protocol"/>
+      </p>
+    </td>
+  </tr>
+</table>
 
 ## Overview
 
