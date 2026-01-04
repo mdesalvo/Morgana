@@ -6,15 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - UNDER DEVELOPMENT
 
-### 🎯 Major Feature: Support for HTTP MCP servers
-This release enhances MCP support with ability to interact with **HTTP MCP** servers, in addition to already implemented **InProcess MCP** servers.
-
 ### 🎯 Major Feature: Morgana as agnostic conversational AI framework
 This release represents a fundamental shift in enterprise readyness: **Morgana is now fully decoupled from any domain-specific agents**, becoming a true **conversational AI framework**.
 
 ### ✨ Added
-
-- Implemented support for `MorganaHttpMCPServer` in addition to the existing `MorganaInProcessMCPServer`: MCP tools can be discovered and connected both natively through in-process integration and via standard MCP protocol over HTTP, providing flexible deployment options for AI capabilities.
 
 ### 🔄 Changed
 
@@ -26,17 +21,12 @@ This release represents a fundamental shift in enterprise readyness: **Morgana i
 ### 🚀 Future Enablement
 
 This release unlocks:
-- Multi-modal support (voice, images, documents) through MCP standardization
-- Hot-reload of MCP servers without application restart
 - Custom UI themes/skins with dynamic branding
 
 ## [0.5.0] - 2026-01-01
 
 ### 🎯 Major Feature: Proactive Conversational Paradigm
 This release represents a fundamental shift in user interaction: **Morgana now initiates conversations** rather than waiting passively for user input. She automatically presents herself with capabilities aligned to classified intents, creating a more engaging and guided experience.
-
-### 🎯 Major Feature: Model Context Protocol (MCP) Integration
-Morgana now supports **dynamic tool expansion** through the Model Context Protocol, enabling agents to declare dependencies on external tool providers via attributes. This transforms Morgana into an **enterprise-grade extensible platform** where capabilities can be scaled declaratively without code changes.
 
 ### ✨ Added
 
@@ -66,19 +56,6 @@ Morgana now supports **dynamic tool expansion** through the Model Context Protoc
 - `FallbackMessage` configuration for error scenarios
 - Separation of displayable intents (user-facing) vs. classification intents (backend)
 
-**Model Context Protocol (MCP) Support**
-- `[UsesMCPServers]` attribute for declarative agent-to-server dependency mapping
-- `IMCPServer` interface for local and remote MCP tool providers
-- `MorganaMCPServer` base class for in-process MCP server implementations
-- `IMCPToolProvider` orchestrating tool discovery and AIFunction conversion
-- `IMCPServerRegistryService` for agent-to-server mapping with fail-fast validation
-- `MorganaMCPToolProvider` implementing automatic tool loading from configured servers
-- Bidirectional validation: agents ↔ MCP server configurations (startup-time checks)
-- `TryGetNormalizedParameter()` in `MorganaMCPServer` for LLM-tolerant parameter name handling (camelCase, snake_case, partial matches)
-- Configuration-driven MCP server management via `appsettings.json` (`LLM:MCPServers`)
-- Example MCP servers: `HardwareCatalogMCPServer`, `SecurityCatalogMCPServer` with real product catalogs
-- Automatic merging of native tools + MCP tools in `AgentAdapter.CreateAgent()`
-
 ### 🔄 Changed
 
 **CSS Modularization**
@@ -94,17 +71,6 @@ Morgana now supports **dynamic tool expansion** through the Model Context Protoc
 - prompts.json `Classifier.Intents` array supports full intent metadata
 - Intent configuration serves dual purpose: classification (backend) + presentation (frontend)
 
-**Agent Architecture Enhancements**
-- `AgentAdapter.CreateAgent()` now queries `IMCPServerRegistryService` for declared MCP servers
-- MCP tools automatically merged with native tools before agent initialization
-- `TroubleshootingAgent` enhanced with `[UsesMCPServers("HardwareCatalog", "SecurityCatalog")]`
-- Tool definitions extended to include MCP-sourced tools with `Scope: "request"` by design
-
-**MCP Protocol Infrastructure**
-- `ServiceCollectionExtensions.AddMCPProtocol()` registers MCP services with DI container
-- `CreateInProcessServer()` reflection-based discovery of `MorganaMCPServer` implementations
-- MCP server instantiation via `ActivatorUtilities` for constructor injection support
-
 ### 🐛 Fixed
 
 **Blazor Server Render Mode Issue**
@@ -119,8 +85,6 @@ Morgana now supports **dynamic tool expansion** through the Model Context Protoc
 
 This release unlocks:
 - **Proactive paradigm**: Personalized greetings, context-aware suggestions, guided onboarding, A/B testing, analytics
-- **MCP extensibility**: HTTP remote servers (v0.6+), third-party tool integrations, production-grade catalogs, external CRM/ERP/knowledge base connectivity
-
 
 ## [0.4.0] - 2025-12-28
 
