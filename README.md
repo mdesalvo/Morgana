@@ -1,172 +1,102 @@
 <table style="border:none;">
-  <tr>
-    <td width="256">
-      <img src="https://github.com/mdesalvo/Morgana/blob/master/Morgana.jpg" alt="Morgana Logo" width="256"/>
-    </td>
-    <td>
-      <h1>Morgana</h1>
-      <p><strong>A modern, flexible, domain-agnostic multi-agent conversational AI framework with full MCP Protocol support</strong></p>
-      <p>
-        <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10"/>
-        <img src="https://img.shields.io/badge/Akka.NET-512BD4?logo=nuget" alt="Akka.NET"/>
-        <img src="https://img.shields.io/badge/Microsoft.Agents.AI-512BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
-        <img src="https://img.shields.io/badge/MCP-Protocol-512BD4" alt="MCP Protocol"/>
-      </p>
-    </td>
-  </tr>
-</table>
+<tr>
+<td width="256">
+ <img src="https://github.com/mdesalvo/Morgana/blob/master/Morgana.jpg" alt="Morgana Logo" width="256"/>
+</td>
+<td>
+ <h1>Morgana</h1>
+      <p><strong>A modern and flexible multi-agent, intent-driven conversational AI system</strong></p>
+      <p><strong>A modern and flexible multi-agent, intent-driven conversational AI framework</strong></p>
+ <p>
+   <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10"/>
+   <img src="https://img.shields.io/badge/Akka.NET-512BD4?logo=nuget" alt="Akka.NET"/>
+@@ -17,903 +17,903 @@
 
 ## Overview
 
-Morgana is a **modern, flexible, domain-agnostic conversational AI framework** built on .NET 10 and Akka.NET actors. It orchestrates multi-agent workflows with full **Model Context Protocol (MCP)** integration, enabling specialized AI assistants to collaborate seamlessly across any business domain or use case.
+Morgana is a modern conversational AI system designed to handle complex scenarios through a sophisticated multi-agent intent-driven architecture. Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET, Morgana orchestrates specialized AI agents that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness.
+Morgana is a modern conversational AI framework designed to handle complex scenarios through a sophisticated multi-agent intent-driven architecture. Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET, Morgana orchestrates specialized AI agents that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness.
 
-The framework provides enterprise-grade capabilities for intent-driven conversations, dynamic tool discovery, and context-aware agent orchestration—all while remaining completely independent from specific business domains. MCP tools can be discovered and connected both natively through **in-process integration** and via **standard MCP protocol over HTTP**, providing flexible deployment options for AI capabilities.
+The system is powered by Microsoft.Agents.AI framework, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
 ## Core Philosophy
 
-Morgana addresses the fundamental challenges of building scalable, maintainable conversational AI systems:
+Traditional chatbot systems often struggle with complexity—they either become monolithic and unmaintainable, or they lack the contextual awareness needed for nuanced customer interactions. Morgana addresses these challenges through:
 
-1. **Domain Agnostic**: Pure framework with zero business logic—bring your own agents, tools, and use cases
-2. **Agent Specialization**: Each agent has a single, well-defined responsibility with access to specific tools
-3. **Actor-Based Concurrency**: Akka.NET provides fault tolerance, message-driven architecture, and natural scalability
-4. **Intelligent Routing**: Requests are classified and routed to the most appropriate specialist agent
-5. **Policy Enforcement**: A dedicated guard actor ensures all interactions comply with business rules and brand guidelines
-6. **Declarative Configuration**: Prompts and agent behaviors are externalized as first-class project artifacts
-7. **Automatic Discovery**: Agents self-register through attributes, eliminating manual configuration
-8. **P2P Context Synchronization**: Agents share contextual information seamlessly through a message bus architecture
-9. **Native Memory Management**: Context and conversation history managed by Microsoft.Agents.AI framework
-10. **Personality-Driven Interactions**: Layered personality system with global and agent-specific traits
-11. **Full MCP Integration**: Dynamic capability expansion through **InProcess** and **HTTP** MCP servers
-12. **Registry-Based Validation**: Fail-fast MCP server configuration validation at startup
-13. **Dynamic UI Context**: Visual agent identification with contextual branding in the user interface
+1. **Agent Specialization**: Each agent has a single, well-defined responsibility with access to specific tools
+2. **Actor-Based Concurrency**: Akka.NET provides fault tolerance, message-driven architecture, and natural scalability
+3. **Intelligent Routing**: Requests are classified and routed to the most appropriate specialist agent
+4. **Policy Enforcement**: A dedicated guard actor ensures all interactions comply with business rules and brand guidelines
+5. **Declarative Configuration**: Prompts and agent behaviors are externalized as first-class project artifacts
+6. **Automatic Discovery**: Agents self-register through attributes, eliminating manual configuration
+7. **P2P Context Synchronization**: Agents share contextual information seamlessly through a message bus architecture
+8. **Native Memory Management**: Context and conversation history managed by Microsoft.Agents.AI framework
+9. **Personality-Driven Interactions**: Layered personality system with global and agent-specific traits
 
 ## Architecture
 
 ### High-Level Component Flow
+
 ```
 ┌───────────────────────────────────────────────────────────────┐
 │                         User Request                          │
 └──────────────────────────────┬────────────────────────────────┘
-                               │
-                               ▼
+                              │
+                              ▼
 ┌───────────────────────────────────────────────────────────────┐
 │                   ConversationManagerActor                    │
 │  (Coordinates, routes, manages stateful conversational flow)  │
 └──────────────────────────────┬────────────────────────────────┘
-                               │
-                               ▼
+                              │
+                              ▼
 ┌───────────────────────────────────────────────────────────────┐
 │                  ConversationSupervisorActor                  │
-│  • Orchestrates the entire multi-turn conversation lifecycle  │
-│  • Tracks active agent context for dynamic UI updates         │
+│  (Orchestrates the entire multi-turn conversation lifecycle)  │
 └───┬───────────┬───────────────┬───────────────────────────────┘
-    │           │               │
-    ▼           ▼               ▼
+   │           │               │
+   ▼           ▼               ▼
 ┌───────┐  ┌──────────┐   ┌───────────┐
 │ Guard │  │Classifier│   │   Router  │ ← Context Sync Bus
 │ Actor │  │  Actor   │   │   Actor   │
 └───────┘  └──────────┘   └───────────┘
-    │           │               │
-    │           │               ▼
-    │           │         ┌───────────┐
-    │           │         │  Morgana  │ ← Base Agent (Framework Core)
-    │           │         │   Agent   │
-    │           │         └───────────┘
-    │           │               └──────────────┬────────────┬─...fully extensible
-    │           │               │              │            │
-    │           │               ▼              ▼            ▼
-    │           │         ┌──────────┐   ┌───────────┐  ┌─────────────────┐
-    │           │         │ Custom   │   │  Custom   │  │     Custom      │ ← Domain Agents
-    │           │         │ Agent A  │   │  Agent B  │  │    Agent C      │   (User-defined)
-    │           │         └──────────┘   └───────────┘  └─────────────────┘
-    │           │              │               │            │ [UsesMCPServers]
-    │           │              │   ┌───────────┴────────────┘
-    │           │              │   │
-    │           │              ▼   ▼
-    │           │         ┌──────────────────────┐
-    │           │         │MorganaContextProvider│ ← AIContextProvider
-    │           │         │  (Context + Thread)  │   (Microsoft.Agents.AI)
-    │           │         └──────────────────────┘
-    │           │              │
-    │           │              │ P2P Context Sync via RouterActor
-    │           │              │
-    │           │              ▼
-    │           │         ┌──────────────────────────────────────┐
-    │           │         │        MorganaMCPToolProvider        │
-    │           │         │  • Tool Discovery & Loading          │
-    │           │         │  • AIFunction Conversion             │
-    │           │         │  • Server Registry Integration       │
-    │           │         └──────────────┬───────────────────────┘
-    │           │                        │
-    │           │                        ▼
-    │           │         ┌──────────────────────────────────────┐
-    │           │         │     UsesMCPServerRegistryService     │
-    │           │         │  • Agent → Server Mapping            │
-    │           │         │  • Configuration Validation          │
-    │           │         │  • Fail-Fast Checks                  │
-    │           │         └──────────────┬───────────────────────┘
-    │           │                        │
-    │           │                        ▼
-    │           │         ┌──────────────────────────────────────┐
-    │           │         │         MorganaMCPServer             │
-    │           │         │    (InProcess & HTTP Support)        │
-    │           │         ├──────────────────────────────────────┤
-    │           │         │  • InProcess: Direct .NET integration│
-    │           │         │  • HTTP: Standard MCP over HTTP/SSE  │
-    │           │         │  • [Your Custom MCP Servers]         │
-    │           │         └──────────────┬───────────────────────┘
-    │           │                        │
-    └─────┬─────┘                        │
-          │                              │
-          ▼                              ▼
-         ┌─────────────────────────────────────────────┐
-         │           MorganaLLMService                 │
-         │  (Guardrail, Classification, Tool Calling)  │
-         └─────────────────────┬───────────────────────┘
-                               │
-                               ▼
-               ┌───────────────────────────────┐
-               │             LLM               │
-               │ (AzureOpenAI, Anthropic, ...) │
-               └───────────────────────────────┘
+   │           │               │
+   │           │               ▼
+   │           │         ┌───────────┐
+   │           │         │  Morgana  │
+   │           │         │   Agent   │
+   │           │         └───────────┘
+   │           │               └──────────────┬────────────┬─...fully extensible
+   │           │               │              │            │
+   │           │               ▼              ▼            ▼
+   │           │         ┌──────────┐   ┌───────────┐  ┌─────────────────┐
+   │           │         │ Billing* │   │ Contract* │  │ Troubleshooting*│
+   │           │         │  Agent   │   │   Agent   │  │     Agent       │
+   │           │         └──────────┘   └───────────┘  └─────────────────┘
+   │           │              │               │            │
+   │           │              │   ┌───────────┴────────────┘
+   │           │              │   │
+   │           │              ▼   ▼
+   │           │         ┌──────────────────────┐
+   │           │         │MorganaContextProvider│ ← AIContextProvider
+   │           │         │  (Context + Thread)  │   (Microsoft.Agents.AI)
+   │           │         └──────────────────────┘
+   │           │              │
+   │           │              │ P2P Context Sync via RouterActor
+   │           │              │
+   └─────┬─────┘              │
+         │                    │
+         ▼                    ▼
+        ┌─────────────────────────────────────────────┐
+        │           MorganaLLMService                 │
+        │  (Guardrail, Classification, Tool Calling)  │
+        └─────────────────────┬───────────────────────┘
+                              │
+                              ▼
+              ┌───────────────────────────────┐
+              │             LLM               │
+              │ (AzureOpenAI, Anthropic, ...) │
+              └───────────────────────────────┘
 ```
-
-### Domain-Agnostic Framework Design
-
-Morgana's core framework is **completely decoupled from business logic**. All domain-specific agents, tools, and MCP servers have been extracted into separate example projects:
-
-**Framework Core (`Morgana`, `Morgana.AI`):**
-- Actor system (ConversationManager, Supervisor, Guard, Classifier, Router)
-- Base `MorganaAgent` class with personality system
-- MCP protocol integration (InProcess + HTTP)
-- Context provider and synchronization infrastructure
-- LLM service abstractions
-- Declarative configuration system
-
-**Example Implementation (`Morgana.AI.Examples`):**
-- Sample agents (Billing, Contract, Troubleshooting)
-- Domain-specific tools (invoice retrieval, contract lookup, diagnostics)
-- Example MCP servers (HardwareCatalog, SecurityCatalog)
-- Reference prompts and configurations
-
-This separation enables Morgana to power **any conversational AI use case**—from customer support to healthcare chatbots, from financial advisors to educational assistants—simply by implementing domain-specific agents and tools.
-
-### Dynamic UI Agent Context
-
-The user interface **automatically adapts** to show which agent is currently active:
-
-**Visual Indicators:**
-- **Header Display**: Shows "Morgana" for base conversations or "Morgana (AgentName)" when a specialist is active
-- **Color Coding**: Violet border for base Morgana, pink border for specialized agents
-- **Completion Messages**: Clear transition feedback when agents complete their tasks
-
-**Technical Implementation:**
-- `ConversationSupervisorActor` tracks the active agent's intent
-- SignalR broadcasts agent name changes to connected clients
-- Blazor UI updates header and avatar styling in real-time
-- Inline styles ensure compatibility with Blazor Server's rendering model
-
-This provides users with **contextual awareness** of which specialist is handling their request without any explicit user action.
 
 ### Actors Hierarchy
 
@@ -193,7 +123,6 @@ The orchestrator that manages the entire conversation lifecycle. It coordinates 
 - Coordinates guard checks before processing
 - Routes classification requests
 - Delegates to appropriate coordinator agents
-- **Tracks active agent intent for UI context updates**
 - Handles error recovery and timeout scenarios
 
 #### 3. GuardActor
@@ -213,321 +142,677 @@ Guard behavior is defined in `prompts.json` with customizable violation terms an
 An intelligent classifier actor that analyzes user intent and determines the appropriate handling path.
 
 **Intent Recognition:**
-- Analyzes user messages using LLM-powered classification
-- Maps intents to registered coordinator agents
-- Handles multi-intent scenarios
-- Maintains classification confidence metrics
+The classifier identifies specific intents configured in `prompts.json`. **Example** built-in intents include:
+- `billing`: Fetch invoices or payment history
+- `troubleshooting`: Diagnose connectivity or device issues
+- `contract`: Handle service contracts and cancellations
+- `other`: General service inquiries
+- ...
 
-**Dynamic Agent Discovery:**
-Classifier automatically discovers all registered agents through the `[MorganaAgent]` attribute, eliminating manual configuration.
+**Metadata Enrichment:**
+Each classification includes confidence scores and contextual metadata that downstream agents can use for decision-making.
 
 #### 5. RouterActor
-The coordination hub that manages agent lifecycle and message routing.
+Coordinator actor that resolves mappings of intents to engage specialized executor agents.
+This actor works as a smart router, dynamically resolving the appropriate Morgana agent based on classified intent.
 
-**Capabilities:**
-- Dynamic agent instantiation based on classification
-- Request delegation to active agents
-- Response collection and aggregation
-- P2P context variable broadcasting
-- Agent state management
+**Context Synchronization Bus:**
+RouterActor also serves as the **message bus for P2P context synchronization** between agents. When an agent updates a shared context variable, RouterActor broadcasts the update to all other agents, ensuring seamless information sharing across the system.
 
-#### 6. MorganaAgent (Base Class)
-The foundation for all conversational agents in the system.
+#### 6. Morgana Agents (Domain-Specific, Extensible!)
+Specialized agents with domain-specific knowledge and tool access. The system includes three built-in **example** agents, but **the architecture is fully extensible** to support any domain-specific intent.
 
-**Core Features:**
-- Personality layer integration (global + agent-specific traits)
-- Context provider access for stateful conversations
-- Tool registration and management
-- Declarative prompt binding
-- Automatic MCP tool loading via `[UsesMCPServers]` attribute
-- Thread-safe conversation history
+**BillingAgent** (example)
+- **Tools**: `GetInvoices()`, `GetInvoiceDetails()`
+- **Purpose**: Handle all billing inquiries, payment verification, and invoice retrieval
+- **Prompt**: Defined in `prompts.json` under ID "Billing"
 
-**Extensibility:**
-Domain-specific agents inherit from `MorganaAgent` and override:
-```csharp
-[MorganaAgent(Intent = "YourIntent")]
-public class YourAgent : MorganaAgent
-{
-    protected override async Task RegisterToolsAsync() 
-    { 
-        // Register domain-specific tools
-    }
-}
-```
+**TroubleshootingAgent** (example)
+- **Tools**: `RunDiagnostics()`, `GetTroubleshootingGuide()`
+- **Purpose**: Diagnose connectivity issues, provide step-by-step troubleshooting
+- **Prompt**: Defined in `prompts.json` under ID "Troubleshooting"
 
-### Model Context Protocol (MCP) Integration
+**ContractAgent** (example)
+- **Tools**: `GetContractDetails()`, `InitiateCancellation()`
+- **Purpose**: Handle contract modifications and termination requests
+- **Prompt**: Defined in `prompts.json` under ID "Contract"
 
-Morgana provides **complete MCP support** with both **InProcess** and **HTTP** transport options:
+**Adding Custom Agents:**
+To add a new agent for your domain:
+1. Define the intent in `prompts.json` (Classifier section)
+2. Create a prompt configuration for the agent behavior
+3. Implement a new class inheriting from `MorganaAgent`
+4. Decorate with `[HandlesIntent("your_intent")]`
+5. Define tools and inject via `AgentAdapter`
 
-#### InProcess MCP Servers
-For maximum performance and .NET-native integration:
+The `AgentRegistryService` automatically discovers and validates all agents at startup.
 
-```csharp
-public class YourMCPServer : MorganaMCPServer
-{
-    public YourMCPServer(ILogger<YourMCPServer> logger) 
-        : base("YourServerName", logger) { }
+## Conversational Memory & Context Management
 
-    protected override void RegisterTools()
-    {
-        AddTool("YourTool", new MCPToolDefinition 
-        {
-            Name = "YourTool",
-            Description = "Tool description",
-            InputSchema = new { /* JSON schema */ }
-        });
-    }
-    
-    public override Task<object> ExecuteToolAsync(string toolName, Dictionary<string, object> arguments)
-    {
-        // Tool implementation
-    }
-}
-```
+Morgana leverages **Microsoft.Agents.AI framework** for native conversation history and context management, eliminating the need for manual memory handling.
 
-**Benefits:**
-- Zero serialization overhead
-- Direct access to .NET libraries and dependencies
-- Type safety with compile-time validation
-- Integrated error handling and logging
+### AgentThread: Automatic Conversation History
 
-#### HTTP MCP Servers
-For distributed deployment and language-agnostic tool providers:
-
-```json
-{
-  "LLM": {
-    "MCPServers": [
-      {
-        "Name": "RemoteTools",
-        "Type": "HTTP",
-        "BaseUrl": "https://your-mcp-server.com",
-        "Enabled": true
-      }
-    ]
-  }
-}
-```
-
-**Benefits:**
-- Standard MCP protocol compliance
-- Language-agnostic server implementations
-- Horizontal scaling of tool providers
-- Separation of concerns (framework vs. tools)
-- SSE-based streaming for real-time updates
-
-#### Declarative Agent-Server Binding
-
-Agents declare their MCP dependencies using attributes:
+Each `MorganaAgent` maintains conversation continuity through `AgentThread`, which automatically manages multi-turn dialogue:
 
 ```csharp
-[MorganaAgent(Intent = "TechnicalSupport")]
-[UsesMCPServers("DiagnosticTools", "HardwareCatalog")]
-public class TechnicalSupportAgent : MorganaAgent
+protected AIAgent aiAgent;
+protected AgentThread aiAgentThread;
+protected MorganaContextProvider contextProvider;
+
+protected async Task ExecuteAgentAsync(Records.AgentRequest req)
 {
-    // Tools from both servers automatically available
+   // Lazy initialization: thread created once per agent lifecycle
+   aiAgentThread ??= aiAgent.GetNewThread();
+
+   // Framework automatically manages conversation history
+   AgentRunResponse llmResponse = await aiAgent.RunAsync(req.Content!, aiAgentThread);
 }
 ```
 
-The registry service validates configurations at startup:
-- Ensures all referenced servers are defined in `appsettings.json`
-- Verifies server connectivity for HTTP servers
-- Provides clear error messages for misconfigurations
-- Enables fail-fast behavior to catch issues early
+**Key Benefits:**
+- **Zero Manual History Management**: No need to manually append user/assistant messages
+- **Persistent Context**: Thread maintains full conversation context across multiple turns
+- **Framework-Native**: Leverages Microsoft.Agents.AI built-in memory capabilities
+- **Lazy Initialization**: Thread created on-demand, reducing resource overhead
 
-### Conversation Context & Memory
+### MorganaContextProvider: Stateful Context Management
 
-#### MorganaContextProvider
-Custom implementation of `AIContextProvider` that manages conversation state:
-
-**Capabilities:**
-- Thread-safe variable storage
-- Scope-based variable management (request vs. context)
-- Integration with Microsoft.Agents.AI `AgentThread`
-- P2P synchronization support
-
-**Variable Scopes:**
-```csharp
-// Request-scoped: extracted from current message
-context.SetRequestVariable("product_id", "ABC123");
-
-// Context-scoped: persisted across conversation turns
-context.SetContextVariable("user_preferences", preferences);
-```
-
-#### P2P Context Synchronization
-
-Agents can broadcast context updates to other agents:
+`MorganaContextProvider` implements `AIContextProvider` to manage agent-specific state and enable P2P context synchronization:
 
 ```csharp
-// Agent A sets a shared variable
-await BroadcastContextVariableAsync("customer_tier", "Premium");
-
-// Agent B receives update automatically
-string tier = context.GetContextVariable("customer_tier");
-```
-
-This enables seamless handoffs and collaborative problem-solving between specialized agents.
-
-### Personality System
-
-Morgana implements a **layered personality architecture** for consistent brand voice:
-
-**Global Personality:**
-Defined in `prompts.json` and applied to all agents:
-```json
+public class MorganaContextProvider : AIContextProvider
 {
-  "GlobalPersonality": {
-    "Traits": ["friendly", "professional", "empathetic"],
-    "Tone": "conversational",
-    "VoiceGuidelines": "Use simple language, avoid jargon"
-  }
+   // Source of truth for agent context variables
+   public Dictionary<string, object> AgentContext { get; private set; }
+
+   // Shared variable tracking for P2P sync
+   private readonly HashSet<string> sharedVariableNames;
+
+   // Callback for broadcasting shared updates
+   public Action<string, object>? OnSharedContextUpdate { get; set; }
 }
 ```
 
-**Agent-Specific Personality:**
-Individual agents can extend or override traits:
-```json
+**Core Responsibilities:**
+1. **Variable Storage**: Maintains `Dictionary<string, object>` for all context variables
+2. **Shared Variable Detection**: Tracks which variables should be broadcast to other agents
+3. **Merge Strategy**: Implements first-write-wins for incoming context updates
+4. **Serialization Support**: Enables persistence with `AgentThread` for future enhancements
+
+### Integration with Tools
+
+Tools interact with context through `MorganaContextProvider`:
+
+```csharp
+public class MorganaTool
 {
-  "Agents": [
-    {
-      "Name": "TechnicalAgent",
-      "Personality": {
-        "AdditionalTraits": ["technical", "detail-oriented"],
-        "Overrides": {
-          "Tone": "instructional"
-        }
-      }
-    }
-  ]
+protected readonly Func<MorganaContextProvider> getContextProvider;
+
+public Task<object> GetContextVariable(string variableName)
+{
+MorganaContextProvider provider = getContextProvider();
+object? value = provider.GetVariable(variableName);
+       // Returns value or "not available" message
+   }
+
+public Task<object> SetContextVariable(string variableName, string variableValue)
+{
+MorganaContextProvider provider = getContextProvider();
+provider.SetVariable(variableName, variableValue);
+
+       // If variable is shared, provider automatically triggers broadcast
+   }
 }
 ```
 
-**Runtime Composition:**
-The framework merges global and agent-specific personalities at runtime, ensuring consistency while allowing specialization.
+### Interaction Token: `#INT#`
 
-### Prompt Engineering as Code
+Agents use the special token `#INT#` to signal when additional user input is required:
 
-All agent behaviors, policies, and personalities are **externalized to JSON configuration files**:
+```csharp
+bool requiresMoreInput = llmResponseText.Contains("#INT#");
+string cleanText = llmResponseText.Replace("#INT#", "").Trim();
 
-#### Structured Prompt Configuration
+return new AgentResponse(cleanText, isCompleted: !requiresMoreInput);
+```
+
+- **Present**: Conversation continues, agent awaits more information
+- **Absent**: Conversation completed, user may close or start new request
+
+This enables natural back-and-forth dialogues within a single intent execution.
+
+## Context Synchronization System
+
+Morgana implements a sophisticated **P2P context synchronization** mechanism powered by `MorganaContextProvider`, allowing agents to share contextual information seamlessly and eliminating redundant user interactions.
+
+### The Problem
+
+Without context synchronization, each specialized agent maintains its own isolated context. This leads to frustrating user experiences:
+
+```
+User → BillingAgent: "Show me my invoices"
+BillingAgent: "What's your customer ID?"
+User: "USER99"
+BillingAgent: [Shows invoices]
+
+User → ContractAgent: "Show me my contract"
+ContractAgent: "What's your customer ID?" ← User already provided this!
+User: "USER99" ← Frustrating repetition
+```
+
+### The Solution: Shared Context with P2P Broadcast
+
+Morgana's context system allows agents to declare which parameters should be **shared** across the system. When one agent collects this information, it's automatically broadcast to all other agents through `MorganaContextProvider`.
+
+### Architecture
+
+#### 1. Declarative Configuration
+Parameters are marked as `Shared: true` in `prompts.json`:
 
 ```json
 {
-  "Agents": [
-    {
-      "Name": "BillingAgent",
-      "Intent": "Billing",
-      "Personality": {
-        "Traits": ["helpful", "precise", "reassuring"]
-      },
-      "SystemPrompt": "You are a billing specialist...",
-      "Tools": [
-        {
-          "Name": "GetInvoices",
-          "Description": "Retrieves customer invoices",
-          "Parameters": [
-            {
-              "Name": "userId",
-              "Type": "string",
-              "Description": "Customer identifier",
-              "Required": true,
-              "Scope": "context",
-              "Shared": true
-            },
-            {
-              "Name": "count",
-              "Type": "integer",
-              "Description": "Number of invoices to retrieve",
-              "Required": false,
-              "Scope": "request"
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "GlobalPolicies": [
-    {
-      "Name": "ToolParameterContextGuidance",
-      "Content": "For context-scoped parameters, retrieve values from conversation context..."
-    },
-    {
-      "Name": "ToolParameterRequestGuidance",
-      "Content": "For request-scoped parameters, extract values from the current user message..."
-    }
-  ],
-  "AdditionalProperties": {
-    "ErrorAnswers": [
-      {
-        "Name": "GenericError",
-        "Content": "I apologize, but I encountered an issue processing your request..."
-      }
-    ]
-  }
+"Name": "userId",
+"Description": "Customer identifier",
+"Required": true,
+"Scope": "context",
+"Shared": true
 }
 ```
 
-#### Dynamic Parameter Guidance
+- **`Scope: "context"`**: Parameter is stored in agent context (checked via `GetContextVariable`)
+- **`Scope: "request"`**: Parameter must be provided by user in current message
+- **`Shared: true`**: Parameter is broadcast to all agents when set
+- **`Shared: false`**: Parameter remains private to the agent
 
-Parameter-level guidance is automatically applied based on `Scope`:
+#### 2. MorganaContextProvider as State Manager
 
-```json
+`MorganaContextProvider` centralizes context management and enables P2P synchronization:
+
+**Variable Storage:**
+```csharp
+public Dictionary<string, object> AgentContext { get; private set; }
+```
+
+**Shared Variable Detection:**
+```csharp
+private readonly HashSet<string> sharedVariableNames;
+
+public void SetVariable(string variableName, object variableValue)
 {
-  "Parameters": [
-    {
-      "Name": "userId",
-      "Scope": "context",
-      "Shared": true
-    },
-    {
-      "Name": "productId",
-      "Scope": "request"
-    }
-  ]
+AgentContext[variableName] = variableValue;
+
+if (sharedVariableNames.Contains(variableName))
+{
+       // Trigger broadcast callback
+       OnSharedContextUpdate?.Invoke(variableName, variableValue);
+}
 }
 ```
 
-The `ToolAdapter` enriches tool descriptions with scope-specific policies:
-- **`Scope: "context"`**: Adds `ToolParameterContextGuidance` policy
-- **`Scope: "request"`**: Adds `ToolParameterRequestGuidance` policy
+**Context Merging:**
+```csharp
+public void MergeSharedContext(Dictionary<string, object> sharedContext)
+{
+foreach (var kvp in sharedContext)
+{
+       // First-write-wins: accept only if not already present
+       if (!AgentContext.ContainsKey(kvp.Key))
+{
+AgentContext[kvp.Key] = kvp.Value;
+}
+}
+}
+```
 
-**Benefits:**
-- LLM understands where to source parameter values
-- Reduces hallucination of parameter values
-- Enables intelligent context reuse across agents
-- Maintains conversation continuity through agent handoffs
+#### 3. RouterActor as Message Bus
 
-#### Error Message Standardization
+RouterActor serves dual purposes:
+1. **Intent Routing**: Routes requests to appropriate agents
+2. **Context Bus**: Broadcasts shared context updates to all agents
 
-Standardized error messages are configured in `AdditionalProperties`:
+When an agent updates a shared variable through `MorganaContextProvider`:
+
+```
+BillingAgent → SetContextVariable("userId", "USER99")
+   ↓
+MorganaContextProvider detects userId is Shared
+   ↓
+Invokes callback → OnSharedContextUpdate
+   ↓
+MorganaAgent → ActorSelection("/user/router-{conversationId}")
+   ↓
+RouterActor → Tell(ContractAgent, ReceiveContextUpdate)
+RouterActor → Tell(TroubleshootingAgent, ReceiveContextUpdate)
+   ↓
+Agents → MorganaContextProvider.MergeSharedContext()
+```
+
+#### 4. Agent-Level Integration
+
+Each `MorganaAgent` registers the broadcast callback during initialization:
+
+```csharp
+// In AgentAdapter.CreateContextProvider()
+MorganaContextProvider provider = new MorganaContextProvider(
+contextProviderLogger, 
+sharedVariables);
+
+if (sharedContextCallback != null)
+provider.OnSharedContextUpdate = sharedContextCallback;
+
+// In MorganaAgent
+protected void OnSharedContextUpdate(string key, object value)
+{
+string intent = GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent;
+
+Context.ActorSelection($"/user/router-{conversationId}")
+.Tell(new BroadcastContextUpdate(intent, new Dictionary<string, object> { [key] = value }));
+}
+
+private void HandleContextUpdate(ReceiveContextUpdate msg)
+{
+contextProvider.MergeSharedContext(msg.UpdatedValues);
+}
+```
+
+### Implementation Flow
+
+```
+1. User → BillingAgent: "Show invoices"
+2. BillingAgent → GetContextVariable("userId") → MISS
+3. BillingAgent → User: "What's your customer ID?"
+4. User: "USER99"
+5. BillingAgent → SetContextVariable("userId", "USER99")
+6. MorganaContextProvider:
+  - Stores userId in AgentContext
+  - Detects userId is Shared
+  - Invokes OnSharedContextUpdate callback
+7. BillingAgent → ActorSelection("/user/router-{conversationId}")
+8. RouterActor → Broadcast to all agents except sender:
+  - Tell(ContractAgent, ReceiveContextUpdate("userId", "USER99"))
+  - Tell(TroubleshootingAgent, ReceiveContextUpdate("userId", "USER99"))
+9. ContractAgent & TroubleshootingAgent:
+  - Receive ReceiveContextUpdate message
+  - Call MorganaContextProvider.MergeSharedContext()
+  - Store userId if not already present (first-write-wins)
+10. User → ContractAgent: "Show my contract"
+11. ContractAgent → GetContextVariable("userId") → HIT! "USER99"
+12. ContractAgent → Uses USER99 without asking ✅
+```
+
+### Key Components
+
+**MorganaContextProvider**
+- Maintains `Dictionary<string, object> AgentContext` as source of truth
+- Tracks `HashSet<string> sharedVariableNames` for broadcast detection
+- Invokes `OnSharedContextUpdate` callback when shared variables are set
+- Implements `MergeSharedContext()` with first-write-wins strategy
+- Supports serialization/deserialization for future persistence needs
+
+**MorganaTool**
+- Receives `Func<MorganaContextProvider>` lazy accessor
+- `GetContextVariable` delegates to provider's `GetVariable()`
+- `SetContextVariable` delegates to provider's `SetVariable()`
+- Provider automatically handles broadcast for shared variables
+
+**MorganaAgent**
+- Implements `OnSharedContextUpdate` callback to broadcast via ActorSelection
+- Implements `HandleContextUpdate` handler to receive and merge updates
+- Registers callback with `MorganaContextProvider` during initialization
+
+**AgentAdapter**
+- Extracts shared variables from `ToolDefinition` parameters
+- Creates `MorganaContextProvider` with shared variable names
+- Registers `OnSharedContextUpdate` callback during agent creation
+
+**RouterActor**
+- Receives `BroadcastContextUpdate` messages from agents
+- Broadcasts `ReceiveContextUpdate` to all agents except sender
+- Logs broadcast activity for observability
+
+### Benefits
+
+1. **Seamless UX**: Users provide information once, all agents benefit
+2. **P2P Architecture**: No central bottleneck, agents communicate via message bus
+3. **Declarative**: Shared vs private is configured in JSON, not code
+4. **Framework-Native**: Built on `AIContextProvider` interface
+5. **Fault Tolerant**: Fire-and-forget messages, agents don't block on sync
+6. **Scalable**: Adding new agents or shared parameters requires only configuration
+7. **Flexible**: Agents can have both shared and private context variables
+8. **First-Write-Wins**: Prevents conflicts through intelligent merge strategy
+
+### Example Configuration
 
 ```json
 {
-  "ErrorAnswers": [
-    {
-      "Name": "GenericError",
-      "Content": "I apologize for the inconvenience. Let me try a different approach..."
-    },
-    {
-      "Name": "LLMServiceError",
-      "Content": "The AI service is temporarily unavailable: ((llm_error))"
-    }
-  ]
+"ID": "Billing",
+"Tools": [
+{
+"Name": "GetInvoices",
+"Parameters": [
+{
+"Name": "userId",
+"Scope": "context",
+"Shared": true
+},
+{
+"Name": "count",
+"Scope": "request"
+}
+]
+}
+]
+}
+```
+
+In this example:
+- `userId` will be shared across all agents when collected
+- `count` is request-specific and never shared
+
+## Personality System
+
+Morgana implements a **layered personality architecture** that creates consistent yet contextually appropriate conversational experiences. The system combines a global personality with agent-specific traits to ensure brand coherence while allowing specialized behavior.
+
+### Architecture
+
+**Two-Tier Personality Model:**
+
+1. **Global Personality (Morgana)**: Base character and tone applied to all interactions
+2. **Agent-Specific Personality**: Specialized traits that complement the global personality
+
+### Configuration
+
+**Global Personality** (`prompts.json` - Morgana prompt):
+```json
+{
+"ID": "Morgana",
+"Content": "You are a modern and effective digital assistant...",
+"Instructions": "Ongoing conversation with the user. Stay consistent...",
+"Personality": "Your name is Morgana: you are a 'good witch' who uses your knowledge of magic to formulate potions and spells to help the user..."
+}
+```
+
+**Agent-Specific Personality** (example - Billing prompt):
+```json
+{
+"ID": "Billing",
+"Content": "You're familiar with the book of potions and spells called 'Billing and Payments'...",
+"Instructions": "NEVER invent procedures or information...",
+"Personality": "Be consistent with your character: let's say that in this specific role, you could be a fairly traditional witch who favors concreteness and pragmatism..."
+}
+```
+
+### Instruction Composition
+
+The `AgentAdapter` composes instructions in a specific order to ensure proper personality layering:
+
+```csharp
+private string ComposeAgentInstructions(Prompt agentPrompt)
+{
+var sb = new StringBuilder();
+
+   // 1. Global role and capabilities
+   sb.AppendLine(morganaPrompt.Content);
+
+   // 2. Global personality (Morgana's character)
+   if (!string.IsNullOrEmpty(morganaPrompt.Personality))
+{
+sb.AppendLine(morganaPrompt.Personality);
+sb.AppendLine();
+}
+
+   // 3. Global policies (context handling, interaction rules)
+   sb.AppendLine(formattedPolicies);
+sb.AppendLine();
+
+   // 4. Global operational instructions
+   sb.AppendLine(morganaPrompt.Instructions);
+sb.AppendLine();
+
+   // 5. Agent-specific role and domain
+   sb.AppendLine(agentPrompt.Content);
+
+   // 6. Agent-specific personality (specialized traits)
+   if (!string.IsNullOrEmpty(agentPrompt.Personality))
+{
+sb.AppendLine(agentPrompt.Personality);
+sb.AppendLine();
+}
+
+   // 7. Agent-specific instructions
+   sb.Append(agentPrompt.Instructions);
+
+return sb.ToString();
+}
+```
+
+### Personality Examples
+
+**BillingAgent**:
+- **Global**: Helpful, slightly mysterious, uses magical metaphors
+- **Agent-Specific**: Traditional, pragmatic, concrete (because nobody likes dealing with bills)
+
+**ContractAgent**:
+- **Global**: Helpful, slightly mysterious, uses magical metaphors
+- **Agent-Specific**: Patient, professional, accustomed to cancellation requests
+
+**TroubleshootingAgent**:
+- **Global**: Helpful, slightly mysterious, uses magical metaphors
+- **Agent-Specific**: Technical but graceful, oriented to results, empathetic with frustrated users
+
+### Benefits
+
+1. **Brand Consistency**: All interactions maintain Morgana's core character
+2. **Contextual Adaptation**: Each agent adapts personality to domain appropriateness
+3. **Natural Handoffs**: Personality continuity across agent transitions
+4. **Declarative Configuration**: No code changes needed to adjust personalities
+5. **Subordination Principle**: Agent personalities complement, never contradict, global personality
+6. **Domain Empathy**: Agents can express understanding appropriate to context (e.g., billing frustration, technical issues)
+
+### Design Philosophy
+
+The personality system follows a **subordination principle**: agent-specific personalities enhance and contextualize the global personality without conflicting. This creates:
+
+- **Vertical Consistency**: Same core character across all interactions
+- **Horizontal Variation**: Appropriate tone adjustments per domain
+- **Seamless Experience**: Users interact with "Morgana" who happens to be specialized in different areas
+
+The system avoids creating disconnected personas—users always feel they're talking to the same assistant, just with domain-appropriate expertise and empathy.
+
+## Prompt Management System
+
+Morgana treats prompts as **first-class project artifacts**, not hardcoded strings. The `IPromptResolverService` provides a flexible, maintainable approach to prompt engineering.
+
+### Key Components
+
+**IPromptResolverService**
+- Centralizes prompt retrieval and resolution
+- Supports structured prompt definitions with metadata
+- Enables versioning and A/B testing of prompts
+- Validates prompt consistency across agents
+
+**ConfigurationPromptResolverService**
+- Loads prompts from embedded `prompts.json` resource
+- Parses structured prompt definitions including:
+- System instructions
+- Personality definitions
+- Global policies
+- Tool definitions
+- Error messages
+- Additional properties
+- Language and versioning metadata
+
+**Prompt Structure**
+```json
+{
+"ID": "billing",
+"Type": "INTENT",
+"SubType": "AGENT",
+"Content": "Agent role and domain description",
+"Personality": "Agent-specific character traits",
+"Instructions": "Behavioral rules and operational guidelines",
+"AdditionalProperties": [
+{
+"GlobalPolicies": [...],
+"ErrorAnswers": [...],
+"Tools": [...]
+}
+]
+}
+```
+
+### Global Policies
+
+Global policies define system-wide behavioral rules that apply to all agents:
+
+```json
+{
+"GlobalPolicies": [
+{
+"Name": "ContextHandling",
+"Description": "CRITICAL CONTEXT RULE - Before asking...",
+"Type": "Critical",
+"Priority": 0
+},
+{
+"Name": "InteractiveToken",
+"Description": "OPERATIONAL RULE INTERACTION TOKEN '#INT#' - You operate....",
+"Type": "Operational",
+"Priority": 0
+},
+{
+"Name": "ToolParameterContextGuidance",
+"Description": "OPERATION RULE ON AGENT TOOLS CONTEXT PARAMETERS - Operates...",
+"Type": "Operational",
+"Priority": 1
+},
+{
+"Name": "ToolParameterRequestGuidance",
+"Description": "OPERATIONAL RULE ON DIRECT REQUEST PARAMETERS OF AGENT TOOLS - Operate...",
+"Type": "Operational",
+"Priority": 2
+}
+]
+}
+```
+
+**Policy Types:**
+- **Critical**: Core rules that must never be violated
+- **Operational**: Procedural guidelines for consistent behavior
+
+**Policy Formatting:**
+The `AgentAdapter` formats policies preserving order and structure:
+
+```csharp
+//Order the policies by type (Critical, Operational) then by priority (the lower is the most important)
+foreach (GlobalPolicy policy in policies.OrderBy(p => p.Type).ThenBy(p => p.Priority))
+{
+var sb = new StringBuilder();
+foreach (var policy in policies)
+{
+sb.AppendLine($"{policy.Name}: {policy.Description}");
+}
+return sb.ToString().TrimEnd();
+}
+```
+
+### Error Messages
+
+Centralized error message management for consistent user experience:
+
+```json
+{
+"ErrorAnswers": [
+{
+"Name": "GenericError",
+"Content": "Sorry, an error occurred while servicing your request."
+},
+{
+"Name": "LLMServiceError",
+"Content": "Sorry, the AI ​​service generated an unexpected error: ((llm_error))"
+}
+]
 }
 ```
 
 Error messages support template placeholders (e.g., `((llm_error))`) for dynamic content injection.
 
-### Benefits of Declarative Configuration
+### Tool Parameter Guidance
+
+Parameter-level guidance is dynamically applied based on `Scope`:
+
+```json
+{
+"Parameters": [
+{
+"Name": "userId",
+"Scope": "context",
+"Shared": true
+},
+{
+"Name": "count",
+"Scope": "request"
+}
+]
+}
+```
+
+The `ToolAdapter` enriches descriptions with appropriate guidance:
+- **`Scope: "context"`**: Adds `ToolParameterContextGuidance` policy
+- **`Scope: "request"`**: Adds `ToolParameterRequestGuidance` policy
+
+### Benefits
 - **Separation of Concerns**: Prompt engineering decoupled from application logic
-- **Rapid Iteration**: Update agent behavior without recompiling or redeploying
+- **Rapid Iteration**: Update agent behavior without recompiling
 - **Consistency**: Single source of truth for agent instructions and policies
 - **Auditability**: Version-controlled prompt evolution
 - **Localization Ready**: Multi-language support built-in
 - **Policy Centralization**: Global rules applied uniformly across all agents
 - **Error Consistency**: Standardized error messaging across the system
-- **Domain Portability**: Same framework, different prompts = different use cases
+
+## Agent Registration & Discovery
+
+Morgana uses **declarative intent mapping** through the `[HandlesIntent]` attribute, enabling automatic agent discovery and validation.
+
+### How It Works
+
+**1. Declarative Intent Handling**
+```csharp
+[HandlesIntent("billing")]
+public class BillingAgent : MorganaAgent
+{
+   // Agent implementation
+}
+```
+
+**2. Automatic Discovery**
+The `AgentRegistryService` scans the assembly at startup to find all classes:
+- Inheriting from `MorganaAgent`
+- Decorated with `[HandlesIntent]`
+
+**3. Bidirectional Validation**
+The system enforces consistency between:
+- Intents declared in agent classes
+- Intents configured in the Classifier prompt
+
+At startup, it verifies:
+- Every classifier intent has a registered agent
+- Every registered agent has a corresponding classifier intent
+
+**4. Runtime Resolution**
+```csharp
+Type? agentType = agentRegistryService.ResolveAgentFromIntent("billing");
+// Returns typeof(BillingAgent)
+```
+
+### Validation Guarantees
+The system throws explicit exceptions if:
+- A classifier intent has no corresponding agent
+- An agent declares an intent not configured for classification
+- Tool definitions mismatch between prompts and implementations
+
+This **fail-fast approach** ensures configuration errors are caught at startup, not during customer interactions.
 
 ## Technology Stack
 
@@ -535,25 +820,16 @@ Error messages support template placeholders (e.g., `((llm_error))`) for dynamic
 - **.NET 10**: Leveraging the latest C# features, performance improvements, and native AOT capabilities
 - **ASP.NET Core Web API**: RESTful interface for client interactions
 - **Akka.NET 1.5**: Actor-based concurrency model for resilient, distributed agent orchestration
-- **Blazor Server**: Real-time UI with SignalR-powered state synchronization
 
 ### AI & Agent Framework
 - **Microsoft.Extensions.AI**: Unified abstraction over chat completions with `IChatClient` interface
 - **Microsoft.Agents.AI**: Declarative agent definition with built-in tool calling, `AgentThread` for conversation history, and `AIContextProvider` for state management
 - **Azure OpenAI Service / Anthropic Claude**: Multi-provider LLM support through configurable implementations
-- **Model Context Protocol (MCP)**: Standardized tool provider interface with **InProcess** and **HTTP** support
 
 ### Memory & Context Management
 - **AgentThread**: Framework-native conversation history management
 - **MorganaContextProvider**: Custom `AIContextProvider` implementation for stateful context management
 - **P2P Context Sync**: Actor-based broadcast mechanism for shared context variables
-
-### MCP Protocol Stack
-- **IMCPServer**: Interface for local and remote MCP tool servers
-- **IMCPToolProvider**: Orchestrates tool loading and AIFunction conversion
-- **IMCPServerRegistryService**: Manages agent-to-server mappings with configuration validation
-- **MorganaMCPServer**: Base class for in-process MCP server implementations
-- **HTTP MCP Client**: Support for standard MCP over HTTP/SSE transport
 
 ### LLM Provider Support
 
@@ -573,17 +849,9 @@ LLM provider selection is managed through `appsettings.json`:
 
 ```json
 {
-  "LLM": {
-    "Provider": "AzureOpenAI",  // or "Anthropic"
-    "MCPServers": [
-      {
-        "Name": "YourServer",
-        "Type": "InProcess",  // or "HTTP"
-        "BaseUrl": "https://your-server.com",  // for HTTP only
-        "Enabled": true
-      }
-    ]
-  }
+"LLM": {
+"Provider": "AzureOpenAI"  // or "Anthropic"
+}
 }
 ```
 
@@ -595,28 +863,24 @@ Tools are defined as C# delegates mapped to tool definitions from prompts. The `
 
 ```csharp
 // Define tool implementation with lazy context provider access
-public class YourTool : MorganaTool
+public class BillingTool : MorganaTool
 {
-    public YourTool(
-        ILogger<MorganaAgent> logger,
-        Func<MorganaContextProvider> getContextProvider) 
-        : base(logger, getContextProvider) { }
+public BillingTool(
+ILogger<MorganaAgent> logger,
+Func<MorganaContextProvider> getContextProvider) 
+: base(logger, getContextProvider) { }
 
-    public async Task<string> YourMethod(string param1, int param2 = 5)
-    {
-        // Access context when needed
-        var context = getContextProvider();
-        var userId = context.GetContextVariable("userId");
-        
-        // Implementation
-    }
+public async Task<string> GetInvoices(string userId, int count = 3)
+{
+       // Implementation
+   }
 }
 
 // Register with adapter in AgentAdapter
-toolAdapter.AddTool("YourMethod", yourTool.YourMethod, toolDefinition);
+toolAdapter.AddTool("GetInvoices", billingTool.GetInvoices, toolDefinition);
 
 // Create AIFunction for agent
-AIFunction function = toolAdapter.CreateFunction("YourMethod");
+AIFunction function = toolAdapter.CreateFunction("GetInvoices");
 ```
 
 **Lazy Context Provider Access:**
@@ -625,9 +889,9 @@ Tools receive `Func<MorganaContextProvider>` to access context on-demand:
 ```csharp
 public Task<object> GetContextVariable(string variableName)
 {
-    MorganaContextProvider provider = getContextProvider();
-    object? value = provider.GetVariable(variableName);
-    // ...
+MorganaContextProvider provider = getContextProvider();
+object? value = provider.GetVariable(variableName);
+   // ...
 }
 ```
 
@@ -644,121 +908,10 @@ The Agent Framework automatically:
 3. Invokes the appropriate method
 4. Returns results to the LLM for natural language synthesis
 
-**MCP Tool Loading:**
-For agents with `[UsesMCPServers]`, the system additionally:
-1. Queries `IMCPServerRegistryService` for server names
-2. Connects to InProcess or HTTP MCP servers
-3. Loads `MCPToolDefinition` schemas from each server
-4. Converts to `AIFunction` instances via `IMCPToolProvider`
-5. Merges with native tools before agent creation
+---
 
-## Getting Started
-
-### Prerequisites
-- .NET 10 SDK
-- Azure OpenAI Service account OR Anthropic API key
-
-### Quick Start
-
-1. **Clone the repository:**
-```bash
-git clone https://github.com/yourusername/morgana.git
-cd morgana
-```
-
-2. **Configure your LLM provider in `appsettings.json`:**
-```json
-{
-  "LLM": {
-    "Provider": "AzureOpenAI",
-    "AzureOpenAI": {
-      "Endpoint": "https://your-resource.openai.azure.com/",
-      "ApiKey": "your-api-key",
-      "DeploymentName": "gpt-4"
-    }
-  }
-}
-```
-
-3. **Define your domain-specific agents:**
-```csharp
-[MorganaAgent(Intent = "CustomerSupport")]
-public class CustomerSupportAgent : MorganaAgent
-{
-    protected override async Task RegisterToolsAsync()
-    {
-        // Register your tools
-    }
-}
-```
-
-4. **Add your prompts to `prompts.json`:**
-```json
-{
-  "Agents": [
-    {
-      "Name": "CustomerSupportAgent",
-      "Intent": "CustomerSupport",
-      "SystemPrompt": "You are a helpful customer support agent..."
-    }
-  ]
-}
-```
-
-5. **Run the application:**
-```bash
-dotnet run --project Cauldron
-```
-
-The Blazor UI will be available at `https://localhost:5001`.
-
-### Example Implementation
-
-Check out the **Morgana.AI.Examples** project for a complete reference implementation including:
-- Sample agents (Billing, Contract, Troubleshooting)
-- Domain-specific tools and MCP servers
-- Configured prompts and personalities
-- Integration tests
-
-This example demonstrates how to build a domain-specific conversational AI system on top of the Morgana framework.
-
-## Use Cases
-
-Morgana's domain-agnostic design enables a wide range of applications:
-
-**Customer Service:**
-- Multi-channel support automation
-- Intelligent ticket routing and escalation
-- Knowledge base integration
-
-**Healthcare:**
-- Patient intake and triage
-- Appointment scheduling
-- Medical record retrieval
-
-**Finance:**
-- Account inquiry handling
-- Transaction dispute resolution
-- Investment advisory
-
-**Education:**
-- Personalized tutoring
-- Course recommendation
-- Administrative assistance
-
-**Enterprise:**
-- HR policy guidance
-- IT helpdesk automation
-- Internal knowledge search
-
-...
-
-Simply implement domain-specific agents and tools—Morgana handles the orchestration, context management and conversational flow.
+**Built with ❤️ using .NET 10, Akka.NET and Microsoft.Agents.AI**
 
 ---
 
-**Built with ❤️ using .NET 10, Akka.NET, Microsoft.Agents.AI and Model Context Protocol**
-
----
-
-Morgana is developed in **Italy/Milan 🇮🇹**: we apologize if you find prompts and some code comments in Italian...but we invite you **to fly on the broomstick with Morgana 🧙‍♀️**
+Morgana is developed in **Italy/Milan 🇮🇹**: we apologize if you find prompts and some code comments in Italian...but we invite you **at flying on the broomstick with Morgana 🧙‍♀️**
