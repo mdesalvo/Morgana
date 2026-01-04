@@ -11,6 +11,9 @@ This release represents a fundamental shift in enterprise readyness: **Morgana i
 
 ### ✨ Added
 
+**Plugin System**
+- Morgana dynamically loads domain assemblies configured in `appsettings.json` under `Plugins:Assemblies`. At bootstrap, `PluginLoaderService` validates that each assembly contains at least one class extending `MorganaAgent`, otherwise it's skipped with a warning. This enables **complete decoupling between framework (Morgana.AI) and application domains (e.g., Morgana.AI.Examples)**, while maintaining automatic discovery of agents and tools via reflection.
+
 ### 🔄 Changed
 
 - Improved visual cues for the active agent: name displayed in the header with a distinctive color scheme (purple for basic Morgana, pink for specialized agents).
