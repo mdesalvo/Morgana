@@ -26,13 +26,13 @@
             },
             {
               "Name": "ToolParameterContextGuidance",
-              "Description": "REGOLA OPERATIVA SUI PARAMETRI DI CONTESTO - Alcuni tool richiedono informazioni persistenti sull'utente (come userId o dati personali). Per questi parametri: verifica prima se l'informazione è già disponibile usando il tool GetContextVariable e, se manca, chiedila all'utente. Altri tool (come quelli per cercare prodotti in cataloghi) usano parametri derivati direttamente dalla richiesta dell'utente - per questi invoca il tool subito senza passare dal contesto.",
+              "Description": "PRIMA DI INVOCARE QUESTO TOOL: chiama il tool GetContextVariable per verificare se l'informazione è già disponibile. Chiedi all'utente SOLO se il tool GetContextVariable restituisce che l'informazione manca.",
               "Type": "Operational",
               "Priority": 1
             },
             {
               "Name": "ToolParameterRequestGuidance",
-              "Description": "REGOLA OPERATIVA SUI PARAMETRI VOLATILI - Quando un tool richiede informazioni legate alla specifica richiesta (come tipo di prodotto da cercare, sintomi di un problema, caratteristiche desiderate), deriva questi valori direttamente da ciò che l'utente ha detto e invoca il tool immediatamente. Non salvare questi parametri nel contesto.",
+              "Description": "Usa direttamente il valore dalla richiesta dell'utente, senza passare dal tool GetContextVariable.",
               "Type": "Operational",
               "Priority": 2
             }
@@ -52,7 +52,7 @@
           "Tools": [
             {
               "Name": "GetContextVariable",
-              "Description": "Questo tool recupera il contesto dell'agente, che contiene informazioni necessarie per il proseguimento della richiesta",
+              "Description": "IMPORTANTE: Usa SEMPRE questo tool PRIMA di chiedere qualsiasi informazione all'utente. Questo tool recupera informazioni che potrebbero già essere disponibili nel contesto dell'agente (ad esempio userId, già fornito in precedenza). Se questo tool restituisce un valore, USALO. Chiedi all'utente SOLO se questo tool indica che l'informazione manca.",
               "Parameters": [
                 {
                   "Name": "variableName",
