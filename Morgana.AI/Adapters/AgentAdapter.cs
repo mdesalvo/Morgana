@@ -17,8 +17,6 @@ public class AgentAdapter
     protected readonly IPromptResolverService promptResolverService;
     protected readonly IChatClient chatClient;
     protected readonly ILogger logger;
-    protected readonly IMCPToolProvider? mcpToolProvider;
-    protected readonly IMCPServerRegistryService? mcpServerRegistryService;
     protected readonly IToolRegistryService? toolRegistryService;
     protected readonly Prompt morganaPrompt;
 
@@ -26,15 +24,11 @@ public class AgentAdapter
         IChatClient chatClient,
         IPromptResolverService promptResolverService,
         ILogger logger,
-        IMCPToolProvider? mcpToolProvider = null,
-        IMCPServerRegistryService? mcpServerRegistryService = null,
         IToolRegistryService? toolRegistryService = null)
     {
         this.chatClient = chatClient;
         this.promptResolverService = promptResolverService;
         this.logger = logger;
-        this.mcpToolProvider = mcpToolProvider;
-        this.mcpServerRegistryService = mcpServerRegistryService;
         this.toolRegistryService = toolRegistryService;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
@@ -148,8 +142,8 @@ public class AgentAdapter
         Type? toolType = toolRegistryService?.FindToolTypeForIntent(intent);
         if (toolType == null)
         {
-            // No native tool found for this intent (agent may use only MCP tools)
-            logger.LogInformation($"No native tool found for intent '{intent}' (agent may rely exclusively on MCP tools)");
+            // No native tool found for this intent
+            logger.LogInformation($"No native tool found for intent '{intent}' (agent has no capabilities!)");
             return toolAdapter;
         }
 
@@ -209,8 +203,7 @@ public class AgentAdapter
     }
 
     /// <summary>
-    /// Generic agent creation method for both native and MCP tools.
-    /// Automatically loads MCP tools from servers declared via IMCPServerRegistryService.
+    /// Generic agent creation method.
     /// </summary>
     public (AIAgent agent, MorganaContextProvider provider) CreateAgent(
         Type agentType,
@@ -223,10 +216,7 @@ public class AgentAdapter
 
         string intent = intentAttribute.Intent;
 
-        // Get MCP server names from registry
-        string[] mcpServerNames = mcpServerRegistryService?.GetServerNamesForAgent(agentType) ?? [];
-
-        logger.LogInformation($"Creating agent for intent '{intent}' with MCP servers: {(mcpServerNames.Length > 0 ? string.Join(", ", mcpServerNames) : "none")}");
+        logger.LogInformation($"Creating agent for intent '{intent}'...");
 
         // Load agent prompt
         Prompt agentPrompt = promptResolverService.ResolveAsync(intent)
@@ -237,51 +227,10 @@ public class AgentAdapter
         ToolDefinition[] agentTools = [.. morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                             .Union(agentPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
 
-        List<ToolDefinition> allToolDefinitions = agentTools.ToList();
-
-        // Load MCP tools ONLY from servers declared in registry
-        List<AIFunction> mcpTools = [];
-        if (mcpToolProvider != null && mcpServerNames.Length > 0)
-        {
-            foreach (string serverName in mcpServerNames)
-            {
-                logger.LogInformation($"Loading MCP tools from server '{serverName}' for agent '{intent}'");
-
-                List<AIFunction> serverTools = mcpToolProvider
-                    .LoadToolsFromServerAsync(serverName)
-                    .GetAwaiter()
-                    .GetResult()
-                    ?.ToList() ?? [];
-
-                mcpTools.AddRange(serverTools);
-
-                // Add MCP tool definitions to context provider metadata
-                foreach (AIFunction mcpTool in serverTools)
-                {
-                    ToolParameter[] mcpToolParameters = mcpTool.AdditionalProperties?
-                        .Select(kvp => new ToolParameter(
-                            Name: kvp.Key,
-                            Description: kvp.Value?.ToString() ?? "",
-                            Required: true,
-                            Scope: "request", //MCP tools are scoped to "request" by design
-                            Shared: false))
-                        .ToArray() ?? [];
-
-                    allToolDefinitions.Add(new ToolDefinition(
-                        mcpTool.Name,
-                        mcpTool.Description,
-                        mcpToolParameters));
-                }
-            }
-
-            logger.LogInformation(
-                $"Agent '{intent}' loaded {mcpTools.Count} MCP tools from {mcpServerNames.Length} server(s)");
-        }
-
-        // Create context provider with all tool definitions (native + MCP)
+        // Create context provider with tool definitions
         MorganaContextProvider contextProvider = CreateContextProvider(
             intent,
-            allToolDefinitions,
+            agentTools,
             sharedContextCallback);
 
         // Create tool adapter and register native tools
@@ -290,16 +239,11 @@ public class AgentAdapter
         // Compose full agent instructions
         string instructions = ComposeAgentInstructions(agentPrompt);
 
-        // Merge native AIFunctions + MCP AIFunctions
-        IEnumerable<AIFunction> allFunctions = toolAdapter
-            .CreateAllFunctions()
-            .Concat(mcpTools);
-
         // Create AIAgent with all tools
         AIAgent agent = chatClient.CreateAIAgent(
             instructions: instructions,
             name: intent,
-            tools: [.. allFunctions]);
+            tools: [.. toolAdapter.CreateAllFunctions()]);
 
         return (agent, contextProvider);
     }

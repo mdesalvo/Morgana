@@ -69,10 +69,9 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             
             if (toolType == null)
             {
-                // Agent without native tool - this is OK if it uses only MCP tools
-                string warning = $"ℹ️  Agent '{intent}' ({agentType.Name}) has no native tool registered. " +
-                               $"This agent may rely exclusively on MCP tools.";
-                warnings.Add(warning);
+                // Agent without native tool
+                string error = $"ℹ️  Agent '{intent}' ({agentType.Name}) has no native tool registered!";
+                errors.Add(error);
             }
             else
             {

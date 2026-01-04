@@ -21,7 +21,7 @@ public interface IToolRegistryService
     
     /// <summary>
     /// Validates that all agents with HandlesIntentAttribute have corresponding native tools.
-    /// Logs warnings for agents without native tools (they may rely only on MCP tools).
+    /// Logs warnings for agents without native tools.
     /// </summary>
     /// <returns>Validation results with any warnings or errors</returns>
     Records.ToolRegistryValidationResult ValidateAgentToolMapping();

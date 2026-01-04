@@ -49,14 +49,10 @@ builder.Services.AddSingleton<ILLMService>(sp =>
     };
 });
 builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMService>().GetChatClient());
-builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
-builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
-
-// MCP & Tooling
-builder.Services.AddMCPProtocol(builder.Configuration);
+builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
+builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
 builder.Services.AddMorganaToolRegistry();
-builder.Services.AddTransient<AgentAdapter>();
 
 // Akka.NET Services
 builder.Services.AddSingleton(sp =>
