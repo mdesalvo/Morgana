@@ -488,23 +488,23 @@ contextProvider.MergeSharedContext(msg.UpdatedValues);
 
 ```json
 {
-"ID": "Billing",
-"Tools": [
-{
-"Name": "GetInvoices",
-"Parameters": [
-{
-"Name": "userId",
-"Scope": "context",
-"Shared": true
-},
-{
-"Name": "count",
-"Scope": "request"
-}
-]
-}
-]
+  "ID": "Billing",
+  "Tools": [
+    {
+      "Name": "GetInvoices",
+      "Parameters": [
+        {
+          "Name": "userId",
+          "Scope": "context",
+          "Shared": true
+        },
+        {
+          "Name": "count",
+          "Scope": "request"
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -528,20 +528,20 @@ Morgana implements a **layered personality architecture** that creates consisten
 **Global Personality** (`prompts.json` - Morgana prompt):
 ```json
 {
-"ID": "Morgana",
-"Content": "You are a modern and effective digital assistant...",
-"Instructions": "Ongoing conversation with the user. Stay consistent...",
-"Personality": "Your name is Morgana: you are a 'good witch' who uses your knowledge of magic to formulate potions and spells to help the user..."
+  "ID": "Morgana",
+  "Content": "You are a modern and effective digital assistant...",
+  "Instructions": "Ongoing conversation with the user. Stay consistent...",
+  "Personality": "Your name is Morgana: you are a 'good witch' who uses your knowledge of magic to formulate potions and spells to help the user..."
 }
 ```
 
 **Agent-Specific Personality** (example - Billing prompt):
 ```json
 {
-"ID": "Billing",
-"Content": "You're familiar with the book of potions and spells called 'Billing and Payments'...",
-"Instructions": "NEVER invent procedures or information...",
-"Personality": "Be consistent with your character: let's say that in this specific role, you could be a fairly traditional witch who favors concreteness and pragmatism..."
+  "ID": "Billing",
+  "Content": "You're familiar with the book of potions and spells called 'Billing and Payments'...",
+  "Instructions": "NEVER invent procedures or information...",
+  "Personality": "Be consistent with your character: let's say that in this specific role, you could be a fairly traditional witch who favors concreteness and pragmatism..."
 }
 ```
 
@@ -648,19 +648,19 @@ Morgana treats prompts as **first-class project artifacts**, not hardcoded strin
 **Prompt Structure**
 ```json
 {
-"ID": "billing",
-"Type": "INTENT",
-"SubType": "AGENT",
-"Content": "Agent role and domain description",
-"Personality": "Agent-specific character traits",
-"Instructions": "Behavioral rules and operational guidelines",
-"AdditionalProperties": [
-{
-"GlobalPolicies": [...],
-"ErrorAnswers": [...],
-"Tools": [...]
-}
-]
+  "ID": "billing",
+  "Type": "INTENT",
+  "SubType": "AGENT",
+  "Content": "Agent role and domain description",
+  "Personality": "Agent-specific character traits",
+  "Instructions": "Behavioral rules and operational guidelines",
+  "AdditionalProperties": [
+    {
+      "GlobalPolicies": [...],
+      "ErrorAnswers": [...],
+      "Tools": [...]
+    }
+  ]
 }
 ```
 
@@ -670,32 +670,32 @@ Global policies define system-wide behavioral rules that apply to all agents:
 
 ```json
 {
-"GlobalPolicies": [
-{
-"Name": "ContextHandling",
-"Description": "CRITICAL CONTEXT RULE - Before asking...",
-"Type": "Critical",
-"Priority": 0
-},
-{
-"Name": "InteractiveToken",
-"Description": "OPERATIONAL RULE INTERACTION TOKEN '#INT#' - You operate....",
-"Type": "Operational",
-"Priority": 0
-},
-{
-"Name": "ToolParameterContextGuidance",
-"Description": "OPERATION RULE ON AGENT TOOLS CONTEXT PARAMETERS - Operates...",
-"Type": "Operational",
-"Priority": 1
-},
-{
-"Name": "ToolParameterRequestGuidance",
-"Description": "OPERATIONAL RULE ON DIRECT REQUEST PARAMETERS OF AGENT TOOLS - Operate...",
-"Type": "Operational",
-"Priority": 2
-}
-]
+  "GlobalPolicies": [
+    {
+      "Name": "ContextHandling",
+      "Description": "CRITICAL CONTEXT RULE - Before asking...",
+      "Type": "Critical",
+      "Priority": 0
+    },
+    {
+      "Name": "InteractiveToken",
+      "Description": "OPERATIONAL RULE INTERACTION TOKEN '#INT#' - You operate....",
+      "Type": "Operational",
+      "Priority": 0
+    },
+    {
+      "Name": "ToolParameterContextGuidance",
+      "Description": "OPERATION RULE ON AGENT TOOLS CONTEXT PARAMETERS - Operates...",
+      "Type": "Operational",
+      "Priority": 1
+    },
+    {
+      "Name": "ToolParameterRequestGuidance",
+      "Description": "OPERATIONAL RULE ON DIRECT REQUEST PARAMETERS OF AGENT TOOLS - Operate...",
+      "Type": "Operational",
+      "Priority": 2
+    }
+  ]
 }
 ```
 
@@ -710,12 +710,12 @@ The `AgentAdapter` formats policies preserving order and structure:
 //Order the policies by type (Critical, Operational) then by priority (the lower is the most important)
 foreach (GlobalPolicy policy in policies.OrderBy(p => p.Type).ThenBy(p => p.Priority))
 {
-var sb = new StringBuilder();
-foreach (var policy in policies)
-{
-sb.AppendLine($"{policy.Name}: {policy.Description}");
-}
-return sb.ToString().TrimEnd();
+  var sb = new StringBuilder();
+  foreach (var policy in policies)
+  {
+    sb.AppendLine($"{policy.Name}: {policy.Description}");
+  }
+  return sb.ToString().TrimEnd();
 }
 ```
 
@@ -725,16 +725,16 @@ Centralized error message management for consistent user experience:
 
 ```json
 {
-"ErrorAnswers": [
-{
-"Name": "GenericError",
-"Content": "Sorry, an error occurred while servicing your request."
-},
-{
-"Name": "LLMServiceError",
-"Content": "Sorry, the AI ​​service generated an unexpected error: ((llm_error))"
-}
-]
+  "ErrorAnswers": [
+    {
+      "Name": "GenericError",
+      "Content": "Sorry, an error occurred while servicing your request."
+    },
+    {
+      "Name": "LLMServiceError",
+      "Content": "Sorry, the AI ​​service generated an unexpected error: ((llm_error))"
+    }
+  ]
 }
 ```
 
@@ -746,17 +746,17 @@ Parameter-level guidance is dynamically applied based on `Scope`:
 
 ```json
 {
-"Parameters": [
-{
-"Name": "userId",
-"Scope": "context",
-"Shared": true
-},
-{
-"Name": "count",
-"Scope": "request"
-}
-]
+  "Parameters": [
+    {
+      "Name": "userId",
+      "Scope": "context",
+      "Shared": true
+    },
+    {
+      "Name": "count",
+      "Scope": "request"
+    }
+  ]
 }
 ```
 
@@ -851,9 +851,9 @@ LLM provider selection is managed through `appsettings.json`:
 
 ```json
 {
-"LLM": {
-"Provider": "AzureOpenAI"  // or "Anthropic"
-}
+  "LLM": {
+    "Provider": "AzureOpenAI"  // or "Anthropic"
+  }
 }
 ```
 
@@ -867,15 +867,14 @@ Tools are defined as C# delegates mapped to tool definitions from prompts. The `
 // Define tool implementation with lazy context provider access
 public class BillingTool : MorganaTool
 {
-public BillingTool(
-ILogger<MorganaAgent> logger,
-Func<MorganaContextProvider> getContextProvider) 
-: base(logger, getContextProvider) { }
+  public BillingTool(
+    ILogger<MorganaAgent> logger,
+    Func<MorganaContextProvider> getContextProvider) : base(logger, getContextProvider) { }
 
-public async Task<string> GetInvoices(string userId, int count = 3)
-{
+    public async Task<string> GetInvoices(string userId, int count = 3)
+    {
        // Implementation
-   }
+    }
 }
 
 // Register with adapter in AgentAdapter
@@ -891,8 +890,8 @@ Tools receive `Func<MorganaContextProvider>` to access context on-demand:
 ```csharp
 public Task<object> GetContextVariable(string variableName)
 {
-MorganaContextProvider provider = getContextProvider();
-object? value = provider.GetVariable(variableName);
+  MorganaContextProvider provider = getContextProvider();
+  object? value = provider.GetVariable(variableName);
    // ...
 }
 ```
@@ -909,10 +908,6 @@ The Agent Framework automatically:
 2. Handles parameter validation and type conversion
 3. Invokes the appropriate method
 4. Returns results to the LLM for natural language synthesis
-
----
-
-**Built with ❤️ using .NET 10, Akka.NET and Microsoft.Agents.AI**
 
 ---
 
