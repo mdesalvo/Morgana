@@ -25,6 +25,7 @@ This release represents a fundamental shift in enterprise readyness: **Morgana i
 
 This release unlocks:
 - Custom UI themes/skins with dynamic branding
+- Platform extensibility via plugin system
 
 ## [0.5.0] - 2026-01-01
 
