@@ -7,7 +7,6 @@ using Morgana.AI.Providers;
 using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Logging;
-using Morgana.AI.Abstractions;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Adapters;

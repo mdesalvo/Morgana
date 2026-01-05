@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
 using Morgana.AI.Providers;
 using Morgana.AI.Tools;

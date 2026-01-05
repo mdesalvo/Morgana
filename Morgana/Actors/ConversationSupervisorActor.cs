@@ -2,7 +2,6 @@ using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
 using Morgana.AI.Abstractions;
-using Morgana.AI.Attributes;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.Interfaces;

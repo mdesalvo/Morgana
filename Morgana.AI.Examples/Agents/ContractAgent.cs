@@ -3,7 +3,6 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Providers;
 
 namespace Morgana.AI.Examples.Agents;
 
