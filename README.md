@@ -55,13 +55,13 @@ Traditional chatbot systems often struggle with complexity—they either become 
 ┌───────────────────────────────────────────────────────────────┐
 │                  ConversationSupervisorActor                  │
 │  (Orchestrates the entire multi-turn conversation lifecycle)  │
-└──┬───────────┬───────────────┬────────────────────────────────┘
-   │           │               │
-   ▼           ▼               ▼
-┌───────┐  ┌──────────┐   ┌───────────┐
-│ Guard │  │Classifier│   │   Router  │ ← Context Sync Bus
-│ Actor │  │  Actor   │   │   Actor   │
-└───────┘  └──────────┘   └───────────┘
+└──┬───────────┬──────────────┬─────────────────────────────────┘
+   │           │              │
+   ▼           ▼              ▼
+┌───────┐  ┌──────────┐  ┌───────────┐
+│ Guard │  │Classifier│  │   Router  │ ← Context Sync Bus
+│ Actor │  │  Actor   │  │   Actor   │
+└───────┘  └──────────┘  └───────────┘
    │           │               │
    │           │               ▼
    │           │         ┌───────────┐
@@ -72,7 +72,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
    │           │               │
    │           │               ▼
    │           │      ╔════════════════════════════════════════════════╗
-   │           │      ║      DYNAMIC DOMAIN AGENTS (Plugin-Loaded)     ║ * Domain agents loaded dynamically via Plugin System
+   │           │      ║      DYNAMIC DOMAIN AGENTS (Plugin-Loaded)     ║ * Loaded via Plugin system
    │           │      ╠════════════════════════════════════════════════╣
    │           │      ║  ┌──────────┐   ┌───────────┐  ┌─────────────┐ ║
    │           │      ║  │ Billing* │   │ Contract* │  │Troubleshoot*│ ║
