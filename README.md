@@ -43,19 +43,19 @@ Traditional chatbot systems often struggle with complexity—they either become 
 ```
 ┌───────────────────────────────────────────────────────────────┐
 │                         User Request                          │
-└──────────────────────────────┬────────────────────────────────┘
+└─────────────────────────────┬─────────────────────────────────┘
                               │
                               ▼
 ┌───────────────────────────────────────────────────────────────┐
 │                   ConversationManagerActor                    │
 │  (Coordinates, routes, manages stateful conversational flow)  │
-└──────────────────────────────┬────────────────────────────────┘
+└─────────────────────────────┬─────────────────────────────────┘
                               │
                               ▼
 ┌───────────────────────────────────────────────────────────────┐
 │                  ConversationSupervisorActor                  │
 │  (Orchestrates the entire multi-turn conversation lifecycle)  │
-└───┬───────────┬───────────────┬───────────────────────────────┘
+└──┬───────────┬───────────────┬────────────────────────────────┘
    │           │               │
    ▼           ▼               ▼
 ┌───────┐  ┌──────────┐   ┌───────────┐
@@ -68,11 +68,11 @@ Traditional chatbot systems often struggle with complexity—they either become 
    │           │         │  Morgana  │
    │           │         │   Agent   │
    │           │         └───────────┘
-   │           │               └──────────────┬────────────┬─...fully extensible
-   │           │               │              │            │
-   │           │               ▼              ▼            ▼
+   │           │               │
+   │           │               │
+   │           │               ▼
    │           │      ╔════════════════════════════════════════════════╗
-   │           │      ║      DYNAMIC DOMAIN AGENTS (Plugin-Loaded)     ║ * Example domain agents loaded dynamically via Plugin System
+   │           │      ║      DYNAMIC DOMAIN AGENTS (Plugin-Loaded)     ║ * Domain agents loaded dynamically via Plugin System
    │           │      ╠════════════════════════════════════════════════╣
    │           │      ║  ┌──────────┐   ┌───────────┐  ┌─────────────┐ ║
    │           │      ║  │ Billing* │   │ Contract* │  │Troubleshoot*│ ║
@@ -143,13 +143,13 @@ A policy enforcement actor that validates every user message against business ru
 - LLM-powered contextual policy checks
 
 **Configuration-Driven:**
-Guard behavior is defined in `prompts.json` with customizable violation terms and responses, making policy updates deployment-independent.
+Guard behavior is defined in `morgana.json` with customizable violation terms and responses, making policy updates deployment-independent.
 
 #### 4. ClassifierActor
 An intelligent classifier actor that analyzes user intent and determines the appropriate handling path.
 
 **Intent Recognition:**
-The classifier identifies specific intents configured in `prompts.json`. **Example** built-in intents include:
+The classifier identifies specific intents configured in `agents.json`. **Example** built-in intents include:
 - `billing`: Fetch invoices or payment history
 - `troubleshooting`: Diagnose connectivity or device issues
 - `contract`: Handle service contracts and cancellations
@@ -172,21 +172,21 @@ Specialized agents with domain-specific knowledge and tool access. The system in
 **BillingAgent** (example)
 - **Tools**: `GetInvoices()`, `GetInvoiceDetails()`
 - **Purpose**: Handle all billing inquiries, payment verification, and invoice retrieval
-- **Prompt**: Defined in `prompts.json` under ID "Billing"
+- **Prompt**: Defined in `agents.json` under ID "Billing"
 
 **TroubleshootingAgent** (example)
 - **Tools**: `RunDiagnostics()`, `GetTroubleshootingGuide()`
 - **Purpose**: Diagnose connectivity issues, provide step-by-step troubleshooting
-- **Prompt**: Defined in `prompts.json` under ID "Troubleshooting"
+- **Prompt**: Defined in `agents.json` under ID "Troubleshooting"
 
 **ContractAgent** (example)
 - **Tools**: `GetContractDetails()`, `InitiateCancellation()`
 - **Purpose**: Handle contract modifications and termination requests
-- **Prompt**: Defined in `prompts.json` under ID "Contract"
+- **Prompt**: Defined in `agents.json` under ID "Contract"
 
 **Adding Custom Agents:**
 To add a new agent for your domain:
-1. Define the intent in `prompts.json` (Classifier section)
+1. Define the intent in `agents.json` (Classifier section)
 2. Create a prompt configuration for the agent behavior
 3. Implement a new class inheriting from `MorganaAgent`
 4. Decorate with `[HandlesIntent("your_intent")]`
@@ -315,15 +315,15 @@ Morgana's context system allows agents to declare which parameters should be **s
 ### Architecture
 
 #### 1. Declarative Configuration
-Parameters are marked as `Shared: true` in `prompts.json`:
+Parameters are marked as `Shared: true` in `agents.json`:
 
 ```json
 {
-"Name": "userId",
-"Description": "Customer identifier",
-"Required": true,
-"Scope": "context",
-"Shared": true
+   "Name": "userId",
+   "Description": "Customer identifier",
+   "Required": true,
+   "Scope": "context",
+   "Shared": true
 }
 ```
 
@@ -496,6 +496,7 @@ private void HandleContextUpdate(ReceiveContextUpdate msg)
   "Tools": [
     {
       "Name": "GetInvoices",
+      "Description": "Gets the invoices of the user",
       "Parameters": [
         {
           "Name": "userId",
@@ -529,7 +530,7 @@ Morgana implements a **layered personality architecture** that creates consisten
 
 ### Configuration
 
-**Global Personality** (`prompts.json` - Morgana prompt):
+**Global Personality** (`morgana.json` - Morgana prompt):
 ```json
 {
   "ID": "Morgana",
@@ -539,7 +540,7 @@ Morgana implements a **layered personality architecture** that creates consisten
 }
 ```
 
-**Agent-Specific Personality** (example - Billing prompt):
+**Agent-Specific Personality** (`agents.json` - Billing prompt):
 ```json
 {
   "ID": "Billing",
@@ -639,7 +640,7 @@ Morgana treats prompts as **first-class project artifacts**, not hardcoded strin
 - Validates prompt consistency across agents
 
 **ConfigurationPromptResolverService**
-- Loads prompts from embedded `prompts.json` resource
+- Loads prompts from embedded `morgana.json` and `agents.json` resources
 - Parses structured prompt definitions including:
 - System instructions
 - Personality definitions
@@ -837,13 +838,9 @@ The system dynamically loads domain assemblies configured in `appsettings.json` 
 
 ### Project Setup
 
-Domain assemblies are referenced with `ReferenceOutputAssembly=false` to ensure they're copied to output without creating compile-time dependencies:
-
 ```xml
 <ItemGroup>
-  <ProjectReference Include="..\Morgana.AI.Examples\Morgana.AI.Examples.csproj">
-    <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-  </ProjectReference>
+  <ProjectReference Include="..\Morgana.AI.Examples\Morgana.AI.Examples.csproj" />
 </ItemGroup>
 ```
 
@@ -911,6 +908,7 @@ The dependency injection container automatically resolves the appropriate `ILLMS
 Tools are defined as C# delegates mapped to tool definitions from prompts. The `ToolAdapter` provides runtime validation and dynamic function creation:
 
 ```csharp
+[ProvidesToolForIntent("billing")]
 // Define tool implementation with lazy context provider access
 public class BillingTool : MorganaTool
 {
@@ -957,5 +955,3 @@ The Agent Framework automatically:
 4. Returns results to the LLM for natural language synthesis
 
 ---
-
-Morgana is developed in **Italy/Milan 🇮🇹**: we apologize if you find prompts and some code comments in Italian...but we invite you **at flying on the broomstick with Morgana 🧙‍♀️**
