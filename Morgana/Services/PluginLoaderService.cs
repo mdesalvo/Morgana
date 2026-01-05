@@ -17,7 +17,7 @@ namespace Morgana.Services;
 /// {
 ///   "Plugins": {
 ///     "Assemblies": [
-///       "Morgana.AI.Examples"
+///       "Morgana.AI.Examples.dll"
 ///     ]
 ///   }
 /// }
