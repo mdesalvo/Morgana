@@ -8,13 +8,32 @@ using static Morgana.Records;
 
 namespace Morgana.Actors;
 
+/// <summary>
+/// Entry point actor for managing conversations. 
+/// Responsible for conversation lifecycle (creation/termination) and message routing to the supervisor.
+/// Uses PipeTo pattern for non-blocking communication with the supervisor.
+/// </summary>
+/// <remarks>
+/// This actor serves as the primary interface between the external system (SignalR) and the internal actor hierarchy.
+/// It maintains a reference to the ConversationSupervisorActor and forwards user messages for processing.
+/// </remarks>
 public class ConversationManagerActor : MorganaActor
 {
     private readonly ISignalRBridgeService signalRBridgeService;
 
-    // Supervisor attivo
+    /// <summary>
+    /// Reference to the active conversation supervisor actor.
+    /// Null until a conversation is created.
+    /// </summary>
     private IActorRef? supervisor;
 
+    /// <summary>
+    /// Initializes a new instance of the ConversationManagerActor.
+    /// </summary>
+    /// <param name="conversationId">Unique identifier for this conversation</param>
+    /// <param name="signalRBridgeService">Service for sending messages to clients via SignalR</param>
+    /// <param name="llmService">LLM service for AI completions</param>
+    /// <param name="promptResolverService">Service for resolving prompt templates</param>
     public ConversationManagerActor(
         string conversationId,
         ISignalRBridgeService signalRBridgeService,
@@ -32,6 +51,11 @@ public class ConversationManagerActor : MorganaActor
         ReceiveAsync<Status.Failure>(HandleSupervisorFailureAsync);
     }
 
+    /// <summary>
+    /// Handles conversation creation requests.
+    /// Creates and watches the supervisor actor, then triggers automatic presentation generation.
+    /// </summary>
+    /// <param name="msg">Conversation creation request message</param>
     private async Task HandleCreateConversationAsync(CreateConversation msg)
     {
         IActorRef senderRef = Sender;
@@ -40,7 +64,8 @@ public class ConversationManagerActor : MorganaActor
 
         if (supervisor is null)
         {
-            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>("supervisor", msg.ConversationId);
+            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>(
+                "supervisor", msg.ConversationId);
 
             Context.Watch(supervisor);
             actorLogger.Info("Supervisor created: {0}", supervisor.Path);
@@ -53,6 +78,11 @@ public class ConversationManagerActor : MorganaActor
         senderRef.Tell(new ConversationCreated(msg.ConversationId));
     }
 
+    /// <summary>
+    /// Handles conversation termination requests.
+    /// Stops the supervisor actor and clears the reference.
+    /// </summary>
+    /// <param name="msg">Conversation termination request message</param>
     private Task HandleTerminateConversationAsync(TerminateConversation msg)
     {
         actorLogger.Info($"Terminating conversation {msg.ConversationId}");
@@ -68,13 +98,23 @@ public class ConversationManagerActor : MorganaActor
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Handles incoming user messages.
+    /// Ensures supervisor exists, then forwards the message using Ask pattern with PipeTo for non-blocking processing.
+    /// </summary>
+    /// <param name="msg">User message to process</param>
+    /// <remarks>
+    /// Uses PipeTo pattern to avoid blocking the actor mailbox while waiting for supervisor response.
+    /// Includes 60-second timeout for supervisor processing.
+    /// </remarks>
     private async Task HandleUserMessageAsync(UserMessage msg)
     {
         actorLogger.Info($"Received message in conversation {conversationId}: {msg.Text}");
 
         if (supervisor == null)
         {
-            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>("supervisor", msg.ConversationId);
+            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>(
+                "supervisor", msg.ConversationId);
             Context.Watch(supervisor);
 
             actorLogger.Warning("Supervisor was missing; created new supervisor: {0}", supervisor.Path);
@@ -89,6 +129,11 @@ public class ConversationManagerActor : MorganaActor
                 failure: ex => new Status.Failure(ex));
     }
 
+    /// <summary>
+    /// Handles successful responses from the supervisor (via PipeTo).
+    /// Sends the response to the client via SignalR with appropriate metadata.
+    /// </summary>
+    /// <param name="ctx">Context containing the supervisor's response</param>
     private async Task HandleSupervisorResponseAsync(SupervisorResponseContext ctx)
     {
         actorLogger.Info(
@@ -118,7 +163,7 @@ public class ConversationManagerActor : MorganaActor
             {
                 await signalRBridgeService.SendStructuredMessageAsync(
                     conversationId,
-                    "Si è verificato un errore nell'invio della risposta.",
+                    "An error occurred while sending the response.",
                     "assistant",
                     null,
                     "delivery_error",
@@ -132,6 +177,11 @@ public class ConversationManagerActor : MorganaActor
         }
     }
 
+    /// <summary>
+    /// Handles supervisor failures (timeout or exception via PipeTo).
+    /// Sends an error message to the client via SignalR.
+    /// </summary>
+    /// <param name="failure">Failure information from supervisor</param>
     private async Task HandleSupervisorFailureAsync(Status.Failure failure)
     {
         actorLogger.Error(failure.Cause, "Supervisor did not reply in time or failed");
@@ -141,7 +191,7 @@ public class ConversationManagerActor : MorganaActor
         {
             await signalRBridgeService.SendStructuredMessageAsync(
                 conversationId,
-                "Si è verificato un errore interno.",
+                "An internal error occurred.",
                 "assistant",
                 null,
                 "supervisor_error",
@@ -154,12 +204,18 @@ public class ConversationManagerActor : MorganaActor
         }
     }
 
+    /// <summary>
+    /// Actor lifecycle hook: called when actor starts.
+    /// </summary>
     protected override void PreStart()
     {
         actorLogger.Info($"ConversationManagerActor started for {conversationId}");
         base.PreStart();
     }
 
+    /// <summary>
+    /// Actor lifecycle hook: called when actor stops.
+    /// </summary>
     protected override void PostStop()
     {
         actorLogger.Info($"ConversationManagerActor stopped for {conversationId}");

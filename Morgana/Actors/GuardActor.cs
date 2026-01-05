@@ -7,8 +7,25 @@ using static Morgana.Records;
 
 namespace Morgana.Actors;
 
+/// <summary>
+/// Content moderation actor that performs two-level filtering on user messages.
+/// First level: synchronous profanity check against a configured list.
+/// Second level: asynchronous LLM-based policy check for complex content violations.
+/// </summary>
+/// <remarks>
+/// This actor uses a hybrid approach for performance:
+/// - Fast synchronous check for known bad terms (immediate rejection)
+/// - Slower async LLM check for nuanced policy violations (spam, phishing, violence, etc.)
+/// Falls back to "compliant" status on errors to avoid blocking legitimate requests.
+/// </remarks>
 public class GuardActor : MorganaActor
 {
+    /// <summary>
+    /// Initializes a new instance of the GuardActor.
+    /// </summary>
+    /// <param name="conversationId">Unique identifier for this conversation</param>
+    /// <param name="llmService">LLM service for policy-based content checks</param>
+    /// <param name="promptResolverService">Service for resolving guard prompt templates</param>
     public GuardActor(
         string conversationId,
         ILLMService llmService,
@@ -19,6 +36,16 @@ public class GuardActor : MorganaActor
         Receive<Status.Failure>(HandleFailure);
     }
 
+    /// <summary>
+    /// Performs two-level compliance check on user message.
+    /// Level 1: Synchronous profanity check (immediate response if violation found).
+    /// Level 2: Asynchronous LLM-based policy check (for spam, phishing, violence, etc.).
+    /// </summary>
+    /// <param name="req">Guard check request containing the message to validate</param>
+    /// <remarks>
+    /// The sender reference is captured before async operations to ensure correct message routing.
+    /// LLM check is only performed if basic profanity check passes.
+    /// </remarks>
     private async Task CheckComplianceAsync(GuardCheckRequest req)
     {
         IActorRef originalSender = Sender;
@@ -37,7 +64,7 @@ public class GuardActor : MorganaActor
 
         actorLogger.Info("Basic profanity check passed, engaging LLM policy check");
 
-        // Advanced LLM-based policy check (async con salvaguardia sender)
+        // Advanced LLM-based policy check (async with sender safeguard)
         try
         {
             string response = await llmService.CompleteWithSystemPromptAsync(
@@ -55,19 +82,29 @@ public class GuardActor : MorganaActor
         {
             actorLogger.Error(ex, "LLM policy check failed");
             
-            // Fallback su errore
+            // Fallback on error: assume compliant to avoid blocking legitimate requests
             LLMCheckContext ctx = new LLMCheckContext(new GuardCheckResponse(true, null), originalSender);
 
             Self.Tell(ctx);
         }
     }
 
+    /// <summary>
+    /// Handles the result of the LLM-based policy check.
+    /// Routes the response back to the original sender.
+    /// </summary>
+    /// <param name="ctx">Context containing the LLM check result and original sender reference</param>
     private void HandleLLMCheckResult(LLMCheckContext ctx)
     {
         actorLogger.Info($"LLM policy check result: compliant={ctx.Response.Compliant}");
         ctx.OriginalSender.Tell(ctx.Response);
     }
 
+    /// <summary>
+    /// Handles failures during guard check processing.
+    /// Falls back to "compliant" status to avoid blocking legitimate requests on errors.
+    /// </summary>
+    /// <param name="failure">Failure information</param>
     private void HandleFailure(Status.Failure failure)
     {
         actorLogger.Error(failure.Cause, "Guard check failed");
