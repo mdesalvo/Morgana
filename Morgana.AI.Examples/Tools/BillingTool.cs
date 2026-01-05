@@ -29,7 +29,7 @@ public class BillingTool : MorganaTool
         return string.Join("\n", invoices.Take(count));
     }
 
-    public async Task<string> GetInvoiceDetails(string invoiceId)
+    public async Task<string> GetInvoiceDetails(string userId, string invoiceId)
     {
         // Simulazione recupero da storage/database
         await Task.Delay(50);
