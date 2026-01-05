@@ -112,7 +112,7 @@
             @bind="inputText"
             @bind:event="oninput"
             @onkeyup="HandleKeyPress"
-            placeholder="Scrivi un messaggio..."
+            placeholder="Consult Morgana..."
             rows="1"
             disabled="@IsTextareaDisabled"
             class="message-input"
@@ -236,7 +236,7 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Error starting conversation: {ex.Message}");
-            errorMessage = $"Impossibile avviare la conversazione: {ex.Message}";
+            errorMessage = $"Unable to start conversation: {ex.Message}";
             StateHasChanged();
         }
     }
@@ -298,7 +298,7 @@
                     messages.Add(new ChatMessage
                     {
                         ConversationId = conversationId,
-                        Text = "Mi dispiace, si è verificato un errore. Riprova.",
+                        Text = "Sorry, an error occurred. Please try again.",
                         Role = "assistant",
                         Timestamp = DateTime.Now,
                         IsError = true,
@@ -307,7 +307,7 @@
                     StateHasChanged();
                 }
 
-                errorMessage = $"Errore nell'invio: {response.StatusCode}";
+                errorMessage = $"Error sending: {response.StatusCode}";
             }
         }
         catch (Exception ex)
@@ -321,7 +321,7 @@
                 messages.Add(new ChatMessage
                 {
                     ConversationId = conversationId,
-                    Text = $"Errore di connessione: {ex.Message}",
+                    Text = $"Connection error: {ex.Message}",
                     Role = "assistant",
                     Timestamp = DateTime.Now,
                     IsError = true,
@@ -359,21 +359,21 @@
                 messages.Remove(typingMessage);
             }
 
-            // Aggiorna il nome dell'agente nell'header
+            // Update the agent name in the header
             if (!string.IsNullOrEmpty(agentName))
             {
                 currentAgentName = agentName;
                 Console.WriteLine($"🎨 Header updated: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
             }
 
-            // Se l'agente ha completato, torna a Morgana
+            // If the agent has completed, return to Morgana
             if (agentCompleted)
             {
                 currentAgentName = "Morgana";
                 Console.WriteLine($"🎨 Header reset to: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
             }
 
-            // Messaggio principale dall'agente
+            // Main message from the agent
             messages.Add(new ChatMessage
             {
                 ConversationId = conversationId,
@@ -385,7 +385,7 @@
                 AgentCompleted = false
             });
 
-            // Se l'agente ha completato E non è Morgana base, aggiungi un messaggio separato
+            // If the agent has completed and is not Morgana, add a separate message
             if (agentCompleted && IsSpecializedAgent(agentName))
             {
                 messages.Add(new ChatMessage
@@ -425,7 +425,7 @@
         message.SelectedQuickReplyId = reply.Id;
         StateHasChanged();
         
-        await Task.Delay(300); // Visual feedback
+        await Task.Delay(250); // Visual feedback
         
         inputText = reply.Value;
         await SendMessage();
@@ -474,6 +474,6 @@
         if (agentName.Contains("(") && agentName.Contains(")"))
             return string.Format(Configuration["Morgana:AgentExitMessage"]!, agentName);
 
-        return "🌸 L'incantesimo è stato completato";
+        return "🌸 The spell has been completed";
     }
 }
