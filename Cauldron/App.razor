@@ -4,3 +4,53 @@
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
 </Router>
+
+@code {
+    // =========================================================================
+    // APP COMPONENT - BLAZOR ROUTER CONFIGURATION
+    // =========================================================================
+
+    // Root component of the Cauldron application.
+    // Configures routing and navigation for the Blazor Server application.
+    //
+    // Router Component:
+    // The Router component scans the specified assembly for components with @page directives
+    // and builds a route table. When the browser URL changes, it renders the matching component.
+    //
+    // Assembly Scanning:
+    // AppAssembly="@typeof(App).Assembly"
+    // Scans the Cauldron assembly for all components with [Route] attributes or @page directives.
+    //
+    // Route Table (Cauldron):
+    // "/" → Index.razor (Chat interface)
+    //
+    // Found Handler:
+    // When a matching route is found:
+    // 1. RouteView renders the matched component
+    // 2. DefaultLayout wraps the component in MainLayout if no explicit layout specified
+    // 3. FocusOnNavigate moves focus to the h1 element for accessibility
+    //
+    // Accessibility (FocusOnNavigate):
+    // After route navigation, focus is automatically moved to the first h1 element.
+    // This helps screen reader users understand the page has changed.
+    //
+    // Missing NotFound Handler:
+    // Cauldron intentionally omits a &lt;NotFound&gt; handler because:
+    // - It's a single-page application (only "/" route)
+    // - MapFallbackToPage("/_Host") in Program.cs routes all requests to the main page
+    // - Unmatched routes automatically redirect to Index.razor
+    //
+    // If Multiple Pages Added:
+    // Future expansion with additional routes would look like:
+    // &lt;Router AppAssembly="@typeof(App).Assembly"&gt;
+    //     &lt;Found Context="routeData"&gt;
+    //         &lt;RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" /&gt;
+    //         &lt;FocusOnNavigate RouteData="@routeData" Selector="h1" /&gt;
+    //     &lt;/Found&gt;
+    //     &lt;NotFound&gt;
+    //         &lt;LayoutView Layout="@typeof(MainLayout)"&gt;
+    //             &lt;p&gt;Sorry, there's nothing at this address.&lt;/p&gt;
+    //         &lt;/LayoutView&gt;
+    //     &lt;/NotFound&gt;
+    // &lt;/Router&gt;
+}

@@ -1,10 +1,15 @@
 @namespace Cauldron.Components
 
+<!-- Quick Reply Buttons Container -->
+<!-- Displays a list of clickable quick reply buttons with animations and selection state -->
 <div class="quick-replies @(IsDisabled ? "disabled" : "")">
     @if (Replies != null)
     {
         @foreach (var reply in Replies.Select((r, i) => new { Reply = r, Index = i }))
         {
+            <!-- Individual Quick Reply Button -->
+            <!-- Staggered animation-delay creates cascading entrance effect -->
+            <!-- Disabled state prevents clicks after one reply selected -->
             <button class="quick-reply-btn @(IsReplySelected(reply.Reply.Id) ? "selected" : "") @(IsDisabled ? "disabled" : "")" 
                     style="animation-delay: @(reply.Index * 0.1)s"
                     disabled="@IsDisabled"
@@ -12,6 +17,7 @@
                 <span class="label">@reply.Reply.Label</span>
                 @if (IsReplySelected(reply.Reply.Id))
                 {
+                    <!-- Checkmark shown only on selected button -->
                     <span class="checkmark">✓</span>
                 }
             </button>
@@ -20,23 +26,88 @@
 </div>
 
 @code {
+    // =========================================================================
+    // COMPONENT PARAMETERS
+    // =========================================================================
+    
+    /// <summary>
+    /// List of quick reply options to display.
+    /// Each reply contains Id, Label (display text), and Value (message to send).
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Example:</strong></para>
+    /// <code>
+    /// Replies = new List&lt;QuickReply&gt;
+    /// {
+    ///     new() { Id = "billing", Label = "📄 View Invoices", Value = "Show me my invoices" },
+    ///     new() { Id = "contract", Label = "📄 Contract Summary", Value = "Summarize my contract" }
+    /// }
+    /// </code>
+    /// </remarks>
     [Parameter]
     public List<QuickReply>? Replies { get; set; }
     
+    /// <summary>
+    /// Event callback fired when a quick reply button is clicked.
+    /// Parent component (Index.razor) handles the selection and sends the message.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Usage in Parent:</strong></para>
+    /// <code>
+    /// &lt;QuickReplyButton 
+    ///     Replies="@message.QuickReplies" 
+    ///     OnSelect="@((reply) => SelectQuickReply(reply, message))" /&gt;
+    /// </code>
+    /// </remarks>
     [Parameter]
     public EventCallback<QuickReply> OnSelect { get; set; }
     
+    /// <summary>
+    /// Indicates whether all quick reply buttons should be disabled.
+    /// Set to true after one reply is selected to prevent multiple selections.
+    /// </summary>
     [Parameter]
     public bool IsDisabled { get; set; }
     
+    /// <summary>
+    /// ID of the currently selected quick reply (if any).
+    /// Used to show checkmark on the selected button.
+    /// </summary>
     [Parameter]
     public string? SelectedReplyId { get; set; }
     
+    // =========================================================================
+    // HELPER METHODS
+    // =========================================================================
+    
+    /// <summary>
+    /// Determines if a specific quick reply is currently selected.
+    /// Used to apply "selected" CSS class and show checkmark.
+    /// </summary>
+    /// <param name="replyId">ID of the quick reply to check</param>
+    /// <returns>True if this reply is selected, false otherwise</returns>
     private bool IsReplySelected(string replyId)
     {
         return !string.IsNullOrEmpty(SelectedReplyId) && SelectedReplyId == replyId;
     }
     
+    /// <summary>
+    /// Handles quick reply button click event.
+    /// Invokes the OnSelect callback if buttons are not disabled.
+    /// </summary>
+    /// <param name="reply">The quick reply that was clicked</param>
+    /// <returns>Task representing the async callback invocation</returns>
+    /// <remarks>
+    /// <para><strong>Click Flow:</strong></para>
+    /// <list type="number">
+    /// <item>User clicks button</item>
+    /// <item>OnReplyClick invoked with reply data</item>
+    /// <item>Check if buttons disabled (safety check)</item>
+    /// <item>Invoke OnSelect callback to parent</item>
+    /// <item>Parent (Index.razor) marks reply as selected</item>
+    /// <item>Parent sends reply value as user message</item>
+    /// </list>
+    /// </remarks>
     private async Task OnReplyClick(QuickReply reply)
     {
         if (!IsDisabled)
@@ -45,3 +116,68 @@
         }
     }
 }
+
+@*
+    ============================================================================
+    QUICK REPLY BUTTON COMPONENT
+    ============================================================================
+    
+    PURPOSE:
+    Reusable component for displaying quick reply buttons in chat messages.
+    Provides guided conversation flow by suggesting actions to users.
+    
+    FEATURES:
+    ├── Staggered Animation: Buttons appear with cascading effect (0.1s delay per button)
+    ├── Single Selection: Once one button is clicked, all buttons are disabled
+    ├── Visual Feedback: Selected button shows checkmark and different styling
+    ├── Event-Driven: Parent component controls the actual message sending
+    └── Responsive Design: Buttons wrap on smaller screens
+    
+    ANIMATION BEHAVIOR:
+    Each button has an animation-delay calculated as: index * 0.1s
+    Example with 3 buttons:
+    - Button 0: 0.0s delay (appears immediately)
+    - Button 1: 0.1s delay
+    - Button 2: 0.2s delay
+    Result: Smooth cascading entrance animation
+    
+    CSS CLASSES:
+    - quick-replies: Container with flexbox layout
+    - quick-reply-btn: Individual button styling
+    - selected: Applied to the clicked button
+    - disabled: Applied when IsDisabled = true (grays out buttons)
+    - label: Text content styling
+    - checkmark: Visual indicator on selected button
+    
+    STATE MANAGEMENT:
+    Component is "dumb" (presentational only):
+    - Does not manage its own state
+    - Receives all state via parameters from parent
+    - Notifies parent of interactions via OnSelect callback
+    - Parent (Index.razor) manages selection state and message sending
+    
+    ACCESSIBILITY:
+    - Buttons use semantic <button> elements
+    - disabled attribute prevents keyboard/screen reader access when inactive
+    - Visual checkmark supplements disabled state for clarity
+    
+    USAGE EXAMPLE:
+    
+    In Index.razor:
+    
+    @if (message.QuickReplies is { Count: > 0 })
+    {
+        <QuickReplyButton 
+            Replies="@message.QuickReplies"
+            OnSelect="@((reply) => SelectQuickReply(reply, message))"
+            IsDisabled="@(message.SelectedQuickReplyId != null)"
+            SelectedReplyId="@message.SelectedQuickReplyId" />
+    }
+    
+    When user clicks a button:
+    1. OnSelect fires with selected reply
+    2. Parent sets message.SelectedQuickReplyId = reply.Id
+    3. IsDisabled becomes true for this message
+    4. SelectedReplyId shows checkmark on clicked button
+    5. Parent sends reply.Value as user message to backend
+*@

@@ -28,6 +28,7 @@
     <div class="messages-container">
         @if (!isInitialized || messages.Count == 0)
         {
+            <!-- Loading state with magical animation -->
             <div class="magical-loader">
                 <div class="magic-sparkle-core">
                     <div class="glow-core"></div>
@@ -54,11 +55,13 @@
         }
         else
         {
+            <!-- Message list -->
             @foreach (ChatMessage message in messages)
             {
                 <div class="message @message.Role">
                     @if (message.Role == "assistant")
                     {
+                        <!-- Agent avatar with dynamic border color -->
                         <img src="images/morgana-avatar.png" 
                              alt="@message.AgentName" 
                              class="message-avatar"
@@ -67,6 +70,7 @@
                     <div class="message-bubble">
                         @if (message.IsTyping)
                         {
+                            <!-- Typing indicator (three animated dots) -->
                             <div class="typing-indicator">
                                 <span></span>
                                 <span></span>
@@ -75,12 +79,14 @@
                         }
                         else
                         {
+                            <!-- Message content -->
                             <div class="message-text @(message.Type == MessageType.Presentation ? "completion-text" : "")">
                                 @message.Text
                             </div>
-                            
+
                             @if (message.QuickReplies is { Count: > 0 })
                             {
+                                <!-- Quick reply buttons (disabled after selection) -->
                                 <div class="quick-replies @(message.SelectedQuickReplyId != null ? "disabled" : "")">
                                     @foreach (QuickReply reply in message.QuickReplies)
                                     {
@@ -97,7 +103,8 @@
                                     }
                                 </div>
                             }
-                            
+
+                            <!-- Message timestamp -->
                             <div class="message-time">@message.Timestamp.ToString("HH:mm")</div>
                         }
                     </div>
@@ -121,6 +128,7 @@
             @onclick="SendMessage"
             disabled="@IsButtonDisabled"
             class="send-button @(isSending ? "sending" : "")">
+            <!-- Animated cauldron icon with magical effects -->
             <span class="cauldron-wrapper">
                 <span class="cauldron-icon">
                     <span class="cauldron-body"></span>
@@ -147,6 +155,7 @@
 
     @if (!string.IsNullOrEmpty(errorMessage))
     {
+        <!-- Error banner -->
         <div class="error-banner">
             ⚠️ @errorMessage
         </div>
@@ -154,29 +163,85 @@
 </div>
 
 @code {
+    // =========================================================================
+    // STATE VARIABLES
+    // =========================================================================
+    
+    /// <summary>
+    /// List of all chat messages in the current conversation.
+    /// Includes user messages, agent responses, typing indicators, and presentation messages.
+    /// </summary>
     private List<ChatMessage> messages = [];
+    
+    /// <summary>
+    /// Current text input from the user (two-way bound to textarea).
+    /// </summary>
     private string inputText = string.Empty;
+    
+    /// <summary>
+    /// Unique identifier for the current conversation.
+    /// Generated on conversation start and used for message routing.
+    /// </summary>
     private string conversationId = string.Empty;
+    
+    /// <summary>
+    /// SignalR connection state indicator.
+    /// True when connected and ready to receive messages.
+    /// </summary>
     private bool isConnected = false;
+    
+    /// <summary>
+    /// Message send operation in progress indicator.
+    /// True during HTTP POST to prevent duplicate sends.
+    /// </summary>
     private bool isSending = false;
+    
+    /// <summary>
+    /// Initialization complete indicator.
+    /// True after SignalR connection and conversation start succeed.
+    /// </summary>
     private bool isInitialized = false;
+    
+    /// <summary>
+    /// Error message to display in error banner.
+    /// Empty string when no error present.
+    /// </summary>
     private string errorMessage = string.Empty;
+    
+    /// <summary>
+    /// Name of the currently active agent.
+    /// Updates dynamically when agents take control: "Morgana", "Billing", etc.
+    /// Displayed in header and used for avatar border color.
+    /// </summary>
     private string currentAgentName = "Morgana";
 
+    // =========================================================================
+    // LIFECYCLE METHODS
+    // =========================================================================
+
+    /// <summary>
+    /// Blazor lifecycle method called when component is initialized.
+    /// Sets up SignalR connection, subscribes to events, and starts conversation.
+    /// </summary>
+    /// <returns>Task representing the async initialization</returns>
     protected override async Task OnInitializedAsync()
     {
         try
         {
             Console.WriteLine("🔵 OnInitializedAsync: Starting...");
 
+            // Start SignalR connection
             await SignalRService.StartAsync();
             isConnected = SignalRService.IsConnected;
             Console.WriteLine($"🔵 SignalR connected: {isConnected}");
 
+            // Subscribe to message received events
             SignalRService.OnMessageReceived += async (conversationId, text, timestamp, quickReplies, agentName, agentCompleted) =>
             {
                 await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
             };
+            
+            // Subscribe to connection state changes
             SignalRService.OnConnectionStateChanged += (connected) =>
             {
                 isConnected = connected;
@@ -184,6 +249,7 @@
                 InvokeAsync(StateHasChanged);
             };
 
+            // Start conversation and get presentation message
             await StartConversation();
             isInitialized = true;
             errorMessage = string.Empty;
@@ -192,7 +258,7 @@
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Initialization error: {ex.Message}");
-            errorMessage = $"Errore di inizializzazione: {ex.Message}";
+            errorMessage = $"Initialization error: {ex.Message}";
         }
         finally
         {
@@ -200,12 +266,33 @@
         }
     }
 
+    // =========================================================================
+    // CONVERSATION MANAGEMENT
+    // =========================================================================
+
+    /// <summary>
+    /// Starts a new conversation with Morgana backend.
+    /// Sends POST request to /api/conversation/start, joins SignalR group, and displays presentation message.
+    /// </summary>
+    /// <returns>Task representing the async conversation start operation</returns>
+    /// <remarks>
+    /// <para><strong>Flow:</strong></para>
+    /// <list type="number">
+    /// <item>Generate new conversation ID (GUID)</item>
+    /// <item>POST to /api/conversation/start</item>
+    /// <item>Extract conversationId from response</item>
+    /// <item>Join SignalR conversation group</item>
+    /// <item>Wait for presentation message via SignalR</item>
+    /// <item>Display presentation with quick replies</item>
+    /// </list>
+    /// </remarks>
     private async Task StartConversation()
     {
         try
         {
             Console.WriteLine("🟢 StartConversation: Calling Morgana...");
 
+            // Generate new conversation ID
             HttpResponseMessage response = await Http.PostAsJsonAsync("/api/conversation/start", new
             {
                 conversationId = Guid.NewGuid().ToString("N")
@@ -215,49 +302,66 @@
 
             if (response.IsSuccessStatusCode)
             {
-                ConversationStartResponse? result = await response.Content.ReadFromJsonAsync<ConversationStartResponse>();
+                // Parse response to get conversation ID
+                var result = await response.Content.ReadFromJsonAsync<ConversationStartResponse>();
                 conversationId = result?.ConversationId ?? string.Empty;
 
-                Console.WriteLine($"🟢 ConversationId received: {conversationId}");
+                Console.WriteLine($"🟢 Conversation started: {conversationId}");
 
-                if (string.IsNullOrEmpty(conversationId))
-                    throw new Exception("ConversationId is empty!");
-
+                // Join SignalR group for this conversation
                 await SignalRService.JoinConversation(conversationId);
 
-                Console.WriteLine($"🟢 Joined SignalR group: {conversationId}");
+                Console.WriteLine($"🟢 Waiting for presentation message...");
+                // Presentation message will arrive via SignalR OnMessageReceived event
             }
             else
             {
                 string errorContent = await response.Content.ReadAsStringAsync();
-                throw new Exception($"Morgana error: {response.StatusCode} - {errorContent}");
+                Console.WriteLine($"❌ Morgana error: {errorContent}");
+                errorMessage = $"Conversation start error: {response.StatusCode}";
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error starting conversation: {ex.Message}");
-            errorMessage = $"Unable to start conversation: {ex.Message}";
-            StateHasChanged();
+            Console.WriteLine($"❌ StartConversation exception: {ex.Message}");
+            errorMessage = $"Error: {ex.Message}";
         }
     }
 
+    // =========================================================================
+    // MESSAGE HANDLING
+    // =========================================================================
+
+    /// <summary>
+    /// Sends a user message to Morgana backend via REST API.
+    /// Adds user message and typing indicator to UI, then waits for agent response via SignalR.
+    /// </summary>
+    /// <returns>Task representing the async send operation</returns>
+    /// <remarks>
+    /// <para><strong>Flow:</strong></para>
+    /// <list type="number">
+    /// <item>Validate input text</item>
+    /// <item>Add user message to messages list</item>
+    /// <item>Add typing indicator to messages list</item>
+    /// <item>Update UI</item>
+    /// <item>POST to /api/conversation/{conversationId}/message</item>
+    /// <item>Wait for response via SignalR (async)</item>
+    /// <item>HandleMessageReceived removes typing indicator and adds agent response</item>
+    /// </list>
+    /// <para><strong>Error Handling:</strong></para>
+    /// <para>On HTTP error or exception, typing indicator is removed and error message displayed.</para>
+    /// </remarks>
     private async Task SendMessage()
     {
-        if (string.IsNullOrWhiteSpace(inputText) || isSending || string.IsNullOrEmpty(conversationId))
-        {
-            Console.WriteLine($"❌ SendMessage blocked: inputText={inputText}, isSending={isSending}, conversationId={conversationId}");
+        // Validate input
+        if (string.IsNullOrWhiteSpace(inputText) || isSending || !isConnected)
             return;
-        }
 
-        string messageText = inputText.Trim().TrimEnd('\0');
+        string messageText = inputText.Trim();
         inputText = string.Empty;
-        errorMessage = string.Empty;
         isSending = true;
 
-        StateHasChanged();
-
-        Console.WriteLine($"🟡 Sending message: '{messageText}' to conversation: {conversationId}");
-
+        // Add user message to UI
         messages.Add(new ChatMessage
         {
             ConversationId = conversationId,
@@ -266,6 +370,7 @@
             Timestamp = DateTime.Now
         });
 
+        // Add typing indicator
         messages.Add(new ChatMessage
         {
             ConversationId = conversationId,
@@ -278,6 +383,7 @@
 
         try
         {
+            // Send message to backend
             HttpResponseMessage response = await Http.PostAsJsonAsync($"/api/conversation/{conversationId}/message", new
             {
                 conversationId = conversationId,
@@ -291,6 +397,7 @@
                 string errorContent = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"❌ Morgana error: {errorContent}");
 
+                // Remove typing indicator and show error
                 ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
                 if (typingMessage != null)
                 {
@@ -314,6 +421,7 @@
         {
             Console.WriteLine($"❌ SendMessage exception: {ex.Message}");
 
+            // Remove typing indicator and show error
             ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
             if (typingMessage != null)
             {
@@ -328,7 +436,7 @@
                     AgentName = "Morgana"
                 });
 
-                errorMessage = $"Errore: {ex.Message}";
+                errorMessage = $"Error: {ex.Message}";
                 StateHasChanged();
             }
         }
@@ -339,6 +447,24 @@
         }
     }
 
+    /// <summary>
+    /// Handles incoming messages from SignalR (agent responses, presentation messages).
+    /// Removes typing indicator, adds agent message to UI, and updates header with current agent.
+    /// </summary>
+    /// <param name="conversationId">Conversation ID of the message</param>
+    /// <param name="text">Message text from agent</param>
+    /// <param name="timestamp">Message timestamp</param>
+    /// <param name="quickReplies">Optional list of quick reply buttons</param>
+    /// <param name="agentName">Name of the responding agent</param>
+    /// <param name="agentCompleted">True if agent has completed its task</param>
+    /// <returns>Task representing the async message handling</returns>
+    /// <remarks>
+    /// <para><strong>Agent Lifecycle:</strong></para>
+    /// <list type="bullet">
+    /// <item><term>Agent Active</term><description>agentCompleted = false, header shows agent name with specialized color</description></item>
+    /// <item><term>Agent Completed</term><description>agentCompleted = true, header returns to "Morgana" with base color, completion message added</description></item>
+    /// </list>
+    /// </remarks>
     private async Task HandleMessageReceived(string conversationId, string text, DateTime timestamp, List<QuickReply>? quickReplies, string? agentName, bool agentCompleted)
     {
         try
@@ -347,33 +473,35 @@
             Console.WriteLine($"🟣 Agent: {agentName ?? "Morgana"}, Completed: {agentCompleted}");
             Console.WriteLine($"🟣 QuickReplies count: {quickReplies?.Count ?? 0}");
 
+            // Verify message is for this conversation
             if (this.conversationId != conversationId)
             {
                 Console.WriteLine("⚠️ Message for different conversation, ignoring");
                 return;
             }
 
+            // Remove typing indicator
             ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
             if (typingMessage != null)
             {
                 messages.Remove(typingMessage);
             }
 
-            // Update the agent name in the header
+            // Update header with current agent name
             if (!string.IsNullOrEmpty(agentName))
             {
                 currentAgentName = agentName;
                 Console.WriteLine($"🎨 Header updated: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
             }
 
-            // If the agent has completed, return to Morgana
+            // If agent has completed, return header to Morgana
             if (agentCompleted)
             {
                 currentAgentName = "Morgana";
                 Console.WriteLine($"🎨 Header reset to: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
             }
 
-            // Main message from the agent
+            // Add main agent message
             messages.Add(new ChatMessage
             {
                 ConversationId = conversationId,
@@ -385,7 +513,7 @@
                 AgentCompleted = false
             });
 
-            // If the agent has completed and is not Morgana, add a separate message
+            // If agent completed and is specialized, add completion message from Morgana
             if (agentCompleted && IsSpecializedAgent(agentName))
             {
                 messages.Add(new ChatMessage
@@ -408,32 +536,65 @@
         }
     }
 
+    // =========================================================================
+    // UI INTERACTION HANDLERS
+    // =========================================================================
+
+    /// <summary>
+    /// Handles keyboard events in textarea (Enter to send, Shift+Enter for newline).
+    /// </summary>
+    /// <param name="e">Keyboard event args</param>
+    /// <returns>Task representing the async key handling</returns>
     private async Task HandleKeyPress(KeyboardEventArgs e)
     {
+        // Send message on Enter (without Shift)
         if (e is { Key: "Enter", ShiftKey: false })
         {
             await SendMessage();
         }
     }
 
+    /// <summary>
+    /// Handles quick reply button selection.
+    /// Marks the selected reply, disables all buttons, and sends the reply value as user message.
+    /// </summary>
+    /// <param name="reply">Selected quick reply definition</param>
+    /// <param name="message">Message containing the quick replies</param>
+    /// <returns>Task representing the async selection handling</returns>
     private async Task SelectQuickReply(QuickReply reply, ChatMessage message)
     {
+        // Prevent multiple selections
         if (message.SelectedQuickReplyId != null) return;
-        
+
         Console.WriteLine($"🟡 Quick reply selected: {reply.Label}");
-        
+
+        // Mark as selected and update UI
         message.SelectedQuickReplyId = reply.Id;
         StateHasChanged();
-        
-        await Task.Delay(250); // Visual feedback
-        
+
+        // Visual feedback delay
+        await Task.Delay(250);
+
+        // Send the quick reply value as user message
         inputText = reply.Value;
         await SendMessage();
     }
 
+    // =========================================================================
+    // UI STATE HELPERS
+    // =========================================================================
+
+    /// <summary>
+    /// Checks if there are any unselected quick replies in the message list.
+    /// </summary>
+    /// <returns>True if any message has quick replies that haven't been selected yet</returns>
     private bool HasActiveQuickReplies() =>
         messages.Any(m => m is { QuickReplies: not null, SelectedQuickReplyId: null });
 
+    /// <summary>
+    /// Gets a value indicating whether the send button should be disabled.
+    /// Disabled when: not connected, sending in progress, empty input, not initialized, has active quick replies, or typing indicator present.
+    /// </summary>
     private bool IsButtonDisabled =>
         !isConnected ||
         isSending ||
@@ -442,6 +603,10 @@
         HasActiveQuickReplies() ||
         messages.Any(m => m.IsTyping);
 
+    /// <summary>
+    /// Gets a value indicating whether the textarea should be disabled.
+    /// Disabled when: not connected, sending in progress, not initialized, has active quick replies, or typing indicator present.
+    /// </summary>
     private bool IsTextareaDisabled =>
         !isConnected ||
         isSending ||
@@ -449,31 +614,69 @@
         HasActiveQuickReplies() ||
         messages.Any(m => m.IsTyping);
 
+    // =========================================================================
+    // CLEANUP
+    // =========================================================================
+
+    /// <summary>
+    /// Disposes component resources.
+    /// Unsubscribes from SignalR events and stops connection.
+    /// </summary>
+    /// <returns>ValueTask representing the async dispose operation</returns>
     public async ValueTask DisposeAsync()
     {
+        // Unsubscribe from events
         SignalRService.OnMessageReceived -= async (conversationId, text, timestamp, quickReplies, agentName, agentCompleted) =>
         {
             await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
         };
+        
+        // Stop SignalR connection
         await SignalRService.StopAsync();
     }
 
+    // =========================================================================
+    // HELPER METHODS
+    // =========================================================================
+
+    /// <summary>
+    /// Determines if an agent name represents a specialized agent (not base Morgana).
+    /// Specialized agents have names with parentheses, e.g., "Morgana (Billing)".
+    /// </summary>
+    /// <param name="agentName">Agent name to check</param>
+    /// <returns>True if specialized agent, false if base Morgana</returns>
     private bool IsSpecializedAgent(string agentName)
     {
         return agentName != null && agentName.Contains("(") && agentName.Contains(")");
     }
 
+    /// <summary>
+    /// Gets the CSS color variable for the avatar border based on agent type.
+    /// </summary>
+    /// <param name="agentName">Name of the current agent</param>
+    /// <returns>
+    /// "var(--secondary-color)" (pink) for specialized agents,
+    /// "var(--primary-color)" (purple) for base Morgana
+    /// </returns>
     private string GetAvatarBorderColor(string? agentName)
     {
-        // Viola per Morgana base, Rosa per agenti specializzati
+        // Pink for specialized agents, purple for base Morgana
         return IsSpecializedAgent(agentName ?? "Morgana") ? "var(--secondary-color)" : "var(--primary-color)";
     }
 
+    /// <summary>
+    /// Gets the completion message to display when an agent finishes its task.
+    /// Uses configured template from appsettings or default message.
+    /// </summary>
+    /// <param name="agentName">Name of the agent that completed</param>
+    /// <returns>Formatted completion message</returns>
     private string GetCompletionMessage(string agentName)
     {
+        // For specialized agents, use configured template
         if (agentName.Contains("(") && agentName.Contains(")"))
             return string.Format(Configuration["Morgana:AgentExitMessage"]!, agentName);
 
+        // Default fallback
         return "🌸 The spell has been completed";
     }
 }

@@ -5,3 +5,33 @@
         @Body
     </main>
 </div>
+
+@code {
+    // =========================================================================
+    // MAIN LAYOUT COMPONENT
+    // ========================================================================
+
+    // Minimal layout component for the Cauldron application.
+    // Wraps all page content in a simple semantic structure.
+    //
+    // Purpose:
+    // This layout provides the structural wrapper for all pages in the application.
+    // Since Cauldron is a single-page chat application, the layout is intentionally minimal.</para>
+    //
+    // Layout Hierarch
+    // App.razor (Router)
+    //   └── MainLayout.razor (Layout wrapper)
+    //         └── @Body (Page content)
+    //               └── Index.razor (Chat interface)
+    //
+    // Design Decisions
+    // - No header/nav/footer: Chat interface fills the viewport
+    // - No sidebar: Focused single-task interface
+    // - Simple .page and main wrappers: CSS styling hooks
+    // - @Body renders the routed page component (typically Index.razor)
+    //
+    // Alternative Layouts:
+    // If the application grows to include multiple pages (admin panel, settings, etc.),
+    // additional layouts can be created and specified via:
+    // @layout AdminLayout
+}

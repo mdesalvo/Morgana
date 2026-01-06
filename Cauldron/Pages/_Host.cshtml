@@ -8,29 +8,95 @@
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <base href="~/" />
-        <title>Morgana - AI Assistant</title>
-            
-        <!-- Favicon -->
+
+        <!-- Page title displayed in browser tab -->
+        <title>Morgana - Magical AI Assistant</title>
+
+        <!-- Favicon Configuration -->
+        <!-- Multiple formats for cross-browser and device compatibility -->
         <link rel="icon" type="image/x-icon" href="~/favicon.ico" />
         <link rel="shortcut icon" href="~/favicon.ico">
         <link rel="icon" type="image/png" sizes="32x32" href="~/images/morgana-avatar.png" />
         <link rel="apple-touch-icon" href="~/images/morgana-avatar.png" />
-            
-        <!-- CSS -->
-        <link href="css/site.css" rel="stylesheet" />
-        <link href="css/cauldron.css" rel="stylesheet" />
-        <link href="css/quick-reply.css" rel="stylesheet" />
-        <link href="css/sparkle-loader.css" rel="stylesheet" />
+
+        <!-- Stylesheet Imports -->
+        <!-- Loaded in order: base styles → component styles → specialized features -->
+        <link href="css/site.css" rel="stylesheet" />           <!-- Base site styles and variables -->
+        <link href="css/cauldron.css" rel="stylesheet" />       <!-- Chat interface styles -->
+        <link href="css/quick-reply.css" rel="stylesheet" />    <!-- Quick reply button styles -->
+        <link href="css/sparkle-loader.css" rel="stylesheet" /> <!-- Loading animation styles -->
     </head>
     <body>
+        <!-- Blazor Server Root Component -->
+        <!-- The entire application is rendered as a server-side component -->
+        <!-- UI updates are sent to the browser via SignalR WebSocket connection -->
         <component type="typeof(App)" render-mode="Server" />
 
+        <!-- Blazor Error UI -->
+        <!-- Displayed automatically when an unhandled exception occurs in a component -->
+        <!-- Hidden by default, shown via JavaScript when Blazor detects an error -->
         <div id="blazor-error-ui" style="display: none;">
-            Si è verificato un errore.
-            <a href="" class="reload">Ricarica</a>
+            An error has occurred.
+            <a href="" class="reload">Reload</a>
             <a class="dismiss">🗙</a>
         </div>
 
+        <!-- Blazor Server JavaScript -->
+        <!-- Establishes SignalR connection for UI updates and event handling -->
+        <!-- Automatically reconnects on connection loss -->
         <script src="_framework/blazor.server.js"></script>
     </body>
 </html>
+
+@*
+    ============================================================================
+    _HOST.CSHTML - BLAZOR SERVER ENTRY POINT
+    ============================================================================
+
+    PURPOSE:
+    This is the root HTML page for the Cauldron Blazor Server application.
+    It provides the initial HTML shell and loads the necessary resources.
+
+    BLAZOR SERVER ARCHITECTURE:
+
+    1. Initial Request (Browser → Server)
+       - Browser requests "/"
+       - Server returns this _Host.cshtml HTML
+       - HTML includes <component> tag helper
+       - Server renders App component to HTML
+       - Browser receives fully-rendered page
+
+    2. SignalR Connection Establishment
+       - blazor.server.js loads and executes
+       - JavaScript establishes SignalR WebSocket connection
+       - Connection used for all subsequent UI updates
+    
+    3. Interactive Phase (Browser ↔ Server)
+       - User interactions (clicks, typing) sent via SignalR
+       - Server processes events and updates component state
+       - Server sends DOM diffs via SignalR
+       - Browser applies patches to update UI
+
+    RENDER MODE: SERVER
+    - Components execute on the server
+    - UI state maintained on server
+    - Only DOM updates sent to client
+    - Benefits: No client-side Blazor runtime, instant initial load
+    - Trade-offs: Requires persistent connection, server resources per client
+
+    ERROR HANDLING:
+    The blazor-error-ui div is shown automatically by Blazor when:
+    - Unhandled exception in component lifecycle
+    - SignalR connection lost and reconnection fails
+    - Component rendering errors
+
+    User can either:
+    - Reload: Restart the entire application
+    - Dismiss: Hide the error banner (may cause issues)
+
+    RESOURCE LOADING ORDER:
+    1. favicon.ico (browser tab icon)
+    2. CSS stylesheets (site → cauldron → quick-reply → sparkle-loader)
+    3. Blazor Server component rendering
+    4. blazor.server.js (establishes SignalR connection)
+*@

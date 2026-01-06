@@ -1,11 +1,111 @@
+@* 
+    ============================================================================
+    _IMPORTS.RAZOR - GLOBAL NAMESPACE IMPORTS
+    ============================================================================
+    
+    PURPOSE:
+    This file defines global @using directives that are automatically available
+    in all Razor components without requiring explicit imports.
+    
+    SCOPE:
+    All .razor files in the Cauldron project inherit these imports.
+    Reduces boilerplate and ensures consistency across components.
+    
+    BLAZOR CONVENTION:
+    _Imports.razor files are hierarchical and can be placed at any folder level.
+    Imports cascade down through subdirectories.
+*@
+
+@* ========================================================================== *@
+@* STANDARD ASP.NET CORE & BLAZOR NAMESPACES                                  *@
+@* ========================================================================== *@
+
+@* HTTP client functionality for REST API calls to Morgana backend *@
 @using System.Net.Http
 @using System.Net.Http.Json
+
+@* Blazor form components (input, validation, EditForm, etc.) *@
 @using Microsoft.AspNetCore.Components.Forms
+
+@* Navigation and routing (NavLink, NavigationManager, Router) *@
 @using Microsoft.AspNetCore.Components.Routing
+
+@* Core Blazor web components (EventCallback, RenderFragment, etc.) *@
 @using Microsoft.AspNetCore.Components.Web
+
+@* Virtualization for large lists (not currently used, but available) *@
 @using Microsoft.AspNetCore.Components.Web.Virtualization
+
+@* JavaScript interop for calling browser APIs *@
 @using Microsoft.JSInterop
+
+@* ========================================================================== *@
+@* CAULDRON APPLICATION NAMESPACES                                            *@
+@* ========================================================================== *@
+
+@* Root namespace (not typically used, but available) *@
 @using Cauldron
+
+@* Shared components and layouts (MainLayout, etc.) *@
 @using Cauldron.Shared
+
+@* Message DTOs (ChatMessage, QuickReply, MessageReceived, etc.) *@
+@* Used throughout Index.razor for chat message management *@
 @using Cauldron.Messages
+
+@* Reusable UI components (QuickReplyButton, etc.) *@
 @using Cauldron.Components
+
+@*
+    ============================================================================
+    NAMESPACE ORGANIZATION
+    ============================================================================
+    
+    Cauldron
+    ├── (root) - Application entry point
+    ├── Shared - Layouts (MainLayout.razor)
+    ├── Messages - DTOs
+    │   ├── ChatMessage.cs
+    │   ├── QuickReply.cs
+    │   ├── MessageReceived.cs
+    │   └── ConversationStartResponse.cs
+    ├── Components - Reusable UI components
+    │   └── QuickReplyButton.razor
+    ├── Services - Backend communication
+    │   └── MorganaSignalRService.cs
+    └── Pages - Routable pages
+        └── Index.razor
+    
+    ============================================================================
+    BENEFITS OF GLOBAL IMPORTS
+    ============================================================================
+    
+    WITHOUT _Imports.razor:
+    
+    @page "/"
+    @using System.Net.Http
+    @using System.Net.Http.Json
+    @using Cauldron.Messages
+    @using Cauldron.Services
+    @inject HttpClient Http
+    
+    WITH _Imports.razor:
+    
+    @page "/"
+    @inject HttpClient Http
+    
+    Result: Cleaner component files, better maintainability
+    
+    ============================================================================
+    ADDING NEW NAMESPACES
+    ============================================================================
+    
+    When adding new namespaces that will be used across multiple components:
+    1. Add @using directive to this file
+    2. All .razor files immediately have access
+    3. No need to update individual components
+    
+    Example:
+    @using Cauldron.Utilities  // New utility classes
+    @using Cauldron.Extensions // New extension methods
+*@
