@@ -189,20 +189,30 @@ public class MorganaAgent : MorganaActor
             aiAgentThread ??= aiAgent.GetNewThread();
 
             AgentRunResponse llmResponse = await aiAgent.RunAsync(req.Content!, aiAgentThread);
-            string llmResponseText = llmResponse.Text;
+            string llmResponseText = llmResponse.Text.Trim();
 
-            // Detect if LLM has emitted the special token for continuing the conversation
-            // with an input request for the user. This will be needed by the supervisor.
-            bool requiresMoreInput = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
+            // Detect if LLM has emitted the special token for continuing the multi-turn conversation
+            bool hasInteractiveToken = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
+
+            // Additional heuristic - if current agent is ending with a direct question with "?",
+            // may it be a "polite" way of engaging the user in the continuation of this intent,
+            // or an intentional question finalized to obtain further informations
+            bool endsWithQuestion = llmResponseText.EndsWith("?");
+
+            // Request is completed when no further user engagement has been emitted
+            bool isCompleted = !hasInteractiveToken && !endsWithQuestion;
+
+            agentLogger.LogInformation(
+                $"Agent response analysis: HasINT={hasInteractiveToken}, EndsWithQuestion={endsWithQuestion}, IsCompleted={isCompleted}");
 
             #if DEBUG
                 string cleanText = llmResponseText;
             #else
-                // When built for production, obviously do not show the special interaction token #INT#
-                string cleanText = llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim();
+                // When built for production, do not show the special interaction token #INT#
+                string cleanText = llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase);
             #endif
                 
-            senderRef.Tell(new Records.AgentResponse(cleanText, !requiresMoreInput));
+            senderRef.Tell(new Records.AgentResponse(cleanText, isCompleted));
         }
         catch (Exception ex)
         {
