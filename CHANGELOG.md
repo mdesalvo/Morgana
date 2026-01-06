@@ -4,7 +4,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0] - UNDER DEVELOPMENT
+## [0.7.0] - UNDER DEVELOPMENT
+
+### 🎯 Major Feature: LLM-Driven Quick Replies System
+This release introduces a sophisticated **Quick Replies system** that enables LLMs to dynamically create interactive button options for users, significantly improving UX/UI for multi-choice scenarios and guided conversations.
+
+### ✨ Added
+
+**SetQuickReplies System Tool**
+- LLM-callable system tool `SetQuickReplies` for creating interactive button options dynamically during conversations
+- Supports JSON array input with `id`, `label` (emoji-enhanced display text), and `value` (message sent on click)
+- Automatic storage in `MorganaContextProvider` using private context key `__pending_quick_replies`
+- `Scope: "context"` and `Shared: false` parameter attributes for proper scoping
+- Tool guidance policy `SetQuickRepliesGuidance` with "TEXT introduces, BUTTONS execute" pattern to prevent duplication
+
+**Quick Reply Pipeline**
+- `MorganaAgent.GetQuickRepliesFromContext()` method for retrieving LLM-generated quick replies from context
+- JSON deserialization from context string storage to `List<QuickReply>` objects
+- Enhanced `AgentResponse`, `ActiveAgentResponse`, and `ConversationResponse` to propagate quick replies through actor pipeline
+
+**Completion Logic Enhancement**
+- Multi-heuristic agent completion detection: `!hasInteractiveToken && !endsWithQuestion && !hasQuickReplies`
+- Agents remain active when offering quick replies to handle button clicks via follow-up flow
+- Prevents mis-classification of quick reply clicks as "other" intent when agent prematurely completes
+
+**Example Agents Enhancement (Morgana.AI.Examples)**
+- **BillingAgent**: Quick replies for invoice selection, payment history navigation
+- **ContractAgent**: Quick replies for clause selection, termination confirmation (Yes/No)
+- **TroubleshootingAgent**: Quick replies for diagnostic guide selection (No Internet, Slow Speed, WiFi Issues)
+- QUICK REPLY USAGE instructions added to all agent prompts in `agents.json`
+- Formatting guidance to prevent excessive markdown and ASCII separators in responses
+
+**Internationalization**
+- Complete English localization of framework codebase and configuration files
+- Removed all Italian language residuals from prompts, logs, and error messages
+- Unified language consistency across `morgana.json` and `agents.json`
+
+### 🔄 Changed
+
+**Context Variable Management**
+- Introduced `DropVariable(variableName)` method in `MorganaContextProvider` for explicit temporary variable cleanup
+
+### 🐛 Fixed
+
+- Quick replies lost during follow-up flow due to missing parameter in `ConversationResponse` creation
+
+### 🚀 Future Enablement
+
+This release unlocks:
+- Dynamic conversation guidance through LLM-generated interactive options
+- Improved UX for multi-step workflows (invoice selection, troubleshooting guides, contract clauses)
+- Reduced user typing through quick reply shortcuts
+- Foundation for more sophisticated UI interactions (carousels, cards, forms)
+
+## [0.6.0] - 2026-01-04
 
 ### 🎯 Major Feature: Morgana as agnostic conversational AI framework
 This release represents a fundamental shift in enterprise readyness: **Morgana is now fully decoupled from any domain-specific agents**, becoming a true **conversational AI framework**.
