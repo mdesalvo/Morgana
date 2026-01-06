@@ -261,14 +261,12 @@ public class ContractTool : MorganaTool
     {
         await Task.Delay(150);
 
-        Contract contract = _mockContract;
-
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"📜 **Contract Overview: {contract.ContractId}**");
+        sb.AppendLine($"📜 **Contract Overview: {_mockContract.ContractId}**");
         sb.AppendLine();
         
         // Status with icon
-        string statusIcon = contract.Status switch
+        string statusIcon = _mockContract.Status switch
         {
             ContractStatus.Active => "✅",
             ContractStatus.PendingRenewal => "🔄",
@@ -278,29 +276,29 @@ public class ContractTool : MorganaTool
             _ => "📋"
         };
         
-        sb.AppendLine($"**Status:** {statusIcon} {contract.Status}");
-        sb.AppendLine($"**Service Plan:** {contract.Plan.Name}");
-        sb.AppendLine($"**Contract Period:** {contract.StartDate:dd/MM/yyyy} to {contract.EndDate:dd/MM/yyyy}");
+        sb.AppendLine($"**Status:** {statusIcon} {_mockContract.Status}");
+        sb.AppendLine($"**Service Plan:** {_mockContract.Plan.Name}");
+        sb.AppendLine($"**Contract Period:** {_mockContract.StartDate:dd/MM/yyyy} to {_mockContract.EndDate:dd/MM/yyyy}");
         
-        int remainingDays = (contract.EndDate - DateTime.Now).Days;
+        int remainingDays = (_mockContract.EndDate - DateTime.Now).Days;
         if (remainingDays > 0)
         {
             sb.AppendLine($"**Time Remaining:** {remainingDays} days ({remainingDays / 30} months)");
         }
         
-        sb.AppendLine($"**Monthly Fee:** €{contract.MonthlyFee:F2} ({contract.BillingCycle})");
+        sb.AppendLine($"**Monthly Fee:** €{_mockContract.MonthlyFee:F2} ({_mockContract.BillingCycle})");
         sb.AppendLine();
         
         // Service Plan Details
         sb.AppendLine("**📡 Service Plan Specifications:**");
-        sb.AppendLine($"  • Speed: {contract.Plan.Speed}");
-        sb.AppendLine($"  • Data Limit: {contract.Plan.DataLimit}");
-        sb.AppendLine($"  • SLA: {contract.Plan.ServiceLevel}");
+        sb.AppendLine($"  • Speed: {_mockContract.Plan.Speed}");
+        sb.AppendLine($"  • Data Limit: {_mockContract.Plan.DataLimit}");
+        sb.AppendLine($"  • SLA: {_mockContract.Plan.ServiceLevel}");
         sb.AppendLine();
         
         // Included Features
         sb.AppendLine("**✨ Included Features:**");
-        foreach (string feature in contract.Plan.IncludedFeatures)
+        foreach (string feature in _mockContract.Plan.IncludedFeatures)
         {
             sb.AppendLine($"  ✓ {feature}");
         }
@@ -308,7 +306,7 @@ public class ContractTool : MorganaTool
         
         // Active Services Breakdown
         sb.AppendLine("**💼 Active Services:**");
-        foreach (ActiveService service in contract.Services)
+        foreach (ActiveService service in _mockContract.Services)
         {
             string optionalBadge = service.IsOptional ? " (Optional)" : " (Required)";
             sb.AppendLine($"  • {service.Name}{optionalBadge} - €{service.MonthlyCost:F2}/month");
@@ -318,9 +316,9 @@ public class ContractTool : MorganaTool
         
         // Quick Termination Info
         sb.AppendLine("**📋 Quick Facts:**");
-        sb.AppendLine($"  • Notice Period: {contract.Termination.NoticePeriodDays} days");
-        sb.AppendLine($"  • Early Termination Fee: €{contract.Termination.EarlyTerminationFee:F2}");
-        sb.AppendLine($"  • Auto-Renewal: Yes (notify 60 days before {contract.EndDate:dd/MM/yyyy})");
+        sb.AppendLine($"  • Notice Period: {_mockContract.Termination.NoticePeriodDays} days");
+        sb.AppendLine($"  • Early Termination Fee: €{_mockContract.Termination.EarlyTerminationFee:F2}");
+        sb.AppendLine($"  • Auto-Renewal: Yes (notify 60 days before {_mockContract.EndDate:dd/MM/yyyy})");
         sb.AppendLine();
         
         sb.AppendLine("💡 **Need More Info?**");
@@ -355,24 +353,24 @@ public class ContractTool : MorganaTool
         sb.AppendLine();
         sb.AppendLine($"**Type:** {clause.Type}");
         sb.AppendLine();
-        sb.AppendLine($"**Summary:**");
+        sb.AppendLine("**Summary:**");
         sb.AppendLine($"_{clause.Summary}_");
         sb.AppendLine();
-        sb.AppendLine($"**Full Legal Text:**");
+        sb.AppendLine("**Full Legal Text:**");
         sb.AppendLine("```");
         sb.AppendLine(WrapText(clause.FullText, 80));
         sb.AppendLine("```");
 
-        // Add contextual guidance
-        if (clause.Type == ClauseType.Termination)
+        switch (clause.Type)
         {
-            sb.AppendLine();
-            sb.AppendLine("💡 To initiate termination, ask me about the **termination procedure**.");
-        }
-        else if (clause.Type == ClauseType.DataUsage)
-        {
-            sb.AppendLine();
-            sb.AppendLine("💡 Check your current data usage by asking about **billing details**.");
+            case ClauseType.Termination:
+                sb.AppendLine();
+                sb.AppendLine("💡 To initiate termination, ask me about the **termination procedure**.");
+                break;
+            case ClauseType.DataUsage:
+                sb.AppendLine();
+                sb.AppendLine("💡 Check your current data usage by asking about **billing details**.");
+                break;
         }
 
         return sb.ToString();
@@ -407,7 +405,7 @@ public class ContractTool : MorganaTool
         if (remainingDays > termination.NoticePeriodDays)
         {
             decimal earlyFee = termination.EarlyTerminationFee;
-            sb.AppendLine($"⚠️ **Early Termination Notice:**");
+            sb.AppendLine("⚠️ **Early Termination Notice:**");
             sb.AppendLine($"Your contract expires in {remainingDays} days ({_mockContract.EndDate:dd/MM/yyyy}).");
             sb.AppendLine($"Terminating now will incur an Early Termination Fee of **€{earlyFee:F2}**.");
             sb.AppendLine();
@@ -478,7 +476,7 @@ public class ContractTool : MorganaTool
     private static string WrapText(string text, int maxLineLength)
     {
         string[] words = text.Split(' ');
-        List<string> lines = new List<string>();
+        List<string> lines = [];
         StringBuilder currentLine = new StringBuilder();
 
         foreach (string word in words)

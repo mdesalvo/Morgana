@@ -168,7 +168,7 @@ public static class Records
     /// Trigger message to generate and send the initial presentation/welcome message.
     /// Sent automatically when a conversation is created.
     /// </summary>
-    public record GeneratePresentationMessage();
+    public record GeneratePresentationMessage;
 
     /// <summary>
     /// Context containing the generated presentation message and available intents.
@@ -185,7 +185,7 @@ public static class Records
         /// If null, quick replies are derived from Intents directly.
         /// </summary>
         public List<AI.Records.QuickReply>? LlmQuickReplies { get; init; }
-    };
+    }
 
     // ==========================================================================
     // CONTEXT WRAPPERS FOR BECOME/PIPETO PATTERN

@@ -286,10 +286,9 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// </remarks>
     public Type? FindToolTypeForIntent(string intent)
     {
-        if (string.IsNullOrWhiteSpace(intent))
-            return null;
-        
-        return intentToToolType.GetValueOrDefault(intent.ToLowerInvariant());
+        return string.IsNullOrWhiteSpace(intent)
+            ? null
+            : intentToToolType.GetValueOrDefault(intent.ToLowerInvariant());
     }
     
     /// <summary>

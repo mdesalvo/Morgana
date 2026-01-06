@@ -2,7 +2,6 @@ using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
 using Morgana.AI.Abstractions;
-using Morgana.AI.Attributes;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.Interfaces;
@@ -52,7 +51,7 @@ public class ConversationSupervisorActor : MorganaActor
     /// Flag indicating whether the presentation message has been sent.
     /// Prevents duplicate presentation on subsequent messages.
     /// </summary>
-    private bool hasPresented = false;
+    private bool hasPresented;
 
     /// <summary>
     /// Initializes a new instance of the ConversationSupervisorActor.
@@ -197,8 +196,8 @@ public class ConversationSupervisorActor : MorganaActor
             actorLogger.Info($"LLM raw response: {llmResponse}");
 
             // Parse LLM response
-            Records.PresentationResponse? presentationResponse = 
-                JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse);
+            PresentationResponse? presentationResponse = 
+                JsonSerializer.Deserialize<PresentationResponse>(llmResponse);
 
             if (presentationResponse == null)
             {

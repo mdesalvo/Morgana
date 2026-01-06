@@ -41,16 +41,11 @@ public class ClassifierActor : MorganaActor
     {
         // Load intents from domain
         List<IntentDefinition> intents = agentConfigService.GetIntentsAsync().GetAwaiter().GetResult();
-        if (intents.Count == 0)
-        {
-            actorLogger.Info("No intents loaded from domain. Classifier will have no intents to classify.");
-        }
-        else
-        {
-            actorLogger.Info($"Loaded {intents.Count} intents from domain for classification");
-        }
+        actorLogger.Info(intents.Count == 0
+            ? "No intents loaded from domain. Classifier will have no intents to classify."
+            : $"Loaded {intents.Count} intents from domain for classification");
         IntentCollection intentCollection = new IntentCollection(intents);
-        
+
         // Format intents as "intent_name (description)" for LLM prompt
         string formattedIntents = string.Join("|", 
             intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));

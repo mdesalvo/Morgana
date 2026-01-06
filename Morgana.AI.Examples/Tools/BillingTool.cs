@@ -269,15 +269,14 @@ public class BillingTool : MorganaTool
 
         if (invoice.Status == InvoiceStatus.Pending)
         {
+            sb.AppendLine();
             int daysUntilDue = (invoice.DueDate - DateTime.Now).Days;
             if (daysUntilDue > 0)
             {
-                sb.AppendLine();
                 sb.AppendLine($"⏰ **Payment due in {daysUntilDue} days**");
             }
             else
             {
-                sb.AppendLine();
                 sb.AppendLine($"⚠️ **Payment is {Math.Abs(daysUntilDue)} days overdue**");
             }
         }

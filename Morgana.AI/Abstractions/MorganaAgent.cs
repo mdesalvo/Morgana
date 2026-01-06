@@ -163,6 +163,7 @@ public class MorganaAgent : MorganaActor
     /// <item>Create or reuse AgentThread for conversation history continuity</item>
     /// <item>Send user message to LLM via aiAgent.RunAsync</item>
     /// <item>Detect #INT# token in response (signals incomplete interaction)</item>
+    /// <item>Detect quick replies which may have emitted by the LLM during tool's execution</item>
     /// <item>Remove #INT# token from production responses (kept in debug for testing)</item>
     /// <item>Send AgentResponse with completion flag to supervisor</item>
     /// </list>
@@ -196,13 +197,13 @@ public class MorganaAgent : MorganaActor
             // Detect if LLM has emitted the special token for continuing the multi-turn conversation
             bool hasInteractiveToken = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
 
-            // Additional heuristic - if current agent is ending with a direct question with "?",
+            // Additional multi-turn heuristic: if agent is ending with a direct question with "?",
             // may it be a "polite" way of engaging the user in the continuation of this intent,
             // or an intentional question finalized to obtain further informations
             bool endsWithQuestion = llmResponseText.EndsWith("?");
 
             // Retrieve quick replies from tools (if any tools set them during execution)
-            List<Records.QuickReply>? quickReplies = RetrieveToolQuickReplies();
+            List<Records.QuickReply>? quickReplies = GetQuickRepliesFromContext();
             bool hasQuickReplies = quickReplies != null && quickReplies.Any();
 
             // Request is completed when no further user engagement has been requested.
@@ -214,12 +215,10 @@ public class MorganaAgent : MorganaActor
                 $"Agent response analysis: HasINT={hasInteractiveToken}, EndsWithQuestion={endsWithQuestion}, HasQR={hasQuickReplies}, IsCompleted={isCompleted}");
 
             #if DEBUG
-                string cleanText = llmResponseText;
+                senderRef.Tell(new Records.AgentResponse(llmResponseText, isCompleted, quickReplies));
             #else
-                string cleanText = llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim();
+                senderRef.Tell(new Records.AgentResponse(llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim(), isCompleted, quickReplies));
             #endif
-
-            senderRef.Tell(new Records.AgentResponse(cleanText, isCompleted, quickReplies));
         }
         catch (Exception ex)
         {
@@ -246,7 +245,7 @@ public class MorganaAgent : MorganaActor
     /// 1. LLM calls "ListTroubleshootingGuides" tool
     /// 2. Tool sets quick replies for guide selection
     /// 3. Tool returns guide list text
-    /// 4. Agent calls RetrieveToolQuickReplies() after tool execution
+    /// 4. Agent calls GetQuickRepliesFromContext() after tool execution
     /// 5. Agent includes quick replies in AgentResponse
     /// 6. UI displays buttons to user
     /// </code>
@@ -255,7 +254,7 @@ public class MorganaAgent : MorganaActor
     /// MorganaTool.SetQuickReplies() stores them as JSON string, so we deserialize here.
     /// The ContextProvider stores all values as JSON strings, not typed objects.</para>
     /// </remarks>
-    protected List<Records.QuickReply>? RetrieveToolQuickReplies()
+    protected List<Records.QuickReply>? GetQuickRepliesFromContext()
     {
         // Retrieve from context (ContextProvider stores as JSON string)
         string? quickRepliesJson = contextProvider.GetVariable("__pending_quick_replies") as string;

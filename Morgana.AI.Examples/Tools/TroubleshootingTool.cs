@@ -597,7 +597,7 @@ public class TroubleshootingTool : MorganaTool
         }
 
         // Success Criteria
-        sb.AppendLine($"**✅ Success Criteria:**");
+        sb.AppendLine("**✅ Success Criteria:**");
         sb.AppendLine($"{guide.SuccessCriteria}");
         sb.AppendLine();
 
