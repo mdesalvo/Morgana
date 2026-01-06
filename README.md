@@ -35,6 +35,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
 8. **Native Memory Management**: Context and conversation history managed by Microsoft.Agents.AI framework
 9. **Personality-Driven Interactions**: Layered personality system with global and agent-specific traits
 10. **Plugin Architecture**: Domain agents dynamically loaded at runtime, enabling complete framework/domain decoupling
+11. **LLM-Driven Quick Replies**: Dynamic interactive button generation for improved UX in multi-choice scenarios
 
 ## Architecture
 
@@ -86,6 +87,11 @@ Traditional chatbot systems often struggle with complexity—they either become 
    │           │         ┌──────────────────────┐
    │           │         │MorganaContextProvider│ ← AIContextProvider
    │           │         │  (Context + Thread)  │   (Microsoft.Agents.AI)
+   │           │         │                      │   
+   │           │         │ ┌──────────────────┐ │
+   │           │         │ │ SetQuickReplies  │ │ ← LLM System Tool
+   │           │         │ │   (JSON → QR)    │ │   (Temporary Context)
+   │           │         │ └──────────────────┘ │
    │           │         └──────────────────────┘
    │           │              │
    │           │              │ P2P Context Sync via RouterActor
@@ -170,19 +176,22 @@ RouterActor also serves as the **message bus for P2P context synchronization** b
 Specialized agents with domain-specific knowledge and tool access. The system includes three built-in **example** agents, but **the architecture is fully extensible** to support any domain-specific intent.
 
 **BillingAgent** (example)
-- **Tools**: `GetInvoices()`, `GetInvoiceDetails()`
+- **Tools**: `GetInvoices()`, `GetInvoiceDetails()`, `SetQuickReplies()`
 - **Purpose**: Handle all billing inquiries, payment verification, and invoice retrieval
 - **Prompt**: Defined in `agents.json` under ID "Billing"
+- **Quick Replies**: Dynamically generates invoice selection buttons for improved UX
 
 **TroubleshootingAgent** (example)
-- **Tools**: `RunDiagnostics()`, `GetTroubleshootingGuide()`
+- **Tools**: `RunDiagnostics()`, `GetTroubleshootingGuide()`, `SetQuickReplies()`
 - **Purpose**: Diagnose connectivity issues, provide step-by-step troubleshooting
 - **Prompt**: Defined in `agents.json` under ID "Troubleshooting"
+- **Quick Replies**: Offers interactive guide selection (No Internet, Slow Speed, WiFi Issues)
 
 **ContractAgent** (example)
-- **Tools**: `GetContractDetails()`, `InitiateCancellation()`
+- **Tools**: `GetContractDetails()`, `InitiateCancellation()`, `SetQuickReplies()`
 - **Purpose**: Handle contract modifications and termination requests
 - **Prompt**: Defined in `agents.json` under ID "Contract"
+- **Quick Replies**: Yes/No confirmation buttons for critical actions
 
 **Adding Custom Agents:**
 To add a new agent for your domain:
@@ -246,6 +255,25 @@ public class MorganaContextProvider : AIContextProvider
 2. **Shared Variable Detection**: Tracks which variables should be broadcast to other agents
 3. **Merge Strategy**: Implements first-write-wins for incoming context updates
 4. **Serialization Support**: Enables persistence with `AgentThread` for future enhancements
+5. **Temporary Variable Management**: `DropVariable()` for explicit cleanup of ephemeral data
+
+**Context Variable Types:**
+
+**Persistent Variables:**
+```csharp
+// Stored indefinitely in agent context
+contextProvider.SetVariable("userId", "U99");  // Remains until conversation ends
+```
+
+**Temporary Variables:**
+```csharp
+// Used and immediately discarded
+contextProvider.SetVariable("__pending_quick_replies", json);
+// ...
+contextProvider.DropVariable("__pending_quick_replies");  // Explicit cleanup
+```
+
+**Convention:** Temporary variables use `__` prefix (e.g., `__pending_quick_replies`) to signal ephemeral nature.
 
 ### Integration with Tools
 
@@ -517,6 +545,300 @@ In this example:
 - `userId` will be shared across all agents when collected
 - `count` is request-specific and never shared
 
+## Quick Replies System
+
+Morgana implements a **LLM-driven Quick Replies system** that enables agents to dynamically generate interactive button options for users, significantly improving UX for multi-choice scenarios and guided conversations.
+
+### The Problem
+
+Traditional conversational flows force users to type responses even when choices are predictable:
+
+```
+Agent: "Here are your 4 recent invoices: INV-001, INV-002, INV-003, INV-004. Which one would you like to see?"
+User: "Show me INV-002"  ← User has to type the invoice number
+```
+
+This creates friction and potential for input errors, especially on mobile devices.
+
+### The Solution: Dynamic Interactive Buttons
+
+The Quick Replies system allows the **LLM to decide** when to offer interactive buttons based on context:
+
+```
+Agent: "I found 4 recent invoices for you. Select one below to view details."
+Buttons: [📄 INV-001 €130] [📄 INV-002 €150] [📄 INV-003 €125] [📄 INV-004 €100]
+User: [clicks button]
+Agent: [shows invoice details immediately]
+```
+
+### Architecture
+
+#### 1. SetQuickReplies System Tool
+
+The LLM has access to a **system tool** that enables dynamic button generation:
+
+**Tool Definition** (`morgana_en.json`):
+```json
+{
+  "Name": "SetQuickReplies",
+  "Description": "SYSTEM TOOL to create interactive button options for the user...",
+  "Parameters": [
+    {
+      "Name": "quickRepliesJSON",
+      "Description": "JSON string containing quick reply button definitions",
+      "Required": true,
+      "Scope": "context",
+      "Shared": false
+    }
+  ]
+}
+```
+
+**LLM Invocation:**
+The LLM calls this tool during response generation:
+
+```json
+SetQuickReplies([
+  {
+    "id": "invoice-001",
+    "label": "📄 Invoice INV-2025-001 (€130)",
+    "value": "Show details for invoice INV-2025-001"
+  },
+  {
+    "id": "invoice-002",
+    "label": "📄 Invoice INV-2025-002 (€150)",
+    "value": "Show details for invoice INV-2025-002"
+  }
+])
+```
+
+#### 2. Storage in MorganaContextProvider
+
+Quick replies are stored as **temporary context** using the special key `__pending_quick_replies`:
+
+```csharp
+// MorganaTool.SetQuickReplies()
+public Task<object> SetQuickReplies(string quickRepliesJSON)
+{
+    // Validate and parse JSON
+    var parsed = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickRepliesJSON);
+    
+    // Store as temporary context (private, not shared)
+    contextProvider.SetVariable("__pending_quick_replies", quickRepliesJSON);
+    
+    return Task.FromResult<object>(
+        "Quick reply buttons set successfully. The user will see N interactive options.");
+}
+```
+
+**Key Characteristics:**
+- **Private**: `Shared: false` - buttons are agent-specific, not broadcast to other agents
+- **Temporary**: Cleared immediately after retrieval via `DropVariable()`
+- **JSON Storage**: Stored as string, deserialized on retrieval for compatibility
+
+#### 3. Agent Retrieval Pipeline
+
+After LLM execution, the agent retrieves and propagates quick replies:
+
+```csharp
+// MorganaAgent.ExecuteAgentAsync()
+protected async Task ExecuteAgentAsync(Records.AgentRequest req)
+{
+    // Execute LLM (may call SetQuickReplies tool)
+    AgentRunResponse llmResponse = await aiAgent.RunAsync(req.Content!, aiAgentThread);
+    
+    // Retrieve quick replies set by LLM during execution
+    List<Records.QuickReply>? quickReplies = GetQuickRepliesFromContext();
+    
+    // Include in response
+    return new AgentResponse(cleanText, isCompleted, quickReplies);
+}
+
+// MorganaAgent.RetrieveToolQuickReplies()
+protected virtual List<Records.QuickReply>? RetrieveToolQuickReplies()
+{
+    // Retrieve JSON from context
+    var json = contextProvider.GetVariable("__pending_quick_replies") as string;
+    
+    if (!string.IsNullOrEmpty(json))
+    {
+        // Deserialize
+        var quickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(json);
+        
+        // Clear temporary variable immediately
+        contextProvider.DropVariable("__pending_quick_replies");
+        
+        return quickReplies;
+    }
+    
+    return null;
+}
+```
+
+#### 4. Actor Pipeline Propagation
+
+Quick replies flow through the actor hierarchy to the UI:
+
+```
+MorganaAgent → AgentResponse(text, isCompleted, quickReplies)
+    ↓
+RouterActor → ActiveAgentResponse(text, isCompleted, agentRef, quickReplies)
+    ↓
+ConversationSupervisorActor → ConversationResponse(..., quickReplies)
+    ↓
+ConversationManagerActor → SignalR.SendStructuredMessageAsync(..., quickReplies)
+    ↓
+Cauldron UI → Renders interactive buttons
+```
+
+### Agent Completion Logic
+
+When an agent offers quick replies, it **must remain active** to handle button clicks:
+
+```csharp
+bool hasInteractiveToken = llmResponseText.Contains("#INT#");
+bool endsWithQuestion = llmResponseText.TrimEnd().EndsWith("?");
+bool hasQuickReplies = quickReplies != null && quickReplies.Any();
+
+// Agent is NOT completed if it offers quick replies
+bool isCompleted = !hasInteractiveToken && !endsWithQuestion && !hasQuickReplies;
+```
+
+**Why?** Without this logic:
+1. Agent completes → `activeAgent = null`
+2. User clicks button → message sent
+3. No active agent → goes to Classifier
+4. Classifier: "Show details for invoice INV-001" → **"other" intent** ❌
+
+**With this logic:**
+1. Agent offers buttons → `isCompleted = false`
+2. Agent remains active
+3. User clicks button → **follow-up flow** to active agent ✅
+4. Agent handles request directly
+
+### TEXT vs BUTTONS Pattern
+
+To prevent duplication, the LLM is guided to follow the **"TEXT introduces, BUTTONS execute"** pattern:
+
+**❌ BAD - Redundant:**
+```
+TEXT: "Your invoices are: INV-001 (€130), INV-002 (€150), INV-003 (€125)"
+BUTTONS: [INV-001] [INV-002] [INV-003]
+```
+
+**✅ GOOD - Complementary:**
+```
+TEXT: "I found 3 recent invoices. Select one below to view details."
+BUTTONS: [📄 INV-001 €130] [📄 INV-002 €150] [📄 INV-003 €125]
+```
+
+**Prompt Guidance** (`morgana_en.json`):
+```
+CRITICAL: When using quick replies, your TEXT response should be a brief contextual 
+introduction WITHOUT listing the options themselves - the buttons will show the options 
+visually. Example: Instead of '1. Invoice A, 2. Invoice B, 3. Invoice C' write 
+'I found 3 recent invoices. Select one below to view details.'
+```
+
+### Use Cases
+
+**Invoice Selection (BillingAgent):**
+```
+User: "Show me my invoices"
+Agent: "I discovered 4 invoices for you. Select one to view the enchanted details."
+Buttons: [📄 INV-001 €130] [📄 INV-002 €150] [📄 INV-003 €125] [📄 INV-004 €100]
+```
+
+**Troubleshooting Guides (TroubleshootingAgent):**
+```
+User: "My internet is not working"
+Agent: "I have 3 guides that can help. Choose the one matching your issue."
+Buttons: [🔴 No Internet] [🐌 Slow Speed] [📡 WiFi Issues]
+```
+
+**Contract Termination Confirmation (ContractAgent):**
+```
+User: "I want to cancel my contract"
+Agent: "This will trigger termination with a €300 fee. Are you certain?"
+Buttons: [✅ Yes, Proceed] [❌ No, Cancel]
+```
+
+### Configuration
+
+**Tool Definition** (`morgana_en.json`):
+```json
+{
+  "Name": "SetQuickReplies",
+  "Parameters": [
+    {
+      "Name": "quickRepliesJSON",
+      "Scope": "context",
+      "Shared": false
+    }
+  ]
+}
+```
+
+**Agent Instructions** (`agents.json`):
+```json
+{
+  "ID": "Billing",
+  "Instructions": "... QUICK REPLY USAGE: When showing a list of invoices, 
+  call SetQuickReplies to let users quickly select an invoice. IMPORTANT: Your 
+  TEXT response should be brief and contextual WITHOUT listing all invoice details. 
+  Format: [{\"id\": \"INV-001\", \"label\": \"📄 Invoice INV-001 (€130)\", 
+  \"value\": \"Show details for invoice INV-001\"}]. Remember: TEXT introduces, 
+  BUTTONS execute."
+}
+```
+
+### QuickReply Record Definition
+
+```csharp
+namespace Morgana.AI.Records;
+
+public record QuickReply(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("label")] string Label,
+    [property: JsonPropertyName("value")] string Value);
+```
+
+**Fields:**
+- **`id`**: Unique identifier (e.g., `"invoice-001"`)
+- **`label`**: Display text with emoji (e.g., `"📄 Invoice INV-001 (€130)"`)
+- **`value`**: Message sent when clicked (e.g., `"Show details for invoice INV-001"`)
+
+### Benefits
+
+1. **LLM-Driven**: Agent decides dynamically when buttons are appropriate
+2. **Zero Configuration**: No hardcoded button definitions in code
+3. **Context-Aware**: Buttons adapt to conversation state and available data
+4. **Mobile-Friendly**: Reduces typing on mobile devices
+5. **Error Prevention**: Eliminates typos in invoice numbers, option names, etc.
+6. **Guided UX**: Users see available options explicitly, reducing confusion
+7. **Agent Continuity**: Button clicks handled via follow-up flow, maintaining context
+8. **Temporary Storage**: Buttons don't pollute persistent context, cleared after use
+
+### Technical Details
+
+**Storage Key Convention:**
+- Key: `__pending_quick_replies`
+- Scope: Private to agent (not shared)
+- Lifecycle: Set during LLM execution → Retrieved after → Immediately dropped
+
+**JSON Format:**
+```json
+[
+  {"id": "opt1", "label": "🔧 Option 1", "value": "User message for option 1"},
+  {"id": "opt2", "label": "📖 Option 2", "value": "User message for option 2"}
+]
+```
+
+**Limits:**
+- Recommended: 3-5 buttons maximum (UI constraint)
+- Label: Emoji-enhanced for visual appeal
+- Value: Natural user message (not system command)
+
 ## Personality System
 
 Morgana implements a **layered personality architecture** that creates consistent yet contextually appropriate conversational experiences. The system combines a global personality with agent-specific traits to ensure brand coherence while allowing specialized behavior.
@@ -699,6 +1021,12 @@ Global policies define system-wide behavioral rules that apply to all agents:
       "Description": "OPERATIONAL RULE ON DIRECT REQUEST PARAMETERS OF AGENT TOOLS - Operate...",
       "Type": "Operational",
       "Priority": 2
+    },
+    {
+      "Name": "SetQuickRepliesGuidance",
+      "Description": "SYSTEM TOOL FOR QUICK REPLIES - When you present multiple options...",
+      "Type": "Operational",
+      "Priority": 3
     }
   ]
 }
@@ -874,8 +1202,9 @@ The system dynamically loads domain assemblies configured in `appsettings.json` 
 
 ### Memory & Context Management
 - **AgentThread**: Framework-native conversation history management
-- **MorganaContextProvider**: Custom `AIContextProvider` implementation for stateful context management
+- **MorganaContextProvider**: Custom `AIContextProvider` implementation for stateful context management with temporary variable support
 - **P2P Context Sync**: Actor-based broadcast mechanism for shared context variables
+- **Quick Replies Storage**: Temporary context variables for LLM-generated interactive buttons
 
 ### LLM Provider Support
 
@@ -919,6 +1248,12 @@ public class BillingTool : MorganaTool
     public async Task<string> GetInvoices(string userId, int count = 3)
     {
        // Implementation
+    }
+    
+    // System tool available to all agents
+    public async Task<object> SetQuickReplies(string quickRepliesJSON)
+    {
+       // Stores temporary quick reply buttons in context
     }
 }
 
