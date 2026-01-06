@@ -64,8 +64,7 @@ public class ConversationManagerActor : MorganaActor
 
         if (supervisor is null)
         {
-            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>(
-                "supervisor", msg.ConversationId);
+            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>("supervisor", msg.ConversationId);
 
             Context.Watch(supervisor);
             actorLogger.Info("Supervisor created: {0}", supervisor.Path);
@@ -113,8 +112,7 @@ public class ConversationManagerActor : MorganaActor
 
         if (supervisor == null)
         {
-            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>(
-                "supervisor", msg.ConversationId);
+            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>("supervisor", msg.ConversationId);
             Context.Watch(supervisor);
 
             actorLogger.Warning("Supervisor was missing; created new supervisor: {0}", supervisor.Path);
@@ -138,7 +136,7 @@ public class ConversationManagerActor : MorganaActor
     {
         actorLogger.Info(
             $"Received response from supervisor (agent: {ctx.Response.AgentName ?? "unknown"}, completed: {ctx.Response.AgentCompleted}): " +
-            $"{ctx.Response.Response[..Math.Min(50, ctx.Response.Response.Length)]}...");
+            $"{ctx.Response.Response[..Math.Min(50, ctx.Response.Response.Length)]}..., #quickReplies: {ctx.Response.QuickReplies?.Count ?? 0}");
 
         // Send response to client via SignalR
         try
@@ -147,12 +145,12 @@ public class ConversationManagerActor : MorganaActor
                 conversationId, 
                 ctx.Response.Response,
                 "assistant",
-                null,
+                ctx.Response.QuickReplies,
                 null,
                 ctx.Response.AgentName,
                 ctx.Response.AgentCompleted);
             
-            actorLogger.Info("Response sent successfully to client via SignalR");
+            actorLogger.Info($"Response sent successfully to client via SignalR (#quickReplies: {ctx.Response.QuickReplies?.Count ?? 0})");
         }
         catch (Exception ex)
         {

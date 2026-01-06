@@ -1,7 +1,8 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Morgana.AI.Providers;
 
-namespace Morgana.AI.Tools;
+namespace Morgana.AI.Abstractions;
 
 /// <summary>
 /// Base class for agent tools that provides context variable access (Get/Set operations).
@@ -15,9 +16,9 @@ namespace Morgana.AI.Tools;
 /// <para><strong>Architecture:</strong></para>
 /// <code>
 /// MorganaTool (base class with context access)
-///   ├── BillingTool (domain-specific tool for billing)
-///   ├── ContractTool (domain-specific tool for contracts)
-///   ├── TroubleshootingTool (domain-specific tool for troubleshooting)
+///   ├── GetInvoices (domain-specific tool)
+///   ├── GetContractDetails (domain-specific tool)
+///   ├── RunDiagnostics (domain-specific tool)
 ///   └── ... other custom tools
 /// </code>
 /// <para><strong>Context Variable Types:</strong></para>
@@ -30,22 +31,18 @@ namespace Morgana.AI.Tools;
 /// conversation context. The LLM decides when to call these operations based on agent prompts.</para>
 /// <para><strong>Example:</strong></para>
 /// <code>
-/// [ProvidesToolForIntent("billing")]
-/// public class BillingTool : MorganaTool
+/// public class GetInvoicesTool : MorganaTool
 /// {
-///     private readonly string[] invoices =
-///     [
-///        "InvoiceID: A555 - Period: Oct 2025 / Nov 2025 - Amount: €130 - Status: Pending (due date 2025-12-15)",
-///        "InvoiceID: B222 - Period: Sep 2025 / Oct 2025 - Amount: €150 - Status: Paid (on 2025-11-14)",
-///        "InvoiceID: C333 - Period: Jun 2025 / Sep 2025 - Amount: €125 - Status: Paid (on 2025-10-13)",
-///        "InvoiceID: Z999 - Period: May 2025 / Jun 2025 - Amount: €100 - Status: Paid (on 2025-09-13)"
-///     ];
-///
-///     public async Task&lt;InvoiceList&gt; GetInvoices(string userId, int count)
+///     [ProvideToolForIntent("billing")]
+///     public async Task&lt;InvoiceList&gt; GetInvoices(int count)
 ///     {
-///         await Task.Delay(50);
-///
-///         return string.Join("\n", invoices.Take(count));
+///         // First, try to get userId from context
+///         object userId = await GetContextVariable("userId");
+///         
+///         // If missing, prompt LLM to ask user
+///         // If present, fetch invoices from backend
+///         
+///         return invoices;
 ///     }
 /// }
 /// </code>
@@ -62,6 +59,12 @@ public class MorganaTool
     /// Uses a function to enable lazy evaluation and ensure correct scoping per request.
     /// </summary>
     protected readonly Func<MorganaContextProvider> getContextProvider;
+    
+    /// <summary>
+    /// Direct access to the context provider instance. Lazily evaluated from getContextProvider.
+    /// Used for quick reply storage and retrieval via special context key "__pending_quick_replies".
+    /// </summary>
+    protected MorganaContextProvider contextProvider => getContextProvider();
 
     /// <summary>
     /// Initializes a new instance of MorganaTool with logging and context provider access.
@@ -90,7 +93,7 @@ public class MorganaTool
     /// The LLM interprets the returned message and decides whether to call SetContextVariable or ask the user.
     /// </returns>
     /// <remarks>
-    /// <para><strong>Critical Rule:</strong></para>
+    /// <para><strong>Critical Rule (from SKILL.md):</strong></para>
     /// <para>"Before asking for ANY information from the user, ALWAYS attempt to retrieve it from context using GetContextVariable.
     /// If the tool returns a valid value, USE IT without asking the user. Ask the user ONLY if the tool indicates the information is missing."</para>
     /// <para><strong>Return Values:</strong></para>
@@ -174,5 +177,92 @@ public class MorganaTool
 
         return Task.FromResult<object>(
             $"Information {variableName} inserted in context with value: {variableValue}");
+    }
+    
+    // =========================================================================
+    // QUICK REPLY SYSTEM TOOL
+    // =========================================================================
+    
+    /// <summary>
+    /// System tool that allows the LLM to set quick reply buttons for the user interface.
+    /// This tool gives the LLM control over when and how to offer guided interaction options.
+    /// </summary>
+    /// <param name="quickReplies">
+    /// JSON string containing an array of quick reply definitions.
+    /// Each quick reply has: id (identifier), label (display text with emoji), value (message to send).
+    /// </param>
+    /// <returns>Confirmation message for the LLM indicating quick replies were set</returns>
+    /// <remarks>
+    /// <para><strong>Purpose:</strong></para>
+    /// <para>SetQuickReplies is a SYSTEM TOOL that the LLM can call when it wants to provide
+    /// guided interaction options to the user. This gives the LLM full control over quick reply
+    /// generation based on conversation context.</para>
+    /// 
+    /// <para><strong>LLM Decision Making:</strong></para>
+    /// <para>The LLM decides to call SetQuickReplies when:</para>
+    /// <list type="bullet">
+    /// <item>Presenting multiple options to choose from (guides, invoices, actions)</item>
+    /// <item>Asking a question with predefined answers (yes/no, selections)</item>
+    /// <item>Offering next steps after completing an operation</item>
+    /// <item>Providing navigation options in a multi-step workflow</item>
+    /// </list>
+    /// 
+    /// <para><strong>JSON Format Expected:</strong></para>
+    /// <code>
+    /// [
+    ///   {
+    ///     "id": "no-internet",
+    ///     "label": "🔴 No Internet Connection",
+    ///     "value": "Show me the no-internet troubleshooting guide"
+    ///   },
+    ///   {
+    ///     "id": "slow-speed",
+    ///     "label": "🐌 Slow Connection Speed",
+    ///     "value": "Show me the slow-connection troubleshooting guide"
+    ///   }
+    /// ]
+    /// </code>
+    /// 
+    /// <para><strong>Single Record Design:</strong></para>
+    /// <para>Uses QuickReply with JsonPropertyName attributes.
+    /// Same record serves as both runtime model and JSON DTO - no duplication!</para>
+    /// 
+    /// <para><strong>Design Guidelines for LLM:</strong></para>
+    /// <list type="bullet">
+    /// <item><term>Limit to 3-5 options</term><description>UI constraint, too many buttons are overwhelming</description></item>
+    /// <item><term>Use emoji in labels</term><description>Visual appeal: "🔧 Run Diagnostics" not "Run Diagnostics"</description></item>
+    /// <item><term>Action-oriented labels</term><description>"Show Invoice Details" not "Invoice Details"</description></item>
+    /// <item><term>Natural values</term><description>Value should be what user would naturally type</description></item>
+    /// <item><term>Clear IDs</term><description>Use descriptive IDs like "invoice-001" not "btn1"</description></item>
+    /// </list>
+    /// </remarks>
+    public Task<object> SetQuickReplies(string quickReplies)
+    {
+        try
+        {
+            // Validate JSON by attempting to parse
+            List<Records.QuickReply>? parsedQuickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickReplies);
+            if (parsedQuickReplies == null || !parsedQuickReplies.Any())
+            {
+                toolLogger.LogWarning("SetQuickReplies called with empty or invalid JSON");
+                return Task.FromResult<object>("Warning: No quick replies were set (empty or invalid data).");
+            }
+
+            // Store the JSON string of the quick replies under a reserved context variable
+            contextProvider.SetVariable("__pending_quick_replies", quickReplies);
+            toolLogger.LogInformation($"LLM set {parsedQuickReplies.Count} quick reply buttons via SetQuickReplies tool");
+
+            // Return confirmation to LLM
+            return Task.FromResult<object>(
+                $"Quick reply buttons set successfully. The user will see {parsedQuickReplies.Count} interactive options. " +
+                $"Now provide your text response to the user - the quick reply buttons will appear below your message.");
+        }
+        catch (JsonException ex)
+        {
+            toolLogger.LogError(ex, "Failed to parse quick replies JSON in SetQuickReplies");
+            return Task.FromResult<object>(
+                "Error: Quick replies JSON format is invalid. Expected format: " +
+                "[{\"id\": \"option1\", \"label\": \"🔧 Option 1\", \"value\": \"User message for option 1\"}]");
+        }
     }
 }

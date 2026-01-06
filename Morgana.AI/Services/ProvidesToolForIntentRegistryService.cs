@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Tools;
 
 namespace Morgana.AI.Services;
 

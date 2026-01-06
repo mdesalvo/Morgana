@@ -55,7 +55,7 @@ public class MorganaContextProvider : AIContextProvider
     /// Source of truth for agent context variables.
     /// Stores all conversation variables accessible via GetContextVariable/SetContextVariable tools.
     /// </summary>
-    public Dictionary<string, object> AgentContext { get; private set; } = new();
+    public Dictionary<string, object> AgentContext { get; private set; } = [];
 
     /// <summary>
     /// Callback invoked when a shared variable is set.
@@ -170,13 +170,44 @@ public class MorganaContextProvider : AIContextProvider
         AgentContext[variableName] = variableValue;
 
         bool isShared = sharedVariableNames.Contains(variableName);
-        
+
         logger.LogInformation($"MorganaContextProvider SET {(isShared ? "SHARED" : "PRIVATE")} '{variableName}' = '{variableValue}'");
 
         if (isShared)
         {
             OnSharedContextUpdate?.Invoke(variableName, variableValue);
         }
+    }
+
+    /// <summary>
+    /// Removes a temporary variable from the agent's context, freeing memory immediately.
+    /// Use this for ephemeral variables that are no longer needed (e.g., "__pending_quick_replies").
+    /// </summary>
+    /// <param name="variableName">Name of the variable to remove from context</param>
+    /// <remarks>
+    /// <para><strong>When to use DropVariable vs SetVariable(null):</strong></para>
+    /// <list type="bullet">
+    /// <item><term>DropVariable</term><description>Removes the key entirely - use for temporary/ephemeral data</description></item>
+    /// <item><term>SetVariable(null)</term><description>Sets value to null but keeps the key - use for persistent variables</description></item>
+    /// </list>
+    /// <para><strong>Typical usage:</strong></para>
+    /// <code>
+    /// // Set temporary variable
+    /// contextProvider.SetVariable("__pending_quick_replies", jsonData);
+    /// 
+    /// // Process the data
+    /// var data = contextProvider.GetVariable("__pending_quick_replies");
+    /// 
+    /// // Drop immediately after use (temporary variable pattern)
+    /// contextProvider.DropVariable("__pending_quick_replies");
+    /// </code>
+    /// <para><strong>Convention:</strong> Prefix temporary variables with "__" (double underscore) to signal ephemeral nature.</para>
+    /// </remarks>
+    public void DropVariable(string variableName)
+    {
+        AgentContext.Remove(variableName);
+
+        logger.LogInformation($"MorganaContextProvider DROP '{variableName}'");
     }
 
     /// <summary>

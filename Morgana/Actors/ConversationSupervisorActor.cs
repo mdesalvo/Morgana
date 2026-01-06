@@ -2,6 +2,7 @@ using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Attributes;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.Interfaces;
@@ -76,7 +77,6 @@ public class ConversationSupervisorActor : MorganaActor
         classifier = Context.System.GetOrCreateActor<ClassifierActor>("classifier", conversationId).GetAwaiter().GetResult();
         router = Context.System.GetOrCreateActor<RouterActor>("router", conversationId).GetAwaiter().GetResult();
 
-        // Landing in initial state
         Idle();
     }
 
@@ -197,8 +197,8 @@ public class ConversationSupervisorActor : MorganaActor
             actorLogger.Info($"LLM raw response: {llmResponse}");
 
             // Parse LLM response
-            AI.Records.PresentationResponse? presentationResponse = 
-                JsonSerializer.Deserialize<AI.Records.PresentationResponse>(llmResponse);
+            Records.PresentationResponse? presentationResponse = 
+                JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse);
 
             if (presentationResponse == null)
             {
@@ -228,8 +228,8 @@ public class ConversationSupervisorActor : MorganaActor
             AI.Records.IntentCollection intentCollection = new AI.Records.IntentCollection(allIntents);
             List<AI.Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
             
-            List<AI.Records.QuickReplyDefinition> fallbackReplies = displayableIntents
-                .Select(intent => new AI.Records.QuickReplyDefinition(
+            List<AI.Records.QuickReply> fallbackReplies = displayableIntents
+                .Select(intent => new AI.Records.QuickReply(
                     intent.Name,
                     intent.Label ?? intent.Name,
                     intent.DefaultValue ?? $"Help me with {intent.Name}"))
@@ -253,13 +253,13 @@ public class ConversationSupervisorActor : MorganaActor
         actorLogger.Info("Sending presentation to client via SignalR");
 
         // Convert LLM-generated quick replies to SignalR format
-        List<QuickReply> quickReplies = ctx.LlmQuickReplies?
-            .Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value))
+        List<AI.Records.QuickReply> quickReplies = ctx.LlmQuickReplies?
+            .Select(qr => new AI.Records.QuickReply(qr.Id, qr.Label, qr.Value))
             .ToList() ?? [];
 
         try
         {
-            await Task.Delay(500); // Give SignalR more time to complete conversation join
+            await Task.Delay(700); // Give SignalR time to join conversation
 
             await signalRBridgeService.SendStructuredMessageAsync(
                 conversationId,
@@ -382,10 +382,10 @@ public class ConversationSupervisorActor : MorganaActor
 
             switch (wrapper.Response)
             {
-                // There is an active agent handling the request
                 case AI.Records.ActiveAgentResponse activeAgentResponse:
                 {
-                    actorLogger.Info($"Received ActiveAgentResponse from {activeAgentResponse.AgentRef.Path}, completed: {activeAgentResponse.IsCompleted}");
+                    int quickRepliesCount = activeAgentResponse.QuickReplies?.Count ?? 0;
+                    actorLogger.Info($"Received ActiveAgentResponse from {activeAgentResponse.AgentRef.Path}, completed: {activeAgentResponse.IsCompleted}, quickReplies: {quickRepliesCount}");
 
                     if (!activeAgentResponse.IsCompleted)
                     {
@@ -397,10 +397,10 @@ public class ConversationSupervisorActor : MorganaActor
                     {
                         // Agent has completed - mark for completion message if it was a specialized agent
                         agentCompleted = activeAgentIntent != null;
-
+                        
                         activeAgent = null;
                         activeAgentIntent = null;
-
+                        
                         actorLogger.Info("Agent completed and cleared");
                     }
 
@@ -409,13 +409,11 @@ public class ConversationSupervisorActor : MorganaActor
                         wrapper.Context.Classification?.Intent,
                         wrapper.Context.Classification?.Metadata,
                         agentName,
-                        agentCompleted));
+                        agentCompleted,
+                        activeAgentResponse.QuickReplies));
 
                     break;
                 }
-
-                // There is not an active agent handling the request,
-                // RouterActor has directly intercepted 'other' intent
                 case AI.Records.AgentResponse routerFallbackResponse:
                 {
                     actorLogger.Warning("Received AgentResponse instead of ActiveAgentResponse (router fallback)");
@@ -438,11 +436,11 @@ public class ConversationSupervisorActor : MorganaActor
                         wrapper.Context.Classification?.Intent,
                         wrapper.Context.Classification?.Metadata,
                         agentName,
-                        agentCompleted));
+                        agentCompleted,
+                        routerFallbackResponse.QuickReplies));
 
                     break;
                 }
-
                 default:
                     actorLogger.Error($"Unexpected message type: {wrapper.Response?.GetType()}");
                     wrapper.Context.OriginalSender.Tell(new ConversationResponse("Unexpected internal error.", null, null, "Morgana", false));
@@ -493,7 +491,8 @@ public class ConversationSupervisorActor : MorganaActor
                 null, 
                 null,
                 agentName,
-                agentCompleted));
+                agentCompleted,
+                wrapper.Response.QuickReplies));
 
             Become(Idle);
         });
@@ -523,10 +522,10 @@ public class ConversationSupervisorActor : MorganaActor
         actorLogger.Info($"Follow-up detected, redirecting to active agent → {activeAgent!.Path}");
 
         activeAgent.Ask<AI.Records.AgentResponse>(
-                new AI.Records.AgentRequest(msg.ConversationId, msg.Text, null), TimeSpan.FromSeconds(60))
-            .PipeTo(Self,
-                success: response => new FollowUpContext(response, originalSender),
-                failure: ex => new Status.Failure(ex));
+            new AI.Records.AgentRequest(msg.ConversationId, msg.Text, null), TimeSpan.FromSeconds(60))
+        .PipeTo(Self,
+            success: response => new FollowUpContext(response, originalSender),
+            failure: ex => new Status.Failure(ex));
 
         Become(() => AwaitingFollowUpResponse(originalSender));
     }

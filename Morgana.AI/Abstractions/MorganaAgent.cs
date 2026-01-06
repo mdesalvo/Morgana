@@ -5,6 +5,7 @@ using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using System.Reflection;
+using System.Text.Json;
 
 namespace Morgana.AI.Abstractions;
 
@@ -55,6 +56,7 @@ public class MorganaAgent : MorganaActor
     /// <summary>
     /// Context provider for reading and writing conversation variables.
     /// Manages both local (agent-specific) and shared (cross-agent) context.
+    /// Also used for quick reply storage/retrieval via special key "__pending_quick_replies".
     /// </summary>
     protected MorganaContextProvider contextProvider;
 
@@ -189,7 +191,7 @@ public class MorganaAgent : MorganaActor
             aiAgentThread ??= aiAgent.GetNewThread();
 
             AgentRunResponse llmResponse = await aiAgent.RunAsync(req.Content!, aiAgentThread);
-            string llmResponseText = llmResponse.Text.Trim();
+            string llmResponseText = llmResponse.Text;
 
             // Detect if LLM has emitted the special token for continuing the multi-turn conversation
             bool hasInteractiveToken = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
@@ -199,20 +201,25 @@ public class MorganaAgent : MorganaActor
             // or an intentional question finalized to obtain further informations
             bool endsWithQuestion = llmResponseText.EndsWith("?");
 
-            // Request is completed when no further user engagement has been emitted
-            bool isCompleted = !hasInteractiveToken && !endsWithQuestion;
+            // Retrieve quick replies from tools (if any tools set them during execution)
+            List<Records.QuickReply>? quickReplies = RetrieveToolQuickReplies();
+            bool hasQuickReplies = quickReplies != null && quickReplies.Any();
+
+            // Request is completed when no further user engagement has been requested.
+            // If agent offers QuickReplies, it MUST remain active to handle clicks
+            // Otherwise, clicks would go through Classifier and risk "other" intent fallback
+            bool isCompleted = !hasInteractiveToken && !endsWithQuestion && !hasQuickReplies;
 
             agentLogger.LogInformation(
-                $"Agent response analysis: HasINT={hasInteractiveToken}, EndsWithQuestion={endsWithQuestion}, IsCompleted={isCompleted}");
+                $"Agent response analysis: HasINT={hasInteractiveToken}, EndsWithQuestion={endsWithQuestion}, HasQR={hasQuickReplies}, IsCompleted={isCompleted}");
 
             #if DEBUG
                 string cleanText = llmResponseText;
             #else
-                // When built for production, do not show the special interaction token #INT#
-                string cleanText = llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase);
+                string cleanText = llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim();
             #endif
-                
-            senderRef.Tell(new Records.AgentResponse(cleanText, isCompleted));
+
+            senderRef.Tell(new Records.AgentResponse(cleanText, isCompleted, quickReplies));
         }
         catch (Exception ex)
         {
@@ -221,7 +228,62 @@ public class MorganaAgent : MorganaActor
             List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>("ErrorAnswers");
             Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
 
-            senderRef.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true));
+            senderRef.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
         }
+    }
+
+    /// <summary>
+    /// Retrieves quick replies that tools may have generated during LLM execution.
+    /// Tools set quick replies via SetPendingQuickReplies() when they want to guide user interactions.
+    /// </summary>
+    /// <returns>List of quick reply buttons from tools, or null if no tools set quick replies</returns>
+    /// <remarks>
+    /// <para><strong>Tool-Driven Quick Replies:</strong></para>
+    /// <para>Tools know their domain data and available operations, making them the best source for
+    /// contextual quick reply suggestions. This method retrieves quick replies from MorganaTool instances.</para>
+    /// <para><strong>Example Flow:</strong></para>
+    /// <code>
+    /// 1. LLM calls "ListTroubleshootingGuides" tool
+    /// 2. Tool sets quick replies for guide selection
+    /// 3. Tool returns guide list text
+    /// 4. Agent calls RetrieveToolQuickReplies() after tool execution
+    /// 5. Agent includes quick replies in AgentResponse
+    /// 6. UI displays buttons to user
+    /// </code>
+    /// <para><strong>Implementation Note:</strong></para>
+    /// <para>Retrieves quick replies from the shared ContextProvider using the special key "__pending_quick_replies".
+    /// MorganaTool.SetQuickReplies() stores them as JSON string, so we deserialize here.
+    /// The ContextProvider stores all values as JSON strings, not typed objects.</para>
+    /// </remarks>
+    protected List<Records.QuickReply>? RetrieveToolQuickReplies()
+    {
+        // Retrieve from context (ContextProvider stores as JSON string)
+        string? quickRepliesJson = contextProvider.GetVariable("__pending_quick_replies") as string;
+        if (!string.IsNullOrEmpty(quickRepliesJson))
+        {
+            try
+            {
+                // Deserialize JSON string to List<QuickReply>
+                List<Records.QuickReply>? quickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickRepliesJson);
+                if (quickReplies != null && quickReplies.Any())
+                {
+                    agentLogger.LogInformation($"Retrieved {quickReplies.Count} quick replies from context");
+
+                    // Drop after retrieval to prevent stale buttons
+                    contextProvider.DropVariable("__pending_quick_replies");
+
+                    return quickReplies;
+                }
+            }
+            catch (JsonException ex)
+            {
+                agentLogger.LogError(ex, "Failed to deserialize quick replies from context");
+
+                // Clear corrupted data
+                contextProvider.DropVariable("__pending_quick_replies");
+            }
+        }
+        
+        return null;
     }
 }

@@ -20,6 +20,38 @@ namespace Morgana.AI;
 public static class Records
 {
     // ==========================================================================
+    // QUICK REPLY MESSAGES
+    // ==========================================================================
+
+    /// <summary>
+    /// Interactive button displayed to the user for quick action selection.
+    /// Used in presentation messages, agent responses, and JSON deserialization from LLM tool calls.
+    /// </summary>
+    /// <param name="Id">Unique identifier for the quick reply (typically matches intent name or action)</param>
+    /// <param name="Label">Display text shown on the button with emoji (e.g., "📄 View Invoices")</param>
+    /// <param name="Value">Message text sent when user clicks the button (e.g., "Show my invoices")</param>
+    /// <remarks>
+    /// <para><strong>Dual Purpose:</strong></para>
+    /// <para>This record serves both as a runtime model and JSON serialization DTO:</para>
+    /// <list type="bullet">
+    /// <item><term>Runtime Model</term><description>Used by AgentResponse, ConversationResponse, StructuredMessage</description></item>
+    /// <item><term>JSON DTO</term><description>Deserialized from LLM SetQuickReplies tool calls</description></item>
+    /// </list>
+    /// <para><strong>JSON Format:</strong></para>
+    /// <code>
+    /// {
+    ///   "id": "no-internet",
+    ///   "label": "🔴 No Internet Connection",
+    ///   "value": "Show me the no-internet troubleshooting guide"
+    /// }
+    /// </code>
+    /// </remarks>
+    public record QuickReply(
+        [property: JsonPropertyName("id")] string Id,
+        [property: JsonPropertyName("label")] string Label,
+        [property: JsonPropertyName("value")] string Value);
+
+    // ==========================================================================
     // AGENT COMMUNICATION MESSAGES
     // ==========================================================================
 
@@ -37,28 +69,43 @@ public static class Records
 
     /// <summary>
     /// Response message from MorganaAgent instances after processing a request.
-    /// Indicates the agent's response text and whether the agent has completed its task.
+    /// Indicates the agent's response text, completion status, and optional quick reply buttons.
     /// </summary>
     /// <param name="Response">Agent's response text (may contain #INT# token for multi-turn interactions)</param>
     /// <param name="IsCompleted">
     /// True if agent has completed its task (conversation returns to idle).
     /// False if agent needs more user input (agent becomes active for follow-up messages).
     /// </param>
+    /// <param name="QuickReplies">
+    /// Optional list of quick reply buttons to display to the user.
+    /// Agents can provide guided choices for better UX (e.g., troubleshooting options, invoice selection).
+    /// If null, no quick replies are shown.
+    /// </param>
+    /// <remarks>
+    /// <para><strong>Quick Reply Usage:</strong></para>
+    /// <para>Agents can emit quick replies to guide users through complex workflows:</para>
+    /// <code>
+    /// // Troubleshooting agent offering diagnostic options
+    /// new AgentResponse(
+    ///     "I can help diagnose your issue.",
+    ///     IsCompleted: false,
+    ///     QuickReplies: new List&lt;QuickReply&gt; {
+    ///         new("diag", "🔧 Run Diagnostics", "Run network diagnostics"),
+    ///         new("guide", "📖 Troubleshooting Guide", "Show me troubleshooting guides")
+    ///     });
+    /// </code>
+    /// <para><strong>Best Practices:</strong></para>
+    /// <list type="bullet">
+    /// <item>Limit to 3-5 quick replies per message (UI constraint)</item>
+    /// <item>Use clear, action-oriented labels with emoji for visual appeal</item>
+    /// <item>Set IsCompleted=false when quick replies represent continuation of workflow</item>
+    /// <item>Quick reply values should be natural user messages that trigger appropriate agent behavior</item>
+    /// </list>
+    /// </remarks>
     public record AgentResponse(
         string Response,
-        bool IsCompleted = true);
-
-    /// <summary>
-    /// Response from RouterActor containing both the agent's response and a reference to the agent actor.
-    /// Used to track which agent is handling the request for multi-turn conversation management.
-    /// </summary>
-    /// <param name="Response">Agent's response text</param>
-    /// <param name="IsCompleted">Whether the agent has completed its task</param>
-    /// <param name="AgentRef">Actor reference to the agent that generated this response</param>
-    public record ActiveAgentResponse(
-        string Response,
-        bool IsCompleted,
-        IActorRef AgentRef);
+        bool IsCompleted = true,
+        List<QuickReply>? QuickReplies = null);
 
     /// <summary>
     /// Message sent by an agent to RouterActor to broadcast shared context variables to all other agents.
@@ -79,6 +126,20 @@ public static class Records
     public record ReceiveContextUpdate(
         string SourceAgentIntent,
         Dictionary<string, object> UpdatedValues);
+
+    /// <summary>
+    /// Response from RouterActor containing both the agent's response and a reference to the agent actor.
+    /// Used to track which agent is handling the request for multi-turn conversation management.
+    /// </summary>
+    /// <param name="Response">Agent's response text</param>
+    /// <param name="IsCompleted">Whether the agent has completed its task</param>
+    /// <param name="AgentRef">Actor reference to the agent that generated this response</param>
+    /// <param name="QuickReplies">Optional list of quick reply buttons from the agent</param>
+    public record ActiveAgentResponse(
+        string Response,
+        bool IsCompleted,
+        IActorRef AgentRef,
+        List<QuickReply>? QuickReplies = null);
 
     // ==========================================================================
     // CLASSIFICATION MESSAGES
@@ -135,7 +196,7 @@ public static class Records
     /// <param name="ID">
     /// Unique prompt identifier.
     /// Framework: "Morgana", "Classifier", "Guard", "Presentation"
-    /// Domain: Intent names like "billing", "contract", "troubleshooting", ...
+    /// Domain: Intent names like "billing", "contract", "troubleshooting"
     /// </param>
     /// <param name="Type">Prompt type (e.g., "SYSTEM", "INTENT")</param>
     /// <param name="SubType">Prompt subtype (e.g., "AGENT", "ACTOR", "PRESENTATION")</param>
@@ -352,30 +413,4 @@ public static class Records
                 .ToList();
         }
     }
-
-    // ==========================================================================
-    // PRESENTATION FLOW RECORDS
-    // ==========================================================================
-
-    /// <summary>
-    /// LLM-generated presentation response from ConversationSupervisorActor.
-    /// Contains the welcome message and quick reply buttons for user interaction.
-    /// </summary>
-    /// <param name="Message">Welcome/presentation message text (2-4 sentences)</param>
-    /// <param name="QuickReplies">List of quick reply button definitions</param>
-    public record PresentationResponse(
-        [property: JsonPropertyName("message")] string Message,
-        [property: JsonPropertyName("quickReplies")] List<QuickReplyDefinition> QuickReplies);
-
-    /// <summary>
-    /// Quick reply button definition for user interaction.
-    /// Used in presentation messages to guide users to available capabilities.
-    /// </summary>
-    /// <param name="Id">Unique identifier (typically matches intent name)</param>
-    /// <param name="Label">Display text on button with emoji (e.g., "📄 View Invoices")</param>
-    /// <param name="Value">Message text sent when user clicks button (e.g., "Show my invoices")</param>
-    public record QuickReplyDefinition(
-        [property: JsonPropertyName("id")] string Id,
-        [property: JsonPropertyName("label")] string Label,
-        [property: JsonPropertyName("value")] string Value);
 }

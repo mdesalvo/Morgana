@@ -105,7 +105,7 @@ public class SignalRBridgeService : ISignalRBridgeService
         string conversationId,
         string text,
         string messageType,
-        List<QuickReply>? quickReplies = null,
+        List<AI.Records.QuickReply>? quickReplies = null,
         string? errorReason = null,
         string? agentName = null,
         bool agentCompleted = false)

@@ -100,12 +100,15 @@ public class RouterActor : MorganaActor
     /// <param name="ctx">Context containing agent response, agent reference, and original sender</param>
     private void HandleAgentResponse(Records.AgentResponseContext ctx)
     {
-        actorLogger.Info($"Received response from agent {ctx.AgentRef.Path}, completed: {ctx.Response.IsCompleted}");
+        actorLogger.Info($"Received response from agent {ctx.AgentRef.Path}, " +
+                         $"completed: {ctx.Response.IsCompleted}, " +
+                         $"#quickReplies: {ctx.Response.QuickReplies?.Count ?? 0}");
 
         ctx.OriginalSender.Tell(new ActiveAgentResponse(
             ctx.Response.Response,
             ctx.Response.IsCompleted,
-            ctx.AgentRef));
+            ctx.AgentRef,
+            ctx.Response.QuickReplies));
     }
 
     /// <summary>

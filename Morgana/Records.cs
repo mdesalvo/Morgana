@@ -30,19 +30,21 @@ public static class Records
 
     /// <summary>
     /// Final response message sent from ConversationSupervisorActor to ConversationManagerActor after processing a user message.
-    /// Contains the AI response, metadata, and agent information.
+    /// Contains the AI response, metadata, agent information, and optional quick reply buttons.
     /// </summary>
     /// <param name="Response">AI-generated response text</param>
     /// <param name="Classification">Intent classification result (e.g., "billing", "contract")</param>
     /// <param name="Metadata">Additional metadata from classification (confidence, error codes, etc.)</param>
     /// <param name="AgentName">Name of the agent that generated the response (e.g., "Morgana", "Morgana (Billing)")</param>
     /// <param name="AgentCompleted">Flag indicating if the agent completed its multi-turn interaction</param>
+    /// <param name="QuickReplies">Optional list of quick reply buttons for guided user interactions</param>
     public record ConversationResponse(
         string Response,
         string? Classification,
         Dictionary<string, string>? Metadata,
         string? AgentName = null,
-        bool AgentCompleted = false);
+        bool AgentCompleted = false,
+        List<AI.Records.QuickReply>? QuickReplies = null);
 
     /// <summary>
     /// Request to create a new conversation and initialize the actor hierarchy.
@@ -126,16 +128,15 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Interactive button displayed to the user for quick action selection.
-    /// Used primarily in presentation messages to guide users to available capabilities.
+    /// LLM-generated presentation response from ConversationSupervisorActor.
+    /// Contains the welcome message and quick reply buttons for user interaction.
+    /// Deserialized from JSON returned by the LLM when generating presentation messages.
     /// </summary>
-    /// <param name="Id">Unique identifier for the quick reply (typically matches intent name)</param>
-    /// <param name="Label">Display text shown on the button (e.g., "📄 View Invoices")</param>
-    /// <param name="Value">Message text sent when user clicks the button (e.g., "Show my invoices")</param>
-    public record QuickReply(
-        string Id,
-        string Label,
-        string Value);
+    /// <param name="Message">Welcome/presentation message text (2-4 sentences)</param>
+    /// <param name="QuickReplies">List of quick reply button definitions</param>
+    public record PresentationResponse(
+        [property: JsonPropertyName("message")] string Message,
+        [property: JsonPropertyName("quickReplies")] List<AI.Records.QuickReply> QuickReplies);
 
     /// <summary>
     /// Structured message sent to clients via SignalR with full metadata support.
@@ -154,7 +155,7 @@ public static class Records
         string Text,
         DateTime Timestamp,
         string MessageType,
-        List<QuickReply>? QuickReplies = null,
+        List<AI.Records.QuickReply>? QuickReplies = null,
         string? ErrorReason = null,
         string? AgentName = null,
         bool AgentCompleted = false);
@@ -167,7 +168,7 @@ public static class Records
     /// Trigger message to generate and send the initial presentation/welcome message.
     /// Sent automatically when a conversation is created.
     /// </summary>
-    public record GeneratePresentationMessage;
+    public record GeneratePresentationMessage();
 
     /// <summary>
     /// Context containing the generated presentation message and available intents.
@@ -183,7 +184,7 @@ public static class Records
         /// LLM-generated quick replies (takes precedence over Intents if available).
         /// If null, quick replies are derived from Intents directly.
         /// </summary>
-        public List<AI.Records.QuickReplyDefinition>? LlmQuickReplies { get; init; }
+        public List<AI.Records.QuickReply>? LlmQuickReplies { get; init; }
     };
 
     // ==========================================================================

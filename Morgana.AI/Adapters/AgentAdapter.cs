@@ -2,11 +2,11 @@
 using Microsoft.Extensions.AI;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Tools;
 using Morgana.AI.Providers;
 using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Abstractions;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Adapters;
