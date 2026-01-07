@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.0] - UNDER DEVELOPMENT
+## [0.7.0] - 2026-01-07
 
 ### 🎯 Major Feature: LLM-Driven Quick Replies System
 This release introduces a sophisticated **Quick Replies system** that enables LLMs to dynamically create interactive button options for users, significantly improving UX/UI for multi-choice scenarios and guided conversations.
@@ -15,10 +15,6 @@ This release introduces a sophisticated **Quick Replies system** that enables LL
 - LLM-callable system tool `SetQuickReplies` for creating interactive button options dynamically during conversations
 - Supports JSON array input with `id`, `label` (emoji-enhanced display text), and `value` (message sent on click)
 - Automatic storage in `MorganaContextProvider` using private context key `__pending_quick_replies`
-- `Scope: "context"` and `Shared: false` parameter attributes for proper scoping
-- Tool guidance policy `SetQuickRepliesGuidance` with "TEXT introduces, BUTTONS execute" pattern to prevent duplication
-
-**Quick Reply Pipeline**
 - `MorganaAgent.GetQuickRepliesFromContext()` method for retrieving LLM-generated quick replies from context
 - JSON deserialization from context string storage to `List<QuickReply>` objects
 - Enhanced `AgentResponse`, `ActiveAgentResponse`, and `ConversationResponse` to propagate quick replies through actor pipeline
@@ -36,7 +32,7 @@ This release introduces a sophisticated **Quick Replies system** that enables LL
 - Formatting guidance to prevent excessive markdown and ASCII separators in responses
 
 **Internationalization**
-- Complete English localization of framework codebase and configuration files
+- Complete English localization of Morgana/Cauldron codebase and configuration files
 - Removed all Italian language residuals from prompts, logs, and error messages
 - Unified language consistency across `morgana.json` and `agents.json`
 
@@ -54,7 +50,6 @@ This release introduces a sophisticated **Quick Replies system** that enables LL
 This release unlocks:
 - Dynamic conversation guidance through LLM-generated interactive options
 - Improved UX for multi-step workflows (invoice selection, troubleshooting guides, contract clauses)
-- Reduced user typing through quick reply shortcuts
 - Foundation for more sophisticated UI interactions (carousels, cards, forms)
 
 ## [0.6.0] - 2026-01-04
