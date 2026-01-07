@@ -58,13 +58,13 @@
 ///         ILLMService llmService,
 ///         IPromptResolverService promptResolverService,
 ///         ILogger&lt;ContractAgent&gt; agentLogger,
-///         AgentAdapter agentAdapter) 
+///         AgentAdapter agentAdapter)
 ///         : base(conversationId, llmService, promptResolverService, agentLogger)
 ///     {
 ///         (aiAgent, contextProvider) = agentAdapter.CreateAgent(
-///             GetType(), 
+///             GetType(),
 ///             OnSharedContextUpdate);
-///         
+///
 ///         ReceiveAsync&lt;Records.AgentRequest&gt;(ExecuteAgentAsync);
 ///     }
 /// }

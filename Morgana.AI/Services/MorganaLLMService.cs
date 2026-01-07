@@ -45,7 +45,7 @@ public class MorganaLLMService : ILLMService
     protected readonly IConfiguration configuration;
     protected readonly IPromptResolverService promptResolverService;
     protected readonly Prompt morganaPrompt;
-    
+
     /// <summary>
     /// Microsoft.Extensions.AI chat client for LLM interactions.
     /// Initialized by derived classes (AnthropicService, AzureOpenAIService).
@@ -74,7 +74,7 @@ public class MorganaLLMService : ILLMService
     /// </summary>
     /// <returns>IChatClient instance configured for the active provider</returns>
     public IChatClient GetChatClient() => chatClient;
-    
+
     /// <summary>
     /// Gets the prompt resolver service associated with this LLM service.
     /// </summary>
@@ -122,7 +122,7 @@ public class MorganaLLMService : ILLMService
     /// ```json
     /// {"intent": "billing", "confidence": 0.95}
     /// ```
-    /// 
+    ///
     /// // After cleanup
     /// {"intent": "billing", "confidence": 0.95}
     /// </code>
@@ -133,7 +133,7 @@ public class MorganaLLMService : ILLMService
     /// <code>
     /// // Configuration (morgana.json)
     /// "LLMServiceError": "I'm sorry, the magic sphere refused to cooperate: ((llm_error))"
-    /// 
+    ///
     /// // On error
     /// "I'm sorry, the magic sphere refused to cooperate: Rate limit exceeded"
     /// </code>
@@ -154,7 +154,7 @@ public class MorganaLLMService : ILLMService
         try
         {
             ChatResponse response = await chatClient.GetResponseAsync(messages, chatOptions);
-            
+
             // Strip markdown code fences from JSON responses
             return response.Text
                 .Replace("```json", string.Empty)
@@ -165,8 +165,8 @@ public class MorganaLLMService : ILLMService
             // Return user-friendly error message from Morgana prompts
             List<ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<ErrorAnswer>>("ErrorAnswers");
             ErrorAnswer? llmError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "LLMServiceError", StringComparison.OrdinalIgnoreCase));
-            
-            return llmError?.Content.Replace("((llm_error))", ex.Message) 
+
+            return llmError?.Content.Replace("((llm_error))", ex.Message)
                           ?? $"LLM service error: {ex.Message}";
         }
     }

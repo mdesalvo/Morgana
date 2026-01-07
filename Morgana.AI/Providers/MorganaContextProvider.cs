@@ -29,7 +29,7 @@ namespace Morgana.AI.Providers;
 ///         ├── AgentContext Dictionary (variable storage)
 ///         ├── SharedVariableNames HashSet (from tool definitions)
 ///         └── OnSharedContextUpdate Callback (broadcasts to RouterActor)
-/// 
+///
 /// MorganaTool
 ///   ├── GetContextVariable() → MorganaContextProvider.GetVariable()
 ///   └── SetContextVariable() → MorganaContextProvider.SetVariable()
@@ -98,13 +98,13 @@ public class MorganaContextProvider : AIContextProvider
     /// {
     ///     MorganaContextProvider provider = getContextProvider();
     ///     object? value = provider.GetVariable(variableName);
-    ///     
+    ///
     ///     if (value != null)
     ///     {
     ///         // HIT: Return value to LLM
     ///         return Task.FromResult(value);
     ///     }
-    ///     
+    ///
     ///     // MISS: Return instruction to LLM
     ///     return Task.FromResult&lt;object&gt;(
     ///         $"Information {variableName} not available in context: you need to engage SetContextVariable to set it."
@@ -158,7 +158,7 @@ public class MorganaContextProvider : AIContextProvider
     ///     MorganaContextProvider provider = getContextProvider();
     ///     provider.SetVariable(variableName, variableValue);
     ///     // Automatic broadcast if shared variable
-    ///     
+    ///
     ///     return Task.FromResult&lt;object&gt;(
     ///         $"Information {variableName} inserted in context with value: {variableValue}"
     ///     );
@@ -194,10 +194,10 @@ public class MorganaContextProvider : AIContextProvider
     /// <code>
     /// // Set temporary variable
     /// contextProvider.SetVariable("__pending_quick_replies", jsonData);
-    /// 
+    ///
     /// // Process the data
     /// var data = contextProvider.GetVariable("__pending_quick_replies");
-    /// 
+    ///
     /// // Drop immediately after use (temporary variable pattern)
     /// contextProvider.DropVariable("__pending_quick_replies");
     /// </code>
@@ -225,12 +225,12 @@ public class MorganaContextProvider : AIContextProvider
     /// Local context: {}
     /// Incoming: {"userId": "P994E"}
     /// Result: {"userId": "P994E"}
-    /// 
+    ///
     /// // Scenario 2: Variable already present (IGNORED)
     /// Local context: {"userId": "P994E"}
     /// Incoming: {"userId": "Q123Z"}  // Different value!
     /// Result: {"userId": "P994E"}    // Keeps original value
-    /// 
+    ///
     /// // Scenario 3: Multiple variables, partial merge
     /// Local context: {"userId": "P994E"}
     /// Incoming: {"userId": "Q123Z", "invoiceId": "INV-001"}
@@ -242,11 +242,11 @@ public class MorganaContextProvider : AIContextProvider
     /// private void HandleContextUpdate(Records.ReceiveContextUpdate msg)
     /// {
     ///     string myIntent = GetType().GetCustomAttribute&lt;HandlesIntentAttribute&gt;()?.Intent ?? "unknown";
-    ///     
+    ///
     ///     agentLogger.LogInformation(
     ///         $"Agent '{myIntent}' received shared context from '{msg.SourceAgentIntent}': " +
     ///         $"{string.Join(", ", msg.UpdatedValues.Keys)}");
-    ///     
+    ///
     ///     contextProvider.MergeSharedContext(msg.UpdatedValues);
     /// }
     /// </code>
@@ -321,7 +321,7 @@ public class MorganaContextProvider : AIContextProvider
     /// // Serialize on thread save
     /// string json = contextProvider.Serialize();
     /// // Store json with AgentThread
-    /// 
+    ///
     /// // Deserialize on thread restore
     /// MorganaContextProvider restored = MorganaContextProvider.Deserialize(json, logger);
     /// // Continue conversation with restored context
@@ -331,14 +331,14 @@ public class MorganaContextProvider : AIContextProvider
     /// (e.g., saving conversation state to database, resuming conversations across server restarts).</para>
     /// </remarks>
     public static MorganaContextProvider Deserialize(
-        string json, 
+        string json,
         ILogger logger)
     {
         Dictionary<string, JsonElement>? data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
-        
-        Dictionary<string, object> agentContext = data?["AgentContext"].Deserialize<Dictionary<string, object>>() 
+
+        Dictionary<string, object> agentContext = data?["AgentContext"].Deserialize<Dictionary<string, object>>()
                                                     ?? new Dictionary<string, object>();
-        
+
         HashSet<string> sharedVars = data?["SharedVariableNames"].Deserialize<HashSet<string>>() ?? [];
 
         MorganaContextProvider provider = new MorganaContextProvider(logger, sharedVars)
@@ -372,12 +372,12 @@ public class MorganaContextProvider : AIContextProvider
     /// public override ValueTask&lt;AIContext&gt; InvokingAsync(InvokingContext context, CancellationToken ct)
     /// {
     ///     AIContext aiContext = new AIContext();
-    ///     
+    ///
     ///     if (AgentContext.ContainsKey("userId"))
     ///     {
     ///         aiContext.AddSystemMessage($"User ID: {AgentContext["userId"]}");
     ///     }
-    ///     
+    ///
     ///     return ValueTask.FromResult(aiContext);
     /// }
     /// </code>

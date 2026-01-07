@@ -81,7 +81,7 @@ public class GuardActor : MorganaActor
         catch (Exception ex)
         {
             actorLogger.Error(ex, "LLM policy check failed");
-            
+
             // Fallback on error: assume compliant to avoid blocking legitimate requests
             LLMCheckContext ctx = new LLMCheckContext(new GuardCheckResponse(true, null), originalSender);
 
@@ -108,7 +108,7 @@ public class GuardActor : MorganaActor
     private void HandleFailure(Status.Failure failure)
     {
         actorLogger.Error(failure.Cause, "Guard check failed");
-        
+
         // Fallback: assume compliant on error to avoid blocking legitimate requests
         Sender.Tell(new GuardCheckResponse(true, null));
     }

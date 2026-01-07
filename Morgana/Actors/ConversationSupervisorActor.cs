@@ -71,7 +71,7 @@ public class ConversationSupervisorActor : MorganaActor
     {
         this.signalRBridgeService = signalRBridgeService;
         this.agentConfigService = agentConfigService;
-        
+
         guard = Context.System.GetOrCreateActor<GuardActor>("guard", conversationId).GetAwaiter().GetResult();
         classifier = Context.System.GetOrCreateActor<ClassifierActor>("classifier", conversationId).GetAwaiter().GetResult();
         router = Context.System.GetOrCreateActor<RouterActor>("router", conversationId).GetAwaiter().GetResult();
@@ -154,7 +154,7 @@ public class ConversationSupervisorActor : MorganaActor
 
             // Load intents from domain
             List<AI.Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
-            
+
             AI.Records.IntentCollection intentCollection = new AI.Records.IntentCollection(allIntents);
             List<AI.Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
 
@@ -172,13 +172,13 @@ public class ConversationSupervisorActor : MorganaActor
                     null,
                     "Morgana",
                     false);
-    
+
                 hasPresented = true;
                 return;
             }
-            
+
             // Format intents for LLM
-            string formattedIntents = string.Join("\n", 
+            string formattedIntents = string.Join("\n",
                 displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
 
             // Build LLM prompt
@@ -196,7 +196,7 @@ public class ConversationSupervisorActor : MorganaActor
             actorLogger.Info($"LLM raw response: {llmResponse}");
 
             // Parse LLM response
-            PresentationResponse? presentationResponse = 
+            PresentationResponse? presentationResponse =
                 JsonSerializer.Deserialize<PresentationResponse>(llmResponse);
 
             if (presentationResponse == null)
@@ -218,15 +218,15 @@ public class ConversationSupervisorActor : MorganaActor
 
             // Fallback: Generate from intents directly
             AI.Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync("Presentation");
-            
+
             string fallbackMessage = presentationPrompt.GetAdditionalProperty<string>("FallbackMessage");
-            
+
             // Build fallback quick replies from intents
             List<AI.Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
-            
+
             AI.Records.IntentCollection intentCollection = new AI.Records.IntentCollection(allIntents);
             List<AI.Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
-            
+
             List<AI.Records.QuickReply> fallbackReplies = displayableIntents
                 .Select(intent => new AI.Records.QuickReply(
                     intent.Name,
@@ -377,7 +377,6 @@ public class ConversationSupervisorActor : MorganaActor
         ReceiveAsync<AgentContext>(async wrapper =>
         {
             string agentName = GetAgentDisplayName(wrapper.Response, ctx.Classification?.Intent);
-            bool agentCompleted = false;
 
             switch (wrapper.Response)
             {
@@ -394,12 +393,8 @@ public class ConversationSupervisorActor : MorganaActor
                     }
                     else
                     {
-                        // Agent has completed - mark for completion message if it was a specialized agent
-                        agentCompleted = activeAgentIntent != null;
-                        
                         activeAgent = null;
                         activeAgentIntent = null;
-                        
                         actorLogger.Info("Agent completed and cleared");
                     }
 
@@ -408,7 +403,7 @@ public class ConversationSupervisorActor : MorganaActor
                         wrapper.Context.Classification?.Intent,
                         wrapper.Context.Classification?.Metadata,
                         agentName,
-                        agentCompleted,
+                        activeAgentResponse.IsCompleted,
                         activeAgentResponse.QuickReplies));
 
                     break;
@@ -425,9 +420,9 @@ public class ConversationSupervisorActor : MorganaActor
                     }
                     else
                     {
-                        agentCompleted = activeAgentIntent != null;
                         activeAgent = null;
                         activeAgentIntent = null;
+                        actorLogger.Info("Router fallback completed, active agent cleared");
                     }
 
                     wrapper.Context.OriginalSender.Tell(new ConversationResponse(
@@ -435,15 +430,17 @@ public class ConversationSupervisorActor : MorganaActor
                         wrapper.Context.Classification?.Intent,
                         wrapper.Context.Classification?.Metadata,
                         agentName,
-                        agentCompleted,
+                        routerFallbackResponse.IsCompleted,
                         routerFallbackResponse.QuickReplies));
 
                     break;
                 }
                 default:
+                { 
                     actorLogger.Error($"Unexpected message type: {wrapper.Response?.GetType()}");
                     wrapper.Context.OriginalSender.Tell(new ConversationResponse("Unexpected internal error.", null, null, "Morgana", false));
                     break;
+                }
             }
 
             Become(Idle);
@@ -468,26 +465,26 @@ public class ConversationSupervisorActor : MorganaActor
 
         ReceiveAsync<FollowUpContext>(async wrapper =>
         {
-            string agentName = activeAgentIntent != null 
+            string agentName = activeAgentIntent != null
                 ? GetAgentDisplayName(null, activeAgentIntent)
                 : "Morgana";
-            
+
             bool agentCompleted = false;
 
             if (wrapper.Response.IsCompleted)
             {
                 actorLogger.Info("Active agent signaled completion, clearing active agent");
-                
+
                 // Mark completion only if it was a specialized agent
                 agentCompleted = activeAgentIntent != null;
-                
+
                 activeAgent = null;
                 activeAgentIntent = null;
             }
 
             wrapper.OriginalSender.Tell(new ConversationResponse(
-                wrapper.Response.Response, 
-                null, 
+                wrapper.Response.Response,
+                null,
                 null,
                 agentName,
                 agentCompleted,
@@ -555,7 +552,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         // Capitalize first letter of intent for display
         string capitalizedIntent = char.ToUpper(intent[0]) + intent[1..];
-        
+
         return $"Morgana ({capitalizedIntent})";
     }
 

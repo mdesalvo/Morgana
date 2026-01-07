@@ -9,7 +9,7 @@ using static Morgana.Records;
 namespace Morgana.Actors;
 
 /// <summary>
-/// Entry point actor for managing conversations. 
+/// Entry point actor for managing conversations.
 /// Responsible for conversation lifecycle (creation/termination) and message routing to the supervisor.
 /// Uses PipeTo pattern for non-blocking communication with the supervisor.
 /// </summary>
@@ -45,7 +45,7 @@ public class ConversationManagerActor : MorganaActor
         ReceiveAsync<UserMessage>(HandleUserMessageAsync);
         ReceiveAsync<CreateConversation>(HandleCreateConversationAsync);
         ReceiveAsync<TerminateConversation>(HandleTerminateConversationAsync);
-        
+
         // Handle supervisor responses (PipeTo pattern)
         ReceiveAsync<SupervisorResponseContext>(HandleSupervisorResponseAsync);
         ReceiveAsync<Status.Failure>(HandleSupervisorFailureAsync);
@@ -142,20 +142,20 @@ public class ConversationManagerActor : MorganaActor
         try
         {
             await signalRBridgeService.SendStructuredMessageAsync(
-                conversationId, 
+                conversationId,
                 ctx.Response.Response,
                 "assistant",
                 ctx.Response.QuickReplies,
                 null,
                 ctx.Response.AgentName,
                 ctx.Response.AgentCompleted);
-            
+
             actorLogger.Info($"Response sent successfully to client via SignalR (#quickReplies: {ctx.Response.QuickReplies?.Count ?? 0})");
         }
         catch (Exception ex)
         {
             actorLogger.Error(ex, "Failed to send SignalR message to client");
-            
+
             // Attempt to send error notification to client
             try
             {

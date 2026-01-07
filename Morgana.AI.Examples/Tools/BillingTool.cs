@@ -190,7 +190,7 @@ public class BillingTool : MorganaTool
             sb.AppendLine($"   Period: {invoice.Period}");
             sb.AppendLine($"   Amount: €{invoice.Total:F2}");
             sb.AppendLine($"   Status: {invoice.Status}");
-            
+
             if (invoice.Status == InvoiceStatus.Pending)
             {
                 sb.AppendLine($"   Due Date: {invoice.DueDate:dd/MM/yyyy}");
@@ -199,7 +199,7 @@ public class BillingTool : MorganaTool
             {
                 sb.AppendLine($"   Paid: {invoice.PaidDate.Value:dd/MM/yyyy}");
             }
-            
+
             sb.AppendLine();
         }
 
@@ -219,7 +219,7 @@ public class BillingTool : MorganaTool
     {
         await Task.Delay(100); // Simulate database query
 
-        Invoice? invoice = _mockInvoices.FirstOrDefault(inv => 
+        Invoice? invoice = _mockInvoices.FirstOrDefault(inv =>
             inv.InvoiceId.Equals(invoiceId, StringComparison.OrdinalIgnoreCase));
 
         if (invoice == null)
@@ -235,31 +235,31 @@ public class BillingTool : MorganaTool
         sb.AppendLine($"**Issue Date:** {invoice.IssueDate:dd/MM/yyyy}");
         sb.AppendLine($"**Due Date:** {invoice.DueDate:dd/MM/yyyy}");
         sb.AppendLine($"**Status:** {GetStatusDescription(invoice.Status)}");
-        
+
         if (invoice.PaidDate.HasValue)
         {
             sb.AppendLine($"**Paid Date:** {invoice.PaidDate.Value:dd/MM/yyyy}");
         }
-        
+
         if (invoice.PaymentMethod != null)
         {
             sb.AppendLine($"**Payment Method:** {FormatPaymentMethod(invoice.PaymentMethod)}");
         }
-        
+
         sb.AppendLine();
         sb.AppendLine("**Line Items:**");
         sb.AppendLine("```");
-        
+
         foreach (InvoiceLineItem item in invoice.LineItems)
         {
-            string quantityInfo = item.Quantity > 1 
+            string quantityInfo = item.Quantity > 1
                 ? $"{item.Quantity} {item.Unit} × €{item.UnitPrice:F2}"
                 : "";
-            
+
             string amountSign = item.Amount < 0 ? "" : " ";
             sb.AppendLine($"{item.Description,-50} {quantityInfo,-20} {amountSign}€{item.Amount,8:F2}");
         }
-        
+
         sb.AppendLine(new string('-', 80));
         sb.AppendLine($"{"Subtotal",-70} €{invoice.Subtotal,8:F2}");
         sb.AppendLine($"{"Tax (22%)",-70} €{invoice.Tax,8:F2}");
@@ -297,7 +297,7 @@ public class BillingTool : MorganaTool
 
         months = Math.Clamp(months, 1, 12);
         DateTime cutoffDate = DateTime.Now.AddMonths(-months);
-        
+
         List<Invoice> paidInvoices = _mockInvoices
             .Where(i => i.Status == InvoiceStatus.Paid && i.PaidDate >= cutoffDate)
             .OrderByDescending(i => i.PaidDate)

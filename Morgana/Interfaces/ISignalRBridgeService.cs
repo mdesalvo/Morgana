@@ -6,7 +6,7 @@ namespace Morgana.Interfaces;
 /// </summary>
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
-/// <para>This service acts as a bridge between the Akka.NET actor system and SignalR, allowing actors to send 
+/// <para>This service acts as a bridge between the Akka.NET actor system and SignalR, allowing actors to send
 /// messages to clients without direct knowledge of SignalR implementation details.</para>
 /// <para><strong>Responsibilities:</strong></para>
 /// <list type="bullet">
@@ -16,7 +16,7 @@ namespace Morgana.Interfaces;
 /// <item>Support rich message types (text, presentation, quick replies, agent metadata)</item>
 /// </list>
 /// <para><strong>Usage Pattern:</strong></para>
-/// <para>Injected into actors (particularly ConversationManagerActor and ConversationSupervisorActor) 
+/// <para>Injected into actors (particularly ConversationManagerActor and ConversationSupervisorActor)
 /// to send responses back to clients after processing through the actor pipeline.</para>
 /// </remarks>
 public interface ISignalRBridgeService
@@ -42,7 +42,7 @@ public interface ISignalRBridgeService
         string conversationId,
         string text,
         string? errorReason = null);
-    
+
     /// <summary>
     /// Sends a structured message with full metadata to a conversation group via SignalR.
     /// Supports message types, quick replies, agent identification, and completion status.
@@ -69,7 +69,7 @@ public interface ISignalRBridgeService
     /// <para><strong>Agent Metadata:</strong></para>
     /// <list type="bullet">
     /// <item><term>agentName</term><description>Displayed in UI to show which specialized agent is responding</description></item>
-    /// <item><term>agentCompleted</term><description>When true, signals the client that the multi-turn interaction is complete 
+    /// <item><term>agentCompleted</term><description>When true, signals the client that the multi-turn interaction is complete
     /// and the conversation returns to idle state (affects UI indicators, enables new intent classification)</description></item>
     /// </list>
     /// <para><strong>Example Usage:</strong></para>
@@ -83,7 +83,7 @@ public interface ISignalRBridgeService
     ///     agentName: "Morgana",
     ///     agentCompleted: false
     /// );
-    /// 
+    ///
     /// // Send agent response with completion
     /// await SendStructuredMessageAsync(
     ///     conversationId: "conv-123",

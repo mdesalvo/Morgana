@@ -159,7 +159,7 @@ public class ConversationController : ControllerBase
     /// 2. Listen on SignalR for "ReceiveMessage" event
     /// 3. Receive AI response with metadata (agent name, completion status)
     /// </code>
-    /// <para><strong>Note:</strong> HTTP 202 Accepted indicates the message was queued, not processed. 
+    /// <para><strong>Note:</strong> HTTP 202 Accepted indicates the message was queued, not processed.
     /// Actual processing status is communicated via SignalR.</para>
     /// </remarks>
     /// <response code="202">Message queued for processing, response will arrive via SignalR</response>

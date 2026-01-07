@@ -39,7 +39,7 @@ namespace Morgana.AI.Services;
 ///   📦 Registered tool: ContractTool for intent 'contract'
 ///   📦 Registered tool: TroubleshootingTool for intent 'troubleshooting'
 /// ✅ Tool registry initialized with 3 tool(s)
-/// 
+///
 /// ========================================
 /// Tool Registry Validation
 /// ========================================
@@ -53,11 +53,11 @@ namespace Morgana.AI.Services;
 /// // Warning: Agent without tool
 /// ℹ️  Agent 'billing' (BillingAgent) has no native tool registered!
 /// // This agent will only have framework tools (GetContextVariable, SetContextVariable)
-/// 
+///
 /// // Warning: Tool without agent
 /// ⚠️  Tool 'BillingTool' provides intent 'billing' but no agent handles this intent.
 /// // This tool will never be instantiated
-/// 
+///
 /// // Error: Duplicate tool registration
 /// ❌ Duplicate tool registration for intent 'billing': BillingTool and AlternateBillingTool
 /// // Only one tool can provide functionality for each intent
@@ -66,14 +66,14 @@ namespace Morgana.AI.Services;
 public class ProvidesToolForIntentRegistryService : IToolRegistryService
 {
     private readonly ILogger logger;
-    
+
     /// <summary>
     /// Registry mapping intent names to tool types.
     /// Built during service initialization via assembly scanning.
     /// Case-insensitive string comparison for intent matching.
     /// </summary>
     private readonly Dictionary<string, Type> intentToToolType;
-    
+
     /// <summary>
     /// Initializes a new instance of ProvidesToolForIntentRegistryService.
     /// Performs tool discovery and validation with comprehensive diagnostic output.
@@ -82,7 +82,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     public ProvidesToolForIntentRegistryService(ILogger logger)
     {
         this.logger = logger;
-        
+
         intentToToolType = InitializeRegistry();
     }
 
@@ -144,7 +144,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             })
             .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaTool)))
             .Where(t => t.GetCustomAttribute<ProvidesToolForIntentAttribute>() != null);
-        
+
         foreach (Type toolType in toolTypes)
         {
             ProvidesToolForIntentAttribute? attr = toolType.GetCustomAttribute<ProvidesToolForIntentAttribute>();
@@ -152,7 +152,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
                 continue;
 
             string intent = attr.Intent.ToLowerInvariant();
-            
+
             // Check for duplicate tool registrations
             if (registry.TryGetValue(intent, out Type? value))
             {
@@ -161,11 +161,11 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
                 logger.LogError(error);
                 continue;
             }
-            
+
             registry[intent] = toolType;
             Console.WriteLine($"  📦 Registered tool: {toolType.Name} for intent '{attr.Intent}'");
         }
-        
+
         Console.WriteLine($"✅ Tool registry initialized with {registry.Count} tool(s)");
         Console.WriteLine();
 
@@ -202,9 +202,9 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             Console.WriteLine("Warnings:");
             foreach (string intent in agentsWithoutTools)
             {
-                Type? agentType = agentTypes.FirstOrDefault(t => 
+                Type? agentType = agentTypes.FirstOrDefault(t =>
                     string.Equals(t.GetCustomAttribute<HandlesIntentAttribute>()?.Intent, intent, StringComparison.OrdinalIgnoreCase));
-                
+
                 string message = $"ℹ️  Agent '{intent}' ({agentType?.Name ?? "unknown"}) has no native tool registered!";
                 Console.WriteLine($"  {message}");
             }
@@ -216,10 +216,10 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         {
             if (agentsWithoutTools.Count == 0)
                 Console.WriteLine();
-            
+
             if (agentsWithoutTools.Count == 0)
                 Console.WriteLine("Warnings:");
-            
+
             foreach (string intent in toolsWithoutAgents)
             {
                 Type? toolType = registry.GetValueOrDefault(intent);
@@ -290,7 +290,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             ? null
             : intentToToolType.GetValueOrDefault(intent.ToLowerInvariant());
     }
-    
+
     /// <summary>
     /// Gets all registered tool types with their associated intents.
     /// </summary>

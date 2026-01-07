@@ -27,11 +27,11 @@ namespace Morgana.AI.Interfaces;
 /// {
 ///     // Found: typeof(BillingTool) decorated with [ProvidesToolForIntent("billing")]
 ///     MorganaTool toolInstance = (MorganaTool)Activator.CreateInstance(
-///         toolType, 
-///         logger, 
+///         toolType,
+///         logger,
 ///         () => contextProvider
 ///     );
-///     
+///
 ///     // Register tool methods in ToolAdapter
 ///     RegisterToolsInAdapter(toolAdapter, toolInstance, tools);
 /// }
@@ -65,20 +65,20 @@ public interface IToolRegistryService
     /// <para><strong>Usage Example:</strong></para>
     /// <code>
     /// Type? toolType = toolRegistryService.FindToolTypeForIntent("billing");
-    /// 
+    ///
     /// if (toolType != null)
     /// {
     ///     // Found: typeof(BillingTool)
     ///     // [ProvidesToolForIntent("billing")]
     ///     // public class BillingTool : MorganaTool
-    ///     
+    ///
     ///     // Instantiate tool
     ///     MorganaTool tool = (MorganaTool)Activator.CreateInstance(
     ///         toolType,
     ///         logger,
     ///         () => contextProvider
     ///     );
-    ///     
+    ///
     ///     // Register tool methods
     ///     RegisterToolsInAdapter(toolAdapter, tool, toolDefinitions);
     /// }
@@ -128,11 +128,11 @@ public interface IToolRegistryService
     /// //   - billing: BillingTool
     /// //   - contract: ContractTool
     /// //   - troubleshooting: TroubleshootingTool
-    /// 
+    ///
     /// // Configuration validation
     /// List&lt;IntentDefinition&gt; intents = await agentConfigService.GetIntentsAsync();
     /// IReadOnlyDictionary&lt;string, Type&gt; tools = toolRegistryService.GetAllRegisteredTools();
-    /// 
+    ///
     /// foreach (IntentDefinition intent in intents)
     /// {
     ///     if (!tools.ContainsKey(intent.Name))

@@ -38,10 +38,10 @@ namespace Morgana.AI.Abstractions;
 ///     {
 ///         // First, try to get userId from context
 ///         object userId = await GetContextVariable("userId");
-///         
+///
 ///         // If missing, prompt LLM to ask user
 ///         // If present, fetch invoices from backend
-///         
+///
 ///         return invoices;
 ///     }
 /// }
@@ -59,7 +59,7 @@ public class MorganaTool
     /// Uses a function to enable lazy evaluation and ensure correct scoping per request.
     /// </summary>
     protected readonly Func<MorganaContextProvider> getContextProvider;
-    
+
     /// <summary>
     /// Direct access to the context provider instance. Lazily evaluated from getContextProvider.
     /// Used for quick reply storage and retrieval via special context key "__pending_quick_replies".
@@ -107,9 +107,9 @@ public class MorganaTool
     /// Tool call: GetContextVariable("userId")
     /// Response: "P994E" (HIT)
     /// LLM: "Great! I have the userId. Proceeding to fetch invoices..."
-    /// 
+    ///
     /// vs.
-    /// 
+    ///
     /// LLM: "I need the userId to fetch invoices. Let me check context first."
     /// Tool call: GetContextVariable("userId")
     /// Response: "Information userId not available in context: you need to engage SetContextVariable to set it." (MISS)
@@ -178,11 +178,11 @@ public class MorganaTool
         return Task.FromResult<object>(
             $"Information {variableName} inserted in context with value: {variableValue}");
     }
-    
+
     // =========================================================================
     // QUICK REPLY SYSTEM TOOL
     // =========================================================================
-    
+
     /// <summary>
     /// System tool that allows the LLM to set quick reply buttons for the user interface.
     /// This tool gives the LLM control over when and how to offer guided interaction options.
@@ -197,7 +197,7 @@ public class MorganaTool
     /// <para>SetQuickReplies is a SYSTEM TOOL that the LLM can call when it wants to provide
     /// guided interaction options to the user. This gives the LLM full control over quick reply
     /// generation based on conversation context.</para>
-    /// 
+    ///
     /// <para><strong>LLM Decision Making:</strong></para>
     /// <para>The LLM decides to call SetQuickReplies when:</para>
     /// <list type="bullet">
@@ -206,7 +206,7 @@ public class MorganaTool
     /// <item>Offering next steps after completing an operation</item>
     /// <item>Providing navigation options in a multi-step workflow</item>
     /// </list>
-    /// 
+    ///
     /// <para><strong>JSON Format Expected:</strong></para>
     /// <code>
     /// [
@@ -222,11 +222,11 @@ public class MorganaTool
     ///   }
     /// ]
     /// </code>
-    /// 
+    ///
     /// <para><strong>Single Record Design:</strong></para>
     /// <para>Uses QuickReply with JsonPropertyName attributes.
     /// Same record serves as both runtime model and JSON DTO - no duplication!</para>
-    /// 
+    ///
     /// <para><strong>Design Guidelines for LLM:</strong></para>
     /// <list type="bullet">
     /// <item><term>Limit to 3-5 options</term><description>UI constraint, too many buttons are overwhelming</description></item>

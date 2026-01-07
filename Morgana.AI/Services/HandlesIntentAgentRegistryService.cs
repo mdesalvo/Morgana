@@ -47,7 +47,7 @@ namespace Morgana.AI.Services;
 /// agents.json: { "Name": "billing", ... }
 /// Code: No class with [HandlesIntent("billing")]
 /// Error: "There are intents not handled by any Morgana agent: billing"
-/// 
+///
 /// // Case 2: Agent implemented but not configured
 /// Code: [HandlesIntent("billing")] public class BillingAgent : MorganaAgent { }
 /// agents.json: No "billing" intent defined
@@ -67,7 +67,7 @@ namespace Morgana.AI.Services;
 public class HandlesIntentAgentRegistryService : IAgentRegistryService
 {
     private readonly IAgentConfigurationService agentConfigService;
-    
+
     /// <summary>
     /// Registry mapping intent names to agent types.
     /// Built during service initialization via assembly scanning.
@@ -118,7 +118,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// <code>
     /// // Missing agent implementations
     /// "There are intents not handled by any Morgana agent: billing, contract"
-    /// 
+    ///
     /// // Missing configuration entries
     /// "There are Morgana agents handling an undeclared intent: billing, contract"
     /// </code>
@@ -130,7 +130,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     private Dictionary<string, Type> InitializeRegistry()
     {
         Dictionary<string, Type> registry = new(StringComparer.OrdinalIgnoreCase);
-        
+
         // Discovery of available agents with their declared intent
         // Scan ALL loaded assemblies, not just executing assembly
         IEnumerable<Type> morganaAgentTypes = AppDomain.CurrentDomain.GetAssemblies()
@@ -148,7 +148,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 }
             })
             .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)));
-        
+
         foreach (Type? morganaAgentType in morganaAgentTypes)
         {
             HandlesIntentAttribute? handlesIntentAttribute = morganaAgentType.GetCustomAttribute<HandlesIntentAttribute>();

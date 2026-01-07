@@ -48,7 +48,7 @@ namespace Morgana.AI.Interfaces;
 /// // Actors: Load framework prompts
 /// Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
 /// Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
-/// 
+///
 /// // AgentAdapter: Load domain agent prompts
 /// Prompt billingPrompt = await promptResolverService.ResolveAsync("billing");
 /// Prompt contractPrompt = await promptResolverService.ResolveAsync("contract");
@@ -92,7 +92,7 @@ public interface IPromptResolverService
     /// </code>
     /// </remarks>
     Task<Prompt[]> GetAllPromptsAsync();
-    
+
     /// <summary>
     /// Resolves a specific prompt by its unique identifier.
     /// Searches across all configured prompt sources (framework and domain).
@@ -116,16 +116,16 @@ public interface IPromptResolverService
     /// // Framework prompt resolution
     /// Prompt morganaPrompt = await promptResolverService.ResolveAsync("Morgana");
     /// // Returns: Core Morgana system prompt with personality, policies, context tools
-    /// 
+    ///
     /// Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
     /// // Returns: Content moderation prompt with profanity terms and policy checks
-    /// 
+    ///
     /// // Domain prompt resolution
     /// Prompt billingPrompt = await promptResolverService.ResolveAsync("billing");
     /// // Returns: Billing agent prompt with tool definitions for invoice retrieval
-    /// 
+    ///
     /// // Error case
-    /// try 
+    /// try
     /// {
     ///     Prompt unknown = await promptResolverService.ResolveAsync("nonexistent");
     /// }

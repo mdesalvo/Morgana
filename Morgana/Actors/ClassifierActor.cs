@@ -47,7 +47,7 @@ public class ClassifierActor : MorganaActor
         IntentCollection intentCollection = new IntentCollection(intents);
 
         // Format intents as "intent_name (description)" for LLM prompt
-        string formattedIntents = string.Join("|", 
+        string formattedIntents = string.Join("|",
             intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
         Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
         classifierPromptContent = $"{classifierPrompt.Content.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
@@ -80,7 +80,7 @@ public class ClassifierActor : MorganaActor
                 msg.Text);
 
             ClassificationResponse? classificationResponse = JsonSerializer.Deserialize<ClassificationResponse>(response);
-            
+
             ClassificationResult result = new ClassificationResult(
                 classificationResponse?.Intent ?? "other",
                 new Dictionary<string, string>

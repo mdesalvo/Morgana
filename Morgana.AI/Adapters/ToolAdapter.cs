@@ -120,10 +120,10 @@ public class ToolAdapter
     /// <code>
     /// // Original description from agents.json
     /// "Alphanumeric identifier of the user"
-    /// 
+    ///
     /// // After applying ToolParameterContextGuidance
-    /// "Alphanumeric identifier of the user. BEFORE INVOKING THIS TOOL: call GetContextVariable 
-    /// to verify if the information is already available. Ask the user ONLY if GetContextVariable 
+    /// "Alphanumeric identifier of the user. BEFORE INVOKING THIS TOOL: call GetContextVariable
+    /// to verify if the information is already available. Ask the user ONLY if GetContextVariable
     /// returns that the information is missing."
     /// </code>
     /// <para>This guidance ensures the LLM checks context before asking users for information.</para>
@@ -149,7 +149,7 @@ public class ToolAdapter
                 "request" => $"{parameter.Description}. {requestGuidance}",
                 _ => parameter.Description
             };
-        
+
             additionalProperties[parameter.Name] = parameterGuidance;
         }
 

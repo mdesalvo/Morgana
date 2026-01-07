@@ -29,7 +29,7 @@ namespace Morgana.Services;
 /// <item>Agents must be properly decorated with [HandlesIntent] attribute for routing</item>
 /// </list>
 /// <para><strong>Usage:</strong></para>
-/// <para>Call LoadPluginAssemblies() during application startup (typically in Program.cs) 
+/// <para>Call LoadPluginAssemblies() during application startup (typically in Program.cs)
 /// before the actor system is used.</para>
 /// </remarks>
 public class PluginLoaderService
@@ -72,13 +72,13 @@ public class PluginLoaderService
     /// ⚠️  Skipped assembly CustomLib: no MorganaAgent subclasses found
     /// ❌ Plugin assembly not found: NonExistent.dll
     /// </code>
-    /// <para><strong>Best Practice:</strong> Call this method early in application startup, 
+    /// <para><strong>Best Practice:</strong> Call this method early in application startup,
     /// after DI configuration but before any actor system usage.</para>
     /// </remarks>
     public void LoadPluginAssemblies()
     {
         string[]? assemblyNames = configuration.GetSection("Plugins:Assemblies").Get<string[]>();
-        
+
         if (assemblyNames == null || assemblyNames.Length == 0)
         {
             logger.LogWarning("No plugin assemblies configured");

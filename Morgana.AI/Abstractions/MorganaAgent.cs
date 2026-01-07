@@ -133,10 +133,10 @@ public class MorganaAgent : MorganaActor
     /// <code>
     /// // BillingAgent discovers userId
     /// BillingAgent broadcasts: { "userId": "P994E" }
-    /// 
+    ///
     /// // ContractAgent receives broadcast and merges (first write)
     /// ContractAgent context: { "userId": "P994E" }
-    /// 
+    ///
     /// // Later, TroubleshootingAgent independently asks user
     /// TroubleshootingAgent has: { "userId": "P994E" } (already set, ignores any conflicting broadcast)
     /// </code>
@@ -282,7 +282,7 @@ public class MorganaAgent : MorganaActor
                 contextProvider.DropVariable("__pending_quick_replies");
             }
         }
-        
+
         return null;
     }
 }

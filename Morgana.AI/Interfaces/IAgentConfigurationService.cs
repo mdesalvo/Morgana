@@ -33,11 +33,11 @@ namespace Morgana.AI.Interfaces;
 /// <code>
 /// // In Program.cs
 /// builder.Services.AddSingleton&lt;IAgentConfigurationService, EmbeddedAgentConfigurationService&gt;();
-/// 
+///
 /// // In ConversationSupervisorActor
 /// List&lt;IntentDefinition&gt; intents = await agentConfigService.GetIntentsAsync();
 /// // Used for presentation generation
-/// 
+///
 /// // In AgentAdapter
 /// Prompt agentPrompt = await promptResolverService.ResolveAsync("billing");
 /// // Loaded via IAgentConfigurationService
@@ -75,7 +75,7 @@ public interface IAgentConfigurationService
     /// The system logs warnings and can operate with no domain agents (using only "other" intent).</para>
     /// </remarks>
     Task<List<Records.IntentDefinition>> GetIntentsAsync();
-    
+
     /// <summary>
     /// Loads agent prompt configurations from domain configuration (typically agents.json).
     /// Returns prompts used by AgentAdapter to compose full agent instructions during agent creation.

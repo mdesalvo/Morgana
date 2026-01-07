@@ -366,7 +366,7 @@ public class AgentAdapter
     ///     {
     ///         AgentAdapter adapter = sp.GetRequiredService&lt;AgentAdapter&gt;();
     ///         (aiAgent, contextProvider) = adapter.CreateAgent(
-    ///             GetType(), 
+    ///             GetType(),
     ///             OnSharedContextUpdate
     ///         );
     ///     }

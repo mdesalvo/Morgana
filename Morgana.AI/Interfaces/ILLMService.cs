@@ -28,7 +28,7 @@ namespace Morgana.AI.Interfaces;
 ///     "Model": "claude-sonnet-4-20250514"
 ///   }
 /// }
-/// 
+///
 /// // Program.cs
 /// builder.Services.AddSingleton&lt;ILLMService&gt;(sp => {
 ///     string provider = config["LLM:Provider"];
@@ -66,7 +66,7 @@ public interface ILLMService
     /// the user prompt and LLM response to the history, enabling context-aware follow-up messages.</para>
     /// </remarks>
     Task<string> CompleteAsync(string conversationId, string prompt);
-    
+
     /// <summary>
     /// Performs a completion with an explicit system prompt and user prompt.
     /// Commonly used by actors for stateless LLM operations (classification, guard checks, etc.).
@@ -82,18 +82,18 @@ public interface ILLMService
     /// string systemPrompt = "You are a language guard. Verify if the message contains...";
     /// string userPrompt = "User's message text";
     /// string response = await llmService.CompleteWithSystemPromptAsync(
-    ///     conversationId, 
-    ///     systemPrompt, 
+    ///     conversationId,
+    ///     systemPrompt,
     ///     userPrompt
     /// );
     /// // Response: {"compliant": true, "violation": null}
-    /// 
+    ///
     /// // ClassifierActor - Intent classification
     /// string systemPrompt = "You are a classifier. Classify this message into: billing|contract|...";
     /// string userPrompt = "Show me my invoices";
     /// string response = await llmService.CompleteWithSystemPromptAsync(
-    ///     conversationId, 
-    ///     systemPrompt, 
+    ///     conversationId,
+    ///     systemPrompt,
     ///     userPrompt
     /// );
     /// // Response: {"intent": "billing", "confidence": 0.95}
@@ -122,13 +122,13 @@ public interface ILLMService
     /// public (AIAgent agent, MorganaContextProvider provider) CreateAgent(Type agentType)
     /// {
     ///     // ... agent setup ...
-    ///     
+    ///
     ///     AIAgent agent = chatClient.CreateAIAgent(
     ///         instructions: instructions,
     ///         name: intent,
     ///         tools: toolAdapter.CreateAllFunctions().ToArray()
     ///     );
-    ///     
+    ///
     ///     return (agent, contextProvider);
     /// }
     /// </code>
@@ -138,7 +138,7 @@ public interface ILLMService
     /// tool execution and result injection back into the conversation.</para>
     /// </remarks>
     IChatClient GetChatClient();
-    
+
     /// <summary>
     /// Gets the prompt resolver service associated with this LLM service.
     /// Provides access to prompt templates for actors and agents.

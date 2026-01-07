@@ -239,13 +239,13 @@ public static class Records
         /// <para><strong>Usage Examples:</strong></para>
         /// <code>
         /// Prompt morganaPrompt = await promptResolver.ResolveAsync("Morgana");
-        /// 
+        ///
         /// // Get global policies
         /// List&lt;GlobalPolicy&gt; policies = morganaPrompt.GetAdditionalProperty&lt;List&lt;GlobalPolicy&gt;&gt;("GlobalPolicies");
-        /// 
+        ///
         /// // Get tools
         /// ToolDefinition[] tools = morganaPrompt.GetAdditionalProperty&lt;ToolDefinition[]&gt;("Tools");
-        /// 
+        ///
         /// // Get error messages
         /// List&lt;ErrorAnswer&gt; errors = morganaPrompt.GetAdditionalProperty&lt;List&lt;ErrorAnswer&gt;&gt;("ErrorAnswers");
         /// </code>
@@ -373,7 +373,7 @@ public static class Records
         /// <code>
         /// IntentCollection intentCollection = new IntentCollection(intents);
         /// Dictionary&lt;string, string&gt; intentDict = intentCollection.AsDictionary();
-        /// 
+        ///
         /// // Format for LLM: "billing (requests to view invoices)|contract (requests to summarize contract)"
         /// string formattedIntents = string.Join("|", intentDict.Select(kvp => $"{kvp.Key} ({kvp.Value})"));
         /// </code>
@@ -398,7 +398,7 @@ public static class Records
         /// <code>
         /// IntentCollection intentCollection = new IntentCollection(allIntents);
         /// List&lt;IntentDefinition&gt; displayable = intentCollection.GetDisplayableIntents();
-        /// 
+        ///
         /// // Convert to quick replies for SignalR
         /// List&lt;QuickReply&gt; quickReplies = displayable
         ///     .Select(i => new QuickReply(i.Name, i.Label, i.DefaultValue))
@@ -408,7 +408,7 @@ public static class Records
         public List<IntentDefinition> GetDisplayableIntents()
         {
             return Intents
-                .Where(i => !string.Equals(i.Name, "other", StringComparison.OrdinalIgnoreCase) 
+                .Where(i => !string.Equals(i.Name, "other", StringComparison.OrdinalIgnoreCase)
                               && !string.IsNullOrEmpty(i.Label))
                 .ToList();
         }

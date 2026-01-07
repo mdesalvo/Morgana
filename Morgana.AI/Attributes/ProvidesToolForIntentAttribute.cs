@@ -24,7 +24,7 @@ namespace Morgana.AI.Attributes;
 /// <code>
 /// [HandlesIntent("billing")]      // Agent
 /// public class BillingAgent : MorganaAgent { }
-/// 
+///
 /// [ProvidesToolForIntent("billing")]  // Tool (must match)
 /// public class BillingTool : MorganaTool { }
 /// </code>
@@ -53,15 +53,15 @@ namespace Morgana.AI.Attributes;
 ///         : base(toolLogger, getContextProvider)
 ///     {
 ///     }
-///     
+///
 ///     // Tool methods matching definitions in agents.json
-///     
+///
 ///     public async Task&lt;InvoiceList&gt; GetInvoices(string userId, int count)
 ///     {
 ///         // Fetch invoices from backend
 ///         return await FetchInvoicesFromBackend(userId.ToString(), count);
 ///     }
-///     
+///
 ///     public async Task&lt;InvoiceDetails&gt; GetInvoiceDetails(string invoiceId)
 ///     {
 ///         // Fetch invoice details
@@ -131,7 +131,7 @@ public class ProvidesToolForIntentAttribute : Attribute
     /// </list>
     /// </remarks>
     public string Intent { get; }
-    
+
     /// <summary>
     /// Initializes a new instance of the ProvidesToolForIntentAttribute.
     /// </summary>
@@ -154,7 +154,7 @@ public class ProvidesToolForIntentAttribute : Attribute
         {
             throw new ArgumentException("Intent cannot be null or empty", nameof(intent));
         }
-        
+
         Intent = intent;
     }
 }

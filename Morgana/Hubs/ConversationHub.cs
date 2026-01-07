@@ -80,7 +80,7 @@ public class ConversationHub : Hub
     /// <item>Conversation ended via REST API</item>
     /// <item>Client wants to stop receiving updates without disconnecting entirely</item>
     /// </list>
-    /// <para><strong>Note:</strong> Groups are automatically cleaned up on disconnection, 
+    /// <para><strong>Note:</strong> Groups are automatically cleaned up on disconnection,
     /// but explicit leaving is recommended for clean state management.</para>
     /// </remarks>
     public async Task LeaveConversation(string conversationId)

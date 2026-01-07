@@ -34,7 +34,7 @@ namespace Morgana.AI.Services;
 ///     ├── BillingAgent.cs
 ///     ├── ContractAgent.cs
 ///     └── TroubleshootingAgent.cs
-/// 
+///
 /// At runtime:
 /// 1. PluginLoaderService loads Morgana.AI.Examples.dll
 /// 2. EmbeddedAgentConfigurationService scans all assemblies
@@ -57,7 +57,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 {
     private readonly AgentConfiguration configuration;
     private readonly ILogger logger;
-    
+
     /// <summary>
     /// Initializes a new instance of EmbeddedAgentConfigurationService.
     /// Immediately loads agent configuration from embedded agents.json resource.
@@ -69,7 +69,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 
         configuration = LoadAgentConfiguration();
     }
-    
+
     /// <summary>
     /// Gets intent definitions from the loaded agents.json configuration.
     /// </summary>
@@ -78,7 +78,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     {
         return Task.FromResult(configuration.Intents);
     }
-    
+
     /// <summary>
     /// Gets agent prompt configurations from the loaded agents.json configuration.
     /// </summary>
@@ -87,7 +87,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     {
         return Task.FromResult(configuration.Agents);
     }
-    
+
     /// <summary>
     /// Loads agent configuration by scanning all loaded assemblies for agents.json embedded resource.
     /// Returns empty configuration if no agents.json found (graceful degradation).
@@ -114,7 +114,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     ///    📋 Intent: billing - requests to view invoices...
     ///    📋 Intent: contract - requests to summarize contract...
     ///    📋 Intent: troubleshooting - requests to solve technical problems...
-    /// 
+    ///
     /// // No configuration found
     /// Searching for agents.json in loaded assemblies...
     /// ⚠️  No agents.json found in any loaded assembly.
@@ -134,18 +134,18 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     private AgentConfiguration LoadAgentConfiguration()
     {
         logger.LogInformation("Searching for agents.json in loaded assemblies...");
-        
+
         // Search for agents.json in ALL loaded assemblies
         foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic))
         {
             string? resourceName = assembly.GetManifestResourceNames()
                 .FirstOrDefault(n => n.EndsWith(".agents.json", StringComparison.OrdinalIgnoreCase));
-            
+
             if (resourceName != null)
             {
                 logger.LogInformation($"✅ Found agents.json in assembly: {assembly.GetName().Name}");
-                
+
                 try
                 {
                     using Stream? stream = assembly.GetManifestResourceStream(resourceName);
@@ -154,22 +154,22 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                         logger.LogWarning($"Could not open stream for {resourceName}");
                         continue;
                     }
-                    
+
                     AgentConfiguration? config = JsonSerializer.Deserialize<AgentConfiguration>(
-                        stream, 
+                        stream,
                         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    
+
                     if (config != null)
                     {
                         logger.LogInformation(
                             $"✅ Loaded {config.Intents.Count} intents and {config.Agents.Count} agent prompts from agents.json");
-                        
+
                         // Log loaded intents for debugging
                         foreach (Records.IntentDefinition intent in config.Intents)
                         {
                             logger.LogInformation($"   📋 Intent: {intent.Name} - {intent.Description}");
                         }
-                        
+
                         return config;
                     }
                 }
@@ -179,16 +179,16 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                 }
             }
         }
-        
+
         // Fallback: no agents.json found
         logger.LogWarning(
             "⚠️  No agents.json found in any loaded assembly. " +
             "Classifier and presentation will have no intents available. " +
             "Add agents.json as embedded resource to your domain project.");
-        
+
         return new AgentConfiguration([], []);
     }
-    
+
     /// <summary>
     /// Internal record for deserializing agents.json structure.
     /// Maps JSON structure to strongly-typed records.

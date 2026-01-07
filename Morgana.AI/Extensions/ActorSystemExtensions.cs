@@ -16,10 +16,10 @@ namespace Morgana.AI.Extensions;
 /// <code>
 /// // Supervisor for conversation "conv123"
 /// /user/supervisor-conv123
-/// 
+///
 /// // Guard for conversation "conv123"
 /// /user/guard-conv123
-/// 
+///
 /// // Router for conversation "conv123"
 /// /user/router-conv123
 /// </code>
@@ -61,7 +61,7 @@ public static class ActorSystemExtensions
         /// guard = await Context.System.GetOrCreateActor&lt;GuardActor&gt;("guard", conversationId);
         /// classifier = await Context.System.GetOrCreateActor&lt;ClassifierActor&gt;("classifier", conversationId);
         /// router = await Context.System.GetOrCreateActor&lt;RouterActor&gt;("router", conversationId);
-        /// 
+        ///
         /// // Result: /user/guard-conv123, /user/classifier-conv123, /user/router-conv123
         /// </code>
         /// <para><strong>Timeout Behavior:</strong></para>
@@ -120,13 +120,13 @@ public static class ActorSystemExtensions
         ///     {
         ///         // Create agent for this intent
         ///         agents[intent] = await Context.System.GetOrCreateAgent(
-        ///             agentType, 
+        ///             agentType,
         ///             intent,        // actorSuffix = intent name
         ///             conversationId
         ///         );
         ///     }
         /// }
-        /// 
+        ///
         /// // Result for billing intent:
         /// // agents["billing"] = /user/billing-conv123
         /// </code>

@@ -88,7 +88,7 @@ public class RouterActor : MorganaActor
 
         // Route to agent using Ask pattern with PipeTo
         selectedAgent.Ask<AgentResponse>(req, TimeSpan.FromSeconds(60))
-            .PipeTo(Self, 
+            .PipeTo(Self,
                 success: response => new Records.AgentResponseContext(response, selectedAgent, originalSender),
                 failure: ex => new Status.Failure(ex));
     }
@@ -119,7 +119,7 @@ public class RouterActor : MorganaActor
     private void HandleFailure(Status.Failure failure)
     {
         actorLogger.Error(failure.Cause, "Agent routing failed");
-        
+
         Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
         Sender.Tell(new AgentResponse(
             classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), true));
@@ -139,7 +139,7 @@ public class RouterActor : MorganaActor
         actorLogger.Info($"Broadcasting context from '{msg.SourceAgentIntent}': {string.Join(", ", msg.UpdatedValues.Keys)}");
 
         int broadcastCount = 0;
-        
+
         // Broadcast to all agents except the source
         foreach (KeyValuePair<string, IActorRef> kvp in agents)
         {

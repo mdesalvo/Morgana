@@ -27,8 +27,8 @@
 ///     if (agentType != null)
 ///     {
 ///         agents[intent] = await Context.System.GetOrCreateAgent(
-///             agentType, 
-///             intent, 
+///             agentType,
+///             intent,
 ///             conversationId
 ///         );
 ///     }
@@ -62,13 +62,13 @@ public interface IAgentRegistryService
     /// <para><strong>Usage Example:</strong></para>
     /// <code>
     /// Type? agentType = agentRegistryService.ResolveAgentFromIntent("billing");
-    /// 
+    ///
     /// if (agentType != null)
     /// {
     ///     // Found: typeof(BillingAgent) decorated with [HandlesIntent("billing")]
     ///     IActorRef agent = await Context.System.GetOrCreateAgent(
-    ///         agentType, 
-    ///         "billing", 
+    ///         agentType,
+    ///         "billing",
     ///         conversationId
     ///     );
     /// }
@@ -86,7 +86,7 @@ public interface IAgentRegistryService
     /// when an unrecognized intent is classified (e.g., "I'm sorry, I don't know the magic formula for this request").</para>
     /// </remarks>
     Type? ResolveAgentFromIntent(string intent);
-    
+
     /// <summary>
     /// Gets all registered intent names from discovered agents.
     /// Returns the set of intents that have agent implementations available.
@@ -108,7 +108,7 @@ public interface IAgentRegistryService
     /// IEnumerable&lt;string&gt; intents = agentRegistryService.GetAllIntents();
     /// logger.LogInformation($"Registered agents for intents: {string.Join(", ", intents)}");
     /// // Output: "Registered agents for intents: billing, contract, troubleshooting"
-    /// 
+    ///
     /// // RouterActor: Create agent for each registered intent
     /// foreach (string intent in agentRegistryService.GetAllIntents())
     /// {

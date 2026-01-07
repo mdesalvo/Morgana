@@ -31,7 +31,7 @@ namespace Morgana.AI.Services;
 /// // Framework prompt
 /// Prompt guardPrompt = await resolver.ResolveAsync("Guard");
 /// // Loaded from: morgana.json (embedded in Morgana.AI assembly)
-/// 
+///
 /// // Domain prompt
 /// Prompt billingPrompt = await resolver.ResolveAsync("billing");
 /// // Loaded from: agents.json (via IAgentConfigurationService)
@@ -50,7 +50,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     /// Cached at service initialization for performance.
     /// </summary>
     private readonly Records.Prompt[] morganaPrompts;
-    
+
     /// <summary>
     /// Service for loading domain-specific agent prompts from agents.json or other sources.
     /// </summary>
@@ -87,12 +87,12 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     ///   - Classifier (intent classification)
     ///   - Guard (content moderation)
     ///   - Presentation (welcome message generation)
-    /// 
+    ///
     /// Domain prompts (3):
     ///   - billing (Billing agent prompt)
     ///   - contract (Contract agent prompt)
     ///   - troubleshooting (Troubleshooting agent prompt)
-    /// 
+    ///
     /// Total: 7 prompts
     /// </code>
     /// </remarks>
@@ -107,7 +107,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     /// Resolves a specific prompt by ID, searching both framework and domain sources.
     /// </summary>
     /// <param name="promptID">
-    /// Unique prompt identifier. 
+    /// Unique prompt identifier.
     /// Framework IDs: "Morgana", "Classifier", "Guard", "Presentation"
     /// Domain IDs: intent names like "billing", "contract", "troubleshooting"
     /// </param>
@@ -131,7 +131,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     public async Task<Records.Prompt> ResolveAsync(string promptID)
     {
         Records.Prompt[] allPrompts = await GetAllPromptsAsync();
-        
+
         Records.Prompt? prompt = allPrompts
             .SingleOrDefault(p => string.Equals(p.ID, promptID, StringComparison.OrdinalIgnoreCase));
 
@@ -174,11 +174,11 @@ public class ConfigurationPromptResolverService : IPromptResolverService
 
         using Stream? stream = assembly.GetManifestResourceStream(resourceName)
             ?? throw new FileNotFoundException("Resource morgana.json not found in Morgana.AI assembly.");
-        
+
         Records.PromptCollection? promptsCollection = JsonSerializer.Deserialize<Records.PromptCollection>(
-            stream, 
+            stream,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        
+
         return promptsCollection?.Prompts ?? [];
     }
 }

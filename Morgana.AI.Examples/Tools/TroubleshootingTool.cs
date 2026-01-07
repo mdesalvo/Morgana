@@ -612,7 +612,7 @@ public class TroubleshootingTool : MorganaTool
         // Detailed Steps
         sb.AppendLine("**📝 Detailed Instructions:**");
         sb.AppendLine();
-        
+
         foreach (TroubleshootingStep step in guide.Steps)
         {
             sb.AppendLine($"**═══ Step {step.StepNumber}: {step.Title} ═══**");
