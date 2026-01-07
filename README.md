@@ -5,11 +5,11 @@
     </td>
     <td>
       <h1>Morgana</h1>
-      <p><strong>A modern, flexible, domain-agnostic multi-agent conversational AI framework</strong></p>
+      <p><strong>A modern, flexible, domain-agnostic, multi-agent conversational AI framework</strong></p>
       <p>
-        <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10"/>
-        <img src="https://img.shields.io/badge/Akka.NET-512BD4?logo=nuget" alt="Akka.NET"/>
-        <img src="https://img.shields.io/badge/Microsoft.Agents.AI-512BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
+        <img src="https://img.shields.io/badge/.NET-10.0-932BD4?logo=dotnet" alt=".NET 10"/>
+        <img src="https://img.shields.io/badge/Akka.NET-932BD4?logo=nuget" alt="Akka.NET"/>
+        <img src="https://img.shields.io/badge/Microsoft.Agents.AI-932BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
       </p>
     </td>
   </tr>
@@ -17,7 +17,7 @@
 
 ## Overview
 
-Morgana is a modern **conversational AI framework** designed to handle complex scenarios through a sophisticated **multi-agent intent-driven architecture**. Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET, Morgana orchestrates specialized **AI agents** that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness.
+Morgana is a modern **conversational AI framework** designed to handle complex scenarios through a sophisticated **multi-agent intent-driven architecture**. Built on cutting-edge .NET 10 and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness.
 
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
@@ -42,9 +42,8 @@ Traditional chatbot systems often struggle with complexity—they either become 
 ### High-Level Component Flow
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                         User Request                          │
-└─────────────────────────────┬─────────────────────────────────┘
+                          User Request
+                              │
                               │
                               ▼
 ┌───────────────────────────────────────────────────────────────┐
@@ -155,7 +154,7 @@ Guard behavior is defined in `morgana.json` with customizable violation terms an
 An intelligent classifier actor that analyzes user intent and determines the appropriate handling path.
 
 **Intent Recognition:**
-The classifier identifies specific intents configured in `agents.json`. **Example** built-in intents include:
+The classifier identifies specific intents configured in `agents.json`. **Example** built-in intents are:
 - `billing`: Fetch invoices or payment history
 - `troubleshooting`: Diagnose connectivity or device issues
 - `contract`: Handle service contracts and cancellations
@@ -173,7 +172,7 @@ This actor works as a smart router, dynamically resolving the appropriate Morgan
 RouterActor also serves as the **message bus for P2P context synchronization** between agents. When an agent updates a shared context variable, RouterActor broadcasts the update to all other agents, ensuring seamless information sharing across the system.
 
 #### 6. Morgana Agents (Domain-Specific, Extensible!)
-Specialized agents with domain-specific knowledge and tool access. The system includes three built-in **example** agents, but **the architecture is fully extensible** to support any domain-specific intent.
+Specialized agents with domain-specific knowledge and tool access. The system includes three built-in **example** agents, but **the architecture is fully extensible** to support any domain-specific intent via autodiscovery.
 
 **BillingAgent** (example)
 - **Tools**: `GetInvoices()`, `GetInvoiceDetails()`, `SetQuickReplies()`
@@ -195,17 +194,19 @@ Specialized agents with domain-specific knowledge and tool access. The system in
 
 **Adding Custom Agents:**
 To add a new agent for your domain:
-1. Define the intent in `agents.json` (Classifier section)
+1. Define the intent in `agents.json` (Intents section)
 2. Create a prompt configuration for the agent behavior
-3. Implement a new class inheriting from `MorganaAgent`
-4. Decorate with `[HandlesIntent("your_intent")]`
-5. Define tools and inject via `AgentAdapter`
+3. Implement a new class inheriting from `MorganaAgent` -> the agent
+4. Decorate it with `[HandlesIntent("your_intent")]`
+5. Implement a new class inheriting from `MorganaTool` -> the tools
+6. Decorate it with `[ProvidesToolForIntent("your_intent")]`
+7. Exploit `AgentAdapter` to activate the agent as `AIAgent`
 
-The `AgentRegistryService` automatically discovers and validates all agents at startup.
+The `IAgentRegistryService` and `IAgentConfigurationService` will automatically discover and validate all agents at startup.
 
 ## Conversational Memory & Context Management
 
-Morgana leverages **Microsoft.Agents.AI framework** for native conversation history and context management, eliminating the need for manual memory handling.
+Morgana leverages **Microsoft.Agents.AI** framework for native conversation history and context management, eliminating the need for manual memory handling.
 
 ### AgentThread: Automatic Conversation History
 
@@ -256,24 +257,6 @@ public class MorganaContextProvider : AIContextProvider
 3. **Merge Strategy**: Implements first-write-wins for incoming context updates
 4. **Serialization Support**: Enables persistence with `AgentThread` for future enhancements
 5. **Temporary Variable Management**: `DropVariable()` for explicit cleanup of ephemeral data
-
-**Context Variable Types:**
-
-**Persistent Variables:**
-```csharp
-// Stored indefinitely in agent context
-contextProvider.SetVariable("userId", "U99");  // Remains until conversation ends
-```
-
-**Temporary Variables:**
-```csharp
-// Used and immediately discarded
-contextProvider.SetVariable("__pending_quick_replies", json);
-// ...
-contextProvider.DropVariable("__pending_quick_replies");  // Explicit cleanup
-```
-
-**Convention:** Temporary variables use `__` prefix (e.g., `__pending_quick_replies`) to signal ephemeral nature.
 
 ### Integration with Tools
 
@@ -547,7 +530,7 @@ In this example:
 
 ## Quick Replies System
 
-Morgana implements a **LLM-driven Quick Replies system** that enables agents to dynamically generate interactive button options for users, significantly improving UX for multi-choice scenarios and guided conversations.
+Morgana implements a **LLM-driven Quick Replies** system that enables agents to dynamically generate interactive button options for users, significantly improving UX for multi-choice scenarios and guided conversations.
 
 ### The Problem
 
@@ -584,7 +567,7 @@ The LLM has access to a **system tool** that enables dynamic button generation:
   "Description": "SYSTEM TOOL to create interactive button options for the user...",
   "Parameters": [
     {
-      "Name": "quickRepliesJSON",
+      "Name": "quickReplies",
       "Description": "JSON string containing quick reply button definitions",
       "Required": true,
       "Scope": "context",
@@ -618,13 +601,13 @@ Quick replies are stored as **temporary context** using the special key `__pendi
 
 ```csharp
 // MorganaTool.SetQuickReplies()
-public Task<object> SetQuickReplies(string quickRepliesJSON)
+public Task<object> SetQuickReplies(string quickReplies)
 {
     // Validate and parse JSON
-    var parsed = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickRepliesJSON);
+    var parsedQuickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickRepliesJSON);
     
     // Store as temporary context (private, not shared)
-    contextProvider.SetVariable("__pending_quick_replies", quickRepliesJSON);
+    contextProvider.SetVariable("__pending_quick_replies", quickReplies);
     
     return Task.FromResult<object>(
         "Quick reply buttons set successfully. The user will see N interactive options.");
@@ -654,8 +637,8 @@ protected async Task ExecuteAgentAsync(Records.AgentRequest req)
     return new AgentResponse(cleanText, isCompleted, quickReplies);
 }
 
-// MorganaAgent.RetrieveToolQuickReplies()
-protected virtual List<Records.QuickReply>? RetrieveToolQuickReplies()
+// MorganaAgent.GetQuickRepliesFromContext()
+protected virtual List<Records.QuickReply>? GetQuickRepliesFromContext()
 {
     // Retrieve JSON from context
     var json = contextProvider.GetVariable("__pending_quick_replies") as string;
@@ -732,7 +715,7 @@ TEXT: "I found 3 recent invoices. Select one below to view details."
 BUTTONS: [📄 INV-001 €130] [📄 INV-002 €150] [📄 INV-003 €125]
 ```
 
-**Prompt Guidance** (`morgana_en.json`):
+**Prompt Guidance** (`morgana.json`):
 ```
 CRITICAL: When using quick replies, your TEXT response should be a brief contextual 
 introduction WITHOUT listing the options themselves - the buttons will show the options 
@@ -765,13 +748,13 @@ Buttons: [✅ Yes, Proceed] [❌ No, Cancel]
 
 ### Configuration
 
-**Tool Definition** (`morgana_en.json`):
+**Tool Definition** (`morgana.json`):
 ```json
 {
   "Name": "SetQuickReplies",
   "Parameters": [
     {
-      "Name": "quickRepliesJSON",
+      "Name": "quickReplies",
       "Scope": "context",
       "Shared": false
     }
@@ -818,26 +801,6 @@ public record QuickReply(
 6. **Guided UX**: Users see available options explicitly, reducing confusion
 7. **Agent Continuity**: Button clicks handled via follow-up flow, maintaining context
 8. **Temporary Storage**: Buttons don't pollute persistent context, cleared after use
-
-### Technical Details
-
-**Storage Key Convention:**
-- Key: `__pending_quick_replies`
-- Scope: Private to agent (not shared)
-- Lifecycle: Set during LLM execution → Retrieved after → Immediately dropped
-
-**JSON Format:**
-```json
-[
-  {"id": "opt1", "label": "🔧 Option 1", "value": "User message for option 1"},
-  {"id": "opt2", "label": "📖 Option 2", "value": "User message for option 2"}
-]
-```
-
-**Limits:**
-- Recommended: 3-5 buttons maximum (UI constraint)
-- Label: Emoji-enhanced for visual appeal
-- Value: Natural user message (not system command)
 
 ## Personality System
 
@@ -1248,12 +1211,6 @@ public class BillingTool : MorganaTool
     public async Task<string> GetInvoices(string userId, int count = 3)
     {
        // Implementation
-    }
-    
-    // System tool available to all agents
-    public async Task<object> SetQuickReplies(string quickRepliesJSON)
-    {
-       // Stores temporary quick reply buttons in context
     }
 }
 
