@@ -119,32 +119,31 @@ public class AgentAdapter
     private string ComposeAgentInstructions(Prompt agentPrompt)
     {
         List<GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<GlobalPolicy>>("GlobalPolicies");
-        string formattedPolicies = FormatGlobalPolicies(globalPolicies);
-
         StringBuilder sb = new StringBuilder();
 
-        // Morgana framework instructions
+        // Morgana prompting
 
         sb.AppendLine(morganaPrompt.Content);
-        if (!string.IsNullOrEmpty(morganaPrompt.Personality))
-        {
-            sb.AppendLine(morganaPrompt.Personality);
-            sb.AppendLine();
-        }
-        sb.AppendLine(formattedPolicies);
+        sb.AppendLine();
+        sb.AppendLine(morganaPrompt.Personality);
+        sb.AppendLine();
+        sb.AppendLine(FormatGlobalPolicies(globalPolicies));
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Instructions);
         sb.AppendLine();
+        sb.AppendLine(morganaPrompt.Formatting);
+        sb.AppendLine();
 
-        // Agent-specific instructions
+        // Agent-specific prompting
 
         sb.AppendLine(agentPrompt.Content);
-        if (!string.IsNullOrEmpty(agentPrompt.Personality))
-        {
-            sb.AppendLine(agentPrompt.Personality);
-            sb.AppendLine();
-        }
-        sb.Append(agentPrompt.Instructions);
+        sb.AppendLine();
+        sb.AppendLine(agentPrompt.Personality);
+        sb.AppendLine();
+        sb.AppendLine(agentPrompt.Instructions);
+        sb.AppendLine();
+        sb.AppendLine(agentPrompt.Formatting);
+        sb.AppendLine();
 
         return sb.ToString();
     }

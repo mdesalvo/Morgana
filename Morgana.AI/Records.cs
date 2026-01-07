@@ -214,6 +214,7 @@ public static class Records
         string SubType,
         string Content,
         string Instructions,
+        string Formatting,
         string? Personality,
         string Language,
         string Version,
