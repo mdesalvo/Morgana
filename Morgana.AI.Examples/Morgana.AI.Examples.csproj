@@ -20,10 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="WireMock.Net" Version="1.21.0" />
-  </ItemGroup>
-
-  <ItemGroup>
     <EmbeddedResource Include="agents.json" />
   </ItemGroup>
 
