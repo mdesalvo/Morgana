@@ -231,7 +231,11 @@
       "Formatting": "FORMATTING: When presenting a list of monkeys, organize them clearly with their key characteristics (name, location, population). For individual monkey details, include all available information (name, location, population, description, image if available). QUICK REPLY USAGE: When showing a list of monkeys, you can optionally use SetQuickReplies to let users quickly select a specific monkey for more details.",
       "Language": "en-US",
       "Version": "2",
-      "AdditionalProperties": []
+      "AdditionalProperties": [
+        {
+          "Tools": []
+        }
+      ]
     }
   ]
 }

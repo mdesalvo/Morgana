@@ -21,9 +21,9 @@ namespace Morgana.AI.Examples.Agents;
 /// </summary>
 [HandlesIntent("monkeys")]
 [UsesMCPServers("MonkeyMCP")]
-public class MonkeyExampleAgent : MorganaAgent
+public class MonkeyAgent : MorganaAgent
 {
-    public MonkeyExampleAgent(
+    public MonkeyAgent(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
