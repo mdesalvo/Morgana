@@ -17,9 +17,10 @@ This release ...
 ### 🔄 Changed
 
 **Dynamic Welcome**
-- Morgana now welcomes with a dynamic landing message from appsettings.json (`Morgana:LandingMessages`)
+- Morgana now welcomes with a dynamic configurable landing message (`Morgana:LandingMessages`)
 
 ### 🐛 Fixed
+- Typing message was always tied to color scheme of "Morgana" agent
 
 ### 🚀 Future Enablement
 
