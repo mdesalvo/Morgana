@@ -84,14 +84,42 @@ public class AgentAdapter
         return sb.ToString();
     }
 
-    private List<string> ExtractSharedVariables(IEnumerable<ToolDefinition> tools)
+    /// <summary>
+    /// Creates a fully configured AIAgent instance from a Morgana agent type.
+    /// </summary>
+    public (AIAgent agent, MorganaContextProvider provider) CreateAgent(
+        Type agentType,
+        Action<string, object>? sharedContextCallback = null)
     {
-        return tools
-            .SelectMany(t => t.Parameters)
-            .Where(p => p.Shared && string.Equals(p.Scope, "context", StringComparison.OrdinalIgnoreCase))
-            .Select(p => p.Name)
-            .Distinct()
-            .ToList();
+        HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>();
+        if (intentAttribute == null)
+            throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
+
+        string intent = intentAttribute.Intent;
+
+        logger.LogInformation($"Creating agent for intent '{intent}'...");
+
+        Prompt agentPrompt = promptResolverService.ResolveAsync(intent).GetAwaiter().GetResult();
+
+        ToolDefinition[] agentTools = [.. morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
+                                            .Union(agentPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
+
+        MorganaContextProvider contextProvider = CreateContextProvider(intent, agentTools, sharedContextCallback);
+
+        ToolAdapter toolAdapter = CreateToolAdapterForIntent(intent, agentTools, contextProvider);
+
+        // Register MCP tools if service available
+        if (mcpClientService != null)
+            RegisterMCPTools(agentType, toolAdapter);
+
+        string instructions = ComposeAgentInstructions(agentPrompt);
+
+        AIAgent agent = chatClient.CreateAIAgent(
+            instructions: instructions,
+            name: intent,
+            tools: [.. toolAdapter.CreateAllFunctions()]);
+
+        return (agent, contextProvider);
     }
 
     private MorganaContextProvider CreateContextProvider(
@@ -112,6 +140,16 @@ public class AgentAdapter
             provider.OnSharedContextUpdate = sharedContextCallback;
 
         return provider;
+    }
+
+    private List<string> ExtractSharedVariables(IEnumerable<ToolDefinition> tools)
+    {
+        return tools
+            .SelectMany(t => t.Parameters)
+            .Where(p => p.Shared && string.Equals(p.Scope, "context", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Name)
+            .Distinct()
+            .ToList();
     }
 
     private ToolAdapter CreateToolAdapterForIntent(
@@ -234,6 +272,7 @@ public class AgentAdapter
                 string prefixedName = $"{serverName}_{kvp.Key}";
                 ToolDefinition prefixedDef = kvp.Value.toolDefinition with { Name = prefixedName };
                 toolAdapter.AddTool(prefixedName, kvp.Value.toolDelegate, prefixedDef);
+
                 logger.LogInformation($"Registered MCP tool: {prefixedName}");
             }
             catch (Exception ex)
@@ -243,43 +282,5 @@ public class AgentAdapter
         }
 
         logger.LogInformation($"Successfully registered {convertedTools.Count} MCP tools from {serverName}");
-    }
-
-    /// <summary>
-    /// Creates a fully configured AIAgent instance from a Morgana agent type.
-    /// </summary>
-    public (AIAgent agent, MorganaContextProvider provider) CreateAgent(
-        Type agentType,
-        Action<string, object>? sharedContextCallback = null)
-    {
-        HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>();
-        if (intentAttribute == null)
-            throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
-
-        string intent = intentAttribute.Intent;
-
-        logger.LogInformation($"Creating agent for intent '{intent}'...");
-
-        Prompt agentPrompt = promptResolverService.ResolveAsync(intent).GetAwaiter().GetResult();
-
-        ToolDefinition[] agentTools = [.. morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
-                                            .Union(agentPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
-
-        MorganaContextProvider contextProvider = CreateContextProvider(intent, agentTools, sharedContextCallback);
-
-        ToolAdapter toolAdapter = CreateToolAdapterForIntent(intent, agentTools, contextProvider);
-
-        // Register MCP tools if service available
-        if (mcpClientService != null)
-            RegisterMCPTools(agentType, toolAdapter);
-
-        string instructions = ComposeAgentInstructions(agentPrompt);
-
-        AIAgent agent = chatClient.CreateAIAgent(
-            instructions: instructions,
-            name: intent,
-            tools: [.. toolAdapter.CreateAllFunctions()]);
-
-        return (agent, contextProvider);
     }
 }
