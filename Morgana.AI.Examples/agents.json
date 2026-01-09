@@ -222,7 +222,7 @@
       ]
     },
     {
-      "ID": "MonkeyExample",
+      "ID": "Monkeys",
       "Type": "INTENT",
       "SubType": "AGENT",
       "Content": "TARGET: You have access to the MonkeyMCP server which provides information about monkey species from around the world. You can retrieve a complete list of all monkeys or find detailed information about specific monkey species by name.",
