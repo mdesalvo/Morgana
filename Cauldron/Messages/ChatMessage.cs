@@ -27,54 +27,54 @@ public class ChatMessage
     /// Unique identifier of the conversation this message belongs to.
     /// </summary>
     public string ConversationId { get; set; } = string.Empty;
-    
+
     /// <summary>
     /// Message text content displayed to the user.
     /// </summary>
     public string Text { get; set; } = string.Empty;
-    
+
     /// <summary>
     /// Timestamp when the message was created or received.
     /// Displayed in HH:mm format in the UI.
     /// </summary>
     public DateTime Timestamp { get; set; }
-    
+
     /// <summary>
     /// Type of message determining styling and behavior.
     /// </summary>
     public MessageType Type { get; set; }
-    
+
     /// <summary>
     /// Optional list of quick reply buttons attached to this message.
     /// Only applicable for assistant messages (typically presentation messages).
     /// </summary>
     public List<QuickReply>? QuickReplies { get; set; }
-    
+
     /// <summary>
     /// Optional error reason if Type = Error.
     /// Contains technical error details for debugging.
     /// </summary>
     public string? ErrorReason { get; set; }
-    
+
     /// <summary>
     /// Name of the agent that generated this message.
     /// Examples: "Morgana", "Morgana (Billing)", "Morgana (Contract)", ...
     /// Used to display agent avatar and header color.
     /// </summary>
     public string AgentName { get; set; } = "Morgana";
-    
+
     /// <summary>
     /// Indicates whether the agent has completed its task after this message.
     /// When true, the UI returns to idle state (header shows "Morgana", purple color).
     /// </summary>
     public bool AgentCompleted { get; set; } = false;
-    
+
     /// <summary>
     /// Tracks which quick reply button was clicked by the user.
     /// When set, all quick reply buttons are disabled and the selected one shows a checkmark.
     /// </summary>
     public string? SelectedQuickReplyId { get; set; }
-    
+
     /// <summary>
     /// Gets or sets the message role for CSS styling ("user" or "assistant").
     /// Automatically converts between MessageType enum and string role.
@@ -105,7 +105,7 @@ public class ChatMessage
             _ => MessageType.Assistant
         };
     }
-    
+
     /// <summary>
     /// Indicates whether this message is a typing indicator.
     /// When true, displays animated three-dot typing indicator instead of text.
@@ -114,7 +114,7 @@ public class ChatMessage
     /// Typing indicators are temporary messages removed when the actual agent response arrives.
     /// </remarks>
     public bool IsTyping { get; set; }
-    
+
     /// <summary>
     /// Indicates whether this message represents an error.
     /// When true, message displays with error styling (red/warning appearance).
@@ -132,19 +132,19 @@ public enum MessageType
     /// Displayed on the right side with user styling.
     /// </summary>
     User,
-    
+
     /// <summary>
     /// Regular response from an agent.
     /// Displayed on the left side with agent avatar and assistant styling.
     /// </summary>
     Assistant,
-    
+
     /// <summary>
     /// Welcome or completion message with special styling.
     /// Typically includes quick reply buttons for user interaction.
     /// </summary>
     Presentation,
-    
+
     /// <summary>
     /// Error message with error styling.
     /// Displayed when backend errors occur or exceptions are caught.
