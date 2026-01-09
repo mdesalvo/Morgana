@@ -7,7 +7,6 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Examples.Agents;
 
 [HandlesIntent("billing")]
-[UsesMCPServers("BillingServer")]
 public class BillingAgent : MorganaAgent
 {
     public BillingAgent(
