@@ -15,15 +15,15 @@ public class MCPClientService : IMCPClientService
 {
     private readonly IConfiguration configuration;
     private readonly ILogger logger;
-    private readonly ConcurrentDictionary<string, MCPClient> clients;
+    private readonly ConcurrentDictionary<string, MCPClient> mcpClients;
     private readonly Dictionary<string, MCPServerConfig> serverConfigs;
     private bool disposed = false;
 
-    public MCPClientService(IConfiguration configuration, ILogger<MCPClientService> logger)
+    public MCPClientService(IConfiguration configuration, ILogger logger)
     {
         this.configuration = configuration;
         this.logger = logger;
-        this.clients = new ConcurrentDictionary<string, MCPClient>();
+        this.mcpClients = new ConcurrentDictionary<string, MCPClient>();
         this.serverConfigs = new Dictionary<string, MCPServerConfig>();
 
         LoadServerConfigurations();
@@ -81,31 +81,34 @@ public class MCPClientService : IMCPClientService
                 $"Available servers: {string.Join(", ", serverConfigs.Keys)}");
         }
 
-        // Get or create client atomically
-        MCPClient client = clients.GetOrAdd(serverName, _ =>
+        // Check if client already exists
+        if (mcpClients.TryGetValue(serverName, out MCPClient? existingClient))
         {
-            logger.LogInformation($"Creating new MCP client for server: {serverName}");
-            return new MCPClient(config, logger);
-        });
-
-        // Ensure client is connected
-        if (!client.IsConnected)
-        {
-            try
-            {
-                await client.ConnectAsync();
-                logger.LogInformation($"Successfully connected to MCP server: {serverName}");
-            }
-            catch (Exception ex)
-            {
-                // Remove failed client from pool
-                clients.TryRemove(serverName, out _);
-                logger.LogError(ex, $"Failed to connect to MCP server: {serverName}");
-                throw new InvalidOperationException($"Failed to connect to MCP server '{serverName}'", ex);
-            }
+            return existingClient;
         }
 
-        return client;
+        // Create new client (MCPClient.ConnectAsync is static factory method)
+        try
+        {
+            logger.LogInformation($"Creating new MCP client for server: {serverName}");
+            MCPClient client = await MCPClient.ConnectAsync(config, logger);
+            
+            // Try to add to pool (another thread might have added it meanwhile)
+            if (mcpClients.TryAdd(serverName, client))
+            {
+                logger.LogInformation($"Successfully connected to MCP server: {serverName}");
+                return client;
+            }
+
+            // Another thread won the race - dispose our client and use theirs
+            await client.DisposeAsync();
+            return mcpClients[serverName];
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, $"Failed to connect to MCP server: {serverName}");
+            throw new InvalidOperationException($"Failed to connect to MCP server '{serverName}'", ex);
+        }
     }
 
     /// <summary>
@@ -113,11 +116,11 @@ public class MCPClientService : IMCPClientService
     /// </summary>
     public async Task DisconnectClientAsync(string serverName)
     {
-        if (clients.TryRemove(serverName, out MCPClient? client))
+        if (mcpClients.TryRemove(serverName, out MCPClient? client))
         {
             try
             {
-                await client.DisconnectAsync();
+                await client.DisposeAsync();
                 logger.LogInformation($"Disconnected MCP client: {serverName}");
             }
             catch (Exception ex)
@@ -133,16 +136,16 @@ public class MCPClientService : IMCPClientService
     /// </summary>
     public async Task DisconnectAllAsync()
     {
-        logger.LogInformation($"Disconnecting {clients.Count} MCP clients...");
+        logger.LogInformation($"Disconnecting {mcpClients.Count} MCP clients...");
 
-        List<Task> disconnectTasks = new List<Task>();
-        foreach (KeyValuePair<string, MCPClient> kvp in clients)
+        List<Task> disconnectTasks = [];
+        foreach (KeyValuePair<string, MCPClient> kvp in mcpClients)
         {
             disconnectTasks.Add(Task.Run(async () =>
             {
                 try
                 {
-                    await kvp.Value.DisconnectAsync();
+                    await kvp.Value.DisposeAsync();
                     logger.LogInformation($"Disconnected MCP client: {kvp.Key}");
                 }
                 catch (Exception ex)
@@ -153,7 +156,7 @@ public class MCPClientService : IMCPClientService
         }
 
         await Task.WhenAll(disconnectTasks);
-        clients.Clear();
+        mcpClients.Clear();
         logger.LogInformation("All MCP clients disconnected");
     }
 

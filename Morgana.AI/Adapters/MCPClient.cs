@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -7,217 +6,174 @@ using static Morgana.AI.Records;
 namespace Morgana.AI.Adapters;
 
 /// <summary>
-/// MCP client implementation using ModelContextProtocol.Core SDK.
-/// Provides connection, tool discovery, and tool invocation for MCP servers.
+/// MCP client wrapper using ModelContextProtocol.Core SDK v0.5.0-preview.1
 /// </summary>
-public class MCPClient
+public class MCPClient : IAsyncDisposable
 {
-    private readonly MCPServerConfig config;
-    private readonly ILogger logger;
-    private McpClient? wrappedClient;
-    private bool isConnected;
+    private readonly McpClient _client;
+    private readonly ILogger _logger;
+    private readonly MCPServerConfig _config;
 
-    public bool IsConnected => isConnected;
-
-    public MCPClient(MCPServerConfig config, ILogger logger)
+    private MCPClient(McpClient client, MCPServerConfig config, ILogger logger)
     {
-        this.config = config;
-        this.logger = logger;
-        this.isConnected = false;
+        _client = client;
+        _config = config;
+        _logger = logger;
     }
 
     /// <summary>
-    /// Establishes connection to the MCP server based on URI scheme.
-    /// Supports stdio:// and sse:// (or https://) transports.
+    /// Creates and connects to MCP server
     /// </summary>
-    public async Task ConnectAsync()
+    public static async Task<MCPClient> ConnectAsync(
+        MCPServerConfig config,
+        ILogger logger,
+        CancellationToken cancellationToken = default)
     {
-        if (isConnected)
-        {
-            logger.LogDebug($"MCP client already connected to: {config.Name}");
-            return;
-        }
-
         logger.LogInformation($"Connecting to MCP server: {config.Name} ({config.Uri})");
+
+        Uri uri = new Uri(config.Uri);
+        IClientTransport transport;
+
+        if (uri.Scheme == "stdio")
+        {
+            // stdio transport
+            string command = uri.LocalPath;
+            IList<string>? args = null;
+
+            if (config.AdditionalSettings?.TryGetValue("Args", out string? argsJson) == true)
+            {
+                args = System.Text.Json.JsonSerializer.Deserialize<string[]>(argsJson);
+            }
+
+            StdioClientTransportOptions options = new StdioClientTransportOptions
+            {
+                Command = command,
+                Arguments = args,
+                Name = config.Name
+            };
+
+            transport = new StdioClientTransport(options);
+            logger.LogDebug($"Created stdio transport: {command}");
+        }
+        else if (uri.Scheme == "https" || uri.Scheme == "http")
+        {
+            // HTTP transport (SSE or Streamable HTTP)
+            HttpClientTransportOptions options = new HttpClientTransportOptions
+            {
+                Endpoint = uri,
+                Name = config.Name
+            };
+
+            // Add custom headers if present
+            if (config.AdditionalSettings != null)
+            {
+                Dictionary<string, string> headers = new Dictionary<string, string>();
+                foreach (KeyValuePair<string, string> kvp in config.AdditionalSettings)
+                {
+                    if (kvp.Key != "Args") // Skip Args, only for stdio
+                    {
+                        headers[kvp.Key] = kvp.Value;
+                    }
+                }
+                if (headers.Count > 0)
+                {
+                    options.AdditionalHeaders = headers;
+                }
+            }
+
+            transport = new HttpClientTransport(options);
+            logger.LogDebug($"Created HTTP transport: {uri}");
+        }
+        else
+        {
+            throw new NotSupportedException(
+                $"Unsupported scheme: {uri.Scheme}. Use 'stdio://', 'http://', or 'https://'");
+        }
 
         try
         {
-            Uri uri = new Uri(config.Uri);
-            IClientTransport transport;
+            // McpClient.CreateAsync handles connection + initialize handshake
+            McpClient mcpClient = await McpClient.CreateAsync(
+                transport,
+                clientOptions: null, // Use defaults
+                cancellationToken: cancellationToken);
 
-            if (uri.Scheme == "stdio")
-            {
-                // Create stdio transport
-                string command = uri.LocalPath;
-                string[]? args = null;
-
-                // Parse args from AdditionalSettings if present
-                if (config.AdditionalSettings?.TryGetValue("Args", out string? argsJson) == true)
-                {
-                    args = JsonSerializer.Deserialize<string[]>(argsJson);
-                }
-
-                // Create STDIO transport
-                transport = new StdioClientTransport(
-                    new StdioClientTransportOptions
-                    {
-                        Arguments = args, 
-                        Command = command
-                    });
-                logger.LogDebug($"Created stdio transport: {command} {string.Join(" ", args ?? Array.Empty<string>())}");
-            }
-            else if (uri.Scheme == "sse" || uri.Scheme == "https" || uri.Scheme == "http")
-            {
-                // Create SSE/HTTP transport
-                transport = new HttpClientTransport(
-                    new HttpClientTransportOptions
-                    {
-                        Endpoint = uri
-                    });
-                logger.LogDebug($"Created SSE transport: {uri}");
-            }
-            else
-            {
-                throw new NotSupportedException($"Unsupported MCP transport scheme: {uri.Scheme}");
-            }
-
-            // Create client with transport
-            wrappedClient = await McpClient.CreateAsync(transport);
-
-            // Initialize connection
-            InitializeRequest initRequest = new InitializeRequest
-            {
-                ProtocolVersion = "1.0",
-                ClientInfo = new Implementation
-                {
-                    Name = "Morgana.AI",
-                    Version = "1.0.0"
-                },
-                Capabilities = new ClientCapabilities
-                {
-                    // Add client capabilities as needed
-                }
-            };
-
-            InitializeResponse? initResponse = await wrappedClient.InitializeAsync(initRequest);
-            
-            if (initResponse == null)
-            {
-                throw new Exception("MCP server returned null initialize response");
-            }
-
-            logger.LogInformation($"Connected to MCP server: {config.Name}, version={initResponse.ProtocolVersion}");
-            isConnected = true;
+            logger.LogInformation($"Connected to MCP server: {config.Name}");
+            return new MCPClient(mcpClient, config, logger);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, $"Failed to connect to MCP server: {config.Name}");
-            isConnected = false;
             throw;
         }
     }
 
     /// <summary>
-    /// Discovers available tools from the MCP server via ListTools request.
+    /// Discovers tools via ListToolsAsync
     /// </summary>
-    /// <returns>List of tool definitions</returns>
-    public async Task<List<Tool>> DiscoverToolsAsync()
+    public async Task<IList<Tool>> DiscoverToolsAsync(CancellationToken cancellationToken = default)
     {
-        if (!isConnected || wrappedClient == null)
-        {
-            throw new InvalidOperationException($"MCP client not connected to server: {config.Name}");
-        }
-
         try
         {
-            logger.LogDebug($"Discovering tools from MCP server: {config.Name}");
-
-            ListToolsResponse? response = await wrappedClient.ListToolsAsync(new ListToolsRequest());
-
-            if (response?.Tools == null)
-            {
-                logger.LogWarning($"MCP server returned no tools: {config.Name}");
-                return new List<Tool>();
-            }
-
-            logger.LogInformation($"Discovered {response.Tools.Count} tools from MCP server: {config.Name}");
-            return response.Tools;
+            _logger.LogDebug($"Discovering tools from: {_config.Name}");
+            
+            // McpClient.ListToolsAsync returns IList<McpClientTool>
+            IList<McpClientTool> mcpTools = await _client.ListToolsAsync(cancellationToken: cancellationToken);
+            
+            // Extract protocol Tool metadata
+            List<Tool> tools = mcpTools.Select(t => t.ProtocolTool).ToList();
+            
+            _logger.LogInformation($"Discovered {tools.Count} tools from: {_config.Name}");
+            return tools;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to discover tools from MCP server: {config.Name}");
+            _logger.LogError(ex, $"Failed to discover tools from: {_config.Name}");
             throw;
         }
     }
 
     /// <summary>
-    /// Invokes a tool on the MCP server with the specified arguments.
+    /// Calls a tool via CallToolAsync
     /// </summary>
-    /// <param name="toolName">Name of the tool to invoke</param>
-    /// <param name="arguments">Tool arguments as dictionary</param>
-    /// <returns>Tool execution result</returns>
-    public async Task<CallToolResult> CallToolAsync(string toolName, Dictionary<string, object> arguments)
+    public async Task<CallToolResult> CallToolAsync(
+        string toolName,
+        Dictionary<string, object>? arguments = null,
+        CancellationToken cancellationToken = default)
     {
-        if (!isConnected || wrappedClient == null)
-        {
-            throw new InvalidOperationException($"MCP client not connected to server: {config.Name}");
-        }
-
         try
         {
-            logger.LogDebug($"Calling MCP tool: {toolName} on server: {config.Name}");
+            _logger.LogDebug($"Calling tool '{toolName}' on: {_config.Name}");
+            
+            // McpClient.CallToolAsync accepts IReadOnlyDictionary<string, object?>
+            CallToolResult result = await _client.CallToolAsync(
+                toolName,
+                arguments as IReadOnlyDictionary<string, object?>,
+                cancellationToken: cancellationToken);
 
-            CallToolRequest request = new CallToolRequest
-            {
-                Name = toolName,
-                Arguments = arguments
-            };
-
-            CallToolResponse? response = await wrappedClient.CallToolAsync(request);
-
-            if (response?.Result == null)
-            {
-                throw new Exception($"MCP server returned null result for tool: {toolName}");
-            }
-
-            logger.LogDebug($"MCP tool call successful: {toolName}");
-            return response.Result;
+            _logger.LogDebug($"Tool '{toolName}' executed successfully");
+            return result;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to call MCP tool: {toolName} on server: {config.Name}");
+            _logger.LogError(ex, $"Failed to call tool '{toolName}' on: {_config.Name}");
             throw;
         }
     }
 
     /// <summary>
-    /// Disconnects from the MCP server and cleans up resources.
+    /// Disconnects from MCP server
     /// </summary>
-    public async Task DisconnectAsync()
+    public async ValueTask DisposeAsync()
     {
-        if (!isConnected || wrappedClient == null)
-        {
-            return;
-        }
-
         try
         {
-            logger.LogInformation($"Disconnecting from MCP server: {config.Name}");
-
-            if (wrappedClient is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-
-            isConnected = false;
-            wrappedClient = null;
-
-            logger.LogInformation($"Disconnected from MCP server: {config.Name}");
+            _logger.LogInformation($"Disconnecting from: {_config.Name}");
+            await _client.DisposeAsync();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Error disconnecting from MCP server: {config.Name}");
-            throw;
+            _logger.LogError(ex, $"Error disconnecting from: {_config.Name}");
         }
     }
 }

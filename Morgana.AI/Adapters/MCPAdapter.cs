@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using System.Text.Json;
-using Microsoft.Extensions.AI;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Adapters;
@@ -83,7 +82,9 @@ public class MCPAdapter
     {
         List<ToolParameter> parameters = new();
 
-        if (mcpTool.InputSchema == null)
+        // InputSchema is JsonElement (struct), check if it has properties
+        if (mcpTool.InputSchema.ValueKind == JsonValueKind.Undefined || 
+            mcpTool.InputSchema.ValueKind == JsonValueKind.Null)
         {
             return parameters;
         }
@@ -152,23 +153,28 @@ public class MCPAdapter
 
         List<string> formattedParts = [];
 
-        foreach (ContentBlock? content in result.Content)
+        foreach (ContentBlock content in result.Content)
         {
-            if (content is TextContent textContent)
+            switch (content)
             {
-                formattedParts.Add(textContent.Text);
-            }
-            else if (content is ImageContent imageContent)
-            {
-                formattedParts.Add($"[Image returned: {imageContent.MimeType}]");
-            }
-            else if (content is ResourceContent resourceContent)
-            {
-                formattedParts.Add($"[Resource: {resourceContent.Uri}]");
-            }
-            else
-            {
-                formattedParts.Add($"[Unknown content type: {content.GetType().Name}]");
+                case TextContentBlock textContent:
+                    formattedParts.Add(textContent.Text);
+                    break;
+                case ImageContentBlock imageContent:
+                    formattedParts.Add($"[Image returned: {imageContent.MimeType}]");
+                    break;
+                case AudioContentBlock audioContent:
+                    formattedParts.Add($"[Audio returned: {audioContent.MimeType}]");
+                    break;
+                case EmbeddedResourceBlock embeddedResource:
+                    formattedParts.Add($"[Resource: {embeddedResource.Resource.Uri}]");
+                    break;
+                case ResourceLinkBlock resourceLink:
+                    formattedParts.Add($"[Resource link: {resourceLink.Uri}]");
+                    break;
+                default:
+                    formattedParts.Add($"[Unknown content type: {content.GetType().Name}]");
+                    break;
             }
         }
 

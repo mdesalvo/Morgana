@@ -218,9 +218,7 @@ public class AgentAdapter
             .GetAwaiter()
             .GetResult();
 
-        List<ModelContextProtocol.Protocol.Tool> mcpTools = mcpClient.DiscoverToolsAsync()
-            .GetAwaiter()
-            .GetResult();
+        IList<ModelContextProtocol.Protocol.Tool> mcpTools = mcpClient.DiscoverToolsAsync().GetAwaiter().GetResult();
 
         if (mcpTools.Count == 0)
         {
@@ -232,7 +230,7 @@ public class AgentAdapter
 
         MCPAdapter mcpAdapter = new MCPAdapter(mcpClient, logger);
         Dictionary<string, (Delegate toolDelegate, ToolDefinition toolDefinition)> convertedTools = 
-            mcpAdapter.ConvertTools(mcpTools);
+            mcpAdapter.ConvertTools(mcpTools.ToList());
 
         foreach (KeyValuePair<string, (Delegate toolDelegate, ToolDefinition toolDefinition)> kvp in convertedTools)
         {
