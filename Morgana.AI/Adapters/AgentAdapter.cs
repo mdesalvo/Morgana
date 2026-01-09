@@ -271,10 +271,7 @@ public class AgentAdapter
         MorganaTool toolInstance;
         try
         {
-            toolInstance = (MorganaTool)Activator.CreateInstance(
-                toolType,
-                logger,
-                (Func<MorganaContextProvider>)(() => contextProvider))!;
+            toolInstance = (MorganaTool)Activator.CreateInstance(toolType, logger, () => contextProvider)!;
         }
         catch (Exception ex)
         {
@@ -328,7 +325,8 @@ public class AgentAdapter
             Delegate toolImplementation = Delegate.CreateDelegate(
                 System.Linq.Expressions.Expression.GetDelegateType(
                     method.GetParameters().Select(p => p.ParameterType)
-                        .Concat([method.ReturnType]).ToArray()),
+                                          .Concat([method.ReturnType])
+                                          .ToArray()),
                 toolInstance,
                 method);
 
@@ -386,19 +384,14 @@ public class AgentAdapter
         logger.LogInformation($"Creating agent for intent '{intent}'...");
 
         // Load agent prompt
-        Prompt agentPrompt = promptResolverService.ResolveAsync(intent)
-            .GetAwaiter()
-            .GetResult();
+        Prompt agentPrompt = promptResolverService.ResolveAsync(intent).GetAwaiter().GetResult();
 
         // Merge Agent tools with Morgana tools for context
         ToolDefinition[] agentTools = [.. morganaPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools")
                                             .Union(agentPrompt.GetAdditionalProperty<ToolDefinition[]>("Tools"))];
 
         // Create context provider with tool definitions
-        MorganaContextProvider contextProvider = CreateContextProvider(
-            intent,
-            agentTools,
-            sharedContextCallback);
+        MorganaContextProvider contextProvider = CreateContextProvider(intent, agentTools, sharedContextCallback);
 
         // Create tool adapter and register native tools
         ToolAdapter toolAdapter = CreateToolAdapterForIntent(intent, agentTools, contextProvider);
