@@ -1,6 +1,7 @@
 @page "/"
 @using Cauldron.Services
 @inject MorganaSignalRService SignalRService
+@inject MorganaLandingMessageService LandingMessageService
 @inject HttpClient Http
 @inject IConfiguration Configuration
 @implements IAsyncDisposable
@@ -50,7 +51,7 @@
                     <div class="sparkle sp11"></div>
                     <div class="sparkle sp12"></div>
                 </div>
-                <p class="loading-text">@(Configuration["Morgana:LandingMessage"])</p>
+                <p class="loading-text">@(landingMessage)</p>
             </div>
         }
         else
@@ -215,6 +216,11 @@
     /// </summary>
     private string currentAgentName = "Morgana";
 
+    /// <summary>
+    /// Landing message (waiting for Morgana presentation).
+    /// </summary>
+    private string landingMessage = string.Empty;
+
     // =========================================================================
     // LIFECYCLE METHODS
     // =========================================================================
@@ -229,6 +235,9 @@
         try
         {
             Console.WriteLine("🔵 OnInitializedAsync: Starting...");
+
+            // Initialize landing message
+            landingMessage = LandingMessageService.GetRandomMessage();
 
             // Start SignalR connection
             await SignalRService.StartAsync();

@@ -36,6 +36,10 @@ builder.Services.AddScoped(sp => new HttpClient
 // Manages WebSocket connection, automatic reconnection, and message routing
 builder.Services.AddScoped<MorganaSignalRService>();
 
+// Dynamic configuration-based landing message service
+// Selects a random welcome message during the "magic spakle" loading
+builder.Services.AddSingleton<MorganaLandingMessageService>();
+
 // ============================================================================
 // 4. APPLICATION PIPELINE
 // ============================================================================
