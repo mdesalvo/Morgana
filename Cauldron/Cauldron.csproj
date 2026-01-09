@@ -8,6 +8,7 @@
         <AssemblyVersion>$(Version)</AssemblyVersion>
         <Title>Cauldron</Title>
         <Authors>Marco De Salvo</Authors>
+        <Product>Morgana</Product>
         <Description>Cauldron is a modular web layer that hosts the Morgana conversational AI platform.
 It provides HTTP and SignalR endpoints for multi-turn dialogues and agent orchestration.
 Built on ASP.NET Core and Akka.NET, it coordinates message routing across specialized AI agents.
