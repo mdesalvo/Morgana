@@ -55,7 +55,7 @@ public class PluginLoaderService
     /// <remarks>
     /// <para><strong>Loading Process:</strong></para>
     /// <list type="number">
-    /// <item>Read assembly names from configuration (Plugins:Assemblies section)</item>
+    /// <item>Read assembly names from configuration (Morgana:Plugins:Assemblies section)</item>
     /// <item>Load each assembly using Assembly.Load (searches probing paths)</item>
     /// <item>Validate assembly contains MorganaAgent-derived classes</item>
     /// <item>Log success/failure for each assembly</item>
@@ -77,11 +77,11 @@ public class PluginLoaderService
     /// </remarks>
     public void LoadPluginAssemblies()
     {
-        string[]? assemblyNames = configuration.GetSection("Plugins:Assemblies").Get<string[]>();
+        string[]? assemblyNames = configuration.GetSection("Morgana:Plugins:Assemblies").Get<string[]>();
 
         if (assemblyNames == null || assemblyNames.Length == 0)
         {
-            logger.LogWarning("No plugin assemblies configured");
+            logger.LogWarning("No plugin assemblies configured. Morgana will run without agents!");
             return;
         }
 

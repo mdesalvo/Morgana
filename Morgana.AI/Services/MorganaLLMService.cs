@@ -24,7 +24,7 @@ namespace Morgana.AI.Services;
 /// <para>The active implementation is selected in Program.cs based on configuration:</para>
 /// <code>
 /// builder.Services.AddSingleton&lt;ILLMService&gt;(sp => {
-///     string provider = config["LLM:Provider"];
+///     string provider = config["Morgana:LLM:Provider"];
 ///     return provider.ToLowerInvariant() switch {
 ///         "anthropic" => new AnthropicService(config, promptResolver),
 ///         "azureopenai" => new AzureOpenAIService(config, promptResolver),
@@ -182,11 +182,13 @@ public class MorganaLLMService : ILLMService
 /// <para><strong>Configuration (appsettings.json):</strong></para>
 /// <code>
 /// {
-///   "LLM": {
-///     "Provider": "anthropic",
-///     "Anthropic": {
-///       "ApiKey": "sk-ant-...",
-///       "Model": "claude-sonnet-4-5"
+///   "Morgana": {
+///     "LLM": {
+///       "Provider": "anthropic",
+///       "Anthropic": {
+///         "ApiKey": "sk-ant-...",
+///         "Model": "claude-sonnet-4-5"
+///       }
 ///     }
 ///   }
 /// }
@@ -219,9 +221,9 @@ public class AnthropicService : MorganaLLMService
         AnthropicClient anthropicClient = new AnthropicClient(
             new ClientOptions
             {
-                APIKey = this.configuration["LLM:Anthropic:ApiKey"]!
+                APIKey = this.configuration["Morgana:LLM:Anthropic:ApiKey"]!
             });
-        string anthropicModel = this.configuration["LLM:Anthropic:Model"]!;
+        string anthropicModel = this.configuration["Morgana:LLM:Anthropic:Model"]!;
 
         // Wrap Anthropic client with Microsoft.Extensions.AI abstraction
         chatClient = anthropicClient.AsIChatClient(anthropicModel);
@@ -236,12 +238,14 @@ public class AnthropicService : MorganaLLMService
 /// <para><strong>Configuration (appsettings.json):</strong></para>
 /// <code>
 /// {
-///   "LLM": {
-///     "Provider": "azureopenai",
-///     "AzureOpenAI": {
-///       "Endpoint": "https://your-resource.openai.azure.com/",
-///       "ApiKey": "your-api-key",
-///       "DeploymentName": "gpt-4"
+///   "Morgana: {
+///     "LLM": {
+///       "Provider": "azureopenai",
+///       "AzureOpenAI": {
+///         "Endpoint": "https://your-resource.openai.azure.com/",
+///         "ApiKey": "your-api-key",
+///         "DeploymentName": "gpt-4"
+///       }
 ///     }
 ///   }
 /// }
@@ -275,9 +279,9 @@ public class AzureOpenAIService : MorganaLLMService
         IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
     {
         AzureOpenAIClient azureClient = new AzureOpenAIClient(
-            new Uri(this.configuration["LLM:AzureOpenAI:Endpoint"]!),
-            new AzureKeyCredential(this.configuration["LLM:AzureOpenAI:ApiKey"]!));
-        string deploymentName = this.configuration["LLM:AzureOpenAI:DeploymentName"]!;
+            new Uri(this.configuration["Morgana:LLM:AzureOpenAI:Endpoint"]!),
+            new AzureKeyCredential(this.configuration["Morgana:LLM:AzureOpenAI:ApiKey"]!));
+        string deploymentName = this.configuration["Morgana:LLM:AzureOpenAI:DeploymentName"]!;
 
         // Get chat client for specific deployment and wrap with Microsoft.Extensions.AI abstraction
         chatClient = azureClient.GetChatClient(deploymentName).AsIChatClient();

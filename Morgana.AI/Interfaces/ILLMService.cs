@@ -31,7 +31,7 @@ namespace Morgana.AI.Interfaces;
 ///
 /// // Program.cs
 /// builder.Services.AddSingleton&lt;ILLMService&gt;(sp => {
-///     string provider = config["LLM:Provider"];
+///     string provider = config["Morgana:LLM:Provider"];
 ///     return provider.ToLowerInvariant() switch {
 ///         "anthropic" => new AnthropicService(config, promptResolver),
 ///         "azureopenai" => new AzureOpenAIService(config, promptResolver),

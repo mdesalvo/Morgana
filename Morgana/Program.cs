@@ -61,7 +61,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
     {
-        policy.WithOrigins(builder.Configuration["Cauldron:BaseUrl"]!) // Cauldron Blazor app URL
+        policy.WithOrigins(builder.Configuration["Morgana:Cauldron:BaseUrl"]!) // Cauldron Blazor app URL
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -81,7 +81,7 @@ builder.Services.AddSingleton<ILogger>(sp =>
 // SECTION 5: Plugin System - Dynamic Agent Loading
 // ==============================================================================
 // Loads external assemblies containing custom Morgana agents at startup
-// Configuration: appsettings.json -> Plugins:Assemblies
+// Configuration: appsettings.json -> Morgana:Plugins:Assemblies
 // 
 // This enables domain-specific agents to be developed separately and loaded
 // without modifying the core Morgana framework.
@@ -114,12 +114,12 @@ builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolve
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
 
 // LLM Service Configuration
-// Supports multiple LLM providers via configuration (LLM:Provider)
+// Supports multiple LLM providers via configuration (Morgana:LLM:Provider)
 // Valid values: "anthropic", "azureopenai"
 builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
-    string llmProvider = builder.Configuration["LLM:Provider"]!;
+    string llmProvider = builder.Configuration["Morgana:LLM:Provider"]!;
 
     return llmProvider.ToLowerInvariant() switch
     {
