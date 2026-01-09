@@ -55,7 +55,7 @@ namespace Morgana.AI.Services;
 /// </remarks>
 public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 {
-    private readonly AgentConfiguration configuration;
+    private readonly Lazy<AgentConfiguration> agentConfiguration;
     private readonly ILogger logger;
 
     /// <summary>
@@ -67,7 +67,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     {
         this.logger = logger;
 
-        configuration = LoadAgentConfiguration();
+        agentConfiguration = new Lazy<AgentConfiguration>(LoadAgentConfiguration);
     }
 
     /// <summary>
@@ -76,7 +76,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     /// <returns>List of intent definitions (empty if no agents.json found)</returns>
     public Task<List<Records.IntentDefinition>> GetIntentsAsync()
     {
-        return Task.FromResult(configuration.Intents);
+        return Task.FromResult(agentConfiguration.Value.Intents);
     }
 
     /// <summary>
@@ -85,7 +85,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     /// <returns>List of agent prompts (empty if no agents.json found)</returns>
     public Task<List<Records.Prompt>> GetAgentPromptsAsync()
     {
-        return Task.FromResult(configuration.Agents);
+        return Task.FromResult(agentConfiguration.Value.Agents);
     }
 
     /// <summary>

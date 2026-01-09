@@ -73,7 +73,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// Built during service initialization via assembly scanning.
     /// Case-insensitive string comparison for intent matching.
     /// </summary>
-    private readonly Dictionary<string, Type> intentToAgentType;
+    private readonly Lazy<Dictionary<string, Type>> intentToAgentType;
 
     /// <summary>
     /// Initializes a new instance of HandlesIntentAgentRegistryService.
@@ -87,7 +87,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     {
         this.agentConfigService = agentConfigService;
 
-        intentToAgentType = InitializeRegistry();
+        intentToAgentType = new Lazy<Dictionary<string, Type>>(InitializeRegistry);
     }
 
     /// <summary>
@@ -199,7 +199,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// RouterActor to provide user-friendly error messages for unsupported intents.</para>
     /// </remarks>
     public Type? ResolveAgentFromIntent(string intent)
-        => intentToAgentType.GetValueOrDefault(intent);
+        => intentToAgentType.Value.GetValueOrDefault(intent);
 
     /// <summary>
     /// Gets all registered intent names from discovered agents.
@@ -211,5 +211,5 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// ensuring agents are ready before the first request arrives.</para>
     /// </remarks>
     public IEnumerable<string> GetAllIntents()
-        => intentToAgentType.Keys;
+        => intentToAgentType.Value.Keys;
 }

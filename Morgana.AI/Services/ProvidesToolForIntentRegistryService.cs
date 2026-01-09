@@ -72,7 +72,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// Built during service initialization via assembly scanning.
     /// Case-insensitive string comparison for intent matching.
     /// </summary>
-    private readonly Dictionary<string, Type> intentToToolType;
+    private readonly Lazy<Dictionary<string, Type>> intentToToolType;
 
     /// <summary>
     /// Initializes a new instance of ProvidesToolForIntentRegistryService.
@@ -83,7 +83,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     {
         this.logger = logger;
 
-        intentToToolType = InitializeRegistry();
+        intentToToolType = new Lazy<Dictionary<string, Type>>(InitializeRegistry);
     }
 
     /// <summary>
@@ -288,7 +288,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     {
         return string.IsNullOrWhiteSpace(intent)
             ? null
-            : intentToToolType.GetValueOrDefault(intent.ToLowerInvariant());
+            : intentToToolType.Value.GetValueOrDefault(intent.ToLowerInvariant());
     }
 
     /// <summary>
@@ -305,6 +305,6 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// </remarks>
     public IReadOnlyDictionary<string, Type> GetAllRegisteredTools()
     {
-        return intentToToolType;
+        return intentToToolType.Value;
     }
 }

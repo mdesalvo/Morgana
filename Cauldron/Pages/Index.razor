@@ -120,7 +120,7 @@
             @bind="inputText"
             @bind:event="oninput"
             @onkeyup="HandleKeyPress"
-            placeholder="Consult Morgana..."
+            placeholder="Consult @(currentAgentName)..."
             rows="1"
             disabled="@IsTextareaDisabled"
             class="message-input"

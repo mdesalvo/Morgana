@@ -49,7 +49,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     /// Framework prompts loaded from morgana.json embedded resource.
     /// Cached at service initialization for performance.
     /// </summary>
-    private readonly Records.Prompt[] morganaPrompts;
+    private readonly Lazy<Records.Prompt[]> morganaPrompts;
 
     /// <summary>
     /// Service for loading domain-specific agent prompts from agents.json or other sources.
@@ -65,7 +65,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     {
         this.agentConfigService = agentConfigService;
 
-        morganaPrompts = LoadMorganaPrompts();
+        morganaPrompts = new Lazy<Records.Prompt[]>(LoadMorganaPrompts);
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     {
         // Merge: morgana.json + domain
         List<Records.Prompt> agentPrompts = await agentConfigService.GetAgentPromptsAsync();
-        return [..morganaPrompts, ..agentPrompts];
+        return [..morganaPrompts.Value, ..agentPrompts];
     }
 
     /// <summary>
