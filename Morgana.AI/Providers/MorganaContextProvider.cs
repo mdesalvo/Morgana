@@ -330,14 +330,11 @@ public class MorganaContextProvider : AIContextProvider
     /// <para>Currently not actively used by the framework but available for future persistence features
     /// (e.g., saving conversation state to database, resuming conversations across server restarts).</para>
     /// </remarks>
-    public static MorganaContextProvider Deserialize(
-        string json,
-        ILogger logger)
+    public static MorganaContextProvider Deserialize(string json, ILogger logger)
     {
         Dictionary<string, JsonElement>? data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
 
-        Dictionary<string, object> agentContext = data?["AgentContext"].Deserialize<Dictionary<string, object>>()
-                                                    ?? new Dictionary<string, object>();
+        Dictionary<string, object> agentContext = data?["AgentContext"].Deserialize<Dictionary<string, object>>() ?? [];
 
         HashSet<string> sharedVars = data?["SharedVariableNames"].Deserialize<HashSet<string>>() ?? [];
 
@@ -353,7 +350,7 @@ public class MorganaContextProvider : AIContextProvider
     }
 
     // =========================================================================
-    // AIContextProvider Implementation (Microsoft.Agents.AI Integration)
+    // AIContextProvider Implementation (Microsoft.Agents.AI)
     // =========================================================================
 
     /// <summary>
@@ -384,6 +381,8 @@ public class MorganaContextProvider : AIContextProvider
     /// </remarks>
     public override ValueTask<AIContext> InvokingAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
+        logger.LogInformation($"{nameof(MorganaContextProvider)} is invoking LLM. ({context.RequestMessages?.Count() ?? 0} request messages)");
+
         // Could inject context variables as system messages if needed in the future
         return ValueTask.FromResult(new AIContext());
     }
@@ -411,6 +410,8 @@ public class MorganaContextProvider : AIContextProvider
     /// </remarks>
     public override ValueTask InvokedAsync(InvokedContext context, CancellationToken cancellationToken = default)
     {
+        logger.LogInformation($"{nameof(MorganaContextProvider)} has invoked LLM. ({context.ResponseMessages?.Count() ?? 0} response messages)");
+
         // Could inspect/log agent responses if needed in the future
         return base.InvokedAsync(context, cancellationToken);
     }
