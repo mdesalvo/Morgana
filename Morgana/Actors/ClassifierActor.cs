@@ -105,8 +105,7 @@ public class ClassifierActor : MorganaActor
                     ["error"] = "classification_failed"
                 });
 
-            AI.Records.ClassificationContext ctx = new AI.Records.ClassificationContext(fallback, originalSender);
-            Self.Tell(ctx);
+            Self.Tell(new AI.Records.ClassificationContext(fallback, originalSender));
         }
     }
 
@@ -117,7 +116,9 @@ public class ClassifierActor : MorganaActor
     /// <param name="ctx">Context containing classification result and original sender reference</param>
     private void HandleClassificationResult(AI.Records.ClassificationContext ctx)
     {
-        actorLogger.Info($"Classification complete: intent='{ctx.Result.Intent}', confidence={ctx.Result.Metadata.GetValueOrDefault("confidence", "N/A")}");
+        actorLogger.Info($"Classification complete: intent='{ctx.Result.Intent}', " +
+            $"confidence={ctx.Result.Metadata.GetValueOrDefault("confidence", "N/A")}");
+
         ctx.OriginalSender.Tell(ctx.Result);
     }
 

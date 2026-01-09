@@ -262,7 +262,7 @@ public class ContractTool : MorganaTool
         await Task.Delay(150);
 
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"📜 **Contract Overview: {_mockContract.ContractId}**");
+        sb.AppendLine($"📜 Contract Overview: {_mockContract.ContractId}");
         sb.AppendLine();
 
         // Status with icon
@@ -276,28 +276,28 @@ public class ContractTool : MorganaTool
             _ => "📋"
         };
 
-        sb.AppendLine($"**Status:** {statusIcon} {_mockContract.Status}");
-        sb.AppendLine($"**Service Plan:** {_mockContract.Plan.Name}");
-        sb.AppendLine($"**Contract Period:** {_mockContract.StartDate:dd/MM/yyyy} to {_mockContract.EndDate:dd/MM/yyyy}");
+        sb.AppendLine($"Status: {statusIcon} {_mockContract.Status}");
+        sb.AppendLine($"Service Plan: {_mockContract.Plan.Name}");
+        sb.AppendLine($"Contract Period: {_mockContract.StartDate:dd/MM/yyyy} to {_mockContract.EndDate:dd/MM/yyyy}");
 
-        int remainingDays = (_mockContract.EndDate - DateTime.Now).Days;
+        int remainingDays = (_mockContract.EndDate - DateTime.UtcNow).Days;
         if (remainingDays > 0)
         {
-            sb.AppendLine($"**Time Remaining:** {remainingDays} days ({remainingDays / 30} months)");
+            sb.AppendLine($"Time Remaining: {remainingDays} days ({remainingDays / 30} months)");
         }
 
-        sb.AppendLine($"**Monthly Fee:** €{_mockContract.MonthlyFee:F2} ({_mockContract.BillingCycle})");
+        sb.AppendLine($"Monthly Fee: €{_mockContract.MonthlyFee:F2} ({_mockContract.BillingCycle})");
         sb.AppendLine();
 
         // Service Plan Details
-        sb.AppendLine("**📡 Service Plan Specifications:**");
+        sb.AppendLine("📡 Service Plan Specifications:");
         sb.AppendLine($"  • Speed: {_mockContract.Plan.Speed}");
         sb.AppendLine($"  • Data Limit: {_mockContract.Plan.DataLimit}");
         sb.AppendLine($"  • SLA: {_mockContract.Plan.ServiceLevel}");
         sb.AppendLine();
 
         // Included Features
-        sb.AppendLine("**✨ Included Features:**");
+        sb.AppendLine("✨ Included Features:");
         foreach (string feature in _mockContract.Plan.IncludedFeatures)
         {
             sb.AppendLine($"  ✓ {feature}");
@@ -305,7 +305,7 @@ public class ContractTool : MorganaTool
         sb.AppendLine();
 
         // Active Services Breakdown
-        sb.AppendLine("**💼 Active Services:**");
+        sb.AppendLine("💼 Active Services:");
         foreach (ActiveService service in _mockContract.Services)
         {
             string optionalBadge = service.IsOptional ? " (Optional)" : " (Required)";
@@ -315,13 +315,13 @@ public class ContractTool : MorganaTool
         sb.AppendLine();
 
         // Quick Termination Info
-        sb.AppendLine("**📋 Quick Facts:**");
+        sb.AppendLine("📋 Quick Facts:");
         sb.AppendLine($"  • Notice Period: {_mockContract.Termination.NoticePeriodDays} days");
         sb.AppendLine($"  • Early Termination Fee: €{_mockContract.Termination.EarlyTerminationFee:F2}");
         sb.AppendLine($"  • Auto-Renewal: Yes (notify 60 days before {_mockContract.EndDate:dd/MM/yyyy})");
         sb.AppendLine();
 
-        sb.AppendLine("💡 **Need More Info?**");
+        sb.AppendLine("💡 Need More Info?");
         sb.AppendLine("  • Ask about specific contract clauses (1-7)");
         sb.AppendLine("  • Inquire about termination procedures");
         sb.AppendLine("  • Request service modification options");
@@ -349,27 +349,25 @@ public class ContractTool : MorganaTool
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"📄 **Clause {clause.ClauseNumber}: {clause.Title}**");
+        sb.AppendLine($"📄 Clause {clause.ClauseNumber}: {clause.Title}");
         sb.AppendLine();
-        sb.AppendLine($"**Type:** {clause.Type}");
+        sb.AppendLine($"Type: {clause.Type}");
         sb.AppendLine();
-        sb.AppendLine("**Summary:**");
+        sb.AppendLine("Summary:");
         sb.AppendLine($"_{clause.Summary}_");
         sb.AppendLine();
-        sb.AppendLine("**Full Legal Text:**");
-        sb.AppendLine("```");
+        sb.AppendLine("Full Legal Text:");
         sb.AppendLine(WrapText(clause.FullText, 80));
-        sb.AppendLine("```");
 
         switch (clause.Type)
         {
             case ClauseType.Termination:
                 sb.AppendLine();
-                sb.AppendLine("💡 To initiate termination, ask me about the **termination procedure**.");
+                sb.AppendLine("💡 To initiate termination, ask me about the termination procedure.");
                 break;
             case ClauseType.DataUsage:
                 sb.AppendLine();
-                sb.AppendLine("💡 Check your current data usage by asking about **billing details**.");
+                sb.AppendLine("💡 Check your current data usage by asking about billing details.");
                 break;
         }
 
@@ -390,29 +388,29 @@ public class ContractTool : MorganaTool
         TerminationPolicy termination = _mockContract.Termination;
 
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine("📋 **Contract Termination Procedure**");
+        sb.AppendLine("📋 Contract Termination Procedure");
         sb.AppendLine();
 
         if (!string.IsNullOrEmpty(reason))
         {
-            sb.AppendLine($"**Termination Reason:** {reason}");
+            sb.AppendLine($"Termination Reason: {reason}");
             sb.AppendLine("_(This will be recorded for internal purposes)_");
             sb.AppendLine();
         }
 
         // Notice Period Warning
-        int remainingDays = (_mockContract.EndDate - DateTime.Now).Days;
+        int remainingDays = (_mockContract.EndDate - DateTime.UtcNow).Days;
         if (remainingDays > termination.NoticePeriodDays)
         {
             decimal earlyFee = termination.EarlyTerminationFee;
-            sb.AppendLine("⚠️ **Early Termination Notice:**");
+            sb.AppendLine("⚠️ Early Termination Notice:");
             sb.AppendLine($"Your contract expires in {remainingDays} days ({_mockContract.EndDate:dd/MM/yyyy}).");
-            sb.AppendLine($"Terminating now will incur an Early Termination Fee of **€{earlyFee:F2}**.");
+            sb.AppendLine($"Terminating now will incur an Early Termination Fee of €{earlyFee:F2}.");
             sb.AppendLine();
         }
 
         // Required Documents
-        sb.AppendLine("**📄 Required Documents:**");
+        sb.AppendLine("📄 Required Documents:");
         for (int i = 0; i < termination.RequiredDocuments.Count; i++)
         {
             sb.AppendLine($"  {i + 1}. {termination.RequiredDocuments[i]}");
@@ -420,15 +418,15 @@ public class ContractTool : MorganaTool
         sb.AppendLine();
 
         // Step-by-Step Process
-        sb.AppendLine("**📝 Termination Steps:**");
+        sb.AppendLine("📝 Termination Steps:");
         for (int i = 0; i < termination.TerminationSteps.Count; i++)
         {
-            sb.AppendLine($"  **Step {i + 1}:** {termination.TerminationSteps[i]}");
+            sb.AppendLine($"  Step {i + 1}: {termination.TerminationSteps[i]}");
         }
         sb.AppendLine();
 
         // Financial Details
-        sb.AppendLine("**💰 Financial Details:**");
+        sb.AppendLine("💰 Financial Details:");
         sb.AppendLine($"  • Notice Period: {termination.NoticePeriodDays} days from request submission");
         sb.AppendLine($"  • Early Termination Fee: €{termination.EarlyTerminationFee:F2} (if applicable)");
         sb.AppendLine($"  • Equipment Deposit: €0 (free rental program)");
@@ -436,9 +434,9 @@ public class ContractTool : MorganaTool
         sb.AppendLine();
 
         // Timeline
-        DateTime effectiveDate = DateTime.Now.AddDays(termination.NoticePeriodDays);
-        sb.AppendLine("**📅 Estimated Timeline:**");
-        sb.AppendLine($"  • Request Submission: Today ({DateTime.Now:dd/MM/yyyy})");
+        DateTime effectiveDate = DateTime.UtcNow.AddDays(termination.NoticePeriodDays);
+        sb.AppendLine("📅 Estimated Timeline:");
+        sb.AppendLine($"  • Request Submission: Today ({DateTime.UtcNow:dd/MM/yyyy})");
         sb.AppendLine($"  • Notice Period Ends: {effectiveDate:dd/MM/yyyy}");
         sb.AppendLine($"  • Service Disconnection: {effectiveDate:dd/MM/yyyy}");
         sb.AppendLine($"  • Equipment Return Due: {effectiveDate.AddDays(30):dd/MM/yyyy}");
@@ -447,20 +445,20 @@ public class ContractTool : MorganaTool
         sb.AppendLine();
 
         // Fee Waiver Conditions
-        sb.AppendLine("**💡 Fee Waiver Eligibility:**");
+        sb.AppendLine("💡 Fee Waiver Eligibility:");
         sb.AppendLine("Early termination fees may be waived if:");
         sb.AppendLine("  • Service downtime exceeded 5% in any 3-month period");
         sb.AppendLine("  • You're relocating to an area without coverage (proof required)");
         sb.AppendLine("  • Account holder death or permanent disability (documentation required)");
         sb.AppendLine();
 
-        sb.AppendLine("**⚠️ Important Notes:**");
+        sb.AppendLine("⚠️ Important Notes:");
         sb.AppendLine("  • All outstanding invoices must be paid before termination");
         sb.AppendLine("  • Failure to return equipment may result in €200 replacement charge");
         sb.AppendLine("  • Termination cannot be cancelled once confirmed");
         sb.AppendLine();
 
-        sb.AppendLine("🤔 **Ready to Proceed?**");
+        sb.AppendLine("🤔 Ready to Proceed?");
         sb.AppendLine("I can assist you with:");
         sb.AppendLine("  • Initiating the formal termination request");
         sb.AppendLine("  • Checking if you qualify for fee waivers");

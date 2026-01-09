@@ -51,7 +51,7 @@ public class GuardActor : MorganaActor
         IActorRef originalSender = Sender;
         AI.Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
 
-        // Basic profanity check (synchronous, immediate response)
+        // Basic profanity check
         foreach (string term in guardPrompt.GetAdditionalProperty<List<string>>("ProfanityTerms"))
         {
             if (req.Message.Contains(term, StringComparison.OrdinalIgnoreCase))
@@ -64,7 +64,7 @@ public class GuardActor : MorganaActor
 
         actorLogger.Info("Basic profanity check passed, engaging LLM policy check");
 
-        // Advanced LLM-based policy check (async with sender safeguard)
+        // Advanced LLM-based policy check
         try
         {
             string response = await llmService.CompleteWithSystemPromptAsync(
@@ -74,18 +74,14 @@ public class GuardActor : MorganaActor
 
             GuardCheckResponse? result = JsonSerializer.Deserialize<GuardCheckResponse>(response);
 
-            LLMCheckContext ctx = new LLMCheckContext(result ?? new GuardCheckResponse(true, null), originalSender);
-
-            Self.Tell(ctx);
+            Self.Tell(new LLMCheckContext(result ?? new GuardCheckResponse(true, null), originalSender));
         }
         catch (Exception ex)
         {
             actorLogger.Error(ex, "LLM policy check failed");
 
             // Fallback on error: assume compliant to avoid blocking legitimate requests
-            LLMCheckContext ctx = new LLMCheckContext(new GuardCheckResponse(true, null), originalSender);
-
-            Self.Tell(ctx);
+            Self.Tell(new LLMCheckContext(new GuardCheckResponse(true, null), originalSender));
         }
     }
 
@@ -97,6 +93,7 @@ public class GuardActor : MorganaActor
     private void HandleLLMCheckResult(LLMCheckContext ctx)
     {
         actorLogger.Info($"LLM policy check result: compliant={ctx.Response.Compliant}");
+
         ctx.OriginalSender.Tell(ctx.Response);
     }
 

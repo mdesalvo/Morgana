@@ -67,6 +67,7 @@ public class ConversationManagerActor : MorganaActor
             supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>("supervisor", msg.ConversationId);
 
             Context.Watch(supervisor);
+
             actorLogger.Info("Supervisor created: {0}", supervisor.Path);
 
             // Trigger automatic presentation
@@ -89,6 +90,7 @@ public class ConversationManagerActor : MorganaActor
         if (supervisor is not null)
         {
             Context.Stop(supervisor);
+
             supervisor = null;
 
             actorLogger.Info("Supervisor stopped for conversation {0}", msg.ConversationId);
@@ -113,6 +115,7 @@ public class ConversationManagerActor : MorganaActor
         if (supervisor == null)
         {
             supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>("supervisor", msg.ConversationId);
+
             Context.Watch(supervisor);
 
             actorLogger.Warning("Supervisor was missing; created new supervisor: {0}", supervisor.Path);
@@ -120,11 +123,12 @@ public class ConversationManagerActor : MorganaActor
 
         actorLogger.Info("Forwarding message to supervisor at {0}", supervisor.Path);
 
-        // PipeTo pattern: non-blocking, with timeout
-        supervisor.Ask<ConversationResponse>(msg, TimeSpan.FromSeconds(60))
-            .PipeTo(Self,
-                success: response => new SupervisorResponseContext(response),
-                failure: ex => new Status.Failure(ex));
+        _ = supervisor
+                .Ask<ConversationResponse>(msg, TimeSpan.FromSeconds(60))
+                .PipeTo(
+                    Self,
+                    success: response => new SupervisorResponseContext(response),
+                    failure: ex => new Status.Failure(ex));
     }
 
     /// <summary>

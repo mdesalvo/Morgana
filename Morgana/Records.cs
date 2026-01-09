@@ -184,7 +184,7 @@ public static class Records
         /// LLM-generated quick replies (takes precedence over Intents if available).
         /// If null, quick replies are derived from Intents directly.
         /// </summary>
-        public List<AI.Records.QuickReply>? LlmQuickReplies { get; init; }
+        public List<AI.Records.QuickReply>? LLMQuickReplies { get; init; }
     }
 
     // ==========================================================================

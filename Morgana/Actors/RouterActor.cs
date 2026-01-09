@@ -87,10 +87,12 @@ public class RouterActor : MorganaActor
         actorLogger.Info($"Routing intent '{req.Classification.Intent}' to agent {selectedAgent.Path}");
 
         // Route to agent using Ask pattern with PipeTo
-        selectedAgent.Ask<AgentResponse>(req, TimeSpan.FromSeconds(60))
-            .PipeTo(Self,
-                success: response => new Records.AgentResponseContext(response, selectedAgent, originalSender),
-                failure: ex => new Status.Failure(ex));
+        _ = selectedAgent
+                .Ask<AgentResponse>(req, TimeSpan.FromSeconds(60))
+                .PipeTo(
+                    Self,
+                    success: response => new Records.AgentResponseContext(response, selectedAgent, originalSender),
+                    failure: ex => new Status.Failure(ex));
     }
 
     /// <summary>

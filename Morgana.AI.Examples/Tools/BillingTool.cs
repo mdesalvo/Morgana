@@ -166,13 +166,13 @@ public class BillingTool : MorganaTool
     /// <returns>Formatted invoice list with summary information</returns>
     public async Task<string> GetInvoices(string userId, int count)
     {
-        await Task.Delay(150); // Simulate database query
+        await Task.Delay(100); // Simulate database query
 
         count = Math.Clamp(count, 1, 10);
         List<Invoice> invoices = _mockInvoices.Take(count).ToList();
 
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"📄 **Recent Invoices for User {userId}** (Showing {invoices.Count})");
+        sb.AppendLine($"📄 Recent Invoices for User {userId} (Showing {invoices.Count})");
         sb.AppendLine();
 
         foreach (Invoice invoice in invoices)
@@ -186,7 +186,7 @@ public class BillingTool : MorganaTool
                 _ => "📋"
             };
 
-            sb.AppendLine($"{statusIcon} **{invoice.InvoiceId}**");
+            sb.AppendLine($"{statusIcon} {invoice.InvoiceId}");
             sb.AppendLine($"   Period: {invoice.Period}");
             sb.AppendLine($"   Amount: €{invoice.Total:F2}");
             sb.AppendLine($"   Status: {invoice.Status}");
@@ -229,26 +229,25 @@ public class BillingTool : MorganaTool
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"📄 **Invoice Details: {invoice.InvoiceId}**");
+        sb.AppendLine($"📄 Invoice Details: {invoice.InvoiceId}");
         sb.AppendLine();
-        sb.AppendLine($"**Billing Period:** {invoice.Period}");
-        sb.AppendLine($"**Issue Date:** {invoice.IssueDate:dd/MM/yyyy}");
-        sb.AppendLine($"**Due Date:** {invoice.DueDate:dd/MM/yyyy}");
-        sb.AppendLine($"**Status:** {GetStatusDescription(invoice.Status)}");
+        sb.AppendLine($"Billing Period: {invoice.Period}");
+        sb.AppendLine($"Issue Date: {invoice.IssueDate:dd/MM/yyyy}");
+        sb.AppendLine($"Due Date: {invoice.DueDate:dd/MM/yyyy}");
+        sb.AppendLine($"Status: {GetStatusDescription(invoice.Status)}");
 
         if (invoice.PaidDate.HasValue)
         {
-            sb.AppendLine($"**Paid Date:** {invoice.PaidDate.Value:dd/MM/yyyy}");
+            sb.AppendLine($"Paid Date: {invoice.PaidDate.Value:dd/MM/yyyy}");
         }
 
         if (invoice.PaymentMethod != null)
         {
-            sb.AppendLine($"**Payment Method:** {FormatPaymentMethod(invoice.PaymentMethod)}");
+            sb.AppendLine($"Payment Method: {FormatPaymentMethod(invoice.PaymentMethod)}");
         }
 
         sb.AppendLine();
-        sb.AppendLine("**Line Items:**");
-        sb.AppendLine("```");
+        sb.AppendLine("Line Items:");
 
         foreach (InvoiceLineItem item in invoice.LineItems)
         {
@@ -263,21 +262,19 @@ public class BillingTool : MorganaTool
         sb.AppendLine(new string('-', 80));
         sb.AppendLine($"{"Subtotal",-70} €{invoice.Subtotal,8:F2}");
         sb.AppendLine($"{"Tax (22%)",-70} €{invoice.Tax,8:F2}");
-        sb.AppendLine(new string('=', 80));
         sb.AppendLine($"{"TOTAL",-70} €{invoice.Total,8:F2}");
-        sb.AppendLine("```");
 
         if (invoice.Status == InvoiceStatus.Pending)
         {
             sb.AppendLine();
-            int daysUntilDue = (invoice.DueDate - DateTime.Now).Days;
+            int daysUntilDue = (invoice.DueDate - DateTime.UtcNow).Days;
             if (daysUntilDue > 0)
             {
-                sb.AppendLine($"⏰ **Payment due in {daysUntilDue} days**");
+                sb.AppendLine($"⏰ Payment due in {daysUntilDue} days");
             }
             else
             {
-                sb.AppendLine($"⚠️ **Payment is {Math.Abs(daysUntilDue)} days overdue**");
+                sb.AppendLine($"⚠️ Payment is {Math.Abs(daysUntilDue)} days overdue");
             }
         }
 
@@ -296,7 +293,7 @@ public class BillingTool : MorganaTool
         await Task.Delay(120);
 
         months = Math.Clamp(months, 1, 12);
-        DateTime cutoffDate = DateTime.Now.AddMonths(-months);
+        DateTime cutoffDate = DateTime.UtcNow.AddMonths(-months);
 
         List<Invoice> paidInvoices = _mockInvoices
             .Where(i => i.Status == InvoiceStatus.Paid && i.PaidDate >= cutoffDate)
@@ -309,14 +306,14 @@ public class BillingTool : MorganaTool
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"💳 **Payment History for User {userId}** (Last {months} months)");
+        sb.AppendLine($"💳 Payment History for User {userId} (Last {months} months)");
         sb.AppendLine();
 
         decimal totalPaid = 0m;
 
         foreach (Invoice invoice in paidInvoices)
         {
-            sb.AppendLine($"✅ **{invoice.InvoiceId}** - {invoice.Period}");
+            sb.AppendLine($"✅ {invoice.InvoiceId} - {invoice.Period}");
             sb.AppendLine($"   Amount: €{invoice.Total:F2}");
             sb.AppendLine($"   Paid: {invoice.PaidDate!.Value:dd/MM/yyyy}");
             sb.AppendLine($"   Method: {FormatPaymentMethod(invoice.PaymentMethod!)}");
@@ -325,8 +322,8 @@ public class BillingTool : MorganaTool
             totalPaid += invoice.Total;
         }
 
-        sb.AppendLine($"**Total Paid (Last {months} months):** €{totalPaid:F2}");
-        sb.AppendLine($"**Average Monthly Spend:** €{totalPaid / paidInvoices.Count:F2}");
+        sb.AppendLine($"Total Paid (Last {months} months): €{totalPaid:F2}");
+        sb.AppendLine($"Average Monthly Spend: €{totalPaid / paidInvoices.Count:F2}");
 
         return sb.ToString();
     }

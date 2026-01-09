@@ -424,7 +424,7 @@ public class TroubleshootingTool : MorganaTool
 
         // Generate realistic diagnostic results
         DiagnosticResult result = new DiagnosticResult(
-            Timestamp: DateTime.Now,
+            Timestamp: DateTime.UtcNow,
             OverallStatus: ConnectionStatus.Good,
             Modem: new ModemStatus(
                 IsOnline: true,
@@ -471,8 +471,8 @@ public class TroubleshootingTool : MorganaTool
 
         // Format output
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine("🔧 **Network Diagnostic Report**");
-        sb.AppendLine($"**Scan Time:** {result.Timestamp:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine("🔧 Network Diagnostic Report");
+        sb.AppendLine($"Scan Time: {result.Timestamp:yyyy-MM-dd HH:mm:ss}");
         sb.AppendLine();
 
         // Overall Status with emoji
@@ -486,11 +486,11 @@ public class TroubleshootingTool : MorganaTool
             ConnectionStatus.Offline => "⚫",
             _ => "⚪"
         };
-        sb.AppendLine($"**Overall Status:** {statusIcon} {result.OverallStatus}");
+        sb.AppendLine($"Overall Status: {statusIcon} {result.OverallStatus}");
         sb.AppendLine();
 
         // Modem Status
-        sb.AppendLine("**📡 Modem/Router Status:**");
+        sb.AppendLine("📡 Modem/Router Status:");
         sb.AppendLine($"  • Online: {(result.Modem.IsOnline ? "✅ Yes" : "❌ No")}");
         sb.AppendLine($"  • Firmware: {result.Modem.FirmwareVersion}");
         sb.AppendLine($"  • Uptime: {result.Modem.UptimeHours} hours ({result.Modem.UptimeHours / 24} days)");
@@ -501,7 +501,7 @@ public class TroubleshootingTool : MorganaTool
         sb.AppendLine();
 
         // Network Metrics
-        sb.AppendLine("**📊 Network Performance Metrics:**");
+        sb.AppendLine("📊 Network Performance Metrics:");
         sb.AppendLine($"  • Download Speed: {result.Metrics.DownloadSpeedMbps:F1} Mbps {GetSpeedRating(result.Metrics.DownloadSpeedMbps, 100)}");
         sb.AppendLine($"  • Upload Speed: {result.Metrics.UploadSpeedMbps:F1} Mbps {GetSpeedRating(result.Metrics.UploadSpeedMbps, 20)}");
         sb.AppendLine($"  • Latency (Ping): {result.Metrics.LatencyMs} ms {GetLatencyRating(result.Metrics.LatencyMs)}");
@@ -513,7 +513,7 @@ public class TroubleshootingTool : MorganaTool
         // Detected Issues
         if (result.DetectedIssues.Any())
         {
-            sb.AppendLine("**⚠️ Detected Issues:**");
+            sb.AppendLine("⚠️ Detected Issues:");
             foreach (DiagnosticIssue issue in result.DetectedIssues)
             {
                 string severityIcon = issue.Severity switch
@@ -523,7 +523,7 @@ public class TroubleshootingTool : MorganaTool
                     IssueSeverity.Info => "ℹ️",
                     _ => "•"
                 };
-                sb.AppendLine($"{severityIcon} **{issue.Issue}** ({issue.Severity})");
+                sb.AppendLine($"{severityIcon} {issue.Issue} ({issue.Severity})");
                 sb.AppendLine($"   {issue.Description}");
                 sb.AppendLine("   Suggested actions:");
                 foreach (string action in issue.SuggestedActions)
@@ -535,20 +535,20 @@ public class TroubleshootingTool : MorganaTool
         }
         else
         {
-            sb.AppendLine("**✅ No Issues Detected**");
+            sb.AppendLine("✅ No Issues Detected");
             sb.AppendLine("Your network is operating optimally.");
             sb.AppendLine();
         }
 
         // Recommendations
-        sb.AppendLine("**💡 Recommendations:**");
+        sb.AppendLine("💡 Recommendations:");
         foreach (string recommendation in result.Recommendations)
         {
             sb.AppendLine($"  • {recommendation}");
         }
         sb.AppendLine();
 
-        sb.AppendLine("**Need Help?** Ask me about:");
+        sb.AppendLine("Need Help? Ask me about:");
         sb.AppendLine("  • 'Show troubleshooting guides' - Interactive step-by-step help");
         sb.AppendLine("  • 'List connected devices' - See what's using your network");
         sb.AppendLine("  • 'Run speed test' - Quick performance check");
@@ -569,7 +569,7 @@ public class TroubleshootingTool : MorganaTool
         if (!_guides.TryGetValue(issueType, out TroubleshootingGuide? guide))
         {
             return $"❌ Troubleshooting guide '{issueType}' not found.\n\n" +
-                   $"**Available Guides:**\n" +
+                   $"Available Guides:\n" +
                    $"  • `no-internet` - Complete loss of connectivity\n" +
                    $"  • `slow-connection` - Speeds slower than expected\n" +
                    $"  • `wifi-issues` - WiFi connection or stability problems\n\n" +
@@ -577,18 +577,18 @@ public class TroubleshootingTool : MorganaTool
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"📖 **Troubleshooting Guide: {guide.ProblemType}**");
+        sb.AppendLine($"📖 Troubleshooting Guide: {guide.ProblemType}");
         sb.AppendLine();
-        sb.AppendLine($"**Guide ID:** {guide.GuideId}");
-        sb.AppendLine($"**Description:** {guide.Description}");
-        sb.AppendLine($"**Estimated Time:** {FormatDuration(guide.Duration)}");
-        sb.AppendLine($"**Difficulty:** {guide.Difficulty}");
+        sb.AppendLine($"Guide ID: {guide.GuideId}");
+        sb.AppendLine($"Description: {guide.Description}");
+        sb.AppendLine($"Estimated Time: {FormatDuration(guide.Duration)}");
+        sb.AppendLine($"Difficulty: {guide.Difficulty}");
         sb.AppendLine();
 
         // Required Tools
         if (guide.RequiredTools.Any())
         {
-            sb.AppendLine("**🛠️ Required Tools/Access:**");
+            sb.AppendLine("🛠️ Required Tools/Access:");
             foreach (string tool in guide.RequiredTools)
             {
                 sb.AppendLine($"  • {tool}");
@@ -597,12 +597,12 @@ public class TroubleshootingTool : MorganaTool
         }
 
         // Success Criteria
-        sb.AppendLine("**✅ Success Criteria:**");
+        sb.AppendLine("✅ Success Criteria:");
         sb.AppendLine($"{guide.SuccessCriteria}");
         sb.AppendLine();
 
         // Steps Overview
-        sb.AppendLine($"**📋 Steps Overview ({guide.Steps.Count} steps):**");
+        sb.AppendLine($"📋 Steps Overview ({guide.Steps.Count} steps):");
         for (int i = 0; i < guide.Steps.Count; i++)
         {
             sb.AppendLine($"  {i + 1}. {guide.Steps[i].Title}");
@@ -610,36 +610,36 @@ public class TroubleshootingTool : MorganaTool
         sb.AppendLine();
 
         // Detailed Steps
-        sb.AppendLine("**📝 Detailed Instructions:**");
+        sb.AppendLine("📝 Detailed Instructions:");
         sb.AppendLine();
 
         foreach (TroubleshootingStep step in guide.Steps)
         {
-            sb.AppendLine($"**═══ Step {step.StepNumber}: {step.Title} ═══**");
+            sb.AppendLine($"═══ Step {step.StepNumber}: {step.Title} ═══");
             sb.AppendLine();
             sb.AppendLine($"_{step.Instructions}_");
             sb.AppendLine();
-            sb.AppendLine("**Actions:**");
+            sb.AppendLine("Actions:");
             foreach (string action in step.DetailedActions)
             {
                 sb.AppendLine($"  ✓ {action}");
             }
             sb.AppendLine();
-            sb.AppendLine($"**Expected Outcome:** {step.ExpectedOutcome}");
+            sb.AppendLine($"Expected Outcome: {step.ExpectedOutcome}");
             sb.AppendLine();
-            sb.AppendLine($"✅ **If Successful:** {step.IfSuccessful}");
-            sb.AppendLine($"❌ **If Unsuccessful:** {step.IfUnsuccessful}");
+            sb.AppendLine($"✅ If Successful: {step.IfSuccessful}");
+            sb.AppendLine($"❌ If Unsuccessful: {step.IfUnsuccessful}");
             sb.AppendLine();
             sb.AppendLine(new string('─', 80));
             sb.AppendLine();
         }
 
         // Interactive Guidance Offer
-        sb.AppendLine("**💬 Interactive Assistance Available:**");
+        sb.AppendLine("💬 Interactive Assistance Available:");
         sb.AppendLine("I can guide you through these steps one at a time!");
         sb.AppendLine("Just say: 'Guide me through step 1' and I'll provide real-time assistance.");
         sb.AppendLine();
-        sb.AppendLine("**Quick Actions:**");
+        sb.AppendLine("Quick Actions:");
         sb.AppendLine("  • 'Run diagnostics' - Get current network status before starting");
         sb.AppendLine("  • 'List other guides' - See all available troubleshooting guides");
         sb.AppendLine("  • 'Create support ticket' - Escalate to technical team");
@@ -658,7 +658,7 @@ public class TroubleshootingTool : MorganaTool
         await Task.Delay(80);
 
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine("📚 **Available Troubleshooting Guides**");
+        sb.AppendLine("📚 Available Troubleshooting Guides");
         sb.AppendLine();
 
         foreach ((string key, TroubleshootingGuide guide) in _guides.OrderBy(g => g.Key))
@@ -671,19 +671,19 @@ public class TroubleshootingTool : MorganaTool
                 _ => "⚪"
             };
 
-            sb.AppendLine($"**{guide.GuideId}: {guide.ProblemType}** {difficultyIcon}");
+            sb.AppendLine($"{guide.GuideId}: {guide.ProblemType} {difficultyIcon}");
             sb.AppendLine($"  {guide.Description}");
             sb.AppendLine($"  ⏱️ {FormatDuration(guide.Duration)} | 🎯 {guide.Difficulty} | 📝 {guide.Steps.Count} steps");
-            sb.AppendLine($"  **Get guide:** Ask me 'Show {key} troubleshooting guide'");
+            sb.AppendLine($"  Get guide: Ask me 'Show {key} troubleshooting guide'");
             sb.AppendLine();
         }
 
-        sb.AppendLine("**Need Help Choosing?**");
+        sb.AppendLine("Need Help Choosing?");
         sb.AppendLine("  • No connection at all? → Use `no-internet` guide");
         sb.AppendLine("  • Slow speeds? → Use `slow-connection` guide");
         sb.AppendLine("  • WiFi problems? → Use `wifi-issues` guide");
         sb.AppendLine();
-        sb.AppendLine("💡 **Pro Tip:** Run diagnostics first to identify your issue!");
+        sb.AppendLine("💡 Pro Tip: Run diagnostics first to identify your issue!");
         sb.AppendLine("Ask me: 'Run diagnostics'");
 
         return sb.ToString();
