@@ -179,11 +179,6 @@ public class AgentAdapter
     /// </summary>
     private void RegisterMCPTools(Type agentType, ToolAdapter toolAdapter)
     {
-        if (mcpClientService == null)
-        {
-            return;
-        }
-
         // Read attribute directly from agent type
         UsesMCPServersAttribute? attribute = agentType.GetCustomAttribute<UsesMCPServersAttribute>();
         if (attribute == null || attribute.ServerNames.Length == 0)
