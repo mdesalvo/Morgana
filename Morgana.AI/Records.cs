@@ -414,4 +414,18 @@ public static class Records
                 .ToList();
         }
     }
+
+    // ==========================================================================
+    // MODEL CONTEXT PROTOCOL
+    // ==========================================================================
+
+    /// <summary>
+    /// MCP server configuration from appsettings.json.
+    /// Defines how to connect to and initialize MCP servers.
+    /// </summary>
+    public record MCPServerConfig(
+        string Name,
+        string Uri,
+        bool Enabled,
+        Dictionary<string, string>? AdditionalSettings = null);
 }
