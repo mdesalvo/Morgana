@@ -101,7 +101,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // ==============================================================================
 // These services provide the core Morgana.AI framework functionality:
 //
-// - IMCPServerRegistryService: Discovers and registers MCP servers used by agents
+// - IMCPClientService: Handles connectivity with discovered MCP servers
 // - IToolRegistryService: Discovers and registers tools provided by agents
 // - IAgentConfigurationService: Loads agent and intent configurations
 // - IPromptResolverService: Resolves prompt templates from configuration
@@ -109,7 +109,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI)
 // - IChatClient: Microsoft.Extensions.AI chat client for LLM interactions
 
-builder.Services.AddSingleton<IMCPServerRegistryService, UsesMCPServersRegistryService>();
+builder.Services.AddSingleton<IMCPClientService, MCPClientService>();
 builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistryService>();
 builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
