@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - UNDER DEVELOPMENT
+
+### 🎯 Major Feature: Model Context Protocol (MCP) Integration
+This release introduces **industrial-grade MCP support**, enabling agents to dynamically acquire capabilities from external MCP servers without code changes. Built on **Microsoft's official ModelContextProtocol library**, Morgana treats MCP tools as first-class citizens—indistinguishable from native tools.
+
+### ✨ Highlights
+
+**MCP Server Integration**
+- `UsesMCPServersAttribute` for declarative MCP server dependencies on agents
+- `IMCPClientService` and `MCPClientService` for managing multiple MCP server connections
+- `MCPClient` with HTTP/SSE transport supporting `tools/list` and `tools/call` operations
+- `MCPAdapter` for automatic JSON Schema → ToolDefinition conversion with type safety
+- Automatic tool discovery and registration at agent creation time
+- MCP server configuration via `appsettings.json` under `MCP:Servers` section
+
+**Type-Safe Parameter Handling**
+- JSON Schema type mapping to CLR types: `string`, `integer` → `int`, `number` → `double`, `boolean` → `bool`
+- **DynamicMethod IL generation** using Reflection.Emit for parameter name preservation (required by `AIFunctionFactory`)
+- Mixed-type parameter support with automatic boxing for value types
+- Object array executor pattern enabling unlimited parameter counts
+- Type conversion layer ensuring JSON serialization compatibility with MCP servers
+
+**MonkeyAgent Example (Morgana.AI.Examples)**
+- Educational MCP integration example using MonkeyMCP server
+- 5 automatically acquired tools: `get_monkeys`, `get_monkey(name)`, `get_monkey_journey(name)`, `get_all_monkey_journeys`, `get_monkey_business` 🐵
+- Demonstrates transparent MCP tool usage alongside native tools
+
+**AgentAdapter Enhancement**
+- Automatic MCP tool registration during agent initialization via `RegisterMCPToolsFromServer()`
+- Multi-server support per agent through `UsesMCPServers` attribute array
+- Seamless integration with existing tool registration pipeline
+
+### 🔄 Changed
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+
+This release unlocks:
+- Microservices exposing tools via MCP for shared agent capabilities
+- Third-party MCP tool ecosystem integration (filesystem, database, API connectors)
+
 ## [0.7.1] - 2026-01-09
 
 ### 🔄 Changed
