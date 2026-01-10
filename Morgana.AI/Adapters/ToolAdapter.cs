@@ -201,15 +201,20 @@ public class ToolAdapter
     /// to capture context. These parameters have no name and type "Closure". We skip them
     /// during validation since they're implementation details, not actual tool parameters.</para>
     /// </remarks>
+    /// <summary>
+    /// Validates that a delegate implementation matches its tool definition.
+    /// Ensures parameter counts, names, and optionality are consistent.
+    /// 
+    /// PATCHED FOR MCP: Skips hidden Closure parameters that .NET may add.
+    /// This provides backward compatibility and defense in depth.
+    /// </summary>
     private static void ValidateToolDefinition(Delegate implementation, ToolDefinition definition)
     {
         ParameterInfo[] allParams = implementation.Method.GetParameters();
         List<ToolParameter> definitionParams = [.. definition.Parameters];
 
-        // PATCH: Skip the first parameter if it's a Closure parameter
-        // .NET adds this when Expression Trees capture variables
+        // MCP: Skip the first parameter if it's a Closure parameter
         ParameterInfo[] methodParams = allParams;
-        
         if (allParams.Length > 0 && IsClosureParameter(allParams[0]))
         {
             // Skip the first Closure parameter
@@ -220,31 +225,15 @@ public class ToolAdapter
             throw new ArgumentException(
                 $"Parameter count mismatch: method has {methodParams.Length} (filtered from {allParams.Length} total), definition has {definitionParams.Count}");
 
+        // Validate parameters by name
         foreach (ParameterInfo methodParam in methodParams)
         {
-            ParameterInfo param = methodParam;
+            string paramName = methodParam.Name ?? string.Empty;
             
-            // If parameter has no name, match by position
-            ToolParameter defParam;
-            if (string.IsNullOrWhiteSpace(param.Name))
-            {
-                // Match by position (index in array)
-                int paramIndex = Array.IndexOf(methodParams, param);
-                if (paramIndex >= 0 && paramIndex < definitionParams.Count)
-                {
-                    defParam = definitionParams[paramIndex];
-                }
-                else
-                {
-                    throw new ArgumentException($"Parameter at position {paramIndex} not found in definition");
-                }
-            }
-            else
-            {
-                // Match by name
-                defParam = definitionParams.FirstOrDefault(p => p.Name == param.Name)
-                    ?? throw new ArgumentException($"Parameter '{methodParam.Name}' not found in definition");
-            }
+            // With DynamicMethod + DefineParameter, all parameters should have names
+            // But we keep this flexible for backward compatibility
+            ToolParameter defParam = definitionParams.FirstOrDefault(p => p.Name == paramName)
+                ?? throw new ArgumentException($"Parameter '{paramName}' not found in definition");
 
             bool isOptional = methodParam.HasDefaultValue;
             if (defParam.Required && isOptional)

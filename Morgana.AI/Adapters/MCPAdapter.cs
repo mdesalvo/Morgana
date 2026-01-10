@@ -17,6 +17,11 @@ public class MCPAdapter
     private readonly MCPClient mcpClient;
     private readonly ILogger logger;
 
+    /// <summary>
+    /// Static cache for executor delegates referenced by DynamicMethod IL.
+    /// </summary>
+    private static readonly Dictionary<string, object> executorCache = [];
+
     public MCPAdapter(MCPClient mcpClient, ILogger logger)
     {
         this.mcpClient = mcpClient;
@@ -48,7 +53,7 @@ public class MCPAdapter
 
                 // Log extracted parameters
                 logger.LogInformation($"[MCP SCHEMA]   Extracted {parameters.Count} parameter(s):");
-                foreach (var param in parameters)
+                foreach (ToolParameter param in parameters)
                 {
                     logger.LogInformation($"[MCP SCHEMA]     - {param.Name} (required: {param.Required})");
                 }
@@ -65,12 +70,12 @@ public class MCPAdapter
                 Delegate toolDelegate = CreateMCPToolDelegate(mcpTool, parameters);
 
                 // Log delegate signature
-                var methodInfo = toolDelegate.Method;
-                var delegateParams = methodInfo.GetParameters();
+                MethodInfo methodInfo = toolDelegate.Method;
+                ParameterInfo[] delegateParams = methodInfo.GetParameters();
                 logger.LogInformation($"[MCP DELEGATE] Created delegate for {mcpTool.Name}:");
                 logger.LogInformation($"[MCP DELEGATE]   Delegate type: {toolDelegate.GetType().Name}");
                 logger.LogInformation($"[MCP DELEGATE]   Method has {delegateParams.Length} parameter(s):");
-                foreach (var p in delegateParams)
+                foreach (ParameterInfo p in delegateParams)
                 {
                     logger.LogInformation($"[MCP DELEGATE]     - {p.Name} ({p.ParameterType.Name})");
                 }
@@ -89,8 +94,7 @@ public class MCPAdapter
 
     /// <summary>
     /// Creates a delegate for an MCP tool.
-    /// Uses Expression Trees to ensure parameter names match the tool definition exactly.
-    /// The patched ToolAdapter will filter out any Closure parameters that .NET adds.
+    /// Supports any number of parameters through dynamic IL generation.
     /// </summary>
     private Delegate CreateMCPToolDelegate(Tool mcpTool, List<ToolParameter> parameters)
     {
@@ -99,7 +103,7 @@ public class MCPAdapter
         
         logger.LogInformation($"[DELEGATE BUILD] Creating delegate for {toolName} with {parameters.Count} parameter(s)");
         
-        // For 0 parameters, use simple lambda
+        // For 0 parameters, use simple lambda (no need for complex IL)
         if (parameters.Count == 0)
         {
             return new Func<Task<object>>(async () =>
@@ -107,7 +111,9 @@ public class MCPAdapter
                 try
                 {
                     logger.LogDebug($"Executing MCP tool (0 params): {toolName}");
+
                     CallToolResult result = await mcpClient.CallToolAsync(toolName, null);
+
                     return FormatMCPResult(result);
                 }
                 catch (Exception ex)
@@ -118,82 +124,41 @@ public class MCPAdapter
             });
         }
         
-        // For parameters > 0, use Expression Trees to set correct parameter names
-        // Create the executor lambda with generic parameter names
-        Delegate executor = parameters.Count switch
+        // For 1+ parameters, create a generic executor and wrap with DynamicMethod
+        // This works for any number of parameters!
+        Func<string[], Task<object>> executor = async (values) =>
         {
-            1 => new Func<string, Task<object>>(async (p0) =>
+            try
             {
-                try
-                {
-                    logger.LogDebug($"Executing MCP tool (1 param): {toolName}");
-                    Dictionary<string, object> args = new() { [paramNames[0]] = p0 };
-                    CallToolResult result = await mcpClient.CallToolAsync(toolName, args);
-                    return FormatMCPResult(result);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, $"Error executing MCP tool: {toolName}");
-                    return $"Error: {ex.Message}";
-                }
-            }),
-            
-            2 => new Func<string, string, Task<object>>(async (p0, p1) =>
+                logger.LogDebug($"Executing MCP tool ({values.Length} params): {toolName}");
+                
+                Dictionary<string, object> args = new();
+                for (int i = 0; i < paramNames.Length; i++)
+                    args[paramNames[i]] = values[i];
+
+                CallToolResult result = await mcpClient.CallToolAsync(toolName, args);
+
+                return FormatMCPResult(result);
+            }
+            catch (Exception ex)
             {
-                try
-                {
-                    logger.LogDebug($"Executing MCP tool (2 params): {toolName}");
-                    Dictionary<string, object> args = new() 
-                    { 
-                        [paramNames[0]] = p0,
-                        [paramNames[1]] = p1
-                    };
-                    CallToolResult result = await mcpClient.CallToolAsync(toolName, args);
-                    return FormatMCPResult(result);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, $"Error executing MCP tool: {toolName}");
-                    return $"Error: {ex.Message}";
-                }
-            }),
-            
-            3 => new Func<string, string, string, Task<object>>(async (p0, p1, p2) =>
-            {
-                try
-                {
-                    logger.LogDebug($"Executing MCP tool (3 params): {toolName}");
-                    Dictionary<string, object> args = new() 
-                    { 
-                        [paramNames[0]] = p0,
-                        [paramNames[1]] = p1,
-                        [paramNames[2]] = p2
-                    };
-                    CallToolResult result = await mcpClient.CallToolAsync(toolName, args);
-                    return FormatMCPResult(result);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, $"Error executing MCP tool: {toolName}");
-                    return $"Error: {ex.Message}";
-                }
-            }),
-            
-            _ => throw new NotSupportedException(
-                $"MCP tools with {parameters.Count} parameters not supported. Max 3 currently supported.")
+                logger.LogError(ex, $"Error executing MCP tool: {toolName}");
+                return $"Error: {ex.Message}";
+            }
         };
         
-        // Now wrap the executor in an Expression Tree to set correct parameter names
+        // Wrap executor in DynamicMethod with proper parameter names
         return CreateDelegateWithNamedParameters(executor, paramNames);
     }
     
     /// <summary>
-    /// Wraps an existing delegate using DynamicMethod to create a method with named parameters.
+    /// Wraps a string array executor using DynamicMethod to create a method with named parameters.
     /// This is necessary because AIFunctionFactory requires parameter names.
+    /// Supports any number of parameters through dynamic IL generation.
     /// </summary>
-    private Delegate CreateDelegateWithNamedParameters(Delegate executor, string[] paramNames)
+    private Delegate CreateDelegateWithNamedParameters(Func<string[], Task<object>> executor, string[] paramNames)
     {
-        // Build delegate type
+        // Build delegate type: Func<string, string, ..., Task<object>>
         Type[] paramTypes = Enumerable.Repeat(typeof(string), paramNames.Length).ToArray();
         Type returnType = typeof(Task<object>);
         Type[] allTypes = paramTypes.Concat([returnType]).ToArray();
@@ -209,11 +174,9 @@ public class MCPAdapter
         
         // Define parameter names
         for (int i = 0; i < paramNames.Length; i++)
-        {
             dynamicMethod.DefineParameter(i + 1, ParameterAttributes.None, paramNames[i]);
-        }
-        
-        // Store executor in a static field so we can reference it in IL
+
+        // Store executor in cache
         string fieldKey = Guid.NewGuid().ToString();
         lock (executorCache)
         {
@@ -228,14 +191,21 @@ public class MCPAdapter
         il.Emit(OpCodes.Call, typeof(MCPAdapter).GetMethod(nameof(GetExecutorFromCache), 
             BindingFlags.NonPublic | BindingFlags.Static)!);
         
-        // Load all parameters onto the stack
+        // Create string array for parameters
+        il.Emit(OpCodes.Ldc_I4, paramNames.Length); // Array length
+        il.Emit(OpCodes.Newarr, typeof(string));    // Create array
+        
+        // Populate array with parameters
         for (int i = 0; i < paramNames.Length; i++)
         {
-            il.Emit(OpCodes.Ldarg, i);
+            il.Emit(OpCodes.Dup);           // Duplicate array reference
+            il.Emit(OpCodes.Ldc_I4, i);     // Array index
+            il.Emit(OpCodes.Ldarg, i);      // Load parameter value
+            il.Emit(OpCodes.Stelem_Ref);    // Store in array
         }
         
-        // Call executor.Invoke with parameters
-        MethodInfo invokeMethod = executor.GetType().GetMethod("Invoke")!;
+        // Call executor.Invoke(string[] args)
+        MethodInfo invokeMethod = typeof(Func<string[], Task<object>>).GetMethod("Invoke")!;
         il.Emit(OpCodes.Callvirt, invokeMethod);
         
         // Return
@@ -244,21 +214,16 @@ public class MCPAdapter
         // Create delegate from DynamicMethod
         return dynamicMethod.CreateDelegate(delegateType);
     }
-    
-    /// <summary>
-    /// Static cache for executor delegates referenced by DynamicMethod IL.
-    /// </summary>
-    private static readonly Dictionary<string, Delegate> executorCache = [];
-    
+
     /// <summary>
     /// Helper method called by DynamicMethod IL to retrieve executor from cache.
     /// </summary>
-    private static Delegate GetExecutorFromCache(string key)
+    private static Func<string[], Task<object>> GetExecutorFromCache(string key)
     {
         lock (executorCache)
         {
-            return executorCache.TryGetValue(key, out Delegate? executor)
-                ? executor
+            return executorCache.TryGetValue(key, out object? executor)
+                ? (Func<string[], Task<object>>)executor
                 : throw new InvalidOperationException($"Executor '{key}' not found in cache");
         }
     }
