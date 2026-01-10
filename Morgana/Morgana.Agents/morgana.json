@@ -21,7 +21,7 @@
             },
             {
               "Name": "InteractiveToken",
-              "Description": "OPERATIONAL RULE ABOUT INTERACTION TOKEN '#INT#' - You operate SUBORDINATELY to the critical rule about context: when you need information from the user, OR you give him a courtesy message iviting him to stay in conversation, OR you give him a list of steps to follow or choices to make, you MUST end the response with the special token #INT#. For example: 'To help you with this request, could you tell me your identification code? #INT#'. Otherwise complete the request autonomously and DO NOT insert the #INT# token.",
+              "Description": "OPERATIONAL RULE ABOUT INTERACTION TOKEN '#INT#' - Ensure to respect the critical rule about context, then: if you need information from the user, OR you write a courtesy message inviting him to stay in conversation, OR you suggest a list of steps to follow or choices to make, you MUST end the response with the special token #INT#. For example: 'To help you with this request, could you tell me your identification code? #INT#', 'Tell me if there is anything else I can do for you. #INT#'. Otherwise complete the request and DO NOT insert the #INT# token.",
               "Type": "Operational",
               "Priority": 0
             },
