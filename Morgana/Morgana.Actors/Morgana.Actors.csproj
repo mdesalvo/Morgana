@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <Title>Morgana.ActorsFramework</Title>
+    <PackageId>Morgana.Actors</PackageId>
+    <OutputType>Library</OutputType>
+    <UserSecretsId>22d33d85-2b71-4c51-80e0-1126a06d4ac4</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Morgana.Foundations\Morgana.Foundations.csproj" />
+  </ItemGroup>
+
+</Project>

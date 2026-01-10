@@ -4,6 +4,7 @@
         <Title>Morgana.Foundations</Title>
         <PackageId>Morgana.Foundations</PackageId>
         <OutputType>Library</OutputType>
+        <UserSecretsId>6fb3c85b-ae39-4966-8737-3788d1aea3e0</UserSecretsId>
     </PropertyGroup>
 
 </Project>

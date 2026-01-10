@@ -1,5 +1,5 @@
 using System.Reflection;
-using Morgana.AgentsFramework.Abstractions;
+using Morgana.Agents.Abstractions;
 
 namespace Morgana.Startup.Services;
 
@@ -17,7 +17,7 @@ namespace Morgana.Startup.Services;
 /// {
 ///   "Plugins": {
 ///     "Assemblies": [
-///       "Morgana.ExampleAgents.dll"
+///       "Morgana.Example.dll"
 ///     ]
 ///   }
 /// }
@@ -68,7 +68,7 @@ public class PluginLoaderService
     /// </list>
     /// <para><strong>Logging Output Examples:</strong></para>
     /// <code>
-    /// ✅ Loaded plugin assembly with 3 Morgana agents: "Morgana.ExampleAgents"
+    /// ✅ Loaded plugin assembly with 3 Morgana agents: "Morgana.Example"
     /// ⚠️  Skipped assembly CustomLib: no MorganaAgent subclasses found
     /// ❌ Plugin assembly not found: NonExistent.dll
     /// </code>

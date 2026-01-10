@@ -5,8 +5,8 @@ using Akka.Actor;
 namespace Morgana.Foundations;
 
 /// <summary>
-/// Central repository of immutable record types (DTOs) used throughout the Morgana.AI framework.
-/// Records are organized by functional area: agent communication, classification, prompts, tools, and presentation.
+/// Central repository of immutable record types (DTOs) used throughout the Morgana framework.
+/// Records are organized by functional area: agent communication, classification, prompts, tools and presentation.
 /// </summary>
 /// <remarks>
 /// <para><strong>Design Philosophy:</strong></para>

@@ -1,8 +1,8 @@
 using Akka.Actor;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using Morgana.ActorsFramework.Actors;
-using Morgana.ActorsFramework.Extensions;
+using Morgana.Actors.Actors;
+using Morgana.Actors.Extensions;
 using Morgana.Foundations;
 using Morgana.Startup.Hubs;
 

@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Morgana.ExampleAgents\Morgana.ExampleAgents.csproj" />
-    <ProjectReference Include="..\Morgana.AgentsFramework\Morgana.AgentsFramework.csproj" />
-    <ProjectReference Include="..\Morgana.ActorsFramework\Morgana.ActorsFramework.csproj" />
+    <ProjectReference Include="..\Morgana.Example\Morgana.Example.csproj" />
+    <ProjectReference Include="..\Morgana.Agents\Morgana.Agents.csproj" />
+    <ProjectReference Include="..\Morgana.Actors\Morgana.Actors.csproj" />
     <ProjectReference Include="..\Morgana.Foundations\Morgana.Foundations.csproj" />
   </ItemGroup>
 

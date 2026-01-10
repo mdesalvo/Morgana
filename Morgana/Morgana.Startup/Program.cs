@@ -2,9 +2,9 @@ using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
 using Microsoft.Extensions.AI;
-using Morgana.AgentsFramework.Adapters;
-using Morgana.AgentsFramework.Interfaces;
-using Morgana.AgentsFramework.Services;
+using Morgana.Agents.Adapters;
+using Morgana.Agents.Interfaces;
+using Morgana.Agents.Services;
 using Morgana.Foundations.Interfaces;
 using Morgana.Startup.Hubs;
 using Morgana.Startup.Services;
@@ -86,7 +86,7 @@ builder.Services.AddSingleton<ILogger>(sp =>
 // This enables domain-specific agents to be developed separately and loaded
 // without modifying the core Morgana framework.
 //
-// Example plugin: Morgana.ExampleAgents (contains BillingAgent, ContractAgent, etc.)
+// Example plugin: Morgana.Example (contains BillingAgent, ContractAgent, etc.)
 
 using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddConsole()))
 {
@@ -97,9 +97,9 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 }
 
 // ==============================================================================
-// SECTION 6: Morgana.AI Services - Core Framework
+// SECTION 6: Morgana.Agents Services - Core Framework
 // ==============================================================================
-// These services provide the core Morgana.AI framework functionality:
+// These services provide the core Morgana.Agents framework functionality:
 //
 // - IMCPClientRegistryService: Handles discovery of configured MCP servers
 // - IToolRegistryService: Discovers and registers tools provided by agents

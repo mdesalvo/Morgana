@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Title>Morgana.ExampleAgents</Title>
+    <PackageId>Morgana.Example</PackageId>
+    <OutputType>Library</OutputType>
+    <UserSecretsId>9cd2f03f-b11c-4215-b59e-7972f4c11aca</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Morgana.Agents\Morgana.Agents.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="agents.json" />
+  </ItemGroup>
+
+</Project>
