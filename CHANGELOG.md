@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0] - UNDER DEVELOPMENT
+## [0.8.0] - 2026-01-11
 
 ### 🎯 Major Feature: Model Context Protocol (MCP) Integration
 This release introduces **industrial-grade MCP support**, enabling agents to dynamically acquire capabilities from external MCP servers without code changes. Built on **Microsoft's official ModelContextProtocol library**, Morgana treats MCP tools as first-class citizens—indistinguishable from native tools.
