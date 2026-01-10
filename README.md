@@ -36,6 +36,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
 9. **Personality-Driven Interactions**: Layered personality system with global and agent-specific traits
 10. **Plugin Architecture**: Domain agents dynamically loaded at runtime, enabling complete framework/domain decoupling
 11. **LLM-Driven Quick Replies**: Dynamic interactive button generation for improved UX in multi-choice scenarios
+12. **MCP Integration**: Agents dynamically extend capabilities by consuming external MCP servers—tools become indistinguishable from native implementations
 
 ## Architecture
 
@@ -75,25 +76,26 @@ Traditional chatbot systems often struggle with complexity—they either become 
    │           │      ║      DYNAMIC DOMAIN AGENTS (Plugin-Loaded)     ║ * Loaded via Plugin system
    │           │      ╠════════════════════════════════════════════════╣
    │           │      ║  ┌──────────┐   ┌───────────┐  ┌─────────────┐ ║
-   │           │      ║  │ Billing* │   │ Contract* │  │Troubleshoot*│ ║
+   │           │      ║  │ Billing* │   │ Contract* │  │   Monkey*   │ ║
    │           │      ║  │  Agent   │   │   Agent   │  │    Agent    │ ║
-   │           │      ║  └──────────┘   └───────────┘  └─────────────┘ ║
-   │           │      ║       │               │              │         ║
-   │           │      ╚═══════┼───────────────┼──────────────┼═════════╝
-   │           │              │   ┌───────────┴──────────────┘
-   │           │              │   │
-   │           │              ▼   ▼
-   │           │         ┌──────────────────────┐
-   │           │         │MorganaContextProvider│ ← AIContextProvider
-   │           │         │  (Context + Thread)  │   (Microsoft.Agents.AI)
-   │           │         │                      │   
-   │           │         │ ┌──────────────────┐ │
+   │           │      ║  └──────────┘   └───────────┘  └──────┬──────┘ ║
+   │           │      ║       │               │               │        ║
+   │           │      ╚═══════┼───────────────┼───────────────┼════════╝
+   │           │              │   ┌───────────┴──────────┐    │
+   │           │              │   │                      │    │
+   │           │              ▼   ▼                      │    │
+   │           │         ┌──────────────────────┐       │    │
+   │           │         │MorganaContextProvider│ ←─────┘    │
+   │           │         │  (Context + Thread)  │   AIContextProvider
+   │           │         │                      │   (Microsoft.Agents.AI)
+   │           │         │ ┌──────────────────┐ │   
    │           │         │ │ SetQuickReplies  │ │ ← LLM System Tool
    │           │         │ │   (JSON → QR)    │ │   (Temporary Context)
    │           │         │ └──────────────────┘ │
    │           │         └──────────────────────┘
    │           │              │
    │           │              │ P2P Context Sync via RouterActor
+   │           │              │
    │           │              │
    └─────┬─────┘              │
          │                    │
@@ -108,6 +110,30 @@ Traditional chatbot systems often struggle with complexity—they either become 
               │             LLM               │
               │ (AzureOpenAI, Anthropic, ...) │
               └───────────────────────────────┘
+              
+                              ┌─────────────────────────┐
+                              │    MCP INTEGRATION      │
+                              │   (External Servers)    │
+                              └─────────────────────────┘
+                                          ▲
+                                          │
+                                          │ HTTP/SSE
+                                          │ tools/list
+                                          │ tools/call
+                                          │
+                              ┌───────────┴────────────┐
+                              │                        │
+                    ┌─────────▼─────────┐    ┌────────▼────────┐
+                    │   MonkeyMCP       │    │  Your MCP       │
+                    │   Server (Azure)  │    │  Server         │
+                    │                   │    │                 │
+                    │ • get_monkeys     │    │ • custom_tools  │
+                    │ • get_monkey      │    │ • api_calls     │
+                    │ • get_journey 🐵  │    │ • services      │
+                    └───────────────────┘    └─────────────────┘
+                    
+                    ↑ MonkeyAgent acquires these tools dynamically
+                      at runtime via [UsesMCPServers("MonkeyMCP")]
 ```
 
 ### Actors Hierarchy
@@ -172,35 +198,96 @@ This actor works as a smart router, dynamically resolving the appropriate Morgan
 RouterActor also serves as the **message bus for P2P context synchronization** between agents. When an agent updates a shared context variable, RouterActor broadcasts the update to all other agents, ensuring seamless information sharing across the system.
 
 #### 6. Morgana Agents (Domain-Specific, Extensible!)
-Specialized agents with domain-specific knowledge and tool access. The system includes three built-in **example** agents, but **the architecture is fully extensible** to support any domain-specific intent via autodiscovery.
+Specialized agents with domain-specific knowledge and tool access. The system includes **example** agents that demonstrate both native tools and MCP integration, but **the architecture is fully extensible** to support any domain-specific intent via autodiscovery.
 
-**BillingAgent** (example)
+**BillingAgent** (example - native tools)
 - **Tools**: `GetInvoices()`, `GetInvoiceDetails()`, `SetQuickReplies()`
 - **Purpose**: Handle all billing inquiries, payment verification, and invoice retrieval
 - **Prompt**: Defined in `agents.json` under ID "Billing"
 - **Quick Replies**: Dynamically generates invoice selection buttons for improved UX
 
-**TroubleshootingAgent** (example)
+**TroubleshootingAgent** (example - native tools)
 - **Tools**: `RunDiagnostics()`, `GetTroubleshootingGuide()`, `SetQuickReplies()`
 - **Purpose**: Diagnose connectivity issues, provide step-by-step troubleshooting
 - **Prompt**: Defined in `agents.json` under ID "Troubleshooting"
 - **Quick Replies**: Offers interactive guide selection (No Internet, Slow Speed, WiFi Issues)
 
-**ContractAgent** (example)
+**ContractAgent** (example - native tools)
 - **Tools**: `GetContractDetails()`, `InitiateCancellation()`, `SetQuickReplies()`
 - **Purpose**: Handle contract modifications and termination requests
 - **Prompt**: Defined in `agents.json` under ID "Contract"
 - **Quick Replies**: Yes/No confirmation buttons for critical actions
 
+**MonkeyAgent** (example - **MCP-powered** 🐵)
+- **MCP Server**: `MonkeyMCP` (Azure Functions)
+- **Acquired Tools**: `get_monkeys`, `get_monkey(name)`, `get_monkey_journey(name)`, `get_all_monkey_journeys`, `get_monkey_business`
+- **Purpose**: Educational example demonstrating MCP integration
+- **Implementation**: Zero tool code—all capabilities acquired dynamically from MCP server
+
+```csharp
+// Morgana.AI.Examples/Agents/MonkeyAgent.cs
+namespace Morgana.AI.Examples.Agents;
+
+/// <summary>
+/// Educational agent demonstrating MCP (Model Context Protocol) integration.
+/// Acquires all tools dynamically from the MonkeyMCP server at runtime.
+/// No native tool implementations needed—MCP tools are indistinguishable from native ones!
+/// </summary>
+[HandlesIntent("monkeys")]
+[UsesMCPServers("MonkeyMCP")]  // ← This is all you need!
+public class MonkeyAgent : MorganaAgent
+{
+    public MonkeyAgent(
+        string conversationId,
+        ILLMService llmService,
+        IPromptResolverService promptResolverService,
+        ILogger logger,
+        AgentAdapter agentAdapter)
+    {
+        this.conversationId = conversationId;
+
+        // Initialize AI agent with MCP tools automatically registered
+        agentAdapter.CreateAgent(
+            agentType: GetType(),
+            sharedContextCallback: OnSharedContextUpdate);
+
+        aiAgent = agentAdapter.ResolveAgent(GetType());
+        contextProvider = agentAdapter.ResolveContextProvider(GetType());
+
+        this.logger = logger;
+        this.llmService = llmService;
+        this.promptResolverService = promptResolverService;
+    }
+
+    // No tool implementations—all acquired from MCP!
+    // Tools available: get_monkeys, get_monkey, get_monkey_journey, 
+    //                  get_all_monkey_journeys, get_monkey_business
+}
+```
+
+**User Experience:**
+```
+User: "Tell me about Curious George"
+MonkeyAgent → Calls get_monkey("Curious George") via MCP server
+            → Receives monkey details from Azure Functions
+            → Synthesizes: "🐵 Curious George is a playful monkey known for his adventures..."
+
+User: "What's his journey?"
+MonkeyAgent → Calls get_monkey_journey("Curious George") via MCP
+            → Receives journey path with activities and health stats
+            → Presents interactive journey narrative
+```
+
 **Adding Custom Agents:**
 To add a new agent for your domain:
 1. Define the intent in `agents.json` (Intents section)
 2. Create a prompt configuration for the agent behavior
-3. Implement a new class inheriting from `MorganaAgent` -> the agent
+3. Implement a new class inheriting from `MorganaAgent` → the agent
 4. Decorate it with `[HandlesIntent("your_intent")]`
-5. Implement a new class inheriting from `MorganaTool` -> the tools
-6. Decorate it with `[ProvidesToolForIntent("your_intent")]`
-7. Exploit `AgentAdapter` to activate the agent as `AIAgent`
+5. **(Optional)** Add `[UsesMCPServers("YourServer")]` for MCP capabilities
+6. Implement a new class inheriting from `MorganaTool` → the native tools
+7. Decorate it with `[ProvidesToolForIntent("your_intent")]`
+8. Exploit `AgentAdapter` to activate the agent as `AIAgent`
 
 The `IAgentRegistryService` and `IAgentConfigurationService` will automatically discover and validate all agents at startup.
 
@@ -1150,6 +1237,190 @@ The system dynamically loads domain assemblies configured in `appsettings.json` 
 - **Validation at Startup**: Invalid plugins are caught early with clear diagnostics
 - **Multi-Domain Support**: Load multiple domain assemblies simultaneously
 - **Clean Separation**: Framework (Morgana.AI) and domains (*.Examples, *.YourDomain) remain independent
+
+## MCP Integration: Extending Agent Capabilities Dynamically
+
+Morgana supports **Model Context Protocol (MCP)** servers, enabling agents to dynamically acquire capabilities from external tools and services without code changes. Each agent can declare its use of MCP servers, and at runtime, Morgana automatically discovers all exposed tools and integrates them as native methods—**indistinguishable from built-in tools**.
+
+### The MCP Advantage
+
+**Traditional Approach:**
+```csharp
+// Adding a new capability requires code changes
+public async Task<string> GetMonkeyInfo(string name) { /* ... */ }
+```
+
+**MCP Approach:**
+```csharp
+// Agent declares MCP server usage via attribute
+[UsesMCPServers("MonkeyMCP")]
+public class MonkeyAgent : MorganaAgent { }
+
+// Tools are automatically discovered and integrated at runtime!
+// get_monkey, get_monkey_journey, get_monkeys, etc. → Native Morgana tools
+```
+
+### How It Works
+
+**1. Declarative Server Usage**
+```csharp
+[HandlesIntent("monkeys")]
+[UsesMCPServers("MonkeyMCP")]  // Declare dependency on MCP server
+public class MonkeyAgent : MorganaAgent
+{
+   // Agent implementation - MCP tools auto-registered
+}
+```
+
+**2. MCP Server Configuration**
+```json
+{
+  "MCP": {
+    "Servers": [
+      {
+        "Name": "MonkeyMCP",
+        "Uri": "https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/",
+        "Enabled": true,
+        "AdditionalSettings": {}
+      }
+    ]
+  }
+}
+```
+
+**3. Automatic Discovery & Integration**
+At agent creation, Morgana:
+- Connects to declared MCP servers
+- Queries available tools via `tools/list`
+- Extracts JSON Schema parameter definitions
+- Generates typed delegates with proper parameter names using **Reflection.Emit**
+- Registers tools alongside native Morgana tools
+
+**4. Type-Safe Parameter Handling**
+MCP tools support rich typing through JSON Schema → CLR type mapping:
+```json
+{
+  "name": "calculate_stats",
+  "inputSchema": {
+    "properties": {
+      "count": { "type": "integer" },
+      "active": { "type": "boolean" },
+      "threshold": { "type": "number" }
+    }
+  }
+}
+```
+
+Morgana automatically generates:
+```csharp
+Func<int, bool, double, Task<object>> calculate_stats
+```
+
+**Supported Types:**
+- `string` → `string`
+- `integer` → `int`
+- `number` → `double`
+- `boolean` → `bool`
+
+**5. Transparent Tool Usage**
+From the agent's perspective (and Morgana's orchestration layer), **there's no distinction** between native tools and MCP-acquired tools:
+
+```csharp
+// Both execute identically through AIFunction interface
+await aiAgent.ExecuteAsync("GetInvoices", args);      // Native tool
+await aiAgent.ExecuteAsync("get_monkey_journey", args); // MCP tool
+```
+
+### Real-World Example: MonkeyAgent
+
+The `MonkeyAgent` demonstrates MCP integration with a playful example:
+
+**Agent Declaration:**
+```csharp
+[HandlesIntent("monkeys")]
+[UsesMCPServers("MonkeyMCP")]
+public class MonkeyAgent : MorganaAgent
+{
+    // Agent gains 5 monkey-related tools automatically!
+}
+```
+
+**Acquired MCP Tools:**
+- `get_monkeys`: List all available monkeys
+- `get_monkey(name)`: Get details for a specific monkey
+- `get_monkey_journey(name)`: Generate unique journey with activities and health stats
+- `get_all_monkey_journeys`: Get journey paths for all monkeys
+- `get_monkey_business`: Random monkey emoji fun 🐵
+
+**User Interaction:**
+```
+User: "Tell me about Curious George"
+Agent → Calls get_monkey("Curious George") via MCP
+      → Receives monkey details
+      → Synthesizes natural language response
+```
+
+### Implementation: Rock-Solid Industrial MCP
+
+Morgana's MCP integration is built on **Microsoft's official ModelContextProtocol library**, ensuring industrial-grade reliability and compliance with the MCP specification.
+
+**Key Components:**
+- **MCPClient**: HTTP/SSE transport with `tools/list` and `tools/call` support
+- **MCPClientService**: Multi-server connection management
+- **MCPAdapter**: JSON Schema → ToolDefinition conversion with type safety
+- **AgentAdapter**: Automatic tool registration during agent initialization
+
+**Technical Highlights:**
+- **DynamicMethod IL generation** for parameter name preservation (required by `AIFunctionFactory`)
+- **Mixed-type parameter support** with automatic boxing for value types
+- **Object array executor pattern** enabling unlimited parameter counts
+- **Type conversion layer** ensuring JSON serialization compatibility
+
+### Configuration & Extensibility
+
+**Enable MCP for any agent:**
+```csharp
+[HandlesIntent("your-domain")]
+[UsesMCPServers("ServerA", "ServerB")]  // Multiple servers supported!
+public class YourAgent : MorganaAgent { }
+```
+
+**Add new MCP servers in appsettings.json:**
+```json
+{
+  "MCP": {
+    "Servers": [
+      {
+        "Name": "YourServer",
+        "Uri": "http://your-service:8080",
+        "Enabled": true,
+        "AdditionalSettings": {}
+      }
+    ]
+  }
+}
+```
+
+No code changes required—just configuration and attribute decoration!
+
+### Why This Matters
+
+**For Developers:**
+- Add capabilities without writing tool implementations
+- Integrate third-party services instantly
+- Prototype new features rapidly
+
+**For System Architects:**
+- Microservices can expose tools via MCP
+- Shared capabilities across multiple agents
+- Clear separation between orchestration (Morgana) and execution (MCP servers)
+
+**For Business:**
+- Faster time-to-market for new features
+- Reduced development and maintenance costs
+- Ecosystem of reusable MCP tools
+
+Morgana treats MCP tools as **first-class citizens**, making external capabilities feel native and eliminating the artificial boundary between "built-in" and "integrated" functionality. 🐒✨
 
 ## Technology Stack
 
