@@ -228,21 +228,11 @@ public class MonkeyAgent : MorganaAgent
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         ILogger logger,
-        AgentAdapter agentAdapter)
+        MorganaAgentAdapter morganaAgentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
-        this.conversationId = conversationId;
+        (aiAgent, contextProvider) = morganaAgentAdapter.CreateAgent(GetType(), OnSharedContextUpdate);
 
-        // Initialize AI agent with MCP tools automatically registered
-        agentAdapter.CreateAgent(
-            agentType: GetType(),
-            sharedContextCallback: OnSharedContextUpdate);
-
-        aiAgent = agentAdapter.ResolveAgent(GetType());
-        contextProvider = agentAdapter.ResolveContextProvider(GetType());
-
-        this.logger = logger;
-        this.llmService = llmService;
-        this.promptResolverService = promptResolverService;
+        ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }
 
     // No tool implementations—all acquired from MCP!
