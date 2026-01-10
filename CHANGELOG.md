@@ -40,6 +40,7 @@ This release introduces **industrial-grade MCP support**, enabling agents to dyn
 
 - Migrated solution files to **slnx** format
 - Centralized project definition via **Directory.Build.Props** standard
+- Reorganized solution into **4 framework projects** (Morgana.Startup, Morgana.Foundations, Morgana.Actors, Morgana.Agents) plus **1 didactic bonus** (Morgana.Example)
 
 ### 🐛 Fixed
 
