@@ -13,9 +13,9 @@ This release introduces **industrial-grade MCP support**, enabling agents to dyn
 
 **MCP Server Integration**
 - `UsesMCPServersAttribute` for declarative MCP server dependencies on agents
-- `IMCPClientService` and `MCPClientService` for managing multiple MCP server connections
+- `IMCPClientRegistryService` and `MCPClientRegistryService` for managing multiple MCP server connections
 - `MCPClient` with HTTP/SSE transport supporting `tools/list` and `tools/call` operations
-- `MCPAdapter` for automatic JSON Schema → ToolDefinition conversion with type safety
+- `MCPToolAdapter` for automatic JSON Schema → ToolDefinition conversion with type safety
 - Automatic tool discovery and registration at agent creation time
 - MCP server configuration via `appsettings.json` under `MCP:Servers` section
 
@@ -27,7 +27,7 @@ This release introduces **industrial-grade MCP support**, enabling agents to dyn
 - Type conversion layer ensuring JSON serialization compatibility with MCP servers
 
 **MonkeyAgent Example (Morgana.AI.Examples)**
-- Educational MCP integration example using MonkeyMCP server
+- Educational MCP integration example using MonkeyMCP server from Microsoft
 - 5 automatically acquired tools: `get_monkeys`, `get_monkey(name)`, `get_monkey_journey(name)`, `get_all_monkey_journeys`, `get_monkey_business` 🐵
 - Demonstrates transparent MCP tool usage alongside native tools
 
