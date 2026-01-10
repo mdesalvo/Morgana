@@ -28,7 +28,7 @@ public class MCPAdapter
     public Dictionary<string, (Delegate toolDelegate, ToolDefinition toolDefinition)> ConvertTools(
         List<Tool> mcpTools)
     {
-        Dictionary<string, (Delegate, ToolDefinition)> result = new();
+        Dictionary<string, (Delegate, ToolDefinition)> result = [];
 
         foreach (Tool mcpTool in mcpTools)
         {
@@ -44,27 +44,52 @@ public class MCPAdapter
                     Parameters: parameters
                 );
 
-                // Create delegate that calls MCP server
-                Func<Dictionary<string, object>, Task<object>> toolDelegate = async (args) =>
+                // Create delegate based on parameter count
+                Delegate toolDelegate;
+                
+                if (parameters.Count == 0)
                 {
-                    try
+                    // No parameters - use Func<Task<object>>
+                    toolDelegate = new Func<Task<object>>(async () =>
                     {
-                        logger.LogDebug($"Executing MCP tool: {mcpTool.Name}");
+                        try
+                        {
+                            logger.LogDebug($"Executing MCP tool (no params): {mcpTool.Name}");
 
-                        CallToolResult result = await mcpClient.CallToolAsync(mcpTool.Name, args);
+                            CallToolResult callToolResult = await mcpClient.CallToolAsync(mcpTool.Name, null);
 
-                        // Format result for LLM
-                        return FormatMCPResult(result);
-                    }
-                    catch (Exception ex)
+                            return FormatMCPResult(callToolResult);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, $"Error executing MCP tool: {mcpTool.Name}");
+                            return $"Error: {ex.Message}";
+                        }
+                    });
+                }
+                else
+                {
+                    // Has parameters - use Func<Dictionary<string, object>, Task<object>>
+                    toolDelegate = new Func<Dictionary<string, object>, Task<object>>(async (args) =>
                     {
-                        logger.LogError(ex, $"Error executing MCP tool: {mcpTool.Name}");
-                        return $"Error: {ex.Message}";
-                    }
-                };
+                        try
+                        {
+                            logger.LogDebug($"Executing MCP tool: {mcpTool.Name}");
+
+                            CallToolResult callToolResult = await mcpClient.CallToolAsync(mcpTool.Name, args);
+
+                            return FormatMCPResult(callToolResult);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, $"Error executing MCP tool: {mcpTool.Name}");
+                            return $"Error: {ex.Message}";
+                        }
+                    });
+                }
 
                 result[mcpTool.Name] = (toolDelegate, definition);
-                logger.LogDebug($"Converted MCP tool: {mcpTool.Name}");
+                logger.LogDebug($"Converted MCP tool: {mcpTool.Name} ({parameters.Count} parameters)");
             }
             catch (Exception ex)
             {
@@ -80,7 +105,7 @@ public class MCPAdapter
     /// </summary>
     private List<ToolParameter> ExtractParameters(Tool mcpTool)
     {
-        List<ToolParameter> parameters = new();
+        List<ToolParameter> parameters = [];
 
         // InputSchema is JsonElement (struct), check if it has properties
         if (mcpTool.InputSchema.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
@@ -88,14 +113,12 @@ public class MCPAdapter
 
         try
         {
-            JsonElement schemaElement = (JsonElement)mcpTool.InputSchema;
-
             // Parse properties
-            if (schemaElement.TryGetProperty("properties", out JsonElement propertiesElement))
+            if (mcpTool.InputSchema.TryGetProperty("properties", out JsonElement propertiesElement))
             {
                 // Parse required fields
                 HashSet<string> requiredFields = [];
-                if (schemaElement.TryGetProperty("required", out JsonElement requiredElement) &&
+                if (mcpTool.InputSchema.TryGetProperty("required", out JsonElement requiredElement) &&
                     requiredElement.ValueKind == JsonValueKind.Array)
                 {
                     foreach (JsonElement req in requiredElement.EnumerateArray())
