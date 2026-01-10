@@ -181,6 +181,10 @@ public class ToolAdapter
     /// <summary>
     /// Validates that a delegate implementation matches its tool definition.
     /// Ensures parameter counts, names, and optionality are consistent.
+    /// 
+    /// PATCHED FOR MCP: Skips hidden Closure parameters that .NET adds when compiling
+    /// Expression Trees that capture variables. This allows MCP-generated delegates
+    /// to work correctly.
     /// </summary>
     /// <param name="implementation">Delegate to validate</param>
     /// <param name="definition">Tool definition to validate against</param>
@@ -188,34 +192,92 @@ public class ToolAdapter
     /// <remarks>
     /// <para><strong>Validation Rules:</strong></para>
     /// <list type="number">
-    /// <item>Parameter count must match exactly</item>
+    /// <item>Parameter count must match exactly (excluding Closure parameters)</item>
     /// <item>Each definition parameter must have a matching method parameter by name</item>
     /// <item>Required parameters in definition cannot be optional in method</item>
     /// </list>
-    /// <para><strong>Example Mismatch:</strong></para>
-    /// <code>
-    /// // Definition says: userId (Required: true)
-    /// public Task&lt;Result&gt; GetInvoices(string userId = "default")
-    /// // ERROR: Parameter 'userId' is required in definition but optional in method
-    /// </code>
+    /// <para><strong>MCP Closure Handling:</strong></para>
+    /// <para>When MCP tools are converted to delegates, .NET may add hidden Closure parameters
+    /// to capture context. These parameters have no name and type "Closure". We skip them
+    /// during validation since they're implementation details, not actual tool parameters.</para>
     /// </remarks>
     private static void ValidateToolDefinition(Delegate implementation, ToolDefinition definition)
     {
-        ParameterInfo[] methodParams = implementation.Method.GetParameters();
+        ParameterInfo[] allParams = implementation.Method.GetParameters();
         List<ToolParameter> definitionParams = [.. definition.Parameters];
 
+        // PATCH: Skip the first parameter if it's a Closure parameter
+        // .NET adds this when Expression Trees capture variables
+        ParameterInfo[] methodParams = allParams;
+        
+        if (allParams.Length > 0 && IsClosureParameter(allParams[0]))
+        {
+            // Skip the first Closure parameter
+            methodParams = allParams.Skip(1).ToArray();
+        }
+
         if (methodParams.Length != definitionParams.Count)
-            throw new ArgumentException($"Parameter count mismatch: method has {methodParams.Length}, definition has {definitionParams.Count}");
+            throw new ArgumentException(
+                $"Parameter count mismatch: method has {methodParams.Length} (filtered from {allParams.Length} total), definition has {definitionParams.Count}");
 
         foreach (ParameterInfo methodParam in methodParams)
         {
             ParameterInfo param = methodParam;
-            ToolParameter defParam = definitionParams.FirstOrDefault(p => p.Name == param.Name)
-                                     ?? throw new ArgumentException($"Parameter '{methodParam.Name}' not found in definition");
+            
+            // If parameter has no name, match by position
+            ToolParameter defParam;
+            if (string.IsNullOrWhiteSpace(param.Name))
+            {
+                // Match by position (index in array)
+                int paramIndex = Array.IndexOf(methodParams, param);
+                if (paramIndex >= 0 && paramIndex < definitionParams.Count)
+                {
+                    defParam = definitionParams[paramIndex];
+                }
+                else
+                {
+                    throw new ArgumentException($"Parameter at position {paramIndex} not found in definition");
+                }
+            }
+            else
+            {
+                // Match by name
+                defParam = definitionParams.FirstOrDefault(p => p.Name == param.Name)
+                    ?? throw new ArgumentException($"Parameter '{methodParam.Name}' not found in definition");
+            }
 
             bool isOptional = methodParam.HasDefaultValue;
             if (defParam.Required && isOptional)
-                throw new ArgumentException($"Parameter '{methodParam.Name}' is required in definition but optional in method");
+                throw new ArgumentException($"Parameter '{defParam.Name}' is required in definition but optional in method");
         }
+    }
+
+    /// <summary>
+    /// Determines if a parameter is a Closure parameter added by .NET's Expression Tree compiler.
+    /// Closure parameters are hidden implementation details used to capture variables in lambdas.
+    /// </summary>
+    /// <param name="param">Parameter to check</param>
+    /// <returns>True if this is a Closure parameter, false otherwise</returns>
+    private static bool IsClosureParameter(ParameterInfo param)
+    {
+        // Closure parameters typically have:
+        // 1. Empty or null name
+        // 2. Type name containing "Closure" or compiler-generated markers
+        string paramName = param.Name ?? string.Empty;
+        string typeName = param.ParameterType.Name;
+        
+        // Check for empty name (common for Closure params)
+        if (string.IsNullOrWhiteSpace(paramName))
+            return true;
+        
+        // Check for Closure type name
+        if (typeName.Contains("Closure", StringComparison.OrdinalIgnoreCase))
+            return true;
+        
+        // Check for compiler-generated type markers
+        if (typeName.Contains("<>") || typeName.Contains("DisplayClass"))
+            return true;
+        
+        return false;
     }
 }
