@@ -17,11 +17,6 @@ public class MCPAdapter
     private readonly MCPClient mcpClient;
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Static cache for executor delegates referenced by DynamicMethod IL.
-    /// </summary>
-    private static readonly Dictionary<string, object> executorCache = [];
-
     public MCPAdapter(MCPClient mcpClient, ILogger logger)
     {
         this.mcpClient = mcpClient;
@@ -30,7 +25,7 @@ public class MCPAdapter
 
     /// <summary>
     /// Converts MCP tools to Morgana tool definitions with execution delegates.
-    /// Creates delegates with proper parameter signatures to match ToolAdapter validation.
+    /// Creates delegates with proper parameter signatures using DynamicMethod IL generation.
     /// </summary>
     /// <param name="mcpTools">List of MCP tools from server</param>
     /// <returns>Dictionary mapping tool names to (delegate, definition) tuples</returns>
@@ -43,20 +38,8 @@ public class MCPAdapter
         {
             try
             {
-                // Log raw InputSchema for debugging
-                logger.LogInformation($"[MCP SCHEMA] Tool: {mcpTool.Name}");
-                logger.LogInformation($"[MCP SCHEMA]   Description: {mcpTool.Description}");
-                logger.LogInformation($"[MCP SCHEMA]   InputSchema JSON: {mcpTool.InputSchema}");
-                
                 // Extract parameters from JSON Schema
                 List<ToolParameter> parameters = ExtractParameters(mcpTool);
-
-                // Log extracted parameters
-                logger.LogInformation($"[MCP SCHEMA]   Extracted {parameters.Count} parameter(s):");
-                foreach (ToolParameter param in parameters)
-                {
-                    logger.LogInformation($"[MCP SCHEMA]     - {param.Name} (required: {param.Required})");
-                }
 
                 // Create tool definition
                 ToolDefinition definition = new ToolDefinition(
@@ -65,27 +48,16 @@ public class MCPAdapter
                     Parameters: parameters
                 );
 
-                // Create delegate that calls MCP server
-                // Use dynamic delegate creation to match parameter names
+                // Create delegate using DynamicMethod with named parameters
                 Delegate toolDelegate = CreateMCPToolDelegate(mcpTool, parameters);
 
-                // Log delegate signature
-                MethodInfo methodInfo = toolDelegate.Method;
-                ParameterInfo[] delegateParams = methodInfo.GetParameters();
-                logger.LogInformation($"[MCP DELEGATE] Created delegate for {mcpTool.Name}:");
-                logger.LogInformation($"[MCP DELEGATE]   Delegate type: {toolDelegate.GetType().Name}");
-                logger.LogInformation($"[MCP DELEGATE]   Method has {delegateParams.Length} parameter(s):");
-                foreach (ParameterInfo p in delegateParams)
-                {
-                    logger.LogInformation($"[MCP DELEGATE]     - {p.Name} ({p.ParameterType.Name})");
-                }
-
                 result[mcpTool.Name] = (toolDelegate, definition);
-                logger.LogInformation($"[MCP SUCCESS] Converted tool: {mcpTool.Name}");
+                
+                logger.LogDebug($"Converted MCP tool: {mcpTool.Name} ({parameters.Count} parameters)");
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"[MCP ERROR] Failed to convert MCP tool: {mcpTool.Name}");
+                logger.LogError(ex, $"Failed to convert MCP tool: {mcpTool.Name}");
             }
         }
 
@@ -101,8 +73,6 @@ public class MCPAdapter
         string toolName = mcpTool.Name;
         string[] paramNames = parameters.Select(p => p.Name).ToArray();
         
-        logger.LogInformation($"[DELEGATE BUILD] Creating delegate for {toolName} with {parameters.Count} parameter(s)");
-        
         // For 0 parameters, use simple lambda (no need for complex IL)
         if (parameters.Count == 0)
         {
@@ -111,9 +81,7 @@ public class MCPAdapter
                 try
                 {
                     logger.LogDebug($"Executing MCP tool (0 params): {toolName}");
-
                     CallToolResult result = await mcpClient.CallToolAsync(toolName, null);
-
                     return FormatMCPResult(result);
                 }
                 catch (Exception ex)
@@ -134,10 +102,11 @@ public class MCPAdapter
                 
                 Dictionary<string, object> args = new();
                 for (int i = 0; i < paramNames.Length; i++)
+                {
                     args[paramNames[i]] = values[i];
-
+                }
+                
                 CallToolResult result = await mcpClient.CallToolAsync(toolName, args);
-
                 return FormatMCPResult(result);
             }
             catch (Exception ex)
@@ -148,7 +117,7 @@ public class MCPAdapter
         };
         
         // Wrap executor in DynamicMethod with proper parameter names
-        return CreateDelegateWithNamedParameters(executor, paramNames);
+        return EmitDelegateWithNamedParameters(executor, paramNames);
     }
     
     /// <summary>
@@ -156,7 +125,7 @@ public class MCPAdapter
     /// This is necessary because AIFunctionFactory requires parameter names.
     /// Supports any number of parameters through dynamic IL generation.
     /// </summary>
-    private Delegate CreateDelegateWithNamedParameters(Func<string[], Task<object>> executor, string[] paramNames)
+    private Delegate EmitDelegateWithNamedParameters(Func<string[], Task<object>> executor, string[] paramNames)
     {
         // Build delegate type: Func<string, string, ..., Task<object>>
         Type[] paramTypes = Enumerable.Repeat(typeof(string), paramNames.Length).ToArray();
@@ -214,7 +183,12 @@ public class MCPAdapter
         // Create delegate from DynamicMethod
         return dynamicMethod.CreateDelegate(delegateType);
     }
-
+    
+    /// <summary>
+    /// Static cache for executor delegates referenced by DynamicMethod IL.
+    /// </summary>
+    private static readonly Dictionary<string, object> executorCache = new();
+    
     /// <summary>
     /// Helper method called by DynamicMethod IL to retrieve executor from cache.
     /// </summary>
