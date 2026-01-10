@@ -64,10 +64,12 @@ public class MCPAdapter
 
     /// <summary>
     /// Creates a delegate for an MCP tool that matches the exact parameter signature.
-    /// Uses dynamic method creation to ensure parameter names match ToolDefinition.
+    /// Uses Expression Trees to ensure parameter names match ToolDefinition exactly.
     /// </summary>
     private Delegate CreateMCPToolDelegate(Tool mcpTool, List<ToolParameter> parameters)
     {
+        string toolName = mcpTool.Name;
+        
         if (parameters.Count == 0)
         {
             // No parameters - simple delegate
@@ -75,81 +77,74 @@ public class MCPAdapter
             {
                 try
                 {
-                    logger.LogDebug($"Executing MCP tool (no params): {mcpTool.Name}");
+                    logger.LogDebug($"Executing MCP tool (0 params): {toolName}");
 
-                    CallToolResult result = await mcpClient.CallToolAsync(mcpTool.Name, null);
+                    CallToolResult result = await mcpClient.CallToolAsync(toolName, null);
 
                     return FormatMCPResult(result);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, $"Error executing MCP tool: {mcpTool.Name}");
+                    logger.LogError(ex, $"Error executing MCP tool: {toolName}");
                     return $"Error: {ex.Message}";
                 }
             });
         }
 
-        // For tools with parameters, we need to create a dynamic delegate
-        // that accepts individual parameters (not Dictionary<string, object>)
-        // We'll use reflection to build the right delegate type and parameter names
+        // For tools with parameters, use Expression Trees to set correct parameter names
+        // This is required because ToolAdapter validates parameter names match
         
-        // Build parameter types array (all parameters are strings or objects)
-        Type[] parameterTypes = parameters.Select(_ => typeof(string)).ToArray();
-        Type returnType = typeof(Task<object>);
-        
-        // Create delegate type: Func<string, string, ..., Task<object>>
-        Type[] allTypes = parameterTypes.Concat([returnType]).ToArray();
-        Type delegateType = Expression.GetFuncType(allTypes);
-        
-        // Create lambda expression that calls MCP
+        // Create parameter expressions with exact names from ToolDefinition
         ParameterExpression[] paramExprs = parameters
             .Select(p => Expression.Parameter(typeof(string), p.Name))
             .ToArray();
         
-        // Build method call expression
-        LambdaExpression callExpression = Expression.Lambda(
-            delegateType,
-            Expression.Call(
-                Expression.Constant(this),
-                typeof(MCPAdapter).GetMethod(nameof(CallMCPToolAsync), 
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!,
-                Expression.Constant(mcpTool.Name),
-                Expression.NewArrayInit(
-                    typeof(string),
-                    paramExprs.Cast<Expression>()
-                ),
-                Expression.Constant(parameters.Select(p => p.Name).ToArray())
-            ),
-            paramExprs
+        // Create the method we'll call: a local helper that builds args and calls MCP
+        Func<string[], Task<object>> executeFunc = async (args) =>
+        {
+            try
+            {
+                logger.LogDebug($"Executing MCP tool ({args.Length} params): {toolName}");
+                
+                // Build arguments dictionary
+                Dictionary<string, object> argsDict = new();
+                for (int i = 0; i < parameters.Count; i++)
+                {
+                    argsDict[parameters[i].Name] = args[i];
+                }
+
+                CallToolResult result = await mcpClient.CallToolAsync(toolName, argsDict);
+
+                return FormatMCPResult(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, $"Error executing MCP tool: {toolName}");
+                return $"Error: {ex.Message}";
+            }
+        };
+        
+        // Create array of parameter values: new[] { p1, p2, p3, ... }
+        NewArrayExpression argsArray = Expression.NewArrayInit(
+            typeof(string),
+            paramExprs.Cast<Expression>()
         );
         
-        return callExpression.Compile();
-    }
-
-    /// <summary>
-    /// Helper method called by dynamically created delegates.
-    /// Converts parameter array to dictionary and calls MCP server.
-    /// </summary>
-    private async Task<object> CallMCPToolAsync(string toolName, string[] paramValues, string[] paramNames)
-    {
-        try
-        {
-            logger.LogDebug($"Executing MCP tool: {toolName}");
-            
-            // Build arguments dictionary
-            Dictionary<string, object> args = [];
-            for (int i = 0; i < paramNames.Length; i++)
-                args[paramNames[i]] = paramValues[i];
-            
-            CallToolResult result = await mcpClient.CallToolAsync(toolName, args);
-
-            return FormatMCPResult(result);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, $"Error executing MCP tool: {toolName}");
-            return $"Error: {ex.Message}";
-        }
+        // Create call: executeFunc(new[] { p1, p2, ... })
+        MethodCallExpression callExpr = Expression.Call(
+            Expression.Constant(executeFunc.Target),
+            executeFunc.Method,
+            argsArray
+        );
+        
+        // Build delegate type: Func<string, Task<object>> or Func<string, string, Task<object>>, etc.
+        Type[] paramTypes = paramExprs.Select(p => p.Type).Concat([typeof(Task<object>)]).ToArray();
+        Type delegateType = Expression.GetFuncType(paramTypes);
+        
+        // Create lambda: (name, journey_id, ...) => executeFunc(new[] { name, journey_id, ... })
+        LambdaExpression lambda = Expression.Lambda(delegateType, callExpr, paramExprs);
+        
+        return lambda.Compile();
     }
 
     /// <summary>
