@@ -295,7 +295,7 @@ public static class Records
 
     /// <summary>
     /// Tool definition specifying a callable tool method with parameters.
-    /// Loaded from agents.json and used by ToolAdapter to create AIFunction instances.
+    /// Loaded from agents.json and used by MorganaToolAdapter to create AIFunction instances.
     /// </summary>
     /// <param name="Name">Tool method name (must match actual method name in MorganaTool class)</param>
     /// <param name="Description">Tool description for LLM understanding</param>

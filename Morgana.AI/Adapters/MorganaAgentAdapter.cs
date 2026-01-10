@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Services;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Adapters;
@@ -15,29 +16,29 @@ namespace Morgana.AI.Adapters;
 /// Adapter for creating and configuring AIAgent instances from Morgana agent definitions.
 /// Handles agent instantiation, instruction composition, tool registration, context provider setup and MCP integration.
 /// </summary>
-public class AgentAdapter
+public class MorganaAgentAdapter
 {
     protected readonly IPromptResolverService promptResolverService;
     protected readonly IChatClient chatClient;
     protected readonly IToolRegistryService toolRegistryService;
-    protected readonly IMCPClientService mcpClientService;
+    protected readonly IMCPClientRegistryService imcpClientRegistryService;
     protected readonly ILogger logger;
     protected readonly Prompt morganaPrompt;
 
     /// <summary>
-    /// Initializes a new instance of the AgentAdapter.
+    /// Initializes a new instance of the MorganaAgentAdapter.
     /// </summary>
-    public AgentAdapter(
+    public MorganaAgentAdapter(
         IChatClient chatClient,
         IPromptResolverService promptResolverService,
         IToolRegistryService toolRegistryService,
-        IMCPClientService mcpClientService,
+        IMCPClientRegistryService imcpClientRegistryService,
         ILogger logger)
     {
         this.chatClient = chatClient;
         this.promptResolverService = promptResolverService;
         this.toolRegistryService = toolRegistryService;
-        this.mcpClientService = mcpClientService;
+        this.imcpClientRegistryService = imcpClientRegistryService;
         this.logger = logger;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
@@ -106,16 +107,16 @@ public class AgentAdapter
 
         MorganaContextProvider contextProvider = CreateContextProvider(intent, agentTools, sharedContextCallback);
 
-        ToolAdapter toolAdapter = CreateToolAdapterForIntent(intent, agentTools, contextProvider);
+        MorganaToolAdapter morganaToolAdapter = CreateToolAdapterForIntent(intent, agentTools, contextProvider);
 
-        RegisterMCPTools(agentType, toolAdapter);
+        RegisterMCPTools(agentType, morganaToolAdapter);
 
         string instructions = ComposeAgentInstructions(agentPrompt);
 
         AIAgent agent = chatClient.CreateAIAgent(
             instructions: instructions,
             name: intent,
-            tools: [.. toolAdapter.CreateAllFunctions()]);
+            tools: [.. morganaToolAdapter.CreateAllFunctions()]);
 
         return (agent, contextProvider);
     }
@@ -145,19 +146,19 @@ public class AgentAdapter
         return provider;
     }
 
-    private ToolAdapter CreateToolAdapterForIntent(
+    private MorganaToolAdapter CreateToolAdapterForIntent(
         string intent,
         ToolDefinition[] tools,
         MorganaContextProvider contextProvider)
     {
         List<GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<GlobalPolicy>>("GlobalPolicies");
-        ToolAdapter toolAdapter = new ToolAdapter(globalPolicies);
+        MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(globalPolicies);
 
         Type? toolType = toolRegistryService?.FindToolTypeForIntent(intent);
         if (toolType == null)
         {
             logger.LogInformation($"No native tool found for intent '{intent}' (agent has no native capabilities)");
-            return toolAdapter;
+            return morganaToolAdapter;
         }
 
         logger.LogInformation($"Found native tool: {toolType.Name} for intent '{intent}' via ToolRegistry");
@@ -175,12 +176,12 @@ public class AgentAdapter
                 $"Ensure {toolType.Name} has a constructor that accepts (ILogger, Func<MorganaContextProvider>).", ex);
         }
 
-        RegisterToolsInAdapter(toolAdapter, toolInstance, tools);
-        return toolAdapter;
+        RegisterToolsInAdapter(morganaToolAdapter, toolInstance, tools);
+        return morganaToolAdapter;
     }
 
     private void RegisterToolsInAdapter(
-        ToolAdapter toolAdapter,
+        MorganaToolAdapter morganaToolAdapter,
         MorganaTool toolInstance,
         ToolDefinition[] tools)
     {
@@ -201,14 +202,14 @@ public class AgentAdapter
                 toolInstance,
                 method);
 
-            toolAdapter.AddTool(toolDefinition.Name, toolImplementation, toolDefinition);
+            morganaToolAdapter.AddTool(toolDefinition.Name, toolImplementation, toolDefinition);
         }
     }
 
     /// <summary>
     /// Registers MCP tools for an agent based on [UsesMCPServers] attribute.
     /// </summary>
-    private void RegisterMCPTools(Type agentType, ToolAdapter toolAdapter)
+    private void RegisterMCPTools(Type agentType, MorganaToolAdapter morganaToolAdapter)
     {
         UsesMCPServersAttribute? attribute = agentType.GetCustomAttribute<UsesMCPServersAttribute>();
         if (attribute == null || attribute.ServerNames.Length == 0)
@@ -223,7 +224,7 @@ public class AgentAdapter
         {
             try
             {
-                RegisterMCPToolsFromServer(serverName, toolAdapter);
+                RegisterMCPToolsFromServer(serverName, morganaToolAdapter);
             }
             catch (Exception ex)
             {
@@ -233,13 +234,13 @@ public class AgentAdapter
     }
 
     /// <summary>
-    /// Registers tools from a specific MCP server into the ToolAdapter.
+    /// Registers tools from a specific MCP server into the MorganaToolAdapter.
     /// </summary>
-    private void RegisterMCPToolsFromServer(string serverName, ToolAdapter toolAdapter)
+    private void RegisterMCPToolsFromServer(string serverName, MorganaToolAdapter morganaToolAdapter)
     {
         logger.LogInformation($"Registering MCP tools from server: {serverName}");
 
-        MCPClient mcpClient = mcpClientService!.GetOrCreateClientAsync(serverName)
+        MCPClient mcpClient = imcpClientRegistryService!.GetOrCreateClientAsync(serverName)
             .GetAwaiter()
             .GetResult();
 
@@ -253,16 +254,16 @@ public class AgentAdapter
 
         logger.LogInformation($"Discovered {mcpTools.Count} tools from MCP server: {serverName}");
 
-        MCPAdapter mcpAdapter = new MCPAdapter(mcpClient, logger);
+        MCPToolAdapter mcpToolAdapter = new MCPToolAdapter(mcpClient, logger);
         Dictionary<string, (Delegate toolDelegate, ToolDefinition toolDefinition)> convertedTools = 
-            mcpAdapter.ConvertTools(mcpTools.ToList());
+            mcpToolAdapter.ConvertTools(mcpTools.ToList());
 
         foreach (KeyValuePair<string, (Delegate toolDelegate, ToolDefinition toolDefinition)> kvp in convertedTools)
         {
             try
             {
                 ToolDefinition namedToolDefinition = kvp.Value.toolDefinition with { Name = kvp.Key };
-                toolAdapter.AddTool(kvp.Key, kvp.Value.toolDelegate, namedToolDefinition);
+                morganaToolAdapter.AddTool(kvp.Key, kvp.Value.toolDelegate, namedToolDefinition);
 
                 logger.LogInformation($"Registered MCP tool: {kvp.Key}");
             }

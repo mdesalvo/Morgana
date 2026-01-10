@@ -14,9 +14,9 @@ public class ContractAgent : MorganaAgent
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         ILogger logger,
-        AgentAdapter agentAdapter) : base(conversationId, llmService, promptResolverService, logger)
+        MorganaAgentAdapter morganaAgentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
-        (aiAgent, contextProvider) = agentAdapter.CreateAgent(GetType(), OnSharedContextUpdate);
+        (aiAgent, contextProvider) = morganaAgentAdapter.CreateAgent(GetType(), OnSharedContextUpdate);
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }

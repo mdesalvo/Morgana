@@ -70,7 +70,7 @@ public class MorganaLLMService : ILLMService
 
     /// <summary>
     /// Gets the underlying Microsoft.Extensions.AI chat client.
-    /// Used by AgentAdapter to create AIAgent instances with tool calling support.
+    /// Used by MorganaAgentAdapter to create AIAgent instances with tool calling support.
     /// </summary>
     /// <returns>IChatClient instance configured for the active provider</returns>
     public IChatClient GetChatClient() => chatClient;

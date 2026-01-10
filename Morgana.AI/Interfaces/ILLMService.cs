@@ -109,7 +109,7 @@ public interface ILLMService
 
     /// <summary>
     /// Gets the underlying Microsoft.Extensions.AI IChatClient for advanced scenarios.
-    /// Used by AgentAdapter to create AIAgent instances with tool calling support.
+    /// Used by MorganaAgentAdapter to create AIAgent instances with tool calling support.
     /// </summary>
     /// <returns>IChatClient instance configured for the active LLM provider</returns>
     /// <remarks>
@@ -117,7 +117,7 @@ public interface ILLMService
     /// <para>The IChatClient provides access to advanced features like tool calling, streaming, and
     /// fine-grained control over LLM interactions. It's used by the agent system but typically not
     /// by actors directly.</para>
-    /// <para><strong>Usage in AgentAdapter:</strong></para>
+    /// <para><strong>Usage in MorganaAgentAdapter:</strong></para>
     /// <code>
     /// public (AIAgent agent, MorganaContextProvider provider) CreateAgent(Type agentType)
     /// {

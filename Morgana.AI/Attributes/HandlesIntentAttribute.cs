@@ -2,7 +2,7 @@
 
 /// <summary>
 /// Marks a MorganaAgent class as the handler for a specific intent.
-/// Used by AgentAdapter and RouterActor to discover and route requests to the appropriate agent.
+/// Used by MorganaAgentAdapter and RouterActor to discover and route requests to the appropriate agent.
 /// </summary>
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
@@ -58,7 +58,7 @@
 ///         ILLMService llmService,
 ///         IPromptResolverService promptResolverService,
 ///         ILogger&lt;ContractAgent&gt; agentLogger,
-///         AgentAdapter agentAdapter)
+///         MorganaAgentAdapter agentAdapter)
 ///         : base(conversationId, llmService, promptResolverService, agentLogger)
 ///     {
 ///         (aiAgent, contextProvider) = agentAdapter.CreateAgent(

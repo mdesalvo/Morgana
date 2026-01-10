@@ -16,12 +16,12 @@ namespace Morgana.AI.Attributes;
 /// </code>
 /// 
 /// <para><strong>Behavior:</strong></para>
-/// <para>During agent creation, AgentAdapter will:</para>
+/// <para>During agent creation, MorganaAgentAdapter will:</para>
 /// <list type="number">
 /// <item>Detect this attribute via reflection</item>
-/// <item>Connect to each declared server via MCPClientService</item>
+/// <item>Connect to each declared server via MCPClientRegistryService</item>
 /// <item>Discover tools from each server via MCPClient</item>
-/// <item>Convert and register tools via MCPAdapter</item>
+/// <item>Convert and register tools via MCPToolAdapter</item>
 /// <item>Register tools with prefixed names (e.g., BillingServer_query_database)</item>
 /// </list>
 /// </remarks>

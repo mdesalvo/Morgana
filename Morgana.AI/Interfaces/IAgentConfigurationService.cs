@@ -27,7 +27,7 @@ namespace Morgana.AI.Interfaces;
 /// 3. IAgentConfigurationService registered in DI
 /// 4. Configuration loaded from agents.json (or other source)
 /// 5. Intents used by ClassifierActor and presentation
-/// 6. Agent prompts used by AgentAdapter during agent creation
+/// 6. Agent prompts used by MorganaAgentAdapter during agent creation
 /// </code>
 /// <para><strong>Usage Example:</strong></para>
 /// <code>
@@ -38,7 +38,7 @@ namespace Morgana.AI.Interfaces;
 /// List&lt;IntentDefinition&gt; intents = await agentConfigService.GetIntentsAsync();
 /// // Used for presentation generation
 ///
-/// // In AgentAdapter
+/// // In MorganaAgentAdapter
 /// Prompt agentPrompt = await promptResolverService.ResolveAsync("billing");
 /// // Loaded via IAgentConfigurationService
 /// </code>
@@ -78,7 +78,7 @@ public interface IAgentConfigurationService
 
     /// <summary>
     /// Loads agent prompt configurations from domain configuration (typically agents.json).
-    /// Returns prompts used by AgentAdapter to compose full agent instructions during agent creation.
+    /// Returns prompts used by MorganaAgentAdapter to compose full agent instructions during agent creation.
     /// </summary>
     /// <returns>
     /// List of agent prompts containing Content, Instructions, Personality, Tools, and metadata.
@@ -105,12 +105,12 @@ public interface IAgentConfigurationService
     /// </code>
     /// <para><strong>Prompt Composition Flow:</strong></para>
     /// <list type="number">
-    /// <item>AgentAdapter receives agent type (e.g., BillingAgent)</item>
+    /// <item>MorganaAgentAdapter receives agent type (e.g., BillingAgent)</item>
     /// <item>Extracts intent from [HandlesIntent] attribute</item>
     /// <item>Calls IPromptResolverService.ResolveAsync(intent)</item>
     /// <item>PromptResolverService queries IAgentConfigurationService</item>
     /// <item>Returns matching agent prompt from domain configuration</item>
-    /// <item>AgentAdapter merges with Morgana framework prompt</item>
+    /// <item>MorganaAgentAdapter merges with Morgana framework prompt</item>
     /// <item>Final instructions passed to AIAgent creation</item>
     /// </list>
     /// <para><strong>Multi-Source Support:</strong></para>

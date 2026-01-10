@@ -10,7 +10,7 @@ namespace Morgana.AI.Adapters;
 /// </summary>
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
-/// <para>The ToolAdapter manages the registration of tool methods (delegates) and their corresponding definitions,
+/// <para>The MorganaToolAdapter manages the registration of tool methods (delegates) and their corresponding definitions,
 /// then converts them into AIFunction instances that can be used by AI agents for tool calling during LLM interactions.</para>
 /// <para><strong>Key Responsibilities:</strong></para>
 /// <list type="bullet">
@@ -21,14 +21,14 @@ namespace Morgana.AI.Adapters;
 /// </list>
 /// <para><strong>Workflow:</strong></para>
 /// <code>
-/// 1. Create ToolAdapter with global policies
+/// 1. Create MorganaToolAdapter with global policies
 /// 2. AddTool(name, delegate, definition) for each tool
 /// 3. CreateAllFunctions() to generate AIFunction[]
 /// 4. Pass AIFunction[] to AIAgent creation
 /// 5. Agent uses tools during LLM interactions via tool calling
 /// </code>
 /// </remarks>
-public class ToolAdapter
+public class MorganaToolAdapter
 {
     /// <summary>
     /// Dictionary mapping tool names to their delegate implementations.
@@ -47,10 +47,10 @@ public class ToolAdapter
     private readonly List<GlobalPolicy> globalPolicies;
 
     /// <summary>
-    /// Initializes a new instance of the ToolAdapter with global policy enforcement.
+    /// Initializes a new instance of the MorganaToolAdapter with global policy enforcement.
     /// </summary>
     /// <param name="globalPolicies">Global policies from Morgana prompt configuration</param>
-    public ToolAdapter(List<GlobalPolicy> globalPolicies)
+    public MorganaToolAdapter(List<GlobalPolicy> globalPolicies)
     {
         this.globalPolicies = globalPolicies;
     }
@@ -62,7 +62,7 @@ public class ToolAdapter
     /// <param name="toolName">Unique name of the tool (e.g., "GetInvoices", "RunDiagnostics")</param>
     /// <param name="toolMethod">Delegate implementing the tool logic</param>
     /// <param name="definition">Tool definition from configuration with parameters and metadata</param>
-    /// <returns>The ToolAdapter instance for fluent chaining</returns>
+    /// <returns>The MorganaToolAdapter instance for fluent chaining</returns>
     /// <exception cref="InvalidOperationException">Thrown if tool name is already registered</exception>
     /// <exception cref="ArgumentException">Thrown if delegate signature doesn't match definition</exception>
     /// <remarks>
@@ -80,7 +80,7 @@ public class ToolAdapter
     ///     .AddTool("GetInvoiceDetails", getDetailsDelegate, getDetailsDef);
     /// </code>
     /// </remarks>
-    public ToolAdapter AddTool(string toolName, Delegate toolMethod, ToolDefinition definition)
+    public MorganaToolAdapter AddTool(string toolName, Delegate toolMethod, ToolDefinition definition)
     {
         if (!toolMethods.TryAdd(toolName, toolMethod))
             throw new InvalidOperationException($"Tool '{toolName}' already registered");

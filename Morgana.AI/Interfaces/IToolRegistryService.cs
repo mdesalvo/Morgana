@@ -8,7 +8,7 @@ namespace Morgana.AI.Interfaces;
 /// <para><strong>Purpose:</strong></para>
 /// <para>This service enables automatic discovery of tool implementations without hardcoded mappings.
 /// It scans loaded assemblies (including plugins) for classes decorated with [ProvidesToolForIntent]
-/// attribute and builds a runtime registry for AgentAdapter consumption.</para>
+/// attribute and builds a runtime registry for MorganaAgentAdapter consumption.</para>
 /// <para><strong>Tool Discovery Flow:</strong></para>
 /// <code>
 /// 1. Application startup
@@ -16,12 +16,12 @@ namespace Morgana.AI.Interfaces;
 /// 3. IToolRegistryService scans all loaded assemblies
 /// 4. Finds classes with [ProvidesToolForIntent] attribute
 /// 5. Builds intent → Type mapping dictionary
-/// 6. AgentAdapter queries registry during agent creation
-/// 7. Creates tool instances and registers methods in ToolAdapter
+/// 6. MorganaAgentAdapter queries registry during agent creation
+/// 7. Creates tool instances and registers methods in MorganaToolAdapter
 /// </code>
-/// <para><strong>Integration with AgentAdapter:</strong></para>
+/// <para><strong>Integration with MorganaAgentAdapter:</strong></para>
 /// <code>
-/// // AgentAdapter.CreateToolAdapterForIntent
+/// // MorganaAgentAdapter.CreateToolAdapterForIntent
 /// Type? toolType = toolRegistryService?.FindToolTypeForIntent("billing");
 /// if (toolType != null)
 /// {
@@ -32,7 +32,7 @@ namespace Morgana.AI.Interfaces;
 ///         () => contextProvider
 ///     );
 ///
-///     // Register tool methods in ToolAdapter
+///     // Register tool methods in MorganaToolAdapter
 ///     RegisterToolsInAdapter(toolAdapter, toolInstance, tools);
 /// }
 /// </code>

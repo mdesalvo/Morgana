@@ -1,10 +1,12 @@
+using Morgana.AI.Services;
+
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
 /// Service interface for managing MCP (Model Context Protocol) client connections.
 /// Provides connection pooling and lifecycle management for MCP servers.
 /// </summary>
-public interface IMCPClientService : IDisposable
+public interface IMCPClientRegistryService : IDisposable, IAsyncDisposable
 {
     /// <summary>
     /// Gets an existing MCP client or creates a new one if not already connected.
@@ -12,7 +14,7 @@ public interface IMCPClientService : IDisposable
     /// </summary>
     /// <param name="serverName">Name of the MCP server from configuration</param>
     /// <returns>Connected MCPClient instance ready for tool discovery and invocation</returns>
-    Task<Adapters.MCPClient> GetOrCreateClientAsync(string serverName);
+    Task<MCPClient> GetOrCreateClientAsync(string serverName);
 
     /// <summary>
     /// Disconnects and removes a specific MCP client from the pool.

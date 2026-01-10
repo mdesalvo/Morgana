@@ -4,6 +4,7 @@ using System.Reflection.Emit;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using System.Text.Json;
+using Morgana.AI.Services;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Adapters;
@@ -12,7 +13,7 @@ namespace Morgana.AI.Adapters;
 /// Adapter for converting MCP tools to Morgana ToolDefinition format.
 /// Creates delegates that bridge MCP tool calls to the MCP server.
 /// </summary>
-public class MCPAdapter
+public class MCPToolAdapter
 {
     private readonly MCPClient mcpClient;
     private readonly ILogger logger;
@@ -31,7 +32,7 @@ public class MCPAdapter
         Type ClrType,
         string JsonType);
 
-    public MCPAdapter(MCPClient mcpClient, ILogger logger)
+    public MCPToolAdapter(MCPClient mcpClient, ILogger logger)
     {
         this.mcpClient = mcpClient;
         this.logger = logger;
@@ -172,7 +173,7 @@ public class MCPAdapter
             $"MCP_Wrapper_{Guid.NewGuid():N}",
             returnType,
             paramTypes,
-            typeof(MCPAdapter).Module,
+            typeof(MCPToolAdapter).Module,
             skipVisibility: true);
 
         // Define parameter names
@@ -192,7 +193,7 @@ public class MCPAdapter
 
         // Load the executor from cache
         il.Emit(OpCodes.Ldstr, fieldKey);
-        il.Emit(OpCodes.Call, typeof(MCPAdapter).GetMethod(nameof(GetObjectArrayExecutorFromCache), 
+        il.Emit(OpCodes.Call, typeof(MCPToolAdapter).GetMethod(nameof(GetObjectArrayExecutorFromCache), 
             BindingFlags.NonPublic | BindingFlags.Static)!);
 
         // Create object array for parameters

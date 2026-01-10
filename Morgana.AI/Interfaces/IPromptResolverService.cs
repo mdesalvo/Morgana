@@ -49,7 +49,7 @@ namespace Morgana.AI.Interfaces;
 /// Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
 /// Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
 ///
-/// // AgentAdapter: Load domain agent prompts
+/// // MorganaAgentAdapter: Load domain agent prompts
 /// Prompt billingPrompt = await promptResolverService.ResolveAsync("billing");
 /// Prompt contractPrompt = await promptResolverService.ResolveAsync("contract");
 /// </code>

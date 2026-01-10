@@ -2,21 +2,21 @@ namespace Morgana.AI.Attributes;
 
 /// <summary>
 /// Marks a MorganaTool class as providing native tools for a specific intent.
-/// Used by AgentAdapter and IToolRegistryService to discover and instantiate tools at runtime.
+/// Used by MorganaAgentAdapter and IToolRegistryService to discover and instantiate tools at runtime.
 /// </summary>
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
 /// <para>This attribute enables automatic discovery of tool implementations for specific intents.
-/// When an agent is created for an intent, the AgentAdapter queries the IToolRegistryService
+/// When an agent is created for an intent, the MorganaAgentAdapter queries the IToolRegistryService
 /// to find the tool class decorated with [ProvidesToolForIntent] for that intent.</para>
 /// <para><strong>Tool Discovery Flow:</strong></para>
 /// <code>
-/// 1. AgentAdapter creates agent for "billing" intent
+/// 1. MorganaAgentAdapter creates agent for "billing" intent
 /// 2. Queries IToolRegistryService.FindToolTypeForIntent("billing")
 /// 3. Registry scans assemblies for [ProvidesToolForIntent("billing")]
 /// 4. Finds BillingTool and returns Type
-/// 5. AgentAdapter instantiates BillingTool via Activator.CreateInstance
-/// 6. Registers tool methods in ToolAdapter
+/// 5. MorganaAgentAdapter instantiates BillingTool via Activator.CreateInstance
+/// 6. Registers tool methods in MorganaToolAdapter
 /// 7. Tools become available to agent during LLM interactions
 /// </code>
 /// <para><strong>Intent Coordination:</strong></para>
@@ -30,7 +30,7 @@ namespace Morgana.AI.Attributes;
 /// </code>
 /// <para><strong>Tool Method Registration:</strong></para>
 /// <para>Tool classes contain public methods that match tool definitions in agents.json.
-/// The AgentAdapter uses reflection to find and register these methods as callable tools.</para>
+/// The MorganaAgentAdapter uses reflection to find and register these methods as callable tools.</para>
 /// <para><strong>Restrictions:</strong></para>
 /// <list type="bullet">
 /// <item>Only one tool class can provide tools for a specific intent</item>

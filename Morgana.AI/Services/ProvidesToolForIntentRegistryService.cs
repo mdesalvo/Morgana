@@ -268,7 +268,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// <para>Returns null for intents without tool implementations rather than throwing.
     /// This allows agents to operate with only framework tools (GetContextVariable, SetContextVariable)
     /// if no domain-specific tool exists.</para>
-    /// <para><strong>Usage by AgentAdapter:</strong></para>
+    /// <para><strong>Usage by MorganaAgentAdapter:</strong></para>
     /// <code>
     /// Type? toolType = toolRegistryService.FindToolTypeForIntent("billing");
     /// if (toolType != null)
