@@ -38,6 +38,9 @@ This release introduces **industrial-grade MCP support**, enabling agents to dyn
 
 ### 🔄 Changed
 
+- Migrated solution files to **slnx** format
+- Centralized project definition via **Directory.Build.Props** standard
+
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
