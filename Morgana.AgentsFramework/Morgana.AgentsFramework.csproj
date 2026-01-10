@@ -1,0 +1,50 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Title>Morgana.AI</Title>
+    <Version>0.8.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <Authors>Marco De Salvo</Authors>
+    <Company>Marco De Salvo</Company>
+    <Product>Morgana</Product>
+    <Description>Morgana is an advanced conversational AI system designed to handle complex customer service scenarios through a sophisticated multi-agent architecture. Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET, Morgana orchestrates specialized AI agents that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness.
+      The system is powered by Microsoft's Agent Framework, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails, policy enforcement, and comprehensive conversation archival.</Description>
+    <Copyright>Marco De Salvo</Copyright>
+    <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mdesalvo/Morgana.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>actor-model agentic-ai chatbot dotnet</PackageTags>
+    <PackageId>Morgana.AgentsFramework</PackageId>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="morgana.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Akka" Version="1.5.58" />
+    <PackageReference Include="Akka.DependencyInjection" Version="1.5.58" />
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.8.0-beta.1" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-preview.260108.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.0.0-preview.260108.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.0.0-preview.260108.1" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.1.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.1.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.1.1-preview.1.25612.2" />
+    <PackageReference Include="ModelContextProtocol" Version="0.5.0-preview.1" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="0.5.0-preview.1" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="0.5.0-preview.1" />
+    <PackageReference Include="ModelContextProtocolServer.Sse" Version="0.6.0" />
+    <PackageReference Include="ModelContextProtocolServer.Stdio" Version="0.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Morgana.ActorsFramework\Morgana.ActorsFramework.csproj" />
+  </ItemGroup>
+
+</Project>
