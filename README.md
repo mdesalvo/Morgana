@@ -5,7 +5,7 @@
     </td>
     <td>
       <h1>Morgana</h1>
-      <p><strong>A modern and flexible, intent-driven, multi-agent conversational AI framework with MCP protocol support</strong></p>
+      <p><strong>A modern and flexible, multi-agent, intent-driven conversational AI framework with MCP protocol support</strong></p>
       <p>
         <img src="https://img.shields.io/badge/.NET-10.0-932BD4?logo=dotnet" alt=".NET 10"/>
         <img src="https://img.shields.io/badge/Akka.NET-932BD4?logo=nuget" alt="Akka.NET"/>
