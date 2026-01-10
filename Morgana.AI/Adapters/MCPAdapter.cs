@@ -17,6 +17,20 @@ public class MCPAdapter
     private readonly MCPClient mcpClient;
     private readonly ILogger logger;
 
+    /// <summary>
+    /// Static cache for executor delegates referenced by DynamicMethod IL.
+    /// </summary>
+    private static readonly Dictionary<string, object> executorCache = [];
+
+    /// <summary>
+    /// Internal record to track MCP parameter metadata including .NET types.
+    /// This allows us to support typed parameters without modifying ToolParameter record.
+    /// </summary>
+    private record MCPParameterInfo(
+        string Name,
+        Type ClrType,
+        string JsonType);
+
     public MCPAdapter(MCPClient mcpClient, ILogger logger)
     {
         this.mcpClient = mcpClient;
@@ -26,34 +40,35 @@ public class MCPAdapter
     /// <summary>
     /// Converts MCP tools to Morgana tool definitions with execution delegates.
     /// Creates delegates with proper parameter signatures using DynamicMethod IL generation.
+    /// Tracks parameter types internally to support typed parameters (int, bool, double, etc.)
     /// </summary>
     /// <param name="mcpTools">List of MCP tools from server</param>
     /// <returns>Dictionary mapping tool names to (delegate, definition) tuples</returns>
     public Dictionary<string, (Delegate toolDelegate, ToolDefinition toolDefinition)> ConvertTools(
         List<Tool> mcpTools)
     {
-        Dictionary<string, (Delegate, ToolDefinition)> result = new();
+        Dictionary<string, (Delegate, ToolDefinition)> result = [];
 
         foreach (Tool mcpTool in mcpTools)
         {
             try
             {
-                // Extract parameters from JSON Schema
-                List<ToolParameter> parameters = ExtractParameters(mcpTool);
+                // Extract parameters with type information
+                (List<ToolParameter> toolParams, List<MCPParameterInfo> paramInfos) = ExtractParametersWithTypes(mcpTool);
 
-                // Create tool definition
+                // Create tool definition (uses existing ToolParameter without Type field)
                 ToolDefinition definition = new ToolDefinition(
                     Name: mcpTool.Name,
                     Description: mcpTool.Description ?? "No description available",
-                    Parameters: parameters
+                    Parameters: toolParams
                 );
 
-                // Create delegate using DynamicMethod with named parameters
-                Delegate toolDelegate = CreateMCPToolDelegate(mcpTool, parameters);
+                // Create delegate using parameter type information
+                Delegate toolDelegate = CreateMCPToolDelegate(mcpTool, paramInfos);
 
                 result[mcpTool.Name] = (toolDelegate, definition);
-                
-                logger.LogDebug($"Converted MCP tool: {mcpTool.Name} ({parameters.Count} parameters)");
+
+                logger.LogDebug($"Converted MCP tool: {mcpTool.Name} ({paramInfos.Count} parameters)");
             }
             catch (Exception ex)
             {
@@ -66,13 +81,10 @@ public class MCPAdapter
 
     /// <summary>
     /// Creates a delegate for an MCP tool.
-    /// Supports any number of parameters through dynamic IL generation.
+    /// Supports any number of parameters with proper typing through dynamic IL generation.
     /// </summary>
-    private Delegate CreateMCPToolDelegate(Tool mcpTool, List<ToolParameter> parameters)
+    private Delegate CreateMCPToolDelegate(Tool mcpTool, List<MCPParameterInfo> parameters)
     {
-        string toolName = mcpTool.Name;
-        string[] paramNames = parameters.Select(p => p.Name).ToArray();
-        
         // For 0 parameters, use simple lambda (no need for complex IL)
         if (parameters.Count == 0)
         {
@@ -80,59 +92,81 @@ public class MCPAdapter
             {
                 try
                 {
-                    logger.LogDebug($"Executing MCP tool (0 params): {toolName}");
-                    CallToolResult result = await mcpClient.CallToolAsync(toolName, null);
+                    logger.LogDebug($"Executing MCP tool (0 params): {mcpTool.Name}");
+
+                    CallToolResult result = await mcpClient.CallToolAsync(mcpTool.Name, null);
+
                     return FormatMCPResult(result);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, $"Error executing MCP tool: {toolName}");
+                    logger.LogError(ex, $"Error executing MCP tool: {mcpTool.Name}");
                     return $"Error: {ex.Message}";
                 }
             });
         }
         
-        // For 1+ parameters, create a generic executor and wrap with DynamicMethod
-        // This works for any number of parameters!
-        Func<string[], Task<object>> executor = async (values) =>
+        // For 1+ parameters, create executor that handles type conversion
+        // The executor receives object[] to handle mixed types
+        Func<object[], Task<object>> executor = async (values) =>
         {
             try
             {
-                logger.LogDebug($"Executing MCP tool ({values.Length} params): {toolName}");
+                logger.LogDebug($"Executing MCP tool ({values.Length} params): {mcpTool.Name}");
                 
                 Dictionary<string, object> args = new();
-                for (int i = 0; i < paramNames.Length; i++)
+                for (int i = 0; i < parameters.Count; i++)
                 {
-                    args[paramNames[i]] = values[i];
+                    // Convert value to appropriate type for JSON serialization
+                    object convertedValue = ConvertValueForMCP(values[i], parameters[i]);
+                    args[parameters[i].Name] = convertedValue;
                 }
                 
-                CallToolResult result = await mcpClient.CallToolAsync(toolName, args);
+                CallToolResult result = await mcpClient.CallToolAsync(mcpTool.Name, args);
+
                 return FormatMCPResult(result);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Error executing MCP tool: {toolName}");
+                logger.LogError(ex, $"Error executing MCP tool: {mcpTool.Name}");
                 return $"Error: {ex.Message}";
             }
         };
-        
-        // Wrap executor in DynamicMethod with proper parameter names
-        return EmitDelegateWithNamedParameters(executor, paramNames);
+
+        // Wrap executor in DynamicMethod with proper parameter names and types
+        return CreateTypedDelegateWithNamedParameters(executor, parameters);
     }
     
     /// <summary>
-    /// Wraps a string array executor using DynamicMethod to create a method with named parameters.
-    /// This is necessary because AIFunctionFactory requires parameter names.
-    /// Supports any number of parameters through dynamic IL generation.
+    /// Converts a parameter value to the appropriate format for MCP server.
+    /// Handles type conversions and ensures proper JSON serialization.
     /// </summary>
-    private Delegate EmitDelegateWithNamedParameters(Func<string[], Task<object>> executor, string[] paramNames)
+    private object ConvertValueForMCP(object value, MCPParameterInfo paramInfo)
     {
-        // Build delegate type: Func<string, string, ..., Task<object>>
-        Type[] paramTypes = Enumerable.Repeat(typeof(string), paramNames.Length).ToArray();
+        // Most types serialize correctly as-is
+        // Special handling for specific cases if needed
+        return paramInfo.JsonType.ToLowerInvariant() switch
+        {
+            "boolean" => value is bool b ? b : bool.Parse(value?.ToString() ?? "false"),
+            "integer" => value is int i ? i : int.Parse(value?.ToString() ?? "0"),
+            "number" => value is double d ? d : double.Parse(value?.ToString() ?? "0"),
+            _ => value?.ToString() ?? ""
+        };
+    }
+    
+    /// <summary>
+    /// Wraps an object array executor using DynamicMethod to create a method with named, typed parameters.
+    /// This is necessary because AIFunctionFactory requires parameter names and proper types.
+    /// Supports mixed types: string, int, double, bool.
+    /// </summary>
+    private Delegate CreateTypedDelegateWithNamedParameters(Func<object[], Task<object>> executor, List<MCPParameterInfo> parameters)
+    {
+        // Build delegate type: Func<T1, T2, ..., Task<object>> where T1, T2 are actual CLR types
+        Type[] paramTypes = parameters.Select(p => p.ClrType).ToArray();
         Type returnType = typeof(Task<object>);
         Type[] allTypes = paramTypes.Concat([returnType]).ToArray();
         Type delegateType = Expression.GetFuncType(allTypes);
-        
+
         // Create DynamicMethod
         DynamicMethod dynamicMethod = new DynamicMethod(
             $"MCP_Wrapper_{Guid.NewGuid():N}",
@@ -140,10 +174,10 @@ public class MCPAdapter
             paramTypes,
             typeof(MCPAdapter).Module,
             skipVisibility: true);
-        
+
         // Define parameter names
-        for (int i = 0; i < paramNames.Length; i++)
-            dynamicMethod.DefineParameter(i + 1, ParameterAttributes.None, paramNames[i]);
+        for (int i = 0; i < parameters.Count; i++)
+            dynamicMethod.DefineParameter(i + 1, ParameterAttributes.None, parameters[i].Name);
 
         // Store executor in cache
         string fieldKey = Guid.NewGuid().ToString();
@@ -151,53 +185,54 @@ public class MCPAdapter
         {
             executorCache[fieldKey] = executor;
         }
-        
-        // Generate IL
+
+        // Generate IL: the remote MCP tool is handled as an equivalent
+        //              IL method generated once at runtime (and cached)
         ILGenerator il = dynamicMethod.GetILGenerator();
-        
+
         // Load the executor from cache
         il.Emit(OpCodes.Ldstr, fieldKey);
-        il.Emit(OpCodes.Call, typeof(MCPAdapter).GetMethod(nameof(GetExecutorFromCache), 
+        il.Emit(OpCodes.Call, typeof(MCPAdapter).GetMethod(nameof(GetObjectArrayExecutorFromCache), 
             BindingFlags.NonPublic | BindingFlags.Static)!);
-        
-        // Create string array for parameters
-        il.Emit(OpCodes.Ldc_I4, paramNames.Length); // Array length
-        il.Emit(OpCodes.Newarr, typeof(string));    // Create array
-        
-        // Populate array with parameters
-        for (int i = 0; i < paramNames.Length; i++)
+
+        // Create object array for parameters
+        il.Emit(OpCodes.Ldc_I4, parameters.Count); // Array length
+        il.Emit(OpCodes.Newarr, typeof(object));   // Create array
+
+        // Populate array with parameters (box value types)
+        for (int i = 0; i < parameters.Count; i++)
         {
             il.Emit(OpCodes.Dup);           // Duplicate array reference
             il.Emit(OpCodes.Ldc_I4, i);     // Array index
             il.Emit(OpCodes.Ldarg, i);      // Load parameter value
+
+            // Box value types
+            if (parameters[i].ClrType.IsValueType)
+                il.Emit(OpCodes.Box, parameters[i].ClrType);
+
             il.Emit(OpCodes.Stelem_Ref);    // Store in array
         }
-        
-        // Call executor.Invoke(string[] args)
-        MethodInfo invokeMethod = typeof(Func<string[], Task<object>>).GetMethod("Invoke")!;
+
+        // Call executor.Invoke(object[] args)
+        MethodInfo invokeMethod = typeof(Func<object[], Task<object>>).GetMethod("Invoke")!;
         il.Emit(OpCodes.Callvirt, invokeMethod);
-        
+
         // Return
         il.Emit(OpCodes.Ret);
-        
+
         // Create delegate from DynamicMethod
         return dynamicMethod.CreateDelegate(delegateType);
     }
-    
+
     /// <summary>
-    /// Static cache for executor delegates referenced by DynamicMethod IL.
+    /// Helper method called by DynamicMethod IL to retrieve object array executor from cache.
     /// </summary>
-    private static readonly Dictionary<string, object> executorCache = new();
-    
-    /// <summary>
-    /// Helper method called by DynamicMethod IL to retrieve executor from cache.
-    /// </summary>
-    private static Func<string[], Task<object>> GetExecutorFromCache(string key)
+    private static Func<object[], Task<object>> GetObjectArrayExecutorFromCache(string key)
     {
         lock (executorCache)
         {
             return executorCache.TryGetValue(key, out object? executor)
-                ? (Func<string[], Task<object>>)executor
+                ? (Func<object[], Task<object>>)executor
                 : throw new InvalidOperationException($"Executor '{key}' not found in cache");
         }
     }
@@ -205,14 +240,16 @@ public class MCPAdapter
 
     /// <summary>
     /// Extracts parameters from MCP tool InputSchema (JSON Schema format).
+    /// Returns both ToolParameter (for Morgana) and MCPParameterInfo (for type-aware delegate generation).
     /// </summary>
-    private List<ToolParameter> ExtractParameters(Tool mcpTool)
+    private (List<ToolParameter> toolParams, List<MCPParameterInfo> paramInfos) ExtractParametersWithTypes(Tool mcpTool)
     {
-        List<ToolParameter> parameters = [];
+        List<ToolParameter> toolParams = [];
+        List<MCPParameterInfo> paramInfos = [];
 
         // InputSchema is JsonElement (struct), check if it has properties
         if (mcpTool.InputSchema.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
-            return parameters;
+            return (toolParams, paramInfos);
 
         try
         {
@@ -241,14 +278,27 @@ public class MCPAdapter
                     if (paramSchema.TryGetProperty("description", out JsonElement descElement))
                         description = descElement.GetString() ?? description;
 
+                    // Extract type from JSON Schema
+                    string jsonType = "string"; // default
+                    if (paramSchema.TryGetProperty("type", out JsonElement typeElement))
+                        jsonType = typeElement.GetString() ?? "string";
+
                     bool isRequired = requiredFields.Contains(paramName);
 
-                    parameters.Add(new ToolParameter(
+                    // Create ToolParameter (existing format, no Type field)
+                    toolParams.Add(new ToolParameter(
                         Name: paramName,
                         Description: description,
                         Required: isRequired,
-                        Scope: "request", // MCP parameters are always request-scoped
+                        Scope: "request",
                         Shared: false
+                    ));
+
+                    // Create MCPParameterInfo (internal, with type tracking)
+                    paramInfos.Add(new MCPParameterInfo(
+                        Name: paramName,
+                        ClrType: MapJsonTypeToClrType(jsonType),
+                        JsonType: jsonType
                     ));
                 }
             }
@@ -258,7 +308,23 @@ public class MCPAdapter
             logger.LogError(ex, $"Error parsing InputSchema for tool: {mcpTool.Name}");
         }
 
-        return parameters;
+        return (toolParams, paramInfos);
+    }
+    
+    /// <summary>
+    /// Maps JSON Schema type to .NET CLR type.
+    /// Supports: string, integer, number (double), boolean.
+    /// DateTime is handled as string (ISO 8601 format).
+    /// </summary>
+    private static Type MapJsonTypeToClrType(string jsonType)
+    {
+        return jsonType?.ToLowerInvariant() switch
+        {
+            "integer" => typeof(int),
+            "number" => typeof(double),
+            "boolean" => typeof(bool),
+            _ => typeof(string) // Default to string
+        };
     }
 
     /// <summary>
