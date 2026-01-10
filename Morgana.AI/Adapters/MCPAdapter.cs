@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using System.Text.Json;
@@ -22,13 +23,14 @@ public class MCPAdapter
 
     /// <summary>
     /// Converts MCP tools to Morgana tool definitions with execution delegates.
+    /// Creates delegates with proper parameter signatures to match ToolAdapter validation.
     /// </summary>
     /// <param name="mcpTools">List of MCP tools from server</param>
     /// <returns>Dictionary mapping tool names to (delegate, definition) tuples</returns>
     public Dictionary<string, (Delegate toolDelegate, ToolDefinition toolDefinition)> ConvertTools(
         List<Tool> mcpTools)
     {
-        Dictionary<string, (Delegate, ToolDefinition)> result = [];
+        Dictionary<string, (Delegate, ToolDefinition)> result = new();
 
         foreach (Tool mcpTool in mcpTools)
         {
@@ -44,49 +46,9 @@ public class MCPAdapter
                     Parameters: parameters
                 );
 
-                // Create delegate based on parameter count
-                Delegate toolDelegate;
-                
-                if (parameters.Count == 0)
-                {
-                    // No parameters - use Func<Task<object>>
-                    toolDelegate = new Func<Task<object>>(async () =>
-                    {
-                        try
-                        {
-                            logger.LogDebug($"Executing MCP tool (no params): {mcpTool.Name}");
-
-                            CallToolResult callToolResult = await mcpClient.CallToolAsync(mcpTool.Name, null);
-
-                            return FormatMCPResult(callToolResult);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogError(ex, $"Error executing MCP tool: {mcpTool.Name}");
-                            return $"Error: {ex.Message}";
-                        }
-                    });
-                }
-                else
-                {
-                    // Has parameters - use Func<Dictionary<string, object>, Task<object>>
-                    toolDelegate = new Func<Dictionary<string, object>, Task<object>>(async (args) =>
-                    {
-                        try
-                        {
-                            logger.LogDebug($"Executing MCP tool: {mcpTool.Name}");
-
-                            CallToolResult callToolResult = await mcpClient.CallToolAsync(mcpTool.Name, args);
-
-                            return FormatMCPResult(callToolResult);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogError(ex, $"Error executing MCP tool: {mcpTool.Name}");
-                            return $"Error: {ex.Message}";
-                        }
-                    });
-                }
+                // Create delegate that calls MCP server
+                // Use dynamic delegate creation to match parameter names
+                Delegate toolDelegate = CreateMCPToolDelegate(mcpTool, parameters);
 
                 result[mcpTool.Name] = (toolDelegate, definition);
                 logger.LogDebug($"Converted MCP tool: {mcpTool.Name} ({parameters.Count} parameters)");
@@ -98,6 +60,96 @@ public class MCPAdapter
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Creates a delegate for an MCP tool that matches the exact parameter signature.
+    /// Uses dynamic method creation to ensure parameter names match ToolDefinition.
+    /// </summary>
+    private Delegate CreateMCPToolDelegate(Tool mcpTool, List<ToolParameter> parameters)
+    {
+        if (parameters.Count == 0)
+        {
+            // No parameters - simple delegate
+            return new Func<Task<object>>(async () =>
+            {
+                try
+                {
+                    logger.LogDebug($"Executing MCP tool (no params): {mcpTool.Name}");
+
+                    CallToolResult result = await mcpClient.CallToolAsync(mcpTool.Name, null);
+
+                    return FormatMCPResult(result);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, $"Error executing MCP tool: {mcpTool.Name}");
+                    return $"Error: {ex.Message}";
+                }
+            });
+        }
+
+        // For tools with parameters, we need to create a dynamic delegate
+        // that accepts individual parameters (not Dictionary<string, object>)
+        // We'll use reflection to build the right delegate type and parameter names
+        
+        // Build parameter types array (all parameters are strings or objects)
+        Type[] parameterTypes = parameters.Select(_ => typeof(string)).ToArray();
+        Type returnType = typeof(Task<object>);
+        
+        // Create delegate type: Func<string, string, ..., Task<object>>
+        Type[] allTypes = parameterTypes.Concat([returnType]).ToArray();
+        Type delegateType = Expression.GetFuncType(allTypes);
+        
+        // Create lambda expression that calls MCP
+        ParameterExpression[] paramExprs = parameters
+            .Select(p => Expression.Parameter(typeof(string), p.Name))
+            .ToArray();
+        
+        // Build method call expression
+        LambdaExpression callExpression = Expression.Lambda(
+            delegateType,
+            Expression.Call(
+                Expression.Constant(this),
+                typeof(MCPAdapter).GetMethod(nameof(CallMCPToolAsync), 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!,
+                Expression.Constant(mcpTool.Name),
+                Expression.NewArrayInit(
+                    typeof(string),
+                    paramExprs.Cast<Expression>()
+                ),
+                Expression.Constant(parameters.Select(p => p.Name).ToArray())
+            ),
+            paramExprs
+        );
+        
+        return callExpression.Compile();
+    }
+
+    /// <summary>
+    /// Helper method called by dynamically created delegates.
+    /// Converts parameter array to dictionary and calls MCP server.
+    /// </summary>
+    private async Task<object> CallMCPToolAsync(string toolName, string[] paramValues, string[] paramNames)
+    {
+        try
+        {
+            logger.LogDebug($"Executing MCP tool: {toolName}");
+            
+            // Build arguments dictionary
+            Dictionary<string, object> args = [];
+            for (int i = 0; i < paramNames.Length; i++)
+                args[paramNames[i]] = paramValues[i];
+            
+            CallToolResult result = await mcpClient.CallToolAsync(toolName, args);
+
+            return FormatMCPResult(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, $"Error executing MCP tool: {toolName}");
+            return $"Error: {ex.Message}";
+        }
     }
 
     /// <summary>
@@ -118,15 +170,13 @@ public class MCPAdapter
             {
                 // Parse required fields
                 HashSet<string> requiredFields = [];
-                if (mcpTool.InputSchema.TryGetProperty("required", out JsonElement requiredElement) &&
-                    requiredElement.ValueKind == JsonValueKind.Array)
+                if (mcpTool.InputSchema.TryGetProperty("required", out JsonElement requiredElement)
+                     && requiredElement.ValueKind == JsonValueKind.Array)
                 {
                     foreach (JsonElement req in requiredElement.EnumerateArray())
                     {
                         if (req.ValueKind == JsonValueKind.String)
-                        {
                             requiredFields.Add(req.GetString()!);
-                        }
                     }
                 }
 
