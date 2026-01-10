@@ -1,0 +1,45 @@
+<Project>
+
+  <PropertyGroup>
+
+    <!-- Common Build Settings -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Version Information -->
+    <Version>0.8.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+
+    <!-- Package Metadata -->
+    <Authors>Marco De Salvo</Authors>
+    <Company>Marco De Salvo</Company>
+    <Product>Morgana</Product>
+    <Copyright>Marco De Salvo</Copyright>
+    
+    <!-- Repository Information -->
+    <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mdesalvo/Morgana.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseUrl>https://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
+    
+    <!-- Common Description -->
+    <Description>Cauldron is a modular web layer that hosts the Morgana conversational AI platform.
+It provides HTTP and SignalR endpoints for multi-turn dialogues and agent orchestration.
+Built on ASP.NET Core and Akka.NET, it coordinates message routing across specialized AI agents.
+The project integrates Microsoft.Agents.AI for LLM-driven reasoning and tool execution.
+Cauldron delivers a scalable, policy-aware conversational experience for enterprise environments.</Description>
+
+    <!-- Disable packaging by default (enable per-project as needed) -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- Package References -->
+  <ItemGroup>
+    <!-- ASP.NET SignalR -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.1" />
+  </ItemGroup>
+
+</Project>
