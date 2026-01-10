@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -10,15 +11,15 @@ namespace Morgana.AI.Adapters;
 /// </summary>
 public class MCPClient : IAsyncDisposable
 {
-    private readonly McpClient _client;
-    private readonly ILogger _logger;
-    private readonly MCPServerConfig _config;
+    private readonly McpClient mcpClient;
+    private readonly ILogger logger;
+    private readonly MCPServerConfig mcpServerConfig;
 
-    private MCPClient(McpClient client, MCPServerConfig config, ILogger logger)
+    private MCPClient(McpClient mcpClient, MCPServerConfig mcpServerConfig, ILogger logger)
     {
-        _client = client;
-        _config = config;
-        _logger = logger;
+        this.mcpClient = mcpClient;
+        this.mcpServerConfig = mcpServerConfig;
+        this.logger = logger;
     }
 
     /// <summary>
@@ -34,60 +35,61 @@ public class MCPClient : IAsyncDisposable
         Uri uri = new Uri(config.Uri);
         IClientTransport transport;
 
-        if (uri.Scheme == "stdio")
+        switch (uri.Scheme.ToLower())
         {
-            // stdio transport
-            string command = uri.LocalPath;
-            IList<string>? args = null;
-
-            if (config.AdditionalSettings?.TryGetValue("Args", out string? argsJson) == true)
+            case "stdio":
             {
-                args = System.Text.Json.JsonSerializer.Deserialize<string[]>(argsJson);
-            }
+                // stdio transport
+                string command = uri.LocalPath;
+                IList<string>? args = null;
+                if (config.AdditionalSettings?.TryGetValue("Args", out string? argsJson) == true)
+                    args = JsonSerializer.Deserialize<string[]>(argsJson);
 
-            StdioClientTransportOptions options = new StdioClientTransportOptions
-            {
-                Command = command,
-                Arguments = args,
-                Name = config.Name
-            };
-
-            transport = new StdioClientTransport(options);
-            logger.LogDebug($"Created stdio transport: {command}");
-        }
-        else if (uri.Scheme == "https" || uri.Scheme == "http")
-        {
-            // HTTP transport (SSE or Streamable HTTP)
-            HttpClientTransportOptions options = new HttpClientTransportOptions
-            {
-                Endpoint = uri,
-                Name = config.Name
-            };
-
-            // Add custom headers if present
-            if (config.AdditionalSettings != null)
-            {
-                Dictionary<string, string> headers = new Dictionary<string, string>();
-                foreach (KeyValuePair<string, string> kvp in config.AdditionalSettings)
+                StdioClientTransportOptions options = new StdioClientTransportOptions
                 {
-                    if (kvp.Key != "Args") // Skip Args, only for stdio
+                    Command = command,
+                    Arguments = args,
+                    Name = config.Name
+                };
+
+                transport = new StdioClientTransport(options);
+                logger.LogDebug($"Created stdio transport: {command}");
+                break;
+            }
+            case "https":
+            case "http":
+            {
+                // HTTP transport (SSE or Streamable HTTP)
+                HttpClientTransportOptions options = new HttpClientTransportOptions
+                {
+                    Endpoint = uri,
+                    Name = config.Name
+                };
+
+                // Add custom headers if present
+                if (config.AdditionalSettings != null)
+                {
+                    Dictionary<string, string> headers = [];
+                    foreach (KeyValuePair<string, string> kvp in config.AdditionalSettings)
                     {
-                        headers[kvp.Key] = kvp.Value;
+                        if (kvp.Key != "Args") // Skip Args, only for stdio
+                        {
+                            headers[kvp.Key] = kvp.Value;
+                        }
+                    }
+                    if (headers.Count > 0)
+                    {
+                        options.AdditionalHeaders = headers;
                     }
                 }
-                if (headers.Count > 0)
-                {
-                    options.AdditionalHeaders = headers;
-                }
-            }
 
-            transport = new HttpClientTransport(options);
-            logger.LogDebug($"Created HTTP transport: {uri}");
-        }
-        else
-        {
-            throw new NotSupportedException(
-                $"Unsupported scheme: {uri.Scheme}. Use 'stdio://', 'http://', or 'https://'");
+                transport = new HttpClientTransport(options);
+                logger.LogDebug($"Created HTTP transport: {uri}");
+                break;
+            }
+            default:
+                throw new NotSupportedException(
+                    $"Unsupported scheme: {uri.Scheme}. Use 'stdio://', 'http://', or 'https://'");
         }
 
         try
@@ -115,20 +117,20 @@ public class MCPClient : IAsyncDisposable
     {
         try
         {
-            _logger.LogDebug($"Discovering tools from: {_config.Name}");
+            logger.LogDebug($"Discovering tools from: {mcpServerConfig.Name}");
             
             // McpClient.ListToolsAsync returns IList<McpClientTool>
-            IList<McpClientTool> mcpTools = await _client.ListToolsAsync(cancellationToken: cancellationToken);
+            IList<McpClientTool> mcpTools = await mcpClient.ListToolsAsync(cancellationToken: cancellationToken);
             
             // Extract protocol Tool metadata
             List<Tool> tools = mcpTools.Select(t => t.ProtocolTool).ToList();
             
-            _logger.LogInformation($"Discovered {tools.Count} tools from: {_config.Name}");
+            logger.LogInformation($"Discovered {tools.Count} tools from: {mcpServerConfig.Name}");
             return tools;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Failed to discover tools from: {_config.Name}");
+            logger.LogError(ex, $"Failed to discover tools from: {mcpServerConfig.Name}");
             throw;
         }
     }
@@ -143,20 +145,20 @@ public class MCPClient : IAsyncDisposable
     {
         try
         {
-            _logger.LogDebug($"Calling tool '{toolName}' on: {_config.Name}");
+            logger.LogDebug($"Calling tool '{toolName}' on: {mcpServerConfig.Name}");
             
             // McpClient.CallToolAsync accepts IReadOnlyDictionary<string, object?>
-            CallToolResult result = await _client.CallToolAsync(
+            CallToolResult result = await mcpClient.CallToolAsync(
                 toolName,
                 arguments as IReadOnlyDictionary<string, object?>,
                 cancellationToken: cancellationToken);
 
-            _logger.LogDebug($"Tool '{toolName}' executed successfully");
+            logger.LogDebug($"Tool '{toolName}' executed successfully");
             return result;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Failed to call tool '{toolName}' on: {_config.Name}");
+            logger.LogError(ex, $"Failed to call tool '{toolName}' on: {mcpServerConfig.Name}");
             throw;
         }
     }
@@ -168,12 +170,12 @@ public class MCPClient : IAsyncDisposable
     {
         try
         {
-            _logger.LogInformation($"Disconnecting from: {_config.Name}");
-            await _client.DisposeAsync();
+            logger.LogInformation($"Disconnecting from: {mcpServerConfig.Name}");
+            await mcpClient.DisposeAsync();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error disconnecting from: {_config.Name}");
+            logger.LogError(ex, $"Error disconnecting from: {mcpServerConfig.Name}");
         }
     }
 }

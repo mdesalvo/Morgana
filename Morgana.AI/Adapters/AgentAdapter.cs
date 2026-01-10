@@ -13,15 +13,15 @@ namespace Morgana.AI.Adapters;
 
 /// <summary>
 /// Adapter for creating and configuring AIAgent instances from Morgana agent definitions.
-/// Handles agent instantiation, instruction composition, tool registration, context provider setup, and MCP integration.
+/// Handles agent instantiation, instruction composition, tool registration, context provider setup and MCP integration.
 /// </summary>
 public class AgentAdapter
 {
     protected readonly IPromptResolverService promptResolverService;
     protected readonly IChatClient chatClient;
+    protected readonly IToolRegistryService toolRegistryService;
+    protected readonly IMCPClientService mcpClientService;
     protected readonly ILogger logger;
-    protected readonly IToolRegistryService? toolRegistryService;
-    protected readonly IMCPClientService? mcpClientService;
     protected readonly Prompt morganaPrompt;
 
     /// <summary>
@@ -30,15 +30,15 @@ public class AgentAdapter
     public AgentAdapter(
         IChatClient chatClient,
         IPromptResolverService promptResolverService,
-        ILogger logger,
-        IToolRegistryService? toolRegistryService = null,
-        IMCPClientService? mcpClientService = null)
+        IToolRegistryService toolRegistryService,
+        IMCPClientService mcpClientService,
+        ILogger logger)
     {
         this.chatClient = chatClient;
         this.promptResolverService = promptResolverService;
-        this.logger = logger;
         this.toolRegistryService = toolRegistryService;
         this.mcpClientService = mcpClientService;
+        this.logger = logger;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
     }
@@ -108,9 +108,7 @@ public class AgentAdapter
 
         ToolAdapter toolAdapter = CreateToolAdapterForIntent(intent, agentTools, contextProvider);
 
-        // Register MCP tools if service available
-        if (mcpClientService != null)
-            RegisterMCPTools(agentType, toolAdapter);
+        RegisterMCPTools(agentType, toolAdapter);
 
         string instructions = ComposeAgentInstructions(agentPrompt);
 
@@ -127,7 +125,12 @@ public class AgentAdapter
         IEnumerable<ToolDefinition> tools,
         Action<string, object>? sharedContextCallback = null)
     {
-        List<string> sharedVariables = ExtractSharedVariables(tools);
+        List<string> sharedVariables = tools
+            .SelectMany(t => t.Parameters)
+            .Where(p => p.Shared && string.Equals(p.Scope, "context", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Name)
+            .Distinct()
+            .ToList();
 
         logger.LogInformation(
             sharedVariables.Count > 0
@@ -140,16 +143,6 @@ public class AgentAdapter
             provider.OnSharedContextUpdate = sharedContextCallback;
 
         return provider;
-    }
-
-    private List<string> ExtractSharedVariables(IEnumerable<ToolDefinition> tools)
-    {
-        return tools
-            .SelectMany(t => t.Parameters)
-            .Where(p => p.Shared && string.Equals(p.Scope, "context", StringComparison.OrdinalIgnoreCase))
-            .Select(p => p.Name)
-            .Distinct()
-            .ToList();
     }
 
     private ToolAdapter CreateToolAdapterForIntent(
@@ -217,7 +210,6 @@ public class AgentAdapter
     /// </summary>
     private void RegisterMCPTools(Type agentType, ToolAdapter toolAdapter)
     {
-        // Read attribute directly from agent type
         UsesMCPServersAttribute? attribute = agentType.GetCustomAttribute<UsesMCPServersAttribute>();
         if (attribute == null || attribute.ServerNames.Length == 0)
         {
@@ -269,11 +261,10 @@ public class AgentAdapter
         {
             try
             {
-                string prefixedName = $"{serverName}_{kvp.Key}";
-                ToolDefinition prefixedDef = kvp.Value.toolDefinition with { Name = prefixedName };
-                toolAdapter.AddTool(prefixedName, kvp.Value.toolDelegate, prefixedDef);
+                ToolDefinition namedToolDefinition = kvp.Value.toolDefinition with { Name = kvp.Key };
+                toolAdapter.AddTool(kvp.Key, kvp.Value.toolDelegate, namedToolDefinition);
 
-                logger.LogInformation($"Registered MCP tool: {prefixedName}");
+                logger.LogInformation($"Registered MCP tool: {kvp.Key}");
             }
             catch (Exception ex)
             {

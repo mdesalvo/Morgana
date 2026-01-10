@@ -83,11 +83,8 @@ public class MCPAdapter
         List<ToolParameter> parameters = new();
 
         // InputSchema is JsonElement (struct), check if it has properties
-        if (mcpTool.InputSchema.ValueKind == JsonValueKind.Undefined || 
-            mcpTool.InputSchema.ValueKind == JsonValueKind.Null)
-        {
+        if (mcpTool.InputSchema.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
             return parameters;
-        }
 
         try
         {
@@ -97,7 +94,7 @@ public class MCPAdapter
             if (schemaElement.TryGetProperty("properties", out JsonElement propertiesElement))
             {
                 // Parse required fields
-                HashSet<string> requiredFields = new();
+                HashSet<string> requiredFields = [];
                 if (schemaElement.TryGetProperty("required", out JsonElement requiredElement) &&
                     requiredElement.ValueKind == JsonValueKind.Array)
                 {
@@ -118,9 +115,7 @@ public class MCPAdapter
 
                     string description = "No description";
                     if (paramSchema.TryGetProperty("description", out JsonElement descElement))
-                    {
                         description = descElement.GetString() ?? description;
-                    }
 
                     bool isRequired = requiredFields.Contains(paramName);
 
@@ -128,7 +123,8 @@ public class MCPAdapter
                         Name: paramName,
                         Description: description,
                         Required: isRequired,
-                        Scope: "request" // MCP parameters are always request-scoped
+                        Scope: "request", // MCP parameters are always request-scoped
+                        Shared: false
                     ));
                 }
             }

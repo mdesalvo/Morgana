@@ -11,8 +11,8 @@ namespace Morgana.AI.Examples.Agents;
 /// This agent can retrieve information about monkeys from a public MCP server.
 /// 
 /// Available tools:
-/// - MonkeyMCP_get_all_monkeys: Returns list of all monkeys
-/// - MonkeyMCP_find_monkey_by_name: Finds specific monkey by name
+/// - get_all_monkeys: Returns list of all monkeys
+/// - find_monkey_by_name: Finds specific monkey by name
 /// 
 /// Test queries:
 /// - "Get me a list of all monkeys"
