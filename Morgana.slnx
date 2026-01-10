@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+  </Folder>
+  <Project Path="Morgana.Foundations\Morgana.Foundations.csproj" />
+  <Project Path="Morgana.ActorsFramework\Morgana.ActorsFramework.csproj" />
+  <Project Path="Morgana.AgentsFramework\Morgana.AgentsFramework.csproj" />
+  <Project Path="Morgana.ExampleAgents\Morgana.ExampleAgents.csproj" />
+  <Project Path="Morgana.Startup\Morgana.Startup.csproj" />
+</Solution>

@@ -1,0 +1,56 @@
+<Project>
+
+  <PropertyGroup>
+
+    <!-- Common Build Settings -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Version Information -->
+    <Version>0.8.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+
+    <!-- Package Metadata -->
+    <Authors>Marco De Salvo</Authors>
+    <Company>Marco De Salvo</Company>
+    <Product>Morgana</Product>
+    <Copyright>Marco De Salvo</Copyright>
+    
+    <!-- Repository Information -->
+    <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mdesalvo/Morgana.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseUrl>https://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
+    <PackageIcon>morgana-avatar.png</PackageIcon>
+    <PackageTags>actor-model agentic-ai chatbot dotnet</PackageTags>
+    
+    <!-- Common Description -->
+    <Description>Morgana is an advanced conversational AI system designed to handle complex customer service scenarios through a sophisticated multi-agent architecture. Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET, Morgana orchestrates specialized AI agents that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness. The system is powered by Microsoft's Agent Framework, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails, policy enforcement, and comprehensive conversation archival.</Description>
+
+    <!-- Disable packaging by default (enable per-project as needed) -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- Package References -->
+  <ItemGroup>
+    <PackageReference Include="Akka" Version="1.5.58" />
+    <PackageReference Include="Akka.DependencyInjection" Version="1.5.58" />
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.8.0-beta.1" />
+    <PackageReference Include="Azure.Identity" Version="1.17.1" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-preview.260108.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.0.0-preview.260108.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.0.0-preview.260108.1" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.1.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.1.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.1.1-preview.1.25612.2" />
+    <PackageReference Include="ModelContextProtocol" Version="0.5.0-preview.1" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="0.5.0-preview.1" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="0.5.0-preview.1" />
+    <PackageReference Include="ModelContextProtocolServer.Sse" Version="0.6.0" />
+    <PackageReference Include="ModelContextProtocolServer.Stdio" Version="0.6.0" />
+  </ItemGroup>
+
+</Project>

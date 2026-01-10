@@ -1,18 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <Title>Morgana.DemoAgents</Title>
-    <Version>0.8.0</Version>
-    <AssemblyVersion>$(Version)</AssemblyVersion>
-    <Authors>Marco De Salvo</Authors>
-    <Company>Marco De Salvo</Company>
-    <Product>Morgana</Product>
-    <Description>Example implementation of 3 domain-specific Morgana agents, along with their intents, prompts and Morgana tools. It also includes a 4th agent demonstrating use of MCP servers (MonkeyMCP from Microsoft)</Description>
-    <Copyright>Marco De Salvo</Copyright>
-    <IsPackable>false</IsPackable>
+    <Title>Morgana.ExampleAgents</Title>
+    <PackageId>Morgana.ExampleAgents</PackageId>
+    <OutputType>Library</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
