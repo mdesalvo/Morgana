@@ -211,8 +211,8 @@ Specialized agents with domain-specific knowledge and tool access. The system in
 - **Implementation**: Zero tool code—all capabilities acquired dynamically from MCP server
 
 ```csharp
-// Morgana.AI.Examples/Agents/MonkeyAgent.cs
-namespace Morgana.AI.Examples.Agents;
+// Morgana.Example/Agents/MonkeyAgent.cs
+namespace Morgana.Example.Agents;
 
 /// <summary>
 /// Educational agent demonstrating MCP (Model Context Protocol) integration.
@@ -841,7 +841,7 @@ Buttons: [✅ Yes, Proceed] [❌ No, Cancel]
 ### QuickReply Record Definition
 
 ```csharp
-namespace Morgana.AI.Records;
+namespace Morgana.Foundations.Records;
 
 public record QuickReply(
     [property: JsonPropertyName("id")] string Id,
@@ -1047,12 +1047,6 @@ Global policies define system-wide behavioral rules that apply to all agents:
       "Description": "OPERATIONAL RULE ON DIRECT REQUEST PARAMETERS OF AGENT TOOLS - Operate...",
       "Type": "Operational",
       "Priority": 2
-    },
-    {
-      "Name": "SetQuickRepliesGuidance",
-      "Description": "SYSTEM TOOL FOR QUICK REPLIES - When you present multiple options...",
-      "Type": "Operational",
-      "Priority": 3
     }
   ]
 }
@@ -1184,7 +1178,7 @@ The system dynamically loads domain assemblies configured in `appsettings.json` 
 {
   "Plugins": {
     "Assemblies": [
-      "Morgana.AI.Examples.dll" // Exposes 3 demo agents
+      "Morgana.Example.dll" // Exposes 4 demo agents
     ]
   }
 }
@@ -1194,7 +1188,7 @@ The system dynamically loads domain assemblies configured in `appsettings.json` 
 
 ```xml
 <ItemGroup>
-  <ProjectReference Include="..\Morgana.AI.Examples\Morgana.AI.Examples.csproj" />
+  <ProjectReference Include="..\Morgana.Example\Morgana.Example.csproj" />
 </ItemGroup>
 ```
 
