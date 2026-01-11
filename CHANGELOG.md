@@ -4,13 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0] - 2026-01-11
+## [0.8.1] - 2026-01-11
 
+### 🐛 Fixed
+- Morgana tools (GetContextVariable, SetContextVariable, SetQuickReplies) were not injected into MCP-only agents
+
+### 🚀 Future Enablement
+This release unlocks:
+- MCP-only agents can now express quick-replies and access to the context like Morgana agents
+
+## [0.8.0] - 2026-01-10
 ### 🎯 Major Feature: Model Context Protocol (MCP) Integration
 This release introduces **industrial-grade MCP support**, enabling agents to dynamically acquire capabilities from external MCP servers without code changes. Built on **Microsoft's official ModelContextProtocol library**, Morgana treats MCP tools as first-class citizens—indistinguishable from native tools.
 
 ### ✨ Highlights
-
 **MCP Server Integration**
 - `UsesMCPServersAttribute` for declarative MCP server dependencies on agents
 - `IMCPClientRegistryService` and `MCPClientRegistryService` for managing multiple MCP server connections
@@ -37,7 +44,6 @@ This release introduces **industrial-grade MCP support**, enabling agents to dyn
 - Seamless integration with existing tool registration pipeline
 
 ### 🔄 Changed
-
 - Migrated solution files to **slnx** format
 - Centralized project definition via **Directory.Build.Props** standard
 - Reorganized solution into **4 framework projects** (Morgana.Startup, Morgana.Foundations, Morgana.Actors, Morgana.Agents) plus **1 didactic bonus** (Morgana.Example)
@@ -45,15 +51,14 @@ This release introduces **industrial-grade MCP support**, enabling agents to dyn
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
-
 This release unlocks:
 - Microservices exposing tools via MCP for shared agent capabilities
 - Third-party MCP tool ecosystem integration (filesystem, database, API connectors)
 
+
 ## [0.7.1] - 2026-01-09
 
 ### 🔄 Changed
-
 **Dynamic Welcome**
 - Morgana now welcomes with a dynamic configurable landing message (`Morgana:LandingMessages`)
 
@@ -61,13 +66,12 @@ This release unlocks:
 - Typing message was always tied to color scheme of "Morgana" agent
 - Textarea did not contextualize to the active agent name
 
-## [0.7.0] - 2026-01-07
 
+## [0.7.0] - 2026-01-07
 ### 🎯 Major Feature: LLM-Driven Quick Replies System
 This release introduces a sophisticated **Quick Replies system** that enables LLMs to dynamically create interactive button options for users, significantly improving UX/UI for multi-choice scenarios and guided conversations.
 
 ### ✨ Added
-
 **SetQuickReplies System Tool**
 - LLM-callable system tool `SetQuickReplies` for creating interactive button options dynamically during conversations
 - Supports JSON array input with `id`, `label` (emoji-enhanced display text), and `value` (message sent on click)
@@ -94,53 +98,45 @@ This release introduces a sophisticated **Quick Replies system** that enables LL
 - Unified language consistency across `morgana.json` and `agents.json`
 
 ### 🔄 Changed
-
 **Context Variable Management**
 - Introduced `DropVariable(variableName)` method in `MorganaContextProvider` for explicit temporary variable cleanup
 
 ### 🐛 Fixed
-
 - Quick replies lost during follow-up flow due to missing parameter in `ConversationResponse` creation
 
 ### 🚀 Future Enablement
-
 This release unlocks:
 - Dynamic conversation guidance through LLM-generated interactive options
 - Improved UX for multi-step workflows (invoice selection, troubleshooting guides, contract clauses)
 - Foundation for more sophisticated UI interactions (carousels, cards, forms)
 
-## [0.6.0] - 2026-01-04
 
+## [0.6.0] - 2026-01-04
 ### 🎯 Major Feature: Morgana as agnostic conversational AI framework
 This release represents a fundamental shift in enterprise readyness: **Morgana is now fully decoupled from any domain-specific agents**, becoming a true **conversational AI framework**.
 
 ### ✨ Added
-
 **Plugin System**
 - Morgana dynamically loads domain assemblies configured in `appsettings.json` under `Plugins:Assemblies`. At bootstrap, `PluginLoaderService` validates that each assembly contains at least one class extending `MorganaAgent`, otherwise it's skipped with a warning. This enables **complete decoupling between framework (Morgana.AI) and application domains (e.g., Morgana.AI.Examples)**, while maintaining automatic discovery of agents and tools via reflection.
 
 ### 🔄 Changed
-
 - Improved visual cues for the active agent: name displayed in the header with a distinctive color scheme (purple for basic Morgana, pink for specialized agents).
 - Extracted example agents, tools and servers into a new, separate "educational" project `Morgana.AI.Examples` to keep the core framework clean and reusable.
 
 ### 🐛 Fixed
-
 - Morgana presents with invented quick-replies when no intent is available from the domain
 
 ### 🚀 Future Enablement
-
 This release unlocks:
 - Custom UI themes/skins with dynamic branding
 - Platform extensibility via plugin system
 
-## [0.5.0] - 2026-01-01
 
+## [0.5.0] - 2026-01-01
 ### 🎯 Major Feature: Proactive Conversational Paradigm
 This release represents a fundamental shift in user interaction: **Morgana now initiates conversations** rather than waiting passively for user input. She automatically presents herself with capabilities aligned to classified intents, creating a more engaging and guided experience.
 
 ### ✨ Added
-
 **Proactive Presentation System**
 - Automatic presentation generation triggered by `ConversationManagerActor` on conversation creation
 - LLM-driven presentation message with dynamic quick reply buttons
@@ -168,7 +164,6 @@ This release represents a fundamental shift in user interaction: **Morgana now i
 - Separation of displayable intents (user-facing) vs. classification intents (backend)
 
 ### 🔄 Changed
-
 **CSS Modularization**
 - Split monolithic `site.css` into modular components (`site.css`, `cauldron.css`, `quick-reply.css`, `sparkle-loader.css`) for improved maintainability
 - Introduced welcome animation with magical sparkle effect featuring purple-white gradient core, orbiting particles, and expanding rings
@@ -183,7 +178,6 @@ This release represents a fundamental shift in user interaction: **Morgana now i
 - Intent configuration serves dual purpose: classification (backend) + presentation (frontend)
 
 ### 🐛 Fixed
-
 **Blazor Server Render Mode Issue**
 - Fixed double SignalR connection caused by `InteractiveServer` render-mode in `App.razor`
   - Root cause: Blazor pre-rendered component on server, then re-initialized on client, creating two parallel conversations
@@ -193,17 +187,15 @@ This release represents a fundamental shift in user interaction: **Morgana now i
   - Result: Eliminated duplicate initialization, reduced memory footprint, prevented race conditions
 
 ### 🚀 Future Enablement
-
 This release unlocks:
 - **Proactive paradigm**: Personalized greetings, context-aware suggestions, guided onboarding, A/B testing, analytics
 
-## [0.4.0] - 2025-12-28
 
+## [0.4.0] - 2025-12-28
 ### 🎯 Major Refactoring: Actor Model Best Practices
 This release represents a fundamental architectural improvement, transforming Morgana from an "ASP.NET with actors on top" into a **production-ready actor-based system** fully aligned with Akka.NET best practices.
 
 ### ✨ Added
-
 **Layered Personality System**
 - Two-tier personality architecture: global (Morgana) + agent-specific personalities
 - Subordination principle: agent personalities complement, never contradict global traits
@@ -252,7 +244,6 @@ This release represents a fundamental architectural improvement, transforming Mo
 - Non-blocking message processing across actor hierarchy
 
 ### 🔄 Changed
-
 **Actor Pattern Migration**
 - **BREAKING**: Replaced `Ask<T>` with `Become/PipeTo` pattern in all actors
 - Eliminated temporary actors and lifecycle leaks
@@ -270,14 +261,12 @@ This release represents a fundamental architectural improvement, transforming Mo
 - Context wrappers organized by project namespace (`Morgana.Records` vs `Morgana.AI.Records`)
 
 ### 🐛 Fixed
-
 - Fixed actor lifecycle leaks from temporary `Ask<T>` actors
 - Fixed sender context loss in async operations
 - Fixed inconsistent error handling across actors
 - Fixed timeout behavior inconsistencies
 
 ### 🚀 Future Enablement
-
 This refactoring unlocks:
 - Akka.Persistence for event sourcing
 - Akka.Cluster for distributed deployment
@@ -290,7 +279,6 @@ This refactoring unlocks:
 ## [0.3.0] - 2025-12-22
 
 ### ✨ Added
-
 - Added `ILLMService` implementation for **Anthropic** -> Morgana is now able to talk with **Claude**
 - Added support for configuring `ILLMService` implementation with setting `LLM:Provider` (_AzureOpenAI_, _Anthropic_)
 - Introduced abstraction of **MorganaLLMService** to factorize `ILLMService` implementations
@@ -304,7 +292,6 @@ This refactoring unlocks:
 - Added comprehensive logging of shared variable tracking and context sync operations
 
 ### 🔄 Changed
-
 - **BREAKING**: Eliminated manual conversation history management from `MorganaAgent` (`List<(string role, string text)> history`)
 - **BREAKING**: Tools now receive `Func<MorganaContextProvider>` lazy accessor instead of direct context access
 - `ConversationSupervisorActor` has been refactored in order to act as a message-driven state machine
@@ -324,7 +311,6 @@ This refactoring unlocks:
 ## [0.2.0] - 2025-12-17
 
 ### ✨ Added
-
 - Decoupled **Morgana** (chatbot) from **Cauldron** (SignalR frontend)
 - Introduced **Morgana.AI** project to decouple AI-related capabilities from **Morgana**
 - Introduced **MorganaAgent** abstraction to specialize actors requiring an AIAgent-based LLM interaction
@@ -336,20 +322,17 @@ This refactoring unlocks:
 - Introduced **ToolAdapter** to ease the creation of AIFunction directly from tool definitions 
 
 ### 🔄 Changed
-
 - Unified `InformativeAgent` and `DispositiveAgent` under a new intent-driven **RouterActor**
 - Removed userId information from the basic fields sent to every actor/agent 
 - Send button has been properly styled as a "magic witch's cauldron" with glowing effects
 
 ### 🐛 Fixed
-
 - Resolved corner cases of multi-message which could be sent to Morgana
 
 
 ## [0.1.0] - 2025-12-10
 
 ### ✨ Added
-
 - Initial public release of **Morgana** and **Morgana.Web**
 - Multi-turn conversational pipeline with supervised agent orchestration
 - Integration with **Microsoft.Agents.AI** for LLM-based decision and tool execution
@@ -360,13 +343,11 @@ This refactoring unlocks:
 - BillingExecutor enhanced with local memory and `#INT#` interactive protocol
 
 ### 🔄 Changed
-
 - Supervisor routing stabilized for multi-turn flows
 - Clarified agent responsibilities and improved modularity
 - Updated intermediate agents to support transparent executor forwarding
 
 ### 🐛 Fixed
-
 - Resolved context loss during multi-step billing interactions
 - Eliminated routing loops caused by agents self-handling fallback messages
 - Fixed inconsistent actor instantiation across conversations
