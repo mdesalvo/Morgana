@@ -31,6 +31,10 @@ public class GuardActor : MorganaActor
         ILLMService llmService,
         IPromptResolverService promptResolverService) : base(conversationId, llmService, promptResolverService)
     {
+        // Perform two-level content moderation check on incoming user messages:
+        // 1. Fast synchronous profanity check against configured term list (immediate rejection if found)
+        // 2. Slower async LLM-based policy check for complex violations (spam, phishing, violence, etc.)
+        // Returns GuardCheckResponse with compliant flag and optional violation message
         ReceiveAsync<Records.GuardCheckRequest>(CheckComplianceAsync);
         Receive<Records.LLMCheckContext>(HandleLLMCheckResult);
         Receive<Status.Failure>(HandleFailure);

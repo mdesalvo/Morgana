@@ -88,10 +88,13 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: Idle");
 
-        // Handle presentation request
+        // Generate and send welcome message with quick reply buttons on conversation start
         ReceiveAsync<Records.GeneratePresentationMessage>(HandlePresentationRequestAsync);
         ReceiveAsync<Records.PresentationContext>(HandlePresentationGenerated);
 
+        // Handle incoming user messages:
+        // - If active agent exists (multi-turn conversation): route directly to that agent → AwaitingFollowUpResponse
+        // - Otherwise (new request): send to GuardActor for content moderation → AwaitingGuardCheck
         ReceiveAsync<Records.UserMessage>(async msg =>
         {
             IActorRef originalSender = Sender;
@@ -120,6 +123,9 @@ public class ConversationSupervisorActor : MorganaActor
         });
 
         Receive<Status.Failure>(HandleUnexpectedFailure);
+
+        // Re-register common handlers for FSM behavior consistency
+        RegisterCommonHandlers();
     }
 
     /// <summary>
@@ -285,6 +291,9 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingGuardCheck");
 
+        // Handle content moderation result from GuardActor:
+        // - If compliant: forward to ClassifierActor for intent detection → AwaitingClassification
+        // - If violation detected: send rejection message to user and return → Idle
         ReceiveAsync<Records.GuardCheckContext>(async wrapper =>
         {
             if (!wrapper.Response.Compliant)
@@ -323,6 +332,9 @@ public class ConversationSupervisorActor : MorganaActor
 
             Become(Idle);
         });
+        
+        // Re-register common handlers for FSM behavior consistency
+        RegisterCommonHandlers();
     }
 
     /// <summary>
@@ -335,6 +347,9 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingClassification");
 
+        // Handle intent classification result from ClassifierActor:
+        // - Classification successful: forward to RouterActor to find appropriate agent → AwaitingAgentResponse
+        // - Updates processing context with classification metadata for agent routing
         ReceiveAsync<Records.ClassificationContext>(async wrapper =>
         {
             actorLogger.Info($"Classification result: {wrapper.Classification.Intent}");
@@ -363,6 +378,9 @@ public class ConversationSupervisorActor : MorganaActor
 
             Become(Idle);
         });
+        
+        // Re-register common handlers for FSM behavior consistency
+        RegisterCommonHandlers();
     }
 
     /// <summary>
@@ -379,6 +397,18 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingAgentResponse");
 
+        // Handle response from specialized agent (via RouterActor):
+        // - ActiveAgentResponse: response from intent-specific agent (BillingAgent, ContractAgent, etc.)
+        // - AgentResponse: fallback response from RouterActor (no agent found for intent)
+        // 
+        // If agent signals IsCompleted=false (multi-turn conversation needed):
+        //   - Set activeAgent reference for future follow-up messages
+        //   - Subsequent user messages will route directly to this agent (bypass classification)
+        // If agent signals IsCompleted=true:
+        //   - Clear activeAgent reference
+        //   - Next user message will go through full flow (guard → classifier → router)
+        //
+        // Then return → Idle to await next user message
         ReceiveAsync<Records.AgentContext>(async wrapper =>
         {
             string agentName = GetAgentDisplayName(ctx.Classification?.Intent);
@@ -465,6 +495,9 @@ public class ConversationSupervisorActor : MorganaActor
 
             Become(Idle);
         });
+        
+        // Re-register common handlers for FSM behavior consistency
+        RegisterCommonHandlers();
     }
 
     /// <summary>
@@ -476,6 +509,18 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingFollowUpResponse");
 
+        // Handle follow-up response from currently active agent (multi-turn conversation):
+        // - Agent was previously set as active (IsCompleted=false in prior response)
+        // - User message routed directly to this agent (bypassing guard/classifier)
+        // 
+        // If agent signals IsCompleted=true:
+        //   - Clear activeAgent reference (multi-turn conversation ended)
+        //   - Next user message will go through full flow again
+        // If agent signals IsCompleted=false:
+        //   - Keep activeAgent reference (conversation continues)
+        //   - Next user message routes directly to same agent again
+        //
+        // Then return → Idle to await next user message
         ReceiveAsync<Records.FollowUpContext>(async wrapper =>
         {
             string agentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
@@ -509,6 +554,9 @@ public class ConversationSupervisorActor : MorganaActor
 
             Become(Idle);
         });
+        
+        // Re-register common handlers for FSM behavior consistency
+        RegisterCommonHandlers();
     }
 
     #endregion

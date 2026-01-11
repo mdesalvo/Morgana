@@ -101,4 +101,46 @@ public class MorganaActor : ReceiveActor
     {
         // actorLogger.Warning($"{GetType().Name} receive timeout");
     }
+
+    /// <summary>
+    /// Registers common message handlers that should be present in all actor behaviors.
+    /// Essential for FSM actors using Become() pattern to maintain consistent message handling across states.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Purpose:</strong></para>
+    /// <para>When actors use Become() to change behaviors (FSM pattern), the message handlers are replaced entirely.
+    /// This means handlers registered in the constructor (like ReceiveTimeout) are lost unless re-registered
+    /// in each behavior. This method provides a centralized way to ensure critical handlers are always present.</para>
+    /// <para><strong>Currently Registered Common Handlers:</strong></para>
+    /// <list type="bullet">
+    /// <item><term>ReceiveTimeout</term><description>Prevents dead letters from timeout messages in FSM states</description></item>
+    /// </list>
+    /// <para><strong>Usage in FSM Actors:</strong></para>
+    /// <code>
+    /// // Example: ConversationSupervisorActor with multiple states
+    /// private void AwaitingGuardCheck()
+    /// {
+    ///     Receive&lt;GuardCheckContext&gt;(HandleGuardCheckResult);
+    ///     RegisterCommonHandlers(); // ✅ Re-register timeout handler
+    /// }
+    ///
+    /// private void AwaitingClassification()
+    /// {
+    ///     Receive&lt;ClassificationContext&gt;(HandleClassificationResult);
+    ///     RegisterCommonHandlers(); // ✅ Re-register timeout handler
+    /// }
+    /// </code>
+    /// <para><strong>Design Note:</strong></para>
+    /// <para>This method is protected so derived classes can call it in their behavior methods.
+    /// If additional common handlers are needed in the future (e.g., PoisonPill, system messages),
+    /// they should be added here to ensure all FSM states handle them consistently.</para>
+    /// <para><strong>Why Not Just Override Become():</strong></para>
+    /// <para>While we could override Become() to automatically re-register handlers, that would be
+    /// less explicit and harder to understand. The explicit call to RegisterCommonHandlers() in each
+    /// behavior makes it clear that common handlers are being maintained across state transitions.</para>
+    /// </remarks>
+    protected void RegisterCommonHandlers()
+    {
+        Receive<ReceiveTimeout>(HandleReceiveTimeout);
+    }
 }

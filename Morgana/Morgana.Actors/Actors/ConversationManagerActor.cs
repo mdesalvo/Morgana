@@ -41,11 +41,21 @@ public class ConversationManagerActor : MorganaActor
     {
         this.signalRBridgeService = signalRBridgeService;
 
+        // Handle incoming user messages from SignalR:
+        // - Ensures supervisor exists (creates if missing)
+        // - Forwards message to supervisor using Ask pattern with PipeTo for non-blocking processing
+        // - Includes 60-second timeout for supervisor response
         ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
+        
+        // Handle conversation lifecycle requests:
+        // - CreateConversation: creates supervisor actor, triggers automatic presentation generation
+        // - TerminateConversation: stops supervisor actor and clears reference
         ReceiveAsync<Records.CreateConversation>(HandleCreateConversationAsync);
         ReceiveAsync<Records.TerminateConversation>(HandleTerminateConversationAsync);
 
-        // Handle supervisor responses (PipeTo pattern)
+        // Handle supervisor responses via PipeTo pattern:
+        // - SupervisorResponseContext: successful response from supervisor → send to client via SignalR
+        // - Status.Failure: timeout or exception from supervisor → send error message to client
         ReceiveAsync<Records.SupervisorResponseContext>(HandleSupervisorResponseAsync);
         ReceiveAsync<Status.Failure>(HandleSupervisorFailureAsync);
     }
@@ -71,6 +81,7 @@ public class ConversationManagerActor : MorganaActor
 
             // Trigger automatic presentation
             supervisor.Tell(new Records.GeneratePresentationMessage());
+
             actorLogger.Info("Presentation generation triggered");
         }
 

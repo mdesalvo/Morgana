@@ -51,6 +51,10 @@ public class ClassifierActor : MorganaActor
         Records.Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
         classifierPromptContent = $"{classifierPrompt.Content.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
 
+        // Analyze incoming user messages to determine their underlying intent:
+        // - Invokes LLM with pre-formatted intent definitions
+        // - Returns ClassificationResult with intent name and confidence score
+        // - Falls back to "other" intent on classification failures to maintain conversation flow
         ReceiveAsync<Records.UserMessage>(ClassifyMessageAsync);
         Receive<Records.ClassificationContext>(HandleClassificationResult);
         Receive<Status.Failure>(HandleFailure);
@@ -88,8 +92,7 @@ public class ClassifierActor : MorganaActor
                     ["confidence"] = (classificationResponse?.Confidence ?? 0.5).ToString("F2")
                 });
 
-            Records.ClassificationContext ctx = new Records.ClassificationContext(result, null, originalSender);
-            Self.Tell(ctx);
+            Self.Tell(new Records.ClassificationContext(result, null, originalSender));
         }
         catch (Exception ex)
         {

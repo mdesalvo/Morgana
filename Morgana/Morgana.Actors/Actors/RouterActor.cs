@@ -47,9 +47,18 @@ public class RouterActor : MorganaActor
                 agents[intent] = Context.System.GetOrCreateAgent(agentType, intent, conversationId).GetAwaiter().GetResult();
         }
 
+        // Route classified requests to specialized agents based on intent:
+        // - Validates classification exists and intent is recognized
+        // - Forwards request to appropriate agent (BillingAgent, ContractAgent, etc.) using Ask pattern
+        // - Wraps agent response with agent reference and completion status
+        // - Returns error messages for missing/unrecognized intents
         ReceiveAsync<Records.AgentRequest>(RouteToAgentAsync);
         Receive<Records.AgentResponseContext>(HandleAgentResponse);
         Receive<Status.Failure>(HandleFailure);
+        
+        // Broadcast context updates from one agent to all other registered agents:
+        // - Used for sharing context variables across agents (e.g., userId from BillingAgent → ContractAgent)
+        // - Excludes source agent from broadcast to avoid self-notification
         Receive<Records.BroadcastContextUpdate>(HandleBroadcastContextUpdate);
     }
 
