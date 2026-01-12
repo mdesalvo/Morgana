@@ -1,6 +1,6 @@
 using Akka.Actor;
 
-namespace Morgana.Startup.Services;
+namespace Morgana.SignalR.Services;
 
 /// <summary>
 /// ASP.NET Core hosted service for managing the Akka.NET actor system lifecycle.

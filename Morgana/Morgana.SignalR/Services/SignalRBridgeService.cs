@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.SignalR;
 using Morgana.Framework;
 using Morgana.Framework.Interfaces;
-using Morgana.Startup.Hubs;
+using Morgana.SignalR.Hubs;
 
-namespace Morgana.Startup.Services;
+namespace Morgana.SignalR.Services;
 
 /// <summary>
 /// Implementation of ISignalRBridgeService that bridges the actor system with SignalR for real-time client communication.

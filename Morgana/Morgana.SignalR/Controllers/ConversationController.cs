@@ -4,9 +4,9 @@ using Microsoft.AspNetCore.SignalR;
 using Morgana.Framework;
 using Morgana.Framework.Actors;
 using Morgana.Framework.Extensions;
-using Morgana.Startup.Hubs;
+using Morgana.SignalR.Hubs;
 
-namespace Morgana.Startup.Controllers;
+namespace Morgana.SignalR.Controllers;
 
 /// <summary>
 /// REST API controller for managing Morgana conversation lifecycle and message routing.

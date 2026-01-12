@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 
-namespace Morgana.Startup.Hubs;
+namespace Morgana.SignalR.Hubs;
 
 /// <summary>
 /// SignalR hub for real-time bi-directional communication between clients and the Morgana conversation system.

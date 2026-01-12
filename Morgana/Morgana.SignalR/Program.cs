@@ -5,8 +5,8 @@ using Microsoft.Extensions.AI;
 using Morgana.Framework.Adapters;
 using Morgana.Framework.Interfaces;
 using Morgana.Framework.Services;
-using Morgana.Startup.Hubs;
-using Morgana.Startup.Services;
+using Morgana.SignalR.Hubs;
+using Morgana.SignalR.Services;
 
 // ==============================================================================
 // MORGANA - AI CONVERSATION FRAMEWORK

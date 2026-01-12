@@ -24,10 +24,18 @@
     <RepositoryUrl>https://github.com/mdesalvo/Morgana.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseUrl>https://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
-    <PackageIcon>..\morgana-avatar.png</PackageIcon>
     
     <!-- Common Description -->
-    <Description>Morgana is an advanced conversational AI system designed to handle complex customer service scenarios through a sophisticated multi-agent architecture. Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET, Morgana orchestrates specialized AI agents that collaborate to understand, classify, and resolve customer inquiries with precision and context awareness. The system is powered by Microsoft's Agent Framework, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails, policy enforcement, and comprehensive conversation archival.</Description>
+    <Description>
+		Morgana is an advanced conversational AI system designed to handle complex
+		customer service scenarios through a sophisticated multi-agent architecture.
+		Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET,
+		Morgana orchestrates specialized AI agents that collaborate to understand,
+		classify, and resolve customer inquiries with precision and context awareness.
+		The system is powered by Microsoft's Agent Framework, enabling seamless
+		integration with Large Language Models (LLMs) while maintaining strict governance
+		through guard rails, policy enforcement, and comprehensive conversation archival.
+	</Description>
 
     <!-- Disable packaging by default (enable per-project as needed) -->
     <IsPackable>false</IsPackable>

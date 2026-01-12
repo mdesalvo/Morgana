@@ -1,7 +1,7 @@
 using Morgana.Framework.Abstractions;
 using System.Reflection;
 
-namespace Morgana.Startup.Services;
+namespace Morgana.SignalR.Services;
 
 /// <summary>
 /// Service for dynamically loading plugin assemblies containing custom Morgana agents.
