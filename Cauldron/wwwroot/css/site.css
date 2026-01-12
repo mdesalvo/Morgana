@@ -81,7 +81,6 @@ body {
     border-radius: 50%;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
     transition: border-color 0.3s ease;
-    /* Il bordo è applicato inline per compatibilità Blazor SignalR */
 }
 
 .header-info h1 {
@@ -192,7 +191,6 @@ body {
     background: var(--surface-light);
 }
 
-/* Stile speciale per testo di completamento */
 .message-text.completion-text {
     font-style: italic;
     color: var(--text-secondary);

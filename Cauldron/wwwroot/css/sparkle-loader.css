@@ -31,7 +31,7 @@
     }
 }
 
-/* Central Glow - Enhanced for Firefox visibility */
+/* Central Glow */
 .glow-core {
     position: absolute;
     top: 50%;
@@ -79,7 +79,7 @@
     }
 }
 
-/* Expanding magic rings - Thicker and more visible */
+/* Expanding magic rings */
 .glow-ring {
     position: absolute;
     top: 50%;
@@ -196,14 +196,14 @@
     pointer-events: none;
 }
 
-/* Enhanced sparkles - Larger and more visible for Firefox */
+/* Enhanced sparkles */
 .magical-loader .sparkle {
     position: absolute;
     border-radius: 50%;
     opacity: 0;
 }
 
-/* Individual sparkle styles - Significantly larger */
+/* Individual sparkle styles */
 .magical-loader .sparkle.sp1 {
     top: 10%;
     left: 15%;
@@ -399,7 +399,7 @@
     animation-delay: 3.3s;
 }
 
-/* Sparkle orbit animations - Enhanced for visibility */
+/* Sparkle orbit animations */
 @keyframes sparkleOrbit1 {
     0%, 100% {
         opacity: 0;
@@ -477,7 +477,7 @@
     }
 }
 
-/* Loading Text - Enhanced visibility */
+/* Loading Text */
 .loading-text {
     display: block;
     margin-top: 30px;
