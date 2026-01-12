@@ -1,5 +1,4 @@
-/* Morgana Chat Styles - Updated with dynamic avatar borders */
-/* Last update: 2025-01-03 */
+/* Morgana Chat Styles */
 
 :root {
     --primary-color: #8b5cf6;
@@ -214,7 +213,6 @@ body {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--primary-color);
     animation: bounce 1.4s infinite ease-in-out;
 }
 
