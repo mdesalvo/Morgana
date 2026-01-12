@@ -36,8 +36,7 @@ Traditional chatbot systems often struggle with complexity—they either become 
 8. **Native Memory Management**: Context and conversation history managed by Microsoft.Agents.AI framework
 9. **Personality-Driven Interactions**: Layered personality system with global and agent-specific traits
 10. **Plugin Architecture**: Domain agents dynamically loaded at runtime, enabling complete framework/domain decoupling
-11. **LLM-Driven Quick Replies**: Dynamic interactive button generation for improved UX in multi-choice scenarios
-12. **MCP Integration**: Agents dynamically extend capabilities by consuming external MCP servers—tools become indistinguishable from native implementations
+11. **MCP Integration**: Agents dynamically extend capabilities by consuming external MCP servers—tools become indistinguishable from native implementations
 
 ## Architecture
 
@@ -117,9 +116,6 @@ The classifier identifies specific intents configured in `agents.json`. **Exampl
 - `other`: General service inquiries
 - ...
 
-**Metadata Enrichment:**
-Each classification includes confidence scores and contextual metadata that downstream agents can use for decision-making.
-
 #### 5. RouterActor
 Coordinator actor that resolves mappings of intents to engage specialized executor agents.
 This actor works as a smart router, dynamically resolving the appropriate Morgana agent based on classified intent.
@@ -127,8 +123,8 @@ This actor works as a smart router, dynamically resolving the appropriate Morgan
 **Context Synchronization Bus:**
 RouterActor also serves as the **message bus for P2P context synchronization** between agents. When an agent updates a shared context variable, RouterActor broadcasts the update to all other agents, ensuring seamless information sharing across the system.
 
-#### 6. Morgana Agents (Domain-Specific, Extensible!)
-Specialized agents with domain-specific knowledge and tool access. The system includes **example** agents that demonstrate both native tools and MCP integration, but **the architecture is fully extensible** to support any domain-specific intent via autodiscovery.
+#### 6. Morgana Agents (automatically loaded via Plugin System)
+Specialized agents with domain-specific knowledge and tool access. The system includes **4 example** agents that demonstrate both native tools and MCP integration, but **the architecture is fully extensible** to support any domain-specific intent via autodiscovery.
 
 **BillingAgent** (example - native tools)
 - **Tools**: `GetInvoices()`, `GetInvoiceDetails()`, `SetQuickReplies()`
@@ -207,7 +203,7 @@ To add a new agent for your domain:
 5. **(Optional)** Add `[UsesMCPServers("YourServer")]` for MCP capabilities
 6. Implement a new class inheriting from `MorganaTool` → the native tools
 7. Decorate it with `[ProvidesToolForIntent("your_intent")]`
-8. Exploit `AgentAdapter` to activate the agent as `AIAgent`
+8. Exploit `MorganaAgentAdapter` to activate the agent as `AIAgent`
 
 The `IAgentRegistryService` and `IAgentConfigurationService` will automatically discover and validate all agents at startup.
 
@@ -306,6 +302,7 @@ return new AgentResponse(cleanText, isCompleted: !requiresMoreInput);
 - **Absent**: Conversation completed, user may close or start new request
 
 This enables natural back-and-forth dialogues within a single intent execution.
+LLM is prompted to retain conversation until its natural ending.
 
 ## Context Synchronization System
 
@@ -352,7 +349,7 @@ Parameters are marked as `Shared: true` in `agents.json`:
 
 #### 2. MorganaContextProvider as State Manager
 
-`MorganaContextProvider` centralizes context management and enables P2P synchronization:
+`MorganaContextProvider` centralizes context management by implementing `AIContextProvider` and enables P2P synchronization:
 
 **Variable Storage:**
 ```csharp
@@ -485,7 +482,7 @@ private void HandleContextUpdate(ReceiveContextUpdate msg)
 - Implements `HandleContextUpdate` handler to receive and merge updates
 - Registers callback with `MorganaContextProvider` during initialization
 
-**AgentAdapter**
+**MorganaAgentAdapter**
 - Extracts shared variables from `ToolDefinition` parameters
 - Creates `MorganaContextProvider` with shared variable names
 - Registers `OnSharedContextUpdate` callback during agent creation
@@ -706,30 +703,6 @@ bool isCompleted = !hasInteractiveToken && !endsWithQuestion && !hasQuickReplies
 3. User clicks button → **follow-up flow** to active agent ✅
 4. Agent handles request directly
 
-### TEXT vs BUTTONS Pattern
-
-To prevent duplication, the LLM is guided to follow the **"TEXT introduces, BUTTONS execute"** pattern:
-
-**❌ BAD - Redundant:**
-```
-TEXT: "Your invoices are: INV-001 (€130), INV-002 (€150), INV-003 (€125)"
-BUTTONS: [INV-001] [INV-002] [INV-003]
-```
-
-**✅ GOOD - Complementary:**
-```
-TEXT: "I found 3 recent invoices. Select one below to view details."
-BUTTONS: [📄 INV-001 €130] [📄 INV-002 €150] [📄 INV-003 €125]
-```
-
-**Prompt Guidance** (`morgana.json`):
-```
-CRITICAL: When using quick replies, your TEXT response should be a brief contextual 
-introduction WITHOUT listing the options themselves - the buttons will show the options 
-visually. Example: Instead of '1. Invoice A, 2. Invoice B, 3. Invoice C' write 
-'I found 3 recent invoices. Select one below to view details.'
-```
-
 ### Use Cases
 
 **Invoice Selection (BillingAgent):**
@@ -844,7 +817,7 @@ Morgana implements a **layered personality architecture** that creates consisten
 
 ### Instruction Composition
 
-The `AgentAdapter` composes instructions in a specific order to ensure proper personality layering:
+The `MorganaAgentAdapter` composes instructions in a specific order to ensure proper personality layering:
 
 ```csharp
 private string ComposeAgentInstructions(Prompt agentPrompt)
@@ -977,20 +950,20 @@ Global policies define system-wide behavioral rules that apply to all agents:
     {
       "Name": "InteractiveToken",
       "Description": "OPERATIONAL RULE INTERACTION TOKEN '#INT#' - You operate....",
-      "Type": "Operational",
-      "Priority": 0
+      "Type": "Critical",
+      "Priority": 1
     },
     {
       "Name": "ToolParameterContextGuidance",
       "Description": "OPERATION RULE ON AGENT TOOLS CONTEXT PARAMETERS - Operates...",
       "Type": "Operational",
-      "Priority": 1
+      "Priority": 0
     },
     {
       "Name": "ToolParameterRequestGuidance",
       "Description": "OPERATIONAL RULE ON DIRECT REQUEST PARAMETERS OF AGENT TOOLS - Operate...",
       "Type": "Operational",
-      "Priority": 2
+      "Priority": 1
     }
   ]
 }
@@ -1001,7 +974,7 @@ Global policies define system-wide behavioral rules that apply to all agents:
 - **Operational**: Procedural guidelines for consistent behavior
 
 **Policy Formatting:**
-The `AgentAdapter` formats policies preserving order and structure:
+The `MorganaAgentAdapter` formats policies preserving order and structure:
 
 ```csharp
 //Order the policies by type (Critical, Operational) then by priority (the lower is the most important)
@@ -1055,7 +1028,7 @@ Parameter-level guidance is dynamically applied based on `Scope`:
 }
 ```
 
-The `ToolAdapter` enriches descriptions with appropriate guidance:
+The `MorganaToolAdapter` enriches descriptions with appropriate guidance:
 - **`Scope: "context"`**: Adds `ToolParameterContextGuidance` policy
 - **`Scope: "request"`**: Adds `ToolParameterRequestGuidance` policy
 
@@ -1126,14 +1099,6 @@ The system dynamically loads domain assemblies configured in `appsettings.json` 
     ]
   }
 }
-```
-
-### Project Setup
-
-```xml
-<ItemGroup>
-  <ProjectReference Include="..\Morgana.Example\Morgana.Example.csproj" />
-</ItemGroup>
 ```
 
 ### Bootstrap Process
@@ -1281,8 +1246,8 @@ Morgana's MCP integration is built on **Microsoft's official ModelContextProtoco
 **Key Components:**
 - **MCPClient**: HTTP/SSE transport with `tools/list` and `tools/call` support
 - **MCPClientService**: Multi-server connection management
-- **MCPAdapter**: JSON Schema → ToolDefinition conversion with type safety
-- **AgentAdapter**: Automatic tool registration during agent initialization
+- **MCPToolAdapter**: JSON Schema → ToolDefinition conversion with type safety
+- **MorganaAgentAdapter**: Automatic tool registration during agent initialization
 
 **Technical Highlights:**
 - **DynamicMethod IL generation** for parameter name preservation (required by `AIFunctionFactory`)
@@ -1382,7 +1347,7 @@ The dependency injection container automatically resolves the appropriate `ILLMS
 
 ### Tool & Function Calling
 
-Tools are defined as C# delegates mapped to tool definitions from prompts. The `ToolAdapter` provides runtime validation and dynamic function creation:
+Tools are defined as C# delegates mapped to tool definitions from prompts. The `MorganaToolAdapter` provides runtime validation and dynamic function creation:
 
 ```csharp
 [ProvidesToolForIntent("billing")]
