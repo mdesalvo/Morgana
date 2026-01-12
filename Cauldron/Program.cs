@@ -2,6 +2,12 @@ using Cauldron.Services;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
+// ==============================================================================
+// CAULDRON - MORGANA'S HOME
+// ==============================================================================
+// This is the main entry point for the Cauldron application.
+// Cauldron is a modular web layer that talks with the Morgana conversational AI platform.
+
 // ============================================================================
 // 1. BLAZOR SERVER CONFIGURATION
 // ============================================================================
