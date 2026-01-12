@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
-using Morgana.Foundations;
-using Morgana.Foundations.Interfaces;
+using Morgana.Framework;
+using Morgana.Framework.Interfaces;
 using Morgana.Startup.Hubs;
 
 namespace Morgana.Startup.Services;

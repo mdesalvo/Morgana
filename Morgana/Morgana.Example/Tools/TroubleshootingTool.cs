@@ -1,8 +1,8 @@
 ﻿using System.Text;
 using Microsoft.Extensions.Logging;
-using Morgana.Agents.Abstractions;
-using Morgana.Agents.Attributes;
-using Morgana.Agents.Providers;
+using Morgana.Framework.Abstractions;
+using Morgana.Framework.Attributes;
+using Morgana.Framework.Providers;
 
 namespace Morgana.Example.Tools;
 

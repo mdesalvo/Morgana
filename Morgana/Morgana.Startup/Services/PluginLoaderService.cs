@@ -1,5 +1,5 @@
+using Morgana.Framework.Abstractions;
 using System.Reflection;
-using Morgana.Agents.Abstractions;
 
 namespace Morgana.Startup.Services;
 

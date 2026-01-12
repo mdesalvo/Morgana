@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Title>Morgana.AgentsFramework</Title>
+    <PackageId>Morgana.Agents</PackageId>
+    <OutputType>Library</OutputType>
+    <UserSecretsId>6e8b72f2-8424-4bc9-9f5c-957368571952</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="morgana.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

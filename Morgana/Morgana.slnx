@@ -2,9 +2,7 @@
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />
   </Folder>
+  <Project Path="Morgana.Framework/Morgana.Framework.csproj" />
   <Project Path="Morgana.Example\Morgana.Example.csproj" />
-  <Project Path="Morgana.Foundations\Morgana.Foundations.csproj" />
-  <Project Path="Morgana.Actors\Morgana.Actors.csproj" />
-  <Project Path="Morgana.Agents\Morgana.Agents.csproj" />
   <Project Path="Morgana.Startup\Morgana.Startup.csproj" />
 </Solution>

@@ -8,11 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Morgana.Agents\Morgana.Agents.csproj" />
+    <EmbeddedResource Include="agents.json" />
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="agents.json" />
+    <ProjectReference Include="..\Morgana.Framework\Morgana.Framework.csproj" />
   </ItemGroup>
 
 </Project>

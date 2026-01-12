@@ -2,10 +2,9 @@ using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
 using Microsoft.Extensions.AI;
-using Morgana.Agents.Adapters;
-using Morgana.Agents.Interfaces;
-using Morgana.Agents.Services;
-using Morgana.Foundations.Interfaces;
+using Morgana.Framework.Adapters;
+using Morgana.Framework.Interfaces;
+using Morgana.Framework.Services;
 using Morgana.Startup.Hubs;
 using Morgana.Startup.Services;
 
