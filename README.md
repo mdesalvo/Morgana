@@ -44,26 +44,26 @@ Traditional chatbot systems often struggle with complexity—they either become 
 ### High-Level Component Flow
 
 ```mermaid
+---
+config:
+  flowchart:
+    htmlLabels: true
+---
 graph TD
-  UserRequest --> ConversationManagerActor
-  ConversationManagerActor --> ConversationSupervisorActor
+  U@{shape: circle, label: "User"} -- Writes to Morgana --> CM@{shape: rounded, label: "ConversationManagerActor"}
+  CM@{shape: rounded, label: "ConversationManagerActor"} -- 1. Creates conversation and activates actor --> SV@{shape: rounded, label: "ConversationSupervisorActor"}
 
-  ConversationSupervisorActor --> GuardActor
-  ConversationSupervisorActor --> ClassifierActor
-  ConversationSupervisorActor --> RouterActor
+  SV@{shape: rounded, label: "ConversationSupervisorActor"} -- 2. Activates actor and asks for language compliance --> G@{shape: rounded, label: "GuardActor"}
+  SV@{shape: rounded, label: "ConversationSupervisorActor"} -- 4. Activates actor and asks for intent classification --> C@{shape: rounded, label: "ClassifierActor"}
+  SV@{shape: rounded, label: "ConversationSupervisorActor"} -- 6. Activates actor and asks for agent routing --> R@{shape: rounded, label: "RouterActor"}
 
-  GuardActor --> LLM
+  G@{shape: rounded, label: "GuardActor"} -- 3. Prompts for language compliance --> LLM
 
-  ClassifierActor --> LLM
+  C@{shape: rounded, label: "ClassifierActor"} -- 5. Prompts for intent classification --> LLM
 
-  RouterActor --> BillingAgent*
-  RouterActor --> ContractAgent*
-  RouterActor --> MonkeyAgent*
-
-  BillingAgent* --> LLM
-  ContractAgent* --> LLM
-  MonkeyAgent* --> LLM
-	MonkeyAgent* --> MonkeyMCP
+  R@{shape: rounded, label: "RouterActor"} -- 7. Activates agent and delegates for intent handling --> MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"}
+  MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"} -. 8 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+  MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"} -. 8 Interacts for tools discovery .-> MCP@{shape: das, label: "MCP Server"}
 ```
 
 ### Actors Hierarchy
