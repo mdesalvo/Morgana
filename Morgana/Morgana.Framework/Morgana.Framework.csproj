@@ -5,6 +5,7 @@
     <PackageId>Morgana.Agents</PackageId>
     <OutputType>Library</OutputType>
     <UserSecretsId>6e8b72f2-8424-4bc9-9f5c-957368571952</UserSecretsId>
+    <Version>0.8.2</Version>
   </PropertyGroup>
 
   <ItemGroup>

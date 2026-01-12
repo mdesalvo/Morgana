@@ -5,6 +5,7 @@
        <PackageId>Cauldron</PackageId>
        <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
        <PackageTags>signalr-hub blazor-server dotnet</PackageTags>
+       <Version>0.8.2</Version>
     </PropertyGroup>
 
     <ItemGroup>
