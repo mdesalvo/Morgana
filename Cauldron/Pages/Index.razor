@@ -127,11 +127,11 @@
         <button
             @onclick="SendMessage"
             disabled="@IsButtonDisabled"
-            class="send-button @(isSending ? "sending" : "")">
+            class="send-button @(isSending ? "sending" : "") @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")">
             <!-- Animated cauldron icon with magical effects -->
             <span class="cauldron-wrapper">
                 <span class="cauldron-icon">
-                    <span class="cauldron-body"></span>
+                    <span class="cauldron-body @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")"></span>
                     <span class="brew-surface"></span>
                     <span class="bubble b1"></span>
                     <span class="bubble b2"></span>

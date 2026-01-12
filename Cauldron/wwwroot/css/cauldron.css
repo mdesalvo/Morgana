@@ -10,24 +10,34 @@
     background: radial-gradient(circle at center,
     rgba(30, 27, 75, 0.4) 0%,
     rgba(15, 23, 42, 0.8) 100%);
-    border: 2px solid rgba(139, 92, 246, 0.4);
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;
     overflow: visible;
     padding: 0;
-    box-shadow: inset 0 0 20px rgba(139, 92, 246, 0.1);
+}
+.send-button.morgana {
+    border: 2px solid var(--primary-color);
+    box-shadow: inset 0 0 20px var(--primary-color);
+}
+.send-button.agent {
+    border: 2px solid var(--secondary-color);
+    box-shadow: inset 0 0 20px var(--secondary-color);
 }
 
 .send-button:hover:not(:disabled) {
     transform: scale(1.1);
-    border-color: rgba(139, 92, 246, 0.7);
-    box-shadow:
-            0 0 25px rgba(139, 92, 246, 0.5),
-            inset 0 0 30px rgba(139, 92, 246, 0.15);
     background: radial-gradient(circle at center,
     rgba(40, 35, 95, 0.5) 0%,
     rgba(15, 23, 42, 0.9) 100%);
+}
+.send-button.morgana:hover:not(:disabled) {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 25px var(--primary-color), inset 0 0 30px var(--primary-color);
+}
+.send-button.agent:hover:not(:disabled) {
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 25px var(--secondary-color), inset 0 0 30px var(--secondary-color);
 }
 
 .send-button:disabled {
@@ -60,14 +70,25 @@
     width: 34px;
     height: 28px;
     background: linear-gradient(180deg, #252538 0%, #16161f 40%, #0d0d15 100%);
-    border: 2.5px solid #8b5cf6;
     border-radius: 45% 45% 50% 50%;
+}
+.cauldron-body.morgana {
+    border: 2.5px solid var(--primary-color);
+    box-shadow: 
+        inset 0 4px 12px var(--primary-color),
+        inset 0 -3px 8px rgba(0, 0, 0, 0.9),
+        inset 2px 0 6px rgba(0, 0, 0, 0.5),
+        inset -2px 0 6px rgba(0, 0, 0, 0.5),
+        0 3px 10px rgba(0, 0, 0, 0.6);
+}
+.cauldron-body.agent {
+    border: 2.5px solid var(--secondary-color);
     box-shadow:
-            inset 0 4px 12px rgba(139, 92, 246, 0.4),
-            inset 0 -3px 8px rgba(0, 0, 0, 0.9),
-            inset 2px 0 6px rgba(0, 0, 0, 0.5),
-            inset -2px 0 6px rgba(0, 0, 0, 0.5),
-            0 3px 10px rgba(0, 0, 0, 0.6);
+        inset 0 4px 12px var(--secondary-color),
+        inset 0 -3px 8px rgba(0, 0, 0, 0.9),
+        inset 2px 0 6px rgba(0, 0, 0, 0.5),
+        inset -2px 0 6px rgba(0, 0, 0, 0.5),
+        0 3px 10px rgba(0, 0, 0, 0.6);
 }
 
 .cauldron-body::before {
@@ -78,11 +99,19 @@
     transform: translateX(-50%);
     width: 32px;
     height: 4px;
-    background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
     border-radius: 50%;
+}
+.cauldron-body.morgana::before {
+    background: linear-gradient(180deg, var(--primary-color) 0%, #7c3aed 100%);
     box-shadow:
-            0 0 8px rgba(139, 92, 246, 0.8),
-            inset 0 -1px 2px rgba(0, 0, 0, 0.5);
+        0 0 8px var(--primary-color),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.5);
+}
+.cauldron-body.agent::before {
+    background: linear-gradient(180deg, var(--secondary-color) 0%, #7c3aed 100%);
+    box-shadow:
+        0 0 8px var(--secondary-color),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .brew-surface {
@@ -125,27 +154,23 @@
     z-index: 1;
     box-shadow: 0 0 4px rgba(167, 139, 250, 0.8);
 }
-
 .bubble.b1 {
     bottom: 14px;
     left: 35%;
     animation: bubbleRise1 3s ease-in-out infinite;
 }
-
 .bubble.b2 {
     bottom: 14px;
     left: 50%;
     animation: bubbleRise2 3.5s ease-in-out infinite;
     animation-delay: 0.5s;
 }
-
 .bubble.b3 {
     bottom: 14px;
     left: 65%;
     animation: bubbleRise3 3.2s ease-in-out infinite;
     animation-delay: 1s;
 }
-
 .bubble.b4 {
     bottom: 14px;
     left: 42%;
@@ -219,20 +244,17 @@
     opacity: 0;
     filter: blur(1px);
 }
-
 .steam.st1 {
     bottom: 34px;
     left: 40%;
     animation: steamRise1 4s ease-out infinite;
 }
-
 .steam.st2 {
     bottom: 34px;
     left: 55%;
     animation: steamRise2 4.5s ease-out infinite;
     animation-delay: 1s;
 }
-
 .steam.st3 {
     bottom: 34px;
     left: 48%;
@@ -305,9 +327,9 @@
     width: 56px;
     height: 56px;
     background: radial-gradient(circle,
-    rgba(167, 139, 250, 0.6) 0%,
-    rgba(139, 92, 246, 0.4) 40%,
-    transparent 70%);
+        rgba(167, 139, 250, 0.6) 0%,
+        rgba(139, 92, 246, 0.4) 40%,
+        transparent 70%);
     border-radius: 50%;
     z-index: 1;
     opacity: 0;
@@ -337,35 +359,29 @@
     opacity: 0;
     z-index: 2;
     box-shadow:
-            0 0 8px rgba(255, 255, 255, 0.9),
-            0 0 12px rgba(167, 139, 250, 0.6);
+        0 0 8px rgba(255, 255, 255, 0.9),
+        0 0 12px rgba(167, 139, 250, 0.6);
 }
-
 .send-button .sparkle.s1 {
     top: 12%;
     left: 18%;
 }
-
 .send-button .sparkle.s2 {
     top: 18%;
     right: 15%;
 }
-
 .send-button .sparkle.s3 {
     bottom: 20%;
     left: 15%;
 }
-
 .send-button .sparkle.s4 {
     top: 25%;
     left: 45%;
 }
-
 .send-button .sparkle.s5 {
     bottom: 28%;
     right: 20%;
 }
-
 .send-button .sparkle.s6 {
     top: 35%;
     right: 12%;
@@ -373,25 +389,30 @@
 
 .send-button.sending {
     animation: buttonPulse 1.5s ease-in-out infinite;
-    border-color: rgba(167, 139, 250, 1);
-    box-shadow:
-            0 0 40px rgba(139, 92, 246, 0.8),
-            0 0 80px rgba(139, 92, 246, 0.4),
-            inset 0 0 20px rgba(139, 92, 246, 0.2);
+}
+.send-button.sending.morgana {
+    animation: buttonPulse 1.5s ease-in-out infinite;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 40px var(--primary-color), 0 0 80px var(--primary-color), inset 0 0 20px var(--primary-color);
+}
+.send-button.sending.agent {
+    animation: buttonPulse 1.5s ease-in-out infinite;
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 40px var(--secondary-color), 0 0 80px var(--secondary-color), inset 0 0 20px var(--secondary-color);
 }
 
 @keyframes buttonPulse {
     0%, 100% {
         transform: scale(1);
         box-shadow:
-                0 0 40px rgba(139, 92, 246, 0.8),
-                0 0 80px rgba(139, 92, 246, 0.4);
+            0 0 40px rgba(139, 92, 246, 0.8),
+            0 0 80px rgba(139, 92, 246, 0.4);
     }
     50% {
         transform: scale(1.08);
         box-shadow:
-                0 0 60px rgba(167, 139, 250, 1),
-                0 0 120px rgba(167, 139, 250, 0.6);
+            0 0 60px rgba(167, 139, 250, 1),
+            0 0 120px rgba(167, 139, 250, 0.6);
     }
 }
 
