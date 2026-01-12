@@ -240,8 +240,13 @@ body {
     resize: none;
 }
 
-.message-input:focus {
+.message-input.morgana:focus {
     border-color: var(--primary-color);
+    outline: none;
+}
+
+.message-input.agent:focus {
+    border-color: var(--secondary-color);
     outline: none;
 }
 

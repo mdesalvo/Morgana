@@ -123,8 +123,7 @@
             placeholder="Consult @(currentAgentName)..."
             rows="1"
             disabled="@IsTextareaDisabled"
-            class="message-input"
-        ></textarea>
+            class="message-input @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")"></textarea>
         <button
             @onclick="SendMessage"
             disabled="@IsButtonDisabled"
