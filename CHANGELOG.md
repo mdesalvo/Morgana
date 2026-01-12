@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Fixed
 - FSM behavior of supervisor caused unregistration of timeout handler, leading to dead-letters at timeout
 - Typing bubble color was always tied to color scheme of "Morgana" agent
+- Textarea was always tied to color scheme of "Morgana" agent
 
 ### 🚀 Future Enablement
 This release unlocks:
