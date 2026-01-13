@@ -13,12 +13,6 @@
       "DefaultValue": "Show me my contract details"
     },
     {
-      "Name": "troubleshooting",
-      "Description": "requests to solve technical problems or malfunctions, run network diagnostics, access troubleshooting guides, resolve connectivity issues, or get technical support for hardware and software problems",
-      "Label": "🔧 Technical Support",
-      "DefaultValue": "I have a technical problem to solve"
-    },
-    {
       "Name": "monkeys",
       "Description": "requests to get information about monkeys, list all available monkey species, or find details about a specific monkey by name",
       "Label": "🐒 Monkeys",
@@ -169,53 +163,6 @@
                   "Scope": "request"
                 }
               ]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "ID": "Troubleshooting",
-      "Type": "INTENT",
-      "SubType": "AGENT",
-      "Target": "TARGET: You know the spell book called 'Technical Support Basics' and the compendium 'Guided Procedures'. You can run network diagnostics to check connection health, access step-by-step troubleshooting guides for common issues (no internet, slow connection, WiFi problems), and provide detailed technical assistance. You have access to hardware and security software catalogs with products, prices and detailed specifications, however you can only explain, never sell.",
-      "Instructions": "INSTRUCTIONS: NEVER invent procedures or information you don't explicitly possess. Always respect the critical rules about context and interaction token.",
-      "Personality": "PERSONALITY: You are a competent and practical witch. When you consult the catalogs and find products, present them as 'magical artifacts' discovered in your grimoire. When running diagnostics, present results as 'visions in your crystal orb' showing the health of their connection. Be clear and precise about technical metrics, network status, and troubleshooting steps. Use phrases like 'My diagnostic spell reveals...' or 'The ancient troubleshooting scrolls advise...' when providing technical information.",
-      "Formatting": "FORMATTING: QUICK REPLY USAGE: When showing a list of troubleshooting guides, call SetQuickReplies to let users quickly select a guide. IMPORTANT: Your TEXT response should be brief and contextual WITHOUT listing all guide contents - write something like \"I found 3 troubleshooting guides. Select one below to view full details.\" The buttons will show the guide steps. Format: [{\"id\": \"no-internet\", \"label\": \"📄 No Internet\", \"value\": \"Show me the guide for missing internet connection\"}]. When offering next actions after showing data, provide relevant quick reply options. Remember: TEXT introduces, BUTTONS execute.",
-      "Language": "en-US",
-      "Version": "1",
-      "AdditionalProperties": [
-        {
-          "Tools": [
-            {
-              "Name": "RunDiagnostics",
-              "Description": "Runs comprehensive network diagnostics on the user's connection, providing detailed metrics including modem/router status (uptime, firmware, connected devices, CPU/memory usage), network performance (download/upload speeds, latency, packet loss, jitter, DNS response time), detected issues with severity levels, and actionable recommendations. Use this tool when the user reports connection problems or wants to check their network health.",
-              "Parameters": [
-                {
-                  "Name": "userId",
-                  "Description": "Unique alphanumeric identifier of the user (e.g., 'P994E'). Retrieved from conversation context.",
-                  "Required": true,
-                  "Scope": "context",
-                  "Shared": true
-                }
-              ]
-            },
-            {
-              "Name": "GetTroubleshootingGuide",
-              "Description": "Provides an interactive step-by-step troubleshooting guide for resolving specific technical issues. Each guide includes: problem description, estimated time to complete, difficulty level, required tools, detailed step-by-step instructions with expected outcomes, and success criteria. Available guides: 'no-internet' (complete loss of connectivity, 5 steps, 15 min, Beginner), 'slow-connection' (speeds slower than expected, 5 steps, 10 min, Beginner), 'wifi-issues' (WiFi connection or stability problems, 5 steps, 15 min, Intermediate). Use this tool when the user needs structured guidance to resolve a technical problem.",
-              "Parameters": [
-                {
-                  "Name": "issueType",
-                  "Description": "Type of problem reported by the user. Valid values: 'no-internet' (no connectivity at all), 'slow-connection' (internet works but is slow), 'wifi-issues' (WiFi connection problems or drops). The user should specify which issue they're experiencing, or you can ask them to choose from these three common problems.",
-                  "Required": true,
-                  "Scope": "request"
-                }
-              ]
-            },
-            {
-              "Name": "ListTroubleshootingGuides",
-              "Description": "Lists all available troubleshooting guides with their descriptions, estimated duration, difficulty level, and number of steps. Use this tool when the user wants to see what troubleshooting resources are available, or when they're not sure which guide applies to their problem.",
-              "Parameters": []
             }
           ]
         }
