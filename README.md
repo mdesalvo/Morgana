@@ -73,8 +73,7 @@ graph LR
 
   G@{shape: rounded, label: "Guard"} -- 3. Prompts for language compliance --> LLM
 
-  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 5 Interacts for tools discovery .-> MCP@{shape: das, label: "MCP Server"}
-  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 6 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 5 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
 ```
 
 ### Actors Hierarchy
