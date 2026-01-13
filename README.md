@@ -64,9 +64,6 @@ graph LR
 ### High-Level Conversation Flow (Agent)
 
 ```mermaid
----
-title: Conversation flow (Agent)
----
 graph LR
   U@{shape: circle, label: "User"} -- Writes to Agent --> CM@{shape: rounded, label: "ConversationManager"}
   CM@{shape: rounded, label: "Manager"} -- 1. Continues conversation and engages actor --> SV@{shape: rounded, label: "Supervisor"}
