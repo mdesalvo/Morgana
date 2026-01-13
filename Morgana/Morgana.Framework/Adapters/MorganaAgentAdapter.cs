@@ -170,8 +170,8 @@ public class MorganaAgentAdapter
     /// </list>
     /// <para><strong>Output Format:</strong></para>
     /// <code>
-    /// ContextHandling: CRITICAL RULE ABOUT CONTEXT - Before asking for ANY information...
-    /// InteractiveToken: OPERATIONAL RULE ABOUT INTERACTION TOKEN '#INT#' - Ensure to respect...
+    /// ContextHandling: CRITICAL RULE CONTEXT - Before asking for ANY information...
+    /// InteractiveToken: OPERATIONAL RULE INTERACTION TOKEN - Ensure to respect...
     /// ToolParameterContextGuidance: BEFORE INVOKING THIS TOOL: call the GetContextVariable tool...
     /// </code>
     /// <para><strong>Usage:</strong></para>
@@ -183,7 +183,7 @@ public class MorganaAgentAdapter
         StringBuilder sb = new StringBuilder();
 
         foreach (Records.GlobalPolicy policy in policies.OrderBy(p => p.Type)
-                                                .ThenBy(p => p.Priority))
+                                                        .ThenBy(p => p.Priority))
         {
             sb.AppendLine($"{policy.Name}: {policy.Description}");
         }
@@ -216,8 +216,8 @@ public class MorganaAgentAdapter
     ///
     /// PERSONALITY: Your name is Morgana: you are a 'good witch'...
     ///
-    /// ContextHandling: CRITICAL RULE ABOUT CONTEXT - Before asking for ANY information...
-    /// InteractiveToken: OPERATIONAL RULE ABOUT INTERACTION TOKEN '#INT#'...
+    /// ContextHandling: CRITICAL RULE CONTEXT - Before asking for ANY information...
+    /// InteractiveToken: OPERATIONAL RULE INTERACTION TOKEN...
     ///
     /// INSTRUCTIONS: Ongoing conversation between you (assistant) and user...
     ///
@@ -241,6 +241,7 @@ public class MorganaAgentAdapter
         List<Records.GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
         StringBuilder sb = new StringBuilder();
 
+        // Morgana
         sb.AppendLine(morganaPrompt.Content);
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Personality);
@@ -252,6 +253,7 @@ public class MorganaAgentAdapter
         sb.AppendLine(morganaPrompt.Formatting);
         sb.AppendLine();
 
+        // Agents
         sb.AppendLine(agentPrompt.Content);
         sb.AppendLine();
         sb.AppendLine(agentPrompt.Personality);
@@ -357,12 +359,11 @@ public class MorganaAgentAdapter
     /// </remarks>
     public (AIAgent agent, MorganaContextProvider provider) CreateAgent(
         Type agentType,
+        string conversationId,
         Action<string, object>? sharedContextCallback = null)
     {
-        HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>();
-        if (intentAttribute == null)
-            throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
-
+        HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>() 
+                                                    ?? throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
         string intent = intentAttribute.Intent;
 
         logger.LogInformation($"Creating agent for intent '{intent}'...");
@@ -370,20 +371,35 @@ public class MorganaAgentAdapter
         Records.Prompt agentPrompt = promptResolverService.ResolveAsync(intent).GetAwaiter().GetResult();
 
         Records.ToolDefinition[] agentTools = [.. morganaPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools")
-                                            .Union(agentPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools"))];
+                                                    .Union(agentPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools"))];
 
-        MorganaContextProvider contextProvider = CreateContextProvider(intent, agentTools, sharedContextCallback);
+        MorganaContextProvider contextProvider = CreateContextProvider(
+            intent,
+            agentTools,
+            sharedContextCallback);
 
-        MorganaToolAdapter morganaToolAdapter = CreateToolAdapterForIntent(intent, agentTools, contextProvider);
+        MorganaToolAdapter morganaToolAdapter = CreateToolAdapterForIntent(
+            intent,
+            agentTools,
+            contextProvider);
 
         RegisterMCPTools(agentType, morganaToolAdapter);
 
         string instructions = ComposeAgentInstructions(agentPrompt);
 
         AIAgent agent = chatClient.CreateAIAgent(
-            instructions: instructions,
-            name: intent,
-            tools: [.. morganaToolAdapter.CreateAllFunctions()]);
+            new ChatClientAgentOptions
+            {
+                Name = intent,
+                ChatOptions = new ChatOptions
+                {
+                    AllowMultipleToolCalls = true,
+                    ConversationId = conversationId,
+                    Instructions = instructions,
+                    Tools = [.. morganaToolAdapter.CreateAllFunctions()],
+                    ToolMode = ChatToolMode.RequireAny
+                }
+            });
 
         return (agent, contextProvider);
     }
@@ -446,12 +462,11 @@ public class MorganaAgentAdapter
         IEnumerable<Records.ToolDefinition> tools,
         Action<string, object>? sharedContextCallback = null)
     {
-        List<string> sharedVariables = tools
+        List<string> sharedVariables = [.. tools
             .SelectMany(t => t.Parameters)
             .Where(p => p.Shared && string.Equals(p.Scope, "context", StringComparison.OrdinalIgnoreCase))
             .Select(p => p.Name)
-            .Distinct()
-            .ToList();
+            .Distinct()];
 
         logger.LogInformation(
             sharedVariables.Count > 0
