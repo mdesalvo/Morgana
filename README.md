@@ -40,29 +40,43 @@ Traditional chatbot systems often struggle with complexity—they either become 
 
 ## Architecture
 
-### High-Level Component Flow
+### High-Level Conversation Flow (Morgana)
+
+```mermaid
+graph LR
+  U@{shape: circle, label: "User"} -- Writes to Morgana --> CM@{shape: rounded, label: "ConversationManager"}
+  CM@{shape: rounded, label: "ConversationManager"} -- 1. Creates conversation and activates actor --> SV@{shape: rounded, label: "ConversationSupervisor"}
+
+  SV@{shape: rounded, label: "ConversationSupervisor"} -- 2. Activates actor and asks for language compliance --> G@{shape: rounded, label: "Guard"}
+  SV@{shape: rounded, label: "ConversationSupervisor"} -- 4. Activates actor and asks for intent classification --> C@{shape: rounded, label: "Classifier"}
+  SV@{shape: rounded, label: "ConversationSupervisor"} -- 6. Activates actor and asks for agent routing --> R@{shape: rounded, label: "Router"}
+
+  G@{shape: rounded, label: "Guard"} -- 3. Prompts for language compliance --> LLM
+
+  C@{shape: rounded, label: "Classifier"} -- 5. Prompts for intent classification --> LLM
+
+  R@{shape: rounded, label: "Router"} -- 7. Activates agent and delegates for intent handling --> MA@{shape: rounded, label: "Agent (loaded via plugin system)"}
+  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 8 Interacts for tools discovery .-> MCP@{shape: das, label: "MCP Server"}
+  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 9 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+```
+
+### High-Level Conversation Flow (Agent)
 
 ```mermaid
 ---
-config:
-  flowchart:
-    htmlLabels: true
+title: Conversation flow (Agent)
 ---
-graph TD
-  U@{shape: circle, label: "User"} -- Writes to Morgana --> CM@{shape: rounded, label: "ConversationManagerActor"}
-  CM@{shape: rounded, label: "ConversationManagerActor"} -- 1. Creates conversation and activates actor --> SV@{shape: rounded, label: "ConversationSupervisorActor"}
+graph LR
+  U@{shape: circle, label: "User"} -- Writes to Agent --> CM@{shape: rounded, label: "ConversationManager"}
+  CM@{shape: rounded, label: "ConversationManager"} -- 1. Continues conversation and engages actor --> SV@{shape: rounded, label: "ConversationSupervisor"}
 
-  SV@{shape: rounded, label: "ConversationSupervisorActor"} -- 2. Activates actor and asks for language compliance --> G@{shape: rounded, label: "GuardActor"}
-  SV@{shape: rounded, label: "ConversationSupervisorActor"} -- 4. Activates actor and asks for intent classification --> C@{shape: rounded, label: "ClassifierActor"}
-  SV@{shape: rounded, label: "ConversationSupervisorActor"} -- 6. Activates actor and asks for agent routing --> R@{shape: rounded, label: "RouterActor"}
+  SV@{shape: rounded, label: "ConversationSupervisor"} -- 2. Asks for language compliance --> G@{shape: rounded, label: "Guard"}
+  SV@{shape: rounded, label: "ConversationSupervisor"} -- 4. Engages agent --> MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"}
 
-  G@{shape: rounded, label: "GuardActor"} -- 3. Prompts for language compliance --> LLM
+  G@{shape: rounded, label: "Guard"} -- 3. Prompts for language compliance --> LLM
 
-  C@{shape: rounded, label: "ClassifierActor"} -- 5. Prompts for intent classification --> LLM
-
-  R@{shape: rounded, label: "RouterActor"} -- 7. Activates agent and delegates for intent handling --> MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"}
-  MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"} -. 8 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
-  MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"} -. 8 Interacts for tools discovery .-> MCP@{shape: das, label: "MCP Server"}
+  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 5 Interacts for tools discovery .-> MCP@{shape: das, label: "MCP Server"}
+  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 6 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
 ```
 
 ### Actors Hierarchy
