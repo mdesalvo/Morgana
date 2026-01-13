@@ -550,7 +550,7 @@ public static class Records
     /// </param>
     /// <param name="Type">Prompt type (e.g., "SYSTEM", "INTENT")</param>
     /// <param name="SubType">Prompt subtype (e.g., "AGENT", "ACTOR", "PRESENTATION")</param>
-    /// <param name="Content">Core prompt text defining role and capabilities</param>
+    /// <param name="Target">Core prompt text defining role and capabilities</param>
     /// <param name="Instructions">Behavioral rules and guidelines</param>
     /// <param name="Personality">Optional tone and character traits</param>
     /// <param name="Language">Language code (e.g., "en-US", "it-IT")</param>
@@ -562,7 +562,7 @@ public static class Records
         string ID,
         string Type,
         string SubType,
-        string Content,
+        string Target,
         string Instructions,
         string Formatting,
         string? Personality,

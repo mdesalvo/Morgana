@@ -72,7 +72,7 @@ public class GuardActor : MorganaActor
         {
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
-                $"{guardPrompt.Content}\n{guardPrompt.Instructions}",
+                $"{guardPrompt.Target}\n{guardPrompt.Instructions}",
                 req.Message);
 
             Records.GuardCheckResponse? result = JsonSerializer.Deserialize<Records.GuardCheckResponse>(response);

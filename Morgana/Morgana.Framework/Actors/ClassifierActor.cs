@@ -48,7 +48,7 @@ public class ClassifierActor : MorganaActor
         string formattedIntents = string.Join("|",
             intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
         Records.Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
-        classifierPromptContent = $"{classifierPrompt.Content.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
+        classifierPromptContent = $"{classifierPrompt.Target.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
 
         // Analyze incoming user messages to determine their underlying intent:
         // - Invokes LLM with pre-formatted intent definitions

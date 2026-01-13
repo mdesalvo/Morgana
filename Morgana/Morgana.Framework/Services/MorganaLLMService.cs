@@ -92,7 +92,7 @@ public class MorganaLLMService : ILLMService
     /// using the Morgana framework prompt as the system context.
     /// </remarks>
     public async Task<string> CompleteAsync(string conversationId, string prompt)
-        => await CompleteWithSystemPromptAsync(conversationId, morganaPrompt.Content, prompt);
+        => await CompleteWithSystemPromptAsync(conversationId, morganaPrompt.Target, prompt);
 
     /// <summary>
     /// Performs a completion with an explicit system prompt and user message.

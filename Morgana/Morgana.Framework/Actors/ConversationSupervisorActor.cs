@@ -188,7 +188,7 @@ public class ConversationSupervisorActor : MorganaActor
                 displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
 
             // Build LLM prompt
-            string systemPrompt = $"{presentationPrompt.Content}\n\n{presentationPrompt.Instructions}"
+            string systemPrompt = $"{presentationPrompt.Target}\n\n{presentationPrompt.Instructions}"
                 .Replace("((intents))", formattedIntents);
 
             actorLogger.Info("Calling LLM for presentation generation");

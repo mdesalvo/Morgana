@@ -200,12 +200,12 @@ public class MorganaAgentAdapter
     /// <remarks>
     /// <para><strong>Composition Order:</strong></para>
     /// <list type="number">
-    /// <item>Morgana Content (framework role definition)</item>
+    /// <item>Morgana Target (framework role definition)</item>
     /// <item>Morgana Personality (witch persona, magical tone)</item>
     /// <item>Global Policies (formatted critical and operational rules)</item>
     /// <item>Morgana Instructions (base conversation guidelines)</item>
     /// <item>Morgana Formatting (text formatting preferences)</item>
-    /// <item>Agent Content (domain-specific role, e.g., "You know the book of spells called 'Billing'")</item>
+    /// <item>Agent Target (domain-specific role, e.g., "You know the book of spells called 'Billing'")</item>
     /// <item>Agent Personality (domain-specific tone, e.g., "formal and pragmatic witch")</item>
     /// <item>Agent Instructions (domain-specific behavioral rules)</item>
     /// <item>Agent Formatting (domain-specific formatting overrides, if any)</item>
@@ -242,7 +242,7 @@ public class MorganaAgentAdapter
         StringBuilder sb = new StringBuilder();
 
         // Morgana
-        sb.AppendLine(morganaPrompt.Content);
+        sb.AppendLine(morganaPrompt.Target);
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Personality);
         sb.AppendLine();
@@ -254,7 +254,7 @@ public class MorganaAgentAdapter
         sb.AppendLine();
 
         // Agents
-        sb.AppendLine(agentPrompt.Content);
+        sb.AppendLine(agentPrompt.Target);
         sb.AppendLine();
         sb.AppendLine(agentPrompt.Personality);
         sb.AppendLine();
