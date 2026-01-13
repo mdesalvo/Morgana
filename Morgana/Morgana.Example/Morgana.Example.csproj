@@ -5,7 +5,7 @@
     <PackageId>Morgana.Example</PackageId>
     <OutputType>Library</OutputType>
     <UserSecretsId>9cd2f03f-b11c-4215-b59e-7972f4c11aca</UserSecretsId>
-    <Version>0.8.2</Version>
+    <Version>0.8.3</Version>
   </PropertyGroup>
 
   <ItemGroup>
