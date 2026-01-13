@@ -122,7 +122,7 @@
       "Version": "1",
       "AdditionalProperties": [
         {
-          "ProfanityTerms": [ "stupid", "idiot", "incompetent", "inept", "dumb", "you're useless" ]
+          "ProfanityTerms": [ "stupid", "fuck", "idiot", "incompetent", "inept", "dumb", "you're useless" ]
         },
         {
           "GuardAnswer": "((violation)). I ask you to maintain a respectful tone: I'm here to help you."
