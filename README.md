@@ -45,17 +45,18 @@ Traditional chatbot systems often struggle with complexity—they either become 
 ```mermaid
 graph LR
   U@{shape: circle, label: "User"} -- Writes to Morgana --> CM@{shape: rounded, label: "ConversationManager"}
-  CM@{shape: rounded, label: "ConversationManager"} -- 1. Creates conversation and activates actor --> SV@{shape: rounded, label: "ConversationSupervisor"}
+  CM@{shape: rounded, label: "Manager"} -- 1. Creates conversation and activates actor --> SV@{shape: rounded, label: "Supervisor"}
 
-  SV@{shape: rounded, label: "ConversationSupervisor"} -- 2. Activates actor and asks for language compliance --> G@{shape: rounded, label: "Guard"}
-  SV@{shape: rounded, label: "ConversationSupervisor"} -- 4. Activates actor and asks for intent classification --> C@{shape: rounded, label: "Classifier"}
-  SV@{shape: rounded, label: "ConversationSupervisor"} -- 6. Activates actor and asks for agent routing --> R@{shape: rounded, label: "Router"}
+  SV@{shape: rounded, label: "Supervisor"} -- 2. Activates actor and asks for language compliance --> G@{shape: rounded, label: "Guard"}
+  SV@{shape: rounded, label: "Supervisor"} -- 4. Activates actor and asks for intent classification --> C@{shape: rounded, label: "Classifier"}
+  SV@{shape: rounded, label: "Supervisor"} -- 6. Activates actor and asks for agent routing --> R@{shape: rounded, label: "Router"}
 
   G@{shape: rounded, label: "Guard"} -- 3. Prompts for language compliance --> LLM
 
   C@{shape: rounded, label: "Classifier"} -- 5. Prompts for intent classification --> LLM
 
   R@{shape: rounded, label: "Router"} -- 7. Activates agent and delegates for intent handling --> MA@{shape: rounded, label: "Agent (loaded via plugin system)"}
+
   MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 8 Interacts for tools discovery .-> MCP@{shape: das, label: "MCP Server"}
   MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 9 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
 ```
@@ -68,10 +69,10 @@ title: Conversation flow (Agent)
 ---
 graph LR
   U@{shape: circle, label: "User"} -- Writes to Agent --> CM@{shape: rounded, label: "ConversationManager"}
-  CM@{shape: rounded, label: "ConversationManager"} -- 1. Continues conversation and engages actor --> SV@{shape: rounded, label: "ConversationSupervisor"}
+  CM@{shape: rounded, label: "Manager"} -- 1. Continues conversation and engages actor --> SV@{shape: rounded, label: "Supervisor"}
 
-  SV@{shape: rounded, label: "ConversationSupervisor"} -- 2. Asks for language compliance --> G@{shape: rounded, label: "Guard"}
-  SV@{shape: rounded, label: "ConversationSupervisor"} -- 4. Engages agent --> MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"}
+  SV@{shape: rounded, label: "Supervisor"} -- 2. Asks for language compliance --> G@{shape: rounded, label: "Guard"}
+  SV@{shape: rounded, label: "Supervisor"} -- 4. Engages agent --> MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"}
 
   G@{shape: rounded, label: "Guard"} -- 3. Prompts for language compliance --> LLM
 
