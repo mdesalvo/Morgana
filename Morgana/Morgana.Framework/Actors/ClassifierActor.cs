@@ -18,10 +18,10 @@ namespace Morgana.Framework.Actors;
 public class ClassifierActor : MorganaActor
 {
     /// <summary>
-    /// Precomputed classifier prompt content with intent definitions embedded.
+    /// Precomputed classifier prompt target with intent definitions embedded.
     /// Built once during actor initialization for performance.
     /// </summary>
-    private readonly string classifierPromptContent;
+    private readonly string classifierPromptTarget;
 
     /// <summary>
     /// Initializes a new instance of the ClassifierActor.
@@ -48,7 +48,7 @@ public class ClassifierActor : MorganaActor
         string formattedIntents = string.Join("|",
             intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
         Records.Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
-        classifierPromptContent = $"{classifierPrompt.Target.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
+        classifierPromptTarget = $"{classifierPrompt.Target.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
 
         // Analyze incoming user messages to determine their underlying intent:
         // - Invokes LLM with pre-formatted intent definitions
@@ -78,7 +78,7 @@ public class ClassifierActor : MorganaActor
         {
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
-                classifierPromptContent,
+                classifierPromptTarget,
                 msg.Text);
 
             Records.ClassificationResponse? classificationResponse = JsonSerializer.Deserialize<Records.ClassificationResponse>(response);

@@ -8,22 +8,28 @@ using Morgana.Framework.Interfaces;
 namespace Morgana.Framework.Actors;
 
 /// <summary>
+/// <para>
 /// Main orchestration actor that supervises the conversation flow through a finite state machine.
 /// Coordinates guard checks, intent classification, agent routing, and follow-up handling.
 /// Manages presentation generation and tracks active agent state for multi-turn conversations.
+/// </para>
+/// <para>
+/// Every UserMessage (new request or follow-up) passes through GuardActor first.
+/// Guard check failure keeps FSM in current state, allowing user to retry without state change.
+/// </para>
 /// </summary>
 /// <remarks>
 /// <para><strong>State Machine:</strong></para>
 /// <list type="bullet">
-/// <item><term>Idle</term><description>Waiting for user messages. Routes to guard check or active agent follow-up.</description></item>
-/// <item><term>AwaitingGuardCheck</term><description>Waiting for content moderation result from GuardActor.</description></item>
-/// <item><term>AwaitingClassification</term><description>Waiting for intent classification result from ClassifierActor.</description></item>
+/// <item><term>Idle</term><description>Waiting for user messages. All messages are routed to guard check first.</description></item>
+/// <item><term>AwaitingGuardCheck</term><description>Waiting for content moderation result from GuardActor. Can transition to Classification or FollowUp based on activeAgent state.</description></item>
+/// <item><term>AwaitingClassification</term><description>Waiting for intent classification result from ClassifierActor (only for new requests).</description></item>
 /// <item><term>AwaitingAgentResponse</term><description>Waiting for specialized agent to process the request.</description></item>
 /// <item><term>AwaitingFollowUpResponse</term><description>Waiting for active agent to process follow-up message.</description></item>
 /// </list>
 /// <para><strong>Active Agent Tracking:</strong></para>
 /// <para>When an agent signals incomplete processing (IsCompleted = false), the supervisor remembers the active agent
-/// and routes subsequent messages directly to it until the agent signals completion.</para>
+/// and routes subsequent messages directly to it (after guard check) until the agent signals completion.</para>
 /// </remarks>
 public class ConversationSupervisorActor : MorganaActor
 {
@@ -81,44 +87,34 @@ public class ConversationSupervisorActor : MorganaActor
 
     /// <summary>
     /// Idle state: waiting for user messages or presentation requests.
-    /// Routes messages to guard check (new requests) or active agent (follow-ups).
+    /// ALL user messages route through guard check first (whether new request or follow-up).
     /// </summary>
     private void Idle()
     {
-        actorLogger.Info("→ State: Idle");
+        actorLogger.Info("↗ State: Idle");
 
         // Generate and send welcome message with quick reply buttons on conversation start
         ReceiveAsync<Records.GeneratePresentationMessage>(HandlePresentationRequestAsync);
         ReceiveAsync<Records.PresentationContext>(HandlePresentationGenerated);
 
         // Handle incoming user messages:
-        // - If active agent exists (multi-turn conversation): route directly to that agent → AwaitingFollowUpResponse
-        // - Otherwise (new request): send to GuardActor for content moderation → AwaitingGuardCheck
+        // ALL messages (new or follow-up) go through guard check first
         ReceiveAsync<Records.UserMessage>(async msg =>
         {
             IActorRef originalSender = Sender;
 
-            if (activeAgent != null)
-            {
-                actorLogger.Info("Active agent detected, routing to follow-up flow");
+            actorLogger.Info("User message received, routing through guard check");
 
-                await EngageActiveAgentInFollowupAsync(msg, originalSender);
-            }
-            else
-            {
-                actorLogger.Info("No active agent, starting new request flow");
+            Records.ProcessingContext ctx = new Records.ProcessingContext(msg, originalSender);
 
-                Records.ProcessingContext ctx = new Records.ProcessingContext(msg, originalSender);
+            _ = guard.Ask<Records.GuardCheckResponse>(
+                        new Records.GuardCheckRequest(msg.ConversationId, msg.Text), TimeSpan.FromSeconds(60))
+                     .PipeTo(
+                        Self,
+                        success: response => new Records.GuardCheckContext(response, ctx),
+                        failure: ex => new Status.Failure(ex));
 
-                _ = guard.Ask<Records.GuardCheckResponse>(
-                            new Records.GuardCheckRequest(msg.ConversationId, msg.Text), TimeSpan.FromSeconds(60))
-                         .PipeTo(
-                            Self,
-                            success: response => new Records.GuardCheckContext(response, ctx),
-                            failure: ex => new Status.Failure(ex));
-
-                Become(() => AwaitingGuardCheck(ctx));
-            }
+            Become(() => AwaitingGuardCheck(ctx));
         });
 
         Receive<Status.Failure>(HandleUnexpectedFailure);
@@ -281,9 +277,14 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
+    /// <para>
     /// AwaitingGuardCheck state: waiting for content moderation result from GuardActor.
-    /// On pass: transitions to AwaitingClassification.
-    /// On fail: sends violation message to client and returns to Idle.
+    /// This state is reached from BOTH new requests AND follow-ups.
+    /// </para>
+    /// <para>
+    /// On pass: transitions to next appropriate state (Classification for new, FollowUp for active agent)
+    /// On fail: sends violation message to client and returns to Idle (user can retry)
+    /// </para>
     /// </summary>
     /// <param name="ctx">Processing context containing original message and sender</param>
     private void AwaitingGuardCheck(Records.ProcessingContext ctx)
@@ -291,8 +292,9 @@ public class ConversationSupervisorActor : MorganaActor
         actorLogger.Info("→ State: AwaitingGuardCheck");
 
         // Handle content moderation result from GuardActor:
-        // - If compliant: forward to ClassifierActor for intent detection → AwaitingClassification
-        // - If violation detected: send rejection message to user and return → Idle
+        // - If compliant AND activeAgent exists: route to active agent (follow-up flow)
+        // - If compliant AND no activeAgent: route to classifier (new request flow)
+        // - If violation: send rejection message and return to Idle (allow user retry)
         ReceiveAsync<Records.GuardCheckContext>(async wrapper =>
         {
             if (!wrapper.Response.Compliant)
@@ -303,24 +305,48 @@ public class ConversationSupervisorActor : MorganaActor
                 string guardAnswer = guardPrompt.GetAdditionalProperty<string>("GuardAnswer")
                     .Replace("((violation))", wrapper.Response.Violation ?? "Content policy violation");
 
+                string currentAgentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
                 wrapper.Context.OriginalSender.Tell(new Records.ConversationResponse(
-                    guardAnswer, null, null, "Morgana", false));
+                    guardAnswer, ctx.Classification?.Intent, null, currentAgentName, false));
 
+                // Return to Idle - user can retry the message
                 Become(Idle);
                 return;
             }
 
-            actorLogger.Info("Message passed guard check, proceeding to classification");
+            actorLogger.Info("Message passed guard check");
 
-            _ = classifier
-                    .Ask<Records.ClassificationResult>(
-                        wrapper.Context.OriginalMessage, TimeSpan.FromSeconds(60))
-                    .PipeTo(
-                        Self,
-                        success: result => new Records.ClassificationContext(result, wrapper.Context, null),
-                        failure: ex => new Status.Failure(ex));
+            if (activeAgent != null)
+            {
+                actorLogger.Info($"Active agent exists, routing to follow-up flow with agent {activeAgent.Path}");
 
-            Become(() => AwaitingClassification(ctx));
+                // Route directly to active agent (follow-up)
+                _ = activeAgent
+                        .Ask<Records.AgentResponse>(
+                            new Records.AgentRequest(wrapper.Context.OriginalMessage.ConversationId, wrapper.Context.OriginalMessage.Text, null),
+                            TimeSpan.FromSeconds(60))
+                        .PipeTo(
+                            Self,
+                            success: response => new Records.FollowUpContext(response, wrapper.Context.OriginalSender),
+                            failure: ex => new Status.Failure(ex));
+
+                Become(() => AwaitingFollowUpResponse(wrapper.Context.OriginalSender));
+            }
+            else
+            {
+                actorLogger.Info("No active agent, proceeding to classification for new request");
+
+                // Route to classifier for new request
+                _ = classifier
+                        .Ask<Records.ClassificationResult>(
+                            wrapper.Context.OriginalMessage, TimeSpan.FromSeconds(60))
+                        .PipeTo(
+                            Self,
+                            success: result => new Records.ClassificationContext(result, wrapper.Context, null),
+                            failure: ex => new Status.Failure(ex));
+
+                Become(() => AwaitingClassification(ctx));
+            }
         });
 
         Receive<Status.Failure>(failure =>
@@ -338,6 +364,7 @@ public class ConversationSupervisorActor : MorganaActor
 
     /// <summary>
     /// AwaitingClassification state: waiting for intent classification result from ClassifierActor.
+    /// Only reached after guard check passes for NEW requests (no active agent).
     /// On success: forwards to RouterActor and transitions to AwaitingAgentResponse.
     /// On failure: sends error message to client and returns to Idle.
     /// </summary>
@@ -384,13 +411,14 @@ public class ConversationSupervisorActor : MorganaActor
 
     /// <summary>
     /// AwaitingAgentResponse state: waiting for specialized agent to process the request.
+    /// Only reached after classification for NEW requests.
     /// Handles both ActiveAgentResponse (from specialized agents) and AgentResponse (from router fallback).
     /// Updates active agent tracking based on agent completion status.
     /// </summary>
     /// <param name="ctx">Processing context containing original message, sender, and classification</param>
     /// <remarks>
     /// If agent signals incomplete (IsCompleted = false), the agent becomes "active" and subsequent messages
-    /// are routed directly to it until it signals completion.
+    /// are routed directly to it (after guard check) until it signals completion.
     /// </remarks>
     private void AwaitingAgentResponse(Records.ProcessingContext ctx)
     {
@@ -402,7 +430,7 @@ public class ConversationSupervisorActor : MorganaActor
         // 
         // If agent signals IsCompleted=false (multi-turn conversation needed):
         //   - Set activeAgent reference for future follow-up messages
-        //   - Subsequent user messages will route directly to this agent (bypass classification)
+        //   - Subsequent user messages will route to guard → active agent (bypass classification)
         // If agent signals IsCompleted=true:
         //   - Clear activeAgent reference
         //   - Next user message will go through full flow (guard → classifier → router)
@@ -415,72 +443,72 @@ public class ConversationSupervisorActor : MorganaActor
             switch (wrapper.Response)
             {
                 case Records.ActiveAgentResponse activeAgentResponse:
-                {
-                    int quickRepliesCount = activeAgentResponse.QuickReplies?.Count ?? 0;
-                    actorLogger.Info($"Received ActiveAgentResponse from {activeAgentResponse.AgentRef.Path}, completed: {activeAgentResponse.IsCompleted}, quickReplies: {quickRepliesCount}");
-
-                    if (!activeAgentResponse.IsCompleted)
                     {
-                        activeAgent = activeAgentResponse.AgentRef;
-                        activeAgentIntent = ctx.Classification?.Intent;
+                        int quickRepliesCount = activeAgentResponse.QuickReplies?.Count ?? 0;
+                        actorLogger.Info($"Received ActiveAgentResponse from {activeAgentResponse.AgentRef.Path}, completed: {activeAgentResponse.IsCompleted}, quickReplies: {quickRepliesCount}");
 
-                        actorLogger.Info($"Active agent set to {activeAgent.Path} with intent {activeAgentIntent}");
+                        if (!activeAgentResponse.IsCompleted)
+                        {
+                            activeAgent = activeAgentResponse.AgentRef;
+                            activeAgentIntent = ctx.Classification?.Intent;
+
+                            actorLogger.Info($"Active agent set to {activeAgent.Path} with intent {activeAgentIntent}");
+                        }
+                        else
+                        {
+                            activeAgent = null;
+                            activeAgentIntent = null;
+
+                            actorLogger.Info("Agent completed and cleared");
+                        }
+
+                        wrapper.Context.OriginalSender.Tell(new Records.ConversationResponse(
+                            activeAgentResponse.Response,
+                            wrapper.Context.Classification?.Intent,
+                            wrapper.Context.Classification?.Metadata,
+                            agentName,
+                            activeAgentResponse.IsCompleted,
+                            activeAgentResponse.QuickReplies));
+
+                        break;
                     }
-                    else
-                    {
-                        activeAgent = null;
-                        activeAgentIntent = null;
-
-                        actorLogger.Info("Agent completed and cleared");
-                    }
-
-                    wrapper.Context.OriginalSender.Tell(new Records.ConversationResponse(
-                        activeAgentResponse.Response,
-                        wrapper.Context.Classification?.Intent,
-                        wrapper.Context.Classification?.Metadata,
-                        agentName,
-                        activeAgentResponse.IsCompleted,
-                        activeAgentResponse.QuickReplies));
-
-                    break;
-                }
                 case Records.AgentResponse routerFallbackResponse:
-                {
-                    actorLogger.Warning("Received AgentResponse instead of ActiveAgentResponse (router fallback)");
-
-                    if (!routerFallbackResponse.IsCompleted)
                     {
-                        activeAgent = router;
-                        activeAgentIntent = ctx.Classification?.Intent;
+                        actorLogger.Warning("Received AgentResponse instead of ActiveAgentResponse (router fallback)");
 
-                        actorLogger.Warning($"Fallback active agent = {router.Path} with intent {activeAgentIntent}");
+                        if (!routerFallbackResponse.IsCompleted)
+                        {
+                            activeAgent = router;
+                            activeAgentIntent = ctx.Classification?.Intent;
+
+                            actorLogger.Warning($"Fallback active agent = {router.Path} with intent {activeAgentIntent}");
+                        }
+                        else
+                        {
+                            activeAgent = null;
+                            activeAgentIntent = null;
+
+                            actorLogger.Info("Router fallback completed, active agent cleared");
+                        }
+
+                        wrapper.Context.OriginalSender.Tell(new Records.ConversationResponse(
+                            routerFallbackResponse.Response,
+                            wrapper.Context.Classification?.Intent,
+                            wrapper.Context.Classification?.Metadata,
+                            agentName,
+                            routerFallbackResponse.IsCompleted,
+                            routerFallbackResponse.QuickReplies));
+
+                        break;
                     }
-                    else
-                    {
-                        activeAgent = null;
-                        activeAgentIntent = null;
-
-                        actorLogger.Info("Router fallback completed, active agent cleared");
-                    }
-
-                    wrapper.Context.OriginalSender.Tell(new Records.ConversationResponse(
-                        routerFallbackResponse.Response,
-                        wrapper.Context.Classification?.Intent,
-                        wrapper.Context.Classification?.Metadata,
-                        agentName,
-                        routerFallbackResponse.IsCompleted,
-                        routerFallbackResponse.QuickReplies));
-
-                    break;
-                }
                 default:
-                {
-                    actorLogger.Error($"Unexpected message type: {wrapper.Response?.GetType()}");
+                    {
+                        actorLogger.Error($"Unexpected message type: {wrapper.Response?.GetType()}");
 
-                    wrapper.Context.OriginalSender.Tell(new Records.ConversationResponse("Unexpected internal error.", null, null, "Morgana", false));
+                        wrapper.Context.OriginalSender.Tell(new Records.ConversationResponse("Unexpected internal error.", null, null, "Morgana", false));
 
-                    break;
-                }
+                        break;
+                    }
             }
 
             Become(Idle);
@@ -501,6 +529,7 @@ public class ConversationSupervisorActor : MorganaActor
 
     /// <summary>
     /// AwaitingFollowUpResponse state: waiting for active agent to process follow-up message.
+    /// Only reached when guard check passes AND there's an active agent.
     /// Clears active agent if it signals completion.
     /// </summary>
     /// <param name="originalSender">Original sender reference for response routing</param>
@@ -509,15 +538,15 @@ public class ConversationSupervisorActor : MorganaActor
         actorLogger.Info("→ State: AwaitingFollowUpResponse");
 
         // Handle follow-up response from currently active agent (multi-turn conversation):
+        // - Guard check already passed before routing here
         // - Agent was previously set as active (IsCompleted=false in prior response)
-        // - User message routed directly to this agent (bypassing guard/classifier)
         // 
         // If agent signals IsCompleted=true:
         //   - Clear activeAgent reference (multi-turn conversation ended)
-        //   - Next user message will go through full flow again
+        //   - Next user message will go through full flow again (guard → classifier → router)
         // If agent signals IsCompleted=false:
         //   - Keep activeAgent reference (conversation continues)
-        //   - Next user message routes directly to same agent again
+        //   - Next user message routes directly to guard → same agent again
         //
         // Then return → Idle to await next user message
         ReceiveAsync<Records.FollowUpContext>(async wrapper =>
@@ -563,39 +592,6 @@ public class ConversationSupervisorActor : MorganaActor
     #region Helper Methods
 
     /// <summary>
-    /// Engages the currently active agent with a follow-up message.
-    /// Used when a multi-turn conversation is in progress.
-    /// </summary>
-    /// <param name="msg">User message to send to active agent</param>
-    /// <param name="originalSender">Original sender reference for response routing</param>
-    private async Task EngageActiveAgentInFollowupAsync(Records.UserMessage msg, IActorRef originalSender)
-    {
-        actorLogger.Info($"Follow-up detected, redirecting to active agent → {activeAgent!.Path}");
-
-        _ = activeAgent
-                .Ask<Records.AgentResponse>(
-                    new Records.AgentRequest(msg.ConversationId, msg.Text, null), TimeSpan.FromSeconds(60))
-                .PipeTo(
-                    Self,
-                    success: response => new Records.FollowUpContext(response, originalSender),
-                    failure: ex => new Status.Failure(ex));
-
-        Become(() => AwaitingFollowUpResponse(originalSender));
-    }
-
-    /// <summary>
-    /// Handles unexpected failures in the Idle state.
-    /// Sends error message to sender and remains in Idle state.
-    /// </summary>
-    /// <param name="failure">Failure information</param>
-    private void HandleUnexpectedFailure(Status.Failure failure)
-    {
-        actorLogger.Error(failure.Cause, "Unexpected failure in ConversationSupervisorActor");
-
-        Sender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
-    }
-
-    /// <summary>
     /// Gets the display name for an agent based on its intent.
     /// Returns "Morgana" for the "other" intent or missing intents.
     /// Returns "Morgana (Intent)" for specialized intents.
@@ -611,6 +607,18 @@ public class ConversationSupervisorActor : MorganaActor
         string capitalizedIntent = char.ToUpper(intent[0]) + intent[1..];
 
         return $"Morgana ({capitalizedIntent})";
+    }
+
+    /// <summary>
+    /// Handles unexpected failures in the Idle state.
+    /// Sends error message to sender and remains in Idle state.
+    /// </summary>
+    /// <param name="failure">Failure information</param>
+    private void HandleUnexpectedFailure(Status.Failure failure)
+    {
+        actorLogger.Error(failure.Cause, "Unexpected failure in ConversationSupervisorActor");
+
+        Sender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
     }
 
     #endregion
