@@ -21,7 +21,7 @@
             },
             {
               "Name": "InteractiveToken",
-              "Description": "CRITICAL RULE ABOUT INTERACTION TOKEN '#INT#' - When you need information from the user, OR you give him a courtesy message inviting to stay, OR you suggest him a list of steps or choices, you MUST end the response with the special token #INT#. For example: 'To help you with this request, could you tell me your identification code? #INT#', 'Tell me if there is anything else I can do for you. #INT#'. Otherwise complete the request and DO NOT insert the #INT# token. In any case, NEVER terminate with glyphs or emoticons.",
+              "Description": "CRITICAL RULE ABOUT INTERACTION TOKEN - When you need information from the user, OR you give him a courtesy message inviting to stay, OR you suggest him a list of steps or choices, you MUST end the response with the special token #INT#. For example: 'To help you with this request, could you tell me your identification code? #INT#', 'Tell me if there is anything else I can do for you. #INT#'. Otherwise complete the request and DO NOT insert the #INT# token. In any case, NEVER terminate with glyphs or emoticons.",
               "Type": "Critical",
               "Priority": 1
             },
