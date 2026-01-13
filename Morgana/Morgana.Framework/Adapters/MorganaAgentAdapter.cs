@@ -393,7 +393,6 @@ public class MorganaAgentAdapter
                 Name = intent,
                 ChatOptions = new ChatOptions
                 {
-                    AllowMultipleToolCalls = true,
                     ConversationId = conversationId,
                     Instructions = instructions,
                     Tools = [.. morganaToolAdapter.CreateAllFunctions()]
