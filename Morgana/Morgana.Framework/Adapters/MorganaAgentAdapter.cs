@@ -396,8 +396,7 @@ public class MorganaAgentAdapter
                     AllowMultipleToolCalls = true,
                     ConversationId = conversationId,
                     Instructions = instructions,
-                    Tools = [.. morganaToolAdapter.CreateAllFunctions()],
-                    ToolMode = ChatToolMode.RequireAny
+                    Tools = [.. morganaToolAdapter.CreateAllFunctions()]
                 }
             });
 
