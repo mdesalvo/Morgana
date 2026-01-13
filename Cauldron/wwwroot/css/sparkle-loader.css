@@ -4,13 +4,12 @@
 
 .magical-loader {
     text-align: center;
-    padding: 80px 20px;
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 400px;
+    padding-top: 20px;
 }
 
 /* Magic Sparkle Core - Main glowing center */
@@ -96,14 +95,12 @@
     height: 200px;
     animation: ringExpand1 3.5s ease-out infinite;
 }
-
 .glow-ring.ring-2 {
     width: 200px;
     height: 200px;
     animation: ringExpand2 3.5s ease-out infinite;
     animation-delay: 1.2s;
 }
-
 .glow-ring.ring-3 {
     width: 200px;
     height: 200px;
@@ -218,7 +215,6 @@
             0 0 35px rgba(167, 139, 250, 0.9);
     animation: sparkleOrbit1 4.5s ease-in-out infinite;
 }
-
 .magical-loader .sparkle.sp2 {
     top: 15%;
     right: 12%;
@@ -234,7 +230,6 @@
     animation: sparkleOrbit2 5s ease-in-out infinite;
     animation-delay: 0.6s;
 }
-
 .magical-loader .sparkle.sp3 {
     top: 30%;
     left: 8%;
@@ -251,7 +246,6 @@
     animation: sparkleOrbit3 5.5s ease-in-out infinite;
     animation-delay: 1.2s;
 }
-
 .magical-loader .sparkle.sp4 {
     top: 35%;
     right: 10%;
@@ -267,7 +261,6 @@
     animation: sparkleOrbit1 4.8s ease-in-out infinite;
     animation-delay: 1.8s;
 }
-
 .magical-loader .sparkle.sp5 {
     bottom: 30%;
     left: 12%;
@@ -284,7 +277,6 @@
     animation: sparkleOrbit2 5.3s ease-in-out infinite;
     animation-delay: 2.4s;
 }
-
 .magical-loader .sparkle.sp6 {
     bottom: 25%;
     right: 8%;
@@ -300,7 +292,6 @@
     animation: sparkleOrbit3 5.8s ease-in-out infinite;
     animation-delay: 3s;
 }
-
 .magical-loader .sparkle.sp7 {
     top: 50%;
     left: 5%;
@@ -316,7 +307,6 @@
     animation: sparkleOrbit1 5.1s ease-in-out infinite;
     animation-delay: 0.4s;
 }
-
 .magical-loader .sparkle.sp8 {
     top: 52%;
     right: 6%;
@@ -332,7 +322,6 @@
     animation: sparkleOrbit2 6s ease-in-out infinite;
     animation-delay: 1s;
 }
-
 .magical-loader .sparkle.sp9 {
     bottom: 15%;
     left: 18%;
@@ -349,7 +338,6 @@
     animation: sparkleOrbit3 4.9s ease-in-out infinite;
     animation-delay: 1.5s;
 }
-
 .magical-loader .sparkle.sp10 {
     bottom: 18%;
     right: 15%;
@@ -365,7 +353,6 @@
     animation: sparkleOrbit1 5.7s ease-in-out infinite;
     animation-delay: 2.1s;
 }
-
 .magical-loader .sparkle.sp11 {
     top: 22%;
     left: 50%;
@@ -381,7 +368,6 @@
     animation: sparkleOrbit2 5.4s ease-in-out infinite;
     animation-delay: 2.7s;
 }
-
 .magical-loader .sparkle.sp12 {
     bottom: 20%;
     left: 50%;
