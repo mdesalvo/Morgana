@@ -2,9 +2,8 @@
 
   <PropertyGroup>
     <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
-    <Title>Morgana.Startup</Title>
-    <PackageId>Morgana.Startup</PackageId>
-    <Version>0.8.3</Version>
+    <Title>Morgana.SignalR</Title>
+    <PackageId>Morgana.SignalR</PackageId>
   </PropertyGroup>
 
   <ItemGroup>

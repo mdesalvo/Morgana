@@ -1,11 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Title>Morgana.AgentsFramework</Title>
-    <PackageId>Morgana.Agents</PackageId>
+    <Title>Morgana.Framework</Title>
+    <PackageId>Morgana.Framework</PackageId>
     <OutputType>Library</OutputType>
-    <UserSecretsId>6e8b72f2-8424-4bc9-9f5c-957368571952</UserSecretsId>
-    <Version>0.8.3</Version>
   </PropertyGroup>
 
   <ItemGroup>
