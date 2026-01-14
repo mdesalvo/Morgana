@@ -25,6 +25,7 @@ This release introduces a new critical global policy **ToolGrounding** strictly 
 
 ### 🔄 Changed
 - Supervisor now works more strictly with Guard, ensuring every user message is checked for language safety and policy compliance
+- Better integration with Microsoft.Agents.AI by correctly providing AIContextProviderFactory to the AIAgent ctor
 
 ### 🐛 Fixed
 - Index.razor was not rendering quick replies via QuickReplyButton component
