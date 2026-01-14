@@ -10,7 +10,7 @@
         <img src="https://img.shields.io/badge/.NET-10.0-932BD4?logo=dotnet" alt=".NET 10"/>
         <img src="https://img.shields.io/badge/Akka.NET-932BD4?logo=nuget" alt="Akka.NET"/>
         <img src="https://img.shields.io/badge/Microsoft.Agents.AI-932BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
-        <img src="https://img.shields.io/badge/ModelContextProtocol-932BD4?logo=nuget" alt="ModelContextProtocol"/>
+        <img src="https://img.shields.io/badge/ModelContextProtocol.Core-932BD4?logo=nuget" alt="ModelContextProtocol.Core"/>
       </p>
     </td>
   </tr>
@@ -108,23 +108,23 @@ graph LR
 
 ### Actors Hierarchy
 
-#### 1. ConversationManagerActor
+#### 1. ConversationManager
 Coordinates and owns the lifecycle of a single user conversation session.
 
 **Responsibilities:**  
-- Creates and supervises the `ConversationSupervisorActor` for the associated conversation
+- Creates and supervises the `ConversationSupervisor` for the associated conversation
 - Acts as the stable entry point for all user messages belonging to one conversation ID
 - Forwards user messages to the supervisor and returns structured responses via SignalR
 - Ensures that each conversation maintains isolation and state continuity across requests
 - Terminates or resets session actors upon explicit user request or system shutdown
 
 **Key Characteristics:**  
-- One `ConversationManagerActor` per conversation/session
+- One `ConversationManager` per conversation/session
 - Persists for the entire life of the conversation unless explicitly terminated
 - Prevents accidental re-creation of supervisors or cross-session contamination
 
-#### 2. ConversationSupervisorActor
-The orchestrator that manages the entire conversation lifecycle. It coordinates all child agents and ensures proper message flow.
+#### 2. ConversationSupervisor
+The orchestrator that manages the entire conversation lifecycle. It coordinates all child actors and agents and ensures proper message flow.
 
 **Responsibilities:**
 - Receives incoming user messages
@@ -133,7 +133,7 @@ The orchestrator that manages the entire conversation lifecycle. It coordinates 
 - Delegates to appropriate coordinator agents
 - Handles error recovery and timeout scenarios
 
-#### 3. GuardActor
+#### 3. Guard
 A policy enforcement actor that validates every user message against business rules, brand guidelines and safety policies.
 
 **Capabilities:**
@@ -146,18 +146,17 @@ A policy enforcement actor that validates every user message against business ru
 **Configuration-Driven:**
 Guard behavior is defined in `morgana.json` with customizable violation terms and responses, making policy updates deployment-independent.
 
-#### 4. ClassifierActor
+#### 4. Classifier
 An intelligent classifier actor that analyzes user intent and determines the appropriate handling path.
 
 **Intent Recognition:**
 The classifier identifies specific intents configured in `agents.json`. **Example** built-in intents are:
 - `billing`: Fetch invoices or payment history
-- `troubleshooting`: Diagnose connectivity or device issues
 - `contract`: Handle service contracts and cancellations
 - `other`: General service inquiries
 - ...
 
-#### 5. RouterActor
+#### 5. Router
 Coordinator actor that resolves mappings of intents to engage specialized executor agents.
 This actor works as a smart router, dynamically resolving the appropriate Morgana agent based on classified intent.
 
@@ -165,7 +164,7 @@ This actor works as a smart router, dynamically resolving the appropriate Morgan
 RouterActor also serves as the **message bus for P2P context synchronization** between agents. When an agent updates a shared context variable, RouterActor broadcasts the update to all other agents, ensuring seamless information sharing across the system.
 
 #### 6. Morgana Agents (automatically loaded via Plugin System)
-Specialized agents with domain-specific knowledge and tool access. The system includes **4 example** agents that demonstrate both native tools and MCP integration, but **the architecture is fully extensible** to support any domain-specific intent via autodiscovery.
+Specialized agents with domain-specific knowledge and tool access. The system includes **3 example** agents that demonstrate both native tools and MCP integration, but **the architecture is fully extensible** to support any domain-specific intent via autodiscovery.
 
 **BillingAgent** (example - native tools)
 - **Tools**: `GetInvoices()`, `GetInvoiceDetails()`, `SetQuickReplies()`
@@ -173,17 +172,11 @@ Specialized agents with domain-specific knowledge and tool access. The system in
 - **Prompt**: Defined in `agents.json` under ID "Billing"
 - **Quick Replies**: Dynamically generates invoice selection buttons for improved UX
 
-**TroubleshootingAgent** (example - native tools)
-- **Tools**: `RunDiagnostics()`, `GetTroubleshootingGuide()`, `SetQuickReplies()`
-- **Purpose**: Diagnose connectivity issues, provide step-by-step troubleshooting
-- **Prompt**: Defined in `agents.json` under ID "Troubleshooting"
-- **Quick Replies**: Offers interactive guide selection (No Internet, Slow Speed, WiFi Issues)
-
 **ContractAgent** (example - native tools)
 - **Tools**: `GetContractDetails()`, `InitiateCancellation()`, `SetQuickReplies()`
 - **Purpose**: Handle contract modifications and termination requests
 - **Prompt**: Defined in `agents.json` under ID "Contract"
-- **Quick Replies**: Yes/No confirmation buttons for critical actions
+- **Quick Replies**: Dynamically provides contract section buttons for targeted support
 
 **MonkeyAgent** (example - **MCP-powered** 🐵)
 - **MCP Server**: `MonkeyMCP` (Azure Functions)
@@ -428,9 +421,9 @@ public void MergeSharedContext(Dictionary<string, object> sharedContext)
 }
 ```
 
-#### 3. RouterActor as Message Bus
+#### 3. Router as Message Bus
 
-RouterActor serves dual purposes:
+Router serves dual purposes:
 1. **Intent Routing**: Routes requests to appropriate agents
 2. **Context Bus**: Broadcasts shared context updates to all agents
 
@@ -528,7 +521,7 @@ private void HandleContextUpdate(ReceiveContextUpdate msg)
 - Creates `MorganaContextProvider` with shared variable names
 - Registers `OnSharedContextUpdate` callback during agent creation
 
-**RouterActor**
+**Router**
 - Receives `BroadcastContextUpdate` messages from agents
 - Broadcasts `ReceiveContextUpdate` to all agents except sender
 - Logs broadcast activity for observability
@@ -605,7 +598,7 @@ Agent: [shows invoice details immediately]
 
 The LLM has access to a **system tool** that enables dynamic button generation:
 
-**Tool Definition** (`morgana_en.json`):
+**Tool Definition** (`morgana.json`):
 ```json
 {
   "Name": "SetQuickReplies",
@@ -840,7 +833,7 @@ Morgana implements a **layered personality architecture** that creates consisten
 ```json
 {
   "ID": "Morgana",
-  "Content": "You are a modern and effective digital assistant...",
+  "Target": "You are a modern and effective digital assistant...",
   "Instructions": "Ongoing conversation with the user. Stay consistent...",
   "Personality": "Your name is Morgana: you are a 'good witch' who uses your knowledge of magic to formulate potions and spells to help the user..."
 }
@@ -850,7 +843,7 @@ Morgana implements a **layered personality architecture** that creates consisten
 ```json
 {
   "ID": "Billing",
-  "Content": "You're familiar with the book of potions and spells called 'Billing and Payments'...",
+  "Target": "You're familiar with the book of potions and spells called 'Billing and Payments'...",
   "Instructions": "NEVER invent procedures or information...",
   "Personality": "Be consistent with your character: let's say that in this specific role, you could be a fairly traditional witch who favors concreteness and pragmatism..."
 }
@@ -866,7 +859,7 @@ private string ComposeAgentInstructions(Prompt agentPrompt)
    var sb = new StringBuilder();
 
    // 1. Global role and capabilities
-   sb.AppendLine(morganaPrompt.Content);
+   sb.AppendLine(morganaPrompt.Target);
 
    // 2. Global personality (Morgana's character)
    if (!string.IsNullOrEmpty(morganaPrompt.Personality))
@@ -884,7 +877,7 @@ private string ComposeAgentInstructions(Prompt agentPrompt)
    sb.AppendLine();
 
    // 5. Agent-specific role and domain
-   sb.AppendLine(agentPrompt.Content);
+   sb.AppendLine(agentPrompt.Target);
 
    // 6. Agent-specific personality (specialized traits)
    if (!string.IsNullOrEmpty(agentPrompt.Personality))
@@ -909,10 +902,6 @@ private string ComposeAgentInstructions(Prompt agentPrompt)
 **ContractAgent**:
 - **Global**: Helpful, slightly mysterious, uses magical metaphors
 - **Agent-Specific**: Patient, professional, accustomed to cancellation requests
-
-**TroubleshootingAgent**:
-- **Global**: Helpful, slightly mysterious, uses magical metaphors
-- **Agent-Specific**: Technical but graceful, oriented to results, empathetic with frustrated users
 
 ### Benefits
 
@@ -962,7 +951,7 @@ Morgana treats prompts as **first-class project artifacts**, not hardcoded strin
   "ID": "billing",
   "Type": "INTENT",
   "SubType": "AGENT",
-  "Content": "Agent role and domain description",
+  "Target": "Agent role and domain description",
   "Personality": "Agent-specific character traits",
   "Instructions": "Behavioral rules and operational guidelines",
   "AdditionalProperties": [
@@ -1127,7 +1116,7 @@ This **fail-fast approach** ensures configuration errors are caught at startup, 
 
 ## Plugin System
 
-The system dynamically loads domain assemblies configured in `appsettings.json` under `Plugins:Assemblies`. At bootstrap, `PluginLoader` validates that each assembly contains at least one class extending `MorganaAgent`, otherwise it's skipped with a warning. This enables complete decoupling between framework (Morgana.AI) and application domains (e.g., Morgana.AI.Examples), while maintaining automatic discovery of agents and tools via reflection.
+The system dynamically loads domain assemblies configured in `appsettings.json` under `Plugins:Assemblies`. At bootstrap, `PluginLoader` validates that each assembly contains at least one class extending `MorganaAgent`, otherwise it's skipped with a warning. This enables complete decoupling between framework (Morgana.Framework) and application domains (e.g., Morgana.Examples), while maintaining automatic discovery of agents and tools via reflection.
 
 ### Configuration
 
@@ -1136,7 +1125,7 @@ The system dynamically loads domain assemblies configured in `appsettings.json` 
 {
   "Plugins": {
     "Assemblies": [
-      "Morgana.Example.dll" // Exposes 4 demo agents
+      "Morgana.Example.dll" // Exposes 3 demo agents
     ]
   }
 }
@@ -1156,7 +1145,7 @@ The system dynamically loads domain assemblies configured in `appsettings.json` 
 - **Runtime Extensibility**: Add new domains by dropping assemblies and updating configuration
 - **Validation at Startup**: Invalid plugins are caught early with clear diagnostics
 - **Multi-Domain Support**: Load multiple domain assemblies simultaneously
-- **Clean Separation**: Framework (Morgana.AI) and domains (*.Examples, *.YourDomain) remain independent
+- **Clean Separation**: Framework (Morgana.Framework) and domains (Morgana.Example, *.YourDomain) remain independent
 
 ## MCP Integration: Extending Agent Capabilities Dynamically
 
@@ -1247,7 +1236,7 @@ From the agent's perspective (and Morgana's orchestration layer), **there's no d
 
 ```csharp
 // Both execute identically through AIFunction interface
-await aiAgent.ExecuteAsync("GetInvoices", args);      // Native tool
+await aiAgent.ExecuteAsync("GetInvoices", args);        // Native tool
 await aiAgent.ExecuteAsync("get_monkey_journey", args); // MCP tool
 ```
 
@@ -1371,7 +1360,7 @@ Morgana provides native support for multiple LLM providers through a pluggable a
 
 **Supported Providers:**
 - **Azure OpenAI Service**: GPT-4 powered language understanding and generation
-- **Anthropic Claude**: Claude Sonnet 4.5 with advanced reasoning capabilities
+- **Anthropic Claude**: Claude Haiku/Sonnet/Opus 4.5 with advanced reasoning capabilities
 
 **Configuration:**
 LLM provider selection is managed through `appsettings.json`:
