@@ -42,40 +42,44 @@ Traditional chatbot systems often struggle with complexity—they either become 
 
 ## Architecture
 
-### High-Level Conversation Flow (Morgana)
+### Morgana Conversation Flow
 
 ```mermaid
 graph LR
-  U@{shape: circle, label: "User"} -- Writes to Morgana --> CM@{shape: rounded, label: "ConversationManager"}
-  CM@{shape: rounded, label: "Manager"} -- 1. Creates conversation and activates actor --> SV@{shape: rounded, label: "Supervisor"}
+  U@{shape: circle, label: "User"} -. Writes to Cauldron .-> CLD@{shape: rounded, label: "Cauldron"}
 
-  SV@{shape: rounded, label: "Supervisor"} -- 2. Activates actor and asks for language compliance --> G@{shape: rounded, label: "Guard"}
-  SV@{shape: rounded, label: "Supervisor"} -- 4. Activates actor and asks for intent classification --> C@{shape: rounded, label: "Classifier"}
-  SV@{shape: rounded, label: "Supervisor"} -- 6. Activates actor and asks for agent routing --> R@{shape: rounded, label: "Router"}
+  CLD@{shape: circle, label: "Cauldron"} -- 1. Engages Morgana --> CM@{shape: rounded, label: "ConversationManager"}
+  CM@{shape: rounded, label: "Manager"} -- 2. Creates conversation and activates actor --> SV@{shape: rounded, label: "Supervisor"}
 
-  G@{shape: rounded, label: "Guard"} -- 3. Prompts for language compliance --> LLM
+  SV@{shape: rounded, label: "Supervisor"} -- 3. Activates actor and asks for language compliance --> G@{shape: rounded, label: "Guard"}
+  SV@{shape: rounded, label: "Supervisor"} -- 5. Activates actor and asks for intent classification --> C@{shape: rounded, label: "Classifier"}
+  SV@{shape: rounded, label: "Supervisor"} -- 7. Activates actor and asks for agent routing --> R@{shape: rounded, label: "Router"}
 
-  C@{shape: rounded, label: "Classifier"} -- 5. Prompts for intent classification --> LLM
+  G@{shape: rounded, label: "Guard"} -. 4 Prompts for language compliance .-> LLM
 
-  R@{shape: rounded, label: "Router"} -- 7. Activates agent and delegates for intent handling --> MA@{shape: rounded, label: "Agent (loaded via plugin system)"}
+  C@{shape: rounded, label: "Classifier"} -. 6 Prompts for intent classification .-> LLM
 
-  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 8 Interacts for tools discovery .-> MCP@{shape: das, label: "MCP Server"}
-  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 9 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+  R@{shape: rounded, label: "Router"} -- 8. Activates agent and delegates for intent handling --> MA@{shape: rounded, label: "Agent (loaded via plugin system)"}
+
+  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 9 Interacts for tools discovery .-> MCP@{shape: das, label: "MCP Server"}
+  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 10 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
 ```
 
-### High-Level Conversation Flow (Agent)
+### Agent Conversation Flow
 
 ```mermaid
 graph LR
-  U@{shape: circle, label: "User"} -- Writes to Agent --> CM@{shape: rounded, label: "ConversationManager"}
-  CM@{shape: rounded, label: "Manager"} -- 1. Continues conversation and engages actor --> SV@{shape: rounded, label: "Supervisor"}
+  U@{shape: circle, label: "User"} -. Writes to Cauldron .-> CLD@{shape: rounded, label: "Cauldron"}
 
-  SV@{shape: rounded, label: "Supervisor"} -- 2. Asks for language compliance --> G@{shape: rounded, label: "Guard"}
-  SV@{shape: rounded, label: "Supervisor"} -- 4. Engages agent --> MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"}
+  CLD@{shape: circle, label: "Cauldron"} -- 1. Engages Morgana --> CM@{shape: rounded, label: "ConversationManager"}
+  CM@{shape: rounded, label: "Manager"} -- 2. Continues conversation and engages actor --> SV@{shape: rounded, label: "Supervisor"}
 
-  G@{shape: rounded, label: "Guard"} -- 3. Prompts for language compliance --> LLM
+  SV@{shape: rounded, label: "Supervisor"} -. 3 Asks for language compliance .-> G@{shape: rounded, label: "Guard"}
+  SV@{shape: rounded, label: "Supervisor"} -- 5. Engages agent --> MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"}
 
-  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 5 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+  G@{shape: rounded, label: "Guard"} -. 4 Prompts for language compliance .-> LLM
+
+  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 6 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
 ```
 
 ### Actors Hierarchy
