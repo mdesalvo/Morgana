@@ -25,20 +25,22 @@ This release introduces a new critical global policy **ToolGrounding** strictly 
 
 ### 🔄 Changed
 - Supervisor now works more strictly with Guard, ensuring every user message is checked for language safety and policy compliance
-- Better integration with Microsoft.Agents.AI by correctly providing AIContextProviderFactory to the AIAgent ctor
+- Better integration with Microsoft.Agents.AI by correctly providing `AIContextProviderFactory` to the `AIAgent` ctor
 
 ### 🐛 Fixed
-- Index.razor was not rendering quick replies via QuickReplyButton component
+- `Index.razor` was not rendering quick replies via QuickReplyButton component
 
 ### 🚀 Future Enablement
 This release unlocks:
-- AIContextProvider hooks can now be exploited for accessing AIContext before/after LLM roundtrips
+- `AIContextProvider` hooks can now be exploited for accessing `AIContext` before and after LLM roundtrips
+- Closure of an agent's conversation can now be given custom LLM-driven behavior (e.g: triggering a NPS)
+- Morgana has become a **language-safe and policy-compliant** conversational environment
 
 
 ## [0.8.3] - 2026-01-13
 
 ### 🐛 Fixed
-- Global policy "InteractiveToken" should have Type="Critical" 
+- Global policy `InteractiveToken` should have Type="Critical" 
 
 
 ## [0.8.2] - 2026-01-12
@@ -53,7 +55,7 @@ This release unlocks:
 ## [0.8.1] - 2026-01-11
 
 ### 🐛 Fixed
-- Morgana tools (GetContextVariable, SetContextVariable, SetQuickReplies) were not injected into MCP-only agents
+- Morgana tools (`GetContextVariable`, `SetContextVariable`, `SetQuickReplies`) were not injected into MCP-only agents
 
 ### 🚀 Future Enablement
 This release unlocks:
