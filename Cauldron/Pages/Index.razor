@@ -87,22 +87,10 @@
 
                             @if (message.QuickReplies is { Count: > 0 })
                             {
-                                <!-- Quick reply buttons (disabled after selection) -->
-                                <div class="quick-replies @(message.SelectedQuickReplyId != null ? "disabled" : "")">
-                                    @foreach (QuickReply reply in message.QuickReplies)
-                                    {
-                                        <button 
-                                            class="quick-reply-btn @(message.SelectedQuickReplyId == reply.Id ? "selected" : "")"
-                                            @onclick="() => SelectQuickReply(reply, message)"
-                                            disabled="@(message.SelectedQuickReplyId != null)">
-                                            @reply.Label
-                                            @if (message.SelectedQuickReplyId == reply.Id)
-                                            {
-                                                <span class="checkmark">✓</span>
-                                            }
-                                        </button>
-                                    }
-                                </div>
+                                <QuickReplyButton Replies="@message.QuickReplies"
+                                                  OnSelect="@((reply) => SelectQuickReply(reply, message))"
+                                                  IsDisabled="@(message.SelectedQuickReplyId != null)"
+                                                  SelectedReplyId="@message.SelectedQuickReplyId" />
                             }
 
                             <!-- Message timestamp -->
