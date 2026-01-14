@@ -46,40 +46,64 @@ Traditional chatbot systems often struggle with complexity—they either become 
 
 ```mermaid
 graph LR
-  U@{shape: circle, label: "User"} -. Writes to Cauldron .-> CLD@{shape: rounded, label: "Cauldron"}
+  %% Frontend
+  U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron\n(Morgana FE)"}
 
-  CLD@{shape: circle, label: "Cauldron"} -- 1. Engages Morgana --> CM@{shape: rounded, label: "ConversationManager"}
-  CM@{shape: rounded, label: "Manager"} -- 2. Creates conversation and activates actor --> SV@{shape: rounded, label: "Supervisor"}
+  %% Backend boundary
+  subgraph Morgana["Morgana"]
+    CM@{shape: rounded, label: "ConversationManager"}
+    SV@{shape: rounded, label: "Supervisor"}
 
-  SV@{shape: rounded, label: "Supervisor"} -- 3. Activates actor and asks for language compliance --> G@{shape: rounded, label: "Guard"}
-  SV@{shape: rounded, label: "Supervisor"} -- 5. Activates actor and asks for intent classification --> C@{shape: rounded, label: "Classifier"}
-  SV@{shape: rounded, label: "Supervisor"} -- 7. Activates actor and asks for agent routing --> R@{shape: rounded, label: "Router"}
+    G@{shape: rounded, label: "Guard"}
+    C@{shape: rounded, label: "Classifier"}
+    R@{shape: rounded, label: "Router"}
+    MA@{shape: rounded, label: "Agent (plugin system)"}
+  end
 
-  G@{shape: rounded, label: "Guard"} -. 4 Prompts for language compliance .-> LLM
+  %% FE → BE
+  CLD --> CM
+  CM -- 1. Creates conversation and activates actor --> SV
 
-  C@{shape: rounded, label: "Classifier"} -. 6 Prompts for intent classification .-> LLM
+  %% Internal BE flow
+  SV -- 2. Asks for language compliance --> G
+  SV -- 4. Asks for intent classification --> C
+  SV -- 6. Asks for agent routing --> R
+  R -- 7. Activates agent for intent handling --> MA
 
-  R@{shape: rounded, label: "Router"} -- 8. Activates agent and delegates for intent handling --> MA@{shape: rounded, label: "Agent (loaded via plugin system)"}
-
-  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 9 Interacts for tools discovery .-> MCP@{shape: das, label: "MCP Server"}
-  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 10 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+  %% External systems
+  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+  C -. 5 Prompts for intent classification .-> LLM
+  MA -. 8 MCP tool discovery .-> MCP@{shape: das, label: "MCP Server"}
+  MA -. 9 Intent handling .-> LLM
 ```
 
 ### Agent Conversation Flow
 
 ```mermaid
 graph LR
-  U@{shape: circle, label: "User"} -. Writes to Cauldron .-> CLD@{shape: rounded, label: "Cauldron"}
+  %% Frontend
+  U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron\n(Morgana FE)"}
 
-  CLD@{shape: circle, label: "Cauldron"} -- 1. Engages Morgana --> CM@{shape: rounded, label: "ConversationManager"}
-  CM@{shape: rounded, label: "Manager"} -- 2. Continues conversation and engages actor --> SV@{shape: rounded, label: "Supervisor"}
+  %% Backend boundary
+  subgraph Morgana["Morgana"]
+    CM@{shape: rounded, label: "ConversationManager"}
+    SV@{shape: rounded, label: "Supervisor"}
 
-  SV@{shape: rounded, label: "Supervisor"} -. 3 Asks for language compliance .-> G@{shape: rounded, label: "Guard"}
-  SV@{shape: rounded, label: "Supervisor"} -- 5. Engages agent --> MA@{shape: rounded, label: "MorganaAgent (loaded via plugin system)"}
+    G@{shape: rounded, label: "Guard"}
+    MA@{shape: rounded, label: "Agent (plugin system)"}
+  end
 
-  G@{shape: rounded, label: "Guard"} -. 4 Prompts for language compliance .-> LLM
+  %% FE → BE
+  CLD --> CM
+  CM -- 1. Continues conversation and engages actor --> SV
 
-  MA@{shape: rounded, label: "Agent (loaded via plugin system)"} -. 6 Interacts for intent handling .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+  %% Internal BE flow
+  SV -- 2. Asks for language compliance --> G
+  SV -- 4. Engages agent for intent handling --> MA
+
+  %% External systems
+  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+  MA -. 5 Intent handling .-> LLM
 ```
 
 ### Actors Hierarchy
