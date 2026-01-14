@@ -52,11 +52,10 @@
     <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-preview.260108.1" />
     <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.0.0-preview.260108.1" />
     <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.0.0-preview.260108.1" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.1.1" />
-    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.1.1" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.1.1-preview.1.25612.2" />
-    <!-- Agents (MCP) -->
-    <PackageReference Include="ModelContextProtocol.Core" Version="0.5.0-preview.1" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.2.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.2.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.2.0-preview.1.26063.2" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="0.6.0-preview.1" />
   </ItemGroup>
 
 </Project>
