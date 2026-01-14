@@ -26,6 +26,7 @@ This release introduces a new critical global policy **ToolGrounding** enforcing
 ### 🔄 Changed
 - Supervisor now works more strictly with Guard, ensuring every user message is checked for language safety and policy compliance
 - Better integration with Microsoft.Agents.AI by correctly providing `AIContextProviderFactory` to the `AIAgent` constructor
+- README has been slightly enhanced by replacing the ASCII diagram with more polite `mermaid` flow charts 
 
 ### 🐛 Fixed
 - `Index.razor` was not rendering quick replies via `QuickReplyButton` component
