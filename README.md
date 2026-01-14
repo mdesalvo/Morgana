@@ -18,11 +18,11 @@
 
 ## Overview
 
-Morgana is a modern **conversational AI framework** designed to handle complex scenarios through a sophisticated **multi-agent intent-driven architecture**. Built on cutting-edge .NET 10 and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that collaborate to understand, classify and resolve customer inquiries with precision and context awareness.
+Morgana is a **conversational AI framework** designed to handle complex scenarios through a sophisticated **multi-agent intent-driven architecture**. Built on cutting-edge .NET 10 and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that collaborate to understand, classify and resolve customer inquiries with precision and context awareness.
 
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
-Morgana kindly assists you with her spells and magical tomes the way you **need**, the way you **want**.
+Morgana kindly assists you with her enchants and magical tomes just the way you **need**, just the way you **want**.
 
 ## Core Philosophy
 
