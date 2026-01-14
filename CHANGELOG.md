@@ -32,7 +32,7 @@ This release introduces a new critical global policy **ToolGrounding** strictly 
 
 ### 🚀 Future Enablement
 This release unlocks:
-- Exploit AIContextProvider hooks for analyzing/manipulating AIContext before/after LLM roundtrips
+- AIContextProvider hooks can now be exploited for accessing AIContext before/after LLM roundtrips
 
 
 ## [0.8.3] - 2026-01-13
