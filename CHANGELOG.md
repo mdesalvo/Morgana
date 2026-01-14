@@ -30,6 +30,10 @@ This release introduces a new critical global policy **ToolGrounding** strictly 
 ### 🐛 Fixed
 - Index.razor was not rendering quick replies via QuickReplyButton component
 
+### 🚀 Future Enablement
+This release unlocks:
+- Exploit AIContextProvider hooks for analyzing/manipulating AIContext before/after LLM roundtrips
+
 
 ## [0.8.3] - 2026-01-13
 
