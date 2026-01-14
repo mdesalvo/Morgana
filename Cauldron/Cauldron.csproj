@@ -4,7 +4,6 @@
        <Title>Cauldron</Title>
        <PackageId>Cauldron</PackageId>
        <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
-       <PackageTags>signalr-hub blazor-server dotnet</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
