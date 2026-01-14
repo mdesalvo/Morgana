@@ -16,8 +16,10 @@ This release introduces a new critical global policy **ToolGrounding** strictly 
 ### ✨ Added
 **ConversationClosure**
 - When LLM decides to not emit #INT# token for conversation continuation, it is now instructed to generate a **soft-continuation set of quick replies** engaging the user in the choice of **staying** in the active conversation with the agent or **exiting** to Morgana. This should finally end the age of unexpected agent terminations.
+  
 **QuickReplyEscapeOptions**
 - When LLM generates quick replies coming from tool's analysis, it is now instructed to include 2 additional entries to give the user the chance to **continue** the active conversation with the agent by asking something more or **returning** back to Morgana. This should give an early exit-strategy to change the active agent.
+
 **ToolGrounding**
 - When LLM generates quick replies coming from tool's analysis, it is now instructed to **not invent capabilities or support paths** which are not expressely encoded in the tools. This should reduce the surface of AI hallucinations which could lead to unpredictable conversation paths.
 
