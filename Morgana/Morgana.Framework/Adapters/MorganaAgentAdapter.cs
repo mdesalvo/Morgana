@@ -390,7 +390,14 @@ public class MorganaAgentAdapter
         AIAgent agent = chatClient.CreateAIAgent(
             new ChatClientAgentOptions
             {
+                // Give the agent its AIContextProvider
+                AIContextProviderFactory = (aiContextProviderFactoryContext) => contextProvider,
+
+                // Give the agent its identifiers
+                Id = $"{intent.ToLower()}-{conversationId}",
                 Name = intent,
+
+                // Give the agent its instructions and tools
                 ChatOptions = new ChatOptions
                 {
                     ConversationId = conversationId,

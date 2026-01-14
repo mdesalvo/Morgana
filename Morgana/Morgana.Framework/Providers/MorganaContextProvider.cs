@@ -76,7 +76,7 @@ public class MorganaContextProvider : AIContextProvider
         IEnumerable<string>? sharedVariableNames = null)
     {
         this.logger = logger;
-        this.sharedVariableNames = new HashSet<string>(sharedVariableNames ?? []);
+        this.sharedVariableNames = [.. sharedVariableNames ?? []];
     }
 
     /// <summary>
