@@ -15,25 +15,25 @@ This release introduces a new critical global policy **ToolGrounding** strictly 
 
 ### ✨ Added
 **ConversationClosure**
-- When LLM decides to not emit #INT# token for conversation continuation, it is now instructed to generate a **soft-continuation set of quick replies** engaging the user in the choice of **staying** in the active conversation with the agent or **exiting** to Morgana. This should finally end the age of unexpected agent terminations.
+- When LLM decides to not emit #INT# token for conversation continuation, it is now instructed to generate a **soft-continuation set of quick replies** engaging the user in the choice of **staying** in the active conversation with the agent or **exiting** to Morgana. This should significantly drop occurrence of unexpected agent exits.
   
 **QuickReplyEscapeOptions**
-- When LLM generates quick replies coming from tool's analysis, it is now instructed to include 2 additional entries to give the user the chance to **continue** the active conversation with the agent by asking something more or **returning** back to Morgana. This should give an early exit-strategy to change the active agent.
+- When LLM generates quick replies coming from tool's analysis, it is now instructed to include 2 additional entries to give the user the chance to **continue** the active conversation with the agent by asking something more or **returning** back to Morgana. The last one has a primary color scheme indicating Morgana. This should enhance usability of quick replies by offering an early exit-strategy to change the active agent.
 
 **ToolGrounding**
-- When LLM generates quick replies coming from tool's analysis, it is now instructed to **not invent capabilities or support paths** which are not expressely encoded in the tools. This should reduce the surface of AI hallucinations which could lead to unpredictable conversation paths.
+- When LLM generates quick replies coming from tool's analysis, it is now instructed to **not invent capabilities or support paths** which are not expressely encoded in the tools. This should reduce the surface of AI hallucinations which could lead before to unpredictable conversation paths.
 
 ### 🔄 Changed
 - Supervisor now works more strictly with Guard, ensuring every user message is checked for language safety and policy compliance
-- Better integration with Microsoft.Agents.AI by correctly providing `AIContextProviderFactory` to the `AIAgent` ctor
+- Better integration with Microsoft.Agents.AI by correctly providing `AIContextProviderFactory` to the `AIAgent` constructor
 
 ### 🐛 Fixed
 - `Index.razor` was not rendering quick replies via `QuickReplyButton` component
 
 ### 🚀 Future Enablement
 This release unlocks:
-- `AIContextProvider` hooks can now be exploited for accessing `AIContext` before and after LLM roundtrips
-- Closure of an agent's conversation can now be given custom LLM-driven behavior (e.g: triggering a NPS)
+- `AIContextProvider` hooks can now be exploited for accessing `AIContext` **before and after LLM roundtrips**
+- Termination of an agent's conversation can now be given a custom LLM-driven behavior (e.g: triggering a NPS)
 - Morgana has become a **language-safe and policy-compliant** conversational environment
 
 
