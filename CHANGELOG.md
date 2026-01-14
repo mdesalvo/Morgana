@@ -11,7 +11,7 @@ This release introduces a new critical global policy **ConversationClosure** exp
 ### 🎯 Major Feature: QuickReplyEscapeOptions Policy
 This release introduces a new critical global policy **QuickReplyEscapeOptions** enriching quick replies coming from tools with 2 additional options letting the user **decide** whether to **continue** with the current agent by asking something else or **return** to Morgana.
 ### 🎯 Major Feature: ToolGrounding Policy
-This release introduces a new critical global policy **ToolGrounding** strictly enforcing quick replies emission rules to be **tied to effective agent's capabilities**, reducing the surface of AI hallucinations.
+This release introduces a new critical global policy **ToolGrounding** enforcing quick replies emission rules to be **tied to effective agent's capabilities**.
 
 ### ✨ Added
 **ConversationClosure**
