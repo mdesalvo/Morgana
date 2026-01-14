@@ -51,13 +51,13 @@ graph LR
 
   %% Backend boundary
   subgraph Morgana["Morgana"]
-    CM@{shape: rounded, label: "ConversationManager"}
+    CM@{shape: rounded, label: "Manager"}
     SV@{shape: rounded, label: "Supervisor"}
 
     G@{shape: rounded, label: "Guard"}
     C@{shape: rounded, label: "Classifier"}
     R@{shape: rounded, label: "Router"}
-    MA@{shape: rounded, label: "Agent (plugin system)"}
+    MA@{shape: rounded, label: "Agent"}
   end
 
   %% FE → BE
@@ -86,11 +86,11 @@ graph LR
 
   %% Backend boundary
   subgraph Morgana["Morgana"]
-    CM@{shape: rounded, label: "ConversationManager"}
+    CM@{shape: rounded, label: "Manager"}
     SV@{shape: rounded, label: "Supervisor"}
 
     G@{shape: rounded, label: "Guard"}
-    MA@{shape: rounded, label: "Agent (plugin system)"}
+    MA@{shape: rounded, label: "Agent"}
   end
 
   %% FE → BE
