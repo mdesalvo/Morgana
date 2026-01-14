@@ -6,9 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.9.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: ConversationClosure Policy
+This release introduces a new critical global policy **ConversationClosure** exploiting quick replies to give the user **explicit control** over whether to **continue** with the current agent or **return** to Morgana.
+### 🎯 Major Feature: QuickReplyEscapeOptions Policy
+This release introduces a new critical global policy **QuickReplyEscapeOptions** enriching quick replies coming from tools with 2 additional options letting the user **decide** whether to **continue** with the current agent by asking something else or **return** to Morgana.
+### 🎯 Major Feature: ToolGrounding Policy
+This release introduces a new critical global policy **ToolGrounding** strictly enforcing quick replies emission rules to be **tied to effective agent's capabilities**, reducing the surface of AI hallucinations.
+
+### ✨ Added
+**ConversationClosure**
+- When LLM decides to not emit #INT# token for conversation continuation, it is now instructed to generate a **soft-continuation set of quick replies** engaging the user in the choice of **staying** in the active conversation with the agent or **exiting** to Morgana. This should finally end the age of unexpected agent terminations.
+**QuickReplyEscapeOptions**
+- When LLM generates quick replies coming from tool's analysis, it is now instructed to include 2 additional entries to give the user the chance to **continue** the active conversation with the agent by asking something more or **returning** back to Morgana. This should give an early exit-strategy to change the active agent.
+**ToolGrounding**
+- When LLM generates quick replies coming from tool's analysis, it is now instructed to **not invent capabilities or support paths** which are not expressely encoded in the tools. This should reduce the surface of AI hallucinations which could lead to unpredictable conversation paths.
 
 ### 🔄 Changed
-- Supervisor now works with Guard at every user message, ensuring language safety and policy compliance
+- Supervisor now works more strictly with Guard, ensuring every user message is checked for language safety and policy compliance
+
+### 🐛 Fixed
+- Index.razor was not rendering quick replies via QuickReplyButton component
+
 
 ## [0.8.3] - 2026-01-13
 
