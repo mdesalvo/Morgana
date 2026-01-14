@@ -28,7 +28,7 @@ This release introduces a new critical global policy **ToolGrounding** strictly 
 - Better integration with Microsoft.Agents.AI by correctly providing `AIContextProviderFactory` to the `AIAgent` ctor
 
 ### 🐛 Fixed
-- `Index.razor` was not rendering quick replies via QuickReplyButton component
+- `Index.razor` was not rendering quick replies via `QuickReplyButton` component
 
 ### 🚀 Future Enablement
 This release unlocks:
