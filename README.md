@@ -47,10 +47,10 @@ Traditional chatbot systems often struggle with complexity—they either become 
 ```mermaid
 graph LR
   %% Frontend
-  U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron\n(Morgana FE)"}
+  U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron"}
 
   %% Backend boundary
-  subgraph Morgana["Morgana"]
+  subgraph Morgana["Morgana Framework"]
     CM@{shape: rounded, label: "Manager"}
     SV@{shape: rounded, label: "Supervisor"}
 
@@ -82,10 +82,10 @@ graph LR
 ```mermaid
 graph LR
   %% Frontend
-  U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron\n(Morgana FE)"}
+  U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron"}
 
   %% Backend boundary
-  subgraph Morgana["Morgana"]
+  subgraph Morgana["Morgana Framework"]
     CM@{shape: rounded, label: "Manager"}
     SV@{shape: rounded, label: "Supervisor"}
 
