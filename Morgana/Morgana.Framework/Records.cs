@@ -275,7 +275,8 @@ public static class Records
     public record QuickReply(
         [property: JsonPropertyName("id")] string Id,
         [property: JsonPropertyName("label")] string Label,
-        [property: JsonPropertyName("value")] string Value);
+        [property: JsonPropertyName("value")] string Value,
+        [property: JsonPropertyName("termination")] bool? Termination=false);
 
     /// <summary>
     /// LLM-generated presentation response from ConversationSupervisorActor.

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR.Client;
 using Cauldron.Messages;
+using System.Text.Json;
 
 namespace Cauldron.Services;
 
@@ -33,16 +34,16 @@ namespace Cauldron.Services;
 /// <para><strong>Usage in Index.razor:</strong></para>
 /// <code>
 /// @inject MorganaSignalRService SignalRService
-/// 
+///
 /// protected override async Task OnInitializedAsync()
 /// {
 ///     await SignalRService.StartAsync();
-///     
+///
 ///     SignalRService.OnMessageReceived += async (conversationId, text, timestamp, quickReplies, agentName, agentCompleted) =>
 ///     {
 ///         await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
 ///     };
-///     
+///
 ///     SignalRService.OnConnectionStateChanged += (connected) =>
 ///     {
 ///         isConnected = connected;
@@ -73,7 +74,7 @@ public class MorganaSignalRService : IAsyncDisposable
     /// </list>
     /// </remarks>
     public event Action<string, string, DateTime, List<QuickReply>?, string?, bool>? OnMessageReceived;
-    
+
     /// <summary>
     /// Event fired when SignalR connection state changes.
     /// Provides connection status for UI indicator updates.
@@ -144,8 +145,8 @@ public class MorganaSignalRService : IAsyncDisposable
         // Register handler for incoming messages from backend
         _hubConnection.On<MessageReceived>("ReceiveMessage", (message) =>
         {
-            _logger.LogInformation($"📩 Message received - Type: {message.MessageType}, QuickReplies: {message.QuickReplies?.Count ?? 0}, Agent: {message.AgentName ?? "Morgana"}, Completed: {message.AgentCompleted}");
-            
+            _logger.LogInformation($"📩 Message received - Type: {message.MessageType}, QuickReplies: { JsonSerializer.Serialize(message.QuickReplies ?? [])}, Agent: {message.AgentName ?? "Morgana"}, Completed: {message.AgentCompleted}");
+
             // Fire event to notify subscribers (typically Index.razor)
             OnMessageReceived?.Invoke(
                 message.ConversationId,

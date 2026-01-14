@@ -32,7 +32,7 @@ public class ConversationStartResponse
     /// Example: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
     /// </remarks>
     public string ConversationId { get; set; } = string.Empty;
-    
+
     /// <summary>
     /// Status message indicating successful conversation creation.
     /// Typically: "Conversation started successfully" or similar confirmation.

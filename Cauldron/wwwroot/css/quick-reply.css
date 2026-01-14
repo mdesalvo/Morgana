@@ -36,6 +36,10 @@
     box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 }
 
+.quick-reply-btn.termination {
+    background: var(--primary-color) !important;
+}
+
 @keyframes quickReplySlide {
     from {
         opacity: 0;

@@ -128,12 +128,16 @@ public class SignalRBridgeService : ISignalRBridgeService
             text = message.Text,
             timestamp = message.Timestamp,
             messageType = message.MessageType,
+
+            // Morgana quick replies -> Cauldron quick replies
             quickReplies = message.QuickReplies?.Select(qr => new
             {
                 id = qr.Id,
                 label = qr.Label,
-                value = qr.Value
+                value = qr.Value,
+                termination = qr.Termination == true
             }).ToList(),
+
             errorReason = message.ErrorReason,
             agentName = message.AgentName,
             agentCompleted = message.AgentCompleted

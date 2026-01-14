@@ -10,7 +10,7 @@
             <!-- Individual Quick Reply Button -->
             <!-- Staggered animation-delay creates cascading entrance effect -->
             <!-- Disabled state prevents clicks after one reply selected -->
-            <button class="quick-reply-btn @(IsReplySelected(reply.Reply.Id) ? "selected" : "") @(IsDisabled ? "disabled" : "")" 
+            <button class="quick-reply-btn @(reply.Reply.Termination ? "termination" : "") @(IsReplySelected(reply.Reply.Id) ? "selected" : "") @(IsDisabled ? "disabled" : "")"
                     style="animation-delay: @(reply.Index * 0.1)s"
                     disabled="@IsDisabled"
                     @onclick="() => OnReplyClick(reply.Reply)">

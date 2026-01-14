@@ -25,7 +25,7 @@ namespace Cauldron.Messages;
 ///   "Label": "📄 View Invoices",
 ///   "DefaultValue": "Show me my latest invoices"
 /// }
-/// 
+///
 /// → Becomes QuickReply:
 /// {
 ///   "Id": "billing",
@@ -47,7 +47,7 @@ public class QuickReply
     /// Used to track which button was clicked via ChatMessage.SelectedQuickReplyId.
     /// </remarks>
     public string Id { get; set; } = string.Empty;
-    
+
     /// <summary>
     /// Display text shown on the button.
     /// Typically includes an emoji and descriptive text (e.g., "📄 View Invoices").
@@ -62,7 +62,7 @@ public class QuickReply
     /// </list>
     /// </remarks>
     public string Label { get; set; } = string.Empty;
-    
+
     /// <summary>
     /// Message text sent to the backend when this quick reply is clicked.
     /// This becomes the user's message in the conversation flow.
@@ -80,4 +80,10 @@ public class QuickReply
     /// POST /api/conversation/{id}/message with body: { "text": "{Value}" }</para>
     /// </remarks>
     public string Value { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Special flag indicating that this QuickReply is the conversation termination hint.
+    /// It will be displayed in primary color to differentiate from the other quick replies.
+    /// </summary>
+    public bool Termination { get; set; }
 }
