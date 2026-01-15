@@ -363,7 +363,7 @@ public class MorganaContextProvider : AIContextProvider
             aiContext.Messages = [];
 
             sb.AppendLine("---BEGIN EPHEMERAL CONTEXT---");
-            sb.AppendLine("---Consider the following system messages as 'ephemeral hints' giving you insights and data relevant ONLY for this turn---");
+            sb.AppendLine("---Consider the following instructions as 'ephemeral hints' giving you insights and data relevant ONLY for this turn---");
             sb.AppendLine();
             foreach (KeyValuePair<string, string> kvp in EphemeralContext)
             {
