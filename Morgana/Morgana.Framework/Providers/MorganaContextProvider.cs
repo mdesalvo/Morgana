@@ -209,7 +209,7 @@ public class MorganaContextProvider : AIContextProvider
     // =========================================================================
 
     /// <summary>
-    /// Retrieves a variable from the agent's context.
+    /// Retrieves a variable from the agent's persistent context.
     /// Used by GetContextVariable tool to check if information is already available.
     /// </summary>
     public object? GetVariable(string variableName)
@@ -225,7 +225,7 @@ public class MorganaContextProvider : AIContextProvider
     }
 
     /// <summary>
-    /// Sets a variable in the agent's context.
+    /// Sets a variable in the agent's persistent context.
     /// If the variable is marked as shared, invokes the callback to notify RouterActor for broadcasting.
     /// </summary>
     public void SetVariable(string variableName, object variableValue)
@@ -242,8 +242,7 @@ public class MorganaContextProvider : AIContextProvider
     }
 
     /// <summary>
-    /// Removes a temporary variable from the agent's context, freeing memory immediately.
-    /// Use this for ephemeral variables that are no longer needed (e.g., "__pending_quick_replies").
+    /// Removes a temporary variable from the agent's persistent context, freeing memory immediately.
     /// </summary>
     public void DropVariable(string variableName)
     {

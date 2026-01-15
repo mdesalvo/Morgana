@@ -56,7 +56,6 @@ public class MorganaAgent : MorganaActor
     /// <summary>
     /// Context provider for reading and writing conversation variables.
     /// Manages both local (agent-specific) and shared (cross-agent) context.
-    /// Also used for quick reply storage/retrieval via special key "__pending_quick_replies".
     /// </summary>
     protected MorganaContextProvider contextProvider;
 
@@ -250,15 +249,11 @@ public class MorganaAgent : MorganaActor
     /// 5. Agent includes quick replies in AgentResponse
     /// 6. UI displays buttons to user
     /// </code>
-    /// <para><strong>Implementation Note:</strong></para>
-    /// <para>Retrieves quick replies from the shared ContextProvider using the special key "__pending_quick_replies".
-    /// MorganaTool.SetQuickReplies() stores them as JSON string, so we deserialize here.
-    /// The ContextProvider stores all values as JSON strings, not typed objects.</para>
     /// </remarks>
     protected List<Records.QuickReply>? GetQuickRepliesFromContext()
     {
         // Retrieve from context (ContextProvider stores as JSON string)
-        string? quickRepliesJson = contextProvider.GetVariable("__pending_quick_replies") as string;
+        string? quickRepliesJson = contextProvider.GetVariable("quick_replies") as string;
         if (!string.IsNullOrEmpty(quickRepliesJson))
         {
             try
@@ -270,7 +265,7 @@ public class MorganaAgent : MorganaActor
                     agentLogger.LogInformation($"Retrieved {quickReplies.Count} quick replies from context");
 
                     // Drop after retrieval to prevent stale buttons
-                    contextProvider.DropVariable("__pending_quick_replies");
+                    contextProvider.DropVariable("quick_replies");
 
                     return quickReplies;
                 }
@@ -280,7 +275,7 @@ public class MorganaAgent : MorganaActor
                 agentLogger.LogError(ex, "Failed to deserialize quick replies from context");
 
                 // Clear corrupted data
-                contextProvider.DropVariable("__pending_quick_replies");
+                contextProvider.DropVariable("quick_replies");
             }
         }
 

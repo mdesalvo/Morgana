@@ -62,7 +62,6 @@ public class MorganaTool
 
     /// <summary>
     /// Direct access to the context provider instance. Lazily evaluated from getContextProvider.
-    /// Used for quick reply storage and retrieval via special context key "__pending_quick_replies".
     /// </summary>
     protected MorganaContextProvider contextProvider => getContextProvider();
 
@@ -249,7 +248,7 @@ public class MorganaTool
             }
 
             // Store the JSON string of the quick replies under a reserved context variable
-            contextProvider.SetVariable("__pending_quick_replies", quickReplies);
+            contextProvider.SetVariable("quick_replies", quickReplies);
             toolLogger.LogInformation($"LLM set {parsedQuickReplies.Count} quick reply buttons via SetQuickReplies tool");
 
             // Return confirmation to LLM
