@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Ephemeral Context
+This release introduces the notion of **Ephemeral Context**, which permits tools to inject **transient instructions** into the agent's context to obtain a **single-turn LLM enrichment**.
+
+### ✨ Added
+**Ephemeral Context**
+- `MorganaContextProvider` gains support for a new `EphemeralContext` property representing a transient `AgentContext` available to agent's tools for providing locally-scoped hints and insights aimed at influencing the LLM behavior **only during the upcoming turn**. This data is **cleared** as soon as injected into the agent's prompt at the moment of invoking LLM.
+- Exploits `AIContextProvider.InvokingAsync` hook as it is designed by **Microsoft.Agents.AI** framework
+
+### 🚀 Future Enablement
+This release unlocks:
+- Design sophisticated turn-based LLM influencing strategies (e.g: data-aware LLM decisions, situation-aware LLM behaviors)
+
 
 ## [0.9.0] - 2026-01-14
 ### 🎯 Major Feature: ConversationClosure Policy
