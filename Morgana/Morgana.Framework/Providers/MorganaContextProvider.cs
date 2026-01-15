@@ -359,7 +359,6 @@ public class MorganaContextProvider : AIContextProvider
         if (EphemeralContext.Count > 0)
         {
             StringBuilder sb = new StringBuilder();
-            aiContext.Messages = [];
 
             sb.AppendLine("---BEGIN EPHEMERAL CONTEXT---");
             sb.AppendLine("---Consider the following instructions as 'ephemeral hints' giving you insights and data relevant ONLY for this turn---");
