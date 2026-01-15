@@ -363,6 +363,8 @@ public class MorganaContextProvider : AIContextProvider
             aiContext.Messages = [];
 
             sb.AppendLine("---BEGIN EPHEMERAL CONTEXT---");
+            sb.AppendLine("---Consider the following system messages as 'ephemeral hints' giving you insights and data relevant ONLY for this turn---");
+            sb.AppendLine();
             foreach (KeyValuePair<string, string> kvp in EphemeralContext)
             {
                 sb.AppendLine($"[{kvp.Key}] {kvp.Value}");
@@ -373,7 +375,7 @@ public class MorganaContextProvider : AIContextProvider
             }
             sb.AppendLine("---END EPHEMERAL CONTEXT---");
 
-            aiContext.Messages.Add(new ChatMessage(ChatRole.System, sb.ToString()));
+            aiContext.Instructions = sb.ToString();
 
             logger.LogInformation(
                 $"Injected {EphemeralContext.Count} ephemeral instruction(s) into LLM context");
