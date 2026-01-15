@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Morgana.Framework;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Adapters;
 using Morgana.Framework.Attributes;
@@ -18,7 +17,5 @@ public class ContractAgent : MorganaAgent
         MorganaAgentAdapter morganaAgentAdapter) : base(conversationId, llmService, promptResolverService, logger)
     {
         (aiAgent, contextProvider) = morganaAgentAdapter.CreateAgent(GetType(), conversationId, OnSharedContextUpdate);
-
-        ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
     }
 }

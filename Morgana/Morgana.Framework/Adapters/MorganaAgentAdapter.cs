@@ -1,6 +1,4 @@
-﻿using System.Reflection;
-using System.Text;
-using Microsoft.Agents.AI;
+﻿using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.Framework.Abstractions;
@@ -8,6 +6,8 @@ using Morgana.Framework.Attributes;
 using Morgana.Framework.Interfaces;
 using Morgana.Framework.Providers;
 using Morgana.Framework.Services;
+using System.Reflection;
+using System.Text;
 
 namespace Morgana.Framework.Adapters;
 

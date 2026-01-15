@@ -1,11 +1,11 @@
-using System.Reflection;
-using System.Text.Json;
 using Akka.Actor;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.Framework.Attributes;
 using Morgana.Framework.Interfaces;
 using Morgana.Framework.Providers;
+using System.Reflection;
+using System.Text.Json;
 
 namespace Morgana.Framework.Abstractions;
 
@@ -82,6 +82,7 @@ public class MorganaAgent : MorganaActor
     {
         this.agentLogger = agentLogger;
 
+        ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
         Receive<Records.ReceiveContextUpdate>(HandleContextUpdate);
     }
 
@@ -182,7 +183,7 @@ public class MorganaAgent : MorganaActor
     /// <para>On exception, returns a generic error message from Morgana prompt configuration.
     /// Always marks as completed (IsCompleted = true) to prevent stuck conversations.</para>
     /// </remarks>
-    protected async Task ExecuteAgentAsync(Records.AgentRequest req)
+    protected virtual async Task ExecuteAgentAsync(Records.AgentRequest req)
     {
         IActorRef? senderRef = Sender;
         Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync("Morgana");
@@ -200,11 +201,11 @@ public class MorganaAgent : MorganaActor
             // Additional multi-turn heuristic: if agent is ending with a direct question with "?",
             // may it be a "polite" way of engaging the user in the continuation of this intent,
             // or an intentional question finalized to obtain further informations
-            bool endsWithQuestion = llmResponseText.EndsWith("?");
+            bool endsWithQuestion = llmResponseText.EndsWith('?');
 
             // Retrieve quick replies from tools (if any tools set them during execution)
             List<Records.QuickReply>? quickReplies = GetQuickRepliesFromContext();
-            bool hasQuickReplies = quickReplies != null && quickReplies.Any();
+            bool hasQuickReplies = quickReplies?.Count > 0;
 
             // Request is completed when no further user engagement has been requested.
             // If agent offers QuickReplies, it MUST remain active to handle clicks

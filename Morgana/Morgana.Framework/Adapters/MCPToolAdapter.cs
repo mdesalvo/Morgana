@@ -1,10 +1,10 @@
+using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Protocol;
+using Morgana.Framework.Services;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text.Json;
-using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Protocol;
-using Morgana.Framework.Services;
 
 namespace Morgana.Framework.Adapters;
 

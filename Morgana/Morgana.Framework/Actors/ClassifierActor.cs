@@ -1,8 +1,8 @@
-using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Interfaces;
+using System.Text.Json;
 
 namespace Morgana.Framework.Actors;
 
