@@ -10,7 +10,7 @@ This release introduces the notion of **Ephemeral Context**, which permits tools
 
 ### ✨ Added
 **Ephemeral Context**
-- `MorganaContextProvider` gains support for a new `EphemeralContext` property representing a transient `AgentContext` available to agent's tools for providing locally-scoped hints and insights aimed at influencing the LLM behavior **only during the upcoming turn**. This data is **cleared** as soon as injected into the agent's prompt at the moment of invoking LLM.
+- `MorganaContextProvider` has a new `EphemeralContext` property representing a transient `AgentContext` available to agent's tools for providing locally-scoped hints and insights aimed at influencing the LLM behavior **only during the upcoming turn**. This data is **cleared** as soon as injected into the agent's prompt at the moment of invoking LLM.
 - Exploits `AIContextProvider.InvokingAsync` hook as it is designed by **Microsoft.Agents.AI** framework
 
 ### 🚀 Future Enablement
