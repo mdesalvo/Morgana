@@ -385,8 +385,6 @@ public class MorganaAgentAdapter
 
         RegisterMCPTools(agentType, morganaToolAdapter);
 
-        string instructions = ComposeAgentInstructions(agentPrompt);
-
         AIAgent agent = chatClient.CreateAIAgent(
             new ChatClientAgentOptions
             {
@@ -401,7 +399,7 @@ public class MorganaAgentAdapter
                 ChatOptions = new ChatOptions
                 {
                     ConversationId = conversationId,
-                    Instructions = instructions,
+                    Instructions = ComposeAgentInstructions(agentPrompt),
                     Tools = [.. morganaToolAdapter.CreateAllFunctions()]
                 }
             });
