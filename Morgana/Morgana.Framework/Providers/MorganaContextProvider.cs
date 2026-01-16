@@ -303,10 +303,10 @@ public class MorganaContextProvider : AIContextProvider
             json, AgentAbstractionsJsonUtilities.DefaultOptions);
 
         Dictionary<string, object> agentContext =
-            agentThread?["AgentContext"].Deserialize<Dictionary<string, object>>() ?? [];
+            agentThread?[nameof(AgentContext)].Deserialize<Dictionary<string, object>>() ?? [];
 
         HashSet<string> sharedVariableNames =
-            agentThread?["SharedVariableNames"].Deserialize<HashSet<string>>() ?? [];
+            agentThread?[nameof(SharedVariableNames)].Deserialize<HashSet<string>>() ?? [];
 
         logger.LogInformation(
             $"{nameof(MorganaContextProvider)} DESERIALIZED with {agentContext.Count} variables and {sharedVariableNames.Count} shared names");
