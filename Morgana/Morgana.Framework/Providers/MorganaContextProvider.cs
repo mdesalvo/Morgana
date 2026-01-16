@@ -132,7 +132,7 @@ public class MorganaContextProvider : AIContextProvider
     /// affect serialization or cross-agent sharing.</para>
     /// <para><strong>When to Use:</strong></para>
     /// <list type="bullet">
-    /// <item>Tool discovers data that LLM should be aware of (invoice counts, user status, ...)</item>
+    /// <item>Tool discovers agentThread that LLM should be aware of (invoice counts, user status, ...)</item>
     /// <item>Tool detects condition requiring special handling (overdue payments, tier changes, ...)</item>
     /// <item>Agent wants to guide LLM behavior for current turn (long conversation hint)</item>
     /// </list>
@@ -299,14 +299,14 @@ public class MorganaContextProvider : AIContextProvider
     /// </summary>
     public static MorganaContextProvider Deserialize(string json, ILogger logger)
     {
-        Dictionary<string, JsonElement>? data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+        Dictionary<string, JsonElement>? agentThread = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
             json, AgentAbstractionsJsonUtilities.DefaultOptions);
 
         Dictionary<string, object> agentContext =
-            data?["AgentContext"].Deserialize<Dictionary<string, object>>() ?? [];
+            agentThread?["AgentContext"].Deserialize<Dictionary<string, object>>() ?? [];
 
         HashSet<string> sharedVariableNames =
-            data?["SharedVariableNames"].Deserialize<HashSet<string>>() ?? [];
+            agentThread?["SharedVariableNames"].Deserialize<HashSet<string>>() ?? [];
 
         logger.LogInformation(
             $"{nameof(MorganaContextProvider)} DESERIALIZED with {agentContext.Count} variables and {sharedVariableNames.Count} shared names");
@@ -330,7 +330,7 @@ public class MorganaContextProvider : AIContextProvider
     /// <para><strong>Injection Format (Markdown-based):</strong></para>
     /// <code>
     /// ---BEGIN EPHEMERAL CONTEXT---
-    /// ---Consider the following instructions as 'ephemeral hints' giving you insights and data relevant ONLY for this turn---
+    /// ---Consider the following instructions as 'ephemeral hints' giving you insights and agentThread relevant ONLY for this turn---
     /// [AVAILABLE_INVOICES] User has 3 recent invoices. Latest invoice: INV-2024-001 for €1,250.00
     ///
     /// [OVERDUE_ALERT] WARNING: User has 2 overdue invoices totaling €3,400. Offer payment assistance.
@@ -360,7 +360,7 @@ public class MorganaContextProvider : AIContextProvider
             StringBuilder sb = new StringBuilder();
 
             sb.AppendLine("---BEGIN EPHEMERAL CONTEXT---");
-            sb.AppendLine("---Consider the following instructions as 'ephemeral hints' giving you insights and data relevant ONLY for this turn.---");
+            sb.AppendLine("---Consider the following instructions as 'ephemeral hints' giving you insights and agentThread relevant ONLY for this turn.---");
             foreach (KeyValuePair<string, string> kvp in EphemeralContext)
             {
                 sb.AppendLine($"[{kvp.Key}] {kvp.Value}");
