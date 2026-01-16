@@ -286,12 +286,14 @@ public class MorganaContextProvider : AIContextProvider
         logger.LogInformation(
             $"{nameof(MorganaContextProvider)} SERIALIZING with {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
 
+        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
+
         return JsonSerializer.SerializeToElement(
             new Dictionary<string, JsonElement>
             {
-                { nameof(AgentContext), JsonSerializer.SerializeToElement(AgentContext) },
-                { nameof(SharedVariableNames), JsonSerializer.SerializeToElement(SharedVariableNames) }
-            }, jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions);
+                { nameof(AgentContext), JsonSerializer.SerializeToElement(AgentContext, jsonSerializerOptions) },
+                { nameof(SharedVariableNames), JsonSerializer.SerializeToElement(SharedVariableNames, jsonSerializerOptions) }
+            }, jsonSerializerOptions);
     }
 
     /// <summary>
@@ -299,14 +301,80 @@ public class MorganaContextProvider : AIContextProvider
     /// </summary>
     public static MorganaContextProvider Deserialize(string json, ILogger logger)
     {
+        #region JsonElement Utilities
+        /* Converts a JsonElement to its appropriate .NET type.
+         * Handles: string, number, boolean, null, object, array. */
+        object ConvertJsonElementToObject(JsonElement element)
+        {
+            return element.ValueKind switch
+            {
+                JsonValueKind.String => element.GetString()!,
+                JsonValueKind.Number => element.TryGetInt32(out int intValue)
+                    ? intValue
+                    : element.TryGetInt64(out long longValue)
+                        ? longValue
+                        : element.GetDouble(),
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.Null => null!,
+                JsonValueKind.Object => DeserializeJsonObject(element),
+                JsonValueKind.Array => DeserializeJsonArray(element),
+                _ => element.GetRawText() // Fallback to raw JSON string
+            };
+        }
+
+        /* Deserializes a JsonElement representing an object to Dictionary<string, object> */
+        Dictionary<string, object> DeserializeJsonObject(JsonElement element)
+        {
+            Dictionary<string, object> result = [];
+
+            foreach (JsonProperty property in element.EnumerateObject())
+                result[property.Name] = ConvertJsonElementToObject(property.Value);
+
+            return result;
+        }
+
+        /* Deserializes a JsonElement representing an array to List<object> */
+        List<object> DeserializeJsonArray(JsonElement element)
+        {
+            List<object> result = [];
+
+            foreach (JsonElement item in element.EnumerateArray())
+                result.Add(ConvertJsonElementToObject(item));
+
+            return result;
+        }
+        #endregion
+
+        JsonSerializerOptions jsonSerializerOptions = AgentAbstractionsJsonUtilities.DefaultOptions;
+
+        // Parse the JSON to get the root dictionary
         Dictionary<string, JsonElement>? agentThread = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-            json, AgentAbstractionsJsonUtilities.DefaultOptions);
+            json, jsonSerializerOptions);
 
-        Dictionary<string, object> agentContext =
-            agentThread?[nameof(AgentContext)].Deserialize<Dictionary<string, object>>() ?? [];
+        if (agentThread == null)
+        {
+            logger.LogWarning($"{nameof(MorganaContextProvider)} DESERIALIZED with NULL agentThread - creating empty provider");
+            return new MorganaContextProvider(logger);
+        }
 
-        HashSet<string> sharedVariableNames =
-            agentThread?[nameof(SharedVariableNames)].Deserialize<HashSet<string>>() ?? [];
+        // Deserialize AgentContext
+        Dictionary<string, object> agentContext = new Dictionary<string, object>();
+        if (agentThread.TryGetValue(nameof(AgentContext), out JsonElement agentContextElement)
+             && agentContextElement.ValueKind == JsonValueKind.Object)
+        {
+            // JsonElement must be explicitly converted to Dictionary<string, object>
+            foreach (JsonProperty property in agentContextElement.EnumerateObject())
+                agentContext[property.Name] = ConvertJsonElementToObject(property.Value);
+        }
+
+        // Deserialize SharedVariableNames
+        HashSet<string> sharedVariableNames = [];
+        if (agentThread.TryGetValue(nameof(SharedVariableNames), out JsonElement sharedNamesElement))
+        {
+            // JsonElement can be directly deserialized to HashSet<string>
+            sharedVariableNames = sharedNamesElement.Deserialize<HashSet<string>>(jsonSerializerOptions) ?? [];
+        }
 
         logger.LogInformation(
             $"{nameof(MorganaContextProvider)} DESERIALIZED with {agentContext.Count} variables and {sharedVariableNames.Count} shared names");
