@@ -164,7 +164,7 @@ public class MorganaContextProvider : AIContextProvider
     public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {
         logger.LogInformation(
-            $"{nameof(MorganaContextProvider)} SERIALIZING with {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
+            $"{nameof(MorganaContextProvider)} SERIALIZING {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
 
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
