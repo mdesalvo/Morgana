@@ -87,7 +87,6 @@ body {
     font-size: 24px;
     font-weight: 700;
     margin: 0;
-    color: white;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
@@ -96,23 +95,20 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
-    color: rgba(255, 255, 255, 0.9);
 }
-
 .status::before {
     content: '';
     width: 8px;
     height: 8px;
     border-radius: 50%;
 }
-
 .status.online::before {
     background: #10b981;
     box-shadow: 0 0 8px #10b981;
 }
-
 .status.offline::before {
     background: #ef4444;
+    box-shadow: 0 0 8px #ef4444;
 }
 
 .messages-container {
@@ -173,7 +169,6 @@ body {
     border-radius: 50%;
     flex-shrink: 0;
     transition: border-color 0.3s ease;
-    /* Il bordo è applicato inline per compatibilità Blazor SignalR */
 }
 
 .message-bubble {

@@ -17,8 +17,8 @@
                  class="header-avatar"
                  style="border: 3px solid @GetAvatarBorderColor(currentAgentName); !important" />
             <div class="header-info">
-                <h1>@currentAgentName</h1>
-                <span class="status @(isConnected ? "online" : "offline")">
+                <h1 style="color: @GetAvatarBorderColor(currentAgentName);">@currentAgentName</h1>
+                <span class="status @(isConnected ? "online" : "offline")" style="color: @(isConnected ? "#10b981" : "#ef4444");">
                     @(isConnected ? "Online" : "Offline")
                 </span>
             </div>
