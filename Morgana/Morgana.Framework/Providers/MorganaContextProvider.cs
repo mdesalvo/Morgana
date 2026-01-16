@@ -291,7 +291,7 @@ public class MorganaContextProvider : AIContextProvider
             {
                 { nameof(AgentContext), JsonSerializer.SerializeToElement(AgentContext) },
                 { nameof(SharedVariableNames), JsonSerializer.SerializeToElement(SharedVariableNames) }
-            }, jsonSerializerOptions ?? AIJsonUtilities.DefaultOptions);
+            }, jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions);
     }
 
     /// <summary>
@@ -299,7 +299,8 @@ public class MorganaContextProvider : AIContextProvider
     /// </summary>
     public static MorganaContextProvider Deserialize(string json, ILogger logger)
     {
-        Dictionary<string, JsonElement>? data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
+        Dictionary<string, JsonElement>? data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+            json, AgentAbstractionsJsonUtilities.DefaultOptions);
 
         Dictionary<string, object> agentContext =
             data?["AgentContext"].Deserialize<Dictionary<string, object>>() ?? [];
