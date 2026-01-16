@@ -458,12 +458,6 @@ public class ContractTool : MorganaTool
         sb.AppendLine("  • Termination cannot be cancelled once confirmed");
         sb.AppendLine();
 
-        sb.AppendLine("🤔 Ready to Proceed?");
-        sb.AppendLine("I can assist you with:");
-        sb.AppendLine("  • Initiating the formal termination request");
-        sb.AppendLine("  • Checking if you qualify for fee waivers");
-        sb.AppendLine("  • Scheduling equipment pickup");
-
         return sb.ToString();
     }
 
