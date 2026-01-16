@@ -1,4 +1,5 @@
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
@@ -9,7 +10,7 @@ namespace Morgana.Framework.Providers;
 /// Custom AIContextProvider that maintains agent conversation context variables.
 /// Supports automatic serialization/deserialization for persistence with AgentThread,
 /// cross-agent context sharing via RouterActor broadcast mechanism and ephemeral
-/// instructions for single-turn LLM conditioning.
+/// instructions for single-turn agent conditioning.
 /// </summary>
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
@@ -49,15 +50,14 @@ namespace Morgana.Framework.Providers;
 /// </code>
 /// </remarks>
 /// <remarks>
-/// <para>Tools can inject single-use instructions that condition the LLM for the
-/// current turn only. These instructions are automatically injected before LLM invocation
+/// <para>Tools can inject single-use instructions that condition the agent for the
+/// next turn only. These instructions are automatically injected before agent invocation
 /// and cleared immediately after, preventing context pollution.</para>
 /// <para><strong>Use Cases:</strong></para>
 /// <list type="bullet">
 /// <item><term>Dynamic Data</term><description>Tool discovers invoices and adds summary for LLM awareness</description></item>
 /// <item><term>Conditional Guardrails</term><description>Tool detects overdue invoices and adds warning instruction</description></item>
 /// <item><term>Behavioral Hints</term><description>Agent detects long conversation and suggests summarization</description></item>
-/// <item><term>Tool Availability</term><description>MCP server connects and announces new capabilities</description></item>
 /// </list>
 /// </remarks>
 public class MorganaContextProvider : AIContextProvider
@@ -68,21 +68,21 @@ public class MorganaContextProvider : AIContextProvider
     /// Set of "shared" variable names, which are subject to the automatic broadcasting
     /// algorythm occurring between all the Morgana agents during tool's writing
     /// </summary>
-    private readonly HashSet<string> sharedVariableNames;
+    private HashSet<string> SharedVariableNames;
 
     /// <summary>
     /// Source of truth for agent context variables (persistent across turns).
     /// Stores all conversation variables accessible via GetContextVariable/SetContextVariable tools.
     /// </summary>
-    public Dictionary<string, object> AgentContext { get; private set; } = [];
+    private Dictionary<string, object> AgentContext = [];
 
     /// <summary>
-    /// Ephemeral instructions that will be injected ONLY in the next LLM invocation.
+    /// Ephemeral instructions that will be injected ONLY in the next agent invocation.
     /// Automatically cleared after injection to prevent persistent context pollution.
     /// Key = instruction identifier (e.g., "TOOL_RESULT", "GUARDRAIL")
     /// Value = instruction text to inject
     /// </summary>
-    private readonly Dictionary<string, string> EphemeralContext = [];
+    private Dictionary<string, string> EphemeralContext = [];
 
     /// <summary>
     /// Callback invoked when a shared variable is set.
@@ -103,15 +103,15 @@ public class MorganaContextProvider : AIContextProvider
         IEnumerable<string>? sharedVariableNames = null)
     {
         this.logger = logger;
-        this.sharedVariableNames = [.. sharedVariableNames ?? []];
+        this.SharedVariableNames = [.. sharedVariableNames ?? []];
     }
 
     // =========================================================================
-    // Ephemeral Context (single-turn LLM conditioning)
+    // Ephemeral Context (single-turn agent conditioning)
     // =========================================================================
 
     /// <summary>
-    /// Adds an ephemeral instruction that will be injected ONLY in the next LLM invocation.
+    /// Adds an ephemeral instruction that will be injected ONLY in the next agent invocation.
     /// Instructions are automatically cleared after injection to prevent agent context pollution.
     /// </summary>
     /// <param name="key">
@@ -128,14 +128,13 @@ public class MorganaContextProvider : AIContextProvider
     /// <remarks>
     /// <para><strong>Design Philosophy:</strong></para>
     /// <para>Ephemeral instructions are "single-use hints" that tools inject to condition
-    /// the LLM for the current turn only. They don't persist in AgentContext and don't
+    /// the agent for the next turn only. They don't persist in AgentContext and don't
     /// affect serialization or cross-agent sharing.</para>
     /// <para><strong>When to Use:</strong></para>
     /// <list type="bullet">
     /// <item>Tool discovers data that LLM should be aware of (invoice counts, user status, ...)</item>
     /// <item>Tool detects condition requiring special handling (overdue payments, tier changes, ...)</item>
     /// <item>Agent wants to guide LLM behavior for current turn (long conversation hint)</item>
-    /// <item>System announces new capabilities (MCP server connected)</item>
     /// </list>
     /// <para><strong>Key Naming Conventions:</strong></para>
     /// <list type="bullet">
@@ -146,7 +145,7 @@ public class MorganaContextProvider : AIContextProvider
     /// <item><term>CONTEXT_ENRICHMENT</term><description>Additional context from external systems</description></item>
     /// </list>
     /// <para><strong>Overwrite Behavior:</strong></para>
-    /// <para>If the same key is set multiple times before LLM invocation (e.g., multiple tool
+    /// <para>If the same key is set multiple times before agent invocation (e.g., multiple tool
     /// calls in same turn), the last value wins. This is intentional - later tools have more
     /// complete information.</para>
     /// </remarks>
@@ -164,8 +163,8 @@ public class MorganaContextProvider : AIContextProvider
     }
 
     /// <summary>
-    /// Removes an ephemeral instruction before the next LLM invocation (optional).
-    /// Typically not needed as instructions are auto-cleared after injection.
+    /// Removes an ephemeral instruction before the next agent invocation.
+    /// Typically not needed, since instructions are auto-cleared after injection.
     /// Use this if a tool needs to explicitly cancel an instruction set by a previous tool in the same turn.
     /// </summary>
     /// <param name="key">Instruction identifier to remove</param>
@@ -188,7 +187,7 @@ public class MorganaContextProvider : AIContextProvider
     }
 
     /// <summary>
-    /// Clears all ephemeral instructions.
+    /// Clears all ephemeral instructions to reset agent conditioning.
     /// Called automatically by InvokingAsync after injection.
     /// Can be called manually if needed (e.g., conversation reset).
     /// </summary>
@@ -205,7 +204,7 @@ public class MorganaContextProvider : AIContextProvider
     }
 
     // =========================================================================
-    // Agent Context (multi-turn LLM conditioning)
+    // Agent Context (multi-turn agent conditioning)
     // =========================================================================
 
     /// <summary>
@@ -232,7 +231,7 @@ public class MorganaContextProvider : AIContextProvider
     {
         AgentContext[variableName] = variableValue;
 
-        bool isShared = sharedVariableNames.Contains(variableName);
+        bool isShared = SharedVariableNames.Contains(variableName);
 
         logger.LogInformation(
             $"{nameof(MorganaContextProvider)} SET {(isShared ? "SHARED" : "PRIVATE")} '{variableName}' = '{variableValue}'");
@@ -275,20 +274,24 @@ public class MorganaContextProvider : AIContextProvider
     }
 
     // =========================================================================
-    // Serialization (Does NOT include ephemeral context)
+    // Serialization
     // =========================================================================
 
     /// <summary>
-    /// Serializes the provider's state for persistence with AgentThread.
+    /// Serializes the provider's internal state for persistence with AgentThread.
     /// NOTE: ephemeral instructions are NOT serialized (by design - they're ephemeral).
     /// </summary>
-    public string Serialize()
+    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        return JsonSerializer.Serialize(new
-        {
-            AgentContext,
-            SharedVariableNames = sharedVariableNames
-        });
+        logger.LogInformation(
+            $"{nameof(MorganaContextProvider)} SERIALIZING with {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
+
+        return JsonSerializer.SerializeToElement(
+            new Dictionary<string, JsonElement>
+            {
+                { nameof(AgentContext), JsonSerializer.SerializeToElement(AgentContext) },
+                { nameof(SharedVariableNames), JsonSerializer.SerializeToElement(SharedVariableNames) }
+            }, jsonSerializerOptions ?? AIJsonUtilities.DefaultOptions);
     }
 
     /// <summary>
@@ -301,18 +304,17 @@ public class MorganaContextProvider : AIContextProvider
         Dictionary<string, object> agentContext =
             data?["AgentContext"].Deserialize<Dictionary<string, object>>() ?? [];
 
-        HashSet<string> sharedVars =
+        HashSet<string> sharedVariableNames =
             data?["SharedVariableNames"].Deserialize<HashSet<string>>() ?? [];
 
-        MorganaContextProvider provider = new MorganaContextProvider(logger, sharedVars)
-        {
-            AgentContext = agentContext
-        };
-
         logger.LogInformation(
-            $"{nameof(MorganaContextProvider)} DESERIALIZED with {agentContext.Count} variables");
+            $"{nameof(MorganaContextProvider)} DESERIALIZED with {agentContext.Count} variables and {sharedVariableNames.Count} shared names");
 
-        return provider;
+        return new MorganaContextProvider(logger)
+        {
+            AgentContext = agentContext,
+            SharedVariableNames = sharedVariableNames
+        };
     }
 
     // =========================================================================
@@ -320,8 +322,8 @@ public class MorganaContextProvider : AIContextProvider
     // =========================================================================
 
     /// <summary>
-    /// AIContextProvider hook: called before agent invocation.
-    /// Injects ephemeral instructions as system messages and clears them immediately after.
+    /// AIContextProvider hook: called BEFORE agent invocation.
+    /// Injects ephemeral instructions and clears them immediately after.
     /// </summary>
     /// <remarks>
     /// <para><strong>Injection Format (Markdown-based):</strong></para>
@@ -333,10 +335,6 @@ public class MorganaContextProvider : AIContextProvider
     /// [OVERDUE_ALERT] WARNING: User has 2 overdue invoices totaling €3,400. Offer payment assistance.
     /// ---END EPHEMERAL CONTEXT---
     /// </code>
-    /// <para><strong>Why Markdown:</strong></para>
-    /// <para>Modern LLMs (including Claude) are trained primarily on markdown and natural text.
-    /// The `---` separators and `[CATEGORY]` prefixes provide clear visual boundaries without
-    /// introducing XML syntax that isn't present elsewhere in Morgana prompts.</para>
     /// <para><strong>Automatic Cleanup:</strong></para>
     /// <para>Instructions are cleared immediately after injection to prevent:
     /// - Context pollution across turns
@@ -361,7 +359,7 @@ public class MorganaContextProvider : AIContextProvider
             StringBuilder sb = new StringBuilder();
 
             sb.AppendLine("---BEGIN EPHEMERAL CONTEXT---");
-            sb.AppendLine("---Consider the following instructions as 'ephemeral hints' giving you insights and data relevant ONLY for this turn---");
+            sb.AppendLine("---Consider the following instructions as 'ephemeral hints' giving you insights and data relevant ONLY for this turn.---");
             foreach (KeyValuePair<string, string> kvp in EphemeralContext)
             {
                 sb.AppendLine($"[{kvp.Key}] {kvp.Value}");
@@ -384,7 +382,7 @@ public class MorganaContextProvider : AIContextProvider
     }
 
     /// <summary>
-    /// AIContextProvider hook: called after agent invocation.
+    /// AIContextProvider hook: called AFTER agent invocation.
     /// Currently performs no action. Reserved for future enhancements.
     /// </summary>
     public override ValueTask InvokedAsync(
