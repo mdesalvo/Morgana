@@ -13,8 +13,8 @@ namespace Morgana.Framework.Interfaces;
 /// history, prompt formatting, and provider-specific API calls.</para>
 /// <para><strong>Supported Providers:</strong></para>
 /// <list type="bullet">
-/// <item><term>Anthropic</term><description>Claude models (Claude Sonnet 4, etc.) via AnthropicService</description></item>
-/// <item><term>Azure OpenAI</term><description>GPT models via AzureOpenAIService</description></item>
+/// <item><term>Anthropic</term><description>Claude models (Claude Sonnet 4, etc.) via Anthropic</description></item>
+/// <item><term>Azure OpenAI</term><description>GPT models via AzureOpenAI</description></item>
 /// <item><term>Custom</term><description>Extensible for additional providers implementing this interface</description></item>
 /// </list>
 /// <para><strong>Provider Selection:</strong></para>
@@ -33,8 +33,8 @@ namespace Morgana.Framework.Interfaces;
 /// builder.Services.AddSingleton&lt;ILLMService&gt;(sp => {
 ///     string provider = config["Morgana:LLM:Provider"];
 ///     return provider.ToLowerInvariant() switch {
-///         "anthropic" => new AnthropicService(config, promptResolver),
-///         "azureopenai" => new AzureOpenAIService(config, promptResolver),
+///         "anthropic"   => new Anthropic(config, promptResolver),
+///         "azureopenai" => new AzureOpenAI(config, promptResolver),
 ///         _ => throw new InvalidOperationException("Unsupported provider")
 ///     };
 /// });

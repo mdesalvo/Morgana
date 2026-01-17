@@ -93,7 +93,7 @@ public class MorganaAgent : MorganaActor
     /// <para><strong>Example:</strong> "billing-conv_123", "contract-conv_456"</para>
     /// <para><strong>Why Needed:</strong></para>
     /// <para>In Morgana, each agent maintains its own AgentThread within a conversation.
-    /// BillingAgent, ContractAgent, and TroubleshootingAgent all participate in the same
+    /// BillingAgent, ContractAgent, and MonkeyAgent all participate in the same
     /// conversation but have separate message histories and context. This property ensures
     /// each agent's state is persisted to a separate file.</para>
     /// <code>
@@ -103,7 +103,7 @@ public class MorganaAgent : MorganaActor
     ///   └─ TroubleshootAgent → troubleshoot-conv_123.morgana.json
     /// </code>
     /// </remarks>
-    protected string AgentConversationId => $"{AgentIntent}-{conversationId}";
+    protected string AgentIdentifier => $"{AgentIntent}-{conversationId}";
 
     /// <summary>
     /// Initializes a new instance of MorganaAgent with AI agent infrastructure.
@@ -312,7 +312,7 @@ public class MorganaAgent : MorganaActor
     /// <para>On exception, returns a generic error message from Morgana prompt configuration.
     /// Always marks as completed (IsCompleted = true) to prevent stuck conversations.</para>
     /// </remarks>
-    protected virtual async Task ExecuteAgentAsync(Records.AgentRequest req)
+    protected async Task ExecuteAgentAsync(Records.AgentRequest req)
     {
         IActorRef? senderRef = Sender;
         Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync("Morgana");
@@ -320,15 +320,15 @@ public class MorganaAgent : MorganaActor
         try
         {
             // Load existing conversation thread from encrypted storage, or create new thread
-            aiAgentThread ??= await persistenceService.LoadConversationAsync(AgentConversationId, this);
+            aiAgentThread ??= await persistenceService.LoadConversationAsync(AgentIdentifier, this);
             if (aiAgentThread != null)
             {
-                agentLogger.LogInformation($"Loaded existing conversation thread for {AgentConversationId}");
+                agentLogger.LogInformation($"Loaded existing conversation thread for {AgentIdentifier}");
             }
             else
             {
                 aiAgentThread = aiAgent.GetNewThread();
-                agentLogger.LogInformation($"Created new conversation thread for {AgentConversationId}");
+                agentLogger.LogInformation($"Created new conversation thread for {AgentIdentifier}");
             }
 
             // Execute LLM with conversation history
@@ -356,8 +356,8 @@ public class MorganaAgent : MorganaActor
                 $"Agent response analysis: HasINT={hasInteractiveToken}, EndsWithQuestion={endsWithQuestion}, HasQR={hasQuickReplies}, IsCompleted={isCompleted}");
 
             // Persist updated conversation state to encrypted storage
-            await persistenceService.SaveConversationAsync(AgentConversationId, aiAgentThread);
-            agentLogger.LogInformation($"Saved conversation state for {AgentConversationId}");
+            await persistenceService.SaveConversationAsync(AgentIdentifier, aiAgentThread);
+            agentLogger.LogInformation($"Saved conversation state for {AgentIdentifier}");
 
             #if DEBUG
                 senderRef.Tell(new Records.AgentResponse(llmResponseText, isCompleted, quickReplies));

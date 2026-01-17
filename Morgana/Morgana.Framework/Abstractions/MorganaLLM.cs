@@ -6,7 +6,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Morgana.Framework.Interfaces;
 
-namespace Morgana.Framework.Services;
+namespace Morgana.Framework.Abstractions;
 
 /// <summary>
 /// Base implementation of ILLMService providing common LLM interaction patterns.
@@ -15,9 +15,9 @@ namespace Morgana.Framework.Services;
 /// <remarks>
 /// <para><strong>Architecture:</strong></para>
 /// <code>
-/// MorganaLLMService (abstract base)
-///   ├── AnthropicService (Anthropic Claude models)
-///   └── AzureOpenAIService (Azure OpenAI GPT models)
+/// MorganaLLM (abstract base)
+///   ├── Anthropic (Anthropic Claude models)
+///   └── AzureOpenAI (Azure OpenAI GPT models)
 /// </code>
 /// <para><strong>Provider Selection:</strong></para>
 /// <para>The active implementation is selected in Program.cs based on configuration:</para>
@@ -25,8 +25,8 @@ namespace Morgana.Framework.Services;
 /// builder.Services.AddSingleton&lt;ILLMService&gt;(sp => {
 ///     string provider = config["Morgana:LLM:Provider"];
 ///     return provider.ToLowerInvariant() switch {
-///         "anthropic" => new AnthropicService(config, promptResolver),
-///         "azureopenai" => new AzureOpenAIService(config, promptResolver),
+///         "anthropic"   => new Anthropic(config, promptResolver),
+///         "azureopenai" => new AzureOpenAI(config, promptResolver),
 ///         _ => throw new InvalidOperationException("Unsupported provider")
 ///     };
 /// });
@@ -39,7 +39,7 @@ namespace Morgana.Framework.Services;
 /// <item><term>System Prompt Support</term><description>Explicit system prompt injection for actors</description></item>
 /// </list>
 /// </remarks>
-public class MorganaLLMService : ILLMService
+public class MorganaLLM : ILLMService
 {
     protected readonly IConfiguration configuration;
     protected readonly IPromptResolverService promptResolverService;
@@ -47,17 +47,17 @@ public class MorganaLLMService : ILLMService
 
     /// <summary>
     /// Microsoft.Extensions.AI chat client for LLM interactions.
-    /// Initialized by derived classes (AnthropicService, AzureOpenAIService).
+    /// Initialized by derived classes (Anthropic, AzureOpenAI).
     /// </summary>
     protected IChatClient chatClient;
 
     /// <summary>
-    /// Initializes the base MorganaLLMService.
+    /// Initializes MorganaLLM abstraction.
     /// Loads the Morgana framework prompt for error message templates.
     /// </summary>
     /// <param name="configuration">Application configuration for provider-specific settings</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
-    public MorganaLLMService(
+    public MorganaLLM(
         IConfiguration configuration,
         IPromptResolverService promptResolverService)
     {
@@ -174,8 +174,8 @@ public class MorganaLLMService : ILLMService
 /* Provider-Specific Implementations */
 
 /// <summary>
-/// Anthropic Claude implementation of ILLMService.
-/// Supports Claude models (Claude Sonnet 4, etc.) via Anthropic SDK.
+/// Anthropic implementation of ILLMService
+/// Supports Claude models (Claude Sonnet 4.5, ...)
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
@@ -205,15 +205,15 @@ public class MorganaLLMService : ILLMService
 /// <item>Streaming support (not currently used by Morgana)</item>
 /// </list>
 /// </remarks>
-public class AnthropicService : MorganaLLMService
+public class Anthropic : MorganaLLM
 {
     /// <summary>
-    /// Initializes a new instance of AnthropicService.
+    /// Initializes a new instance of Anthropic.
     /// Creates Anthropic client and wraps it with Microsoft.Extensions.AI IChatClient.
     /// </summary>
     /// <param name="configuration">Application configuration containing Anthropic API key and model</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
-    public AnthropicService(
+    public Anthropic(
         IConfiguration configuration,
         IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
     {
@@ -230,8 +230,8 @@ public class AnthropicService : MorganaLLMService
 }
 
 /// <summary>
-/// Azure OpenAI implementation of ILLMService.
-/// Supports GPT models via Azure OpenAI Service.
+/// Azure OpenAI implementation of ILLMService
+/// Supports GPT models via Azure OpenAI Service
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
@@ -265,15 +265,15 @@ public class AnthropicService : MorganaLLMService
 /// <item>Regional deployment options</item>
 /// </list>
 /// </remarks>
-public class AzureOpenAIService : MorganaLLMService
+public class AzureOpenAI : MorganaLLM
 {
     /// <summary>
-    /// Initializes a new instance of AzureOpenAIService.
+    /// Initializes a new instance of AzureOpenAI.
     /// Creates Azure OpenAI client and wraps it with Microsoft.Extensions.AI IChatClient.
     /// </summary>
     /// <param name="configuration">Application configuration containing Azure endpoint, key, and deployment</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
-    public AzureOpenAIService(
+    public AzureOpenAI(
         IConfiguration configuration,
         IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
     {

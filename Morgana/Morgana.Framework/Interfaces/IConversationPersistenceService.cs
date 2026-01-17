@@ -45,34 +45,34 @@ public interface IConversationPersistenceService
     /// Saves the complete conversation state to persistent storage.
     /// Serializes the AgentThread including message history, context variables, and metadata.
     /// </summary>
-    /// <param name="conversationId">Unique identifier for the conversation</param>
-    /// <param name="thread">AgentThread instance containing the complete conversation state</param>
+    /// <param name="agentIdentifier">Unique identifier for the agent's conversation</param>
+    /// <param name="agentThread">AgentThread instance containing the complete conversation state</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (optional, uses AgentAbstractionsJsonUtilities.DefaultOptions if null)</param>
     /// <returns>Task representing the async save operation</returns>
     /// <remarks>
     /// <para><strong>Thread Safety:</strong></para>
-    /// <para>Implementations should handle concurrent saves to the same conversationId appropriately,
+    /// <para>Implementations should handle concurrent saves to the same agentIdentifier appropriately,
     /// typically using last-write-wins semantics or file locking mechanisms.</para>
     /// <para><strong>Error Handling:</strong></para>
     /// <para>Implementations should throw meaningful exceptions for I/O errors, encryption failures,
     /// or serialization errors to allow proper error handling by callers.</para>
     /// </remarks>
     Task SaveConversationAsync(
-        string conversationId,
-        AgentThread thread,
+        string agentIdentifier,
+        AgentThread agentThread,
         JsonSerializerOptions? jsonSerializerOptions = null);
 
     /// <summary>
-    /// Loads a previously saved conversation state from persistent storage.
+    /// Loads a previously saved agent's conversation state from persistent storage.
     /// Deserializes the AgentThread and reconnects all context providers and callbacks.
     /// </summary>
-    /// <param name="conversationId">Unique identifier for the conversation to load</param>
+    /// <param name="agentIdentifier">Unique identifier for the agent's conversation to load</param>
     /// <param name="agent">MorganaAgent instance that will receive the deserialized thread</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (optional, uses AgentAbstractionsJsonUtilities.DefaultOptions if null)</param>
     /// <returns>Deserialized AgentThread if conversation exists, null if not found</returns>
     /// <remarks>
     /// <para><strong>Null Return Semantics:</strong></para>
-    /// <para>Returns null when the conversationId has never been saved, indicating this is a new conversation.
+    /// <para>Returns null when the agentIdentifier has never been saved, indicating this is a new conversation.
     /// Callers should create a new AgentThread in this case via agent.GetNewThread().</para>
     /// <para><strong>Deserialization Process:</strong></para>
     /// <list type="number">
@@ -83,27 +83,27 @@ public interface IConversationPersistenceService
     /// </list>
     /// </remarks>
     Task<AgentThread?> LoadConversationAsync(
-        string conversationId,
+        string agentIdentifier,
         Abstractions.MorganaAgent agent,
         JsonSerializerOptions? jsonSerializerOptions = null);
 
     /// <summary>
-    /// Checks if a conversation with the given ID exists in persistent storage.
+    /// Checks if an agent's conversation with the given ID exists in persistent storage.
     /// Useful for determining whether to load existing state or create a new conversation.
     /// </summary>
-    /// <param name="conversationId">Unique identifier for the conversation</param>
+    /// <param name="agentIdentifier">Unique identifier for the conversation</param>
     /// <returns>True if the conversation exists in storage, false otherwise</returns>
-    Task<bool> ConversationExistsAsync(string conversationId);
+    Task<bool> ConversationExistsAsync(string agentIdentifier);
 
     /// <summary>
-    /// Deletes a conversation and all its associated state from persistent storage.
+    /// Deletes an agent's conversation and all its associated state from persistent storage.
     /// Use this for cleanup, GDPR compliance, or when users explicitly delete conversations.
     /// </summary>
-    /// <param name="conversationId">Unique identifier for the conversation to delete</param>
+    /// <param name="agentIdentifier">Unique identifier for the agent's conversation to delete</param>
     /// <returns>Task representing the async delete operation</returns>
     /// <remarks>
     /// <para><strong>Idempotency:</strong></para>
     /// <para>Implementations should be idempotent - deleting a non-existent conversation should not throw an error.</para>
     /// </remarks>
-    Task DeleteConversationAsync(string conversationId);
+    Task DeleteConversationAsync(string agentIdentifier);
 }

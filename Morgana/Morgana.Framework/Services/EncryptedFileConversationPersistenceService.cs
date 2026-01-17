@@ -10,17 +10,17 @@ namespace Morgana.Framework.Services;
 
 /// <summary>
 /// File-based conversation persistence service with AES encryption.
-/// Stores each conversation as an encrypted {conversationId}.morgana.json file on disk.
+/// Stores each conversation as an encrypted "{intent}-{conversationId}.morgana.json" file on disk.
 /// </summary>
 /// <remarks>
 /// <para><strong>Storage Model:</strong></para>
 /// <para>Each conversation is stored as a separate encrypted file following the pattern:</para>
 /// <code>
-/// {StoragePath}/{conversationId}.morgana.json
+/// {StoragePath}/{intent}-{conversationId}.morgana.json
 ///
 /// Example:
-/// C:/MorganaData/conv_12345.morgana.json
-/// C:/MorganaData/conv_67890.morgana.json
+/// C:/MorganaData/billing-conv12345.morgana.json
+/// C:/MorganaData/contract-conv12345.morgana.json
 /// </code>
 /// <para><strong>Encryption:</strong></para>
 /// <para>Files are encrypted using AES-256 in CBC mode with PKCS7 padding.
@@ -38,16 +38,6 @@ namespace Morgana.Framework.Services;
 ///   }
 /// }
 /// </code>
-/// <para><strong>Thread Safety:</strong></para>
-/// <para>Uses file system locking for thread safety. Concurrent writes to the same conversation
-/// use last-write-wins semantics. Reads are non-blocking.</para>
-/// <para><strong>Performance Characteristics:</strong></para>
-/// <list type="bullet">
-/// <item>Save: O(1) - single file write with encryption</item>
-/// <item>Load: O(1) - single file read with decryption</item>
-/// <item>Exists: O(1) - file existence check</item>
-/// <item>Delete: O(1) - single file delete</item>
-/// </list>
 /// </remarks>
 public class EncryptedFileConversationPersistenceService : IConversationPersistenceService
 {
@@ -89,17 +79,17 @@ public class EncryptedFileConversationPersistenceService : IConversationPersiste
 
     /// <inheritdoc/>
     public async Task SaveConversationAsync(
-        string conversationId,
-        AgentThread thread,
+        string agentIdentifier,
+        AgentThread agentThread,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        string filePath = GetFilePath(conversationId);
+        string filePath = GetFilePath(agentIdentifier);
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
         try
         {
             // Serialize AgentThread to JSON
-            JsonElement serialized = thread.Serialize(jsonSerializerOptions);
+            JsonElement serialized = agentThread.Serialize(jsonSerializerOptions);
             string json = JsonSerializer.Serialize(serialized, jsonSerializerOptions);
 
             // Encrypt JSON content
@@ -110,27 +100,27 @@ public class EncryptedFileConversationPersistenceService : IConversationPersiste
             await File.WriteAllBytesAsync(tempPath, encryptedData);
             File.Move(tempPath, filePath, overwrite: true);
 
-            logger.LogInformation($"Saved conversation {conversationId} to {filePath} ({encryptedData.Length} bytes encrypted)");
+            logger.LogInformation($"Saved conversation {agentIdentifier} to {filePath} ({encryptedData.Length} bytes encrypted)");
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to save conversation {conversationId}");
+            logger.LogError(ex, $"Failed to save conversation {agentIdentifier}");
             throw;
         }
     }
 
     /// <inheritdoc/>
     public async Task<AgentThread?> LoadConversationAsync(
-        string conversationId,
+        string agentIdentifier,
         MorganaAgent agent,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        string filePath = GetFilePath(conversationId);
+        string filePath = GetFilePath(agentIdentifier);
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
         if (!File.Exists(filePath))
         {
-            logger.LogInformation($"Conversation {conversationId} not found, returning null");
+            logger.LogInformation($"Conversation {agentIdentifier} not found, returning null");
             return null;
         }
 
@@ -148,55 +138,55 @@ public class EncryptedFileConversationPersistenceService : IConversationPersiste
             // Deserialize thread via agent (which handles context provider reconstruction)
             AgentThread restored = agent.DeserializeThread(serialized, jsonSerializerOptions);
 
-            logger.LogInformation($"Loaded conversation {conversationId} from {filePath} ({encryptedData.Length} bytes decrypted)");
+            logger.LogInformation($"Loaded conversation {agentIdentifier} from {filePath} ({encryptedData.Length} bytes decrypted)");
 
             return restored;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to load conversation {conversationId}");
+            logger.LogError(ex, $"Failed to load conversation {agentIdentifier}");
             throw;
         }
     }
 
     /// <inheritdoc/>
-    public Task<bool> ConversationExistsAsync(string conversationId)
+    public Task<bool> ConversationExistsAsync(string agentIdentifier)
     {
-        string filePath = GetFilePath(conversationId);
+        string filePath = GetFilePath(agentIdentifier);
         bool exists = File.Exists(filePath);
 
-        logger.LogDebug($"Conversation {conversationId} exists: {exists}");
+        logger.LogDebug($"Conversation {agentIdentifier} exists: {exists}");
 
         return Task.FromResult(exists);
     }
 
     /// <inheritdoc/>
-    public Task DeleteConversationAsync(string conversationId)
+    public Task DeleteConversationAsync(string agentIdentifier)
     {
-        string filePath = GetFilePath(conversationId);
+        string filePath = GetFilePath(agentIdentifier);
 
         if (File.Exists(filePath))
         {
             File.Delete(filePath);
-            logger.LogInformation($"Deleted conversation {conversationId} from {filePath}");
+            logger.LogInformation($"Deleted conversation {agentIdentifier} from {filePath}");
         }
         else
         {
-            logger.LogDebug($"Conversation {conversationId} does not exist, nothing to delete");
+            logger.LogDebug($"Conversation {agentIdentifier} does not exist, nothing to delete");
         }
 
         return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Constructs the full file path for a conversation.
+    /// Constructs the full file path for an agent's conversation.
     /// </summary>
-    /// <param name="conversationId">Conversation identifier</param>
-    /// <returns>Full path to the .morgana.json file</returns>
-    private string GetFilePath(string conversationId)
+    /// <param name="agentIdentifier">Agent's conversation identifier</param>
+    /// <returns>Full path to the agent's ".morgana.json" file</returns>
+    private string GetFilePath(string agentIdentifier)
     {
-        // Sanitize conversationId to prevent directory traversal attacks
-        string sanitized = string.Join("_", conversationId.Split(Path.GetInvalidFileNameChars()));
+        // Sanitize agentIdentifier to prevent directory traversal attacks
+        string sanitized = string.Join("_", agentIdentifier.Split(Path.GetInvalidFileNameChars()));
         return Path.Combine(options.StoragePath, $"{sanitized}.morgana.json");
     }
 
