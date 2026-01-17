@@ -12,7 +12,7 @@ namespace Morgana.Framework.Providers;
 /// <remarks>
 /// <para><strong>Architecture:</strong></para>
 /// <code>
-/// MorganaChatMessageStoreProvider (Morgana layer)
+/// MorganaStoreProvider (Morgana layer)
 ///   └── InMemoryChatMessageStore (Microsoft implementation)
 ///         └── Handles message storage, filtering, serialization
 /// </code>
@@ -25,7 +25,7 @@ namespace Morgana.Framework.Providers;
 /// <para><strong>Integration with Framework:</strong></para>
 /// <code>
 /// AgentThread.Serialize() → combines:
-///   - MorganaChatMessageStoreProvider.Serialize() → InMemoryChatMessageStore.Serialize()
+///   - MorganaStoreProvider.Serialize() → InMemoryChatMessageStore.Serialize()
 ///   - MorganaContextProvider.Serialize()
 ///   
 /// AgentThread.Deserialize() → restores both via factories
@@ -34,7 +34,7 @@ namespace Morgana.Framework.Providers;
 /// <para>When database persistence is needed, replace innerStore with DatabaseChatMessageStore
 /// while keeping the same Morgana wrapper interface.</para>
 /// </remarks>
-public class MorganaChatMessageStoreProvider : ChatMessageStore
+public class MorganaStoreProvider : ChatMessageStore
 {
     private readonly InMemoryChatMessageStore innerStore;
     private readonly string conversationId;
@@ -50,7 +50,7 @@ public class MorganaChatMessageStoreProvider : ChatMessageStore
     /// <param name="serializedState">Serialized state from previous thread, or null for new thread</param>
     /// <param name="jsonSerializerOptions">JSON serialization options from framework</param>
     /// <param name="logger">Logger instance for diagnostics</param>
-    public MorganaChatMessageStoreProvider(
+    public MorganaStoreProvider(
         string conversationId,
         string intent,
         JsonElement serializedState,
@@ -68,8 +68,8 @@ public class MorganaChatMessageStoreProvider : ChatMessageStore
         
         logger.LogInformation(
             serializedState.ValueKind != JsonValueKind.Undefined
-                ? $"{nameof(MorganaChatMessageStoreProvider)} RESTORED for agent '{intent}' in conversation '{conversationId}'"
-                : $"{nameof(MorganaChatMessageStoreProvider)} CREATED for agent '{intent}' in conversation '{conversationId}'");
+                ? $"{nameof(MorganaStoreProvider)} RESTORED for agent '{intent}' in conversation '{conversationId}'"
+                : $"{nameof(MorganaStoreProvider)} CREATED for agent '{intent}' in conversation '{conversationId}'");
     }
 
     /// <summary>
@@ -83,7 +83,7 @@ public class MorganaChatMessageStoreProvider : ChatMessageStore
         IEnumerable<ChatMessage> messages = await innerStore.InvokingAsync(context, cancellationToken);
         
         logger.LogInformation(
-            $"{nameof(MorganaChatMessageStoreProvider)} INVOKING: Returning {messages.Count()} messages for agent '{intent}' in conversation '{conversationId}'");
+            $"{nameof(MorganaStoreProvider)} INVOKING: Returning {messages.Count()} messages for agent '{intent}' in conversation '{conversationId}'");
         
         return messages;
     }
@@ -105,7 +105,7 @@ public class MorganaChatMessageStoreProvider : ChatMessageStore
         int totalCount = requestCount + responseCount + contextProviderCount;
         
         logger.LogInformation(
-            $"{nameof(MorganaChatMessageStoreProvider)} INVOKED: Stored {totalCount} messages " +
+            $"{nameof(MorganaStoreProvider)} INVOKED: Stored {totalCount} messages " +
             $"(request: {requestCount}, response: {responseCount}, context: {contextProviderCount}) " +
             $"for agent '{intent}' in conversation '{conversationId}'");
     }
@@ -120,7 +120,7 @@ public class MorganaChatMessageStoreProvider : ChatMessageStore
         JsonElement serialized = innerStore.Serialize(jsonSerializerOptions);
         
         logger.LogInformation(
-            $"{nameof(MorganaChatMessageStoreProvider)} SERIALIZED for agent '{intent}' in conversation '{conversationId}'");
+            $"{nameof(MorganaStoreProvider)} SERIALIZED for agent '{intent}' in conversation '{conversationId}'");
         
         return serialized;
     }
