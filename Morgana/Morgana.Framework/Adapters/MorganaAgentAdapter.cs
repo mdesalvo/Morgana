@@ -392,11 +392,11 @@ public class MorganaAgentAdapter
                 AIContextProviderFactory = (aiContextProviderFactoryContext) => contextProvider,
 
                 // Give the agent its ChatMessageStore
-                ChatMessageStoreFactory = (context) => new MorganaStoreProvider(
+                ChatMessageStoreFactory = (chatMessageStoreFactoryContext) => new MorganaStoreProvider(
                     conversationId,
                     intent,
-                    context.SerializedState,
-                    context.JsonSerializerOptions,
+                    chatMessageStoreFactoryContext.SerializedState,
+                    chatMessageStoreFactoryContext.JsonSerializerOptions,
                     logger),
 
                 // Give the agent its identifiers
