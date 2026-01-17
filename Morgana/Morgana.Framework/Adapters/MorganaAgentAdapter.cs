@@ -392,7 +392,7 @@ public class MorganaAgentAdapter
                 AIContextProviderFactory = (aiContextProviderFactoryContext) => contextProvider,
 
                 // Give the agent its ChatMessageStore
-                ChatMessageStoreFactory = (context) => new InMemoryChatMessageStoreService(
+                ChatMessageStoreFactory = (context) => new MorganaChatMessageStoreProvider(
                     conversationId,
                     intent,
                     context.SerializedState,
@@ -406,7 +406,6 @@ public class MorganaAgentAdapter
                 // Give the agent its instructions and tools
                 ChatOptions = new ChatOptions
                 {
-                    ConversationId = conversationId,
                     Instructions = ComposeAgentInstructions(agentPrompt),
                     Tools = [.. morganaToolAdapter.CreateAllFunctions()]
                 }
