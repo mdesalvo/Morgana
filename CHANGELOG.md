@@ -15,14 +15,14 @@ This release gives `AIAgent` the ability to rely on `ChatMessageStore` abstracti
 
 ### 🔄 Changed
 - `ConversationId` is not provided anymore to agent's `ChatOptions`, since we moved to `ChatMessageStore`
-- AgentName is now contextualized to color scheme of the current agent, instead of static white
-- Status of SignalR connection is now green or red, instead of static white
+- AgentName is now contextualized to color scheme of the current agent for better usabilty (instead of white)
+- Status of SignalR connection is now green or red for better usabilty (instead of white)
 
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
 This release unlocks:
-- `MorganaChatMessageStoreProvider` can easily become a database store by changing only its internals
+- `MorganaChatMessageStoreProvider` can easily become a database store by changing only its internal implementation
 
 
 ## [0.9.0] - 2026-01-14
