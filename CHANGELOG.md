@@ -50,18 +50,13 @@ This release introduces a new critical global policy **ToolGrounding** enforcing
 
 ### 🐛 Fixed
 - `Index.razor` was not rendering quick replies via `QuickReplyButton` component
-
+- Global policy `InteractiveToken` should have Type="Critical"
+  
 ### 🚀 Future Enablement
 This release unlocks:
 - `AIContextProvider` hooks can now be exploited for accessing `AIContext` **before and after LLM roundtrips**
 - Termination of an agent's conversation can now be given a custom LLM-driven behavior (e.g: triggering a NPS)
 - Morgana has become a **language-safe and policy-compliant** conversational environment
-
-
-## [0.8.3] - 2026-01-13
-
-### 🐛 Fixed
-- Global policy `InteractiveToken` should have Type="Critical" 
 
 
 ## [0.8.2] - 2026-01-12
