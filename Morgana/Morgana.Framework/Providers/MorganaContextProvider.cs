@@ -84,6 +84,46 @@ public class MorganaContextProvider : AIContextProvider
         this.SharedVariableNames = [.. sharedVariableNames ?? []];
     }
 
+    /// <summary>
+    /// Initializes a new instance of MorganaContextProvider from serialized state (deserialization).
+    /// Used by AgentThread.DeserializeThread to restore provider state from persistence.
+    /// </summary>
+    /// <param name="logger">Logger instance for context operation diagnostics</param>
+    /// <param name="serializedState">Serialized provider state from Serialize() method</param>
+    /// <param name="jsonSerializerOptions">JSON serialization options (defaults to AgentAbstractionsJsonUtilities.DefaultOptions)</param>
+    public MorganaContextProvider(
+        ILogger logger,
+        JsonElement serializedState,
+        JsonSerializerOptions? jsonSerializerOptions = null)
+    {
+        this.logger = logger;
+    
+        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
+    
+        // Deserialize AgentContext
+        if (serializedState.TryGetProperty(nameof(AgentContext), out JsonElement contextElement))
+        {
+            AgentContext = contextElement.Deserialize<Dictionary<string, object>>(jsonSerializerOptions) ?? [];
+        }
+        else
+        {
+            AgentContext = [];
+        }
+    
+        // Deserialize SharedVariableNames
+        if (serializedState.TryGetProperty(nameof(SharedVariableNames), out JsonElement sharedElement))
+        {
+            SharedVariableNames = sharedElement.Deserialize<HashSet<string>>(jsonSerializerOptions) ?? [];
+        }
+        else
+        {
+            SharedVariableNames = [];
+        }
+    
+        logger.LogInformation(
+            $"{nameof(MorganaContextProvider)} DESERIALIZED {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
+    }
+
     // =========================================================================
     // Agent Context
     // =========================================================================

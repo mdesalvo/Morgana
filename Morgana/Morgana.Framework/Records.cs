@@ -63,6 +63,52 @@ public static class Records
         string ConversationId);
 
     // ==========================================================================
+    // CONVERSATION PERSISTENCE
+    // ==========================================================================
+
+    /// <summary>
+    /// Configuration options for conversation persistence.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Configuration Example:</strong></para>
+    /// <code>
+    /// {
+    ///   "Morgana": {
+    ///     "ConversationPersistence": {
+    ///       "StoragePath": "C:/MorganaData",
+    ///       "EncryptionKey": "your-base64-encoded-256-bit-key"
+    ///     }
+    ///   }
+    /// }
+    /// </code>
+    /// <para><strong>Generating an Encryption Key:</strong></para>
+    /// <code>
+    /// // C# code to generate a secure 256-bit key
+    /// using System.Security.Cryptography;
+    /// byte[] key = new byte[32];
+    /// RandomNumberGenerator.Fill(key);
+    /// string base64Key = Convert.ToBase64String(key);
+    /// Console.WriteLine(base64Key);
+    /// </code>
+    /// </remarks>
+    public record ConversationPersistenceOptions
+    {
+        /// <summary>
+        /// Directory path where conversation files will be stored.
+        /// Directory will be created if it doesn't exist.
+        /// </summary>
+        /// <example>C:/MorganaData</example>
+        public string StoragePath { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Base64-encoded 256-bit AES encryption key for conversation data.
+        /// CRITICAL: Keep this key secure and never commit it to source control.
+        /// </summary>
+        /// <example>3q2+7w8e9r0t1y2u3i4o5p6a7s8d9f0g1h2j3k4l5z6x7c8v9b0n1m2==</example>
+        public string EncryptionKey { get; set; } = string.Empty;
+    }
+    
+    // ==========================================================================
     // USER MESSAGE HANDLING
     // ==========================================================================
 

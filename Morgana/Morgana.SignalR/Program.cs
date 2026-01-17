@@ -2,6 +2,7 @@ using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
 using Microsoft.Extensions.AI;
+using Morgana.Framework;
 using Morgana.Framework.Adapters;
 using Morgana.Framework.Interfaces;
 using Morgana.Framework.Services;
@@ -132,14 +133,29 @@ builder.Services.AddSingleton<ILLMService>(sp => {
 builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMService>().GetChatClient());
 
 // ==============================================================================
-// SECTION 7: Agent Adapter
+// SECTION 7: Conversation Persistence
+// ==============================================================================
+// Encrypted file-based persistence for conversation state (AgentThread + Context)
+// Enables resuming conversations across application restarts
+//
+// Storage Model: Each conversation stored as encrypted "{conversationId}.morgana.json" file
+// Configuration: Morgana:ConversationPersistence in appsettings.json
+
+builder.Services.Configure<Records.ConversationPersistenceOptions>(
+builder.Configuration.GetSection("Morgana:ConversationPersistence"));
+
+builder.Services.AddSingleton<IConversationPersistenceService, 
+    EncryptedFileConversationPersistenceService>();
+
+// ==============================================================================
+// SECTION 8: Agent Adapter
 // ==============================================================================
 // Adapter for integrating Morgana agents with Microsoft.Extensions.AI abstractions
 
 builder.Services.AddSingleton<MorganaAgentAdapter>();
 
 // ==============================================================================
-// SECTION 8: Akka.NET Actor System
+// SECTION 9: Akka.NET Actor System
 // ==============================================================================
 // Creates and configures the Akka.NET actor system for conversation orchestration
 //
@@ -168,7 +184,7 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddHostedService<AkkaHostedService>();
 
 // ==============================================================================
-// SECTION 9: Application Pipeline Configuration
+// SECTION 10: Application Pipeline Configuration
 // ==============================================================================
 // Configures the HTTP request pipeline and middleware
 
@@ -183,7 +199,7 @@ app.MapControllers();                            // Map REST API controllers
 app.MapHub<ConversationHub>("/conversationHub"); // Map SignalR hub endpoint
 
 // ==============================================================================
-// SECTION 10: Application Startup
+// SECTION 11: Application Startup
 // ==============================================================================
 // Starts the web application and actor system
 
