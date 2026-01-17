@@ -1,7 +1,7 @@
 <table style="border:none;">
   <tr>
     <td width="256">
-      <img src="https://github.com/mdesalvo/Morgana/blob/master/Morgana.jpg" alt="Morgana Logo" width="256"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/master/Morgana2.jpg" alt="Morgana Logo" width="256"/>
     </td>
     <td>
       <h1>Morgana</h1>
