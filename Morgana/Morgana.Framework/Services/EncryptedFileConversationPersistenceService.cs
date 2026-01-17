@@ -83,11 +83,12 @@ public class EncryptedFileConversationPersistenceService : IConversationPersiste
         AgentThread agentThread,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        string filePath = GetFilePath(agentIdentifier);
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
         try
         {
+            string filePath = GetFilePath(agentIdentifier);
+
             // Serialize AgentThread to JSON
             JsonElement serialized = agentThread.Serialize(jsonSerializerOptions);
             string json = JsonSerializer.Serialize(serialized, jsonSerializerOptions);
@@ -115,17 +116,17 @@ public class EncryptedFileConversationPersistenceService : IConversationPersiste
         MorganaAgent agent,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        string filePath = GetFilePath(agentIdentifier);
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
-
-        if (!File.Exists(filePath))
-        {
-            logger.LogInformation($"Conversation {agentIdentifier} not found, returning null");
-            return null;
-        }
 
         try
         {
+            string filePath = GetFilePath(agentIdentifier);
+            if (!File.Exists(filePath))
+            {
+                logger.LogInformation($"Conversation {agentIdentifier} not found, returning null");
+                return null;
+            }
+
             // Read encrypted file
             byte[] encryptedData = await File.ReadAllBytesAsync(filePath);
 
@@ -147,35 +148,6 @@ public class EncryptedFileConversationPersistenceService : IConversationPersiste
             logger.LogError(ex, $"Failed to load conversation {agentIdentifier}");
             throw;
         }
-    }
-
-    /// <inheritdoc/>
-    public Task<bool> ConversationExistsAsync(string agentIdentifier)
-    {
-        string filePath = GetFilePath(agentIdentifier);
-        bool exists = File.Exists(filePath);
-
-        logger.LogDebug($"Conversation {agentIdentifier} exists: {exists}");
-
-        return Task.FromResult(exists);
-    }
-
-    /// <inheritdoc/>
-    public Task DeleteConversationAsync(string agentIdentifier)
-    {
-        string filePath = GetFilePath(agentIdentifier);
-
-        if (File.Exists(filePath))
-        {
-            File.Delete(filePath);
-            logger.LogInformation($"Deleted conversation {agentIdentifier} from {filePath}");
-        }
-        else
-        {
-            logger.LogDebug($"Conversation {agentIdentifier} does not exist, nothing to delete");
-        }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>

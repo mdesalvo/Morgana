@@ -86,24 +86,4 @@ public interface IConversationPersistenceService
         string agentIdentifier,
         Abstractions.MorganaAgent agent,
         JsonSerializerOptions? jsonSerializerOptions = null);
-
-    /// <summary>
-    /// Checks if an agent's conversation with the given ID exists in persistent storage.
-    /// Useful for determining whether to load existing state or create a new conversation.
-    /// </summary>
-    /// <param name="agentIdentifier">Unique identifier for the conversation</param>
-    /// <returns>True if the conversation exists in storage, false otherwise</returns>
-    Task<bool> ConversationExistsAsync(string agentIdentifier);
-
-    /// <summary>
-    /// Deletes an agent's conversation and all its associated state from persistent storage.
-    /// Use this for cleanup, GDPR compliance, or when users explicitly delete conversations.
-    /// </summary>
-    /// <param name="agentIdentifier">Unique identifier for the agent's conversation to delete</param>
-    /// <returns>Task representing the async delete operation</returns>
-    /// <remarks>
-    /// <para><strong>Idempotency:</strong></para>
-    /// <para>Implementations should be idempotent - deleting a non-existent conversation should not throw an error.</para>
-    /// </remarks>
-    Task DeleteConversationAsync(string agentIdentifier);
 }
