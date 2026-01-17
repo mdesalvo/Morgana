@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: MorganaChatMessageStoreProvider
+This release gives `AIAgent` the ability to rely on `ChatMessageStore` abstraction for persisting conversation messages.
+
+### ✨ Added
+**MorganaChatMessageStoreProvider**
+- Delegates storage, filtering and serialization of messages to **Microsoft.Agents.AI** framework: wraps `InMemoryChatMessageStore` while providing **Morgana-specific observability**
+- Fully compatible with `AgentThread`, which can finally decouple handling of messages (`ChatMessageStore`) from handling of context (`AIContextProvider`) during serialization roundtrips
+
+### 🔄 Changed
+- `ConversationId` is not provided anymore to agent's `ChatOptions`, since we moved to `ChatMessageStore`
+- AgentName is now contextualized to color scheme of the current agent, instead of static white
+- Status of SignalR connection is now green or red, instead of static white
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+This release unlocks:
+- `MorganaChatMessageStoreProvider` can easily become a database store by changing only its internals
+
 
 ## [0.9.0] - 2026-01-14
 ### 🎯 Major Feature: ConversationClosure Policy
