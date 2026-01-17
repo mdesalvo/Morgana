@@ -155,7 +155,7 @@ public class MorganaContextProvider : AIContextProvider
     }
 
     // =========================================================================
-    // Serialization
+    // AIContextProvider (Microsoft.Agents.AI)
     // =========================================================================
 
     /// <summary>
@@ -177,101 +177,7 @@ public class MorganaContextProvider : AIContextProvider
     }
 
     /// <summary>
-    /// Deserializes provider state from AgentThread persistence.
-    /// </summary>
-    public static MorganaContextProvider Deserialize(string json, ILogger logger)
-    {
-        #region JsonElement Utilities
-        /* Converts a JsonElement to its appropriate .NET type.
-         * Handles: string, number, boolean, null, object, array. */
-        object ConvertJsonElementToObject(JsonElement element)
-        {
-            return element.ValueKind switch
-            {
-                JsonValueKind.String => element.GetString()!,
-                JsonValueKind.Number => element.TryGetInt32(out int intValue)
-                    ? intValue
-                    : element.TryGetInt64(out long longValue)
-                        ? longValue
-                        : element.GetDouble(),
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                JsonValueKind.Null => null!,
-                JsonValueKind.Object => DeserializeJsonObject(element),
-                JsonValueKind.Array => DeserializeJsonArray(element),
-                _ => element.GetRawText() // Fallback to raw JSON string
-            };
-        }
-
-        /* Deserializes a JsonElement representing an object to Dictionary<string, object> */
-        Dictionary<string, object> DeserializeJsonObject(JsonElement element)
-        {
-            Dictionary<string, object> result = [];
-
-            foreach (JsonProperty property in element.EnumerateObject())
-                result[property.Name] = ConvertJsonElementToObject(property.Value);
-
-            return result;
-        }
-
-        /* Deserializes a JsonElement representing an array to List<object> */
-        List<object> DeserializeJsonArray(JsonElement element)
-        {
-            List<object> result = [];
-
-            foreach (JsonElement item in element.EnumerateArray())
-                result.Add(ConvertJsonElementToObject(item));
-
-            return result;
-        }
-        #endregion
-
-        JsonSerializerOptions jsonSerializerOptions = AgentAbstractionsJsonUtilities.DefaultOptions;
-
-        // Parse the JSON to get the root dictionary
-        Dictionary<string, JsonElement>? agentThread = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-            json, jsonSerializerOptions);
-
-        if (agentThread == null)
-        {
-            logger.LogWarning($"{nameof(MorganaContextProvider)} DESERIALIZED with NULL agentThread - creating empty provider");
-            return new MorganaContextProvider(logger);
-        }
-
-        // Deserialize AgentContext
-        Dictionary<string, object> agentContext = new Dictionary<string, object>();
-        if (agentThread.TryGetValue(nameof(AgentContext), out JsonElement agentContextElement)
-             && agentContextElement.ValueKind == JsonValueKind.Object)
-        {
-            // JsonElement must be explicitly converted to Dictionary<string, object>
-            foreach (JsonProperty property in agentContextElement.EnumerateObject())
-                agentContext[property.Name] = ConvertJsonElementToObject(property.Value);
-        }
-
-        // Deserialize SharedVariableNames
-        HashSet<string> sharedVariableNames = [];
-        if (agentThread.TryGetValue(nameof(SharedVariableNames), out JsonElement sharedNamesElement))
-        {
-            // JsonElement can be directly deserialized to HashSet<string>
-            sharedVariableNames = sharedNamesElement.Deserialize<HashSet<string>>(jsonSerializerOptions) ?? [];
-        }
-
-        logger.LogInformation(
-            $"{nameof(MorganaContextProvider)} DESERIALIZED with {agentContext.Count} variables and {sharedVariableNames.Count} shared names");
-
-        return new MorganaContextProvider(logger)
-        {
-            AgentContext = agentContext,
-            SharedVariableNames = sharedVariableNames
-        };
-    }
-
-    // =========================================================================
-    // AIContextProvider (Microsoft.Agents.AI)
-    // =========================================================================
-
-    /// <summary>
-    /// AIContextProvider: hook called BEFORE agent invocation.
+    /// Hook called BEFORE agent invocation (USER -> AGENT)
     /// </summary>
     public override ValueTask<AIContext> InvokingAsync(
         InvokingContext context,
@@ -285,7 +191,7 @@ public class MorganaContextProvider : AIContextProvider
     }
 
     /// <summary>
-    /// AIContextProvider: hook called AFTER agent invocation.
+    /// Hook called AFTER agent invocation (AGENT -> USER)
     /// </summary>
     public override ValueTask InvokedAsync(
         InvokedContext context,
