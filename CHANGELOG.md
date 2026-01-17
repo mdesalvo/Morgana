@@ -22,7 +22,7 @@ This release gives `AIAgent` the ability to rely on `ChatMessageStore` abstracti
 
 ### 🚀 Future Enablement
 This release unlocks:
-- `MorganaChatMessageStoreProvider` can easily become a database store by changing only its internal implementation
+- `MorganaChatMessageStoreProvider` can easily become a database store by changing only its wrapped `ChatMessageStore`
 
 
 ## [0.9.0] - 2026-01-14
