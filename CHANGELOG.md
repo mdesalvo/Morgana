@@ -5,24 +5,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.10.0] - UNDER DEVELOPMENT
-### 🎯 Major Feature: MorganaChatMessageStoreProvider
-This release gives `AIAgent` the ability to rely on `ChatMessageStore` abstraction for persisting conversation messages.
+### 🎯 Major Feature: Conversation Persistence
+This release introduces **persistent conversation storage** with **encrypted SQLite databases**, enabling Morgana to resume conversations across application restarts while maintaining full context and message history.
 
 ### ✨ Added
-**MorganaChatMessageStoreProvider**
-- Delegates storage, filtering and serialization of messages to **Microsoft.Agents.AI** framework: wraps `InMemoryChatMessageStore` while providing **Morgana-specific observability**
-- Fully compatible with `AgentThread`, which can finally decouple handling of messages (`ChatMessageStore`) from handling of context (`AIContextProvider`) during serialization roundtrips
+**IConversationPersistenceService**
+- Abstraction for pluggable persistence strategies (SQLite, PostgreSQL, SQL Server, etc.)
+- `SaveConversationAsync()` and `LoadConversationAsync()` for **AgentThread serialization/deserialization**
+- Full integration with **Microsoft.Agents.AI** framework for automatic state management
+
+**SqliteConversationPersistenceService**
+- Default implementation storing conversations in encrypted SQLite databases
+- One database per conversation: `morgana-{conversationId}.db`
+- Table schema with agent-specific rows containing encrypted AgentThread BLOBs
+- **AES-256-CBC encryption** with IV prepended to ciphertext for data-at-rest protection
+- Optimized for single-writer scenario (one active agent per conversation)
+- `user_version` pragma-based initialization tracking for zero-overhead schema checks
+
+**Database Schema**
+```sql
+CREATE TABLE morgana (
+    agent_identifier TEXT PRIMARY KEY,    -- e.g., "billing-conv12345"
+    agent_name TEXT UNIQUE,                -- e.g., "billing"
+    conversation_id TEXT,                  -- e.g., "conv12345"
+    agent_thread BLOB,                     -- AES-256 encrypted AgentThread
+    creation_date TEXT,                    -- ISO 8601 timestamp (immutable)
+    last_update TEXT                       -- ISO 8601 timestamp (updated on save)
+);
+```
+
+**MorganaAgent Persistence Integration**
+- Automatic thread loading on first agent invocation via `LoadConversationAsync()`
+- Automatic thread saving after each turn via `SaveConversationAsync()`
+- Seamless serialization of both **ChatMessageStore** (conversation history) and **AIContextProvider** (context variables)
+- Each agent maintains isolated thread storage per conversation
 
 ### 🔄 Changed
 - `ConversationId` is not provided anymore to agent's `ChatOptions`, since we moved to `ChatMessageStore`
 - AgentName is now contextualized to color scheme of the current agent for better usabilty (instead of white)
 - Status of SignalR connection is now green or red for better usabilty (instead of white)
-
+- 
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
 This release unlocks:
-- `MorganaChatMessageStoreProvider` can easily become a database store by changing only its wrapped `ChatMessageStore`
+- **Enterprise-grade persistence** with PostgreSQL/SQL Server by implementing `IConversationPersistenceService`
+- Conversation analytics and auditing through database queries
 
 
 ## [0.9.0] - 2026-01-14
