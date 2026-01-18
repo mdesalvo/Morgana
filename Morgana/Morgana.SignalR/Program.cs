@@ -144,9 +144,7 @@ builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMServi
 
 builder.Services.Configure<Records.ConversationPersistenceOptions>(
 builder.Configuration.GetSection("Morgana:ConversationPersistence"));
-
-builder.Services.AddSingleton<IConversationPersistenceService, 
-    EncryptedFileConversationPersistenceService>();
+builder.Services.AddSingleton<IConversationPersistenceService, SQLiteConversationPersistenceService>();
 
 // ==============================================================================
 // SECTION 8: Agent Adapter
