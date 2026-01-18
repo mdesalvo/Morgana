@@ -250,6 +250,44 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<string?> GetMostRecentAgentAsync(string conversationId)
+    {
+        try
+        {
+            string connectionString = GetConnectionString(conversationId);
+            string dbPath = GetDatabasePath(conversationId);
+
+            if (!File.Exists(dbPath))
+            {
+                logger.LogInformation($"Database for conversation {conversationId} not found");
+                return null;
+            }
+
+            await using SqliteConnection connection = new SqliteConnection(connectionString);
+            await connection.OpenAsync();
+
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "SELECT agent_name FROM morgana ORDER BY last_update DESC LIMIT 1;";
+
+            object? result = await command.ExecuteScalarAsync();
+        
+            string? agentName = result?.ToString();
+        
+            logger.LogInformation(
+                agentName != null 
+                    ? $"Most recent agent for conversation {conversationId}: {agentName}"
+                    : $"No agents found for conversation {conversationId}");
+
+            return agentName;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, $"Failed to get most recent agent for conversation {conversationId}");
+            return null;
+        }
+    }
+
     /// <summary>
     /// Constructs the SQLite connection string for a conversation database.
     /// Simple configuration for single-writer scenario (one agent at a time).

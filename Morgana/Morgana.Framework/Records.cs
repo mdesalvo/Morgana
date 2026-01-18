@@ -107,7 +107,14 @@ public static class Records
         /// <example>3q2+7w8e9r0t1y2u3i4o5p6a7s8d9f0g1h2j3k4l5z6x7c8v9b0n1m2==</example>
         public string EncryptionKey { get; set; } = string.Empty;
     }
-    
+
+    /// <summary>
+    /// Request to restore active agent state when resuming a conversation from persistence.
+    /// Sent to ConversationSupervisor after conversation resume to set activeAgent and activeAgentIntent.
+    /// </summary>
+    /// <param name="AgentIntent">Intent of the agent that was last active (e.g., "billing", "contract")</param>
+    public record RestoreActiveAgent(string AgentIntent);
+
     // ==========================================================================
     // USER MESSAGE HANDLING
     // ==========================================================================

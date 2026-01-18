@@ -38,6 +38,7 @@ public class ConversationSupervisorActor : MorganaActor
     private readonly IActorRef router;
     private readonly ISignalRBridgeService signalRBridgeService;
     private readonly IAgentConfigurationService agentConfigService;
+    private readonly IAgentRegistryService agentRegistryService;
 
     /// <summary>
     /// Reference to the currently active agent (for multi-turn conversations).
@@ -66,15 +67,18 @@ public class ConversationSupervisorActor : MorganaActor
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="signalRBridgeService">Service for sending messages to clients via SignalR</param>
     /// <param name="agentConfigService">Service for loading intent and agent configurations</param>
+    /// <param name="agentRegistryService">Service for runtime discovery and resolution of agent types</param>
     public ConversationSupervisorActor(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         ISignalRBridgeService signalRBridgeService,
-        IAgentConfigurationService agentConfigService) : base(conversationId, llmService, promptResolverService)
+        IAgentConfigurationService agentConfigService,
+        IAgentRegistryService agentRegistryService) : base(conversationId, llmService, promptResolverService)
     {
         this.signalRBridgeService = signalRBridgeService;
         this.agentConfigService = agentConfigService;
+        this.agentRegistryService = agentRegistryService;
 
         guard = Context.System.GetOrCreateActor<GuardActor>("guard", conversationId).GetAwaiter().GetResult();
         classifier = Context.System.GetOrCreateActor<ClassifierActor>("classifier", conversationId).GetAwaiter().GetResult();
@@ -619,6 +623,49 @@ public class ConversationSupervisorActor : MorganaActor
         actorLogger.Error(failure.Cause, "Unexpected failure in ConversationSupervisorActor");
 
         Sender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
+    }
+
+    /// <summary>
+    /// Restores the active agent state when resuming a conversation from persistence.
+    /// This allows multi-turn conversations to continue seamlessly after application restart.
+    /// Registered as common handler across all FSM states.
+    /// </summary>
+    /// <param name="msg">Restoration request containing the agent intent</param>
+    private async Task HandleRestoreActiveAgentAsync(Records.RestoreActiveAgent msg)
+    {
+        actorLogger.Info($"Restoring active agent: {msg.AgentIntent}");
+
+        try
+        {
+            // Resolve agent actor reference (creates if doesn't exist)
+            IActorRef agentRef = await Context.System.GetOrCreateAgent(
+                agentType: agentRegistryService.ResolveAgentFromIntent(msg.AgentIntent),
+                actorSuffix: msg.AgentIntent,
+                conversationId: conversationId);
+
+            // Set supervisor state
+            activeAgent = agentRef;
+            activeAgentIntent = msg.AgentIntent;
+
+            actorLogger.Info($"Active agent restored: {activeAgent.Path} with intent {activeAgentIntent}");
+        }
+        catch (Exception ex)
+        {
+            actorLogger.Error(ex, $"Failed to restore active agent for intent {msg.AgentIntent}");
+        
+            // Fallback: clear active agent, next message will reclassify
+            activeAgent = null;
+            activeAgentIntent = null;
+        }
+    }
+
+    /// <inheritdoc/>
+    protected override void RegisterCommonHandlers()
+    {
+        base.RegisterCommonHandlers();
+
+        // Specific handlers for supervisor
+        ReceiveAsync<Records.RestoreActiveAgent>(HandleRestoreActiveAgentAsync);
     }
 
     #endregion

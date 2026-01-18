@@ -86,4 +86,12 @@ public interface IConversationPersistenceService
         string agentIdentifier,
         Abstractions.MorganaAgent agent,
         JsonSerializerOptions? jsonSerializerOptions = null);
+
+    /// <summary>
+    /// Gets the most recently active agent for a conversation.
+    /// Uses last_update timestamp to determine which agent was last engaged.
+    /// </summary>
+    /// <param name="conversationId">Conversation identifier</param>
+    /// <returns>Agent name (e.g., "billing") or null if conversation not found</returns>
+    Task<string?> GetMostRecentAgentAsync(string conversationId);
 }

@@ -139,7 +139,7 @@ public class MorganaActor : ReceiveActor
     /// less explicit and harder to understand. The explicit call to RegisterCommonHandlers() in each
     /// behavior makes it clear that common handlers are being maintained across state transitions.</para>
     /// </remarks>
-    protected void RegisterCommonHandlers()
+    protected virtual void RegisterCommonHandlers()
     {
         Receive<ReceiveTimeout>(HandleReceiveTimeout);
     }

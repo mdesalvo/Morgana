@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using Morgana.Framework;
 using Morgana.Framework.Actors;
 using Morgana.Framework.Extensions;
+using Morgana.Framework.Interfaces;
 using Morgana.SignalR.Hubs;
 
 namespace Morgana.SignalR.Controllers;
@@ -29,6 +30,7 @@ public class ConversationController : ControllerBase
 {
     private readonly ActorSystem actorSystem;
     private readonly ILogger logger;
+    private readonly IConversationPersistenceService conversationPersistenceService;
     private readonly IHubContext<ConversationHub> signalrContext;
 
     /// <summary>
@@ -36,14 +38,17 @@ public class ConversationController : ControllerBase
     /// </summary>
     /// <param name="actorSystem">Akka.NET actor system for conversation management</param>
     /// <param name="logger">Logger instance for diagnostic information</param>
+    /// <param name="conversationPersistenceService">Service for recovering an existing conversation</param>
     /// <param name="signalrContext">SignalR hub context for real-time client communication</param>
     public ConversationController(
         ActorSystem actorSystem,
         ILogger logger,
+        IConversationPersistenceService conversationPersistenceService,
         IHubContext<ConversationHub> signalrContext)
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
+        this.conversationPersistenceService = conversationPersistenceService;
         this.signalrContext = signalrContext;
     }
 
@@ -133,6 +138,63 @@ public class ConversationController : ControllerBase
         catch (Exception ex)
         {
             logger.LogError(ex, $"Failed to end conversation {conversationId}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Resumes an existing conversation by restoring actor hierarchy and active agent state from persistent storage.
+    /// </summary>
+    /// <param name="conversationId">Unique identifier of the conversation to resume</param>
+    /// <returns>
+    /// 200 OK with conversation details and restored active agent on success.<br/>
+    /// 404 Not Found if conversation doesn't exist.<br/>
+    /// 500 Internal Server Error on failure.
+    /// </returns>
+    [HttpPost("{conversationId}/resume")]
+    public async Task<IActionResult> ResumeConversation(string conversationId)
+    {
+        try
+        {
+            logger.LogInformation($"Resuming conversation {conversationId}");
+
+            // 1. Get most recent agent from database
+            string? lastActiveAgent = await conversationPersistenceService
+                .GetMostRecentAgentAsync(conversationId);
+
+            if (lastActiveAgent == null)
+            {
+                logger.LogWarning($"No conversation history found for {conversationId}");
+                return NotFound(new { error = "Conversation not found" });
+            }
+
+            // 2. Create/get manager and supervisor
+            IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>(
+                "manager", conversationId);
+
+            Records.ConversationCreated? conversationCreated = await manager.Ask<Records.ConversationCreated>(
+                new Records.CreateConversation(conversationId));
+
+            // 3. Restore active agent state in supervisor
+            IActorRef supervisor = await actorSystem.ActorSelection(
+                    $"/user/supervisor-{conversationId}")
+                .ResolveOne(TimeSpan.FromMilliseconds(500));
+
+            supervisor.Tell(new Records.RestoreActiveAgent(lastActiveAgent));
+
+            logger.LogInformation(
+                $"Resumed conversation {conversationCreated.ConversationId} with active agent: {lastActiveAgent}");
+
+            return Ok(new
+            {
+                conversationId = conversationCreated.ConversationId,
+                resumed = true,
+                activeAgent = lastActiveAgent
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, $"Failed to resume conversation {conversationId}");
             return StatusCode(500, new { error = ex.Message });
         }
     }
