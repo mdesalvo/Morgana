@@ -1,7 +1,7 @@
 <table style="border:none;">
   <tr>
     <td width="256">
-      <img src="https://github.com/mdesalvo/Morgana/blob/master/Morgana2.jpg" alt="Morgana Logo" width="256"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/master/Morgana.jpg" alt="Morgana Logo" width="256"/>
     </td>
     <td>
       <h1>Morgana</h1>
@@ -36,9 +36,10 @@ Traditional chatbot systems often struggle with complexity—they either become 
 6. **Automatic Discovery**: Agents self-register through attributes, eliminating manual configuration
 7. **P2P Context Synchronization**: Agents share contextual information seamlessly through a message bus architecture
 8. **Native Memory Management**: Context and conversation history managed by Microsoft.Agents.AI framework
-9. **Personality-Driven Interactions**: Layered personality system with global and agent-specific traits
-10. **Plugin Architecture**: Domain agents dynamically loaded at runtime, enabling complete framework/domain decoupling
-11. **MCP Integration**: Agents dynamically extend capabilities by consuming external MCP servers—tools become indistinguishable from native implementations
+9. **Persistent Conversations**: Encrypted SQLite storage enables resuming conversations across restarts while maintaining full context
+10. **Personality-Driven Interactions**: Layered personality system with global and agent-specific traits
+11. **Plugin Architecture**: Domain agents dynamically loaded at runtime, enabling complete framework/domain decoupling
+12. **MCP Integration**: Agents dynamically extend capabilities by consuming external MCP servers—tools become indistinguishable from native implementations
 
 ## Architecture
 
@@ -746,13 +747,6 @@ Agent: "I discovered 4 invoices for you. Select one to view the enchanted detail
 Buttons: [📄 INV-001 €130] [📄 INV-002 €150] [📄 INV-003 €125] [📄 INV-004 €100]
 ```
 
-**Troubleshooting Guides (TroubleshootingAgent):**
-```
-User: "My internet is not working"
-Agent: "I have 3 guides that can help. Choose the one matching your issue."
-Buttons: [🔴 No Internet] [🐌 Slow Speed] [📡 WiFi Issues]
-```
-
 **Contract Termination Confirmation (ContractAgent):**
 ```
 User: "I want to cancel my contract"
@@ -792,7 +786,7 @@ Buttons: [✅ Yes, Proceed] [❌ No, Cancel]
 ### QuickReply Record Definition
 
 ```csharp
-namespace Morgana.Foundations.Records;
+namespace Morgana.Framework.Records;
 
 public record QuickReply(
     [property: JsonPropertyName("id")] string Id,
@@ -1344,10 +1338,12 @@ Morgana treats MCP tools as **first-class citizens**, making external capabiliti
 - **Azure OpenAI Service / Anthropic Claude**: Multi-provider LLM support through configurable implementations
 
 ### Memory & Context Management
-- **AgentThread**: Framework-native conversation history management
+- **AgentThread**: Framework-native conversation history management with automatic serialization support
 - **MorganaContextProvider**: Custom `AIContextProvider` implementation for stateful context management with temporary variable support
+- **MorganaStoreProvider**: Wrapper around Microsoft's `InMemoryChatMessageStore` providing Morgana-specific observability and serialization
 - **P2P Context Sync**: Actor-based broadcast mechanism for shared context variables
 - **Quick Replies Storage**: Temporary context variables for LLM-generated interactive buttons
+- **Conversation Persistence**: 💾 Encrypted SQLite databases storing full conversation state (messages + context) with AES-256-CBC encryption
 
 ### LLM Provider Support
 
@@ -1425,5 +1421,104 @@ The Agent Framework automatically:
 2. Handles parameter validation and type conversion
 3. Invokes the appropriate method
 4. Returns results to the LLM for natural language synthesis
+
+### Conversation Persistence 💾
+
+Morgana features **enterprise-grade conversation persistence** that seamlessly integrates with Microsoft.Agents.AI framework, enabling conversations to survive application restarts while maintaining complete context and message history.
+
+**Architecture:**
+```
+IConversationPersistenceService (abstraction)
+    ↓ implemented by
+SqliteConversationPersistenceService (default)
+    ↓ can be replaced with
+PostgreSqlConversationPersistenceService, SqlServerConversationPersistenceService, etc.
+```
+
+**Storage Model:**
+- **One database per conversation**: `morgana-{conversationId}.db`
+- **One row per agent**: `billing-conv12345`, `contract-conv12345`, etc.
+- **Encrypted AgentThread BLOBs**: AES-256-CBC with IV prepended
+- **Automatic serialization**: Both `ChatMessageStore` (messages) and `AIContextProvider` (context variables)
+
+**Database Schema:**
+```sql
+CREATE TABLE morgana (
+    agent_identifier TEXT PRIMARY KEY,    -- "billing-conv12345"
+    agent_name TEXT UNIQUE,                -- "billing"
+    conversation_id TEXT,                  -- "conv12345"
+    agent_thread BLOB,                     -- Encrypted AgentThread (messages + context)
+    creation_date TEXT,                    -- ISO 8601 timestamp (immutable)
+    last_update TEXT                       -- ISO 8601 timestamp (updated on save)
+);
+```
+
+**Automatic Integration:**
+```csharp
+// MorganaAgent automatically handles persistence
+protected async Task ExecuteAgentAsync(Records.AgentRequest req)
+{
+    // 1. Load thread from database (if exists)
+    aiAgentThread ??= await persistenceService.LoadConversationAsync(
+        AgentIdentifier,
+        this,
+        jsonSerializerOptions);
+    
+    // 2. Execute agent logic
+    await aiAgent.RunAsync(req.Message, aiAgentThread);
+    
+    // 3. Save thread to database
+    await persistenceService.SaveConversationAsync(
+        AgentIdentifier,
+        aiAgentThread,
+        jsonSerializerOptions);
+}
+```
+
+**What Gets Persisted:**
+- ✅ **Full conversation history** (user messages + agent responses + tool calls)
+- ✅ **Context variables** (userId, invoiceId, shared state, etc.)
+- ✅ **Quick replies state** (LLM-generated interactive buttons)
+- ✅ **Shared variable configuration** (which variables sync across agents)
+- ✅ **Agent completion status** (multi-turn conversation state)
+
+**Configuration:**
+```json
+{
+  "Morgana": {
+    "ConversationPersistence": {
+      "StoragePath": "C:/MorganaData",
+      "EncryptionKey": "your-base64-encoded-256-bit-key"
+    }
+  }
+}
+```
+
+**Security:**
+- **AES-256-CBC encryption** for data at rest
+- **IV prepended to ciphertext** for each AgentThread BLOB
+- **Base64-encoded encryption key** in configuration (externalize in production)
+
+**Pluggable Architecture:**
+Switching to enterprise databases requires only one line change:
+
+```csharp
+// Program.cs - Default SQLite
+builder.Services.AddSingleton<IConversationPersistenceService, 
+    SqliteConversationPersistenceService>();
+
+// Program.cs - Switch to PostgreSQL
+builder.Services.AddSingleton<IConversationPersistenceService, 
+    PostgreSqlConversationPersistenceService>();
+```
+
+All agents, tools, and business logic remain unchanged—true dependency inversion! 🎯
+
+**Benefits:**
+- 🔄 **Resume conversations** across application restarts
+- 📊 **Conversation analytics** through SQL queries on persisted data
+- 🔒 **GDPR compliance** with encrypted storage and retention policies
+- 🌐 **Distributed deployments** can share conversation state
+- 🧪 **Testing & debugging** with persistent conversation snapshots
 
 ---
