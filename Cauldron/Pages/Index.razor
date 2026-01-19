@@ -24,7 +24,7 @@
                     @(isConnected ? "Online" : "Offline")
                 </span>
             </div>
-            <button class="new-conversation-btn" disabled="@IsNewConversationButtonDisabled" @onclick="ClearAndStartNewConversation" title="Start a new conversation">
+            <button class="new-conversation-btn @(IsNewConversationButtonVisible ? "visible" : "hidden")" @onclick="ClearConversation" title="Start a new conversation">
                 <span class="btn-icon">✨</span>
                 <span class="btn-text">New Conversation</span>
             </button>
@@ -205,7 +205,7 @@
 
     /// <summary>
     /// Name of the currently active agent.
-    /// Updates dynamically when agents take control: "Morgana", "Billing", etc.
+    /// Updates dynamically when agents take control: "Morgana", "Morgana (Billing)", etc.
     /// Displayed in header and used for avatar border color.
     /// </summary>
     private string currentAgentName = "Morgana";
@@ -477,11 +477,11 @@
     /// Triggered by the "+ New Conversation" button.
     /// </summary>
     /// <returns>Task representing the async new conversation operation</returns>
-    private async Task ClearAndStartNewConversation()
+    private async Task ClearConversation()
     {
         try
         {
-            Console.WriteLine("🆕 ClearAndStartNewConversation: Clearing storage and refreshing...");
+            Console.WriteLine($"🆕 {nameof(ClearConversation)}: Clearing storage and refreshing...");
             
             // Clear saved conversation ID from ProtectedLocalStorage
             await StorageService.ClearConversationIdAsync();
@@ -491,7 +491,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ ClearAndStartNewConversation exception: {ex.Message}");
+            Console.WriteLine($"❌ {nameof(ClearConversation)} exception: {ex.Message}");
             errorMessage = $"Error starting new conversation: {ex.Message}";
         }
     }
@@ -775,14 +775,11 @@
         messages.Any(m => m.IsTyping);
 
     /// <summary>
-    /// Gets a value indicating whether the new conversation button should be disabled.
-    /// Disabled when: not connected, not initialized, not checked for storage.
+    /// Gets a value indicating whether the new conversation button should be visible.
+    /// Visible when: connected and initialized and checked for storage.
     /// </summary>
-    private bool IsNewConversationButtonDisabled =>
-        !isConnected &&
-        !isInitialized &&
-        !hasCheckedStorage &&
-        string.IsNullOrWhiteSpace(conversationId);
+    private bool IsNewConversationButtonVisible =>
+        isConnected && isInitialized && hasCheckedStorage && !string.IsNullOrWhiteSpace(conversationId);
 
     /// <summary>
     /// Gets a value indicating whether the textarea should be disabled.

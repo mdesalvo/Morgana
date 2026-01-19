@@ -27,6 +27,12 @@
     /* Shadow for depth */
     box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 30%, transparent);
 }
+.new-conversation-btn.visible {
+    display: flex;
+}
+.new-conversation-btn.hidden {
+    display: none;
+}
 
 /* Icon styling */
 .new-conversation-btn .btn-icon {
@@ -72,7 +78,7 @@
 }
 
 /* Responsive adjustments */
-@media (max-width: 768px) {
+@media (max-width: 640px) {
     .new-conversation-btn {
         padding: 8px 12px;
         font-size: 13px;
@@ -112,7 +118,7 @@
 .chat-header .header-content {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    /*justify-content: space-between;*/
     width: 100%;
 }
 
@@ -121,37 +127,3 @@
     flex: 0 1 auto;
     margin-right: 16px;
 }
-
-/* ==============================================================================
-   ALTERNATIVE POSITIONING OPTIONS
-   ============================================================================== 
-   Comment/uncomment based on your preferred button location:
-   ============================================================================== */
-
-/* Option 1: Top-right corner (absolute positioning) */
-/*
-.new-conversation-btn {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-}
-*/
-
-/* Option 2: Floating button (bottom-right) */
-/*
-.new-conversation-btn {
-    position: fixed;
-    bottom: 100px;
-    right: 24px;
-    z-index: 1000;
-    border-radius: 50%;
-    width: 56px;
-    height: 56px;
-    padding: 0;
-    justify-content: center;
-}
-
-.new-conversation-btn .btn-text {
-    display: none;
-}
-*/
