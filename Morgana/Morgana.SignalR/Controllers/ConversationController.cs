@@ -83,7 +83,7 @@ public class ConversationController : ControllerBase
                 "manager", request.ConversationId);
 
             Records.ConversationCreated? conversationCreated = await manager.Ask<Records.ConversationCreated>(
-                new Records.CreateConversation(request.ConversationId));
+                new Records.CreateConversation(request.ConversationId, false));
 
             logger.LogInformation($"Started conversation {conversationCreated.ConversationId}");
 
@@ -173,7 +173,7 @@ public class ConversationController : ControllerBase
                 "manager", conversationId);
 
             Records.ConversationCreated? conversationCreated = await manager.Ask<Records.ConversationCreated>(
-                new Records.CreateConversation(conversationId));
+                new Records.CreateConversation(conversationId, true));
 
             // Restore active agent state in supervisor
             IActorRef supervisor = await actorSystem.ActorSelection(

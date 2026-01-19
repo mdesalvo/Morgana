@@ -72,16 +72,20 @@ public class ConversationManagerActor : MorganaActor
 
         if (supervisor is null)
         {
-            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>("supervisor", msg.ConversationId);
+            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>(
+                "supervisor", msg.ConversationId);
 
             Context.Watch(supervisor);
 
             actorLogger.Info("Supervisor created: {0}", supervisor.Path);
 
-            // Trigger automatic presentation
-            supervisor.Tell(new Records.GeneratePresentationMessage());
+            // Trigger automatic presentation (only in case of new conversation)
+            if (!msg.IsRestore)
+            {
+                supervisor.Tell(new Records.GeneratePresentationMessage());
 
-            actorLogger.Info("Presentation generation triggered");
+                actorLogger.Info("Presentation generation triggered");
+            }
         }
 
         senderRef.Tell(new Records.ConversationCreated(msg.ConversationId));
@@ -123,7 +127,8 @@ public class ConversationManagerActor : MorganaActor
 
         if (supervisor == null)
         {
-            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>("supervisor", msg.ConversationId);
+            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>(
+                "supervisor", msg.ConversationId);
 
             Context.Watch(supervisor);
 

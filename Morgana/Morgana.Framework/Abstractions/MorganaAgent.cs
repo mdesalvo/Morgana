@@ -178,7 +178,7 @@ public class MorganaAgent : MorganaActor
 
         // Extract AIContextProviderState if present
         JsonElement providerState = default;
-        if (serializedThread.TryGetProperty("AIContextProviderState", out JsonElement stateElement))
+        if (serializedThread.TryGetProperty("aiContextProviderState", out JsonElement stateElement))
             providerState = stateElement;
 
         // Recreate context provider from serialized state
