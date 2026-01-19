@@ -58,7 +58,8 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     private const int SchemaVersion = 1;
 
     // SQL statements
-    private const string InitializeDatabaseSQL = @"
+    private const string InitializeDatabaseSQL =
+        """
         CREATE TABLE IF NOT EXISTS morgana (
             agent_identifier TEXT PRIMARY KEY NOT NULL,
             agent_name TEXT UNIQUE NOT NULL,
@@ -68,27 +69,30 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             last_update TEXT NOT NULL,
             is_active INTEGER NOT NULL DEFAULT 0
         );
-        
+
         CREATE INDEX IF NOT EXISTS idx_agent_name ON morgana(agent_name);
         CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
-    ";
+        """;
 
-    private const string SaveConversationSQL = @"
+    private const string SaveConversationSQL =
+        """
         INSERT INTO morgana (agent_identifier, agent_name, conversation_id, agent_thread, creation_date, last_update, is_active)
         VALUES (@agent_identifier, @agent_name, @conversation_id, @agent_thread, @creation_date, @last_update, @is_active)
         ON CONFLICT(agent_identifier) DO UPDATE SET
             agent_thread = excluded.agent_thread,
             last_update = @last_update,
             is_active = @is_active;
-    ";
+        """;
 
-    private const string LoadConversationSQL = @"
+    private const string LoadActiveConversationSQL =
+        """
         SELECT agent_thread FROM morgana WHERE agent_identifier = @agent_identifier AND is_active = 1;
-    ";
+        """;
 
-    private const string GetMostRecentActiveAgentSQL = @"
+    private const string GetMostRecentActiveAgentSQL =
+        """
         SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIMIT 1;
-    ";
+        """;
 
     /// <summary>
     /// Initializes a new instance of the SQLiteConversationPersistenceService.
@@ -225,7 +229,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
 
             // Query agent thread
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = LoadConversationSQL;
+            command.CommandText = LoadActiveConversationSQL;
             command.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
             await using SqliteDataReader reader = await command.ExecuteReaderAsync();
