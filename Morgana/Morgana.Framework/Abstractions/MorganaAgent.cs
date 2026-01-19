@@ -190,6 +190,9 @@ public class MorganaAgent : MorganaActor
         // Reconnect shared context update callback
         restoredProvider.OnSharedContextUpdate = OnSharedContextUpdate;
 
+        // Propagate shared variables with connected callback
+        restoredProvider.PropagateSharedVariables();
+
         // Assign restored provider
         contextProvider = restoredProvider;
 

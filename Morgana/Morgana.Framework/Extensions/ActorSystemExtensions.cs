@@ -64,10 +64,6 @@ public static class ActorSystemExtensions
         ///
         /// // Result: /user/guard-conv123, /user/classifier-conv123, /user/router-conv123
         /// </code>
-        /// <para><strong>Timeout Behavior:</strong></para>
-        /// <para>The 250ms timeout for actor resolution is intentionally short. If an actor doesn't respond
-        /// within this time, it's assumed not to exist, and a new one is created. This prevents long waits
-        /// in the common case where an actor hasn't been created yet.</para>
         /// </remarks>
         public async Task<IActorRef> GetOrCreateActor<T>(string actorSuffix, string conversationId)
             where T : MorganaActor
@@ -78,7 +74,7 @@ public static class ActorSystemExtensions
             {
                 // Attempt to resolve existing actor
                 return await actorSystem.ActorSelection($"/user/{actorName}")
-                    .ResolveOne(TimeSpan.FromMilliseconds(250));
+                    .ResolveOne(TimeSpan.FromMilliseconds(500));
             }
             catch
             {
@@ -146,7 +142,7 @@ public static class ActorSystemExtensions
             {
                 // Attempt to resolve existing agent
                 return await actorSystem.ActorSelection($"/user/{agentName}")
-                    .ResolveOne(TimeSpan.FromMilliseconds(250));
+                    .ResolveOne(TimeSpan.FromMilliseconds(500));
             }
             catch
             {

@@ -115,13 +115,6 @@ public class MorganaContextProvider : AIContextProvider
         if (serializedState.TryGetProperty(nameof(SharedVariableNames), out JsonElement sharedElement))
         {
             SharedVariableNames = sharedElement.Deserialize<HashSet<string>>(jsonSerializerOptions) ?? [];
-
-            // Ensure to propagate shared variables from deserialized context
-            foreach (string sharedVariableName in SharedVariableNames)
-            {
-                if (AgentContext.TryGetValue(sharedVariableName, out object? sharedVariableValue))
-                    OnSharedContextUpdate?.Invoke(sharedVariableName, sharedVariableValue);
-            }
         }
         else
         {
@@ -199,6 +192,47 @@ public class MorganaContextProvider : AIContextProvider
                 logger.LogInformation(
                     $"{nameof(MorganaContextProvider)} IGNORED shared context '{kvp.Key}' (already set to '{value}')");
             }
+        }
+    }
+
+    /// <summary>
+    /// Propagates all shared context variables to other agents via OnSharedContextUpdate callback.
+    /// Called after deserialization once the callback has been reconnected.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Purpose:</strong></para>
+    /// <para>When an agent is reloaded from persistence, its shared variables need to be broadcast
+    /// to other agents so they can receive the context. This method is called explicitly after
+    /// the OnSharedContextUpdate callback has been reconnected in MorganaAgent.DeserializeThread.</para>
+    /// <para><strong>Timing:</strong></para>
+    /// <list type="number">
+    /// <item>MorganaContextProvider constructor deserializes state (callback still NULL)</item>
+    /// <item>MorganaAgent.DeserializeThread connects callback</item>
+    /// <item>MorganaAgent.DeserializeThread calls PropagateSharedVariables()</item>
+    /// <item>Shared variables broadcast to RouterActor</item>
+    /// <item>RouterActor distributes to all other agents</item>
+    /// </list>
+    /// </remarks>
+    public void PropagateSharedVariables()
+    {
+        int propagatedCount = 0;
+
+        foreach (string sharedVariableName in SharedVariableNames)
+        {
+            if (AgentContext.TryGetValue(sharedVariableName, out object? sharedVariableValue))
+            {
+                OnSharedContextUpdate?.Invoke(sharedVariableName, sharedVariableValue);
+                propagatedCount++;
+
+                logger.LogInformation(
+                    $"{nameof(MorganaContextProvider)} PROPAGATED shared variable '{sharedVariableName}' = '{sharedVariableValue}'");
+            }
+        }
+
+        if (propagatedCount > 0)
+        {
+            logger.LogInformation(
+                $"{nameof(MorganaContextProvider)} PROPAGATED {propagatedCount} shared variables to other agents");
         }
     }
 
