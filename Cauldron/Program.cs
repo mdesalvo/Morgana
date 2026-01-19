@@ -1,3 +1,4 @@
+using Cauldron.Interfaces;
 using Cauldron.Services;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -33,6 +34,12 @@ builder.Services.AddScoped(sp => new HttpClient
     BaseAddress = new Uri(builder.Configuration["Morgana:BaseUrl"]!)  // e.g., "https://localhost:5001"
 });
 
+// ==============================================================================
+// SECTION 4: Logging Infrastructure
+// ==============================================================================
+builder.Services.AddSingleton<ILogger>(sp =>
+    sp.GetRequiredService<ILoggerFactory>().CreateLogger("Cauldron"));
+
 // ============================================================================
 // 3. CUSTOM SERVICES
 // ============================================================================
@@ -43,8 +50,13 @@ builder.Services.AddScoped(sp => new HttpClient
 builder.Services.AddScoped<MorganaSignalRService>();
 
 // Dynamic configuration-based landing message service
-// Selects a random welcome message during the "magic spakle" loading
+// Selects a random welcome message during the "magic sparkle" loading
 builder.Services.AddSingleton<MorganaLandingMessageService>();
+
+// Conversation persistence service using ProtectedLocalStorage
+// Stores conversation ID in browser localStorage with automatic AES-256 encryption
+// Enables seamless conversation resume across browser sessions
+builder.Services.AddScoped<IConversationStorageService, ProtectedLocalStorageService>();
 
 // ============================================================================
 // 4. APPLICATION PIPELINE
@@ -75,57 +87,3 @@ app.MapFallbackToPage("/_Host");        // Fallback to _Host.cshtml for all unma
 // Start the application and listen for requests.
 
 await app.RunAsync();
-
-/*
- * ============================================================================
- * CAULDRON APPLICATION ARCHITECTURE
- * ============================================================================
- * 
- * Cauldron is a Blazor Server application providing a real-time chat interface
- * for interacting with the Morgana AI conversational system.
- * 
- * TECHNOLOGY STACK:
- * ├── Blazor Server (Server-side rendering with SignalR UI updates)
- * ├── ASP.NET Core 10.0 (Web framework)
- * ├── SignalR Client (Real-time communication with Morgana backend)
- * └── HttpClient (REST API calls to Morgana)
- * 
- * COMMUNICATION PATTERNS:
- * 
- * 1. REST API (Cauldron → Morgana)
- *    - POST /api/conversation/start → Start new conversation
- *    - POST /api/conversation/{id}/message → Send user message
- *    - HTTP 202 Accepted (async processing pattern)
- * 
- * 2. SignalR (Morgana → Cauldron)
- *    - WebSocket connection to /conversationHub
- *    - ReceiveMessage events with agent responses
- *    - Group-based routing (one group per conversation)
- * 
- * 3. Blazor SignalR (Cauldron Server → Browser)
- *    - Automatic UI updates via Blazor Server SignalR
- *    - DOM diffing and patch application
- *    - Component state management
- * 
- * APPLICATION FLOW:
- * 
- * 1. User opens browser → Loads _Host.cshtml
- * 2. Blazor Server initializes → Establishes SignalR connection for UI
- * 3. Index.razor OnInitializedAsync → MorganaSignalRService.StartAsync()
- * 4. SignalR client connects to Morgana backend
- * 5. POST /api/conversation/start → Creates conversation
- * 6. Join SignalR conversation group
- * 7. Receive presentation message via SignalR
- * 8. User types message → POST to Morgana
- * 9. Morgana processes → Sends response via SignalR
- * 10. UI updates automatically via Blazor Server
- * 
- * CONFIGURATION (appsettings.json):
- * {
- *   "Morgana": {
- *     "BaseUrl": "https://localhost:5001",
- *     "LandingMessage": "Summoning Morgana...",
- *     "AgentExitMessage": "{0} has completed the spell."
- *   }
- * }
- */
