@@ -158,16 +158,6 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Resuming conversation {conversationId}");
 
-            // Get most recent agent from database
-            string? lastActiveAgent = await conversationPersistenceService
-                .GetMostRecentActiveAgentAsync(conversationId);
-
-            if (lastActiveAgent == null)
-            {
-                logger.LogWarning($"No conversation history found for {conversationId}");
-                return NotFound(new { error = "Conversation not found" });
-            }
-
             // Create/get manager and supervisor
             IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>(
                 "manager", conversationId);
@@ -180,7 +170,12 @@ public class ConversationController : ControllerBase
                     $"/user/supervisor-{conversationId}")
                 .ResolveOne(TimeSpan.FromMilliseconds(500));
 
-            supervisor.Tell(new Records.RestoreActiveAgent(lastActiveAgent));
+            // Get most recent active agent from database
+            string? lastActiveAgent = await conversationPersistenceService
+                .GetMostRecentActiveAgentAsync(conversationId);
+
+            // Tell supervisor to recontuxtualize on it
+            supervisor.Tell(new Records.RestoreActiveAgent(lastActiveAgent ?? "Morgana"));
 
             logger.LogInformation(
                 $"Resumed conversation {conversationCreated.ConversationId} with active agent: {lastActiveAgent}");

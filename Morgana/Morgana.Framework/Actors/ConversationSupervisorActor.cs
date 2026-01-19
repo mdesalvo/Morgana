@@ -637,14 +637,22 @@ public class ConversationSupervisorActor : MorganaActor
 
         try
         {
+            // No active agent -> Give Morgana fallback control
+            if (string.Equals(msg.AgentIntent, "Morgana", StringComparison.OrdinalIgnoreCase))
+            {
+                // Fallback: clear active agent, next message will reclassify
+                activeAgent = null;
+                activeAgentIntent = null;
+
+                actorLogger.Info($"No active agent detected: fallback to Morgana");
+                return;
+            }
+
             // Resolve agent actor reference (creates if doesn't exist)
-            IActorRef agentRef = await Context.System.GetOrCreateAgent(
-                agentType: agentRegistryService.ResolveAgentFromIntent(msg.AgentIntent),
+            activeAgent = await Context.System.GetOrCreateAgent(
+                agentType: agentRegistryService.ResolveAgentFromIntent(msg.AgentIntent)!,
                 actorSuffix: msg.AgentIntent,
                 conversationId: conversationId);
-
-            // Set supervisor state
-            activeAgent = agentRef;
             activeAgentIntent = msg.AgentIntent;
 
             actorLogger.Info($"Active agent restored: {activeAgent.Path} with intent {activeAgentIntent}");
