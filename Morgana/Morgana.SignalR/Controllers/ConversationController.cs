@@ -83,7 +83,7 @@ public class ConversationController : ControllerBase
                 "manager", request.ConversationId);
 
             Records.ConversationCreated? conversationCreated = await manager.Ask<Records.ConversationCreated>(
-                new Records.CreateConversation(request.ConversationId));
+                new Records.CreateConversation(request.ConversationId, false));
 
             logger.LogInformation($"Started conversation {conversationCreated.ConversationId}");
 
@@ -158,29 +158,24 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Resuming conversation {conversationId}");
 
-            // 1. Get most recent agent from database
-            string? lastActiveAgent = await conversationPersistenceService
-                .GetMostRecentAgentAsync(conversationId);
-
-            if (lastActiveAgent == null)
-            {
-                logger.LogWarning($"No conversation history found for {conversationId}");
-                return NotFound(new { error = "Conversation not found" });
-            }
-
-            // 2. Create/get manager and supervisor
+            // Create/get manager and supervisor
             IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>(
                 "manager", conversationId);
 
             Records.ConversationCreated? conversationCreated = await manager.Ask<Records.ConversationCreated>(
-                new Records.CreateConversation(conversationId));
+                new Records.CreateConversation(conversationId, true));
 
-            // 3. Restore active agent state in supervisor
+            // Restore active agent state in supervisor
             IActorRef supervisor = await actorSystem.ActorSelection(
                     $"/user/supervisor-{conversationId}")
                 .ResolveOne(TimeSpan.FromMilliseconds(500));
 
-            supervisor.Tell(new Records.RestoreActiveAgent(lastActiveAgent));
+            // Get most recent active agent from database
+            string? lastActiveAgent = await conversationPersistenceService
+                .GetMostRecentActiveAgentAsync(conversationId);
+
+            // Tell supervisor to recontuxtualize on it
+            supervisor.Tell(new Records.RestoreActiveAgent(lastActiveAgent ?? "Morgana"));
 
             logger.LogInformation(
                 $"Resumed conversation {conversationCreated.ConversationId} with active agent: {lastActiveAgent}");

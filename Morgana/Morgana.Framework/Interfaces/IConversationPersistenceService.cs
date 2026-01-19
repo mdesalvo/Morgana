@@ -22,10 +22,10 @@ namespace Morgana.Framework.Interfaces;
 /// <para><strong>Usage Pattern:</strong></para>
 /// <code>
 /// // Save conversation after each turn
-/// await persistenceService.SaveConversationAsync(conversationId, agentThread);
+/// await persistenceService.SaveAgentConversationAsync(conversationId, agentThread);
 ///
 /// // Load conversation on subsequent requests
-/// AgentThread? restored = await persistenceService.LoadConversationAsync(conversationId, morganaAgent);
+/// AgentThread? restored = await persistenceService.LoadAgentConversationAsync(conversationId, morganaAgent);
 /// if (restored != null)
 /// {
 ///     // Continue conversation with restored state
@@ -34,19 +34,19 @@ namespace Morgana.Framework.Interfaces;
 /// </code>
 /// <para><strong>Implementation Examples:</strong></para>
 /// <list type="bullet">
-/// <item><term>EncryptedFileConversationPersistenceService</term><description>Stores conversations in encrypted .morgana.json files</description></item>
-/// <item><term>SqlConversationPersistenceService</term><description>Stores conversations in SQL database (future)</description></item>
+/// <item><term>SqlConversationPersistenceService</term><description>Stores conversations in SQL database</description></item>
 /// <item><term>CosmosDbConversationPersistenceService</term><description>Stores conversations in Azure Cosmos DB (future)</description></item>
 /// </list>
 /// </remarks>
 public interface IConversationPersistenceService
 {
     /// <summary>
-    /// Saves the complete conversation state to persistent storage.
+    /// Saves the complete conversation state of the given agent to persistent storage.
     /// Serializes the AgentThread including message history, context variables, and metadata.
     /// </summary>
     /// <param name="agentIdentifier">Unique identifier for the agent's conversation</param>
     /// <param name="agentThread">AgentThread instance containing the complete conversation state</param>
+    /// <param name="isCompleted">Flag indicating if the agent is signalling completion of the conversation</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (optional, uses AgentAbstractionsJsonUtilities.DefaultOptions if null)</param>
     /// <returns>Task representing the async save operation</returns>
     /// <remarks>
@@ -57,9 +57,10 @@ public interface IConversationPersistenceService
     /// <para>Implementations should throw meaningful exceptions for I/O errors, encryption failures,
     /// or serialization errors to allow proper error handling by callers.</para>
     /// </remarks>
-    Task SaveConversationAsync(
+    Task SaveAgentConversationAsync(
         string agentIdentifier,
         AgentThread agentThread,
+        bool isCompleted,
         JsonSerializerOptions? jsonSerializerOptions = null);
 
     /// <summary>
@@ -82,7 +83,7 @@ public interface IConversationPersistenceService
     /// <item>Return the fully restored AgentThread</item>
     /// </list>
     /// </remarks>
-    Task<AgentThread?> LoadConversationAsync(
+    Task<AgentThread?> LoadAgentConversationAsync(
         string agentIdentifier,
         Abstractions.MorganaAgent agent,
         JsonSerializerOptions? jsonSerializerOptions = null);
@@ -93,5 +94,5 @@ public interface IConversationPersistenceService
     /// </summary>
     /// <param name="conversationId">Conversation identifier</param>
     /// <returns>Agent name (e.g., "billing") or null if conversation not found</returns>
-    Task<string?> GetMostRecentAgentAsync(string conversationId);
+    Task<string?> GetMostRecentActiveAgentAsync(string conversationId);
 }

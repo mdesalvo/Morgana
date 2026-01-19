@@ -52,8 +52,10 @@ public static class Records
     /// Request to create a new conversation and initialize the actor hierarchy.
     /// </summary>
     /// <param name="ConversationId">Unique identifier for the new conversation</param>
+    /// <param name="IsRestore">Flag indicating that the conversation is being created or restored</param>
     public record CreateConversation(
-        string ConversationId);
+        string ConversationId,
+        bool IsRestore);
 
     /// <summary>
     /// Request to terminate a conversation and stop all associated actors.

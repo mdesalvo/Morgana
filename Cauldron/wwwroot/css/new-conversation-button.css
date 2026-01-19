@@ -1,0 +1,129 @@
+/* ==============================================================================
+   NEW CONVERSATION BUTTON
+   ============================================================================== */
+
+.new-conversation-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    margin-left: auto; /* Push to right side of header */
+    background: var(--primary-color);
+    color: white;
+
+    /* Typography */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+
+    /* Border and shape */
+    border: none;
+    border-radius: 12px;
+
+    /* Interaction */
+    cursor: pointer;
+    transition: all 0.3s ease;
+
+    /* Shadow for depth */
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 30%, transparent);
+}
+.new-conversation-btn.visible {
+    display: flex;
+}
+.new-conversation-btn.hidden {
+    display: none;
+}
+
+/* Icon styling */
+.new-conversation-btn .btn-icon {
+    font-size: 16px;
+    display: inline-block;
+    animation: sparkle 2s ease-in-out infinite;
+}
+
+/* Text styling */
+.new-conversation-btn .btn-text {
+    display: inline-block;
+}
+
+/* Hover effect - brighten and lift */
+.new-conversation-btn:hover {
+    background: color-mix(in srgb, var(--primary-color) 85%, white);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 40%, transparent);
+}
+
+/* Active/click effect - press down */
+.new-conversation-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--primary-color) 30%, transparent);
+}
+
+/* Focus state for accessibility */
+.new-conversation-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 30%, transparent);
+}
+
+/* Sparkle animation for the icon */
+@keyframes sparkle {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(1.1) rotate(15deg);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .new-conversation-btn {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+
+    .new-conversation-btn .btn-text {
+        display: none; /* Hide text on mobile, keep icon only */
+    }
+
+    .new-conversation-btn .btn-icon {
+        font-size: 18px;
+    }
+}
+
+/* Alternative compact version (if header space is limited) */
+.new-conversation-btn.compact {
+    padding: 8px;
+    min-width: 40px;
+    justify-content: center;
+}
+
+.new-conversation-btn.compact .btn-text {
+    display: none;
+}
+
+.new-conversation-btn.compact .btn-icon {
+    margin: 0;
+}
+
+/* ==============================================================================
+   HEADER LAYOUT ADJUSTMENTS
+   ============================================================================== 
+   If your header needs adjustments to accommodate the button, consider:
+   ============================================================================== */
+
+/* Ensure header has space for the button */
+.chat-header .header-content {
+    display: flex;
+    align-items: center;
+    /*justify-content: space-between;*/
+    width: 100%;
+}
+
+/* Ensure header info doesn't take all space */
+.chat-header .header-info {
+    flex: 0 1 auto;
+    margin-right: 16px;
+}

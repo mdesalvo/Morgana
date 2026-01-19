@@ -2,6 +2,8 @@
 @using Cauldron.Services
 @inject MorganaSignalRService SignalRService
 @inject MorganaLandingMessageService LandingMessageService
+@inject IConversationStorageService StorageService
+@inject NavigationManager NavigationManager
 @inject HttpClient Http
 @inject IConfiguration Configuration
 @implements IAsyncDisposable
@@ -15,21 +17,26 @@
             <img src="images/morgana-avatar.png" 
                  alt="Morgana" 
                  class="header-avatar"
-                 style="border: 3px solid @GetAvatarBorderColor(currentAgentName); !important" />
+                 style="border: 3px solid @GetAvatarBorderColor(currentAgentName);" />
             <div class="header-info">
                 <h1 style="color: @GetAvatarBorderColor(currentAgentName);">@currentAgentName</h1>
                 <span class="status @(isConnected ? "online" : "offline")" style="color: @(isConnected ? "#10b981" : "#ef4444");">
                     @(isConnected ? "Online" : "Offline")
                 </span>
             </div>
+            <button class="new-conversation-btn @(IsNewConversationButtonVisible ? "visible" : "hidden")" @onclick="ClearConversation" title="Start a new conversation with Morgana">
+                <span class="btn-icon">✨</span>
+                <span class="btn-text">New Conversation</span>
+            </button>
         </div>
     </div>
 
     <!-- Messages Area -->
     <div class="messages-container">
-        @if (!isInitialized || messages.Count == 0)
+        @if (messages.Count == 0)
         {
             <!-- Loading state with magical animation -->
+            <!-- Loader visible until first message arrives from backend (presentation or conversation history) -->
             <div class="magical-loader">
                 <div class="magic-sparkle-core">
                     <div class="glow-core"></div>
@@ -114,7 +121,7 @@
             class="message-input @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")"></textarea>
         <button
             @onclick="SendMessage"
-            disabled="@IsButtonDisabled"
+            disabled="@IsSendButtonDisabled"
             class="send-button @(isSending ? "sending" : "") @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")">
             <!-- Animated cauldron icon with magical effects -->
             <span class="cauldron-wrapper">
@@ -154,51 +161,51 @@
     // =========================================================================
     // STATE VARIABLES
     // =========================================================================
-    
+
     /// <summary>
     /// List of all chat messages in the current conversation.
     /// Includes user messages, agent responses, typing indicators, and presentation messages.
     /// </summary>
     private List<ChatMessage> messages = [];
-    
+
     /// <summary>
     /// Current text input from the user (two-way bound to textarea).
     /// </summary>
     private string inputText = string.Empty;
-    
+
     /// <summary>
     /// Unique identifier for the current conversation.
     /// Generated on conversation start and used for message routing.
     /// </summary>
     private string conversationId = string.Empty;
-    
+
     /// <summary>
     /// SignalR connection state indicator.
     /// True when connected and ready to receive messages.
     /// </summary>
     private bool isConnected = false;
-    
+
     /// <summary>
     /// Message send operation in progress indicator.
     /// True during HTTP POST to prevent duplicate sends.
     /// </summary>
     private bool isSending = false;
-    
+
     /// <summary>
     /// Initialization complete indicator.
     /// True after SignalR connection and conversation start succeed.
     /// </summary>
     private bool isInitialized = false;
-    
+
     /// <summary>
     /// Error message to display in error banner.
     /// Empty string when no error present.
     /// </summary>
     private string errorMessage = string.Empty;
-    
+
     /// <summary>
     /// Name of the currently active agent.
-    /// Updates dynamically when agents take control: "Morgana", "Billing", etc.
+    /// Updates dynamically when agents take control: "Morgana", "Morgana (Billing)", etc.
     /// Displayed in header and used for avatar border color.
     /// </summary>
     private string currentAgentName = "Morgana";
@@ -208,13 +215,19 @@
     /// </summary>
     private string landingMessage = string.Empty;
 
+    /// <summary>
+    /// Flag to track if storage has been checked (prevents multiple checks on re-renders).
+    /// </summary>
+    private bool hasCheckedStorage = false;
+
     // =========================================================================
     // LIFECYCLE METHODS
     // =========================================================================
 
     /// <summary>
     /// Blazor lifecycle method called when component is initialized.
-    /// Sets up SignalR connection, subscribes to events, and starts conversation.
+    /// Sets up SignalR connection and subscribes to events.
+    /// Note: ProtectedLocalStorage check moved to OnAfterRenderAsync for JavaScript interop availability.
     /// </summary>
     /// <returns>Task representing the async initialization</returns>
     protected override async Task OnInitializedAsync()
@@ -236,7 +249,7 @@
             {
                 await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
             };
-            
+
             // Subscribe to connection state changes
             SignalRService.OnConnectionStateChanged += (connected) =>
             {
@@ -245,20 +258,47 @@
                 InvokeAsync(StateHasChanged);
             };
 
-            // Start conversation and get presentation message
-            await StartConversation();
-            isInitialized = true;
-            errorMessage = string.Empty;
-            Console.WriteLine($"🔵 Initialized with conversationId: {conversationId}");
+            Console.WriteLine("🔵 Initialization complete. Checking storage for existing conversation...");
+
+            if (!hasCheckedStorage)
+            {
+                hasCheckedStorage = true;
+
+                try
+                {
+                    // Check ProtectedLocalStorage for saved conversation ID
+                    string? savedConversationId = await StorageService.GetConversationIdAsync();
+
+                    if (!string.IsNullOrEmpty(savedConversationId))
+                    {
+                        Console.WriteLine($"🔵 Found saved conversation ID: {savedConversationId}");
+                        await ResumeConversation(savedConversationId);
+                    }
+                    else
+                    {
+                        Console.WriteLine("🔵 No saved conversation found, starting new");
+                        await StartConversation();
+                    }
+
+                    isInitialized = true;
+                    errorMessage = string.Empty;
+                    Console.WriteLine($"🔵 Initialized with conversationId: {conversationId}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Storage check error: {ex.Message}");
+                    errorMessage = $"Initialization error: {ex.Message}";
+                }
+                finally
+                {
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Initialization error: {ex.Message}");
             errorMessage = $"Initialization error: {ex.Message}";
-        }
-        finally
-        {
-            StateHasChanged();
         }
     }
 
@@ -267,8 +307,111 @@
     // =========================================================================
 
     /// <summary>
+    /// Resumes an existing conversation from ProtectedLocalStorage.
+    /// If resume fails (404), automatically falls back to starting a new conversation.
+    /// </summary>
+    /// <param name="savedConversationId">The conversation ID retrieved from storage</param>
+    /// <returns>Task representing the async resume operation</returns>
+    /// <remarks>
+    /// <para><strong>Resume Flow:</strong></para>
+    /// <list type="number">
+    /// <item>POST to /api/conversation/{id}/resume</item>
+    /// <item>Backend restores actor hierarchy and loads AgentThread from SQLite</item>
+    /// <item>Join SignalR group for this conversation</item>
+    /// <item>Backend may send welcome-back message via SignalR (optional)</item>
+    /// </list>
+    /// <para><strong>Fallback Scenarios:</strong></para>
+    /// <list type="bullet">
+    /// <item><term>404 Not Found</term><description>Conversation expired/deleted → Clear storage and start new</description></item>
+    /// <item><term>500 Server Error</term><description>Backend error → Clear storage and start new</description></item>
+    /// <item><term>Network Error</term><description>Connection failure → Clear storage and start new</description></item>
+    /// </list>
+    /// </remarks>
+    private async Task ResumeConversation(string savedConversationId)
+    {
+        try
+        {
+            Console.WriteLine($"🟡 ResumeConversation: Attempting to resume {savedConversationId}");
+
+            HttpResponseMessage response = await Http.PostAsync(
+                $"/api/conversation/{savedConversationId}/resume", null);
+
+            Console.WriteLine($"🟡 Resume response status: {response.StatusCode}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Successfully resumed
+                ConversationResumeResponse? result = await response.Content
+                    .ReadFromJsonAsync<ConversationResumeResponse>();
+
+                conversationId = result?.ConversationId ?? savedConversationId;
+                if (string.IsNullOrEmpty(result?.ActiveAgent)
+                     || string.Equals(result.ActiveAgent, "Morgana", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentAgentName = "Morgana";
+                }
+                else
+                {
+                    currentAgentName = $"Morgana ({char.ToUpper(result.ActiveAgent[0]) + result.ActiveAgent.Substring(1)})";
+                }
+                Console.WriteLine($"🟡 Conversation resumed: {conversationId}, Active agent: {result?.ActiveAgent}");
+
+                // Join SignalR group
+                await SignalRService.JoinConversation(conversationId);
+
+                // Add a system message to hide the loader
+                // Backend should send conversation history via SignalR, but if it doesn't,
+                // this placeholder ensures the loader disappears
+                messages.Add(new ChatMessage
+                {
+                    ConversationId = conversationId,
+                    Text = $"✨ Conversation resumed (found in parchment '{conversationId}'). {currentAgentName} back to you!",
+                    Role = "assistant",
+                    Timestamp = DateTime.Now,
+                    AgentName = currentAgentName,
+                    Type = MessageType.Assistant
+                });
+                
+                await InvokeAsync(StateHasChanged);
+
+                Console.WriteLine($"🟡 Joined SignalR group, waiting for conversation history...");
+                // Backend should send conversation history via SignalR
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                // Conversation not found in backend (expired or deleted)
+                Console.WriteLine($"⚠️ Conversation {savedConversationId} not found, starting fresh");
+                
+                // Clear corrupted/expired storage
+                await StorageService.ClearConversationIdAsync();
+                
+                // Fallback to new conversation
+                await StartConversation();
+            }
+            else
+            {
+                // Other error (500, etc.)
+                string errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"❌ Resume error {response.StatusCode}: {errorContent}");
+                
+                // Fallback to new conversation
+                await StorageService.ClearConversationIdAsync();
+                await StartConversation();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ ResumeConversation exception: {ex.Message}");
+            
+            // Fallback to new conversation on any error
+            await StorageService.ClearConversationIdAsync();
+            await StartConversation();
+        }
+    }
+
+    /// <summary>
     /// Starts a new conversation with Morgana backend.
-    /// Sends POST request to /api/conversation/start, joins SignalR group, and displays presentation message.
+    /// Sends POST request to /api/conversation/start, joins SignalR group, saves to storage, and displays presentation message.
     /// </summary>
     /// <returns>Task representing the async conversation start operation</returns>
     /// <remarks>
@@ -278,6 +421,7 @@
     /// <item>POST to /api/conversation/start</item>
     /// <item>Extract conversationId from response</item>
     /// <item>Join SignalR conversation group</item>
+    /// <item>Save conversationId to ProtectedLocalStorage</item>
     /// <item>Wait for presentation message via SignalR</item>
     /// <item>Display presentation with quick replies</item>
     /// </list>
@@ -299,13 +443,17 @@
             if (response.IsSuccessStatusCode)
             {
                 // Parse response to get conversation ID
-                var result = await response.Content.ReadFromJsonAsync<ConversationStartResponse>();
+                ConversationStartResponse? result = await response.Content.ReadFromJsonAsync<ConversationStartResponse>();
                 conversationId = result?.ConversationId ?? string.Empty;
 
                 Console.WriteLine($"🟢 Conversation started: {conversationId}");
 
                 // Join SignalR group for this conversation
                 await SignalRService.JoinConversation(conversationId);
+
+                // Save conversation ID to ProtectedLocalStorage
+                await StorageService.SaveConversationIdAsync(conversationId);
+                Console.WriteLine($"🟢 Conversation ID saved to protected storage");
 
                 Console.WriteLine($"🟢 Waiting for presentation message...");
                 // Presentation message will arrive via SignalR OnMessageReceived event
@@ -321,6 +469,30 @@
         {
             Console.WriteLine($"❌ StartConversation exception: {ex.Message}");
             errorMessage = $"Error: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Clears the saved conversation ID and refreshes the page to start a new conversation.
+    /// Triggered by the "+ New Conversation" button.
+    /// </summary>
+    /// <returns>Task representing the async new conversation operation</returns>
+    private async Task ClearConversation()
+    {
+        try
+        {
+            Console.WriteLine($"🆕 {nameof(ClearConversation)}: Clearing storage and refreshing...");
+            
+            // Clear saved conversation ID from ProtectedLocalStorage
+            await StorageService.ClearConversationIdAsync();
+            
+            // Force page reload to trigger OnInitializedAsync with fresh state
+            NavigationManager.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ {nameof(ClearConversation)} exception: {ex.Message}");
+            errorMessage = $"Error starting new conversation: {ex.Message}";
         }
     }
 
@@ -406,7 +578,8 @@
                         Role = "assistant",
                         Timestamp = DateTime.Now,
                         IsError = true,
-                        AgentName = "Morgana"
+                        AgentName = currentAgentName,
+                        Type = MessageType.Error
                     });
                     StateHasChanged();
                 }
@@ -430,7 +603,8 @@
                     Role = "assistant",
                     Timestamp = DateTime.Now,
                     IsError = true,
-                    AgentName = "Morgana"
+                    AgentName = currentAgentName,
+                    Type = MessageType.Error
                 });
 
                 errorMessage = $"Error: {ex.Message}";
@@ -592,13 +766,23 @@
     /// Gets a value indicating whether the send button should be disabled.
     /// Disabled when: not connected, sending in progress, empty input, not initialized, has active quick replies, or typing indicator present.
     /// </summary>
-    private bool IsButtonDisabled =>
+    private bool IsSendButtonDisabled =>
         !isConnected ||
         isSending ||
         string.IsNullOrWhiteSpace(inputText) ||
         !isInitialized ||
         HasActiveQuickReplies() ||
         messages.Any(m => m.IsTyping);
+
+    /// <summary>
+    /// Gets a value indicating whether the new conversation button should be visible.
+    /// </summary>
+    private bool IsNewConversationButtonVisible =>
+        isConnected
+         && isInitialized
+         && hasCheckedStorage
+         && !string.IsNullOrWhiteSpace(conversationId)
+         && messages.Count > 0;
 
     /// <summary>
     /// Gets a value indicating whether the textarea should be disabled.
@@ -642,7 +826,7 @@
     /// </summary>
     /// <param name="agentName">Agent name to check</param>
     /// <returns>True if specialized agent, false if base Morgana</returns>
-    private bool IsSpecializedAgent(string agentName)
+    private bool IsSpecializedAgent(string? agentName)
     {
         return agentName != null && agentName.Contains("(") && agentName.Contains(")");
     }
@@ -669,11 +853,7 @@
     /// <returns>Formatted completion message</returns>
     private string GetCompletionMessage(string agentName)
     {
-        // For specialized agents, use configured template
-        if (agentName.Contains("(") && agentName.Contains(")"))
-            return string.Format(Configuration["Morgana:AgentExitMessage"]!, agentName);
-
-        // Default fallback
-        return "The spell has been completed";
+        string template = Configuration["Morgana:AgentExitMessage"] ?? "{0} has completed its spell. I'm back to you!";
+        return string.Format(template, agentName);
     }
 }
