@@ -31,6 +31,7 @@ CREATE TABLE morgana (
     agent_thread BLOB,                     -- AES-256 encrypted AgentThread
     creation_date TEXT,                    -- ISO 8601 timestamp (immutable)
     last_update TEXT                       -- ISO 8601 timestamp (updated on save)
+    is_active                              -- INTEGER 0/1
 );
 ```
 
@@ -44,7 +45,8 @@ CREATE TABLE morgana (
 - `ConversationId` is not provided anymore to agent's `ChatOptions`, since we moved to `ChatMessageStore`
 - AgentName is now contextualized to color scheme of the current agent for better usabilty (instead of white)
 - Status of SignalR connection is now green or red for better usabilty (instead of white)
-- 
+- Refactored RouterActor from eager to lazy agent creation (Akka.NET best practice for hierarchical actor systems)
+
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
