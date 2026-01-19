@@ -24,7 +24,7 @@
                     @(isConnected ? "Online" : "Offline")
                 </span>
             </div>
-            <button class="new-conversation-btn @(IsNewConversationButtonVisible ? "visible" : "hidden")" @onclick="ClearConversation" title="Start a new conversation">
+            <button class="new-conversation-btn @(IsNewConversationButtonVisible ? "visible" : "hidden")" @onclick="ClearConversation" title="Start a new conversation with Morgana">
                 <span class="btn-icon">✨</span>
                 <span class="btn-text">New Conversation</span>
             </button>
@@ -776,10 +776,13 @@
 
     /// <summary>
     /// Gets a value indicating whether the new conversation button should be visible.
-    /// Visible when: connected and initialized and checked for storage.
     /// </summary>
     private bool IsNewConversationButtonVisible =>
-        isConnected && isInitialized && hasCheckedStorage && !string.IsNullOrWhiteSpace(conversationId);
+        isConnected
+         && isInitialized
+         && hasCheckedStorage
+         && !string.IsNullOrWhiteSpace(conversationId)
+         && messages.Count > 0;
 
     /// <summary>
     /// Gets a value indicating whether the textarea should be disabled.
