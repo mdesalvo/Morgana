@@ -237,7 +237,7 @@
             Console.WriteLine("🔵 OnInitializedAsync: Starting...");
 
             // Initialize landing message
-            landingMessage = LandingMessageService.GetRandomMessage();
+            landingMessage = LandingMessageService.GetRandomLandingMessage();
 
             // Start SignalR connection
             await SignalRService.StartAsync();
@@ -365,9 +365,9 @@
                 messages.Add(new ChatMessage
                 {
                     ConversationId = conversationId,
-                    Text = $"✨ Conversation resumed (found in parchment '{conversationId}'). {currentAgentName} back to you!",
+                    Text = LandingMessageService.GetRandomResumingMessage(),
                     Role = "assistant",
-                    Timestamp = DateTime.Now,
+                    Timestamp = DateTime.UtcNow,
                     AgentName = currentAgentName,
                     Type = MessageType.Assistant
                 });
@@ -535,7 +535,7 @@
             ConversationId = conversationId,
             Text = messageText,
             Role = "user",
-            Timestamp = DateTime.Now
+            Timestamp = DateTime.UtcNow
         });
 
         // Add typing indicator
@@ -545,7 +545,7 @@
             Role = "assistant",
             IsTyping = true,
             AgentName = currentAgentName,
-            Timestamp = DateTime.Now
+            Timestamp = DateTime.UtcNow
         });
 
         StateHasChanged();
@@ -576,7 +576,7 @@
                         ConversationId = conversationId,
                         Text = "Sorry, an error occurred. Please try again.",
                         Role = "assistant",
-                        Timestamp = DateTime.Now,
+                        Timestamp = DateTime.UtcNow,
                         IsError = true,
                         AgentName = currentAgentName,
                         Type = MessageType.Error
@@ -601,7 +601,7 @@
                     ConversationId = conversationId,
                     Text = $"Connection error: {ex.Message}",
                     Role = "assistant",
-                    Timestamp = DateTime.Now,
+                    Timestamp = DateTime.UtcNow,
                     IsError = true,
                     AgentName = currentAgentName,
                     Type = MessageType.Error
