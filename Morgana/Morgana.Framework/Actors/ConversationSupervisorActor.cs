@@ -652,7 +652,7 @@ public class ConversationSupervisorActor : MorganaActor
         catch (Exception ex)
         {
             actorLogger.Error(ex, $"Failed to restore active agent for intent {msg.AgentIntent}");
-        
+
             // Fallback: clear active agent, next message will reclassify
             activeAgent = null;
             activeAgentIntent = null;

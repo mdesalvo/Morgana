@@ -81,7 +81,7 @@ public class MorganaAgent : MorganaActor
     /// All MorganaAgent subclasses MUST be decorated with [HandlesIntent("...")] attribute.</para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown if HandlesIntentAttribute is not present on the agent class</exception>
-    protected string AgentIntent => GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent 
+    protected string AgentIntent => GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent
                                      ?? throw new InvalidOperationException($"Agent {GetType().Name} must be decorated with [HandlesIntent] attribute");
 
     /// <summary>

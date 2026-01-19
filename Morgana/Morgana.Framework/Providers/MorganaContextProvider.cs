@@ -97,9 +97,9 @@ public class MorganaContextProvider : AIContextProvider
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
         this.logger = logger;
-    
+
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
-    
+
         // Deserialize AgentContext
         if (serializedState.TryGetProperty(nameof(AgentContext), out JsonElement contextElement))
         {
@@ -109,7 +109,7 @@ public class MorganaContextProvider : AIContextProvider
         {
             AgentContext = [];
         }
-    
+
         // Deserialize SharedVariableNames
         if (serializedState.TryGetProperty(nameof(SharedVariableNames), out JsonElement sharedElement))
         {
@@ -119,7 +119,7 @@ public class MorganaContextProvider : AIContextProvider
         {
             SharedVariableNames = [];
         }
-    
+
         logger.LogInformation(
             $"{nameof(MorganaContextProvider)} DESERIALIZED {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
     }

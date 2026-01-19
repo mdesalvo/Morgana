@@ -362,7 +362,7 @@ public class MorganaAgentAdapter
         string conversationId,
         Action<string, object>? sharedContextCallback = null)
     {
-        HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>() 
+        HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>()
                                                     ?? throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
         string intent = intentAttribute.Intent;
 

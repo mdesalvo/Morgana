@@ -19,7 +19,7 @@ namespace Morgana.Framework.Services;
 /// <code>
 /// Database per conversation:
 ///   {StoragePath}/morgana-conv12345.db
-///   
+///
 /// Table structure (morgana):
 ///   - agent_identifier: TEXT PRIMARY KEY (e.g., "billing-conv12345")
 ///   - agent_name: TEXT UNIQUE (e.g., "billing")
@@ -220,7 +220,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             command.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
             await using SqliteDataReader reader = await command.ExecuteReaderAsync();
-            
+
             if (!await reader.ReadAsync())
             {
                 logger.LogInformation($"Agent thread {agentIdentifier} not found in database, returning null");
@@ -271,11 +271,11 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             command.CommandText = "SELECT agent_name FROM morgana ORDER BY last_update DESC LIMIT 1;";
 
             object? result = await command.ExecuteScalarAsync();
-        
+
             string? agentName = result?.ToString();
-        
+
             logger.LogInformation(
-                agentName != null 
+                agentName != null
                     ? $"Most recent agent for conversation {conversationId}: {agentName}"
                     : $"No agents found for conversation {conversationId}");
 
