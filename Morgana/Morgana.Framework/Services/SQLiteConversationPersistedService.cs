@@ -86,7 +86,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
 
     private const string LoadAgentConversationSQL =
         """
-        SELECT agent_thread FROM morgana WHERE agent_identifier = @agent_identifier AND is_active = 1;
+        SELECT agent_thread FROM morgana WHERE agent_identifier = @agent_identifier;
         """;
 
     private const string GetMostRecentActiveAgentSQL =
