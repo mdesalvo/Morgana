@@ -5,7 +5,7 @@
     </td>
     <td>
       <h1>Morgana</h1>
-      <p><strong>A magical witch assistant equipped with your enchanted AI-driven grimoire</strong></p>
+      <p><strong>Your magical witch assistant equipped with an enchanted you-driven AI grimoire</strong></p>
       <p>
         <img src="https://img.shields.io/badge/.NET-10.0-932BD4?logo=dotnet" alt=".NET 10"/>
         <img src="https://img.shields.io/badge/Akka.NET-932BD4?logo=nuget" alt="Akka.NET"/>
