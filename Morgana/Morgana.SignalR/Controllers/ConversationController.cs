@@ -160,7 +160,7 @@ public class ConversationController : ControllerBase
 
             // Get most recent agent from database
             string? lastActiveAgent = await conversationPersistenceService
-                .GetMostRecentAgentAsync(conversationId);
+                .GetMostRecentActiveAgentAsync(conversationId);
 
             if (lastActiveAgent == null)
             {

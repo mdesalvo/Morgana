@@ -64,7 +64,8 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             conversation_id TEXT NOT NULL,
             agent_thread BLOB NOT NULL,
             creation_date TEXT NOT NULL,
-            last_update TEXT NOT NULL
+            last_update TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 0
         );
         
         CREATE INDEX IF NOT EXISTS idx_agent_name ON morgana(agent_name);
@@ -72,15 +73,16 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     ";
 
     private const string UpsertSql = @"
-        INSERT INTO morgana (agent_identifier, agent_name, conversation_id, agent_thread, creation_date, last_update)
-        VALUES (@agent_identifier, @agent_name, @conversation_id, @agent_thread, @creation_date, @last_update)
+        INSERT INTO morgana (agent_identifier, agent_name, conversation_id, agent_thread, creation_date, last_update, is_active)
+        VALUES (@agent_identifier, @agent_name, @conversation_id, @agent_thread, @creation_date, @last_update, @is_active)
         ON CONFLICT(agent_identifier) DO UPDATE SET
             agent_thread = excluded.agent_thread,
-            last_update = @last_update;
+            last_update = @last_update,
+            is_active = @is_active;
     ";
 
     private const string SelectSql = @"
-        SELECT agent_thread FROM morgana WHERE agent_identifier = @agent_identifier;
+        SELECT agent_thread FROM morgana WHERE agent_identifier = @agent_identifier AND is_active = 1;
     ";
 
     /// <summary>
@@ -119,6 +121,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     public async Task SaveConversationAsync(
         string agentIdentifier,
         AgentThread agentThread,
+        bool isCompleted,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
@@ -164,6 +167,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
                 command.Parameters.AddWithValue("@agent_thread", encryptedData);
                 command.Parameters.AddWithValue("@creation_date", utcNow);
                 command.Parameters.AddWithValue("@last_update", utcNow);
+                command.Parameters.AddWithValue("@is_active", isCompleted ? 0 : 1);
 
                 await command.ExecuteNonQueryAsync();
                 await transaction.CommitAsync();
@@ -251,7 +255,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     }
 
     /// <inheritdoc/>
-    public async Task<string?> GetMostRecentAgentAsync(string conversationId)
+    public async Task<string?> GetMostRecentActiveAgentAsync(string conversationId)
     {
         try
         {
@@ -268,7 +272,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             await connection.OpenAsync();
 
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = "SELECT agent_name FROM morgana ORDER BY last_update DESC LIMIT 1;";
+            command.CommandText = "SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIMIT 1;";
 
             object? result = await command.ExecuteScalarAsync();
 

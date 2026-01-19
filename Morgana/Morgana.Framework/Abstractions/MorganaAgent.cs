@@ -356,7 +356,7 @@ public class MorganaAgent : MorganaActor
                 $"Agent response analysis: HasINT={hasInteractiveToken}, EndsWithQuestion={endsWithQuestion}, HasQR={hasQuickReplies}, IsCompleted={isCompleted}");
 
             // Persist updated conversation state to encrypted storage
-            await persistenceService.SaveConversationAsync(AgentIdentifier, aiAgentThread);
+            await persistenceService.SaveConversationAsync(AgentIdentifier, aiAgentThread, isCompleted);
             agentLogger.LogInformation($"Saved conversation state for {AgentIdentifier}");
 
             #if DEBUG

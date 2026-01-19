@@ -47,6 +47,7 @@ public interface IConversationPersistenceService
     /// </summary>
     /// <param name="agentIdentifier">Unique identifier for the agent's conversation</param>
     /// <param name="agentThread">AgentThread instance containing the complete conversation state</param>
+    /// <param name="isCompleted">Flag indicating if the agent is signalling completion of the conversation</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (optional, uses AgentAbstractionsJsonUtilities.DefaultOptions if null)</param>
     /// <returns>Task representing the async save operation</returns>
     /// <remarks>
@@ -60,6 +61,7 @@ public interface IConversationPersistenceService
     Task SaveConversationAsync(
         string agentIdentifier,
         AgentThread agentThread,
+        bool isCompleted,
         JsonSerializerOptions? jsonSerializerOptions = null);
 
     /// <summary>
@@ -93,5 +95,5 @@ public interface IConversationPersistenceService
     /// </summary>
     /// <param name="conversationId">Conversation identifier</param>
     /// <returns>Agent name (e.g., "billing") or null if conversation not found</returns>
-    Task<string?> GetMostRecentAgentAsync(string conversationId);
+    Task<string?> GetMostRecentActiveAgentAsync(string conversationId);
 }
