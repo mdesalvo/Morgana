@@ -27,6 +27,7 @@ namespace Morgana.Framework.Services;
 ///   - agent_thread: BLOB (AES-256-CBC encrypted AgentThread JSON)
 ///   - creation_date: TEXT (ISO 8601: "yyyy-MM-ddTHH:mm:ss.fffZ")
 ///   - last_update: TEXT (ISO 8601: "yyyy-MM-ddTHH:mm:ss.fffZ")
+///   - is_active: INTEGER (0 or 1)
 /// </code>
 /// <para><strong>Concurrency Model:</strong></para>
 /// <para>Only ONE agent is active at a time per conversation. No concurrent writes occur.
@@ -57,7 +58,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     private const int SchemaVersion = 1;
 
     // SQL statements
-    private const string CreateTableSql = @"
+    private const string InitializeDatabaseSQL = @"
         CREATE TABLE IF NOT EXISTS morgana (
             agent_identifier TEXT PRIMARY KEY NOT NULL,
             agent_name TEXT UNIQUE NOT NULL,
@@ -72,7 +73,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
         CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
     ";
 
-    private const string UpsertSql = @"
+    private const string SaveConversationSQL = @"
         INSERT INTO morgana (agent_identifier, agent_name, conversation_id, agent_thread, creation_date, last_update, is_active)
         VALUES (@agent_identifier, @agent_name, @conversation_id, @agent_thread, @creation_date, @last_update, @is_active)
         ON CONFLICT(agent_identifier) DO UPDATE SET
@@ -81,8 +82,12 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             is_active = @is_active;
     ";
 
-    private const string SelectSql = @"
+    private const string LoadConversationSQL = @"
         SELECT agent_thread FROM morgana WHERE agent_identifier = @agent_identifier AND is_active = 1;
+    ";
+
+    private const string GetMostRecentActiveAgentSQL = @"
+        SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIMIT 1;
     ";
 
     /// <summary>
@@ -157,7 +162,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             {
                 await using SqliteCommand command = connection.CreateCommand();
                 command.Transaction = transaction;
-                command.CommandText = UpsertSql;
+                command.CommandText = SaveConversationSQL;
 
                 string utcNow = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
 
@@ -220,7 +225,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
 
             // Query agent thread
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = SelectSql;
+            command.CommandText = LoadConversationSQL;
             command.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
             await using SqliteDataReader reader = await command.ExecuteReaderAsync();
@@ -272,7 +277,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             await connection.OpenAsync();
 
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = "SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIMIT 1;";
+            command.CommandText = GetMostRecentActiveAgentSQL;
 
             object? result = await command.ExecuteScalarAsync();
 
@@ -334,7 +339,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
 
         // Create schema
         await using SqliteCommand schemaCommand = connection.CreateCommand();
-        schemaCommand.CommandText = CreateTableSql;
+        schemaCommand.CommandText = InitializeDatabaseSQL;
         await schemaCommand.ExecuteNonQueryAsync();
 
         // Mark database as initialized
