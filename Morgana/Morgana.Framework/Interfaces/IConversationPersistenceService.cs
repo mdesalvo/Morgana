@@ -34,8 +34,7 @@ namespace Morgana.Framework.Interfaces;
 /// </code>
 /// <para><strong>Implementation Examples:</strong></para>
 /// <list type="bullet">
-/// <item><term>EncryptedFileConversationPersistenceService</term><description>Stores conversations in encrypted .morgana.json files</description></item>
-/// <item><term>SqlConversationPersistenceService</term><description>Stores conversations in SQL database (future)</description></item>
+/// <item><term>SqlConversationPersistenceService</term><description>Stores conversations in SQL database</description></item>
 /// <item><term>CosmosDbConversationPersistenceService</term><description>Stores conversations in Azure Cosmos DB (future)</description></item>
 /// </list>
 /// </remarks>
