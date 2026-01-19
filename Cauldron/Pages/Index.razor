@@ -24,14 +24,10 @@
                     @(isConnected ? "Online" : "Offline")
                 </span>
             </div>
-            
-            @if (isInitialized && !string.IsNullOrEmpty(conversationId))
-            {
-                <button class="new-conversation-btn" @onclick="StartNewConversation" title="Start a new conversation">
-                    <span class="btn-icon">✨</span>
-                    <span class="btn-text">New Conversation</span>
-                </button>
-            }
+            <button class="new-conversation-btn" disabled="@IsNewConversationButtonDisabled" @onclick="ClearAndStartNewConversation" title="Start a new conversation">
+                <span class="btn-icon">✨</span>
+                <span class="btn-text">New Conversation</span>
+            </button>
         </div>
     </div>
 
@@ -125,7 +121,7 @@
             class="message-input @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")"></textarea>
         <button
             @onclick="SendMessage"
-            disabled="@IsButtonDisabled"
+            disabled="@IsSendButtonDisabled"
             class="send-button @(isSending ? "sending" : "") @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")">
             <!-- Animated cauldron icon with magical effects -->
             <span class="cauldron-wrapper">
@@ -165,48 +161,48 @@
     // =========================================================================
     // STATE VARIABLES
     // =========================================================================
-    
+
     /// <summary>
     /// List of all chat messages in the current conversation.
     /// Includes user messages, agent responses, typing indicators, and presentation messages.
     /// </summary>
     private List<ChatMessage> messages = [];
-    
+
     /// <summary>
     /// Current text input from the user (two-way bound to textarea).
     /// </summary>
     private string inputText = string.Empty;
-    
+
     /// <summary>
     /// Unique identifier for the current conversation.
     /// Generated on conversation start and used for message routing.
     /// </summary>
     private string conversationId = string.Empty;
-    
+
     /// <summary>
     /// SignalR connection state indicator.
     /// True when connected and ready to receive messages.
     /// </summary>
     private bool isConnected = false;
-    
+
     /// <summary>
     /// Message send operation in progress indicator.
     /// True during HTTP POST to prevent duplicate sends.
     /// </summary>
     private bool isSending = false;
-    
+
     /// <summary>
     /// Initialization complete indicator.
     /// True after SignalR connection and conversation start succeed.
     /// </summary>
     private bool isInitialized = false;
-    
+
     /// <summary>
     /// Error message to display in error banner.
     /// Empty string when no error present.
     /// </summary>
     private string errorMessage = string.Empty;
-    
+
     /// <summary>
     /// Name of the currently active agent.
     /// Updates dynamically when agents take control: "Morgana", "Billing", etc.
@@ -253,7 +249,7 @@
             {
                 await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
             };
-            
+
             // Subscribe to connection state changes
             SignalRService.OnConnectionStateChanged += (connected) =>
             {
@@ -262,57 +258,47 @@
                 InvokeAsync(StateHasChanged);
             };
 
-            Console.WriteLine("🔵 Initialization complete, waiting for first render to check storage");
+            Console.WriteLine("🔵 Initialization complete. Checking storage for existing conversation...");
+
+            if (!hasCheckedStorage)
+            {
+                hasCheckedStorage = true;
+
+                try
+                {
+                    // Check ProtectedLocalStorage for saved conversation ID
+                    string? savedConversationId = await StorageService.GetConversationIdAsync();
+
+                    if (!string.IsNullOrEmpty(savedConversationId))
+                    {
+                        Console.WriteLine($"🔵 Found saved conversation ID: {savedConversationId}");
+                        await ResumeConversation(savedConversationId);
+                    }
+                    else
+                    {
+                        Console.WriteLine("🔵 No saved conversation found, starting new");
+                        await StartConversation();
+                    }
+
+                    isInitialized = true;
+                    errorMessage = string.Empty;
+                    Console.WriteLine($"🔵 Initialized with conversationId: {conversationId}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Storage check error: {ex.Message}");
+                    errorMessage = $"Initialization error: {ex.Message}";
+                }
+                finally
+                {
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Initialization error: {ex.Message}");
             errorMessage = $"Initialization error: {ex.Message}";
-        }
-    }
-
-    /// <summary>
-    /// Blazor lifecycle method called after component renders.
-    /// Checks ProtectedLocalStorage for saved conversation ID on first render only.
-    /// ProtectedLocalStorage requires JavaScript interop, so must be called after first render.
-    /// </summary>
-    /// <param name="firstRender">True if this is the first render of the component</param>
-    /// <returns>Task representing the async after-render operations</returns>
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender && !hasCheckedStorage)
-        {
-            hasCheckedStorage = true;
-            
-            try
-            {
-                // Check ProtectedLocalStorage for saved conversation ID
-                string? savedConversationId = await StorageService.GetConversationIdAsync();
-                
-                if (!string.IsNullOrEmpty(savedConversationId))
-                {
-                    Console.WriteLine($"🔵 Found saved conversation ID: {savedConversationId}");
-                    await ResumeConversation(savedConversationId);
-                }
-                else
-                {
-                    Console.WriteLine("🔵 No saved conversation found, starting new");
-                    await StartConversation();
-                }
-
-                isInitialized = true;
-                errorMessage = string.Empty;
-                Console.WriteLine($"🔵 Initialized with conversationId: {conversationId}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Storage check error: {ex.Message}");
-                errorMessage = $"Initialization error: {ex.Message}";
-            }
-            finally
-            {
-                await InvokeAsync(StateHasChanged);
-            }
         }
     }
 
@@ -357,8 +343,12 @@
                 // Successfully resumed
                 ConversationResumeResponse? result = await response.Content
                     .ReadFromJsonAsync<ConversationResumeResponse>();
-                
+
                 conversationId = result?.ConversationId ?? savedConversationId;
+                if (string.IsNullOrEmpty(result?.ActiveAgent))
+                    currentAgentName = "Morgana";
+                else
+                    currentAgentName = $"Morgana ({char.ToUpper(result.ActiveAgent[0]) + result.ActiveAgent.Substring(1)})";
 
                 Console.WriteLine($"🟡 Conversation resumed: {conversationId}, Active agent: {result?.ActiveAgent}");
 
@@ -371,11 +361,11 @@
                 messages.Add(new ChatMessage
                 {
                     ConversationId = conversationId,
-                    Text = "✨ Conversation resumed. Welcome back!",
+                    Text = $"✨ Conversation resumed. {currentAgentName} back to you!",
                     Role = "assistant",
                     Timestamp = DateTime.Now,
-                    AgentName = "Morgana",
-                    Type = MessageType.Presentation
+                    AgentName = currentAgentName,
+                    Type = MessageType.Assistant
                 });
                 
                 await InvokeAsync(StateHasChanged);
@@ -483,11 +473,11 @@
     /// Triggered by the "+ New Conversation" button.
     /// </summary>
     /// <returns>Task representing the async new conversation operation</returns>
-    private async Task StartNewConversation()
+    private async Task ClearAndStartNewConversation()
     {
         try
         {
-            Console.WriteLine("🆕 StartNewConversation: Clearing storage and refreshing...");
+            Console.WriteLine("🆕 ClearAndStartNewConversation: Clearing storage and refreshing...");
             
             // Clear saved conversation ID from ProtectedLocalStorage
             await StorageService.ClearConversationIdAsync();
@@ -497,7 +487,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ StartNewConversation exception: {ex.Message}");
+            Console.WriteLine($"❌ ClearAndStartNewConversation exception: {ex.Message}");
             errorMessage = $"Error starting new conversation: {ex.Message}";
         }
     }
@@ -584,7 +574,8 @@
                         Role = "assistant",
                         Timestamp = DateTime.Now,
                         IsError = true,
-                        AgentName = "Morgana"
+                        AgentName = currentAgentName,
+                        Type = MessageType.Error
                     });
                     StateHasChanged();
                 }
@@ -608,7 +599,8 @@
                     Role = "assistant",
                     Timestamp = DateTime.Now,
                     IsError = true,
-                    AgentName = "Morgana"
+                    AgentName = currentAgentName,
+                    Type = MessageType.Error
                 });
 
                 errorMessage = $"Error: {ex.Message}";
@@ -770,13 +762,23 @@
     /// Gets a value indicating whether the send button should be disabled.
     /// Disabled when: not connected, sending in progress, empty input, not initialized, has active quick replies, or typing indicator present.
     /// </summary>
-    private bool IsButtonDisabled =>
+    private bool IsSendButtonDisabled =>
         !isConnected ||
         isSending ||
         string.IsNullOrWhiteSpace(inputText) ||
         !isInitialized ||
         HasActiveQuickReplies() ||
         messages.Any(m => m.IsTyping);
+
+    /// <summary>
+    /// Gets a value indicating whether the new conversation button should be disabled.
+    /// Disabled when: not connected, not initialized, not checked for storage.
+    /// </summary>
+    private bool IsNewConversationButtonDisabled =>
+        !isConnected &&
+        !isInitialized &&
+        !hasCheckedStorage &&
+        string.IsNullOrWhiteSpace(conversationId);
 
     /// <summary>
     /// Gets a value indicating whether the textarea should be disabled.
