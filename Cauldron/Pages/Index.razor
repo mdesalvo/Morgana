@@ -345,11 +345,15 @@
                     .ReadFromJsonAsync<ConversationResumeResponse>();
 
                 conversationId = result?.ConversationId ?? savedConversationId;
-                if (string.IsNullOrEmpty(result?.ActiveAgent))
+                if (string.IsNullOrEmpty(result?.ActiveAgent)
+                     || string.Equals(result.ActiveAgent, "Morgana", StringComparison.OrdinalIgnoreCase))
+                {
                     currentAgentName = "Morgana";
+                }
                 else
+                {
                     currentAgentName = $"Morgana ({char.ToUpper(result.ActiveAgent[0]) + result.ActiveAgent.Substring(1)})";
-
+                }
                 Console.WriteLine($"🟡 Conversation resumed: {conversationId}, Active agent: {result?.ActiveAgent}");
 
                 // Join SignalR group
@@ -361,7 +365,7 @@
                 messages.Add(new ChatMessage
                 {
                     ConversationId = conversationId,
-                    Text = $"✨ Conversation resumed. {currentAgentName} back to you!",
+                    Text = $"✨ Conversation resumed (found in parchment '{conversationId}'). {currentAgentName} back to you!",
                     Role = "assistant",
                     Timestamp = DateTime.Now,
                     AgentName = currentAgentName,
