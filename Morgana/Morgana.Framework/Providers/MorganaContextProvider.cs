@@ -1,3 +1,4 @@
+using Akka.Util.Internal;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -114,6 +115,13 @@ public class MorganaContextProvider : AIContextProvider
         if (serializedState.TryGetProperty(nameof(SharedVariableNames), out JsonElement sharedElement))
         {
             SharedVariableNames = sharedElement.Deserialize<HashSet<string>>(jsonSerializerOptions) ?? [];
+
+            // Ensure to propagate shared variables from deserialized context
+            foreach (string sharedVariableName in SharedVariableNames)
+            {
+                if (AgentContext.TryGetValue(sharedVariableName, out object? sharedVariableValue))
+                    OnSharedContextUpdate?.Invoke(sharedVariableName, sharedVariableValue);
+            }
         }
         else
         {
