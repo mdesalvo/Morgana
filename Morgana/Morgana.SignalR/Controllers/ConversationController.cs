@@ -158,7 +158,7 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Resuming conversation {conversationId}");
 
-            // 1. Get most recent agent from database
+            // Get most recent agent from database
             string? lastActiveAgent = await conversationPersistenceService
                 .GetMostRecentAgentAsync(conversationId);
 
@@ -168,14 +168,14 @@ public class ConversationController : ControllerBase
                 return NotFound(new { error = "Conversation not found" });
             }
 
-            // 2. Create/get manager and supervisor
+            // Create/get manager and supervisor
             IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>(
                 "manager", conversationId);
 
             Records.ConversationCreated? conversationCreated = await manager.Ask<Records.ConversationCreated>(
                 new Records.CreateConversation(conversationId));
 
-            // 3. Restore active agent state in supervisor
+            // Restore active agent state in supervisor
             IActorRef supervisor = await actorSystem.ActorSelection(
                     $"/user/supervisor-{conversationId}")
                 .ResolveOne(TimeSpan.FromMilliseconds(500));
