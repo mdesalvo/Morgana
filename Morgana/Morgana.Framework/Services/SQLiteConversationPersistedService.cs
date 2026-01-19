@@ -58,7 +58,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     private const int SchemaVersion = 1;
 
     // SQL statements
-    private const string InitializeDatabaseSQL =
+    private const string InitializeMorganaTableSQL =
         """
         CREATE TABLE IF NOT EXISTS morgana (
             agent_identifier TEXT PRIMARY KEY NOT NULL,
@@ -74,7 +74,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
         CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
         """;
 
-    private const string SaveConversationSQL =
+    private const string SaveAgentConversationSQL =
         """
         INSERT INTO morgana (agent_identifier, agent_name, conversation_id, agent_thread, creation_date, last_update, is_active)
         VALUES (@agent_identifier, @agent_name, @conversation_id, @agent_thread, @creation_date, @last_update, @is_active)
@@ -84,7 +84,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             is_active = @is_active;
         """;
 
-    private const string LoadActiveConversationSQL =
+    private const string LoadAgentConversationSQL =
         """
         SELECT agent_thread FROM morgana WHERE agent_identifier = @agent_identifier AND is_active = 1;
         """;
@@ -127,7 +127,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     }
 
     /// <inheritdoc/>
-    public async Task SaveConversationAsync(
+    public async Task SaveAgentConversationAsync(
         string agentIdentifier,
         AgentThread agentThread,
         bool isCompleted,
@@ -166,7 +166,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             {
                 await using SqliteCommand command = connection.CreateCommand();
                 command.Transaction = transaction;
-                command.CommandText = SaveConversationSQL;
+                command.CommandText = SaveAgentConversationSQL;
 
                 string utcNow = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
 
@@ -197,7 +197,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     }
 
     /// <inheritdoc/>
-    public async Task<AgentThread?> LoadConversationAsync(
+    public async Task<AgentThread?> LoadAgentConversationAsync(
         string agentIdentifier,
         MorganaAgent agent,
         JsonSerializerOptions? jsonSerializerOptions = null)
@@ -229,7 +229,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
 
             // Query agent thread
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = LoadActiveConversationSQL;
+            command.CommandText = LoadAgentConversationSQL;
             command.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
             await using SqliteDataReader reader = await command.ExecuteReaderAsync();
@@ -343,7 +343,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
 
         // Create schema
         await using SqliteCommand schemaCommand = connection.CreateCommand();
-        schemaCommand.CommandText = InitializeDatabaseSQL;
+        schemaCommand.CommandText = InitializeMorganaTableSQL;
         await schemaCommand.ExecuteNonQueryAsync();
 
         // Mark database as initialized

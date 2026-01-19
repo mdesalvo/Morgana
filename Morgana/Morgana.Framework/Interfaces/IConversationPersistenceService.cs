@@ -22,10 +22,10 @@ namespace Morgana.Framework.Interfaces;
 /// <para><strong>Usage Pattern:</strong></para>
 /// <code>
 /// // Save conversation after each turn
-/// await persistenceService.SaveConversationAsync(conversationId, agentThread);
+/// await persistenceService.SaveAgentConversationAsync(conversationId, agentThread);
 ///
 /// // Load conversation on subsequent requests
-/// AgentThread? restored = await persistenceService.LoadConversationAsync(conversationId, morganaAgent);
+/// AgentThread? restored = await persistenceService.LoadAgentConversationAsync(conversationId, morganaAgent);
 /// if (restored != null)
 /// {
 ///     // Continue conversation with restored state
@@ -41,7 +41,7 @@ namespace Morgana.Framework.Interfaces;
 public interface IConversationPersistenceService
 {
     /// <summary>
-    /// Saves the complete conversation state to persistent storage.
+    /// Saves the complete conversation state of the given agent to persistent storage.
     /// Serializes the AgentThread including message history, context variables, and metadata.
     /// </summary>
     /// <param name="agentIdentifier">Unique identifier for the agent's conversation</param>
@@ -57,7 +57,7 @@ public interface IConversationPersistenceService
     /// <para>Implementations should throw meaningful exceptions for I/O errors, encryption failures,
     /// or serialization errors to allow proper error handling by callers.</para>
     /// </remarks>
-    Task SaveConversationAsync(
+    Task SaveAgentConversationAsync(
         string agentIdentifier,
         AgentThread agentThread,
         bool isCompleted,
@@ -83,7 +83,7 @@ public interface IConversationPersistenceService
     /// <item>Return the fully restored AgentThread</item>
     /// </list>
     /// </remarks>
-    Task<AgentThread?> LoadConversationAsync(
+    Task<AgentThread?> LoadAgentConversationAsync(
         string agentIdentifier,
         Abstractions.MorganaAgent agent,
         JsonSerializerOptions? jsonSerializerOptions = null);

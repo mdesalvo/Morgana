@@ -319,8 +319,8 @@ public class MorganaAgent : MorganaActor
 
         try
         {
-            // Load existing conversation thread from encrypted storage, or create new thread
-            aiAgentThread ??= await persistenceService.LoadConversationAsync(AgentIdentifier, this);
+            // Load existing agent's conversation thread from encrypted storage, or create new thread
+            aiAgentThread ??= await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
             if (aiAgentThread != null)
             {
                 agentLogger.LogInformation($"Loaded existing conversation thread for {AgentIdentifier}");
@@ -355,8 +355,8 @@ public class MorganaAgent : MorganaActor
             agentLogger.LogInformation(
                 $"Agent response analysis: HasINT={hasInteractiveToken}, EndsWithQuestion={endsWithQuestion}, HasQR={hasQuickReplies}, IsCompleted={isCompleted}");
 
-            // Persist updated conversation state to encrypted storage
-            await persistenceService.SaveConversationAsync(AgentIdentifier, aiAgentThread, isCompleted);
+            // Persist updated agent's conversation state to encrypted storage
+            await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgentThread, isCompleted);
             agentLogger.LogInformation($"Saved conversation state for {AgentIdentifier}");
 
             #if DEBUG
