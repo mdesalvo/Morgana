@@ -88,10 +88,10 @@ public class RouterActor : MorganaActor
 
         // Create agent (or get if already exists - handles resume scenario)
         IActorRef agent = await Context.System.GetOrCreateAgent(agentType, intent, conversationId);
-        
+
         // Cache for future requests
         agents[intent] = agent;
-        
+
         actorLogger.Info($"Agent created/resolved for intent '{intent}': {agent.Path}");
         return agent;
     }
@@ -199,7 +199,7 @@ public class RouterActor : MorganaActor
 
             // Get or create agent for this intent
             IActorRef? agent = await GetOrCreateAgentForIntent(intent);
-            
+
             if (agent != null)
             {
                 agent.Tell(new Records.ReceiveContextUpdate(msg.SourceAgentIntent, msg.UpdatedValues));
