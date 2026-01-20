@@ -363,7 +363,8 @@ public class MorganaAgent : MorganaActor
             agentLogger.LogInformation($"Saved conversation state for {AgentIdentifier}");
 
             // Drop quick replies from context
-            contextProvider.DropVariable("quick_replies");
+            if (hasQuickReplies)
+                contextProvider.DropVariable("quick_replies");
 
             #if DEBUG
                 senderRef.Tell(new Records.AgentResponse(llmResponseText, isCompleted, quickReplies));
