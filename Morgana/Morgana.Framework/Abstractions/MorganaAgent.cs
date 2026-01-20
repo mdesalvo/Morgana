@@ -362,6 +362,9 @@ public class MorganaAgent : MorganaActor
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgentThread, isCompleted);
             agentLogger.LogInformation($"Saved conversation state for {AgentIdentifier}");
 
+            // Drop quick replies from context (to prevent stale buttons)
+            contextProvider.DropVariable("quick_replies");
+
             #if DEBUG
                 senderRef.Tell(new Records.AgentResponse(llmResponseText, isCompleted, quickReplies));
             #else
@@ -400,20 +403,16 @@ public class MorganaAgent : MorganaActor
     /// </remarks>
     protected List<Records.QuickReply>? GetQuickRepliesFromContext()
     {
-        // Retrieve from context (ContextProvider stores as JSON string)
-        string? quickRepliesJson = contextProvider.GetVariable("quick_replies") as string;
-        if (!string.IsNullOrEmpty(quickRepliesJson))
+        #region Utilities
+        List<Records.QuickReply>? GetQuickReplies(string quickRepliesJSON)
         {
             try
             {
                 // Deserialize JSON string to List<QuickReply>
-                List<Records.QuickReply>? quickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickRepliesJson);
+                List<Records.QuickReply>? quickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickRepliesJSON);
                 if (quickReplies != null && quickReplies.Any())
                 {
                     agentLogger.LogInformation($"Retrieved {quickReplies.Count} quick replies from context");
-
-                    // Drop after retrieval to prevent stale buttons
-                    contextProvider.DropVariable("quick_replies");
 
                     return quickReplies;
                 }
@@ -425,7 +424,21 @@ public class MorganaAgent : MorganaActor
                 // Clear corrupted data
                 contextProvider.DropVariable("quick_replies");
             }
+
+            return null;
         }
+        #endregion
+
+        // Retrieve quick_replies from context
+        object? ctxQuickReplies = contextProvider.GetVariable("quick_replies");
+
+        // We may find them in string format
+        if (ctxQuickReplies is string ctxQuickRepliesJson && !string.IsNullOrEmpty(ctxQuickRepliesJson))
+            return GetQuickReplies(ctxQuickRepliesJson);
+
+        // Or we may find them in JsonElement format
+        if (ctxQuickReplies is JsonElement ctxQuickRepliesJsonElement && ctxQuickRepliesJsonElement.ValueKind == JsonValueKind.String)
+            return GetQuickReplies(ctxQuickRepliesJsonElement.GetString()!);
 
         return null;
     }
