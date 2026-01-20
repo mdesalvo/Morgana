@@ -389,7 +389,7 @@ public class MorganaAgentAdapter
             new ChatClientAgentOptions
             {
                 // Give the agent its AIContextProvider
-                AIContextProviderFactory = (aiContextProviderFactoryContext) => contextProvider,
+                AIContextProviderFactory = (_) => contextProvider,
 
                 // Give the agent its ChatMessageStore
                 ChatMessageStoreFactory = (chatMessageStoreFactoryContext) => new MorganaStoreProvider(

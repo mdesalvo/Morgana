@@ -130,7 +130,7 @@ public class MorganaAgent : MorganaActor
 
     /// <summary>
     /// Deserializes a previously serialized AgentThread, restoring conversation history and context state.
-    /// Recreates the MorganaContextProvider from persisted state and reconnects shared context callbacks.
+    /// Updates the existing context provider instance to preserve tool closures.
     /// </summary>
     /// <param name="serializedThread">JSON element containing the serialized thread state from a previous Serialize() call</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (defaults to AgentAbstractionsJsonUtilities.DefaultOptions)</param>
@@ -139,36 +139,18 @@ public class MorganaAgent : MorganaActor
     /// <para><strong>Deserialization Process:</strong></para>
     /// <list type="number">
     /// <item>Extract AIContextProviderState from serialized thread JSON</item>
-    /// <item>Create new MorganaContextProvider instance using deserialization constructor</item>
+    /// <item>Restore state into EXISTING MorganaContextProvider instance (preserves tool closures)</item>
     /// <item>Reconnect OnSharedContextUpdate callback for inter-agent communication</item>
+    /// <item>Propagate shared variables to other agents</item>
     /// <item>Delegate to underlying AIAgent.DeserializeThread to restore message history and chat store</item>
     /// <item>Return fully functional AgentThread ready to continue the conversation</item>
     /// </list>
-    /// <para><strong>Usage Pattern:</strong></para>
-    /// <code>
-    /// // Serialize thread for persistence
-    /// JsonElement serialized = aiAgentThread.Serialize();
-    /// await database.SaveConversation(conversationId, JsonSerializer.Serialize(serialized));
-    ///
-    /// // Later: deserialize thread to resume conversation
-    /// string savedJson = await database.LoadConversation(conversationId);
-    /// JsonElement loaded = JsonSerializer.Deserialize&lt;JsonElement&gt;(savedJson);
-    /// AgentThread restored = DeserializeThread(loaded);
-    ///
-    /// // Continue conversation with restored context
-    /// var response = await aiAgent.RunAsync("What was my previous question?", restored);
-    /// </code>
-    /// <para><strong>State Restoration:</strong></para>
-    /// <para>This method restores all conversation state including:</para>
-    /// <list type="bullet">
-    /// <item>Message history (user and assistant messages)</item>
-    /// <item>Context variables (both private and shared)</item>
-    /// <item>Shared variable names configuration</item>
-    /// <item>Chat message store state</item>
-    /// </list>
-    /// <para><strong>Important:</strong></para>
-    /// <para>The deserialized thread is automatically assigned to aiAgentThread field, so subsequent
-    /// ExecuteAgentAsync calls will use the restored conversation context.</para>
+    /// <para><strong>CRITICAL - Tool Closure Preservation:</strong></para>
+    /// <para>This method UPDATES the existing contextProvider instance instead of creating a new one.
+    /// This is essential because tools are created with closures that capture the contextProvider field:
+    /// <code>MorganaTool baseTool = new MorganaTool(logger, () => contextProvider);</code></para>
+    /// <para>If we replaced the field with a new instance, tools would write to the old instance
+    /// while the agent reads from the new one, causing quick_replies and other ephemeral data to be lost.</para>
     /// </remarks>
     public virtual AgentThread DeserializeThread(
         JsonElement serializedThread,
@@ -181,20 +163,16 @@ public class MorganaAgent : MorganaActor
         if (serializedThread.TryGetProperty("aiContextProviderState", out JsonElement stateElement))
             providerState = stateElement;
 
-        // Recreate context provider from serialized state
-        MorganaContextProvider restoredProvider = new MorganaContextProvider(
-            agentLogger,
-            providerState,
-            jsonSerializerOptions);
+        // Update existing provider instead of creating new one
+        // This preserves tool closures that captured the provider instance
+        if (providerState.ValueKind != JsonValueKind.Undefined)
+            contextProvider.RestoreState(providerState, jsonSerializerOptions);
 
-        // Reconnect shared context update callback
-        restoredProvider.OnSharedContextUpdate = OnSharedContextUpdate;
+        // Reconnect shared context update callback (in case it was cleared)
+        contextProvider.OnSharedContextUpdate = OnSharedContextUpdate;
 
         // Propagate shared variables with connected callback
-        restoredProvider.PropagateSharedVariables();
-
-        // Assign restored provider
-        contextProvider = restoredProvider;
+        contextProvider.PropagateSharedVariables();
 
         // Delegate to underlying AIAgent to deserialize thread
         aiAgentThread = aiAgent.DeserializeThread(serializedThread, jsonSerializerOptions);

@@ -235,6 +235,50 @@ public class MorganaContextProvider : AIContextProvider
         }
     }
 
+    /// <summary>
+    /// Restores the internal state of this provider from serialized data.
+    /// Used during deserialization to update the existing provider instance instead of creating a new one.
+    /// This preserves tool closures that captured the provider instance.
+    /// </summary>
+    /// <param name="serializedState">Serialized provider state from persistence</param>
+    /// <param name="jsonSerializerOptions">JSON serialization options</param>
+    /// <remarks>
+    /// <para><strong>Why This Exists:</strong></para>
+    /// <para>Tools are created with closures that capture the contextProvider field:
+    /// <code>() => contextProvider</code></para>
+    /// <para>If we create a new provider instance during deserialization, the tool closures
+    /// still point to the old instance, causing a mismatch where tools write to one instance
+    /// but the agent reads from another.</para>
+    /// <para>By restoring state into the existing instance, we preserve the tool closures.</para>
+    /// </remarks>
+    public void RestoreState(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null)
+    {
+        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
+
+        // Restore AgentContext
+        if (serializedState.TryGetProperty(nameof(AgentContext), out JsonElement contextElement))
+        {
+            Dictionary<string, object>? restoredContext = contextElement.Deserialize<Dictionary<string, object>>(jsonSerializerOptions);
+            if (restoredContext != null)
+            {
+                AgentContext = restoredContext;
+            }
+        }
+
+        // Restore SharedVariableNames
+        if (serializedState.TryGetProperty(nameof(SharedVariableNames), out JsonElement sharedNamesElement))
+        {
+            HashSet<string>? restoredSharedNames = sharedNamesElement.Deserialize<HashSet<string>>(jsonSerializerOptions);
+            if (restoredSharedNames != null)
+            {
+                SharedVariableNames = restoredSharedNames;
+            }
+        }
+
+        logger.LogInformation(
+            $"{nameof(MorganaContextProvider)} STATE RESTORED: {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
+    }
+
     // =========================================================================
     // AIContextProvider (Microsoft.Agents.AI)
     // =========================================================================
