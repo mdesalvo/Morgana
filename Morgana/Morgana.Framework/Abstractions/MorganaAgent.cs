@@ -350,6 +350,13 @@ public class MorganaAgent : MorganaActor
             List<Records.QuickReply>? quickReplies = GetQuickRepliesFromContext();
             bool hasQuickReplies = quickReplies?.Count > 0;
 
+            // Drop immediately them from context to prevent serialization
+            if (hasQuickReplies)
+            {
+                contextProvider.DropVariable("quick_replies");
+                agentLogger.LogInformation($"Dropped {quickReplies!.Count} quick replies from context (ephemeral data)");
+            }
+
             // Request is completed when no further user engagement has been requested.
             // If agent offers QuickReplies, it MUST remain active to handle clicks
             // Otherwise, clicks would go through Classifier and risk "other" intent fallback
