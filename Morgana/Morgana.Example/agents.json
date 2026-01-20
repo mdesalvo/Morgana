@@ -41,7 +41,7 @@
           "Tools": [
             {
               "Name": "GetInvoices",
-              "Description": "This tool retrieves the most recent invoices for the user, showing summary information including invoice ID, period, total amount, payment status and due dates. This tool does NOT have 'Pay Invoice' capabilities. Use this tool when the user wants to see their billing history or recent invoices.",
+              "Description": "This tool retrieves the most recent invoices for the user, showing summary information including invoice ID, period, total amount, payment status and due dates. Use this tool when the user wants to see their billing history or recent invoices.",
               "Parameters": [
                 {
                   "Name": "userId",
@@ -60,7 +60,7 @@
             },
             {
               "Name": "GetInvoiceDetails",
-              "Description": "This tool retrieves comprehensive details of a specific invoice including all line items, charges, discounts, taxes, payment method and payment status. This tool does NOT have 'Pay Invoice' capabilities. Use this tool when the user wants to examine a specific invoice in detail or asks about charges on a particular bill.",
+              "Description": "This tool retrieves comprehensive details of a specific invoice including all line items, charges, discounts, taxes, payment method and payment status. Use this tool when the user wants to examine a specific invoice in detail or asks about charges on a particular bill.",
               "Parameters": [
                 {
                   "Name": "userId",
@@ -79,7 +79,7 @@
             },
             {
               "Name": "GetPaymentHistory",
-              "Description": "This tool retrieves payment history showing all settled invoices within a specified time period. Includes payment dates, amounts, payment methods used, and calculates total spending and average monthly cost. This tool does NOT have 'Pay Invoice' capabilities. Use this tool when the user wants to review their payment patterns or financial history.",
+              "Description": "This tool retrieves payment history showing all settled invoices within a specified time period. Includes payment dates, amounts, payment methods used, and calculates total spending and average monthly cost. Use this tool when the user wants to review their payment patterns or financial history.",
               "Parameters": [
                 {
                   "Name": "userId",
@@ -115,7 +115,7 @@
           "Tools": [
             {
               "Name": "GetContractDetails",
-              "Description": "This tool retrieves comprehensive contract information including service plan specifications (speed, data limits, SLA), monthly fees, contract period, status, included features, active services breakdown, and quick termination facts. This tool does NOT have 'Modify Terms' or 'Change Clauses' capabilities. Use this tool when the user wants to understand their contract terms or check their current plan.",
+              "Description": "This tool retrieves comprehensive contract information including service plan specifications (speed, data limits, SLA), monthly fees, contract period, status, included features, active services breakdown, and quick termination facts. Use this tool when the user wants to understand their contract terms or check their current plan.",
               "Parameters": [
                 {
                   "Name": "userId",
@@ -128,7 +128,7 @@
             },
             {
               "Name": "GetContractClause",
-              "Description": "This tool retrieves detailed information about a specific contract clause including its title, summary, and full legal text. Contract has 7 clauses: (1) Service Level Agreement, (2) Payment Terms, (3) Data Usage Policy, (4) Termination Terms, (5) Auto-Renewal, (6) Limitation of Liability, (7) Data Privacy (GDPR). This tool does NOT have 'Modify Terms' or 'Change Clauses' capabilities. Use this tool when the user wants to understand a specific contractual term or legal provision.",
+              "Description": "This tool retrieves detailed information about a specific contract clause including its title, summary, and full legal text. Contract has 7 clauses: (1) Service Level Agreement, (2) Payment Terms, (3) Data Usage Policy, (4) Termination Terms, (5) Auto-Renewal, (6) Limitation of Liability, (7) Data Privacy (GDPR). Use this tool when the user wants to understand a specific contractual term or legal provision.",
               "Parameters": [
                 {
                   "Name": "userId",
@@ -147,7 +147,7 @@
             },
             {
               "Name": "GetTerminationProcedure",
-              "Description": "This tool provides comprehensive explaining of termination procedure, including required documents, step-by-step process, financial details (notice period, early termination fees, refund policy), estimated timeline, and fee waiver eligibility criteria. Use this tool when the user asks about cancellation, contract termination, or wants to understand how to end their service. This tool does NOT have 'Modify Terms' or 'Change Clauses' or 'Execute Withdrawal' capabilities.",
+              "Description": "This tool provides comprehensive explaining of termination procedure, including required documents, step-by-step process, financial details (notice period, early termination fees, refund policy), estimated timeline, and fee waiver eligibility criteria. Use this tool when the user asks about cancellation, contract termination, or wants to understand how to end their service. IMPORTANT: this tool DOES NOT start a real contract termination, it is just a reference guide.",
               "Parameters": [
                 {
                   "Name": "userId",
