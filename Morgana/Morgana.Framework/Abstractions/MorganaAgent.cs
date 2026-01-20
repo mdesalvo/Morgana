@@ -421,7 +421,7 @@ public class MorganaAgent : MorganaActor
             {
                 agentLogger.LogError(ex, "Failed to deserialize quick replies from context");
 
-                // Clear corrupted data
+                // Clear corrupted data (prevent serialized context to be damaged)
                 contextProvider.DropVariable("quick_replies");
             }
 
