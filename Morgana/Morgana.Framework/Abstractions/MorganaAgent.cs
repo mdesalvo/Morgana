@@ -362,7 +362,7 @@ public class MorganaAgent : MorganaActor
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgentThread, isCompleted);
             agentLogger.LogInformation($"Saved conversation state for {AgentIdentifier}");
 
-            // Drop quick replies from context (to prevent stale buttons in the current sessions)
+            // Drop quick replies from context
             contextProvider.DropVariable("quick_replies");
 
             #if DEBUG
