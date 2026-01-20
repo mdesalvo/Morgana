@@ -117,6 +117,22 @@ public static class Records
     /// <param name="AgentIntent">Intent of the agent that was last active (e.g., "billing", "contract")</param>
     public record RestoreActiveAgent(string AgentIntent);
 
+    /// <summary>
+    /// Request sent to RouterActor to restore/resolve an agent by intent.
+    /// Returns the agent reference if successful, or null if intent is invalid.
+    /// Router will cache the agent for future routing operations.
+    /// </summary>
+    /// <param name="AgentIntent">Intent name to resolve agent for</param>
+    public record RestoreAgentRequest(string AgentIntent);
+
+    /// <summary>
+    /// Response from RouterActor containing the resolved agent reference.
+    /// Null AgentRef indicates the intent could not be resolved to a valid agent.
+    /// </summary>
+    /// <param name="AgentIntent">Original intent requested</param>
+    /// <param name="AgentRef">Resolved agent reference, or null if not found</param>
+    public record RestoreAgentResponse(string AgentIntent, IActorRef? AgentRef);
+
     // ==========================================================================
     // USER MESSAGE HANDLING
     // ==========================================================================

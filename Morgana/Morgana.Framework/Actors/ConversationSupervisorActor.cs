@@ -101,8 +101,7 @@ public class ConversationSupervisorActor : MorganaActor
         ReceiveAsync<Records.GeneratePresentationMessage>(HandlePresentationRequestAsync);
         ReceiveAsync<Records.PresentationContext>(HandlePresentationGenerated);
 
-        // Handle incoming user messages:
-        // ALL messages (new or follow-up) go through guard check first
+        // Handle incoming user messages giving them to the guard
         ReceiveAsync<Records.UserMessage>(async msg =>
         {
             IActorRef originalSender = Sender;
@@ -199,14 +198,14 @@ public class ConversationSupervisorActor : MorganaActor
                 systemPrompt,
                 "Generate the presentation message");
 
-            actorLogger.Info($"LLM raw response: {llmResponse}");
+            actorLogger.Info($"LLM raw restoreAgentResponse: {llmResponse}");
 
-            // Parse LLM response
+            // Parse LLM restoreAgentResponse
             Records.PresentationResponse? presentationResponse =
                 JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse);
 
             if (presentationResponse == null)
-                throw new InvalidOperationException("LLM returned null presentation response");
+                throw new InvalidOperationException("LLM returned null presentation restoreAgentResponse");
 
             actorLogger.Info($"LLM generated presentation with {presentationResponse.QuickReplies.Count} quick replies");
 
@@ -428,9 +427,9 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingAgentResponse");
 
-        // Handle response from specialized agent (via RouterActor):
-        // - ActiveAgentResponse: response from intent-specific agent (BillingAgent, ContractAgent, etc.)
-        // - AgentResponse: fallback response from RouterActor (no agent found for intent)
+        // Handle restoreAgentResponse from specialized agent (via RouterActor):
+        // - ActiveAgentResponse: restoreAgentResponse from intent-specific agent (BillingAgent, ContractAgent, etc.)
+        // - AgentResponse: fallback restoreAgentResponse from RouterActor (no agent found for intent)
         // 
         // If agent signals IsCompleted=false (multi-turn conversation needed):
         //   - Set activeAgent reference for future follow-up messages
@@ -536,14 +535,14 @@ public class ConversationSupervisorActor : MorganaActor
     /// Only reached when guard check passes AND there's an active agent.
     /// Clears active agent if it signals completion.
     /// </summary>
-    /// <param name="originalSender">Original sender reference for response routing</param>
+    /// <param name="originalSender">Original sender reference for restoreAgentResponse routing</param>
     private void AwaitingFollowUpResponse(IActorRef originalSender)
     {
         actorLogger.Info("→ State: AwaitingFollowUpResponse");
 
-        // Handle follow-up response from currently active agent (multi-turn conversation):
+        // Handle follow-up restoreAgentResponse from currently active agent (multi-turn conversation):
         // - Guard check already passed before routing here
-        // - Agent was previously set as active (IsCompleted=false in prior response)
+        // - Agent was previously set as active (IsCompleted=false in prior restoreAgentResponse)
         // 
         // If agent signals IsCompleted=true:
         //   - Clear activeAgent reference (multi-turn conversation ended)
@@ -637,7 +636,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         try
         {
-            // No active agent -> Give Morgana fallback control
+            // No active agent -> Fallback to Morgana
             if (string.Equals(msg.AgentIntent, "Morgana", StringComparison.OrdinalIgnoreCase))
             {
                 // Fallback: clear active agent, next message will reclassify
@@ -648,22 +647,33 @@ public class ConversationSupervisorActor : MorganaActor
                 return;
             }
 
-            // Resolve agent actor reference (creates if doesn't exist)
-            activeAgent = await Context.System.GetOrCreateAgent(
-                agentType: agentRegistryService.ResolveAgentFromIntent(msg.AgentIntent)!,
-                actorSuffix: msg.AgentIntent,
-                conversationId: conversationId);
-            activeAgentIntent = msg.AgentIntent;
+            // Delegate to router for agent resolution and caching
+            Records.RestoreAgentResponse restoreAgentResponse = await router.Ask<Records.RestoreAgentResponse>(
+                new Records.RestoreAgentRequest(msg.AgentIntent), TimeSpan.FromSeconds(60));
+            if (restoreAgentResponse.AgentRef != null)
+            {
+                activeAgent = restoreAgentResponse.AgentRef;
+                activeAgentIntent = msg.AgentIntent;
 
-            actorLogger.Info($"Active agent restored: {activeAgent.Path} with intent {activeAgentIntent}");
+                actorLogger.Info($"Active agent restored: {activeAgent.Path} with intent {activeAgentIntent}");
+            }
+            else
+            {
+                // Intent not recognized or agent not available
+                // Fallback: clear active agent, next message will reclassify
+                activeAgent = null;
+                activeAgentIntent = null;
+
+                actorLogger.Warning($"Could not restore agent for intent '{msg.AgentIntent}' - clearing active agent");
+            }
         }
         catch (Exception ex)
         {
-            actorLogger.Error(ex, $"Failed to restore active agent for intent {msg.AgentIntent}");
-
             // Fallback: clear active agent, next message will reclassify
             activeAgent = null;
             activeAgentIntent = null;
+
+            actorLogger.Error(ex, $"Failed to restore active agent for intent {msg.AgentIntent}");
         }
     }
 

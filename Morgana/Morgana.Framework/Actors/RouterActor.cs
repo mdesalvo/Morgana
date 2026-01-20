@@ -1,8 +1,10 @@
 using Akka.Actor;
+using Akka.Dispatch.SysMsg;
 using Akka.Event;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Extensions;
 using Morgana.Framework.Interfaces;
+using System.Reflection.Metadata;
 
 namespace Morgana.Framework.Actors;
 
@@ -61,6 +63,9 @@ public class RouterActor : MorganaActor
         // - Excludes source agent from broadcast to avoid self-notification
         // - Creates agents on-demand if they don't exist yet
         ReceiveAsync<Records.BroadcastContextUpdate>(HandleBroadcastContextUpdate);
+
+        // Handle agent restoration requests from supervisor
+        ReceiveAsync<Records.RestoreAgentRequest>(HandleRestoreAgentRequestAsync);
     }
 
     /// <summary>
@@ -208,5 +213,30 @@ public class RouterActor : MorganaActor
         }
 
         actorLogger.Info($"Context update broadcast complete: {broadcastCount} agent(s) notified");
+    }
+
+    /// <summary>
+    /// Handles agent restoration requests from ConversationSupervisorActor.
+    /// Resolves and caches the agent, making it immediately available for routing.
+    /// </summary>
+    /// <param name="req">Restoration request with agent intent</param>
+    private async Task HandleRestoreAgentRequestAsync(Records.RestoreAgentRequest req)
+    {
+        IActorRef originalSender = Sender;
+
+        actorLogger.Info($"Restoring agent for intent '{req.AgentIntent}'");
+
+        IActorRef? agentRef = await GetOrCreateAgentForIntent(req.AgentIntent);
+
+        if (agentRef != null)
+        {
+            actorLogger.Info($"Agent restored and cached: {agentRef.Path}");
+        }
+        else
+        {
+            actorLogger.Warning($"Could not restore agent for intent '{req.AgentIntent}' - no matching agent type");
+        }
+
+        originalSender.Tell(new Records.RestoreAgentResponse(req.AgentIntent, agentRef));
     }
 }
