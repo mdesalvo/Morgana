@@ -3,7 +3,6 @@ using Akka.Actor.Setup;
 using Akka.DependencyInjection;
 using Microsoft.Extensions.AI;
 using Morgana.Framework;
-using Morgana.Framework.Abstractions;
 using Morgana.Framework.Adapters;
 using Morgana.Framework.Interfaces;
 using Morgana.Framework.Services;
