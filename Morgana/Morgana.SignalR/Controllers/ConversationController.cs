@@ -174,7 +174,7 @@ public class ConversationController : ControllerBase
             string? lastActiveAgent = await conversationPersistenceService
                 .GetMostRecentActiveAgentAsync(conversationId);
 
-            // Tell supervisor to recontuxtualize on it
+            // Tell supervisor to recontextualize on it
             supervisor.Tell(new Records.RestoreActiveAgent(lastActiveAgent ?? "Morgana"));
 
             logger.LogInformation(
