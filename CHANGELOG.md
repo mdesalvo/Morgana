@@ -4,31 +4,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
 ## [0.10.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Conversation Persistence
-This release introduces **persistent conversation storage** with **encrypted SQLite databases**, enabling Morgana to resume conversations across application restarts while maintaining full context and message history.
+This release introduces **persistent conversation storage**, enabling Morgana to resume conversations across application restarts while maintaining full context and message history.
 
 ### ✨ Added
 **IConversationPersistenceService**
 - Abstraction for pluggable persistence strategies (SQLite, PostgreSQL, SQL Server, etc.)
 - `SaveConversationAsync()` and `LoadConversationAsync()` for **AgentThread serialization/deserialization**
-- Full integration with **Microsoft.Agents.AI** framework for automatic state management
+- Full integration with **Microsoft.Agents.AI** framework for automatic state management (context + messages)
 
 **SqliteConversationPersistenceService**
-- Default implementation storing conversations in encrypted SQLite databases
+- Default implementation storing conversations in **SQLite** databases
 - One database per conversation: `morgana-{conversationId}.db`
 - Table schema with agent-specific rows containing encrypted AgentThread BLOBs
 - **AES-256-CBC encryption** with IV prepended to ciphertext for data-at-rest protection
 - Optimized for single-writer scenario (one active agent per conversation)
-- `user_version` pragma-based initialization tracking for zero-overhead schema checks
 
 **Database Schema**
 ```sql
 CREATE TABLE morgana (
-    agent_identifier TEXT PRIMARY KEY,    -- e.g., "billing-conv12345"
+    agent_identifier TEXT PRIMARY KEY,     -- e.g., "billing-conv12345"
     agent_name TEXT UNIQUE,                -- e.g., "billing"
     conversation_id TEXT,                  -- e.g., "conv12345"
-    agent_thread BLOB,                     -- AES-256 encrypted AgentThread
+    agent_thread BLOB,                     -- AES-256 encrypted AgentThread's JSON
     creation_date TEXT,                    -- ISO 8601 timestamp (immutable)
     last_update TEXT                       -- ISO 8601 timestamp (updated on save)
     is_active                              -- INTEGER 0/1
@@ -57,7 +57,7 @@ CREATE TABLE morgana (
 
 ### 🚀 Future Enablement
 This release unlocks:
-- **Enterprise-grade persistence** with PostgreSQL/SQL Server by implementing `IConversationPersistenceService`
+- **Enterprise-grade persistence** with any server or cloud solution by implementing custom `IConversationPersistenceService`
 - Conversation analytics and auditing through database queries
 
 
