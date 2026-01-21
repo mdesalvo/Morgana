@@ -38,7 +38,6 @@ public class ConversationSupervisorActor : MorganaActor
     private readonly IActorRef router;
     private readonly ISignalRBridgeService signalRBridgeService;
     private readonly IAgentConfigurationService agentConfigService;
-    private readonly IAgentRegistryService agentRegistryService;
 
     /// <summary>
     /// Reference to the currently active agent (for multi-turn conversations).
@@ -67,18 +66,15 @@ public class ConversationSupervisorActor : MorganaActor
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="signalRBridgeService">Service for sending messages to clients via SignalR</param>
     /// <param name="agentConfigService">Service for loading intent and agent configurations</param>
-    /// <param name="agentRegistryService">Service for runtime discovery and resolution of agent types</param>
     public ConversationSupervisorActor(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         ISignalRBridgeService signalRBridgeService,
-        IAgentConfigurationService agentConfigService,
-        IAgentRegistryService agentRegistryService) : base(conversationId, llmService, promptResolverService)
+        IAgentConfigurationService agentConfigService) : base(conversationId, llmService, promptResolverService)
     {
         this.signalRBridgeService = signalRBridgeService;
         this.agentConfigService = agentConfigService;
-        this.agentRegistryService = agentRegistryService;
 
         guard = Context.System.GetOrCreateActor<GuardActor>("guard", conversationId).GetAwaiter().GetResult();
         classifier = Context.System.GetOrCreateActor<ClassifierActor>("classifier", conversationId).GetAwaiter().GetResult();
