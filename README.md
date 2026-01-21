@@ -440,7 +440,7 @@ Invokes callback → OnSharedContextUpdate
 MorganaAgent → ActorSelection("/user/router-{conversationId}")
    ↓
 RouterActor → Tell(ContractAgent, ReceiveContextUpdate)
-RouterActor → Tell(TroubleshootingAgent, ReceiveContextUpdate)
+RouterActor → Tell(MonkeysAgent, ReceiveContextUpdate)
    ↓
 Agents → MorganaAIContextProvider.MergeSharedContext()
 ```
@@ -487,8 +487,8 @@ private void HandleContextUpdate(ReceiveContextUpdate msg)
 7. BillingAgent → ActorSelection("/user/router-{conversationId}")
 8. RouterActor → Broadcast to all agents except sender:
   - Tell(ContractAgent, ReceiveContextUpdate("userId", "USER99"))
-  - Tell(TroubleshootingAgent, ReceiveContextUpdate("userId", "USER99"))
-9. ContractAgent & TroubleshootingAgent:
+  - Tell(MonkeysAgent, ReceiveContextUpdate("userId", "USER99"))
+9. ContractAgent & MonkeysAgent:
   - Receive ReceiveContextUpdate message
   - Call MorganaAIContextProvider.MergeSharedContext()
   - Store userId if not already present (first-write-wins)
