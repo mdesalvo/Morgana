@@ -33,7 +33,7 @@ namespace Morgana.Framework.Services;
 ///     ├── agents.json (domain configuration)
 ///     ├── BillingAgent.cs
 ///     ├── ContractAgent.cs
-///     └── TroubleshootingAgent.cs
+///     └── MonkeysAgent.cs
 ///
 /// At runtime:
 /// 1. PluginLoaderService loads Morgana.Example.dll
@@ -113,7 +113,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     /// ✅ Loaded 3 intents and 3 agent prompts from agents.json
     ///    📋 Intent: billing - requests to view invoices...
     ///    📋 Intent: contract - requests to summarize contract...
-    ///    📋 Intent: troubleshooting - requests to solve technical problems...
+    ///    📋 Intent: monkeys - requests to show a list of monkeys (MCP)...
     ///
     /// // No configuration found
     /// Searching for agents.json in loaded assemblies...

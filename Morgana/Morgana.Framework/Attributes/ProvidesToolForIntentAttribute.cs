@@ -119,7 +119,7 @@ public class ProvidesToolForIntentAttribute : Attribute
     /// Must match the intent specified in HandlesIntentAttribute on the corresponding agent.
     /// </summary>
     /// <value>
-    /// Intent name (e.g., "billing", "contract", "troubleshooting")
+    /// Intent name (e.g., "billing", "contract", "monkeys")
     /// </value>
     /// <remarks>
     /// <para><strong>Intent Naming Consistency:</strong></para>

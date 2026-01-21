@@ -224,25 +224,24 @@ public static class Records
     /// </param>
     /// <param name="QuickReplies">
     /// Optional list of quick reply buttons to display to the user.
-    /// Agents can provide guided choices for better UX (e.g., troubleshooting options, invoice selection).
+    /// Agents can provide guided choices for better UX (e.g., contract sections, invoice selection).
     /// If null, no quick replies are shown.
     /// </param>
     /// <remarks>
     /// <para><strong>Quick Reply Usage:</strong></para>
     /// <para>Agents can emit quick replies to guide users through complex workflows:</para>
     /// <code>
-    /// // Troubleshooting agent offering diagnostic options
+    /// // Billing agent offering invoice options
     /// new AgentResponse(
-    ///     "I can help diagnose your issue.",
+    ///     "I can help with your invoices.",
     ///     IsCompleted: false,
     ///     QuickReplies: new List&lt;QuickReply&gt; {
-    ///         new("diag", "🔧 Run Diagnostics", "Run network diagnostics"),
-    ///         new("guide", "📖 Troubleshooting Guide", "Show me troubleshooting guides")
+    ///         new("diag", "🔧 Show recent invoices", "Show me my invoices"),
+    ///         new("guide", "📖 Show payment history", "Show me history of my payments")
     ///     });
     /// </code>
     /// <para><strong>Best Practices:</strong></para>
     /// <list type="bullet">
-    /// <item>Limit to 3-5 quick replies per message (UI constraint)</item>
     /// <item>Use clear, action-oriented labels with emoji for visual appeal</item>
     /// <item>Set IsCompleted=false when quick replies represent continuation of workflow</item>
     /// <item>Quick reply values should be natural user messages that trigger appropriate agent behavior</item>
@@ -339,7 +338,7 @@ public static class Records
     /// {
     ///   "id": "no-internet",
     ///   "label": "🔴 No Internet Connection",
-    ///   "value": "Show me the no-internet troubleshooting guide"
+    ///   "value": "Show me the no-internet assistance guide"
     /// }
     /// </code>
     /// </remarks>
@@ -618,7 +617,7 @@ public static class Records
     /// <param name="ID">
     /// Unique prompt identifier.
     /// Framework: "Morgana", "Classifier", "Guard", "Presentation"
-    /// Domain: Intent names like "billing", "contract", "troubleshooting"
+    /// Domain: Intent names like "billing", "contract", "monkeys"
     /// </param>
     /// <param name="Type">Prompt type (e.g., "SYSTEM", "INTENT")</param>
     /// <param name="SubType">Prompt subtype (e.g., "AGENT", "ACTOR", "PRESENTATION")</param>

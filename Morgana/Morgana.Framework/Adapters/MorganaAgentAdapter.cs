@@ -464,7 +464,7 @@ public class MorganaAgentAdapter
     /// Agent 'billing' has 2 shared variables: userId, customerId
     ///
     /// // Agent without shared variables
-    /// Agent 'troubleshooting' has NO shared variables
+    /// Agent 'monkeys' has NO shared variables
     /// </code>
     /// </remarks>
     private MorganaAIContextProvider CreateAIContextProvider(

@@ -16,7 +16,7 @@ namespace Morgana.Framework.Abstractions;
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
 /// <para>MorganaAgent provides the foundation for building specialized conversational agents that handle specific intents
-/// (e.g., BillingAgent, ContractAgent, TroubleshootingAgent). Each agent manages its own conversation thread,
+/// (e.g., BillingAgent, ContractAgent, MonkeysAgent). Each agent manages its own conversation thread,
 /// context variables, and can communicate with other agents via the RouterActor.</para>
 /// <para><strong>Key Features:</strong></para>
 /// <list type="bullet">
@@ -32,7 +32,7 @@ namespace Morgana.Framework.Abstractions;
 ///   └── MorganaAgent (adds AI agent capabilities)
 ///         ├── BillingAgent [HandlesIntent("billing")]
 ///         ├── ContractAgent [HandlesIntent("contract")]
-///         └── TroubleshootingAgent [HandlesIntent("troubleshooting")]
+///         └── MonkeysAgent [HandlesIntent("monkeys")]
 /// </code>
 /// <para><strong>Usage Pattern:</strong></para>
 /// <para>Agents receive AgentRequest messages, process them via ExecuteAgentAsync, and respond with AgentResponse.
@@ -76,7 +76,7 @@ public class MorganaAgent : MorganaActor
     /// Extracted from the HandlesIntentAttribute decorating the agent class.
     /// </summary>
     /// <remarks>
-    /// <para><strong>Example:</strong> "billing", "contract", "troubleshooting"</para>
+    /// <para><strong>Example:</strong> "billing", "contract", "monkeys"</para>
     /// <para><strong>Important:</strong> This property throws if HandlesIntentAttribute is not present.
     /// All MorganaAgent subclasses MUST be decorated with [HandlesIntent("...")] attribute.</para>
     /// </remarks>
@@ -233,8 +233,8 @@ public class MorganaAgent : MorganaActor
     /// // ContractAgent receives broadcast and merges (first write)
     /// ContractAgent context: { "userId": "P994E" }
     ///
-    /// // Later, TroubleshootingAgent independently asks user
-    /// TroubleshootingAgent has: { "userId": "P994E" } (already set, ignores any conflicting broadcast)
+    /// // Later, ContractAgent independently asks user
+    /// ContractAgent has: { "userId": "P994E" } (already set, ignores any conflicting broadcast)
     /// </code>
     /// </remarks>
     private void HandleContextUpdate(Records.ReceiveContextUpdate msg)
@@ -376,7 +376,7 @@ public class MorganaAgent : MorganaActor
     /// contextual quick reply suggestions. This method retrieves quick replies from MorganaTool instances.</para>
     /// <para><strong>Example Flow:</strong></para>
     /// <code>
-    /// 1. LLM calls "ListTroubleshootingGuides" tool
+    /// 1. LLM calls "GetInvoices" tool
     /// 2. Tool sets quick replies for guide selection
     /// 3. Tool returns guide list text
     /// 4. Agent calls GetQuickRepliesFromContext() after tool execution

@@ -15,7 +15,7 @@
 /// Core system prompts: Morgana (base behavior), Classifier, Guard, Presentation
 /// </description></item>
 /// <item><term>Domain Prompts (agents.json)</term><description>
-/// Business-specific agent prompts: Billing, Contract, Troubleshooting, etc.
+/// Business-specific agent prompts: Billing, Contract, Monkeys, etc.
 /// </description></item>
 /// </list>
 /// <para><strong>Prompt Structure:</strong></para>
@@ -86,7 +86,7 @@ public interface IPromptResolverService
     /// //   - Presentation (SYSTEM/PRESENTATION)
     /// //   - Billing (INTENT/AGENT)
     /// //   - Contract (INTENT/AGENT)
-    /// //   - Troubleshooting (INTENT/AGENT)
+    /// //   - Monkeys (INTENT/AGENT)
     /// </code>
     /// </remarks>
     Task<Records.Prompt[]> GetAllPromptsAsync();
@@ -98,7 +98,7 @@ public interface IPromptResolverService
     /// <param name="promptID">
     /// Unique identifier of the prompt to resolve.
     /// Framework prompts: "Morgana", "Classifier", "Guard", "Presentation"
-    /// Domain prompts: intent names like "billing", "contract", "troubleshooting"
+    /// Domain prompts: intent names like "billing", "contract", "monkeys"
     /// </param>
     /// <returns>Prompt definition matching the specified ID</returns>
     /// <exception cref="InvalidOperationException">Thrown if prompt ID not found in any source</exception>

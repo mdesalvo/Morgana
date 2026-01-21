@@ -155,7 +155,7 @@ public class MorganaTool
     /// <item>Provider calls agent's OnSharedContextUpdate callback</item>
     /// <item>Agent broadcasts to RouterActor via BroadcastContextUpdate</item>
     /// <item>RouterActor sends ReceiveContextUpdate to all other agents</item>
-    /// <item>ContractAgent and TroubleshootingAgent receive and merge the userId</item>
+    /// <item>ContractAgent and MonkeysAgent receive and merge the userId</item>
     /// <item>All agents can now use userId without asking the user again</item>
     /// </list>
     /// <para><strong>Local Variable Flow (example: invoiceId):</strong></para>
@@ -212,12 +212,12 @@ public class MorganaTool
     ///   {
     ///     "id": "no-internet",
     ///     "label": "🔴 No Internet Connection",
-    ///     "value": "Show me the no-internet troubleshooting guide"
+    ///     "value": "Show me the no-internet assistance guide"
     ///   },
     ///   {
     ///     "id": "slow-speed",
     ///     "label": "🐌 Slow Connection Speed",
-    ///     "value": "Show me the slow-connection troubleshooting guide"
+    ///     "value": "Show me the slow-connection assistance guide"
     ///   }
     /// ]
     /// </code>

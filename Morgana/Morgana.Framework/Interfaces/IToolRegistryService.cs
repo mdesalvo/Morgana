@@ -124,10 +124,9 @@ public interface IToolRegistryService
     ///     logger.LogInformation($"  - {kvp.Key}: {kvp.Value.Name}");
     /// }
     /// // Output:
-    /// // Registered 3 tool implementations:
+    /// // Registered 2 tool implementations:
     /// //   - billing: BillingTool
     /// //   - contract: ContractTool
-    /// //   - troubleshooting: TroubleshootingTool
     ///
     /// // Configuration validation
     /// List&lt;IntentDefinition&gt; intents = await agentConfigService.GetIntentsAsync();

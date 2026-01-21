@@ -7,7 +7,7 @@ namespace Morgana.Framework.Services;
 /// <summary>
 /// Implementation of IPromptResolverService that resolves prompts from two sources:
 /// 1. morgana.json (framework prompts: Morgana, Classifier, Guard, Presentation)
-/// 2. IAgentConfigurationService (domain prompts: billing, contract, troubleshooting, etc.)
+/// 2. IAgentConfigurationService (domain prompts: billing, contract, monkeys, etc.)
 /// </summary>
 /// <remarks>
 /// <para><strong>Two-Tier Prompt Architecture:</strong></para>
@@ -91,7 +91,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     /// Domain prompts (3):
     ///   - billing (Billing agent prompt)
     ///   - contract (Contract agent prompt)
-    ///   - troubleshooting (Troubleshooting agent prompt)
+    ///   - monkeys (Monkeys MCP agent prompt)
     ///
     /// Total: 7 prompts
     /// </code>
@@ -109,7 +109,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     /// <param name="promptID">
     /// Unique prompt identifier.
     /// Framework IDs: "Morgana", "Classifier", "Guard", "Presentation"
-    /// Domain IDs: intent names like "billing", "contract", "troubleshooting"
+    /// Domain IDs: intent names like "billing", "contract", "monkeys"
     /// </param>
     /// <returns>Prompt matching the specified ID</returns>
     /// <exception cref="KeyNotFoundException">Thrown if prompt ID not found in any source</exception>

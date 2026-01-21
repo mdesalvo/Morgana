@@ -107,7 +107,7 @@ public interface IAgentRegistryService
     /// // Log available agents at startup
     /// IEnumerable&lt;string&gt; intents = agentRegistryService.GetAllIntents();
     /// logger.LogInformation($"Registered agents for intents: {string.Join(", ", intents)}");
-    /// // Output: "Registered agents for intents: billing, contract, troubleshooting"
+    /// // Output: "Registered agents for intents: billing, contract, monkeys"
     ///
     /// // RouterActor: Create agent for each registered intent
     /// foreach (string intent in agentRegistryService.GetAllIntents())

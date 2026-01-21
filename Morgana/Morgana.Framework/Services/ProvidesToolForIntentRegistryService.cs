@@ -37,15 +37,13 @@ namespace Morgana.Framework.Services;
 /// 🔍 Scanning assemblies for MorganaTool implementations...
 ///   📦 Registered tool: BillingTool for intent 'billing'
 ///   📦 Registered tool: ContractTool for intent 'contract'
-///   📦 Registered tool: TroubleshootingTool for intent 'troubleshooting'
-/// ✅ Tool registry initialized with 3 tool(s)
+/// ✅ Tool registry initialized with 2 tool(s)
 ///
 /// ========================================
 /// Tool Registry Validation
 /// ========================================
 /// ✅ Tool Registry: Agent 'billing' → Tool 'BillingTool'
 /// ✅ Tool Registry: Agent 'contract' → Tool 'ContractTool'
-/// ✅ Tool Registry: Agent 'troubleshooting' → Tool 'TroubleshootingTool'
 /// ========================================
 /// </code>
 /// <para><strong>Validation Scenarios:</strong></para>
