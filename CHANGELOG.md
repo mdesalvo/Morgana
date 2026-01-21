@@ -41,6 +41,12 @@ CREATE TABLE morgana (
 - Seamless serialization of both **ChatMessageStore** (conversation history) and **AIContextProvider** (context variables)
 - Each agent maintains isolated thread storage per conversation
 
+**Cauldron: ProtectedLocalStorage and UI/UX continuity**
+- Cauldron stores the conversation identifier in ASP.NET `ProtectedLocalStorage`, which keeps it encrypted and always available across client/server restarts
+- It automatically detects the **last active agent** of the conversation, then properly recontextualizes the UI and sends an agent-resuming user message
+- If there was no active agent (Morgana had the control) it just recontextualizes the UI
+- Cauldron has a new button for starting a fresh new conversation with Morgana: this offers a confirmation modal, which is a new capability
+
 ### 🔄 Changed
 - `ConversationId` is not provided anymore to agent's `ChatOptions`, since we moved to `ChatMessageStore`
 - AgentName is now contextualized to color scheme of the current agent for better usabilty (instead of white)
