@@ -148,7 +148,9 @@ public class MorganaAgent : MorganaActor
     /// <para><strong>CRITICAL - Tool Closure Preservation:</strong></para>
     /// <para>This method UPDATES the existing contextProvider instance instead of creating a new one.
     /// This is essential because tools are created with closures that capture the contextProvider field:
-    /// <code>MorganaTool baseTool = new MorganaTool(logger, () => contextProvider);</code></para>
+    /// <code>
+    /// MorganaTool baseTool = new MorganaTool(logger, () => contextProvider);
+    /// </code></para>
     /// <para>If we replaced the field with a new instance, tools would write to the old instance
     /// while the agent reads from the new one, causing quick_replies and other ephemeral data to be lost.</para>
     /// </remarks>
@@ -158,15 +160,14 @@ public class MorganaAgent : MorganaActor
     {
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
-        // Extract AIContextProviderState if present
-        JsonElement providerState = default;
+        // Extract AIContextProviderState
+        JsonElement aiContextProviderState = default;
         if (serializedThread.TryGetProperty("aiContextProviderState", out JsonElement stateElement))
-            providerState = stateElement;
+            aiContextProviderState = stateElement;
 
-        // Update existing provider instead of creating new one
-        // This preserves tool closures that captured the provider instance
-        if (providerState.ValueKind != JsonValueKind.Undefined)
-            contextProvider.RestoreState(providerState, jsonSerializerOptions);
+        // Restore MorganaContextProvider from its data
+        if (aiContextProviderState.ValueKind != JsonValueKind.Undefined)
+            contextProvider.RestoreState(aiContextProviderState, jsonSerializerOptions);
 
         // Reconnect shared context update callback (in case it was cleared)
         contextProvider.OnSharedContextUpdate = OnSharedContextUpdate;
@@ -328,7 +329,7 @@ public class MorganaAgent : MorganaActor
             List<Records.QuickReply>? quickReplies = GetQuickRepliesFromContext();
             bool hasQuickReplies = quickReplies?.Count > 0;
 
-            // Drop immediately them from context to prevent serialization
+            // Drop immediately them from context to prevent serialization (they're ephemeral UI hints)
             if (hasQuickReplies)
             {
                 contextProvider.DropVariable("quick_replies");
