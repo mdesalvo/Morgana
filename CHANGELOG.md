@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.10.0] - UNDER DEVELOPMENT
+## [0.10.0] - 2026-01-21
 ### 🎯 Major Feature: Conversation Persistence
 This release introduces **persistent conversation storage**, enabling Morgana to resume conversations across application restarts while maintaining full context and message history.
 
