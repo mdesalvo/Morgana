@@ -370,6 +370,7 @@
                     Type = MessageType.Assistant
                 });
 
+                // Add an automatic user message triggering the agent's capabilities
                 if (!string.Equals(currentAgentName, "Morgana", StringComparison.OrdinalIgnoreCase))
                 {
                     inputText = LandingMessageService.GetAutoResumeUserMessage();
