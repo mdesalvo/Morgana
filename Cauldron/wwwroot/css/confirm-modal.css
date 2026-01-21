@@ -1,0 +1,310 @@
+﻿/* ==============================================================================
+   CONFIRM MODAL - Confirmation modal component
+   ============================================================================== */
+
+/* Modal Overlay - Full screen backdrop with blur */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    /* Translucent dark background with blur effect */
+    background: color-mix(in srgb, var(--bg-color) 85%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    /* Center content */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Fade-in animation */
+    animation: modalFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Modal Content Container - Glassmorphic card */
+.modal-content {
+    position: relative;
+    min-width: 420px;
+    max-width: 520px;
+    padding: 36px;
+    overflow: hidden;
+    /* Glassmorphic background with gradient */
+    background: linear-gradient( 135deg, color-mix(in srgb, var(--surface-color) 95%, transparent) 0%, color-mix(in srgb, var(--surface-light) 95%, transparent) 100% );
+    /* Border with primary color hint */
+    border: 2px solid color-mix(in srgb, var(--primary-color) 20%, transparent);
+    border-radius: 24px;
+    /* Layered shadows for depth */
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px color-mix(in srgb, var(--primary-color) 10%, transparent), inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+    /* Scale-in animation */
+    animation: modalScaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+    /* Magical glow effect on hover */
+    .modal-content::before {
+        content: '';
+        position: absolute;
+        top: -2px;
+        left: -2px;
+        right: -2px;
+        bottom: -2px;
+        z-index: -1;
+        border-radius: 24px;
+        opacity: 0;
+        background: linear-gradient( 135deg, var(--primary-color), var(--secondary-color) );
+        transition: opacity 0.4s ease;
+    }
+
+    .modal-content:hover::before {
+        opacity: 0.12;
+    }
+
+@keyframes modalScaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.92) translateY(24px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Modal Header - Icon and title */
+.modal-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+/* Magical Icon Container */
+.magical-icon {
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    /* Gradient background */
+    background: linear-gradient( 135deg, var(--primary-color), var(--primary-dark) );
+    border-radius: 14px;
+    /* Glowing shadow */
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--primary-color) 35%, transparent), inset 0 1px 0 color-mix(in srgb, white 20%, transparent);
+    /* Magical pulse animation */
+    animation: magicalPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes magicalPulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 8px 20px color-mix(in srgb, var(--primary-color) 35%, transparent), inset 0 1px 0 color-mix(in srgb, white 20%, transparent);
+    }
+
+    50% {
+        transform: scale(1.06);
+        box-shadow: 0 12px 28px color-mix(in srgb, var(--primary-color) 50%, transparent), inset 0 1px 0 color-mix(in srgb, white 25%, transparent);
+    }
+}
+
+/* Modal Title */
+.modal-header h3 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.2;
+    /* Gradient text effect */
+    background: linear-gradient( 135deg, var(--primary-color), var(--secondary-color) );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Modal Body - Message content */
+.modal-body {
+    margin-bottom: 32px;
+}
+
+.modal-body p {
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Modal Actions - Button container */
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+/* Modal Buttons - Base style */
+.modal-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 26px;
+    overflow: hidden;
+    /* Typography */
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    /* Border and shape */
+    border: 2px solid;
+    border-radius: 12px;
+    background: transparent;
+    /* Interaction */
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Animated background effect */
+.modal-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: -1;
+}
+
+.modal-btn:hover::before {
+    left: 0;
+}
+
+/* Icon animation on hover */
+.modal-btn .btn-icon {
+    font-size: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-btn:hover .btn-icon {
+    transform: scale(1.2);
+}
+
+/* Cancel Button - Subtle gray style */
+.modal-btn.cancel {
+    border-color: var(--surface-light);
+    color: var(--text-secondary);
+}
+
+    .modal-btn.cancel::before {
+        background: color-mix(in srgb, var(--surface-light) 60%, transparent);
+    }
+
+    .modal-btn.cancel:hover {
+        border-color: var(--text-secondary);
+        color: var(--text-primary);
+    }
+
+/* Confirm Button - Primary color style */
+.modal-btn.confirm {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+    .modal-btn.confirm::before {
+        background: linear-gradient( 135deg, var(--primary-color), var(--primary-dark) );
+    }
+
+    .modal-btn.confirm:hover {
+        color: white;
+        border-color: var(--primary-color);
+        box-shadow: 0 8px 20px color-mix(in srgb, var(--primary-color) 45%, transparent);
+    }
+
+/* Active state - Press down effect */
+.modal-btn:active {
+    transform: scale(0.97);
+}
+
+/* Disabled state */
+.modal-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+    .modal-btn:disabled:hover {
+        transform: none;
+        box-shadow: none;
+    }
+
+/* Focus state for accessibility */
+.modal-btn:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
+    outline-offset: 2px;
+}
+
+/* ==============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================== */
+
+@media (max-width: 640px) {
+    .modal-content {
+        min-width: auto;
+        width: calc(100vw - 32px);
+        padding: 28px 24px;
+    }
+
+    .modal-header h3 {
+        font-size: 22px;
+    }
+
+    .magical-icon {
+        width: 48px;
+        height: 48px;
+        font-size: 24px;
+    }
+
+    .modal-body p {
+        font-size: 15px;
+    }
+
+    /* Stack buttons vertically on mobile */
+    .modal-actions {
+        flex-direction: column-reverse;
+        gap: 10px;
+    }
+
+    .modal-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 400px) {
+    .modal-content {
+        width: calc(100vw - 24px);
+        padding: 24px 20px;
+    }
+
+    .modal-header {
+        gap: 12px;
+    }
+
+        .modal-header h3 {
+            font-size: 20px;
+        }
+}

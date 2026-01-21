@@ -1,0 +1,64 @@
+﻿@namespace Cauldron.Components
+
+@* Confirmation modal component with magical Morgana theme *@
+
+@if (IsVisible)
+{
+    <div class="modal-overlay" @onclick="HandleBackdropClick">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div class="magical-icon">✨</div>
+                <h3>@Title</h3>
+            </div>
+
+            <div class="modal-body">
+                <p>@Message</p>
+            </div>
+
+            <div class="modal-actions">
+                <button class="modal-btn cancel" @onclick="OnCancel">
+                    <span class="btn-icon">✕</span>
+                    <span>@CancelText</span>
+                </button>
+                <button class="modal-btn confirm" @onclick="OnConfirm">
+                    <span class="btn-icon">✓</span>
+                    <span>@ConfirmText</span>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "Confirm Action";
+
+    [Parameter]
+    public string Message { get; set; } = "Are you sure?";
+
+    [Parameter]
+    public string ConfirmText { get; set; } = "Yes";
+
+    [Parameter]
+    public string CancelText { get; set; } = "No";
+
+    [Parameter]
+    public EventCallback OnConfirm { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    [Parameter]
+    public bool CloseOnBackdrop { get; set; } = true;
+
+    private void HandleBackdropClick()
+    {
+        if (CloseOnBackdrop)
+        {
+            OnCancel.InvokeAsync();
+        }
+    }
+}

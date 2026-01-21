@@ -14,20 +14,26 @@
     <!-- Header -->
     <div class="chat-header">
         <div class="header-content">
+
             <img src="images/morgana-avatar.png" 
                  alt="Morgana" 
                  class="header-avatar"
                  style="border: 3px solid @GetAvatarBorderColor(currentAgentName);" />
+
             <div class="header-info">
                 <h1 style="color: @GetAvatarBorderColor(currentAgentName);">@currentAgentName</h1>
                 <span class="status @(isConnected ? "online" : "offline")" style="color: @(isConnected ? "#10b981" : "#ef4444");">
                     @(isConnected ? "Online" : "Offline")
                 </span>
             </div>
-            <button class="new-conversation-btn @(IsNewConversationButtonVisible ? "visible" : "hidden")" @onclick="ClearConversationAsync" title="Start a new conversation with Morgana">
+
+            <button class="new-conversation-btn @(IsNewConversationButtonVisible ? "visible" : "hidden")"
+                    @onclick="ShowConfirmModal"
+                    title="Start a new conversation with Morgana">
                 <span class="btn-icon">✨</span>
                 <span class="btn-text">New Conversation</span>
             </button>
+
         </div>
     </div>
 
@@ -157,6 +163,15 @@
     }
 </div>
 
+<!-- Confirmation Modal for New Conversation -->
+<ConfirmModal IsVisible="@showConfirmModal"
+              Title="Start New Conversation?"
+              Message="This will start a new conversation with Morgana. Your chat history will be lost. Are you sure you want to continue?"
+              ConfirmText="Yes, start new"
+              CancelText="No, stay here"
+              OnConfirm="@ConfirmNewConversationAsync"
+              OnCancel="@HideConfirmModal" />
+
 @code {
     // =========================================================================
     // STATE VARIABLES
@@ -202,6 +217,11 @@
     /// Empty string when no error present.
     /// </summary>
     private string errorMessage = string.Empty;
+
+    /// <summary>
+    /// Controls visibility of the new conversation confirmation modal.
+    /// </summary>
+    private bool showConfirmModal = false;
 
     /// <summary>
     /// Name of the currently active agent.
@@ -754,6 +774,34 @@
         // Send the quick reply value as user message
         inputText = reply.Value;
         await SendMessageAsync();
+    }
+
+    /// <summary>
+    /// Shows the confirmation modal for starting a new conversation.
+    /// </summary>
+    private void ShowConfirmModal()
+    {
+        showConfirmModal = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Hides the confirmation modal without taking action.
+    /// </summary>
+    private void HideConfirmModal()
+    {
+        showConfirmModal = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Handles the confirmation action - hides modal and starts new conversation.
+    /// </summary>
+    private async Task ConfirmNewConversationAsync()
+    {
+        showConfirmModal = false;
+        StateHasChanged();
+        await ClearConversationAsync();
     }
 
     // =========================================================================
