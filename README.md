@@ -253,7 +253,7 @@ Each `MorganaAgent` maintains conversation continuity through `AgentThread`, whi
 ```csharp
 protected AIAgent aiAgent;
 protected AgentThread aiAgentThread;
-protected MorganaContextProvider contextProvider;
+protected MorganaAIContextProvider contextProvider;
 
 protected async Task ExecuteAgentAsync(Records.AgentRequest req)
 {
@@ -271,12 +271,12 @@ protected async Task ExecuteAgentAsync(Records.AgentRequest req)
 - **Framework-Native**: Leverages Microsoft.Agents.AI built-in memory capabilities
 - **Lazy Initialization**: Thread created on-demand, reducing resource overhead
 
-### MorganaContextProvider: Stateful Context Management
+### MorganaAIContextProvider: Stateful Context Management
 
-`MorganaContextProvider` implements `AIContextProvider` to manage agent-specific state and enable P2P context synchronization:
+`MorganaAIContextProvider` implements `AIContextProvider` to manage agent-specific state and enable P2P context synchronization:
 
 ```csharp
-public class MorganaContextProvider : AIContextProvider
+public class MorganaAIContextProvider : AIContextProvider
 {
    // Source of truth for agent context variables
    public Dictionary<string, object> AgentContext { get; private set; }
@@ -298,23 +298,23 @@ public class MorganaContextProvider : AIContextProvider
 
 ### Integration with Tools
 
-Tools interact with context through `MorganaContextProvider`:
+Tools interact with context through `MorganaAIContextProvider`:
 
 ```csharp
 public class MorganaTool
 {
-  protected readonly Func<MorganaContextProvider> getContextProvider;
+  protected readonly Func<MorganaAIContextProvider> getContextProvider;
 
   public Task<object> GetContextVariable(string variableName)
   {
-    MorganaContextProvider provider = getContextProvider();
+    MorganaAIContextProvider provider = getContextProvider();
     object? value = provider.GetVariable(variableName);
     // Returns value or "not available" message
   }
 
   public Task<object> SetContextVariable(string variableName, string variableValue)
   {
-    MorganaContextProvider provider = getContextProvider();
+    MorganaAIContextProvider provider = getContextProvider();
     provider.SetVariable(variableName, variableValue);
 
     // If variable is shared, provider automatically triggers broadcast
@@ -341,7 +341,7 @@ LLM is prompted to retain conversation until its natural ending.
 
 ## Context Synchronization System
 
-Morgana implements a sophisticated **P2P context synchronization** mechanism powered by `MorganaContextProvider`, allowing agents to share contextual information seamlessly and eliminating redundant user interactions.
+Morgana implements a sophisticated **P2P context synchronization** mechanism powered by `MorganaAIContextProvider`, allowing agents to share contextual information seamlessly and eliminating redundant user interactions.
 
 ### The Problem
 
@@ -360,7 +360,7 @@ User: "USER99" ← Frustrating repetition
 
 ### The Solution: Shared Context with P2P Broadcast
 
-Morgana's context system allows agents to declare which parameters should be **shared** across the system. When one agent collects this information, it's automatically broadcast to all other agents through `MorganaContextProvider`.
+Morgana's context system allows agents to declare which parameters should be **shared** across the system. When one agent collects this information, it's automatically broadcast to all other agents through `MorganaAIContextProvider`.
 
 ### Architecture
 
@@ -382,9 +382,9 @@ Parameters are marked as `Shared: true` in `agents.json`:
 - **`Shared: true`**: Parameter is broadcast to all agents when set
 - **`Shared: false`**: Parameter remains private to the agent
 
-#### 2. MorganaContextProvider as State Manager
+#### 2. MorganaAIContextProvider as State Manager
 
-`MorganaContextProvider` centralizes context management by implementing `AIContextProvider` and enables P2P synchronization:
+`MorganaAIContextProvider` centralizes context management by implementing `AIContextProvider` and enables P2P synchronization:
 
 **Variable Storage:**
 ```csharp
@@ -428,12 +428,12 @@ Router serves dual purposes:
 1. **Intent Routing**: Routes requests to appropriate agents
 2. **Context Bus**: Broadcasts shared context updates to all agents
 
-When an agent updates a shared variable through `MorganaContextProvider`:
+When an agent updates a shared variable through `MorganaAIContextProvider`:
 
 ```
 BillingAgent → SetContextVariable("userId", "USER99")
    ↓
-MorganaContextProvider detects userId is Shared
+MorganaAIContextProvider detects userId is Shared
    ↓
 Invokes callback → OnSharedContextUpdate
    ↓
@@ -442,7 +442,7 @@ MorganaAgent → ActorSelection("/user/router-{conversationId}")
 RouterActor → Tell(ContractAgent, ReceiveContextUpdate)
 RouterActor → Tell(TroubleshootingAgent, ReceiveContextUpdate)
    ↓
-Agents → MorganaContextProvider.MergeSharedContext()
+Agents → MorganaAIContextProvider.MergeSharedContext()
 ```
 
 #### 4. Agent-Level Integration
@@ -451,7 +451,7 @@ Each `MorganaAgent` registers the broadcast callback during initialization:
 
 ```csharp
 // In AgentAdapter.CreateContextProvider()
-MorganaContextProvider provider = new MorganaContextProvider(
+MorganaAIContextProvider provider = new MorganaAIContextProvider(
   contextProviderLogger, sharedVariables);
 
 if (sharedContextCallback != null)
@@ -480,7 +480,7 @@ private void HandleContextUpdate(ReceiveContextUpdate msg)
 3. BillingAgent → User: "What's your customer ID?"
 4. User: "USER99"
 5. BillingAgent → SetContextVariable("userId", "USER99")
-6. MorganaContextProvider:
+6. MorganaAIContextProvider:
   - Stores userId in AgentContext
   - Detects userId is Shared
   - Invokes OnSharedContextUpdate callback
@@ -490,7 +490,7 @@ private void HandleContextUpdate(ReceiveContextUpdate msg)
   - Tell(TroubleshootingAgent, ReceiveContextUpdate("userId", "USER99"))
 9. ContractAgent & TroubleshootingAgent:
   - Receive ReceiveContextUpdate message
-  - Call MorganaContextProvider.MergeSharedContext()
+  - Call MorganaAIContextProvider.MergeSharedContext()
   - Store userId if not already present (first-write-wins)
 10. User → ContractAgent: "Show my contract"
 11. ContractAgent → GetContextVariable("userId") → HIT! "USER99"
@@ -499,7 +499,7 @@ private void HandleContextUpdate(ReceiveContextUpdate msg)
 
 ### Key Components
 
-**MorganaContextProvider**
+**MorganaAIContextProvider**
 - Maintains `Dictionary<string, object> AgentContext` as source of truth
 - Tracks `HashSet<string> sharedVariableNames` for broadcast detection
 - Invokes `OnSharedContextUpdate` callback when shared variables are set
@@ -507,7 +507,7 @@ private void HandleContextUpdate(ReceiveContextUpdate msg)
 - Supports serialization/deserialization for future persistence needs
 
 **MorganaTool**
-- Receives `Func<MorganaContextProvider>` lazy accessor
+- Receives `Func<MorganaAIContextProvider>` lazy accessor
 - `GetContextVariable` delegates to provider's `GetVariable()`
 - `SetContextVariable` delegates to provider's `SetVariable()`
 - Provider automatically handles broadcast for shared variables
@@ -515,11 +515,11 @@ private void HandleContextUpdate(ReceiveContextUpdate msg)
 **MorganaAgent**
 - Implements `OnSharedContextUpdate` callback to broadcast via ActorSelection
 - Implements `HandleContextUpdate` handler to receive and merge updates
-- Registers callback with `MorganaContextProvider` during initialization
+- Registers callback with `MorganaAIContextProvider` during initialization
 
 **MorganaAgentAdapter**
 - Extracts shared variables from `ToolDefinition` parameters
-- Creates `MorganaContextProvider` with shared variable names
+- Creates `MorganaAIContextProvider` with shared variable names
 - Registers `OnSharedContextUpdate` callback during agent creation
 
 **Router**
@@ -634,7 +634,7 @@ SetQuickReplies([
 ])
 ```
 
-#### 2. Storage in MorganaContextProvider
+#### 2. Storage in MorganaAIContextProvider
 
 Quick replies are stored as **temporary context** using the special key `__pending_quick_replies`:
 
@@ -1339,7 +1339,7 @@ Morgana treats MCP tools as **first-class citizens**, making external capabiliti
 
 ### Memory & Context Management
 - **AgentThread**: Framework-native conversation history management with automatic serialization support
-- **MorganaContextProvider**: Custom `AIContextProvider` implementation for stateful context management with temporary variable support
+- **MorganaAIContextProvider**: Custom `AIContextProvider` implementation for stateful context management with temporary variable support
 - **MorganaStoreProvider**: Wrapper around Microsoft's `InMemoryChatMessageStore` providing Morgana-specific observability and serialization
 - **P2P Context Sync**: Actor-based broadcast mechanism for shared context variables
 - **Quick Replies Storage**: Temporary context variables for LLM-generated interactive buttons
@@ -1382,7 +1382,7 @@ public class BillingTool : MorganaTool
 {
   public BillingTool(
     ILogger<MorganaAgent> logger,
-    Func<MorganaContextProvider> getContextProvider) : base(logger, getContextProvider) { }
+    Func<MorganaAIContextProvider> getContextProvider) : base(logger, getContextProvider) { }
 
     public async Task<string> GetInvoices(string userId, int count = 3)
     {
@@ -1398,12 +1398,12 @@ AIFunction function = toolAdapter.CreateFunction("GetInvoices");
 ```
 
 **Lazy Context Provider Access:**
-Tools receive `Func<MorganaContextProvider>` to access context on-demand:
+Tools receive `Func<MorganaAIContextProvider>` to access context on-demand:
 
 ```csharp
 public Task<object> GetContextVariable(string variableName)
 {
-  MorganaContextProvider provider = getContextProvider();
+  MorganaAIContextProvider provider = getContextProvider();
   object? value = provider.GetVariable(variableName);
    // ...
 }
