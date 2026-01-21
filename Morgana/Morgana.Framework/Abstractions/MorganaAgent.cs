@@ -57,7 +57,7 @@ public class MorganaAgent : MorganaActor
     /// Context provider for reading and writing conversation variables.
     /// Manages both local (agent-specific) and shared (cross-agent) context.
     /// </summary>
-    protected MorganaContextProvider contextProvider;
+    protected MorganaAIContextProvider contextProvider;
 
     /// <summary>
     /// Service for persisting and loading conversation state (AgentThread + context) across application restarts.
@@ -165,17 +165,17 @@ public class MorganaAgent : MorganaActor
         if (serializedThread.TryGetProperty("aiContextProviderState", out JsonElement stateElement))
             aiContextProviderState = stateElement;
 
-        // Restore MorganaContextProvider from its data
+        // Use it to restore internal state of MorganaContextProvider
         if (aiContextProviderState.ValueKind != JsonValueKind.Undefined)
             contextProvider.RestoreState(aiContextProviderState, jsonSerializerOptions);
 
-        // Reconnect shared context update callback (in case it was cleared)
+        // Reconnect shared context update callback
         contextProvider.OnSharedContextUpdate = OnSharedContextUpdate;
 
         // Propagate shared variables with connected callback
         contextProvider.PropagateSharedVariables();
 
-        // Delegate to underlying AIAgent to deserialize thread
+        // Delegate to underlying AIAgent to continue thread deserialization (ChatMessageStore)
         aiAgentThread = aiAgent.DeserializeThread(serializedThread, jsonSerializerOptions);
 
         agentLogger.LogInformation($"Deserialized AgentThread for conversation {conversationId}");

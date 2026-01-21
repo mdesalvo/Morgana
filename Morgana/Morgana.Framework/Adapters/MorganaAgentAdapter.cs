@@ -38,7 +38,7 @@ namespace Morgana.Framework.Adapters;
 /// 6. Register custom tools (IF MorganaTool exists for intent)
 /// 7. Register MCP tools (IF [UsesMCPServers] attribute present)
 /// 8. Create AIAgent with chatClient.CreateAIAgent()
-/// 9. Return (agent, contextProvider) tuple
+/// 9. Return (agent, morganaAIContextProvider) tuple
 /// </code>
 /// <para><strong>Tool Registration Strategy (NEW in this version):</strong></para>
 /// <para>The adapter now guarantees that ALL agents receive the 3 fundamental tools from MorganaTool,
@@ -70,7 +70,7 @@ namespace Morgana.Framework.Adapters;
 ///     MorganaAgentAdapter agentAdapter)
 ///     : base(conversationId, llmService, promptResolverService, agentLogger)
 /// {
-///     (aiAgent, contextProvider) = agentAdapter.CreateAgent(
+///     (aiAgent, morganaAIContextProvider) = agentAdapter.CreateAgent(
 ///         GetType(),
 ///         OnSharedContextUpdate);
 ///
@@ -303,7 +303,7 @@ public class MorganaAgentAdapter
     /// </item>
     /// <item>Compose full agent instructions (framework + domain)</item>
     /// <item>Create AIAgent with chatClient.CreateAIAgent()</item>
-    /// <item>Return (agent, contextProvider) tuple</item>
+    /// <item>Return (agent, morganaAIContextProvider) tuple</item>
     /// </list>
     /// <para><strong>Tool Registration Guarantee (NEW):</strong></para>
     /// <para>This version ALWAYS registers the 3 base tools from MorganaTool, even if no custom
@@ -336,7 +336,7 @@ public class MorganaAgentAdapter
     ///         : base(conversationId, llmService, promptResolverService, agentLogger)
     ///     {
     ///         // Create agent with tool calling capabilities
-    ///         (aiAgent, contextProvider) = agentAdapter.CreateAgent(
+    ///         (aiAgent, morganaAIContextProvider) = agentAdapter.CreateAgent(
     ///             GetType(),
     ///             OnSharedContextUpdate);
     ///
@@ -357,7 +357,7 @@ public class MorganaAgentAdapter
     /// }
     /// </code>
     /// </remarks>
-    public (AIAgent agent, MorganaContextProvider provider) CreateAgent(
+    public (AIAgent agent, MorganaAIContextProvider provider) CreateAgent(
         Type agentType,
         string conversationId,
         Action<string, object>? sharedContextCallback = null)
@@ -373,7 +373,7 @@ public class MorganaAgentAdapter
         Records.ToolDefinition[] agentTools = [.. morganaPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools")
                                                     .Union(agentPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools"))];
 
-        MorganaContextProvider contextProvider = CreateContextProvider(
+        MorganaAIContextProvider morganaAIContextProvider = CreateAIContextProvider(
             intent,
             agentTools,
             sharedContextCallback);
@@ -381,18 +381,18 @@ public class MorganaAgentAdapter
         MorganaToolAdapter morganaToolAdapter = CreateToolAdapterForIntent(
             intent,
             agentTools,
-            contextProvider);
+            morganaAIContextProvider);
 
         RegisterMCPTools(agentType, morganaToolAdapter);
 
-        AIAgent agent = chatClient.CreateAIAgent(
+        AIAgent aiAgent = chatClient.CreateAIAgent(
             new ChatClientAgentOptions
             {
-                // Give the agent its AIContextProvider
-                AIContextProviderFactory = (_) => contextProvider,
+                // Give the agent a factory for AIContextProvider
+                AIContextProviderFactory = (_) => morganaAIContextProvider,
 
-                // Give the agent its ChatMessageStore
-                ChatMessageStoreFactory = (chatMessageStoreFactoryContext) => new MorganaStoreProvider(
+                // Give the agent a factory for ChatMessageStore
+                ChatMessageStoreFactory = (chatMessageStoreFactoryContext) => new MorganaChatMessageStoreProvider(
                     conversationId,
                     intent,
                     chatMessageStoreFactoryContext.SerializedState,
@@ -411,7 +411,7 @@ public class MorganaAgentAdapter
                 }
             });
 
-        return (agent, contextProvider);
+        return (aiAgent, morganaAIContextProvider);
     }
 
     /// <summary>
@@ -467,7 +467,7 @@ public class MorganaAgentAdapter
     /// Agent 'troubleshooting' has NO shared variables
     /// </code>
     /// </remarks>
-    private MorganaContextProvider CreateContextProvider(
+    private MorganaAIContextProvider CreateAIContextProvider(
         string agentName,
         IEnumerable<Records.ToolDefinition> tools,
         Action<string, object>? sharedContextCallback = null)
@@ -483,12 +483,12 @@ public class MorganaAgentAdapter
                 ? $"Agent '{agentName}' has {sharedVariables.Count} shared variables: {string.Join(", ", sharedVariables)}"
                 : $"Agent '{agentName}' has NO shared variables");
 
-        MorganaContextProvider provider = new MorganaContextProvider(logger, sharedVariables);
+        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables);
 
         if (sharedContextCallback != null)
-            provider.OnSharedContextUpdate = sharedContextCallback;
+            aiContextProvider.OnSharedContextUpdate = sharedContextCallback;
 
-        return provider;
+        return aiContextProvider;
     }
 
     /// <summary>
@@ -497,7 +497,7 @@ public class MorganaAgentAdapter
     /// </summary>
     /// <param name="intent">Intent name for tool discovery (e.g., "billing", "contract")</param>
     /// <param name="tools">All tool definitions (morgana.json + agents.json already merged)</param>
-    /// <param name="contextProvider">Context provider instance for tool access to conversation variables</param>
+    /// <param name="aiContextProvider">Context provider instance for tool access to conversation variables</param>
     /// <returns>Configured MorganaToolAdapter with registered tool implementations</returns>
     /// <remarks>
     /// <para><strong>NEW BEHAVIOR - Base Tools Always Registered:</strong></para>
@@ -525,14 +525,14 @@ public class MorganaAgentAdapter
     ///    // Compares by Name only, avoiding record reference equality issues
     ///
     /// 3. ALWAYS register base tools:
-    ///    baseTool = new MorganaTool(logger, () => contextProvider)
+    ///    baseTool = new MorganaTool(logger, () => morganaAIContextProvider)
     ///    RegisterToolsInAdapter(adapter, baseTool, baseTools)
     ///    → Typically 3 tools registered (GetContextVariable, SetContextVariable, SetQuickReplies)
     ///
     /// 4. IF intent-specific tools exist:
     ///    a. Check if custom MorganaTool implementation exists (via IToolRegistryService)
     ///    b. IF implementation exists:
-    ///       customTool = new BillingTool(logger, () => contextProvider)
+    ///       customTool = new BillingTool(logger, () => morganaAIContextProvider)
     ///       RegisterToolsInAdapter(adapter, customTool, intentSpecificTools)
     ///       → N tools registered (GetInvoices, GetInvoiceDetails, etc.)
     ///    c. IF no implementation:
@@ -652,7 +652,7 @@ public class MorganaAgentAdapter
     private MorganaToolAdapter CreateToolAdapterForIntent(
         string intent,
         Records.ToolDefinition[] tools,
-        MorganaContextProvider contextProvider)
+        MorganaAIContextProvider aiContextProvider)
     {
         List<Records.GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
         MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(globalPolicies);
@@ -664,7 +664,7 @@ public class MorganaAgentAdapter
 
         // ALWAYS register base tools (GetContextVariable, SetContextVariable, SetQuickReplies)
         // These are fundamental capabilities every agent needs, regardless of custom tools
-        MorganaTool baseTool = new MorganaTool(logger, () => contextProvider);
+        MorganaTool baseTool = new MorganaTool(logger, () => aiContextProvider);
         RegisterToolsInAdapter(morganaToolAdapter, baseTool, baseTools);
         logger.LogInformation($"Registered {baseTools.Length} base tools for intent '{intent}'");
 
@@ -688,7 +688,7 @@ public class MorganaAgentAdapter
         MorganaTool customToolInstance;
         try
         {
-            customToolInstance = (MorganaTool)Activator.CreateInstance(toolType, logger, () => contextProvider)!;
+            customToolInstance = (MorganaTool)Activator.CreateInstance(toolType, logger, () => aiContextProvider)!;
         }
         catch (Exception ex)
         {
@@ -764,12 +764,12 @@ public class MorganaAgentAdapter
     /// <para><strong>Usage Contexts:</strong></para>
     /// <code>
     /// // Register base tools (ALWAYS)
-    /// MorganaTool baseTool = new MorganaTool(logger, () => contextProvider);
+    /// MorganaTool baseTool = new MorganaTool(logger, () => morganaAIContextProvider);
     /// RegisterToolsInAdapter(adapter, baseTool, baseTools);
     /// // Registers: GetContextVariable, SetContextVariable, SetQuickReplies
     ///
     /// // Register custom tools (IF custom MorganaTool exists)
-    /// BillingTool customTool = new BillingTool(logger, () => contextProvider);
+    /// BillingTool customTool = new BillingTool(logger, () => morganaAIContextProvider);
     /// RegisterToolsInAdapter(adapter, customTool, intentSpecificTools);
     /// // Registers: GetInvoices, GetInvoiceDetails, etc.
     /// </code>

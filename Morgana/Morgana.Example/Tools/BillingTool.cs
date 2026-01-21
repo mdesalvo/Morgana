@@ -15,7 +15,7 @@ public class BillingTool : MorganaTool
 {
     public BillingTool(
         ILogger toolLogger,
-        Func<MorganaContextProvider> getContextProvider) : base(toolLogger, getContextProvider) { }
+        Func<MorganaAIContextProvider> getContextProvider) : base(toolLogger, getContextProvider) { }
 
     // =========================================================================
     // DOMAIN MODELS

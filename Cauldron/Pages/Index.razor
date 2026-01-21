@@ -24,7 +24,7 @@
                     @(isConnected ? "Online" : "Offline")
                 </span>
             </div>
-            <button class="new-conversation-btn @(IsNewConversationButtonVisible ? "visible" : "hidden")" @onclick="ClearConversation" title="Start a new conversation with Morgana">
+            <button class="new-conversation-btn @(IsNewConversationButtonVisible ? "visible" : "hidden")" @onclick="ClearConversationAsync" title="Start a new conversation with Morgana">
                 <span class="btn-icon">✨</span>
                 <span class="btn-text">New Conversation</span>
             </button>
@@ -95,7 +95,7 @@
                             @if (message.QuickReplies is { Count: > 0 })
                             {
                                 <QuickReplyButton Replies="@message.QuickReplies"
-                                                  OnSelect="@((reply) => SelectQuickReply(reply, message))"
+                                                  OnSelect="@((reply) => SelectQuickReplyAsync(reply, message))"
                                                   IsDisabled="@(message.SelectedQuickReplyId != null)"
                                                   SelectedReplyId="@message.SelectedQuickReplyId" />
                             }
@@ -114,13 +114,13 @@
         <textarea
             @bind="inputText"
             @bind:event="oninput"
-            @onkeyup="HandleKeyPress"
+            @onkeyup="HandleKeyPressAsync"
             placeholder="Consult @(currentAgentName)..."
             rows="1"
             disabled="@IsTextareaDisabled"
             class="message-input @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")"></textarea>
         <button
-            @onclick="SendMessage"
+            @onclick="SendMessageAsync"
             disabled="@IsSendButtonDisabled"
             class="send-button @(isSending ? "sending" : "") @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")">
             <!-- Animated cauldron icon with magical effects -->
@@ -247,7 +247,7 @@
             // Subscribe to message received events
             SignalRService.OnMessageReceived += async (conversationId, text, timestamp, quickReplies, agentName, agentCompleted) =>
             {
-                await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
+                await HandleMessageReceivedAsync(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
             };
 
             // Subscribe to connection state changes
@@ -272,12 +272,12 @@
                     if (!string.IsNullOrEmpty(savedConversationId))
                     {
                         Console.WriteLine($"🔵 Found saved conversation ID: {savedConversationId}");
-                        await ResumeConversation(savedConversationId);
+                        await ResumeConversationAsync(savedConversationId);
                     }
                     else
                     {
                         Console.WriteLine("🔵 No saved conversation found, starting new");
-                        await StartConversation();
+                        await StartConversationAsync();
                     }
 
                     isInitialized = true;
@@ -327,7 +327,7 @@
     /// <item><term>Network Error</term><description>Connection failure → Clear storage and start new</description></item>
     /// </list>
     /// </remarks>
-    private async Task ResumeConversation(string savedConversationId)
+    private async Task ResumeConversationAsync(string savedConversationId)
     {
         try
         {
@@ -360,8 +360,6 @@
                 await SignalRService.JoinConversation(conversationId);
 
                 // Add a system message to hide the loader
-                // Backend should send conversation history via SignalR, but if it doesn't,
-                // this placeholder ensures the loader disappears
                 messages.Add(new ChatMessage
                 {
                     ConversationId = conversationId,
@@ -371,7 +369,13 @@
                     AgentName = currentAgentName,
                     Type = MessageType.Assistant
                 });
-                
+
+                if (!string.Equals(currentAgentName, "Morgana", StringComparison.OrdinalIgnoreCase))
+                {
+                    inputText = LandingMessageService.GetAutoResumeUserMessage();
+                    await SendMessageAsync();
+                }
+
                 await InvokeAsync(StateHasChanged);
 
                 Console.WriteLine($"🟡 Joined SignalR group, waiting for conversation history...");
@@ -386,7 +390,7 @@
                 await StorageService.ClearConversationIdAsync();
                 
                 // Fallback to new conversation
-                await StartConversation();
+                await StartConversationAsync();
             }
             else
             {
@@ -396,7 +400,7 @@
                 
                 // Fallback to new conversation
                 await StorageService.ClearConversationIdAsync();
-                await StartConversation();
+                await StartConversationAsync();
             }
         }
         catch (Exception ex)
@@ -405,7 +409,7 @@
             
             // Fallback to new conversation on any error
             await StorageService.ClearConversationIdAsync();
-            await StartConversation();
+            await StartConversationAsync();
         }
     }
 
@@ -426,7 +430,7 @@
     /// <item>Display presentation with quick replies</item>
     /// </list>
     /// </remarks>
-    private async Task StartConversation()
+    private async Task StartConversationAsync()
     {
         try
         {
@@ -477,11 +481,11 @@
     /// Triggered by the "+ New Conversation" button.
     /// </summary>
     /// <returns>Task representing the async new conversation operation</returns>
-    private async Task ClearConversation()
+    private async Task ClearConversationAsync()
     {
         try
         {
-            Console.WriteLine($"🆕 {nameof(ClearConversation)}: Clearing storage and refreshing...");
+            Console.WriteLine($"🆕 {nameof(ClearConversationAsync)}: Clearing storage and refreshing...");
             
             // Clear saved conversation ID from ProtectedLocalStorage
             await StorageService.ClearConversationIdAsync();
@@ -491,7 +495,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ {nameof(ClearConversation)} exception: {ex.Message}");
+            Console.WriteLine($"❌ {nameof(ClearConversationAsync)} exception: {ex.Message}");
             errorMessage = $"Error starting new conversation: {ex.Message}";
         }
     }
@@ -519,7 +523,7 @@
     /// <para><strong>Error Handling:</strong></para>
     /// <para>On HTTP error or exception, typing indicator is removed and error message displayed.</para>
     /// </remarks>
-    private async Task SendMessage()
+    private async Task SendMessageAsync()
     {
         // Validate input
         if (string.IsNullOrWhiteSpace(inputText) || isSending || !isConnected)
@@ -636,7 +640,7 @@
     /// <item><term>Agent Completed</term><description>agentCompleted = true, header returns to "Morgana" with base color, completion message added</description></item>
     /// </list>
     /// </remarks>
-    private async Task HandleMessageReceived(string conversationId, string text, DateTime timestamp, List<QuickReply>? quickReplies, string? agentName, bool agentCompleted)
+    private async Task HandleMessageReceivedAsync(string conversationId, string text, DateTime timestamp, List<QuickReply>? quickReplies, string? agentName, bool agentCompleted)
     {
         try
         {
@@ -716,12 +720,12 @@
     /// </summary>
     /// <param name="e">Keyboard event args</param>
     /// <returns>Task representing the async key handling</returns>
-    private async Task HandleKeyPress(KeyboardEventArgs e)
+    private async Task HandleKeyPressAsync(KeyboardEventArgs e)
     {
         // Send message on Enter (without Shift)
         if (e is { Key: "Enter", ShiftKey: false })
         {
-            await SendMessage();
+            await SendMessageAsync();
         }
     }
 
@@ -732,7 +736,7 @@
     /// <param name="reply">Selected quick reply definition</param>
     /// <param name="message">Message containing the quick replies</param>
     /// <returns>Task representing the async selection handling</returns>
-    private async Task SelectQuickReply(QuickReply reply, ChatMessage message)
+    private async Task SelectQuickReplyAsync(QuickReply reply, ChatMessage message)
     {
         // Prevent multiple selections
         if (message.SelectedQuickReplyId != null) return;
@@ -748,7 +752,7 @@
 
         // Send the quick reply value as user message
         inputText = reply.Value;
-        await SendMessage();
+        await SendMessageAsync();
     }
 
     // =========================================================================
@@ -809,7 +813,7 @@
         // Unsubscribe from events
         SignalRService.OnMessageReceived -= async (conversationId, text, timestamp, quickReplies, agentName, agentCompleted) =>
         {
-            await HandleMessageReceived(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
+            await HandleMessageReceivedAsync(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
         };
         
         // Stop SignalR connection

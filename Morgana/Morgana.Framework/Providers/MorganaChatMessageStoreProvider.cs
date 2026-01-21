@@ -34,7 +34,7 @@ namespace Morgana.Framework.Providers;
 /// <para>When database persistence is needed, replace innerStore with DatabaseChatMessageStore
 /// while keeping the same Morgana wrapper interface.</para>
 /// </remarks>
-public class MorganaStoreProvider : ChatMessageStore
+public class MorganaChatMessageStoreProvider : ChatMessageStore
 {
     private readonly InMemoryChatMessageStore innerStore;
     private readonly string conversationId;
@@ -50,7 +50,7 @@ public class MorganaStoreProvider : ChatMessageStore
     /// <param name="serializedState">Serialized state from previous thread, or null for new thread</param>
     /// <param name="jsonSerializerOptions">JSON serialization options from framework</param>
     /// <param name="logger">Logger instance for diagnostics</param>
-    public MorganaStoreProvider(
+    public MorganaChatMessageStoreProvider(
         string conversationId,
         string intent,
         JsonElement serializedState,
@@ -68,8 +68,8 @@ public class MorganaStoreProvider : ChatMessageStore
 
         logger.LogInformation(
             serializedState.ValueKind != JsonValueKind.Undefined
-                ? $"{nameof(MorganaStoreProvider)} RESTORED for agent '{intent}' in conversation '{conversationId}'"
-                : $"{nameof(MorganaStoreProvider)} CREATED for agent '{intent}' in conversation '{conversationId}'");
+                ? $"{nameof(MorganaChatMessageStoreProvider)} RESTORED for agent '{intent}' in conversation '{conversationId}'"
+                : $"{nameof(MorganaChatMessageStoreProvider)} CREATED for agent '{intent}' in conversation '{conversationId}'");
     }
 
     /// <summary>
@@ -83,7 +83,7 @@ public class MorganaStoreProvider : ChatMessageStore
         IEnumerable<ChatMessage> messages = await innerStore.InvokingAsync(context, cancellationToken);
 
         logger.LogInformation(
-            $"{nameof(MorganaStoreProvider)} INVOKING: Returning {messages.Count()} messages for agent '{intent}' in conversation '{conversationId}'");
+            $"{nameof(MorganaChatMessageStoreProvider)} INVOKING: Returning {messages.Count()} messages for agent '{intent}' in conversation '{conversationId}'");
 
         return messages;
     }
@@ -105,7 +105,7 @@ public class MorganaStoreProvider : ChatMessageStore
         int totalCount = requestCount + responseCount + contextProviderCount;
 
         logger.LogInformation(
-            $"{nameof(MorganaStoreProvider)} INVOKED: Stored {totalCount} messages " +
+            $"{nameof(MorganaChatMessageStoreProvider)} INVOKED: Stored {totalCount} messages " +
             $"(request: {requestCount}, response: {responseCount}, context: {contextProviderCount}) " +
             $"for agent '{intent}' in conversation '{conversationId}'");
     }
@@ -120,7 +120,7 @@ public class MorganaStoreProvider : ChatMessageStore
         JsonElement serialized = innerStore.Serialize(jsonSerializerOptions);
 
         logger.LogInformation(
-            $"{nameof(MorganaStoreProvider)} SERIALIZED for agent '{intent}' in conversation '{conversationId}'");
+            $"{nameof(MorganaChatMessageStoreProvider)} SERIALIZED for agent '{intent}' in conversation '{conversationId}'");
 
         return serialized;
     }

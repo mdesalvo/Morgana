@@ -58,12 +58,12 @@ public class MorganaTool
     /// Factory function to retrieve the current MorganaContextProvider instance.
     /// Uses a function to enable lazy evaluation and ensure correct scoping per request.
     /// </summary>
-    protected readonly Func<MorganaContextProvider> getContextProvider;
+    protected readonly Func<MorganaAIContextProvider> getContextProvider;
 
     /// <summary>
     /// Direct access to the context provider instance. Lazily evaluated from getContextProvider.
     /// </summary>
-    protected MorganaContextProvider contextProvider => getContextProvider();
+    protected MorganaAIContextProvider contextProvider => getContextProvider();
 
     /// <summary>
     /// Initializes a new instance of MorganaTool with logging and context provider access.
@@ -76,7 +76,7 @@ public class MorganaTool
     /// </remarks>
     public MorganaTool(
         ILogger toolLogger,
-        Func<MorganaContextProvider> getContextProvider)
+        Func<MorganaAIContextProvider> getContextProvider)
     {
         this.toolLogger = toolLogger;
         this.getContextProvider = getContextProvider;
@@ -119,7 +119,7 @@ public class MorganaTool
     /// </remarks>
     public Task<object> GetContextVariable(string variableName)
     {
-        MorganaContextProvider provider = getContextProvider();
+        MorganaAIContextProvider provider = getContextProvider();
         object? value = provider.GetVariable(variableName);
 
         if (value != null)
@@ -171,7 +171,7 @@ public class MorganaTool
     /// </remarks>
     public Task<object> SetContextVariable(string variableName, string variableValue)
     {
-        MorganaContextProvider provider = getContextProvider();
+        MorganaAIContextProvider provider = getContextProvider();
         provider.SetVariable(variableName, variableValue);
 
         return Task.FromResult<object>(

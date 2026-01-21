@@ -25,15 +25,15 @@ public class ProtectedLocalStorageService : IConversationStorageService
     {
         try
         {
-            ProtectedBrowserStorageResult<string> result = 
+            ProtectedBrowserStorageResult<string> result =
                 await protectedLocalStore.GetAsync<string>(StorageKey);
-            
+
             if (result.Success)
             {
                 logger.LogInformation($"Retrieved conversation ID from protected storage");
                 return result.Value;
             }
-            
+
             logger.LogInformation("No conversation ID found in protected storage");
             return null;
         }

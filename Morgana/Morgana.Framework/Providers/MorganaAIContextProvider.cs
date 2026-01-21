@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace Morgana.Framework.Providers;
 
 /// <summary>
-/// Custom AIContextProvider that maintains agent conversation context variables.
+/// Morgana's extension of AIContextProvider that maintains agent conversation context variables.
 /// Supports automatic serialization/deserialization for persistence with AgentThread
 /// and cross-agent context sharing via RouterActor broadcast mechanism.
 /// </summary>
@@ -46,7 +46,7 @@ namespace Morgana.Framework.Providers;
 /// 7. ContractAgent now has userId without asking user
 /// </code>
 /// </remarks>
-public class MorganaContextProvider : AIContextProvider
+public class MorganaAIContextProvider : AIContextProvider
 {
     private readonly ILogger logger;
 
@@ -76,7 +76,7 @@ public class MorganaContextProvider : AIContextProvider
     /// Names of variables that should be broadcast to other agents when set.
     /// Extracted from tool definitions where Scope="context" and Shared=true.
     /// </param>
-    public MorganaContextProvider(
+    public MorganaAIContextProvider(
         ILogger logger,
         IEnumerable<string>? sharedVariableNames = null)
     {
@@ -91,7 +91,7 @@ public class MorganaContextProvider : AIContextProvider
     /// <param name="logger">Logger instance for context operation diagnostics</param>
     /// <param name="serializedState">Serialized provider state from Serialize() method</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (defaults to AgentAbstractionsJsonUtilities.DefaultOptions)</param>
-    public MorganaContextProvider(
+    public MorganaAIContextProvider(
         ILogger logger,
         JsonElement serializedState,
         JsonSerializerOptions? jsonSerializerOptions = null)
@@ -121,7 +121,7 @@ public class MorganaContextProvider : AIContextProvider
         }
 
         logger.LogInformation(
-            $"{nameof(MorganaContextProvider)} DESERIALIZED {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
+            $"{nameof(MorganaAIContextProvider)} DESERIALIZED {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
     }
 
     // =========================================================================
@@ -136,11 +136,11 @@ public class MorganaContextProvider : AIContextProvider
     {
         if (AgentContext.TryGetValue(variableName, out object? value))
         {
-            logger.LogInformation($"{nameof(MorganaContextProvider)} GET '{variableName}' = '{value}'");
+            logger.LogInformation($"{nameof(MorganaAIContextProvider)} GET '{variableName}' = '{value}'");
             return value;
         }
 
-        logger.LogInformation($"{nameof(MorganaContextProvider)} MISS '{variableName}'");
+        logger.LogInformation($"{nameof(MorganaAIContextProvider)} MISS '{variableName}'");
         return null;
     }
 
@@ -155,7 +155,7 @@ public class MorganaContextProvider : AIContextProvider
         bool isShared = SharedVariableNames.Contains(variableName);
 
         logger.LogInformation(
-            $"{nameof(MorganaContextProvider)} SET {(isShared ? "SHARED" : "PRIVATE")} '{variableName}' = '{variableValue}'");
+            $"{nameof(MorganaAIContextProvider)} SET {(isShared ? "SHARED" : "PRIVATE")} '{variableName}' = '{variableValue}'");
 
         if (isShared)
             OnSharedContextUpdate?.Invoke(variableName, variableValue);
@@ -168,7 +168,7 @@ public class MorganaContextProvider : AIContextProvider
     {
         AgentContext.Remove(variableName);
 
-        logger.LogInformation($"{nameof(MorganaContextProvider)} DROPPED '{variableName}'");
+        logger.LogInformation($"{nameof(MorganaAIContextProvider)} DROPPED '{variableName}'");
     }
 
     /// <summary>
@@ -184,12 +184,12 @@ public class MorganaContextProvider : AIContextProvider
                 AgentContext[kvp.Key] = kvp.Value;
 
                 logger.LogInformation(
-                    $"{nameof(MorganaContextProvider)} MERGED shared context '{kvp.Key}' = '{kvp.Value}'");
+                    $"{nameof(MorganaAIContextProvider)} MERGED shared context '{kvp.Key}' = '{kvp.Value}'");
             }
             else
             {
                 logger.LogInformation(
-                    $"{nameof(MorganaContextProvider)} IGNORED shared context '{kvp.Key}' (already set to '{value}')");
+                    $"{nameof(MorganaAIContextProvider)} IGNORED shared context '{kvp.Key}' (already set to '{value}')");
             }
         }
     }
@@ -224,14 +224,14 @@ public class MorganaContextProvider : AIContextProvider
                 propagatedCount++;
 
                 logger.LogInformation(
-                    $"{nameof(MorganaContextProvider)} PROPAGATED shared variable '{sharedVariableName}' = '{sharedVariableValue}'");
+                    $"{nameof(MorganaAIContextProvider)} PROPAGATED shared variable '{sharedVariableName}' = '{sharedVariableValue}'");
             }
         }
 
         if (propagatedCount > 0)
         {
             logger.LogInformation(
-                $"{nameof(MorganaContextProvider)} PROPAGATED {propagatedCount} shared variables to other agents");
+                $"{nameof(MorganaAIContextProvider)} PROPAGATED {propagatedCount} shared variables to other agents");
         }
     }
 
@@ -245,7 +245,9 @@ public class MorganaContextProvider : AIContextProvider
     /// <remarks>
     /// <para><strong>Why This Exists:</strong></para>
     /// <para>Tools are created with closures that capture the contextProvider field:
-    /// <code>() => contextProvider</code></para>
+    /// <code>
+    /// () => contextProvider
+    /// </code></para>
     /// <para>If we create a new provider instance during deserialization, the tool closures
     /// still point to the old instance, causing a mismatch where tools write to one instance
     /// but the agent reads from another.</para>
@@ -256,27 +258,23 @@ public class MorganaContextProvider : AIContextProvider
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
         // Restore AgentContext
-        if (serializedState.TryGetProperty(nameof(AgentContext), out JsonElement contextElement))
+        if (serializedState.TryGetProperty(nameof(AgentContext), out JsonElement agentContextJsonElement))
         {
-            Dictionary<string, object>? restoredContext = contextElement.Deserialize<Dictionary<string, object>>(jsonSerializerOptions);
-            if (restoredContext != null)
-            {
-                AgentContext = restoredContext;
-            }
+            Dictionary<string, object>? agentContext = agentContextJsonElement.Deserialize<Dictionary<string, object>>(jsonSerializerOptions);
+            if (agentContext != null)
+                AgentContext = agentContext;
         }
 
         // Restore SharedVariableNames
-        if (serializedState.TryGetProperty(nameof(SharedVariableNames), out JsonElement sharedNamesElement))
+        if (serializedState.TryGetProperty(nameof(SharedVariableNames), out JsonElement sharedVariableNamesJsonElement))
         {
-            HashSet<string>? restoredSharedNames = sharedNamesElement.Deserialize<HashSet<string>>(jsonSerializerOptions);
-            if (restoredSharedNames != null)
-            {
-                SharedVariableNames = restoredSharedNames;
-            }
+            HashSet<string>? sharedVariableNames = sharedVariableNamesJsonElement.Deserialize<HashSet<string>>(jsonSerializerOptions);
+            if (sharedVariableNames != null)
+                SharedVariableNames = sharedVariableNames;
         }
 
         logger.LogInformation(
-            $"{nameof(MorganaContextProvider)} STATE RESTORED: {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
+            $"{nameof(MorganaAIContextProvider)} CONTEXT RESTORED: {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
     }
 
     // =========================================================================
@@ -289,7 +287,7 @@ public class MorganaContextProvider : AIContextProvider
     public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {
         logger.LogInformation(
-            $"{nameof(MorganaContextProvider)} SERIALIZING {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
+            $"{nameof(MorganaAIContextProvider)} SERIALIZING {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
 
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
