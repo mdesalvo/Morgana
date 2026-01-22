@@ -50,49 +50,9 @@ namespace Morgana.Framework.Services;
 /// </remarks>
 public class SQLiteConversationPersistenceService : IConversationPersistenceService
 {
-    private readonly ILogger<SQLiteConversationPersistenceService> logger;
+    private readonly ILogger logger;
     private readonly Records.ConversationPersistenceOptions options;
     private readonly byte[] encryptionKey;
-
-    // Database schema version for tracking initialization
-    private const int SchemaVersion = 1;
-
-    // SQL statements
-    private const string InitializeMorganaTableSQL =
-        """
-        CREATE TABLE IF NOT EXISTS morgana (
-            agent_identifier TEXT PRIMARY KEY NOT NULL,
-            agent_name TEXT UNIQUE NOT NULL,
-            conversation_id TEXT NOT NULL,
-            agent_thread BLOB NOT NULL,
-            creation_date TEXT NOT NULL,
-            last_update TEXT NOT NULL,
-            is_active INTEGER NOT NULL DEFAULT 0
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_agent_name ON morgana(agent_name);
-        CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
-        """;
-
-    private const string SaveAgentConversationSQL =
-        """
-        INSERT INTO morgana (agent_identifier, agent_name, conversation_id, agent_thread, creation_date, last_update, is_active)
-        VALUES (@agent_identifier, @agent_name, @conversation_id, @agent_thread, @creation_date, @last_update, @is_active)
-        ON CONFLICT(agent_identifier) DO UPDATE SET
-            agent_thread = excluded.agent_thread,
-            last_update = @last_update,
-            is_active = @is_active;
-        """;
-
-    private const string LoadAgentConversationSQL =
-        """
-        SELECT agent_thread FROM morgana WHERE agent_identifier = @agent_identifier;
-        """;
-
-    private const string GetMostRecentActiveAgentSQL =
-        """
-        SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIMIT 1;
-        """;
 
     /// <summary>
     /// Initializes a new instance of the SQLiteConversationPersistenceService.
@@ -103,7 +63,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     /// <exception cref="ArgumentException">Thrown if StoragePath or EncryptionKey are not configured</exception>
     public SQLiteConversationPersistenceService(
         IOptions<Records.ConversationPersistenceOptions> options,
-        ILogger<SQLiteConversationPersistenceService> logger)
+        ILogger logger)
     {
         this.logger = logger;
         this.options = options.Value;
@@ -138,54 +98,60 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
         try
         {
             // Extract agent_name and conversation_id from agent_identifier (format: "{agent_name}-{conversation_id}")
-            string[] parts = agentIdentifier.Split('-', 2);
-            if (parts.Length != 2)
+            string[] agentIdentifierParts = agentIdentifier.Split('-', 2);
+            if (agentIdentifierParts.Length != 2)
                 throw new ArgumentException($"Invalid agent_identifier format: '{agentIdentifier}'. Expected format: '{{agent_name}}-{{conversation_id}}'");
 
-            string agentName = parts[0];
-            string conversationId = parts[1];
+            string agentName = agentIdentifierParts[0];
+            string conversationId = agentIdentifierParts[1];
 
             // Serialize AgentThread to JSON
-            JsonElement serialized = agentThread.Serialize(jsonSerializerOptions);
-            string json = JsonSerializer.Serialize(serialized, jsonSerializerOptions);
+            JsonElement agentThreadJsonElement = agentThread.Serialize(jsonSerializerOptions);
+            string agentThreadJsonString = JsonSerializer.Serialize(agentThreadJsonElement, jsonSerializerOptions);
 
             // Encrypt JSON content
-            byte[] encryptedData = Encrypt(json);
+            byte[] encryptedAgentThreadJsonString = Encrypt(agentThreadJsonString);
 
             // Get database connection
-            string connectionString = GetConnectionString(conversationId);
-            await using SqliteConnection connection = new SqliteConnection(connectionString);
-            await connection.OpenAsync();
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
 
             // Initialize database only if needed (checked via user_version pragma)
-            await EnsureDatabaseInitializedAsync(connection);
+            await EnsureDatabaseInitializedAsync(sqliteConnection);
 
             // Upsert agent thread with transaction
-            await using SqliteTransaction transaction = connection.BeginTransaction();
+            await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
             try
             {
-                await using SqliteCommand command = connection.CreateCommand();
-                command.Transaction = transaction;
-                command.CommandText = SaveAgentConversationSQL;
+                await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+                sqliteCommand.Transaction = sqliteTransaction;
+                sqliteCommand.CommandText =
+"""
+INSERT INTO morgana (agent_identifier, agent_name, conversation_id, agent_thread, creation_date, last_update, is_active)
+VALUES (@agent_identifier, @agent_name, @conversation_id, @agent_thread, @creation_date, @last_update, @is_active)
+ON CONFLICT(agent_identifier) DO UPDATE SET
+    agent_thread = excluded.agent_thread, last_update = @last_update, is_active = @is_active;
+""";
 
                 string utcNow = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
 
-                command.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
-                command.Parameters.AddWithValue("@agent_name", agentName);
-                command.Parameters.AddWithValue("@conversation_id", conversationId);
-                command.Parameters.AddWithValue("@agent_thread", encryptedData);
-                command.Parameters.AddWithValue("@creation_date", utcNow);
-                command.Parameters.AddWithValue("@last_update", utcNow);
-                command.Parameters.AddWithValue("@is_active", isCompleted ? 0 : 1);
+                sqliteCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
+                sqliteCommand.Parameters.AddWithValue("@agent_name", agentName);
+                sqliteCommand.Parameters.AddWithValue("@conversation_id", conversationId);
+                sqliteCommand.Parameters.AddWithValue("@agent_thread", encryptedAgentThreadJsonString);
+                sqliteCommand.Parameters.AddWithValue("@creation_date", utcNow);
+                sqliteCommand.Parameters.AddWithValue("@last_update", utcNow);
+                sqliteCommand.Parameters.AddWithValue("@is_active", isCompleted ? 0 : 1);
 
-                await command.ExecuteNonQueryAsync();
-                await transaction.CommitAsync();
+                await sqliteCommand.ExecuteNonQueryAsync();
+                await sqliteTransaction.CommitAsync();
 
-                logger.LogInformation($"Saved conversation {agentIdentifier} to database ({encryptedData.Length} bytes encrypted)");
+                logger.LogInformation($"Saved conversation {agentIdentifier} to database ({encryptedAgentThreadJsonString.Length} bytes encrypted)");
             }
             catch
             {
-                await transaction.RollbackAsync();
+                await sqliteTransaction.RollbackAsync();
                 throw;
             }
         }
@@ -207,54 +173,57 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
         try
         {
             // Extract conversation_id from agent_identifier
-            string[] parts = agentIdentifier.Split('-', 2);
-            if (parts.Length != 2)
+            string[] agentIdentifierParts = agentIdentifier.Split('-', 2);
+            if (agentIdentifierParts.Length != 2)
                 throw new ArgumentException($"Invalid agent_identifier format: '{agentIdentifier}'. Expected format: '{{agent_name}}-{{conversation_id}}'");
 
-            string conversationId = parts[1];
+            string conversationId = agentIdentifierParts[1];
 
             // Get database connection
-            string connectionString = GetConnectionString(conversationId);
-            string dbPath = GetDatabasePath(conversationId);
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            string sqliteDbPath = GetDatabasePath(conversationId);
 
             // Check if database file exists
-            if (!File.Exists(dbPath))
+            if (!File.Exists(sqliteDbPath))
             {
-                logger.LogInformation($"Conversation database for {agentIdentifier} not found, returning null");
+                logger.LogInformation($"Conversation SQLite database for {agentIdentifier} not found, returning null");
                 return null;
             }
 
-            await using SqliteConnection connection = new SqliteConnection(connectionString);
-            await connection.OpenAsync();
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
 
             // Query agent thread
-            await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = LoadAgentConversationSQL;
-            command.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
+            await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+            sqliteCommand.CommandText =
+"""
+SELECT agent_thread FROM morgana WHERE agent_identifier = @agent_identifier;
+""";
+            sqliteCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
-            await using SqliteDataReader reader = await command.ExecuteReaderAsync();
+            await using SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync();
 
-            if (!await reader.ReadAsync())
+            if (!await sqliteDataReader.ReadAsync())
             {
-                logger.LogInformation($"Agent thread {agentIdentifier} not found in database, returning null");
+                logger.LogInformation($"Agent thread {agentIdentifier} not found in SQLite database, returning null");
                 return null;
             }
 
             // Read encrypted blob
-            byte[] encryptedData = (byte[])reader["agent_thread"];
+            byte[] agentThreadEncryptedJsonString = (byte[])sqliteDataReader["agent_thread"];
 
             // Decrypt content
-            string json = Decrypt(encryptedData);
+            string agentThreadJsonString = Decrypt(agentThreadEncryptedJsonString);
 
             // Deserialize JSON to JsonElement
-            JsonElement serialized = JsonSerializer.Deserialize<JsonElement>(json, jsonSerializerOptions);
+            JsonElement agentThreadJsonElement = JsonSerializer.Deserialize<JsonElement>(agentThreadJsonString, jsonSerializerOptions);
 
             // Deserialize thread via MorganaAgent
-            AgentThread restored = await agent.DeserializeThreadAsync(serialized, jsonSerializerOptions);
+            AgentThread agentThread = await agent.DeserializeThreadAsync(agentThreadJsonElement, jsonSerializerOptions);
 
-            logger.LogInformation($"Loaded conversation {agentIdentifier} from database ({encryptedData.Length} bytes decrypted)");
+            logger.LogInformation($"Loaded conversation {agentIdentifier} from SQLite database ({agentThreadEncryptedJsonString.Length} bytes decrypted)");
 
-            return restored;
+            return agentThread;
         }
         catch (Exception ex)
         {
@@ -268,22 +237,25 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     {
         try
         {
-            string connectionString = GetConnectionString(conversationId);
-            string dbPath = GetDatabasePath(conversationId);
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            string sqliteDbPath = GetDatabasePath(conversationId);
 
-            if (!File.Exists(dbPath))
+            if (!File.Exists(sqliteDbPath))
             {
-                logger.LogInformation($"Database for conversation {conversationId} not found");
+                logger.LogInformation($"SQLite database for conversation {conversationId} not found");
                 return null;
             }
 
-            await using SqliteConnection connection = new SqliteConnection(connectionString);
-            await connection.OpenAsync();
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
 
-            await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = GetMostRecentActiveAgentSQL;
+            await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+            sqliteCommand.CommandText =
+"""
+SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIMIT 1;
+""";
 
-            object? result = await command.ExecuteScalarAsync();
+            object? result = await sqliteCommand.ExecuteScalarAsync();
 
             string? agentName = result?.ToString();
 
@@ -309,8 +281,8 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     /// <returns>SQLite connection string</returns>
     private string GetConnectionString(string conversationId)
     {
-        string dbPath = GetDatabasePath(conversationId);
-        return $"Data Source={dbPath}";
+        string sqliteDbPath = GetDatabasePath(conversationId);
+        return $"Data Source={sqliteDbPath}";
     }
 
     /// <summary>
@@ -322,8 +294,8 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     private string GetDatabasePath(string conversationId)
     {
         // Sanitize conversationId to prevent directory traversal attacks
-        string sanitized = string.Join("_", conversationId.Split(Path.GetInvalidFileNameChars()));
-        return Path.Combine(options.StoragePath, $"morgana-{sanitized}.db");
+        string sanitizedConversationId = string.Join("_", conversationId.Split(Path.GetInvalidFileNameChars()));
+        return Path.Combine(options.StoragePath, $"morgana-{sanitizedConversationId}.db");
     }
 
     /// <summary>
@@ -338,17 +310,30 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
         checkCommand.CommandText = "PRAGMA user_version;";
         long currentVersion = (long)(await checkCommand.ExecuteScalarAsync() ?? 0L);
 
-        if (currentVersion >= SchemaVersion)
+        if (currentVersion >= 1)
             return; // Already initialized
 
         // Create schema
         await using SqliteCommand schemaCommand = connection.CreateCommand();
-        schemaCommand.CommandText = InitializeMorganaTableSQL;
+        schemaCommand.CommandText =
+"""
+CREATE TABLE IF NOT EXISTS morgana (
+    agent_identifier TEXT PRIMARY KEY NOT NULL,
+    agent_name TEXT UNIQUE NOT NULL,
+    conversation_id TEXT NOT NULL,
+    agent_thread BLOB NOT NULL,
+    creation_date TEXT NOT NULL,
+    last_update TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
+""";
         await schemaCommand.ExecuteNonQueryAsync();
 
-        // Mark database as initialized
+        // Mark database as initialized (once, forever)
         await using SqliteCommand versionCommand = connection.CreateCommand();
-        versionCommand.CommandText = $"PRAGMA user_version = {SchemaVersion};";
+        versionCommand.CommandText = "PRAGMA user_version = 1;";
         await versionCommand.ExecuteNonQueryAsync();
     }
 
