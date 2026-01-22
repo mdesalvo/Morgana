@@ -185,6 +185,12 @@ public static class Records
         /// Mapped from SQLite is_active column: true when is_active = 0, false when is_active = 1.
         /// </summary>
         public required bool AgentCompleted { get; init; }
+
+        /// <summary>
+        /// Optional list of quick reply buttons attached to this message.
+        /// Reconstructed from SetQuickReplies tool calls when loading conversation history.
+        /// </summary>
+        public List<QuickReply>? QuickReplies { get; init; }
     }
 
     /// <summary>

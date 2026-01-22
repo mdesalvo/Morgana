@@ -344,18 +344,8 @@ SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date A
                     allMessages.Add((agentName, agentCompleted, message));
             }
 
-            // Sort messages chronologically by CreatedAt
-            // and filter out agent's technical messages
-            MorganaChatMessage[] chatMessages = allMessages
-                .Where(m => !string.IsNullOrEmpty(m.message.Text))
-                .OrderBy(m => m.message.CreatedAt)
-                .Select(m => MapToMorganaChatMessage(conversationId, m.agentName, m.agentCompleted, m.message))
-                .ToArray();
-
-            logger.LogInformation(
-                $"Retrieved conversation history for {conversationId}: {chatMessages.Length} messages from {allMessages.Select(m => m.agentName).Distinct().Count()} agents");
-
-            return chatMessages;
+            // Delegate filtering and processing to specialized method
+            return ProcessMessagesForHistory(conversationId, allMessages, jsonSerializerOptions);
         }
         catch (Exception ex)
         {
@@ -480,58 +470,159 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
     }
 
     /// <summary>
+    /// Processes raw messages from AgentThread into UI-ready MorganaChatMessage array.
+    /// Handles quick reply extraction, message filtering, and chronological ordering.
+    /// </summary>
+    private MorganaChatMessage[] ProcessMessagesForHistory(
+        string conversationId,
+        List<(string agentName, bool agentCompleted, ChatMessage message)> allMessages,
+        JsonSerializerOptions jsonSerializerOptions)
+    {
+        // =============================================================================
+        // PASS 1: Extract quick replies from SetQuickReplies function calls
+        // =============================================================================
+        var quickRepliesByCallId = allMessages
+            .Where(m => m.message.Role == ChatRole.Assistant)
+            .SelectMany(m => m.message.Contents?
+                .OfType<FunctionCallContent>()
+                .Where(fc => fc.Name == "SetQuickReplies") ?? [])
+            .Select(fc => new
+            {
+                CallId = fc.CallId,
+                QuickReplies = TryParseQuickRepliesFromDictionary(fc.Arguments, jsonSerializerOptions)
+            })
+            .Where(x => x.QuickReplies != null)
+            .ToDictionary(x => x.CallId, x => x.QuickReplies!);
+
+        logger.LogDebug($"Extracted quick replies from {quickRepliesByCallId.Count} SetQuickReplies calls");
+
+        // =============================================================================
+        // PASS 2: Filter and map messages with quick replies attachment
+        // =============================================================================
+        List<MorganaChatMessage> result = [];
+        string? pendingQuickRepliesCallId = null;
+
+        foreach ((string agentName, bool agentCompleted, ChatMessage message) in allMessages)
+        {
+            // Skip tool messages
+            if (message.Role == ChatRole.Tool)
+                continue;
+
+            // Check for SetQuickReplies function call
+            FunctionCallContent? setQuickRepliesCall = message.Contents?
+                .OfType<FunctionCallContent>()
+                .FirstOrDefault(fc => fc.Name == "SetQuickReplies");
+
+            if (setQuickRepliesCall != null)
+            {
+                pendingQuickRepliesCallId = setQuickRepliesCall.CallId;
+                continue; // Skip empty tool call message
+            }
+
+            // Process messages with text content
+            string messageText = ExtractTextFromMessage(message);
+            if (string.IsNullOrWhiteSpace(messageText))
+                continue;
+
+            // Attach quick replies to assistant message following SetQuickReplies
+            List<QuickReply>? quickReplies = null;
+            if (pendingQuickRepliesCallId != null && 
+                message.Role == ChatRole.Assistant &&
+                quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
+            {
+                pendingQuickRepliesCallId = null;
+            }
+
+            result.Add(MapToMorganaChatMessage(conversationId, agentName, agentCompleted, message, quickReplies));
+        }
+
+        logger.LogInformation(
+            $"Processed {result.Count} messages (filtered from {allMessages.Count} raw messages) for {conversationId}");
+
+        return result.ToArray();
+    }
+
+    /// <summary>
+    /// Attempts to parse quick replies from SetQuickReplies function call arguments dictionary.
+    /// Returns null if parsing fails (graceful degradation).
+    /// </summary>
+    private List<QuickReply>? TryParseQuickRepliesFromDictionary(
+        IDictionary<string, object?>? arguments, 
+        JsonSerializerOptions jsonSerializerOptions)
+    {
+        if (arguments == null || !arguments.TryGetValue("quickReplies", out object? quickRepliesValue))
+            return null;
+
+        try
+        {
+            // The value might be a string (JSON) or already a JsonElement
+            string quickRepliesString = quickRepliesValue switch
+            {
+                string str => str,
+                JsonElement jsonElement => jsonElement.GetString() ?? "[]",
+                _ => JsonSerializer.Serialize(quickRepliesValue, jsonSerializerOptions)
+            };
+
+            List<QuickReply>? quickReplies = JsonSerializer.Deserialize<List<QuickReply>>(
+                quickRepliesString, 
+                jsonSerializerOptions);
+        
+            return quickReplies?.Count > 0 ? quickReplies : null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to parse quick replies from function arguments");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Extracts and concatenates all TextContent blocks from a ChatMessage.
+    /// </summary>
+    private string ExtractTextFromMessage(ChatMessage message)
+    {
+        if (message.Contents == null || message.Contents.Count == 0)
+            return string.Empty;
+
+        return string.Join(" ", message.Contents
+            .OfType<TextContent>()
+            .Where(tc => !string.IsNullOrEmpty(tc.Text))
+            .Select(tc => tc.Text!.Trim()));
+    }
+
+    /// <summary>
     /// Maps a Microsoft.Agents.AI.ChatMessage to MorganaChatMessage record.
     /// </summary>
-    /// <param name="conversationId">Conversation identifier</param>
-    /// <param name="agentName">Name of the agent that generated the message (e.g., "billing", "contract")</param>
-    /// <param name="agentCompleted">Whether the agent has completed its task (from SQLite is_active column)</param>
-    /// <param name="chatMessage">Source ChatMessage from AgentThread</param>
-    /// <returns>Mapped MorganaChatMessage for UI consumption</returns>
-    /// <remarks>
-    /// <para><strong>Text Extraction:</strong></para>
-    /// <para>Concatenates all TextContent blocks in ChatMessage.Content with space separator.
-    /// Non-text content (images, files, etc.) is ignored as Cauldron has no multimedia capabilities yet.</para>
-    /// <para><strong>Agent Name Formatting:</strong></para>
-    /// <list type="bullet">
-    /// <item>User messages: "User"</item>
-    /// <item>Assistant messages: "Morgana ({agentName})" e.g., "Morgana (Billing)"</item>
-    /// </list>
-    /// </remarks>
     private MorganaChatMessage MapToMorganaChatMessage(
         string conversationId,
         string agentName,
         bool agentCompleted,
-        ChatMessage chatMessage)
+        ChatMessage chatMessage,
+        List<QuickReply>? quickReplies = null)
     {
-        // Extract and concatenate all TextContent blocks
-        string messageText = string.Empty;
-        if (chatMessage.Contents?.Count > 0)
-        {
-            IEnumerable<string> textContents = chatMessage.Contents
-                .OfType<TextContent>() //Exclude other types of content (Cauldron has not multimedia capabilities yet...)
-                .Where(tc => !string.IsNullOrEmpty(tc.Text))
-                .Select(tc => tc.Text!);
-
-            messageText = string.Join(" ", textContents);
-        }
+        string messageText = ExtractTextFromMessage(chatMessage);
 
         // Determine message type from role
-        MessageType messageType = MessageType.Assistant;
-        string displayAgentName = $"Morgana ({char.ToUpperInvariant(agentName[0]) + agentName[1..]})";
-        if (chatMessage.Role == ChatRole.User)
-        {
-            messageType = MessageType.User;
-            displayAgentName = "User";
-        }
+        MessageType messageType = chatMessage.Role == ChatRole.User 
+            ? MessageType.User 
+            : MessageType.Assistant;
+
+        // Format agent name for UI
+        string displayAgentName = chatMessage.Role == ChatRole.User 
+            ? "User"
+            : string.IsNullOrEmpty(agentName) || agentName.Equals("morgana", StringComparison.OrdinalIgnoreCase)
+                ? "Morgana"
+                : $"Morgana ({char.ToUpper(agentName[0])}{agentName[1..]})";
 
         return new MorganaChatMessage
         {
             ConversationId = conversationId,
             Text = messageText,
-            Timestamp = chatMessage.CreatedAt.GetValueOrDefault().UtcDateTime,
+            Timestamp = chatMessage.CreatedAt?.UtcDateTime ?? DateTime.UtcNow,
             Type = messageType,
             AgentName = displayAgentName,
-            AgentCompleted = agentCompleted
+            AgentCompleted = agentCompleted,
+            QuickReplies = quickReplies
         };
     }
 
