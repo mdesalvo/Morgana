@@ -1,5 +1,7 @@
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Text.Json;
 
 namespace Morgana.Framework.Providers;
@@ -54,13 +56,13 @@ public class MorganaAIContextProvider : AIContextProvider
     /// Set of "shared" variable names, which are subject to the automatic broadcasting
     /// algorythm occurring between all the Morgana agents during tool's writing
     /// </summary>
-    private HashSet<string> SharedVariableNames;
+    private ImmutableHashSet<string> SharedVariableNames;
 
     /// <summary>
     /// Source of truth for agent context variables (persistent across turns).
     /// Stores all conversation variables accessible via GetContextVariable/SetContextVariable tools.
     /// </summary>
-    private Dictionary<string, object> AgentContext = [];
+    private ConcurrentDictionary<string, object> AgentContext = [];
 
     /// <summary>
     /// Callback invoked when a shared variable is set.
@@ -103,7 +105,7 @@ public class MorganaAIContextProvider : AIContextProvider
         // Deserialize AgentContext
         if (serializedState.TryGetProperty(nameof(AgentContext), out JsonElement contextElement))
         {
-            AgentContext = contextElement.Deserialize<Dictionary<string, object>>(jsonSerializerOptions) ?? [];
+            AgentContext = contextElement.Deserialize<ConcurrentDictionary<string, object>>(jsonSerializerOptions) ?? [];
         }
         else
         {
@@ -113,7 +115,7 @@ public class MorganaAIContextProvider : AIContextProvider
         // Deserialize SharedVariableNames
         if (serializedState.TryGetProperty(nameof(SharedVariableNames), out JsonElement sharedElement))
         {
-            SharedVariableNames = sharedElement.Deserialize<HashSet<string>>(jsonSerializerOptions) ?? [];
+            SharedVariableNames = sharedElement.Deserialize<ImmutableHashSet<string>>(jsonSerializerOptions) ?? [];
         }
         else
         {
@@ -150,7 +152,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </summary>
     public void SetVariable(string variableName, object variableValue)
     {
-        AgentContext[variableName] = variableValue;
+        AgentContext.AddOrUpdate(variableName, variableValue, (_, _) => variableValue);
 
         bool isShared = SharedVariableNames.Contains(variableName);
 
@@ -166,9 +168,8 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </summary>
     public void DropVariable(string variableName)
     {
-        AgentContext.Remove(variableName);
-
-        logger.LogInformation($"{nameof(MorganaAIContextProvider)} DROPPED '{variableName}'");
+        if (AgentContext.Remove(variableName, out _))
+            logger.LogInformation($"{nameof(MorganaAIContextProvider)} DROPPED '{variableName}'");
     }
 
     /// <summary>
@@ -260,7 +261,7 @@ public class MorganaAIContextProvider : AIContextProvider
         // Restore AgentContext
         if (serializedState.TryGetProperty(nameof(AgentContext), out JsonElement agentContextJsonElement))
         {
-            Dictionary<string, object>? agentContext = agentContextJsonElement.Deserialize<Dictionary<string, object>>(jsonSerializerOptions);
+            ConcurrentDictionary<string, object>? agentContext = agentContextJsonElement.Deserialize<ConcurrentDictionary<string, object>>(jsonSerializerOptions);
             if (agentContext != null)
                 AgentContext = agentContext;
         }
@@ -268,7 +269,7 @@ public class MorganaAIContextProvider : AIContextProvider
         // Restore SharedVariableNames
         if (serializedState.TryGetProperty(nameof(SharedVariableNames), out JsonElement sharedVariableNamesJsonElement))
         {
-            HashSet<string>? sharedVariableNames = sharedVariableNamesJsonElement.Deserialize<HashSet<string>>(jsonSerializerOptions);
+            ImmutableHashSet<string>? sharedVariableNames = sharedVariableNamesJsonElement.Deserialize<ImmutableHashSet<string>>(jsonSerializerOptions);
             if (sharedVariableNames != null)
                 SharedVariableNames = sharedVariableNames;
         }
