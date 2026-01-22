@@ -1,11 +1,14 @@
-using Microsoft.Agents.AI;
+﻿using Microsoft.Agents.AI;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Interfaces;
+using Newtonsoft.Json.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
+using static Morgana.Framework.Records;
 
 namespace Morgana.Framework.Services;
 
@@ -51,7 +54,7 @@ namespace Morgana.Framework.Services;
 public class SQLiteConversationPersistenceService : IConversationPersistenceService
 {
     private readonly ILogger logger;
-    private readonly Records.ConversationPersistenceOptions options;
+    private readonly ConversationPersistenceOptions options;
     private readonly byte[] encryptionKey;
 
     /// <summary>
@@ -62,7 +65,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     /// <param name="logger">Logger instance for diagnostics</param>
     /// <exception cref="ArgumentException">Thrown if StoragePath or EncryptionKey are not configured</exception>
     public SQLiteConversationPersistenceService(
-        IOptions<Records.ConversationPersistenceOptions> options,
+        IOptions<ConversationPersistenceOptions> options,
         ILogger logger)
     {
         this.logger = logger;
@@ -273,6 +276,90 @@ SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIM
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<MorganaChatMessage[]> GetConversationHistoryAsync(
+        string conversationId,
+        JsonSerializerOptions? jsonSerializerOptions = null)
+    {
+        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
+
+        try
+        {
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            string sqliteDbPath = GetDatabasePath(conversationId);
+
+            // Early return if database doesn't exist
+            if (!File.Exists(sqliteDbPath))
+            {
+                logger.LogInformation($"SQLite database for conversation {conversationId} not found, returning empty history");
+                return Array.Empty<MorganaChatMessage>();
+            }
+
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
+
+            await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+            sqliteCommand.CommandText =
+"""
+SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date ASC;
+""";
+
+            await using SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync();
+
+            // Collect all messages from all agents with their completion status
+            List<(string agentName, bool agentCompleted, ChatMessage message)> allMessages = [];
+
+            while (await sqliteDataReader.ReadAsync())
+            {
+                string agentName = (string)sqliteDataReader["agent_name"];
+                byte[] encryptedAgentThreadJsonString = (byte[])sqliteDataReader["agent_thread"];
+                bool agentCompleted = (int)sqliteDataReader["is_active"] == 0;
+
+                // Decrypt and deserialize agent thread
+                string agentThreadJsonString = Decrypt(encryptedAgentThreadJsonString);
+                JsonElement agentThreadJsonElement = JsonSerializer.Deserialize<JsonElement>(
+                    agentThreadJsonString,
+                    jsonSerializerOptions);
+
+                // Extract messages array from AgentThread structure
+                // AgentThread JSON structure: { "Messages": [...], "SharedVariableNames": [...], ... }
+                if (!agentThreadJsonElement.TryGetProperty("Messages", out JsonElement messagesElement))
+                {
+                    logger.LogWarning($"AgentThread for {agentName} missing Messages property, skipping");
+                    continue;
+                }
+
+                // Deserialize messages to ChatMessage array
+                ChatMessage[]? messages = JsonSerializer.Deserialize<ChatMessage[]>(
+                    messagesElement.GetRawText(),
+                    jsonSerializerOptions) ?? throw new InvalidOperationException(
+                        $"Failed to deserialize Messages for agent {agentName} in conversation {conversationId}");
+
+                // Add all messages with agent metadata
+                foreach (ChatMessage message in messages)
+                    allMessages.Add((agentName, agentCompleted, message));
+            }
+
+            // Sort messages chronologically by CreatedAt
+            MorganaChatMessage[] chatMessages = allMessages
+                .OrderBy(m => m.message.CreatedAt)
+                .Select(m => MapToMorganaChatMessage(conversationId, m.agentName, m.agentCompleted, m.message))
+                .ToArray();
+
+            logger.LogInformation(
+                $"Retrieved conversation history for {conversationId}: {chatMessages.Length} messages from {allMessages.Select(m => m.agentName).Distinct().Count()} agents");
+
+            return chatMessages;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, $"Failed to retrieve conversation history for {conversationId}");
+            throw;
+        }
+    }
+
+    #region Utilities
+
     /// <summary>
     /// Constructs the SQLite connection string for a conversation database.
     /// Simple configuration for single-writer scenario (one agent at a time).
@@ -385,4 +472,62 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
 
         return srDecrypt.ReadToEnd();
     }
+
+    /// <summary>
+    /// Maps a Microsoft.Agents.AI.ChatMessage to MorganaChatMessage record.
+    /// </summary>
+    /// <param name="conversationId">Conversation identifier</param>
+    /// <param name="agentName">Name of the agent that generated the message (e.g., "billing", "contract")</param>
+    /// <param name="agentCompleted">Whether the agent has completed its task (from SQLite is_active column)</param>
+    /// <param name="chatMessage">Source ChatMessage from AgentThread</param>
+    /// <returns>Mapped MorganaChatMessage for UI consumption</returns>
+    /// <remarks>
+    /// <para><strong>Text Extraction:</strong></para>
+    /// <para>Concatenates all TextContent blocks in ChatMessage.Content with space separator.
+    /// Non-text content (images, files, etc.) is ignored as Cauldron has no multimedia capabilities yet.</para>
+    /// <para><strong>Agent Name Formatting:</strong></para>
+    /// <list type="bullet">
+    /// <item>User messages: "User"</item>
+    /// <item>Assistant messages: "Morgana ({agentName})" e.g., "Morgana (Billing)"</item>
+    /// </list>
+    /// </remarks>
+    private static MorganaChatMessage MapToMorganaChatMessage(
+        string conversationId,
+        string agentName,
+        bool agentCompleted,
+        ChatMessage chatMessage)
+    {
+        // Extract and concatenate all TextContent blocks
+        string messageText = string.Empty;
+        if (chatMessage.Contents?.Count > 0)
+        {
+            IEnumerable<string> textContents = chatMessage.Contents
+                .OfType<TextContent>() //Exclude other types of content (Cauldron has not multimedia capabilities yet...)
+                .Where(tc => !string.IsNullOrEmpty(tc.Text))
+                .Select(tc => tc.Text!);
+
+            messageText = string.Join(" ", textContents);
+        }
+
+        // Determine message type from role
+        MessageType messageType = MessageType.Assistant;
+        string displayAgentName = $"Morgana ({char.ToUpperInvariant(agentName[0]) + agentName[1..]})";
+        if (chatMessage.Role == ChatRole.User)
+        {
+            messageType = MessageType.User;
+            displayAgentName = "User";
+        }
+
+        return new MorganaChatMessage
+        {
+            ConversationId = conversationId,
+            Text = messageText,
+            Timestamp = chatMessage.CreatedAt.GetValueOrDefault().UtcDateTime,
+            Type = messageType,
+            AgentName = displayAgentName,
+            AgentCompleted = agentCompleted
+        };
+    }
+
+    #endregion
 }

@@ -1,5 +1,6 @@
 using Microsoft.Agents.AI;
 using System.Text.Json;
+using static Morgana.Framework.Records;
 
 namespace Morgana.Framework.Interfaces;
 
@@ -95,4 +96,28 @@ public interface IConversationPersistenceService
     /// <param name="conversationId">Conversation identifier</param>
     /// <returns>Agent name (e.g., "billing") or null if conversation not found</returns>
     Task<string?> GetMostRecentActiveAgentAsync(string conversationId);
+
+    /// <summary>
+    /// Retrieves the complete conversation history across all agents for a given conversation.
+    /// Decrypts, deserializes, and chronologically orders messages from all participating agents.
+    /// </summary>
+    /// <param name="conversationId">Conversation identifier</param>
+    /// <param name="jsonSerializerOptions">JSON serialization options (optional, uses AgentAbstractionsJsonUtilities.DefaultOptions if null)</param>
+    /// <returns>Array of MorganaChatMessage ordered by creation timestamp, or empty array if conversation not found</returns>
+    /// <remarks>
+    /// <para><strong>Process Flow:</strong></para>
+    /// <list type="number">
+    /// <item>Load all agent rows from SQLite database for the conversation</item>
+    /// <item>For each agent: decrypt agent_thread BLOB and deserialize to AgentThread JSON structure</item>
+    /// <item>Extract ChatMessage array from each AgentThread.Messages</item>
+    /// <item>Reconcile messages from all agents and sort by CreatedAt timestamp</item>
+    /// <item>Map each Microsoft.Agents.AI.ChatMessage to MorganaChatMessage record</item>
+    /// </list>
+    /// <para><strong>Failure Semantics:</strong></para>
+    /// <para>Fails fast on any deserialization error - no partial/incomplete history is returned.
+    /// This ensures UI always displays complete, consistent conversation state.</para>
+    /// </remarks>
+    Task<MorganaChatMessage[]> GetConversationHistoryAsync(
+        string conversationId,
+        JsonSerializerOptions? jsonSerializerOptions = null);
 }
