@@ -249,8 +249,8 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             // Deserialize JSON to JsonElement
             JsonElement serialized = JsonSerializer.Deserialize<JsonElement>(json, jsonSerializerOptions);
 
-            // Deserialize thread via agent (which handles context provider reconstruction)
-            AgentThread restored = agent.DeserializeThread(serialized, jsonSerializerOptions);
+            // Deserialize thread via MorganaAgent
+            AgentThread restored = await agent.DeserializeThreadAsync(serialized, jsonSerializerOptions);
 
             logger.LogInformation($"Loaded conversation {agentIdentifier} from database ({encryptedData.Length} bytes decrypted)");
 

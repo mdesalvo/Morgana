@@ -154,7 +154,7 @@ public class MorganaAgent : MorganaActor
     /// <para>If we replaced the field with a new instance, tools would write to the old instance
     /// while the agent reads from the new one, causing quick_replies and other ephemeral data to be lost.</para>
     /// </remarks>
-    public virtual AgentThread DeserializeThread(
+    public virtual async Task<AgentThread> DeserializeThreadAsync(
         JsonElement serializedThread,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
@@ -176,7 +176,7 @@ public class MorganaAgent : MorganaActor
         contextProvider.PropagateSharedVariables();
 
         // Delegate to underlying AIAgent to continue thread deserialization (ChatMessageStore)
-        aiAgentThread = aiAgent.DeserializeThread(serializedThread, jsonSerializerOptions);
+        aiAgentThread = await aiAgent.DeserializeThreadAsync(serializedThread, jsonSerializerOptions);
 
         agentLogger.LogInformation($"Deserialized AgentThread for conversation {conversationId}");
 
@@ -309,12 +309,12 @@ public class MorganaAgent : MorganaActor
             }
             else
             {
-                aiAgentThread = aiAgent.GetNewThread();
+                aiAgentThread = await aiAgent.GetNewThreadAsync();
                 agentLogger.LogInformation($"Created new conversation thread for {AgentIdentifier}");
             }
 
             // Execute LLM with conversation history
-            AgentRunResponse llmResponse = await aiAgent.RunAsync(req.Content!, aiAgentThread);
+            AgentResponse llmResponse = await aiAgent.RunAsync(req.Content!, aiAgentThread);
             string llmResponseText = llmResponse.Text;
 
             // Detect if LLM has emitted the special token for continuing the multi-turn conversation

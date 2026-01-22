@@ -385,19 +385,22 @@ public class MorganaAgentAdapter
 
         RegisterMCPTools(agentType, morganaToolAdapter);
 
-        AIAgent aiAgent = chatClient.CreateAIAgent(
+        AIAgent aiAgent = chatClient.AsAIAgent(
             new ChatClientAgentOptions
             {
                 // Give the agent a factory for AIContextProvider
-                AIContextProviderFactory = (_) => morganaAIContextProvider,
+                AIContextProviderFactory = (_, _) =>
+                    new ValueTask<AIContextProvider>(morganaAIContextProvider),
 
                 // Give the agent a factory for ChatMessageStore
-                ChatMessageStoreFactory = (chatMessageStoreFactoryContext) => new MorganaChatMessageStoreProvider(
-                    conversationId,
-                    intent,
-                    chatMessageStoreFactoryContext.SerializedState,
-                    chatMessageStoreFactoryContext.JsonSerializerOptions,
-                    logger),
+                ChatMessageStoreFactory = (chatMessageStoreFactoryContext, _) =>
+                    new ValueTask<ChatMessageStore>(
+                        new MorganaChatMessageStoreProvider(
+                            conversationId,
+                            intent,
+                            chatMessageStoreFactoryContext.SerializedState,
+                            chatMessageStoreFactoryContext.JsonSerializerOptions,
+                            logger)),
 
                 // Give the agent its identifiers
                 Id = $"{intent.ToLower()}-{conversationId}",
