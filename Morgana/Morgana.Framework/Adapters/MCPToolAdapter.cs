@@ -114,12 +114,11 @@ public class MCPToolAdapter
             {
                 logger.LogDebug($"Executing MCP tool ({values.Length} params): {mcpTool.Name}");
 
-                Dictionary<string, object> args = new();
+                Dictionary<string, object> args = [];
                 for (int i = 0; i < parameters.Count; i++)
                 {
                     // Convert value to appropriate type for JSON serialization
-                    object convertedValue = ConvertValueForMCP(values[i], parameters[i]);
-                    args[parameters[i].Name] = convertedValue;
+                    args[parameters[i].Name] = ConvertValueForMCP(values[i], parameters[i]);
                 }
 
                 CallToolResult result = await mcpClient.CallToolAsync(mcpTool.Name, args);
@@ -290,7 +289,7 @@ public class MCPToolAdapter
                         Name: paramName,
                         Description: description,
                         Required: isRequired,
-                        Scope: "request",
+                        Scope: "request", // MCP tools cannot have parameters with "context" scope
                         Shared: false
                     ));
 
