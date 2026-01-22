@@ -324,7 +324,6 @@ public class ContractTool : MorganaTool
         sb.AppendLine("💡 Need More Info?");
         sb.AppendLine("  • Ask about specific contract clauses (1-7)");
         sb.AppendLine("  • Inquire about termination procedures");
-        sb.AppendLine("  • Request service modification options");
 
         return sb.ToString();
     }
@@ -363,7 +362,7 @@ public class ContractTool : MorganaTool
         {
             case ClauseType.Termination:
                 sb.AppendLine();
-                sb.AppendLine("💡 To initiate termination, ask me about the termination procedure.");
+                sb.AppendLine("💡 To know about termination, ask me about the termination procedure.");
                 break;
             case ClauseType.DataUsage:
                 sb.AppendLine();
@@ -455,7 +454,6 @@ public class ContractTool : MorganaTool
         sb.AppendLine("⚠️ Important Notes:");
         sb.AppendLine("  • All outstanding invoices must be paid before termination");
         sb.AppendLine("  • Failure to return equipment may result in €200 replacement charge");
-        sb.AppendLine("  • Termination cannot be cancelled once confirmed");
         sb.AppendLine();
 
         return sb.ToString();
