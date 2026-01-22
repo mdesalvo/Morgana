@@ -76,9 +76,14 @@ public class ConversationSupervisorActor : MorganaActor
         this.signalRBridgeService = signalRBridgeService;
         this.agentConfigService = agentConfigService;
 
-        guard = Context.System.GetOrCreateActor<GuardActor>("guard", conversationId).GetAwaiter().GetResult();
-        classifier = Context.System.GetOrCreateActor<ClassifierActor>("classifier", conversationId).GetAwaiter().GetResult();
-        router = Context.System.GetOrCreateActor<RouterActor>("router", conversationId).GetAwaiter().GetResult();
+        guard = Context.System.GetOrCreateActor<GuardActor>(
+            "guard", conversationId).GetAwaiter().GetResult();
+
+        classifier = Context.System.GetOrCreateActor<ClassifierActor>(
+            "classifier", conversationId).GetAwaiter().GetResult();
+
+        router = Context.System.GetOrCreateActor<RouterActor>(
+            "router", conversationId).GetAwaiter().GetResult();
 
         Idle();
     }
