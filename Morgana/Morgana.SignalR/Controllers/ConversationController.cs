@@ -194,6 +194,60 @@ public class ConversationController : ControllerBase
     }
 
     /// <summary>
+    /// Retrieves the complete conversation history for a given conversation ID.
+    /// Returns all messages chronologically ordered across all participating agents.
+    /// </summary>
+    /// <param name="conversationId">Unique identifier of the conversation</param>
+    /// <returns>
+    /// 200 OK with array of MorganaChatMessage on success.<br/>
+    /// 404 Not Found if conversation doesn't exist.<br/>
+    /// 500 Internal Server Error on failure.
+    /// </returns>
+    /// <remarks>
+    /// <para><strong>Use Case:</strong></para>
+    /// <para>Called by Cauldron frontend after resuming a conversation to display complete message history.
+    /// This is a synchronous HTTP call, not via SignalR, to ensure the history is loaded before the UI
+    /// removes the magical loader.</para>
+    /// <para><strong>Data Flow:</strong></para>
+    /// <code>
+    /// 1. Client resumes conversation (POST /api/conversation/{id}/resume)
+    /// 2. Client joins SignalR group (await SignalRService.JoinConversation)
+    /// 3. Client calls this endpoint (GET /api/conversation/{id}/history)
+    /// 4. Backend loads from SQLite, decrypts, deserializes, maps to MorganaChatMessage[]
+    /// 5. Client populates messages[] array and removes loader
+    /// </code>
+    /// </remarks>
+    /// <response code="200">History retrieved successfully</response>
+    /// <response code="404">Conversation not found</response>
+    /// <response code="500">Internal error occurred</response>
+    [HttpGet("{conversationId}/history")]
+    public async Task<IActionResult> GetConversationHistory(string conversationId)
+    {
+        try
+        {
+            logger.LogInformation($"Retrieving conversation history for {conversationId}");
+
+            Records.MorganaChatMessage[] chatMessages = await conversationPersistenceService
+                .GetConversationHistoryAsync(conversationId);
+
+            if (chatMessages.Length == 0)
+            {
+                logger.LogWarning($"No history found for conversation {conversationId}");
+                return NotFound(new { error = $"Conversation {conversationId} not found or has no messages" });
+            }
+
+            logger.LogInformation($"Retrieved {chatMessages.Length} messages for conversation {conversationId}");
+
+            return Ok(new { messages = chatMessages });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, $"Failed to retrieve conversation history for {conversationId}");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Sends a user message to the conversation for processing by the actor pipeline.
     /// The response will be delivered asynchronously via SignalR.
     /// </summary>

@@ -3,6 +3,7 @@
 @inject MorganaSignalRService SignalRService
 @inject MorganaLandingMessageService LandingMessageService
 @inject IConversationStorageService StorageService
+@inject IConversationHistoryService HistoryService
 @inject NavigationManager NavigationManager
 @inject HttpClient Http
 @inject IConfiguration Configuration
@@ -198,19 +199,19 @@
     /// SignalR connection state indicator.
     /// True when connected and ready to receive messages.
     /// </summary>
-    private bool isConnected = false;
+    private bool isConnected;
 
     /// <summary>
     /// Message send operation in progress indicator.
     /// True during HTTP POST to prevent duplicate sends.
     /// </summary>
-    private bool isSending = false;
+    private bool isSending;
 
     /// <summary>
     /// Initialization complete indicator.
     /// True after SignalR connection and conversation start succeed.
     /// </summary>
-    private bool isInitialized = false;
+    private bool isInitialized;
 
     /// <summary>
     /// Error message to display in error banner.
@@ -221,7 +222,7 @@
     /// <summary>
     /// Controls visibility of the new conversation confirmation modal.
     /// </summary>
-    private bool showConfirmModal = false;
+    private bool showConfirmModal;
 
     /// <summary>
     /// Name of the currently active agent.
@@ -238,7 +239,7 @@
     /// <summary>
     /// Flag to track if storage has been checked (prevents multiple checks on re-renders).
     /// </summary>
-    private bool hasCheckedStorage = false;
+    private bool hasCheckedStorage;
 
     // =========================================================================
     // LIFECYCLE METHODS
@@ -379,7 +380,32 @@
                 // Join SignalR group
                 await SignalRService.JoinConversation(conversationId);
 
-                // Add a system message to hide the loader
+                Console.WriteLine($"🟡 Loading conversation history for {conversationId}...");
+
+                try
+                {
+                    ConversationHistoryResponse? history = await HistoryService.GetHistoryAsync(conversationId);
+
+                    if (history?.Messages is { Length: > 0 })
+                    {
+                        Console.WriteLine($"🟡 Retrieved {history.Messages.Length} messages from history");
+
+                        foreach (ChatMessage morganaChatMessage in history.Messages)
+                            messages.Add(morganaChatMessage);
+
+                        Console.WriteLine($"🟡 Conversation history loaded successfully");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"⚠️ No history found for conversation {conversationId}");
+                    }
+                }
+                catch (Exception historyEx)
+                {
+                    Console.WriteLine($"⚠️ Failed to load history: {historyEx.Message}");
+                }
+
+                // Add a system message to resume the conversation
                 messages.Add(new ChatMessage
                 {
                     ConversationId = conversationId,
@@ -390,17 +416,9 @@
                     Type = MessageType.Assistant
                 });
 
-                // Add an automatic user message triggering the agent's capabilities
-                if (!string.Equals(currentAgentName, "Morgana", StringComparison.OrdinalIgnoreCase))
-                {
-                    inputText = LandingMessageService.GetAutoResumeUserMessage();
-                    await SendMessageAsync();
-                }
-
                 await InvokeAsync(StateHasChanged);
 
                 Console.WriteLine($"🟡 Joined SignalR group, waiting for conversation history...");
-                // Backend should send conversation history via SignalR
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {

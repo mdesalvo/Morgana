@@ -312,20 +312,24 @@ SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date A
             while (await sqliteDataReader.ReadAsync())
             {
                 string agentName = (string)sqliteDataReader["agent_name"];
-                byte[] encryptedAgentThreadJsonString = (byte[])sqliteDataReader["agent_thread"];
-                bool agentCompleted = (int)sqliteDataReader["is_active"] == 0;
+                bool agentCompleted = (long)sqliteDataReader["is_active"] == 0;
 
                 // Decrypt and deserialize agent thread
+                byte[] encryptedAgentThreadJsonString = (byte[])sqliteDataReader["agent_thread"];
                 string agentThreadJsonString = Decrypt(encryptedAgentThreadJsonString);
                 JsonElement agentThreadJsonElement = JsonSerializer.Deserialize<JsonElement>(
                     agentThreadJsonString,
                     jsonSerializerOptions);
 
                 // Extract messages array from AgentThread structure
-                // AgentThread JSON structure: { "Messages": [...], "SharedVariableNames": [...], ... }
-                if (!agentThreadJsonElement.TryGetProperty("Messages", out JsonElement messagesElement))
+                if (!agentThreadJsonElement.TryGetProperty("storeState", out JsonElement storeStateElement))
                 {
-                    logger.LogWarning($"AgentThread for {agentName} missing Messages property, skipping");
+                    logger.LogWarning($"AgentThread for {agentName} missing 'storeState' property, skipping");
+                    continue;
+                }
+                if (!storeStateElement.TryGetProperty("messages", out JsonElement messagesElement))
+                {
+                    logger.LogWarning($"AgentThread.storeState for {agentName} missing 'messages' property, skipping");
                     continue;
                 }
 
@@ -341,7 +345,9 @@ SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date A
             }
 
             // Sort messages chronologically by CreatedAt
+            // and filter out agent's technical messages
             MorganaChatMessage[] chatMessages = allMessages
+                .Where(m => !string.IsNullOrEmpty(m.message.Text))
                 .OrderBy(m => m.message.CreatedAt)
                 .Select(m => MapToMorganaChatMessage(conversationId, m.agentName, m.agentCompleted, m.message))
                 .ToArray();
