@@ -166,9 +166,8 @@ public class ConversationController : ControllerBase
                 new Records.CreateConversation(conversationId, true), TimeSpan.FromSeconds(60));
 
             // Restore active agent state in supervisor
-            IActorRef supervisor = await actorSystem.ActorSelection(
-                    $"/user/supervisor-{conversationId}")
-                .ResolveOne(TimeSpan.FromMilliseconds(500));
+            IActorRef supervisor = await actorSystem.GetOrCreateActor<ConversationSupervisorActor>(
+                "supervisor", conversationId);
 
             // Get most recent active agent from database
             string? lastActiveAgent = await conversationPersistenceService
