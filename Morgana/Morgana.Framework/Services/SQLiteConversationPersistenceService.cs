@@ -390,7 +390,7 @@ SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date A
     /// Uses SQLite's user_version pragma to track initialization state - only runs once per database.
     /// </summary>
     /// <param name="connection">Open SQLite connection</param>
-    private static async Task EnsureDatabaseInitializedAsync(SqliteConnection connection)
+    private async Task EnsureDatabaseInitializedAsync(SqliteConnection connection)
     {
         // Check user_version to see if database is already initialized
         await using SqliteCommand checkCommand = connection.CreateCommand();
@@ -491,7 +491,7 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
     /// <item>Assistant messages: "Morgana ({agentName})" e.g., "Morgana (Billing)"</item>
     /// </list>
     /// </remarks>
-    private static MorganaChatMessage MapToMorganaChatMessage(
+    private MorganaChatMessage MapToMorganaChatMessage(
         string conversationId,
         string agentName,
         bool agentCompleted,
