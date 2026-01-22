@@ -99,7 +99,7 @@ public class PluginLoaderService
                     .Count(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)));
                 if (detectedAgents > 0)
                 {
-                    logger.LogInformation($"✅ Loaded plugin assembly with {detectedAgents} Morgana agents: {assembly.GetName().Name}");
+                    logger.LogInformation($"✅ Loaded assembly {assembly.GetName().Name}: detected {detectedAgents} Morgana agents");
                 }
                 else
                 {
