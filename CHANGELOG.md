@@ -50,6 +50,7 @@ This release introduces **virtual unified conversation timeline**, enabling **Ca
 
 ### 🐛 Fixed
 - User messages were sent to the agent's thread without timestamp
+- Concurrent agent responses were displayed out of order due to processing time differences
 
 ### 🚀 Future Enablement
 This release unlocks:
