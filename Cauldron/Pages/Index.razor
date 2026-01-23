@@ -351,6 +351,7 @@
         {
             Console.WriteLine($"🟡 ResumeConversation: Attempting to resume {savedConversationId}");
 
+            // Call Morgana to resume the conversation
             HttpResponseMessage response = await Http.PostAsync(
                 $"/api/conversation/{savedConversationId}/resume", null);
 
