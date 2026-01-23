@@ -6,18 +6,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.11.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Multi-Agent Conversation History
+This release introduces **virtual conversation history reconstruction**, enabling **Cauldron** to display the **complete chronological message flow across all agents** by reconciling agent-isolated storage at startup.
+
 ### ✨ Added
+**IConversationHistoryService**
+- HTTP-based abstraction for retrieving complete conversation history from backend
+- Designed to work seamlessly with `ProtectedLocalStorage` conversation resume flow
+
+**MorganaConversationHistoryService**
+- Default implementation calling `GET /api/conversation/{conversationId}/history` Morgana endpoint
+- Synchronous HTTP retrieval (not SignalR) to ensure complete history loads before UI initialization
+- Graceful error handling: returns `null` on 404 (conversation not found) or network errors
+- Enables magical loader to remain active until history is fully populated
+
+**ConversationController: GetConversationHistory Endpoint**
+- New REST endpoint: `GET /api/conversation/{conversationId}/history`
+- Returns `MorganaChatMessage[]` with chronologically ordered messages from all agents
+- Delegates to `IConversationPersistenceService.GetConversationHistoryAsync()` for data retrieval
+
+**SqliteConversationPersistenceService: History Reconciliation**
+- `GetConversationHistoryAsync(conversationId)` method for cross-agent message reconstruction
+- Agent-isolated storage → Virtual unified conversation timeline
+- Decrypts and deserializes `AgentThread` BLOBs from each agent's SQLite row
+- Extracts `ChatMessage[]` from `AgentThread.storeState.messages` JSON structure
+- Filters out internal tool messages (`ChatRole.Tool`) for clean UI rendering
+- Preserves agent metadata (`agentName`, `agentCompleted`) for UI context
+
+**Cauldron: Conversation Resume Flow**
+- `Index.razor` enhanced with automatic history loading on conversation resume
+- **Resume Flow**:
+  1. Detect saved `conversationId` in `ProtectedLocalStorage` (on `OnAfterRenderAsync`)
+  2. Call `POST /api/conversation/{conversationId}/resume` to restore backend actor hierarchy
+  3. Join SignalR group for real-time message delivery
+  4. Call `IConversationHistoryService.GetHistoryAsync()` to fetch complete message history
+  5. Populate `chatMessages` list and remove magical sparkle loader
+- **Fallback handling**: If resume fails (404/500), clears storage and starts new conversation
+- **Presentation message injection**: Synthetic presentation message prepended when history exists (for visual consistency)
 
 ### 🔄 Changed
-- Updated `Microsoft.Agents.AI` dependancy to **1.0.0-preview.260121.1**
-- Enhanced `MorganaAIContextProvider` to handle context data as **thread-safe** and **immutable** collections 
+- Updated `Microsoft.Agents.AI` dependency to **1.0.0-preview.260121.1**
+- Enhanced `MorganaAIContextProvider` to handle context data as **thread-safe** and **immutable** collections
 
 ### 🐛 Fixed
 - User messages were sent to the agent's thread without timestamp
 
 ### 🚀 Future Enablement
 This release unlocks:
-- ...
+- **Cross-session continuity** for users returning to active conversations
+- **Multi-device sync** potential (history accessible from any client with valid `conversationId`)
 
 
 ## [0.10.0] - 2026-01-21
