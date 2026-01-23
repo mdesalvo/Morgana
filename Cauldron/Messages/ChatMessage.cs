@@ -93,15 +93,11 @@ public class ChatMessage
         get => Type switch
         {
             MessageType.User => "user",
-            MessageType.Assistant => "assistant",
-            MessageType.Presentation => "assistant",
-            MessageType.Error => "assistant",
             _ => "assistant"
         };
         set => Type = value switch
         {
             "user" => MessageType.User,
-            "assistant" => MessageType.Assistant,
             _ => MessageType.Assistant
         };
     }
@@ -120,6 +116,11 @@ public class ChatMessage
     /// When true, message displays with error styling (red/warning appearance).
     /// </summary>
     public bool IsError { get; set; }
+
+    /// <summary>
+    /// Optional flag indicating that this is the last message of a resumed conversation.
+    /// </summary>
+    public bool? IsLastHistoryMessage { get; init; }
 }
 
 /// <summary>

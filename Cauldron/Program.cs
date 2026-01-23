@@ -57,6 +57,7 @@ builder.Services.AddSingleton<MorganaLandingMessageService>();
 // Stores conversation ID in browser localStorage with automatic AES-256 encryption
 // Enables seamless conversation resume across browser sessions
 builder.Services.AddScoped<IConversationStorageService, ProtectedLocalStorageService>();
+builder.Services.AddScoped<IConversationHistoryService, MorganaConversationHistoryService>();
 
 // ============================================================================
 // 4. APPLICATION PIPELINE

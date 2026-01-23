@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.SignalR;
-using Morgana.Framework;
 using Morgana.Framework.Interfaces;
 using Morgana.SignalR.Hubs;
+using Morgana.SignalR.Messages;
+using static Morgana.Framework.Records;
 
 namespace Morgana.SignalR.Services;
 
@@ -105,42 +106,28 @@ public class SignalRBridgeService : ISignalRBridgeService
         string conversationId,
         string text,
         string messageType,
-        List<Records.QuickReply>? quickReplies = null,
+        List<QuickReply>? quickReplies = null,
         string? errorReason = null,
         string? agentName = null,
         bool agentCompleted = false)
     {
         logger.LogInformation($"Sending {messageType} message to conversation {conversationId} via SignalR (agent: {agentName ?? "Morgana"}, completed: {agentCompleted})");
 
-        Records.StructuredMessage message = new Records.StructuredMessage(
-            conversationId,
-            text,
-            DateTime.UtcNow,
-            messageType,
-            quickReplies,
-            errorReason,
-            agentName ?? "Morgana",
-            agentCompleted);
-
-        await hubContext.Clients.Group(conversationId).SendAsync("ReceiveMessage", new
+        // Create strongly-typed DTO with contract mapping
+        SignalRMessage message = new SignalRMessage
         {
-            conversationId = message.ConversationId,
-            text = message.Text,
-            timestamp = message.Timestamp,
-            messageType = message.MessageType,
+            ConversationId = conversationId,
+            Text = text,
+            Timestamp = DateTime.UtcNow,
+            MessageType = messageType,
+            QuickReplies = quickReplies,
+            ErrorReason = errorReason,
+            AgentName = agentName ?? "Morgana",
+            AgentCompleted = agentCompleted
+        };
 
-            // Morgana quick replies -> Cauldron quick replies
-            quickReplies = message.QuickReplies?.Select(qr => new
-            {
-                id = qr.Id,
-                label = qr.Label,
-                value = qr.Value,
-                termination = qr.Termination == true
-            }).ToList(),
-
-            errorReason = message.ErrorReason,
-            agentName = message.AgentName,
-            agentCompleted = message.AgentCompleted
-        });
+        // Send strongly-typed DTO (SignalR serializes to JSON automatically)
+        await hubContext.Clients.Group(conversationId)
+            .SendAsync("ReceiveMessage", message);
     }
 }

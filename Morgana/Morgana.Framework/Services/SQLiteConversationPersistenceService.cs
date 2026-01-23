@@ -1,11 +1,13 @@
-using Microsoft.Agents.AI;
+﻿using Microsoft.Agents.AI;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Interfaces;
 using System.Security.Cryptography;
 using System.Text.Json;
+using static Morgana.Framework.Records;
 
 namespace Morgana.Framework.Services;
 
@@ -51,7 +53,7 @@ namespace Morgana.Framework.Services;
 public class SQLiteConversationPersistenceService : IConversationPersistenceService
 {
     private readonly ILogger logger;
-    private readonly Records.ConversationPersistenceOptions options;
+    private readonly ConversationPersistenceOptions options;
     private readonly byte[] encryptionKey;
 
     /// <summary>
@@ -62,7 +64,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     /// <param name="logger">Logger instance for diagnostics</param>
     /// <exception cref="ArgumentException">Thrown if StoragePath or EncryptionKey are not configured</exception>
     public SQLiteConversationPersistenceService(
-        IOptions<Records.ConversationPersistenceOptions> options,
+        IOptions<ConversationPersistenceOptions> options,
         ILogger logger)
     {
         this.logger = logger;
@@ -273,6 +275,88 @@ SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIM
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<MorganaChatMessage[]> GetConversationHistoryAsync(
+        string conversationId,
+        JsonSerializerOptions? jsonSerializerOptions = null)
+    {
+        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
+
+        try
+        {
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            string sqliteDbPath = GetDatabasePath(conversationId);
+
+            // Early return if database doesn't exist
+            if (!File.Exists(sqliteDbPath))
+            {
+                logger.LogInformation($"SQLite database for conversation {conversationId} not found, returning empty history");
+                return [];
+            }
+
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
+
+            await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+            sqliteCommand.CommandText =
+"""
+SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date ASC;
+""";
+
+            await using SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync();
+
+            // Collect all messages from all agents with their completion status
+            List<(string agentName, bool agentCompleted, ChatMessage message)> allMessages = [];
+
+            while (await sqliteDataReader.ReadAsync())
+            {
+                string agentName = (string)sqliteDataReader["agent_name"];
+                bool agentCompleted = (long)sqliteDataReader["is_active"] == 0;
+
+                // Decrypt and deserialize agent thread
+                byte[] encryptedAgentThreadJsonString = (byte[])sqliteDataReader["agent_thread"];
+                string agentThreadJsonString = Decrypt(encryptedAgentThreadJsonString);
+                JsonElement agentThreadJsonElement = JsonSerializer.Deserialize<JsonElement>(
+                    agentThreadJsonString,
+                    jsonSerializerOptions);
+
+                // Extract messages array from AgentThread structure
+                if (!agentThreadJsonElement.TryGetProperty("storeState", out JsonElement storeStateElement))
+                {
+                    logger.LogWarning($"AgentThread for {agentName} missing 'storeState' property, skipping");
+                    continue;
+                }
+                if (!storeStateElement.TryGetProperty("messages", out JsonElement messagesElement))
+                {
+                    logger.LogWarning($"AgentThread.storeState for {agentName} missing 'messages' property, skipping");
+                    continue;
+                }
+
+                // Deserialize messages to ChatMessage array
+                ChatMessage[]? chatMessages = JsonSerializer.Deserialize<ChatMessage[]>(
+                    messagesElement.GetRawText(),
+                    jsonSerializerOptions) ?? throw new InvalidOperationException(
+                        $"Failed to deserialize Messages for agent {agentName} in conversation {conversationId}");
+
+                // Add all messages with agent metadata
+                foreach (ChatMessage message in chatMessages)
+                    allMessages.Add((agentName, agentCompleted, message));
+            }
+
+            // Delegate filtering and processing to specialized method
+            // (ensure to present messages in theit effective temporal order,
+            //  since they comes from database in agent's appearance order)
+            return ProcessMessagesForHistory(conversationId, [.. allMessages.OrderBy(m => m.message.CreatedAt?.UtcDateTime ?? DateTime.UtcNow) ], jsonSerializerOptions);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, $"Failed to retrieve conversation history for {conversationId}");
+            throw;
+        }
+    }
+
+    #region Utilities
+
     /// <summary>
     /// Constructs the SQLite connection string for a conversation database.
     /// Simple configuration for single-writer scenario (one agent at a time).
@@ -303,7 +387,7 @@ SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIM
     /// Uses SQLite's user_version pragma to track initialization state - only runs once per database.
     /// </summary>
     /// <param name="connection">Open SQLite connection</param>
-    private static async Task EnsureDatabaseInitializedAsync(SqliteConnection connection)
+    private async Task EnsureDatabaseInitializedAsync(SqliteConnection connection)
     {
         // Check user_version to see if database is already initialized
         await using SqliteCommand checkCommand = connection.CreateCommand();
@@ -385,4 +469,172 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
 
         return srDecrypt.ReadToEnd();
     }
+
+    /// <summary>
+    /// Processes raw messages from AgentThread into UI-ready MorganaChatMessage array.
+    /// Handles quick reply extraction, message filtering, and chronological ordering.
+    /// </summary>
+    private MorganaChatMessage[] ProcessMessagesForHistory(
+        string conversationId,
+        List<(string agentName, bool agentCompleted, ChatMessage message)> allMessages,
+        JsonSerializerOptions jsonSerializerOptions)
+    {
+        // =============================================================================
+        // PASS 1: Extract quick replies from SetQuickReplies function calls
+        // =============================================================================
+        Dictionary<string, List<QuickReply>> quickRepliesByCallId = allMessages
+            .Where(m => m.message.Role == ChatRole.Assistant)
+            .SelectMany(m => m.message.Contents?
+                .OfType<FunctionCallContent>()
+                .Where(fc => fc.Name == "SetQuickReplies") ?? [])
+            .Select(fc => new
+            {
+                CallId = fc.CallId,
+                QuickReplies = TryParseQuickRepliesFromDictionary(fc.Arguments, jsonSerializerOptions)
+            })
+            .Where(x => x.QuickReplies != null)
+            .ToDictionary(x => x.CallId, x => x.QuickReplies!);
+
+        logger.LogDebug($"Extracted quick replies from {quickRepliesByCallId.Count} SetQuickReplies calls");
+
+        // =============================================================================
+        // PASS 2: Filter and map messages with quick replies attachment
+        // =============================================================================
+        List<MorganaChatMessage> result = [];
+        string? pendingQuickRepliesCallId = null;
+        int msgIndex = 0;
+        bool isLastHistoryMessage = false;
+
+        foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in allMessages)
+        {
+            // Determine if the current message is the last one
+            msgIndex++;
+            if (msgIndex == allMessages.Count)
+                isLastHistoryMessage = true;
+
+            // Skip tool messages
+            if (chatMessage.Role == ChatRole.Tool)
+                continue;
+
+            // Check for SetQuickReplies function call
+            FunctionCallContent? setQuickRepliesCall = chatMessage.Contents?
+                .OfType<FunctionCallContent>()
+                .FirstOrDefault(fc => fc.Name == "SetQuickReplies");
+
+            if (setQuickRepliesCall != null)
+            {
+                pendingQuickRepliesCallId = setQuickRepliesCall.CallId;
+                continue; // Skip empty tool call message
+            }
+
+            // Process messages with text content
+            string messageText = ExtractTextFromMessage(chatMessage);
+            if (string.IsNullOrWhiteSpace(messageText))
+                continue;
+
+            // Attach quick replies to assistant message following SetQuickReplies
+            List<QuickReply>? quickReplies = null;
+            if (pendingQuickRepliesCallId != null
+                 && chatMessage.Role == ChatRole.Assistant
+                 && quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
+            {
+                pendingQuickRepliesCallId = null;
+            }
+
+            result.Add(MapToMorganaChatMessage(conversationId, agentName, agentCompleted, chatMessage, isLastHistoryMessage, quickReplies));
+        }
+
+        logger.LogInformation(
+            $"Processed {result.Count} messages (filtered from {allMessages.Count} raw messages) for {conversationId}");
+
+        return result.ToArray();
+    }
+
+    /// <summary>
+    /// Attempts to parse quick replies from SetQuickReplies function call arguments dictionary.
+    /// Returns null if parsing fails (graceful degradation).
+    /// </summary>
+    private List<QuickReply>? TryParseQuickRepliesFromDictionary(
+        IDictionary<string, object?>? arguments,
+        JsonSerializerOptions jsonSerializerOptions)
+    {
+        if (arguments == null || !arguments.TryGetValue("quickReplies", out object? quickRepliesValue))
+            return null;
+
+        try
+        {
+            // The value might be a string (JSON) or already a JsonElement
+            string quickRepliesString = quickRepliesValue switch
+            {
+                string str => str,
+                JsonElement jsonElement => jsonElement.GetString() ?? "[]",
+                _ => JsonSerializer.Serialize(quickRepliesValue, jsonSerializerOptions)
+            };
+
+            List<QuickReply>? quickReplies = JsonSerializer.Deserialize<List<QuickReply>>(
+                quickRepliesString,
+                jsonSerializerOptions);
+
+            return quickReplies?.Count > 0 ? quickReplies : null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to parse quick replies from function arguments");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Extracts and concatenates all TextContent blocks from a ChatMessage.
+    /// </summary>
+    private string ExtractTextFromMessage(ChatMessage chatMessage)
+    {
+        if (chatMessage.Contents == null || chatMessage.Contents.Count == 0)
+            return string.Empty;
+
+        return string.Join(" ", chatMessage.Contents
+            .OfType<TextContent>()
+            .Where(tc => !string.IsNullOrEmpty(tc.Text))
+            .Select(tc => tc.Text!.Trim()));
+    }
+
+    /// <summary>
+    /// Maps a Microsoft.Agents.AI.ChatMessage to MorganaChatMessage record.
+    /// </summary>
+    private MorganaChatMessage MapToMorganaChatMessage(
+        string conversationId,
+        string agentName,
+        bool agentCompleted,
+        ChatMessage chatMessage,
+        bool isLastHistoryMessage,
+        List<QuickReply>? quickReplies = null)
+    {
+        string messageText = ExtractTextFromMessage(chatMessage);
+
+        // Determine message type from role
+        MessageType messageType = chatMessage.Role == ChatRole.User
+            ? MessageType.User
+            : MessageType.Assistant;
+
+        // Format agent name for UI
+        string displayAgentName = chatMessage.Role == ChatRole.User
+            ? "User"
+            : string.IsNullOrEmpty(agentName) || agentName.Equals("morgana", StringComparison.OrdinalIgnoreCase)
+                ? "Morgana"
+                : $"Morgana ({char.ToUpper(agentName[0])}{agentName[1..]})";
+
+        return new MorganaChatMessage
+        {
+            ConversationId = conversationId,
+            Text = messageText,
+            Timestamp = chatMessage.CreatedAt?.UtcDateTime ?? DateTime.UtcNow,
+            Type = messageType,
+            AgentName = displayAgentName,
+            AgentCompleted = agentCompleted,
+            QuickReplies = quickReplies,
+            IsLastHistoryMessage = isLastHistoryMessage
+        };
+    }
+
+    #endregion
 }

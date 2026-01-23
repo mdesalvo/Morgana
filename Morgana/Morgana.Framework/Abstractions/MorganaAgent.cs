@@ -6,6 +6,7 @@ using Morgana.Framework.Interfaces;
 using Morgana.Framework.Providers;
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.Extensions.AI;
 
 namespace Morgana.Framework.Abstractions;
 
@@ -313,8 +314,9 @@ public class MorganaAgent : MorganaActor
                 agentLogger.LogInformation($"Created new conversation thread for {AgentIdentifier}");
             }
 
-            // Execute LLM with conversation history
-            AgentResponse llmResponse = await aiAgent.RunAsync(req.Content!, aiAgentThread);
+            // Execute agent on its conversation thread (which has context and history)
+            AgentResponse llmResponse = await aiAgent.RunAsync(
+                new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow }, aiAgentThread);
             string llmResponseText = llmResponse.Text;
 
             // Detect if LLM has emitted the special token for continuing the multi-turn conversation

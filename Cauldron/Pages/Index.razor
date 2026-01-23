@@ -3,6 +3,7 @@
 @inject MorganaSignalRService SignalRService
 @inject MorganaLandingMessageService LandingMessageService
 @inject IConversationStorageService StorageService
+@inject IConversationHistoryService HistoryService
 @inject NavigationManager NavigationManager
 @inject HttpClient Http
 @inject IConfiguration Configuration
@@ -39,7 +40,7 @@
 
     <!-- Messages Area -->
     <div class="messages-container">
-        @if (messages.Count == 0)
+        @if (chatMessages.Count == 0)
         {
             <!-- Loading state with magical animation -->
             <!-- Loader visible until first message arrives from backend (presentation or conversation history) -->
@@ -70,44 +71,44 @@
         else
         {
             <!-- Message list -->
-            @foreach (ChatMessage message in messages)
+            @foreach (ChatMessage chatMessage in chatMessages)
             {
-                <div class="message @message.Role">
-                    @if (message.Role == "assistant")
+                <div class="message @chatMessage.Role">
+                    @if (chatMessage.Role == "assistant")
                     {
                         <!-- Agent avatar with dynamic border color -->
                         <img src="images/morgana-avatar.png" 
-                             alt="@message.AgentName" 
+                             alt="@chatMessage.AgentName" 
                              class="message-avatar"
-                             style="border: 2px solid @GetAvatarBorderColor(message.AgentName);" />
+                             style="border: 2px solid @GetAvatarBorderColor(chatMessage.AgentName);" />
                     }
                     <div class="message-bubble">
-                        @if (message.IsTyping)
+                        @if (chatMessage.IsTyping)
                         {
                             <!-- Typing indicator (three animated dots) -->
                             <div class="typing-indicator">
-                                <span style="background: @GetAvatarBorderColor(message.AgentName);"></span>
-                                <span style="background: @GetAvatarBorderColor(message.AgentName);"></span>
-                                <span style="background: @GetAvatarBorderColor(message.AgentName);"></span>
+                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
+                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
+                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
                             </div>
                         }
                         else
                         {
                             <!-- Message content -->
-                            <div class="message-text @(message.Type == MessageType.Presentation ? "completion-text" : "")">
-                                @message.Text
+                            <div class="message-text @(chatMessage.Type == MessageType.Presentation ? "completion-text" : "")">
+                                @chatMessage.Text
                             </div>
 
-                            @if (message.QuickReplies is { Count: > 0 })
+                            @if (chatMessage.QuickReplies is { Count: > 0 })
                             {
-                                <QuickReplyButton Replies="@message.QuickReplies"
-                                                  OnSelect="@((reply) => SelectQuickReplyAsync(reply, message))"
-                                                  IsDisabled="@(message.SelectedQuickReplyId != null)"
-                                                  SelectedReplyId="@message.SelectedQuickReplyId" />
+                                <QuickReplyButton Replies="@chatMessage.QuickReplies"
+                                                  OnSelect="@((reply) => SelectQuickReplyAsync(reply, chatMessage))"
+                                                  IsDisabled="@(chatMessage.SelectedQuickReplyId != null || chatMessage.IsLastHistoryMessage == false)"
+                                                  SelectedReplyId="@chatMessage.SelectedQuickReplyId" />
                             }
 
                             <!-- Message timestamp -->
-                            <div class="message-time">@message.Timestamp.ToString("HH:mm")</div>
+                            <div class="message-time">@chatMessage.Timestamp.ToString("HH:mm")</div>
                         }
                     </div>
                 </div>
@@ -181,7 +182,7 @@
     /// List of all chat messages in the current conversation.
     /// Includes user messages, agent responses, typing indicators, and presentation messages.
     /// </summary>
-    private List<ChatMessage> messages = [];
+    private List<ChatMessage> chatMessages = [];
 
     /// <summary>
     /// Current text input from the user (two-way bound to textarea).
@@ -198,19 +199,19 @@
     /// SignalR connection state indicator.
     /// True when connected and ready to receive messages.
     /// </summary>
-    private bool isConnected = false;
+    private bool isConnected;
 
     /// <summary>
     /// Message send operation in progress indicator.
     /// True during HTTP POST to prevent duplicate sends.
     /// </summary>
-    private bool isSending = false;
+    private bool isSending;
 
     /// <summary>
     /// Initialization complete indicator.
     /// True after SignalR connection and conversation start succeed.
     /// </summary>
-    private bool isInitialized = false;
+    private bool isInitialized;
 
     /// <summary>
     /// Error message to display in error banner.
@@ -221,7 +222,7 @@
     /// <summary>
     /// Controls visibility of the new conversation confirmation modal.
     /// </summary>
-    private bool showConfirmModal = false;
+    private bool showConfirmModal;
 
     /// <summary>
     /// Name of the currently active agent.
@@ -238,7 +239,7 @@
     /// <summary>
     /// Flag to track if storage has been checked (prevents multiple checks on re-renders).
     /// </summary>
-    private bool hasCheckedStorage = false;
+    private bool hasCheckedStorage;
 
     // =========================================================================
     // LIFECYCLE METHODS
@@ -265,10 +266,7 @@
             Console.WriteLine($"🔵 SignalR connected: {isConnected}");
 
             // Subscribe to message received events
-            SignalRService.OnMessageReceived += async (conversationId, text, timestamp, quickReplies, agentName, agentCompleted) =>
-            {
-                await HandleMessageReceivedAsync(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
-            };
+            SignalRService.OnMessageReceived += HandleMessageReceivedAsync;
 
             // Subscribe to connection state changes
             SignalRService.OnConnectionStateChanged += (connected) =>
@@ -353,6 +351,7 @@
         {
             Console.WriteLine($"🟡 ResumeConversation: Attempting to resume {savedConversationId}");
 
+            // Call Morgana to resume the conversation
             HttpResponseMessage response = await Http.PostAsync(
                 $"/api/conversation/{savedConversationId}/resume", null);
 
@@ -379,28 +378,106 @@
                 // Join SignalR group
                 await SignalRService.JoinConversation(conversationId);
 
-                // Add a system message to hide the loader
-                messages.Add(new ChatMessage
-                {
-                    ConversationId = conversationId,
-                    Text = LandingMessageService.GetRandomResumingMessage(),
-                    Role = "assistant",
-                    Timestamp = DateTime.UtcNow,
-                    AgentName = currentAgentName,
-                    Type = MessageType.Assistant
-                });
+                Console.WriteLine($"🟡 Loading conversation history for {conversationId}...");
 
-                // Add an automatic user message triggering the agent's capabilities
-                if (!string.Equals(currentAgentName, "Morgana", StringComparison.OrdinalIgnoreCase))
+                try
                 {
-                    inputText = LandingMessageService.GetAutoResumeUserMessage();
-                    await SendMessageAsync();
+                    ConversationHistoryResponse? history = await HistoryService.GetHistoryAsync(conversationId);
+
+                    if (history?.Messages is { Length: > 0 })
+                    {
+                        Console.WriteLine($"🟡 Retrieved {history.Messages.Length} messages from history");
+
+                        for (int i = 0; i < history.Messages.Length; i++)
+                        {
+                            #region Transient Hints
+                            if (string.Equals(history.Messages[i].Role, "user", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Detect if this user message can be classified as "agent's turn boundary":
+                                // it is preceded by "Agent X" message and followed by "Agent Y" message
+                                bool isPrecededByAssistantMessage = i > 0 && string.Equals(history.Messages[i-1].Role, "assistant", StringComparison.OrdinalIgnoreCase);
+                                bool isFollowedByAssistantMessage = i + 1 < history.Messages.Length && string.Equals(history.Messages[i+1].Role, "assistant", StringComparison.OrdinalIgnoreCase);
+                                bool isTurnBoundaryMessage = isPrecededByAssistantMessage 
+                                                              && isFollowedByAssistantMessage
+                                                              && !string.Equals(history.Messages[i-1].AgentName, history.Messages[i+1].AgentName, StringComparison.OrdinalIgnoreCase);
+                                if (isTurnBoundaryMessage)
+                                {
+                                    // Emit a transient "Agent X has completed" message, which is
+                                    // ephemeral and does not participate in the DB conversation
+                                    chatMessages.Add(new ChatMessage
+                                    {
+                                        ConversationId = history.Messages[i].ConversationId,
+                                        Text = GetCompletionMessage(history.Messages[i-1].AgentName!),
+                                        Role = "assistant",
+                                        Timestamp = history.Messages[i].Timestamp.AddMilliseconds(-5),
+                                        AgentName = "Morgana",
+                                        AgentCompleted = true,
+                                        Type = MessageType.Presentation
+                                    });
+                                }
+                            }
+                            #endregion
+
+                            chatMessages.Add(history.Messages[i]);
+                        }
+                        #region Transient Hints
+                        // Detect if the last history message can be classified as "agent's turn boundary":
+                        // it is an "Agent X" message, but Cauldron is back listening in "Morgana" mode
+                        ChatMessage lastHistoryMessage = history.Messages.Last();
+                        if (IsSpecializedAgent(lastHistoryMessage.AgentName) && !IsSpecializedAgent(currentAgentName))
+                        {
+                            // Emit a transient "Agent X has completed" message, which is
+                            // ephemeral and does not participate in the DB conversation
+                            chatMessages.Add(new ChatMessage
+                            {
+                                ConversationId = lastHistoryMessage.ConversationId,
+                                Text = GetCompletionMessage(lastHistoryMessage.AgentName!),
+                                Role = "assistant",
+                                Timestamp = lastHistoryMessage.Timestamp.AddMilliseconds(-5),
+                                AgentName = "Morgana",
+                                AgentCompleted = true,
+                                Type = MessageType.Presentation
+                            });
+                        }
+                        #endregion
+
+                        Console.WriteLine($"🟡 Conversation history loaded successfully");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"⚠️ No history found for conversation {conversationId}");
+
+                        // Add a system message to force UI resume
+                        chatMessages.Add(new ChatMessage
+                        {
+                            ConversationId = conversationId,
+                            Text = LandingMessageService.GetRandomResumingMessage(),
+                            Role = "assistant",
+                            Timestamp = DateTime.UtcNow,
+                            AgentName = currentAgentName,
+                            Type = MessageType.Assistant
+                        });
+                    }
+                }
+                catch (Exception historyEx)
+                {
+                    Console.WriteLine($"⚠️ Failed to load history: {historyEx.Message}");
+
+                    // Add a system message to force UI resume
+                    chatMessages.Add(new ChatMessage
+                    {
+                        ConversationId = conversationId,
+                        Text = LandingMessageService.GetRandomResumingMessage(),
+                        Role = "assistant",
+                        Timestamp = DateTime.UtcNow,
+                        AgentName = currentAgentName,
+                        Type = MessageType.Assistant
+                    });
                 }
 
                 await InvokeAsync(StateHasChanged);
 
                 Console.WriteLine($"🟡 Joined SignalR group, waiting for conversation history...");
-                // Backend should send conversation history via SignalR
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
@@ -419,8 +496,10 @@
                 string errorContent = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"❌ Resume error {response.StatusCode}: {errorContent}");
                 
-                // Fallback to new conversation
+                // Clear corrupted/expired storage
                 await StorageService.ClearConversationIdAsync();
+
+                // Fallback to new conversation
                 await StartConversationAsync();
             }
         }
@@ -428,8 +507,10 @@
         {
             Console.WriteLine($"❌ ResumeConversation exception: {ex.Message}");
             
-            // Fallback to new conversation on any error
+            // Clear corrupted/expired storage
             await StorageService.ClearConversationIdAsync();
+
+            // Fallback to new conversation
             await StartConversationAsync();
         }
     }
@@ -555,7 +636,7 @@
         isSending = true;
 
         // Add user message to UI
-        messages.Add(new ChatMessage
+        chatMessages.Add(new ChatMessage
         {
             ConversationId = conversationId,
             Text = messageText,
@@ -564,7 +645,7 @@
         });
 
         // Add typing indicator
-        messages.Add(new ChatMessage
+        chatMessages.Add(new ChatMessage
         {
             ConversationId = conversationId,
             Role = "assistant",
@@ -592,11 +673,11 @@
                 Console.WriteLine($"❌ Morgana error: {errorContent}");
 
                 // Remove typing indicator and show error
-                ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
+                ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
                 if (typingMessage != null)
                 {
-                    messages.Remove(typingMessage);
-                    messages.Add(new ChatMessage
+                    chatMessages.Remove(typingMessage);
+                    chatMessages.Add(new ChatMessage
                     {
                         ConversationId = conversationId,
                         Text = "Sorry, an error occurred. Please try again.",
@@ -617,11 +698,11 @@
             Console.WriteLine($"❌ SendMessage exception: {ex.Message}");
 
             // Remove typing indicator and show error
-            ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
+            ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
             if (typingMessage != null)
             {
-                messages.Remove(typingMessage);
-                messages.Add(new ChatMessage
+                chatMessages.Remove(typingMessage);
+                chatMessages.Add(new ChatMessage
                 {
                     ConversationId = conversationId,
                     Text = $"Connection error: {ex.Message}",
@@ -644,82 +725,75 @@
     }
 
     /// <summary>
-    /// Handles incoming messages from SignalR (agent responses, presentation messages).
-    /// Removes typing indicator, adds agent message to UI, and updates header with current agent.
+    /// Handles incoming messages from SignalR with strongly-typed DTO.
+    /// Removes typing indicator, updates agent state, and adds message to UI.
     /// </summary>
-    /// <param name="conversationId">Conversation ID of the message</param>
-    /// <param name="text">Message text from agent</param>
-    /// <param name="timestamp">Message timestamp</param>
-    /// <param name="quickReplies">Optional list of quick reply buttons</param>
-    /// <param name="agentName">Name of the responding agent</param>
-    /// <param name="agentCompleted">True if agent has completed its task</param>
+    /// <param name="signalrMessage">Strongly-typed SignalR message DTO containing all message data</param>
     /// <returns>Task representing the async message handling</returns>
     /// <remarks>
     /// <para><strong>Agent Lifecycle:</strong></para>
     /// <list type="bullet">
-    /// <item><term>Agent Active</term><description>agentCompleted = false, header shows agent name with specialized color</description></item>
-    /// <item><term>Agent Completed</term><description>agentCompleted = true, header returns to "Morgana" with base color, completion message added</description></item>
+    /// <item><term>Agent Active</term><description>message.AgentCompleted = false, header shows agent name</description></item>
+    /// <item><term>Agent Completed</term><description>message.AgentCompleted = true, header returns to "Morgana"</description></item>
     /// </list>
     /// </remarks>
-    private async Task HandleMessageReceivedAsync(string conversationId, string text, DateTime timestamp, List<QuickReply>? quickReplies, string? agentName, bool agentCompleted)
+    private async Task HandleMessageReceivedAsync(SignalRMessage signalrMessage)
     {
         try
         {
-            Console.WriteLine($"🟣 Message received for conversation: {conversationId}");
-            Console.WriteLine($"🟣 Agent: {agentName ?? "Morgana"}, Completed: {agentCompleted}");
-            Console.WriteLine($"🟣 QuickReplies count: {quickReplies?.Count ?? 0}");
+            Console.WriteLine($"🟣 Message received for conversation: {signalrMessage.ConversationId}");
+            Console.WriteLine($"🟣 Agent: {signalrMessage.AgentName}, Completed: {signalrMessage.AgentCompleted}");
+            Console.WriteLine($"🟣 QuickReplies count: {signalrMessage.QuickReplies?.Count ?? 0}");
 
             // Verify message is for this conversation
-            if (this.conversationId != conversationId)
+            if (conversationId != signalrMessage.ConversationId)
             {
                 Console.WriteLine("⚠️ Message for different conversation, ignoring");
                 return;
             }
 
             // Remove typing indicator
-            ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
+            ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
             if (typingMessage != null)
-            {
-                messages.Remove(typingMessage);
-            }
+                chatMessages.Remove(typingMessage);
 
             // Update header with current agent name
-            if (!string.IsNullOrEmpty(agentName))
+            if (!string.IsNullOrEmpty(signalrMessage.AgentName))
             {
-                currentAgentName = agentName;
+                currentAgentName = signalrMessage.AgentName;
                 Console.WriteLine($"🎨 Header updated: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
             }
 
             // If agent has completed, return header to Morgana
-            if (agentCompleted)
+            if (signalrMessage.AgentCompleted)
             {
                 currentAgentName = "Morgana";
                 Console.WriteLine($"🎨 Header reset to: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
             }
 
             // Add main agent message
-            messages.Add(new ChatMessage
+            chatMessages.Add(new ChatMessage
             {
-                ConversationId = conversationId,
-                Text = text,
+                ConversationId = signalrMessage.ConversationId,
+                Text = signalrMessage.Text,
                 Role = "assistant",
-                Timestamp = timestamp,
-                QuickReplies = quickReplies,
-                AgentName = agentName ?? "Morgana",
+                Timestamp = signalrMessage.Timestamp,
+                QuickReplies = signalrMessage.QuickReplies,
+                AgentName = signalrMessage.AgentName ?? "Morgana",
                 AgentCompleted = false
             });
 
             // If agent completed and is specialized, add completion message from Morgana
-            if (agentCompleted && IsSpecializedAgent(agentName))
+            if (signalrMessage.AgentCompleted && IsSpecializedAgent(signalrMessage.AgentName))
             {
-                messages.Add(new ChatMessage
+                chatMessages.Add(new ChatMessage
                 {
-                    ConversationId = conversationId,
-                    Text = GetCompletionMessage(agentName!),
+                    ConversationId = signalrMessage.ConversationId,
+                    Text = GetCompletionMessage(signalrMessage.AgentName!),
                     Role = "assistant",
-                    Timestamp = timestamp.AddSeconds(1),
+                    Timestamp = signalrMessage.Timestamp.AddMilliseconds(5),
                     AgentName = "Morgana",
-                    AgentCompleted = false,
+                    AgentCompleted = true,
                     Type = MessageType.Presentation
                 });
             }
@@ -809,11 +883,11 @@
     // =========================================================================
 
     /// <summary>
-    /// Checks if there are any unselected quick replies in the message list.
+    /// Checks if there are any unselected quick replies in the tail of message list.
     /// </summary>
-    /// <returns>True if any message has quick replies that haven't been selected yet</returns>
+    /// <returns>True if any message has ending quick replies that haven't been selected yet</returns>
     private bool HasActiveQuickReplies() =>
-        messages.Any(m => m is { QuickReplies: not null, SelectedQuickReplyId: null });
+        chatMessages.Any(m => m is { QuickReplies: not null, SelectedQuickReplyId: null, IsLastHistoryMessage: true });
 
     /// <summary>
     /// Gets a value indicating whether the send button should be disabled.
@@ -825,7 +899,7 @@
         string.IsNullOrWhiteSpace(inputText) ||
         !isInitialized ||
         HasActiveQuickReplies() ||
-        messages.Any(m => m.IsTyping);
+        chatMessages.Any(m => m.IsTyping);
 
     /// <summary>
     /// Gets a value indicating whether the new conversation button should be visible.
@@ -835,7 +909,7 @@
          && isInitialized
          && hasCheckedStorage
          && !string.IsNullOrWhiteSpace(conversationId)
-         && messages.Count > 0;
+         && chatMessages.Count > 0;
 
     /// <summary>
     /// Gets a value indicating whether the textarea should be disabled.
@@ -846,7 +920,7 @@
         isSending ||
         !isInitialized ||
         HasActiveQuickReplies() ||
-        messages.Any(m => m.IsTyping);
+        chatMessages.Any(m => m.IsTyping);
 
     // =========================================================================
     // CLEANUP
@@ -860,10 +934,7 @@
     public async ValueTask DisposeAsync()
     {
         // Unsubscribe from events
-        SignalRService.OnMessageReceived -= async (conversationId, text, timestamp, quickReplies, agentName, agentCompleted) =>
-        {
-            await HandleMessageReceivedAsync(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
-        };
+        SignalRService.OnMessageReceived -= HandleMessageReceivedAsync;
         
         // Stop SignalR connection
         await SignalRService.StopAsync();

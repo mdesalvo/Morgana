@@ -4,7 +4,6 @@ public class MorganaLandingMessageService
 {
     private readonly string[] landingMessages;
     private readonly string[] resumingMessages;
-    private readonly string autoResumeUserMessage;
     private readonly Random random = new Random();
 
     public MorganaLandingMessageService(IConfiguration configuration)
@@ -14,9 +13,6 @@ public class MorganaLandingMessageService
 
         resumingMessages = configuration.GetSection("Morgana:ResumingMessages").Get<string[]>()
                            ?? ["🔮 The circle is open once more. We resume where the spell paused. 🔮"];
-
-        autoResumeUserMessage = configuration["AutoResumeUserMessage"]
-                                 ?? "Hello once more. What magical abilities can you use to assist me today? \uD83D\uDD2E";
     }
 
     public string GetRandomLandingMessage()
@@ -34,7 +30,4 @@ public class MorganaLandingMessageService
             return resumingMessages[random.Next(resumingMessages.Length)];
         }
     }
-
-    public string GetAutoResumeUserMessage()
-        => autoResumeUserMessage;
 }
