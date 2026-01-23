@@ -47,6 +47,7 @@ This release introduces **virtual unified conversation timeline**, enabling **Ca
 ### 🔄 Changed
 - Updated `Microsoft.Agents.AI` dependency to **1.0.0-preview.260121.1**
 - Enhanced `MorganaAIContextProvider` to handle context data as **thread-safe** and **immutable** collections
+- Optimized `ConversationController` to replace `Ask<T>` with `Tell` fire-and-forget
 
 ### 🐛 Fixed
 - User messages were sent to the agent's thread without timestamp
