@@ -5,7 +5,7 @@
     </td>
     <td>
       <h1>Morgana</h1>
-      <p><strong>A magical witch assistant equipped with an enchanted AI-driven grimoire.<br/>She kindly assists you with her magical tomes just the way you need, just the way you want.</strong></p>
+      <p><strong>A magical witch assistant equipped with an enchanted AI-driven grimoire</strong></p>
       <p>
         <img src="https://img.shields.io/badge/.NET-10.0-932BD4?logo=dotnet" alt=".NET 10"/>
         <img src="https://img.shields.io/badge/Akka.NET-932BD4?logo=nuget" alt="Akka.NET"/>
@@ -21,6 +21,8 @@
 Morgana is a **conversational AI framework** designed to handle complex scenarios through a sophisticated **multi-agent intent-driven architecture**. Built on cutting-edge **.NET 10** and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that collaborate to understand, classify and resolve customer inquiries with precision and context awareness.
 
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
+
+Morgana kindly assists you with her magical AI potions just the way you **need**, just the way you **want**. Just enter **Cauldron**...
 
 ## Core Philosophy
 
