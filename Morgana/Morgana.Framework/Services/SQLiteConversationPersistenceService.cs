@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Interfaces;
-using Newtonsoft.Json.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
 using static Morgana.Framework.Records;
@@ -292,7 +291,7 @@ SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIM
             if (!File.Exists(sqliteDbPath))
             {
                 logger.LogInformation($"SQLite database for conversation {conversationId} not found, returning empty history");
-                return Array.Empty<MorganaChatMessage>();
+                return [];
             }
 
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
@@ -334,13 +333,13 @@ SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date A
                 }
 
                 // Deserialize messages to ChatMessage array
-                ChatMessage[]? messages = JsonSerializer.Deserialize<ChatMessage[]>(
+                ChatMessage[]? chatMessages = JsonSerializer.Deserialize<ChatMessage[]>(
                     messagesElement.GetRawText(),
                     jsonSerializerOptions) ?? throw new InvalidOperationException(
                         $"Failed to deserialize Messages for agent {agentName} in conversation {conversationId}");
 
                 // Add all messages with agent metadata
-                foreach (ChatMessage message in messages)
+                foreach (ChatMessage message in chatMessages)
                     allMessages.Add((agentName, agentCompleted, message));
             }
 
@@ -481,7 +480,7 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
         // =============================================================================
         // PASS 1: Extract quick replies from SetQuickReplies function calls
         // =============================================================================
-        var quickRepliesByCallId = allMessages
+        Dictionary<string, List<QuickReply>> quickRepliesByCallId = allMessages
             .Where(m => m.message.Role == ChatRole.Assistant)
             .SelectMany(m => m.message.Contents?
                 .OfType<FunctionCallContent>()
@@ -502,14 +501,14 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
         List<MorganaChatMessage> result = [];
         string? pendingQuickRepliesCallId = null;
 
-        foreach ((string agentName, bool agentCompleted, ChatMessage message) in allMessages)
+        foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in allMessages)
         {
             // Skip tool messages
-            if (message.Role == ChatRole.Tool)
+            if (chatMessage.Role == ChatRole.Tool)
                 continue;
 
             // Check for SetQuickReplies function call
-            FunctionCallContent? setQuickRepliesCall = message.Contents?
+            FunctionCallContent? setQuickRepliesCall = chatMessage.Contents?
                 .OfType<FunctionCallContent>()
                 .FirstOrDefault(fc => fc.Name == "SetQuickReplies");
 
@@ -520,20 +519,20 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
             }
 
             // Process messages with text content
-            string messageText = ExtractTextFromMessage(message);
+            string messageText = ExtractTextFromMessage(chatMessage);
             if (string.IsNullOrWhiteSpace(messageText))
                 continue;
 
             // Attach quick replies to assistant message following SetQuickReplies
             List<QuickReply>? quickReplies = null;
-            if (pendingQuickRepliesCallId != null && 
-                message.Role == ChatRole.Assistant &&
-                quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
+            if (pendingQuickRepliesCallId != null
+                 && chatMessage.Role == ChatRole.Assistant
+                 && quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
             {
                 pendingQuickRepliesCallId = null;
             }
 
-            result.Add(MapToMorganaChatMessage(conversationId, agentName, agentCompleted, message, quickReplies));
+            result.Add(MapToMorganaChatMessage(conversationId, agentName, agentCompleted, chatMessage, quickReplies));
         }
 
         logger.LogInformation(
@@ -547,7 +546,7 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
     /// Returns null if parsing fails (graceful degradation).
     /// </summary>
     private List<QuickReply>? TryParseQuickRepliesFromDictionary(
-        IDictionary<string, object?>? arguments, 
+        IDictionary<string, object?>? arguments,
         JsonSerializerOptions jsonSerializerOptions)
     {
         if (arguments == null || !arguments.TryGetValue("quickReplies", out object? quickRepliesValue))
@@ -564,9 +563,9 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
             };
 
             List<QuickReply>? quickReplies = JsonSerializer.Deserialize<List<QuickReply>>(
-                quickRepliesString, 
+                quickRepliesString,
                 jsonSerializerOptions);
-        
+
             return quickReplies?.Count > 0 ? quickReplies : null;
         }
         catch (Exception ex)
@@ -579,12 +578,12 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
     /// <summary>
     /// Extracts and concatenates all TextContent blocks from a ChatMessage.
     /// </summary>
-    private string ExtractTextFromMessage(ChatMessage message)
+    private string ExtractTextFromMessage(ChatMessage chatMessage)
     {
-        if (message.Contents == null || message.Contents.Count == 0)
+        if (chatMessage.Contents == null || chatMessage.Contents.Count == 0)
             return string.Empty;
 
-        return string.Join(" ", message.Contents
+        return string.Join(" ", chatMessage.Contents
             .OfType<TextContent>()
             .Where(tc => !string.IsNullOrEmpty(tc.Text))
             .Select(tc => tc.Text!.Trim()));
@@ -603,12 +602,12 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
         string messageText = ExtractTextFromMessage(chatMessage);
 
         // Determine message type from role
-        MessageType messageType = chatMessage.Role == ChatRole.User 
-            ? MessageType.User 
+        MessageType messageType = chatMessage.Role == ChatRole.User
+            ? MessageType.User
             : MessageType.Assistant;
 
         // Format agent name for UI
-        string displayAgentName = chatMessage.Role == ChatRole.User 
+        string displayAgentName = chatMessage.Role == ChatRole.User
             ? "User"
             : string.IsNullOrEmpty(agentName) || agentName.Equals("morgana", StringComparison.OrdinalIgnoreCase)
                 ? "Morgana"
