@@ -331,7 +331,7 @@ public class ConversationSupervisorActor : MorganaActor
                             TimeSpan.FromSeconds(60))
                         .PipeTo(
                             Self,
-                            success: response => new Records.FollowUpContext(response, wrapper.Context.OriginalSender),
+                            success: response => new Records.FollowUpContext(response, wrapper.Context.OriginalSender, wrapper.Context.OriginalMessage.Timestamp),
                             failure: ex => new Status.Failure(ex));
 
                 Become(() => AwaitingFollowUpResponse(wrapper.Context.OriginalSender));
@@ -472,7 +472,8 @@ public class ConversationSupervisorActor : MorganaActor
                             wrapper.Context.Classification?.Metadata,
                             agentName,
                             activeAgentResponse.IsCompleted,
-                            activeAgentResponse.QuickReplies));
+                            activeAgentResponse.QuickReplies,
+                            wrapper.Context.OriginalMessage.Timestamp));
 
                         break;
                     }
@@ -501,7 +502,8 @@ public class ConversationSupervisorActor : MorganaActor
                             wrapper.Context.Classification?.Metadata,
                             agentName,
                             routerFallbackResponse.IsCompleted,
-                            routerFallbackResponse.QuickReplies));
+                            routerFallbackResponse.QuickReplies,
+                            wrapper.Context.OriginalMessage.Timestamp));
 
                         break;
                     }
@@ -571,7 +573,8 @@ public class ConversationSupervisorActor : MorganaActor
                 null,
                 agentName,
                 wrapper.Response.IsCompleted,
-                wrapper.Response.QuickReplies));
+                wrapper.Response.QuickReplies,
+                wrapper.OriginalMessageTimestamp));
 
             Become(Idle);
         });

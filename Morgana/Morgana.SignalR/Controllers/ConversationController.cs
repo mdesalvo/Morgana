@@ -57,20 +57,23 @@ public class ConversationController : ControllerBase
     /// </summary>
     /// <param name="request">Request containing the conversation ID to start</param>
     /// <returns>
-    /// 200 OK with conversation details on success.
+    /// 202 Accepted with conversation details immediately.
     /// 500 Internal Server Error on failure.
     /// </returns>
     /// <remarks>
     /// <para>This endpoint:</para>
     /// <list type="number">
     /// <item>Creates or retrieves the ConversationManagerActor for the given conversation ID</item>
-    /// <item>Sends a CreateConversation message to the manager (which creates the supervisor)</item>
-    /// <item>Waits for confirmation that the conversation was created</item>
+    /// <item>Sends CreateConversation message via Tell (fire-and-forget, no temporary actors)</item>
+    /// <item>Returns immediately - the manager creates supervisor asynchronously</item>
     /// <item>The supervisor automatically generates and sends a presentation message via SignalR</item>
     /// </list>
     /// <para><strong>Client Flow:</strong> Call this endpoint, then listen on SignalR for the presentation message.</para>
+    /// <para><strong>Note:</strong> HTTP 202 Accepted indicates the conversation creation was queued. 
+    /// The actual creation happens asynchronously. The client should wait for the presentation message via SignalR 
+    /// to confirm the conversation is ready.</para>
     /// </remarks>
-    /// <response code="200">Conversation started successfully</response>
+    /// <response code="202">Conversation creation queued successfully</response>
     /// <response code="500">Internal error occurred</response>
     [HttpPost("start")]
     public async Task<IActionResult> StartConversation([FromBody] Records.StartConversationRequest request)
@@ -82,15 +85,14 @@ public class ConversationController : ControllerBase
             IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>(
                 "manager", request.ConversationId);
 
-            Records.ConversationCreated? conversationCreated = await manager.Ask<Records.ConversationCreated>(
-                new Records.CreateConversation(request.ConversationId, false), TimeSpan.FromSeconds(60));
+            manager.Tell(new Records.CreateConversation(request.ConversationId, false));
 
-            logger.LogInformation($"Started conversation {conversationCreated.ConversationId}");
+            logger.LogInformation($"Conversation creation queued: {request.ConversationId}");
 
-            return Ok(new
+            return Accepted(new
             {
-                conversationId = conversationCreated.ConversationId,
-                message = "Conversation started successfully"
+                conversationId = request.ConversationId,
+                message = "Conversation creation started"
             });
         }
         catch (Exception ex)
@@ -147,10 +149,23 @@ public class ConversationController : ControllerBase
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to resume</param>
     /// <returns>
-    /// 200 OK with conversation details and restored active agent on success.<br/>
-    /// 404 Not Found if conversation doesn't exist.<br/>
+    /// 202 Accepted with conversation details and restored active agent immediately.<br/>
     /// 500 Internal Server Error on failure.
     /// </returns>
+    /// <remarks>
+    /// <para>This endpoint:</para>
+    /// <list type="number">
+    /// <item>Creates or retrieves the ConversationManagerActor and supervisor</item>
+    /// <item>Sends CreateConversation message via Tell (fire-and-forget, no temporary actors)</item>
+    /// <item>Retrieves last active agent from database</item>
+    /// <item>Sends RestoreActiveAgent message to supervisor via Tell</item>
+    /// <item>Returns immediately - restoration happens asynchronously</item>
+    /// </list>
+    /// <para><strong>Client Flow:</strong> After calling this endpoint, the client should fetch conversation history 
+    /// via GET /api/conversation/{id}/history to populate the UI.</para>
+    /// </remarks>
+    /// <response code="202">Conversation resume queued successfully</response>
+    /// <response code="500">Internal error occurred</response>
     [HttpPost("{conversationId}/resume")]
     public async Task<IActionResult> ResumeConversation(string conversationId)
     {
@@ -158,30 +173,26 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Resuming conversation {conversationId}");
 
-            // Create/get manager and supervisor
             IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>(
                 "manager", conversationId);
 
-            Records.ConversationCreated? conversationCreated = await manager.Ask<Records.ConversationCreated>(
-                new Records.CreateConversation(conversationId, true), TimeSpan.FromSeconds(60));
-
-            // Restore active agent state in supervisor
-            IActorRef supervisor = await actorSystem.GetOrCreateActor<ConversationSupervisorActor>(
-                "supervisor", conversationId);
+            manager.Tell(new Records.CreateConversation(conversationId, true));
 
             // Get most recent active agent from database
             string? lastActiveAgent = await conversationPersistenceService
                 .GetMostRecentActiveAgentAsync(conversationId);
 
-            // Tell supervisor to recontextualize on it
+            // Tell supervisor to restore active agent
+            IActorRef supervisor = await actorSystem.GetOrCreateActor<ConversationSupervisorActor>(
+                "supervisor", conversationId);
             supervisor.Tell(new Records.RestoreActiveAgent(lastActiveAgent ?? "Morgana"));
 
             logger.LogInformation(
-                $"Resumed conversation {conversationCreated.ConversationId} with active agent: {lastActiveAgent}");
+                $"Conversation resume queued: {conversationId} with active agent: {lastActiveAgent}");
 
-            return Ok(new
+            return Accepted(new
             {
-                conversationId = conversationCreated.ConversationId,
+                conversationId = conversationId,
                 resumed = true,
                 activeAgent = lastActiveAgent
             });
@@ -312,24 +323,14 @@ public class ConversationController : ControllerBase
     /// <returns>
     /// 200 OK with health status information.
     /// </returns>
-    /// <remarks>
-    /// <para>Returns:</para>
-    /// <list type="bullet">
-    /// <item><term>status</term><description>Always "healthy" if endpoint responds</description></item>
-    /// <item><term>timestamp</term><description>Current UTC timestamp</description></item>
-    /// <item><term>actorSystem</term><description>"running" or "terminated" based on actor system state</description></item>
-    /// </list>
-    /// <para>Useful for load balancers, monitoring systems, and diagnostics.</para>
-    /// </remarks>
-    /// <response code="200">Service is healthy and responding</response>
     [HttpGet("health")]
     public IActionResult Health()
     {
         return Ok(new
         {
             status = "healthy",
-            timestamp = DateTime.UtcNow,
-            actorSystem = actorSystem.WhenTerminated.IsCompleted ? "terminated" : "running"
+            actorSystem = actorSystem.Name,
+            uptime = actorSystem.Uptime
         });
     }
 }

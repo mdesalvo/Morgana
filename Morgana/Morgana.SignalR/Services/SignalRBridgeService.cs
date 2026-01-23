@@ -68,6 +68,7 @@ public class SignalRBridgeService : ISignalRBridgeService
     /// <param name="errorReason">Optional error reason code for error messages</param>
     /// <param name="agentName">Optional name of the agent that generated the response</param>
     /// <param name="agentCompleted">Flag indicating if the agent has completed its task</param>
+    /// <param name="originalTimestamp">Timestamp of the message when create at UI level</param>
     /// <returns>Task representing the async send operation</returns>
     /// <remarks>
     /// <para><strong>Message Structure:</strong></para>
@@ -109,7 +110,8 @@ public class SignalRBridgeService : ISignalRBridgeService
         List<QuickReply>? quickReplies = null,
         string? errorReason = null,
         string? agentName = null,
-        bool agentCompleted = false)
+        bool agentCompleted = false,
+        DateTime? originalTimestamp = null)
     {
         logger.LogInformation($"Sending {messageType} message to conversation {conversationId} via SignalR (agent: {agentName ?? "Morgana"}, completed: {agentCompleted})");
 
@@ -118,7 +120,7 @@ public class SignalRBridgeService : ISignalRBridgeService
         {
             ConversationId = conversationId,
             Text = text,
-            Timestamp = DateTime.UtcNow,
+            Timestamp = originalTimestamp ?? DateTime.UtcNow,
             MessageType = messageType,
             QuickReplies = quickReplies,
             ErrorReason = errorReason,

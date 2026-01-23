@@ -166,7 +166,8 @@ public class ConversationManagerActor : MorganaActor
                 ctx.Response.QuickReplies,
                 null,
                 ctx.Response.AgentName,
-                ctx.Response.AgentCompleted);
+                ctx.Response.AgentCompleted,
+                ctx.Response.OriginalTimestamp);
 
             actorLogger.Info($"Response sent successfully to client via SignalR (#quickReplies: {ctx.Response.QuickReplies?.Count ?? 0})");
         }

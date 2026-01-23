@@ -54,6 +54,7 @@ public interface ISignalRBridgeService
     /// <param name="errorReason">Optional error reason code for error messages (e.g., "llm_error", "supervisor_error")</param>
     /// <param name="agentName">Optional name of the agent that generated the response (e.g., "Morgana", "Morgana (Billing)")</param>
     /// <param name="agentCompleted">Flag indicating if the agent has completed its task (affects UI state, conversation flow)</param>
+    /// <param name="originalTimestamp">Timestamp of the message when created in UI</param>
     /// <returns>Task representing the async send operation</returns>
     /// <remarks>
     /// <para><strong>Message Types:</strong></para>
@@ -71,6 +72,7 @@ public interface ISignalRBridgeService
     /// <item><term>agentName</term><description>Displayed in UI to show which specialized agent is responding</description></item>
     /// <item><term>agentCompleted</term><description>When true, signals the client that the multi-turn interaction is complete
     /// and the conversation returns to idle state (affects UI indicators, enables new intent classification)</description></item>
+    /// <item><term>originalTimestamp</term><description>Timestamp of the message when created in UI</description></item>
     /// </list>
     /// <para><strong>Example Usage:</strong></para>
     /// <code>
@@ -81,7 +83,8 @@ public interface ISignalRBridgeService
     ///     messageType: "presentation",
     ///     quickReplies: [new QuickReply("billing", "📄 View Invoices", "Show my invoices")],
     ///     agentName: "Morgana",
-    ///     agentCompleted: false
+    ///     agentCompleted: false,
+    ///     originalTimestamp: "2026-01-23T12:15:00Z"
     /// );
     ///
     /// // Send agent response with completion
@@ -91,7 +94,8 @@ public interface ISignalRBridgeService
     ///     messageType: "assistant",
     ///     quickReplies: null,
     ///     agentName: "Morgana (Billing)",
-    ///     agentCompleted: true  // Billing agent finished, return to idle
+    ///     agentCompleted: true,  // Billing agent finished, return to idle
+    ///     originalTimestamp: "2026-01-23T12:15:00Z"
     /// );
     /// </code>
     /// </remarks>
@@ -102,5 +106,6 @@ public interface ISignalRBridgeService
         List<Records.QuickReply>? quickReplies = null,
         string? errorReason = null,
         string? agentName = null,
-        bool agentCompleted = false);
+        bool agentCompleted = false,
+        DateTime? originalTimestamp = null);
 }

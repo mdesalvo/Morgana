@@ -40,13 +40,15 @@ public static class Records
     /// <param name="AgentName">Name of the agent that generated the response (e.g., "Morgana", "Morgana (Billing)")</param>
     /// <param name="AgentCompleted">Flag indicating if the agent completed its multi-turn interaction</param>
     /// <param name="QuickReplies">Optional list of quick reply buttons for guided user interactions</param>
+    /// <param name="OriginalTimestamp">Optional timestamp of the message when created at UI level</param>
     public record ConversationResponse(
         string Response,
         string? Classification,
         Dictionary<string, string>? Metadata,
         string? AgentName = null,
         bool AgentCompleted = false,
-        List<QuickReply>? QuickReplies = null);
+        List<QuickReply>? QuickReplies = null,
+        DateTime? OriginalTimestamp = null);
 
     /// <summary>
     /// Request to create a new conversation and initialize the actor hierarchy.
@@ -552,7 +554,8 @@ public static class Records
     /// <param name="OriginalSender">Actor reference to reply to</param>
     public record FollowUpContext(
         AgentResponse Response,
-        IActorRef OriginalSender);
+        IActorRef OriginalSender,
+        DateTime OriginalMessageTimestamp);
 
     /// <summary>
     /// Context wrapper for ConversationSupervisorActor response via PipeTo.
