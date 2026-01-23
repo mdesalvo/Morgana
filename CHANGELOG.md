@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced `MorganaAIContextProvider` to handle context data as **thread-safe** and **immutable** collections 
 
 ### 🐛 Fixed
+- User messages were sent to the agent's thread without timestamp
 
 ### 🚀 Future Enablement
 This release unlocks:
