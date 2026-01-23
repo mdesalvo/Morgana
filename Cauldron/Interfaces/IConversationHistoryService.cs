@@ -1,7 +1,3 @@
-// =============================================================================
-// NUOVO FILE: Cauldron/Interfaces/IConversationHistoryService.cs
-// =============================================================================
-
 using Cauldron.Messages;
 
 namespace Cauldron.Interfaces;

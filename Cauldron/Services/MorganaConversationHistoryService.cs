@@ -1,10 +1,5 @@
-// =============================================================================
-// NUOVO FILE: Cauldron/Services/ConversationHistoryService.cs
-// =============================================================================
-
 using Cauldron.Interfaces;
 using Cauldron.Messages;
-using System.Net.Http.Json;
 
 namespace Cauldron.Services;
 
@@ -24,19 +19,19 @@ namespace Cauldron.Services;
 /// <item>Network Error → Returns null (connection failure)</item>
 /// </list>
 /// </remarks>
-public class ConversationHistoryService : IConversationHistoryService
+public class MorganaConversationHistoryService : IConversationHistoryService
 {
     private readonly HttpClient _httpClient;
-    private readonly ILogger<ConversationHistoryService> _logger;
+    private readonly ILogger<MorganaConversationHistoryService> _logger;
 
     /// <summary>
     /// Initializes a new instance of the ConversationHistoryService.
     /// </summary>
     /// <param name="httpClient">HTTP client for API calls (injected by DI)</param>
     /// <param name="logger">Logger instance for diagnostics</param>
-    public ConversationHistoryService(
+    public MorganaConversationHistoryService(
         HttpClient httpClient,
-        ILogger<ConversationHistoryService> logger)
+        ILogger<MorganaConversationHistoryService> logger)
     {
         _httpClient = httpClient;
         _logger = logger;
