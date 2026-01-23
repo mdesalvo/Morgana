@@ -344,9 +344,13 @@ SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date A
             }
 
             // Delegate filtering and processing to specialized method
-            // (ensure to present messages in theit effective temporal order,
-            //  since they comes from database in agent's appearance order)
-            return ProcessMessagesForHistory(conversationId, [.. allMessages.OrderBy(m => m.message.CreatedAt?.UtcDateTime ?? DateTime.UtcNow) ], jsonSerializerOptions);
+            // (ensure to present messages in their effective temporal order,
+            //  since they comes from database in agent's appearance order;
+            //  also ensure to filter out tool messages)
+            return ProcessMessagesForHistory(conversationId,
+                allMessages.Where(m => m.message.Role != ChatRole.Tool)
+                           .OrderBy(m => m.message.CreatedAt?.UtcDateTime ?? DateTime.UtcNow)
+                           .ToList(), jsonSerializerOptions);
         }
         catch (Exception ex)
         {
