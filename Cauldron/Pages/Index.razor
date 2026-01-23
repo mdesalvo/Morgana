@@ -266,10 +266,7 @@
             Console.WriteLine($"🔵 SignalR connected: {isConnected}");
 
             // Subscribe to message received events
-            SignalRService.OnMessageReceived += async (conversationId, text, timestamp, quickReplies, agentName, agentCompleted) =>
-            {
-                await HandleMessageReceivedAsync(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
-            };
+            SignalRService.OnMessageReceived += HandleMessageReceivedAsync;
 
             // Subscribe to connection state changes
             SignalRService.OnConnectionStateChanged += (connected) =>
@@ -673,33 +670,28 @@
     }
 
     /// <summary>
-    /// Handles incoming messages from SignalR (agent responses, presentation messages).
-    /// Removes typing indicator, adds agent message to UI, and updates header with current agent.
+    /// Handles incoming messages from SignalR with strongly-typed DTO.
+    /// Removes typing indicator, updates agent state, and adds message to UI.
     /// </summary>
-    /// <param name="conversationId">Conversation ID of the message</param>
-    /// <param name="text">Message text from agent</param>
-    /// <param name="timestamp">Message timestamp</param>
-    /// <param name="quickReplies">Optional list of quick reply buttons</param>
-    /// <param name="agentName">Name of the responding agent</param>
-    /// <param name="agentCompleted">True if agent has completed its task</param>
+    /// <param name="signalrMessage">Strongly-typed SignalR message DTO containing all message data</param>
     /// <returns>Task representing the async message handling</returns>
     /// <remarks>
     /// <para><strong>Agent Lifecycle:</strong></para>
     /// <list type="bullet">
-    /// <item><term>Agent Active</term><description>agentCompleted = false, header shows agent name with specialized color</description></item>
-    /// <item><term>Agent Completed</term><description>agentCompleted = true, header returns to "Morgana" with base color, completion message added</description></item>
+    /// <item><term>Agent Active</term><description>message.AgentCompleted = false, header shows agent name</description></item>
+    /// <item><term>Agent Completed</term><description>message.AgentCompleted = true, header returns to "Morgana"</description></item>
     /// </list>
     /// </remarks>
-    private async Task HandleMessageReceivedAsync(string conversationId, string text, DateTime timestamp, List<QuickReply>? quickReplies, string? agentName, bool agentCompleted)
+    private async Task HandleMessageReceivedAsync(SignalRMessage signalrMessage)
     {
         try
         {
-            Console.WriteLine($"🟣 Message received for conversation: {conversationId}");
-            Console.WriteLine($"🟣 Agent: {agentName ?? "Morgana"}, Completed: {agentCompleted}");
-            Console.WriteLine($"🟣 QuickReplies count: {quickReplies?.Count ?? 0}");
+            Console.WriteLine($"🟣 Message received for conversation: {signalrMessage.ConversationId}");
+            Console.WriteLine($"🟣 Agent: {signalrMessage.AgentName}, Completed: {signalrMessage.AgentCompleted}");
+            Console.WriteLine($"🟣 QuickReplies count: {signalrMessage.QuickReplies?.Count ?? 0}");
 
             // Verify message is for this conversation
-            if (this.conversationId != conversationId)
+            if (conversationId != signalrMessage.ConversationId)
             {
                 Console.WriteLine("⚠️ Message for different conversation, ignoring");
                 return;
@@ -708,19 +700,17 @@
             // Remove typing indicator
             ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
             if (typingMessage != null)
-            {
                 chatMessages.Remove(typingMessage);
-            }
 
             // Update header with current agent name
-            if (!string.IsNullOrEmpty(agentName))
+            if (!string.IsNullOrEmpty(signalrMessage.AgentName))
             {
-                currentAgentName = agentName;
+                currentAgentName = signalrMessage.AgentName;
                 Console.WriteLine($"🎨 Header updated: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
             }
 
             // If agent has completed, return header to Morgana
-            if (agentCompleted)
+            if (signalrMessage.AgentCompleted)
             {
                 currentAgentName = "Morgana";
                 Console.WriteLine($"🎨 Header reset to: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
@@ -729,26 +719,26 @@
             // Add main agent message
             chatMessages.Add(new ChatMessage
             {
-                ConversationId = conversationId,
-                Text = text,
+                ConversationId = signalrMessage.ConversationId,
+                Text = signalrMessage.Text,
                 Role = "assistant",
-                Timestamp = timestamp,
-                QuickReplies = quickReplies,
-                AgentName = agentName ?? "Morgana",
+                Timestamp = signalrMessage.Timestamp,
+                QuickReplies = signalrMessage.QuickReplies,
+                AgentName = signalrMessage.AgentName ?? "Morgana",
                 AgentCompleted = false
             });
 
             // If agent completed and is specialized, add completion message from Morgana
-            if (agentCompleted && IsSpecializedAgent(agentName))
+            if (signalrMessage.AgentCompleted && IsSpecializedAgent(signalrMessage.AgentName))
             {
                 chatMessages.Add(new ChatMessage
                 {
-                    ConversationId = conversationId,
-                    Text = GetCompletionMessage(agentName!),
+                    ConversationId = signalrMessage.ConversationId,
+                    Text = GetCompletionMessage(signalrMessage.AgentName!),
                     Role = "assistant",
-                    Timestamp = timestamp.AddSeconds(1),
+                    Timestamp = signalrMessage.Timestamp.AddMilliseconds(10),
                     AgentName = "Morgana",
-                    AgentCompleted = false,
+                    AgentCompleted = true,
                     Type = MessageType.Presentation
                 });
             }
@@ -889,10 +879,7 @@
     public async ValueTask DisposeAsync()
     {
         // Unsubscribe from events
-        SignalRService.OnMessageReceived -= async (conversationId, text, timestamp, quickReplies, agentName, agentCompleted) =>
-        {
-            await HandleMessageReceivedAsync(conversationId, text, timestamp, quickReplies, agentName, agentCompleted);
-        };
+        SignalRService.OnMessageReceived -= HandleMessageReceivedAsync;
         
         // Stop SignalR connection
         await SignalRService.StopAsync();
