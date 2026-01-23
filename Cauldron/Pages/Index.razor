@@ -838,9 +838,9 @@
     // =========================================================================
 
     /// <summary>
-    /// Checks if there are any unselected quick replies in the message list.
+    /// Checks if there are any unselected quick replies in the tail of message list.
     /// </summary>
-    /// <returns>True if any message has quick replies that haven't been selected yet</returns>
+    /// <returns>True if any message has ending quick replies that haven't been selected yet</returns>
     private bool HasActiveQuickReplies() =>
         chatMessages.Any(m => m is { QuickReplies: not null, SelectedQuickReplyId: null, IsLastHistoryMessage: true });
 
