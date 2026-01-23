@@ -500,9 +500,16 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
         // =============================================================================
         List<MorganaChatMessage> result = [];
         string? pendingQuickRepliesCallId = null;
+        int msgIndex = 0;
+        bool isLastHistoryMessage = false;
 
         foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in allMessages)
         {
+            // Determine if the current message is the last one
+            msgIndex++;
+            if (msgIndex == allMessages.Count)
+                isLastHistoryMessage = true;
+
             // Skip tool messages
             if (chatMessage.Role == ChatRole.Tool)
                 continue;
@@ -532,7 +539,7 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
                 pendingQuickRepliesCallId = null;
             }
 
-            result.Add(MapToMorganaChatMessage(conversationId, agentName, agentCompleted, chatMessage, quickReplies));
+            result.Add(MapToMorganaChatMessage(conversationId, agentName, agentCompleted, chatMessage, isLastHistoryMessage, quickReplies));
         }
 
         logger.LogInformation(
@@ -597,6 +604,7 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
         string agentName,
         bool agentCompleted,
         ChatMessage chatMessage,
+        bool isLastHistoryMessage,
         List<QuickReply>? quickReplies = null)
     {
         string messageText = ExtractTextFromMessage(chatMessage);
@@ -621,7 +629,8 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
             Type = messageType,
             AgentName = displayAgentName,
             AgentCompleted = agentCompleted,
-            QuickReplies = quickReplies
+            QuickReplies = quickReplies,
+            IsLastHistoryMessage = isLastHistoryMessage
         };
     }
 

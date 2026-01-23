@@ -40,7 +40,7 @@
 
     <!-- Messages Area -->
     <div class="messages-container">
-        @if (messages.Count == 0)
+        @if (chatMessages.Count == 0)
         {
             <!-- Loading state with magical animation -->
             <!-- Loader visible until first message arrives from backend (presentation or conversation history) -->
@@ -71,44 +71,44 @@
         else
         {
             <!-- Message list -->
-            @foreach (ChatMessage message in messages)
+            @foreach (ChatMessage chatMessage in chatMessages)
             {
-                <div class="message @message.Role">
-                    @if (message.Role == "assistant")
+                <div class="message @chatMessage.Role">
+                    @if (chatMessage.Role == "assistant")
                     {
                         <!-- Agent avatar with dynamic border color -->
                         <img src="images/morgana-avatar.png" 
-                             alt="@message.AgentName" 
+                             alt="@chatMessage.AgentName" 
                              class="message-avatar"
-                             style="border: 2px solid @GetAvatarBorderColor(message.AgentName);" />
+                             style="border: 2px solid @GetAvatarBorderColor(chatMessage.AgentName);" />
                     }
                     <div class="message-bubble">
-                        @if (message.IsTyping)
+                        @if (chatMessage.IsTyping)
                         {
                             <!-- Typing indicator (three animated dots) -->
                             <div class="typing-indicator">
-                                <span style="background: @GetAvatarBorderColor(message.AgentName);"></span>
-                                <span style="background: @GetAvatarBorderColor(message.AgentName);"></span>
-                                <span style="background: @GetAvatarBorderColor(message.AgentName);"></span>
+                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
+                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
+                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
                             </div>
                         }
                         else
                         {
                             <!-- Message content -->
-                            <div class="message-text @(message.Type == MessageType.Presentation ? "completion-text" : "")">
-                                @message.Text
+                            <div class="message-text @(chatMessage.Type == MessageType.Presentation ? "completion-text" : "")">
+                                @chatMessage.Text
                             </div>
 
-                            @if (message.QuickReplies is { Count: > 0 })
+                            @if (chatMessage.QuickReplies is { Count: > 0 })
                             {
-                                <QuickReplyButton Replies="@message.QuickReplies"
-                                                  OnSelect="@((reply) => SelectQuickReplyAsync(reply, message))"
-                                                  IsDisabled="@(message.SelectedQuickReplyId != null)"
-                                                  SelectedReplyId="@message.SelectedQuickReplyId" />
+                                <QuickReplyButton Replies="@chatMessage.QuickReplies"
+                                                  OnSelect="@((reply) => SelectQuickReplyAsync(reply, chatMessage))"
+                                                  IsDisabled="@(chatMessage.SelectedQuickReplyId != null || chatMessage.IsLastHistoryMessage == false)"
+                                                  SelectedReplyId="@chatMessage.SelectedQuickReplyId" />
                             }
 
                             <!-- Message timestamp -->
-                            <div class="message-time">@message.Timestamp.ToString("HH:mm")</div>
+                            <div class="message-time">@chatMessage.Timestamp.ToString("HH:mm")</div>
                         }
                     </div>
                 </div>
@@ -182,7 +182,7 @@
     /// List of all chat messages in the current conversation.
     /// Includes user messages, agent responses, typing indicators, and presentation messages.
     /// </summary>
-    private List<ChatMessage> messages = [];
+    private List<ChatMessage> chatMessages = [];
 
     /// <summary>
     /// Current text input from the user (two-way bound to textarea).
@@ -391,30 +391,41 @@
                         Console.WriteLine($"🟡 Retrieved {history.Messages.Length} messages from history");
 
                         foreach (ChatMessage morganaChatMessage in history.Messages)
-                            messages.Add(morganaChatMessage);
+                            chatMessages.Add(morganaChatMessage);
 
                         Console.WriteLine($"🟡 Conversation history loaded successfully");
                     }
                     else
                     {
                         Console.WriteLine($"⚠️ No history found for conversation {conversationId}");
+
+                        // Add a system message to force UI resume
+                        chatMessages.Add(new ChatMessage
+                        {
+                            ConversationId = conversationId,
+                            Text = LandingMessageService.GetRandomResumingMessage(),
+                            Role = "assistant",
+                            Timestamp = DateTime.UtcNow,
+                            AgentName = currentAgentName,
+                            Type = MessageType.Assistant
+                        });
                     }
                 }
                 catch (Exception historyEx)
                 {
                     Console.WriteLine($"⚠️ Failed to load history: {historyEx.Message}");
-                }
 
-                // Add a system message to resume the conversation
-                messages.Add(new ChatMessage
-                {
-                    ConversationId = conversationId,
-                    Text = LandingMessageService.GetRandomResumingMessage(),
-                    Role = "assistant",
-                    Timestamp = DateTime.UtcNow,
-                    AgentName = currentAgentName,
-                    Type = MessageType.Assistant
-                });
+                    // Add a system message to force UI resume
+                    chatMessages.Add(new ChatMessage
+                    {
+                        ConversationId = conversationId,
+                        Text = LandingMessageService.GetRandomResumingMessage(),
+                        Role = "assistant",
+                        Timestamp = DateTime.UtcNow,
+                        AgentName = currentAgentName,
+                        Type = MessageType.Assistant
+                    });
+                }
 
                 await InvokeAsync(StateHasChanged);
 
@@ -573,7 +584,7 @@
         isSending = true;
 
         // Add user message to UI
-        messages.Add(new ChatMessage
+        chatMessages.Add(new ChatMessage
         {
             ConversationId = conversationId,
             Text = messageText,
@@ -582,7 +593,7 @@
         });
 
         // Add typing indicator
-        messages.Add(new ChatMessage
+        chatMessages.Add(new ChatMessage
         {
             ConversationId = conversationId,
             Role = "assistant",
@@ -610,11 +621,11 @@
                 Console.WriteLine($"❌ Morgana error: {errorContent}");
 
                 // Remove typing indicator and show error
-                ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
+                ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
                 if (typingMessage != null)
                 {
-                    messages.Remove(typingMessage);
-                    messages.Add(new ChatMessage
+                    chatMessages.Remove(typingMessage);
+                    chatMessages.Add(new ChatMessage
                     {
                         ConversationId = conversationId,
                         Text = "Sorry, an error occurred. Please try again.",
@@ -635,11 +646,11 @@
             Console.WriteLine($"❌ SendMessage exception: {ex.Message}");
 
             // Remove typing indicator and show error
-            ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
+            ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
             if (typingMessage != null)
             {
-                messages.Remove(typingMessage);
-                messages.Add(new ChatMessage
+                chatMessages.Remove(typingMessage);
+                chatMessages.Add(new ChatMessage
                 {
                     ConversationId = conversationId,
                     Text = $"Connection error: {ex.Message}",
@@ -695,10 +706,10 @@
             }
 
             // Remove typing indicator
-            ChatMessage? typingMessage = messages.LastOrDefault(m => m.IsTyping);
+            ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
             if (typingMessage != null)
             {
-                messages.Remove(typingMessage);
+                chatMessages.Remove(typingMessage);
             }
 
             // Update header with current agent name
@@ -716,7 +727,7 @@
             }
 
             // Add main agent message
-            messages.Add(new ChatMessage
+            chatMessages.Add(new ChatMessage
             {
                 ConversationId = conversationId,
                 Text = text,
@@ -730,7 +741,7 @@
             // If agent completed and is specialized, add completion message from Morgana
             if (agentCompleted && IsSpecializedAgent(agentName))
             {
-                messages.Add(new ChatMessage
+                chatMessages.Add(new ChatMessage
                 {
                     ConversationId = conversationId,
                     Text = GetCompletionMessage(agentName!),
@@ -831,7 +842,7 @@
     /// </summary>
     /// <returns>True if any message has quick replies that haven't been selected yet</returns>
     private bool HasActiveQuickReplies() =>
-        messages.Any(m => m is { QuickReplies: not null, SelectedQuickReplyId: null });
+        chatMessages.Any(m => m is { QuickReplies: not null, SelectedQuickReplyId: null, IsLastHistoryMessage: true });
 
     /// <summary>
     /// Gets a value indicating whether the send button should be disabled.
@@ -843,7 +854,7 @@
         string.IsNullOrWhiteSpace(inputText) ||
         !isInitialized ||
         HasActiveQuickReplies() ||
-        messages.Any(m => m.IsTyping);
+        chatMessages.Any(m => m.IsTyping);
 
     /// <summary>
     /// Gets a value indicating whether the new conversation button should be visible.
@@ -853,7 +864,7 @@
          && isInitialized
          && hasCheckedStorage
          && !string.IsNullOrWhiteSpace(conversationId)
-         && messages.Count > 0;
+         && chatMessages.Count > 0;
 
     /// <summary>
     /// Gets a value indicating whether the textarea should be disabled.
@@ -864,7 +875,7 @@
         isSending ||
         !isInitialized ||
         HasActiveQuickReplies() ||
-        messages.Any(m => m.IsTyping);
+        chatMessages.Any(m => m.IsTyping);
 
     // =========================================================================
     // CLEANUP

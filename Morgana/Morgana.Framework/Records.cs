@@ -191,6 +191,11 @@ public static class Records
         /// Reconstructed from SetQuickReplies tool calls when loading conversation history.
         /// </summary>
         public List<QuickReply>? QuickReplies { get; init; }
+
+        /// <summary>
+        /// Optional flag indicating that this is the last message of a resumed conversation.
+        /// </summary>
+        public bool? IsLastHistoryMessage { get; init; }
     }
 
     /// <summary>
