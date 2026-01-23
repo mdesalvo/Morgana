@@ -388,8 +388,58 @@
                     {
                         Console.WriteLine($"🟡 Retrieved {history.Messages.Length} messages from history");
 
-                        foreach (ChatMessage morganaChatMessage in history.Messages)
-                            chatMessages.Add(morganaChatMessage);
+                        for (int i = 0; i < history.Messages.Length; i++)
+                        {
+                            #region Transient Hints
+                            if (string.Equals(history.Messages[i].Role, "user", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Detect if this user message can be classified as "agent's turn boundary":
+                                // it is preceded by "Agent X" message and followed by "Agent Y" message
+                                bool isPrecededByAssistantMessage = i > 0 && string.Equals(history.Messages[i-1].Role, "assistant", StringComparison.OrdinalIgnoreCase);
+                                bool isFollowedByAssistantMessage = i + 1 < history.Messages.Length && string.Equals(history.Messages[i+1].Role, "assistant", StringComparison.OrdinalIgnoreCase);
+                                bool isTurnBoundaryMessage = isPrecededByAssistantMessage 
+                                                              && isFollowedByAssistantMessage
+                                                              && !string.Equals(history.Messages[i-1].AgentName, history.Messages[i+1].AgentName, StringComparison.OrdinalIgnoreCase);
+                                if (isTurnBoundaryMessage)
+                                {
+                                    // Emit a transient "Agent X has completed" message, which is
+                                    // ephemeral and does not participate in the DB conversation
+                                    chatMessages.Add(new ChatMessage
+                                    {
+                                        ConversationId = history.Messages[i].ConversationId,
+                                        Text = GetCompletionMessage(history.Messages[i-1].AgentName!),
+                                        Role = "assistant",
+                                        Timestamp = history.Messages[i].Timestamp.AddMilliseconds(-5),
+                                        AgentName = "Morgana",
+                                        AgentCompleted = true,
+                                        Type = MessageType.Presentation
+                                    });
+                                }
+                            }
+                            #endregion
+
+                            chatMessages.Add(history.Messages[i]);
+                        }
+                        #region Transient Hints
+                        // Detect if the last history message can be classified as "agent's turn boundary":
+                        // it is an "Agent X" message, but Cauldron is back listening in "Morgana" mode
+                        ChatMessage lastHistoryMessage = history.Messages.Last();
+                        if (IsSpecializedAgent(lastHistoryMessage.AgentName) && !IsSpecializedAgent(currentAgentName))
+                        {
+                            // Emit a transient "Agent X has completed" message, which is
+                            // ephemeral and does not participate in the DB conversation
+                            chatMessages.Add(new ChatMessage
+                            {
+                                ConversationId = lastHistoryMessage.ConversationId,
+                                Text = GetCompletionMessage(lastHistoryMessage.AgentName!),
+                                Role = "assistant",
+                                Timestamp = lastHistoryMessage.Timestamp.AddMilliseconds(-5),
+                                AgentName = "Morgana",
+                                AgentCompleted = true,
+                                Type = MessageType.Presentation
+                            });
+                        }
+                        #endregion
 
                         Console.WriteLine($"🟡 Conversation history loaded successfully");
                     }
@@ -741,7 +791,7 @@
                     ConversationId = signalrMessage.ConversationId,
                     Text = GetCompletionMessage(signalrMessage.AgentName!),
                     Role = "assistant",
-                    Timestamp = signalrMessage.Timestamp.AddMilliseconds(10),
+                    Timestamp = signalrMessage.Timestamp.AddMilliseconds(5),
                     AgentName = "Morgana",
                     AgentCompleted = true,
                     Type = MessageType.Presentation
