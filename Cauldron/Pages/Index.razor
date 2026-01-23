@@ -446,8 +446,10 @@
                 string errorContent = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"❌ Resume error {response.StatusCode}: {errorContent}");
                 
-                // Fallback to new conversation
+                // Clear corrupted/expired storage
                 await StorageService.ClearConversationIdAsync();
+
+                // Fallback to new conversation
                 await StartConversationAsync();
             }
         }
@@ -455,8 +457,10 @@
         {
             Console.WriteLine($"❌ ResumeConversation exception: {ex.Message}");
             
-            // Fallback to new conversation on any error
+            // Clear corrupted/expired storage
             await StorageService.ClearConversationIdAsync();
+
+            // Fallback to new conversation
             await StartConversationAsync();
         }
     }
