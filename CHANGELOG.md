@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.11.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Multi-Agent Conversation History
-This release introduces **virtual conversation history reconstruction**, enabling **Cauldron** to display the **complete chronological message flow across all agents** by reconciling agent-isolated storage at startup.
+This release introduces **virtual unified conversation timeline**, enabling **Cauldron** to display the **complete chronological message flow across all agents** by reconciling agent-isolated storage at startup.
 
 ### ✨ Added
 **IConversationHistoryService**
