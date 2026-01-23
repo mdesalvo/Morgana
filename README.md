@@ -522,7 +522,7 @@ private void HandleContextUpdate(ReceiveContextUpdate msg)
 - Creates `MorganaAIContextProvider` with shared variable names
 - Registers `OnSharedContextUpdate` callback during agent creation
 
-**Router**
+**RouterActor**
 - Receives `BroadcastContextUpdate` messages from agents
 - Broadcasts `ReceiveContextUpdate` to all agents except sender
 - Logs broadcast activity for observability
@@ -636,17 +636,17 @@ SetQuickReplies([
 
 #### 2. Storage in MorganaAIContextProvider
 
-Quick replies are stored as **temporary context** using the special key `__pending_quick_replies`:
+Quick replies are stored as **temporary context** using the special key `quick_replies`:
 
 ```csharp
 // MorganaTool.SetQuickReplies()
 public Task<object> SetQuickReplies(string quickReplies)
 {
     // Validate and parse JSON
-    var parsedQuickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickRepliesJSON);
+    var parsedQuickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickReplies);
     
     // Store as temporary context (private, not shared)
-    contextProvider.SetVariable("__pending_quick_replies", quickReplies);
+    contextProvider.SetVariable("quick_replies", quickReplies);
     
     return Task.FromResult<object>(
         "Quick reply buttons set successfully. The user will see N interactive options.");
@@ -680,7 +680,7 @@ protected async Task ExecuteAgentAsync(Records.AgentRequest req)
 protected virtual List<Records.QuickReply>? GetQuickRepliesFromContext()
 {
     // Retrieve JSON from context
-    var json = contextProvider.GetVariable("__pending_quick_replies") as string;
+    var json = contextProvider.GetVariable("quick_replies") as string;
     
     if (!string.IsNullOrEmpty(json))
     {
@@ -688,7 +688,7 @@ protected virtual List<Records.QuickReply>? GetQuickRepliesFromContext()
         var quickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(json);
         
         // Clear temporary variable immediately
-        contextProvider.DropVariable("__pending_quick_replies");
+        contextProvider.DropVariable("quick_replies");
         
         return quickReplies;
     }
@@ -1263,7 +1263,7 @@ Agent → Calls get_monkey("Curious George") via MCP
       → Synthesizes natural language response
 ```
 
-### Implementation: Rock-Solid Industrial MCP
+### Implementation
 
 Morgana's MCP integration is built on **Microsoft's official ModelContextProtocol library**, ensuring industrial-grade reliability and compliance with the MCP specification.
 
@@ -1340,7 +1340,7 @@ Morgana treats MCP tools as **first-class citizens**, making external capabiliti
 ### Memory & Context Management
 - **AgentThread**: Framework-native conversation history management with automatic serialization support
 - **MorganaAIContextProvider**: Custom `AIContextProvider` implementation for stateful context management with temporary variable support
-- **MorganaStoreProvider**: Wrapper around Microsoft's `InMemoryChatMessageStore` providing Morgana-specific observability and serialization
+- **MorganaChatMessageStoreProvider**: Wrapper around Microsoft's `InMemoryChatMessageStore` providing Morgana-specific observability and serialization
 - **P2P Context Sync**: Actor-based broadcast mechanism for shared context variables
 - **Quick Replies Storage**: Temporary context variables for LLM-generated interactive buttons
 - **Conversation Persistence**: 💾 Encrypted SQLite databases storing full conversation state (messages + context) with AES-256-CBC encryption
@@ -1444,12 +1444,13 @@ PostgreSqlConversationPersistenceService, SqlServerConversationPersistenceServic
 **Database Schema:**
 ```sql
 CREATE TABLE morgana (
-    agent_identifier TEXT PRIMARY KEY,    -- "billing-conv12345"
+    agent_identifier TEXT PRIMARY KEY,     -- "billing-conv12345"
     agent_name TEXT UNIQUE,                -- "billing"
     conversation_id TEXT,                  -- "conv12345"
     agent_thread BLOB,                     -- Encrypted AgentThread (messages + context)
     creation_date TEXT,                    -- ISO 8601 timestamp (immutable)
-    last_update TEXT                       -- ISO 8601 timestamp (updated on save)
+    last_update TEXT,                      -- ISO 8601 timestamp (updated on save)
+    is_active INTEGER                      -- 0=completed, 1=active (multi-turn state)
 );
 ```
 
@@ -1481,6 +1482,48 @@ protected async Task ExecuteAgentAsync(Records.AgentRequest req)
 - ✅ **Quick replies state** (LLM-generated interactive buttons)
 - ✅ **Shared variable configuration** (which variables sync across agents)
 - ✅ **Agent completion status** (multi-turn conversation state)
+
+**Multi-Agent History Reconciliation:**
+
+While each agent maintains its own isolated `AgentThread` in the database, Morgana provides **virtual unified timeline reconstruction** for UI rendering through `GetConversationHistoryAsync()`.
+
+**Reconciliation Process:**
+1. Query all agents: `SELECT agent_name, agent_thread FROM morgana ORDER BY creation_date`
+2. Decrypt AgentThread BLOBs (AES-256-CBC with IV extraction)
+3. Deserialize messages from `AgentThread.storeState.messages`
+4. Filter out `ChatRole.Tool` messages (not user-facing)
+5. Extract quick replies from `SetQuickReplies` function calls
+6. Sort chronologically by `Timestamp` across all agents
+7. Map to `MorganaChatMessage` DTO with agent metadata
+
+**REST Endpoint:**
+```http
+GET /api/conversation/{conversationId}/history
+```
+
+Returns chronologically ordered messages from all participating agents:
+```json
+{
+  "messages": [
+    {
+      "text": "How much is invoice 12345?",
+      "role": "user",
+      "timestamp": "2025-01-23T10:00:00Z",
+      "agentName": "User"
+    },
+    {
+      "text": "Invoice 12345 is €150.",
+      "role": "assistant",
+      "timestamp": "2025-01-23T10:01:00Z",
+      "agentName": "Billing",
+      "agentCompleted": true,
+      "quickReplies": [
+        { "text": "Pay now", "value": "pay_12345" }
+      ]
+    }
+  ]
+}
+```
 
 **Configuration:**
 ```json
@@ -1516,6 +1559,7 @@ All agents, tools, and business logic remain unchanged—true dependency inversi
 
 **Benefits:**
 - 🔄 **Resume conversations** across application restarts
+- 🌐 **Multi-device sync** potential (history accessible from any client with valid `conversationId`)
 - 📊 **Conversation analytics** through SQL queries on persisted data
 - 🔒 **GDPR compliance** with encrypted storage and retention policies
 - 🌐 **Distributed deployments** can share conversation state
