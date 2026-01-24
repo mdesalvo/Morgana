@@ -6,6 +6,12 @@
 # Stage 2: Runtime with ASP.NET Core Runtime only (~200 MB)
 
 # ==============================================================================
+# BUILD ARGUMENTS
+# ==============================================================================
+# Version is passed from docker-compose or GitHub Actions
+ARG VERSION=latest
+
+# ==============================================================================
 # STAGE 1: BUILD
 # ==============================================================================
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
@@ -13,7 +19,7 @@ WORKDIR /src
 
 # Copy project file and dependencies (for optimal layer caching)
 COPY ["Cauldron/Cauldron.csproj", "Cauldron/"]
-COPY ["Cauldron/Directory.Build.props", "Cauldron/"]
+COPY ["Cauldron/Directory.Build.props", "Directory.Build.props"]
 
 # Restore NuGet dependencies (cached layer if .csproj doesn't change)
 RUN dotnet restore "Cauldron/Cauldron.csproj"
@@ -40,10 +46,13 @@ RUN dotnet publish "Cauldron.csproj" \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
-# Metadata labels
+# Re-declare ARG for use in this stage
+ARG VERSION=latest
+
+# Metadata labels (OCI standard)
 LABEL org.opencontainers.image.title="Cauldron"
 LABEL org.opencontainers.image.description="A magical witch assistant equipped with an enchanted AI-driven grimoire (FrontEnd)"
-LABEL org.opencontainers.image.version="0.12.0"
+LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.authors="Marco De Salvo"
 LABEL org.opencontainers.image.url="https://github.com/mdesalvo/Morgana"
 LABEL org.opencontainers.image.source="https://github.com/mdesalvo/Morgana"

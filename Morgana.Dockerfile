@@ -7,6 +7,12 @@
 # - Morgana.Example (example plugin with agents)
 
 # ==============================================================================
+# BUILD ARGUMENTS
+# ==============================================================================
+# Version is passed from docker-compose or GitHub Actions
+ARG VERSION=latest
+
+# ==============================================================================
 # STAGE 1: BUILD
 # ==============================================================================
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
@@ -45,10 +51,13 @@ RUN dotnet publish "Morgana.SignalR.csproj" \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
-# Metadata labels
+# Re-declare ARG for use in this stage
+ARG VERSION=latest
+
+# Metadata labels (OCI standard)
 LABEL org.opencontainers.image.title="Morgana"
 LABEL org.opencontainers.image.description="A magical witch assistant equipped with an enchanted AI-driven grimoire (BackEnd)"
-LABEL org.opencontainers.image.version="0.12.0"
+LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.authors="Marco De Salvo"
 LABEL org.opencontainers.image.url="https://github.com/mdesalvo/Morgana"
 LABEL org.opencontainers.image.source="https://github.com/mdesalvo/Morgana"

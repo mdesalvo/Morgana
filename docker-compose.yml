@@ -17,7 +17,9 @@ services:
     build:
       context: .
       dockerfile: Morgana.Dockerfile
-    image: morgana:0.12.0
+      args:
+        VERSION: ${MORGANA_VERSION}
+    image: morgana:${MORGANA_VERSION}
     container_name: morgana
     ports:
       - "5001:5001"
@@ -53,7 +55,9 @@ services:
     build:
       context: .
       dockerfile: Cauldron.Dockerfile
-    image: cauldron:0.12.0
+      args:
+        VERSION: ${CAULDRON_VERSION}
+    image: cauldron:${CAULDRON_VERSION}
     container_name: cauldron
     ports:
       - "5002:5002"
