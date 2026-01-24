@@ -4,6 +4,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Production-Ready Docker Deployment
+This release introduces **complete Docker containerization** of both **Morgana (backend)** and **Cauldron (frontend)**, enabling **single-command deployment**, **reproducible builds**, and **seamless distribution** via Docker Hub with automated CI/CD pipelines.
+
+### ✨ Added
+**Docker Multi-Stage Builds**
+- `Morgana.Dockerfile`: Optimized 3-stage build (SDK → Publish → Runtime) for backend containerization
+- `Cauldron.Dockerfile`: Optimized 3-stage build (SDK → Publish → Runtime) for frontend containerization
+- Multi-platform support: `linux/amd64` and `linux/arm64` (Apple Silicon, Raspberry Pi)
+- Layer caching optimized for faster rebuilds (dependencies cached separately from source code)
+- Runtime images based on `mcr.microsoft.com/dotnet/aspnet:10.0` (~200MB final size)
+
+**Docker Compose Orchestration**
+- `docker-compose.yml`: Single-file orchestration for **Morgana + Cauldron** with dedicated bridge network
+- Automatic service dependency management (Cauldron waits for Morgana startup)
+- Persistent volume for SQLite conversation databases (`morgana-data`)
+- Environment-based configuration via `.env` file (secrets externalized from images)
+
+**Automated Versioning from Single Source of Truth**
+- `Directory.Build.targets`: MSBuild integration for automatic `.env.versions` generation during build
+- Extracts versions from `Directory.Build.props` via XmlPeek and populates `MORGANA_VERSION`/`CAULDRON_VERSION`
+- Eliminates manual version management across Docker files (ARG-based propagation)
+- OCI-compliant image labels with dynamic version injection (`org.opencontainers.image.version`)
+
+**GitHub Actions CI/CD Pipeline**
+- `.github/workflows/docker-publish.yml`: Fully automated build and publish workflow
+- Triggered when publishing a GitHub Release (GitHub creates the version tag at publication time)
+- Version extraction directly from `Directory.Build.props` (single source of truth validation)
+- Multi-platform image builds with Docker Buildx
+- Automated push to Docker Hub: `mdesalvo/morgana:X.Y.Z` and `mdesalvo/cauldron:X.Y.Z`
+- Workflow validates successful publication and build completion
+
+**Security & Configuration**
+- Secrets externalized via environment variables (no hardcoded API keys in images)
+- AES-256 encryption key generation documented (OpenSSL/PowerShell commands)
+- LLM provider configuration: Anthropic Claude or Azure OpenAI (runtime-switchable)
+- Network isolation: Dedicated Docker bridge network for internal service communication
+
+### 🔄 Changed
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+This release unlocks:
+- **Docker Hub distribution**: Public images available at `mdesalvo/morgana` and `mdesalvo/cauldron`
+- **Cloud deployment readiness**: Azure Container Instances, AWS ECS, Google Cloud Run
+- **CI/CD integration**: Automated testing, security scanning, and deployment pipelines
+
 
 ## [0.11.0] - 2026-01-24
 ### 🎯 Major Feature: Multi-Agent Conversation History
