@@ -11,7 +11,7 @@ This release introduces **virtual unified conversation timeline**, enabling **Ca
 
 ### ✨ Added
 **IConversationHistoryService**
-- HTTP-based abstraction for retrieving complete conversation history from backend
+- HTTP-based abstraction for retrieving complete conversation history from Morgana
 - Designed to work seamlessly with `ProtectedLocalStorage` conversation resume flow
 
 **MorganaConversationHistoryService**
@@ -22,15 +22,14 @@ This release introduces **virtual unified conversation timeline**, enabling **Ca
 
 **ConversationController: GetConversationHistory Endpoint**
 - New REST endpoint: `GET /api/conversation/{conversationId}/history`
-- Returns `MorganaChatMessage[]` with chronologically ordered messages from all agents
+- Returns chronologically ordered messages from all agents
 - Delegates to `IConversationPersistenceService.GetConversationHistoryAsync()` for data retrieval
 
 **SqliteConversationPersistenceService: History Reconciliation**
 - `GetConversationHistoryAsync(conversationId)` method for cross-agent message reconstruction
 - Agent-isolated storage → Virtual unified conversation timeline
 - Decrypts and deserializes `AgentThread` BLOBs from each agent's SQLite row
-- Extracts `ChatMessage[]` from `AgentThread.storeState.messages` JSON structure
-- Filters out internal tool messages (`ChatRole.Tool`) for clean UI rendering
+- Extracts `ChatMessage[]` from `AgentThread` JSON structure
 - Preserves agent metadata (`agentName`, `agentCompleted`) for UI context
 
 **Cauldron: Conversation Resume Flow**
@@ -48,6 +47,7 @@ This release introduces **virtual unified conversation timeline**, enabling **Ca
 - Updated `Microsoft.Agents.AI` dependency to **1.0.0-preview.260121.1**
 - Enhanced `MorganaAIContextProvider` to handle context data as **thread-safe** and **immutable** collections
 - Optimized `ConversationController` to replace `Ask<T>` with `Tell` fire-and-forget
+- Introduced SignalR data contract between Morgana and Cauldron for better maintainability
 
 ### 🐛 Fixed
 - User messages were sent to the agent's thread without timestamp
