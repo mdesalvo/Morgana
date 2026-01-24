@@ -16,7 +16,7 @@ WORKDIR /src
 COPY ["Morgana/Morgana.SignalR/Morgana.SignalR.csproj", "Morgana.SignalR/"]
 COPY ["Morgana/Morgana.Framework/Morgana.Framework.csproj", "Morgana.Framework/"]
 COPY ["Morgana/Morgana.Example/Morgana.Example.csproj", "Morgana.Example/"]
-COPY ["Morgana/Morgana.Framework/Directory.Build.props", "Morgana.Framework/"]
+COPY ["Morgana/Directory.Build.props", "Morgana.Framework/"]
 
 # Restore NuGet dependencies
 RUN dotnet restore "Morgana.SignalR/Morgana.SignalR.csproj"
