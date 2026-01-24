@@ -33,7 +33,7 @@ services:
       # LLM Provider (anthropic or azureopenai)
       - Morgana__LLM__Provider=${LLM_PROVIDER}
       - Morgana__LLM__Anthropic__ApiKey=${ANTHROPIC_API_KEY}
-      - Morgana__LLM__Anthropic__Model=${ANTHROPIC_API_MODEL}
+      - Morgana__LLM__Anthropic__Model=${ANTHROPIC_MODEL}
       - Morgana__LLM__AzureOpenAI__Endpoint=${AZURE_OPENAI_ENDPOINT}
       - Morgana__LLM__AzureOpenAI__ApiKey=${AZURE_OPENAI_KEY}
       - Morgana__LLM__AzureOpenAI__Deployment=${AZURE_OPENAI_DEPLOYMENT}
