@@ -25,11 +25,11 @@ services:
       # ASP.NET Core
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5001
-      
+
       # Conversation persistence (SQLite)
       - Morgana__ConversationPersistence__StoragePath=/app/data
       - Morgana__ConversationPersistence__EncryptionKey=${ENCRYPTION_KEY}
-      
+
       # LLM Provider (anthropic or azureopenai)
       - Morgana__LLM__Provider=${LLM_PROVIDER}
       - Morgana__LLM__Anthropic__ApiKey=${ANTHROPIC_API_KEY}
@@ -37,7 +37,7 @@ services:
       - Morgana__LLM__AzureOpenAI__Endpoint=${AZURE_OPENAI_ENDPOINT}
       - Morgana__LLM__AzureOpenAI__ApiKey=${AZURE_OPENAI_KEY}
       - Morgana__LLM__AzureOpenAI__Deployment=${AZURE_OPENAI_DEPLOYMENT}
-      
+
       # CORS: Cauldron frontend URL
       - Morgana__Cauldron__BaseUrl=http://cauldron:5002
     volumes:
@@ -45,15 +45,9 @@ services:
       - morgana-data:/app/data
     networks:
       - morgana-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   # ============================================================================
-  # CAULDRON - FRONTEND (SignalR + Blazor Server UI)
+  # CAULDRON - FRONTEND (Blazor Server UI)
   # ============================================================================
   cauldron:
     build:
@@ -67,19 +61,13 @@ services:
       # ASP.NET Core
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5002
-      
+
       # Morgana backend URL (internal network communication)
       - Morgana__BaseUrl=http://morgana:5001
     depends_on:
-      morgana:
-        condition: service_healthy
+      - morgana
     networks:
       - morgana-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5002"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 # ==============================================================================
 # VOLUMES
