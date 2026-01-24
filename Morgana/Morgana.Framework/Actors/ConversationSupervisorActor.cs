@@ -10,7 +10,7 @@ namespace Morgana.Framework.Actors;
 /// <summary>
 /// <para>
 /// Main orchestration actor that supervises the conversation flow through a finite state machine.
-/// Coordinates guard checks, intent classification, agent routing, and follow-up handling.
+/// Coordinates guard checks, intent classification, agent routing and follow-up handling.
 /// Manages presentation generation and tracks active agent state for multi-turn conversations.
 /// </para>
 /// <para>
@@ -33,11 +33,13 @@ namespace Morgana.Framework.Actors;
 /// </remarks>
 public class ConversationSupervisorActor : MorganaActor
 {
+    private readonly ISignalRBridgeService signalRBridgeService;
+    private readonly IAgentConfigurationService agentConfigService;
+
+    /* Actors directly orchestrated by the supervisor */
     private readonly IActorRef guard;
     private readonly IActorRef classifier;
     private readonly IActorRef router;
-    private readonly ISignalRBridgeService signalRBridgeService;
-    private readonly IAgentConfigurationService agentConfigService;
 
     /// <summary>
     /// Reference to the currently active agent (for multi-turn conversations).
@@ -103,7 +105,8 @@ public class ConversationSupervisorActor : MorganaActor
         ReceiveAsync<Records.PresentationContext>(HandlePresentationGenerated);
 
         // Handle incoming user messages giving them to the guard
-        ReceiveAsync<Records.UserMessage>(async msg =>
+        // (synchronous because there are no async/await needs)
+        Receive<Records.UserMessage>(msg =>
         {
             IActorRef originalSender = Sender;
 
@@ -191,41 +194,40 @@ public class ConversationSupervisorActor : MorganaActor
             string systemPrompt = $"{presentationPrompt.Target}\n\n{presentationPrompt.Instructions}"
                 .Replace("((intents))", formattedIntents);
 
-            actorLogger.Info("Calling LLM for presentation generation");
+            actorLogger.Info("Invoking LLM to generate presentation message");
 
-            // Call LLM to generate structured JSON
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
                 systemPrompt,
-                "Generate the presentation message");
+                "Generate the presentation");
 
-            actorLogger.Info($"LLM raw restoreAgentResponse: {llmResponse}");
+            actorLogger.Info("LLM presentation generated successfully");
 
-            // Parse LLM restoreAgentResponse
-            Records.PresentationResponse? presentationResponse =
+            Records.PresentationResponse? presentation =
                 JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse);
 
-            if (presentationResponse == null)
-                throw new InvalidOperationException("LLM returned null presentation restoreAgentResponse");
-
-            actorLogger.Info($"LLM generated presentation with {presentationResponse.QuickReplies.Count} quick replies");
-
-            // Convert to internal format
-            Self.Tell(new Records.PresentationContext(presentationResponse.Message, displayableIntents)
+            if (presentation != null)
             {
-                LLMQuickReplies = presentationResponse.QuickReplies
-            });
+                actorLogger.Info($"LLM generated {presentation.QuickReplies.Count} quick replies");
+
+                Self.Tell(new Records.PresentationContext(presentation.Message, displayableIntents)
+                {
+                    LLMQuickReplies = presentation.QuickReplies
+                });
+            }
+            else
+            {
+                throw new InvalidOperationException("LLM returned null presentation");
+            }
         }
         catch (Exception ex)
         {
             actorLogger.Error(ex, "LLM presentation generation failed, using fallback");
 
-            // Fallback: Generate from intents directly
-            Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync("Presentation");
+            // Fallback: use static message
+            Records.Prompt fallbackPrompt = await promptResolverService.ResolveAsync("Presentation");
+            string fallbackMessage = fallbackPrompt.GetAdditionalProperty<string>("FallbackMessage");
 
-            string fallbackMessage = presentationPrompt.GetAdditionalProperty<string>("FallbackMessage");
-
-            // Build fallback quick replies from intents
             List<Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
 
             Records.IntentCollection intentCollection = new Records.IntentCollection(allIntents);
@@ -380,7 +382,8 @@ public class ConversationSupervisorActor : MorganaActor
         // Handle intent classification result from ClassifierActor:
         // - Classification successful: forward to RouterActor to find appropriate agent → AwaitingAgentResponse
         // - Updates processing context with classification metadata for agent routing
-        ReceiveAsync<Records.ClassificationContext>(async wrapper =>
+        // (synchronous because there are no async/await needs)
+        Receive<Records.ClassificationContext>(wrapper =>
         {
             actorLogger.Info($"Classification result: {wrapper.Classification.Intent}");
 
@@ -440,7 +443,8 @@ public class ConversationSupervisorActor : MorganaActor
         //   - Next user message will go through full flow (guard → classifier → router)
         //
         // Then return → Idle to await next user message
-        ReceiveAsync<Records.AgentContext>(async wrapper =>
+        // (synchronous because there are no async/await needs)
+        Receive<Records.AgentContext>(wrapper =>
         {
             string agentName = GetAgentDisplayName(ctx.Classification?.Intent);
 
@@ -555,7 +559,8 @@ public class ConversationSupervisorActor : MorganaActor
         //   - Next user message routes directly to guard → same agent again
         //
         // Then return → Idle to await next user message
-        ReceiveAsync<Records.FollowUpContext>(async wrapper =>
+        // (synchronous because there are no async/await needs)
+        Receive<Records.FollowUpContext>(wrapper =>
         {
             string agentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
 
@@ -634,50 +639,47 @@ public class ConversationSupervisorActor : MorganaActor
     /// Registered as common handler across all FSM states.
     /// </summary>
     /// <param name="msg">Restoration request containing the agent intent</param>
-    private async Task HandleRestoreActiveAgentAsync(Records.RestoreActiveAgent msg)
+    private void HandleRestoreActiveAgent(Records.RestoreActiveAgent msg)
     {
         actorLogger.Info($"Restoring active agent: {msg.AgentIntent}");
 
-        try
-        {
-            // No active agent -> Fallback to Morgana
-            if (string.Equals(msg.AgentIntent, "Morgana", StringComparison.OrdinalIgnoreCase))
-            {
-                // Fallback: clear active agent, next message will reclassify
-                activeAgent = null;
-                activeAgentIntent = null;
-
-                actorLogger.Info($"No active agent detected: fallback to Morgana");
-                return;
-            }
-
-            // Delegate to router for agent resolution and caching
-            Records.RestoreAgentResponse restoreAgentResponse = await router.Ask<Records.RestoreAgentResponse>(
-                new Records.RestoreAgentRequest(msg.AgentIntent), TimeSpan.FromSeconds(60));
-            if (restoreAgentResponse.AgentRef != null)
-            {
-                activeAgent = restoreAgentResponse.AgentRef;
-                activeAgentIntent = msg.AgentIntent;
-
-                actorLogger.Info($"Active agent restored: {activeAgent.Path} with intent {activeAgentIntent}");
-            }
-            else
-            {
-                // Intent not recognized or agent not available
-                // Fallback: clear active agent, next message will reclassify
-                activeAgent = null;
-                activeAgentIntent = null;
-
-                actorLogger.Warning($"Could not restore agent for intent '{msg.AgentIntent}' - clearing active agent");
-            }
-        }
-        catch (Exception ex)
+        // No active agent -> Fallback to Morgana
+        if (string.Equals(msg.AgentIntent, "Morgana", StringComparison.OrdinalIgnoreCase))
         {
             // Fallback: clear active agent, next message will reclassify
             activeAgent = null;
             activeAgentIntent = null;
 
-            actorLogger.Error(ex, $"Failed to restore active agent for intent {msg.AgentIntent}");
+            actorLogger.Info($"No active agent detected: fallback to Morgana");
+            return;
+        }
+
+        // Delegate to router for agent resolution and caching using Tell pattern
+        router.Tell(new Records.RestoreAgentRequest(msg.AgentIntent));
+    }
+
+    /// <summary>
+    /// Handles the response from RouterActor after agent restoration request.
+    /// Sets or clears the active agent based on resolution success.
+    /// </summary>
+    /// <param name="response">Response containing resolved agent reference or null</param>
+    private void HandleRestoreAgentResponse(Records.RestoreAgentResponse response)
+    {
+        if (response.AgentRef != null)
+        {
+            activeAgent = response.AgentRef;
+            activeAgentIntent = response.AgentIntent;
+
+            actorLogger.Info($"Active agent restored: {activeAgent.Path} with intent {activeAgentIntent}");
+        }
+        else
+        {
+            // Intent not recognized or agent not available
+            // Fallback: clear active agent, next message will reclassify
+            activeAgent = null;
+            activeAgentIntent = null;
+
+            actorLogger.Warning($"Could not restore agent for intent '{response.AgentIntent}' - clearing active agent");
         }
     }
 
@@ -687,7 +689,8 @@ public class ConversationSupervisorActor : MorganaActor
         base.RegisterCommonHandlers();
 
         // Specific handlers for supervisor
-        ReceiveAsync<Records.RestoreActiveAgent>(HandleRestoreActiveAgentAsync);
+        Receive<Records.RestoreActiveAgent>(HandleRestoreActiveAgent);
+        Receive<Records.RestoreAgentResponse>(HandleRestoreAgentResponse);
     }
 
     #endregion
