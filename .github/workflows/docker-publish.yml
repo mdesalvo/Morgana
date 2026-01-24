@@ -52,25 +52,3 @@ jobs:
             ${{ env.DOCKER_USERNAME }}/cauldron:latest
           cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/cauldron:latest
           cache-to: type=inline
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          body: |
-            ## Docker Images
-
-            Pull the images:
-            ```bash
-            docker pull ${{ env.DOCKER_USERNAME }}/morgana:${{ steps.version.outputs.VERSION }}
-            docker pull ${{ env.DOCKER_USERNAME }}/cauldron:${{ steps.version.outputs.VERSION }}
-            ```
-
-            Or use the provided docker-compose.yml:
-            ```bash
-            docker-compose up -d
-            ```
-
-            ## What's Changed
-            See CHANGELOG.md for details.
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
