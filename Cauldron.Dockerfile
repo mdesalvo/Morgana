@@ -40,6 +40,15 @@ RUN dotnet publish "Cauldron.csproj" \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
+# Metadata labels
+LABEL org.opencontainers.image.title="Cauldron"
+LABEL org.opencontainers.image.description="A magical witch assistant equipped with an enchanted AI-driven grimoire (FrontEnd)"
+LABEL org.opencontainers.image.version="0.12.0"
+LABEL org.opencontainers.image.authors="Marco De Salvo"
+LABEL org.opencontainers.image.url="https://github.com/mdesalvo/Morgana"
+LABEL org.opencontainers.image.source="https://github.com/mdesalvo/Morgana"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
 # Expose port 5002 for HTTP
 EXPOSE 5002
 
