@@ -1,0 +1,96 @@
+version: '3.8'
+
+# ==============================================================================
+# MORGANA + CAULDRON - DOCKER COMPOSE
+# ==============================================================================
+# Architecture:
+# - morgana: Backend SignalR + API (port 5001)
+# - cauldron: Frontend Blazor Server (port 5002)
+# - Dedicated bridge network for internal communication
+# - Persistent volume for SQLite databases
+
+services:
+  # ============================================================================
+  # MORGANA - BACKEND (SignalR + API + Akka.NET + Microsoft.Agents.AI)
+  # ============================================================================
+  morgana:
+    build:
+      context: .
+      dockerfile: Morgana.Dockerfile
+    container_name: morgana
+    ports:
+      - "5001:5001"
+    environment:
+      # ASP.NET Core
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5001
+      
+      # Conversation persistence (SQLite)
+      - Morgana__ConversationPersistence__StoragePath=/app/data
+      - Morgana__ConversationPersistence__EncryptionKey=${ENCRYPTION_KEY}
+      
+      # LLM Provider (anthropic or azureopenai)
+      - Morgana__LLM__Provider=${LLM_PROVIDER}
+      - Morgana__LLM__Anthropic__ApiKey=${ANTHROPIC_API_KEY}
+      - Morgana__LLM__Anthropic__Model=${ANTHROPIC_API_MODEL}
+      - Morgana__LLM__AzureOpenAI__Endpoint=${AZURE_OPENAI_ENDPOINT}
+      - Morgana__LLM__AzureOpenAI__ApiKey=${AZURE_OPENAI_KEY}
+      - Morgana__LLM__AzureOpenAI__Deployment=${AZURE_OPENAI_DEPLOYMENT}
+      
+      # CORS: Cauldron frontend URL
+      - Morgana__Cauldron__BaseUrl=http://cauldron:5002
+    volumes:
+      # Persistent volume for SQLite databases
+      - morgana-data:/app/data
+    networks:
+      - morgana-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================================================
+  # CAULDRON - FRONTEND (SignalR + Blazor Server UI)
+  # ============================================================================
+  cauldron:
+    build:
+      context: .
+      dockerfile: Cauldron.Dockerfile
+    container_name: cauldron
+    ports:
+      - "5002:5002"
+    environment:
+      # ASP.NET Core
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5002
+      
+      # Morgana backend URL (internal network communication)
+      - Morgana__BaseUrl=http://morgana:5001
+    depends_on:
+      morgana:
+        condition: service_healthy
+    networks:
+      - morgana-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ==============================================================================
+# VOLUMES
+# ==============================================================================
+volumes:
+  # SQLite database persistence (conversations + agent threads)
+  morgana-data:
+    driver: local
+
+# ==============================================================================
+# NETWORKS
+# ==============================================================================
+networks:
+  # Dedicated bridge network for internal container communication
+  morgana-network:
+    driver: bridge
