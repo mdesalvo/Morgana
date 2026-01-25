@@ -12,8 +12,8 @@
         <img src="https://img.shields.io/badge/Microsoft.Agents.AI-932BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
         <img src="https://img.shields.io/badge/ModelContextProtocol.Core-932BD4?logo=nuget" alt="ModelContextProtocol.Core"/>
       </p>
-      <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/v/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana%20(Docker)&color=932BD4" alt="Morgana Docker"></a>
-      <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/v/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron%20(Docker)&color=932BD4" alt="Cauldron Docker"></a>
+      <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/v/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana%20(Docker)&color=9f7aea" alt="Morgana Docker"></a>
+      <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/v/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron%20(Docker)&color=9f7aea" alt="Cauldron Docker"></a>
     </td>
   </tr>
 </table>
