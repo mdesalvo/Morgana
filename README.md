@@ -12,11 +12,13 @@
         <img src="https://img.shields.io/badge/Microsoft.Agents.AI-932BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
         <img src="https://img.shields.io/badge/ModelContextProtocol.Core-932BD4?logo=nuget" alt="ModelContextProtocol.Core"/>
       </p>
+      <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/v/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana%20(Docker)&color=932BD4" alt="Morgana Docker"></a>
+      <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/v/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron%20(Docker)&color=932BD4" alt="Cauldron Docker"></a>
     </td>
   </tr>
 </table>
 
-## Overview
+## Overview 
 
 Morgana is a **conversational AI framework** designed to handle complex scenarios through a sophisticated **multi-agent intent-driven architecture**. Built on cutting-edge **.NET 10** and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that collaborate to understand, classify and resolve customer inquiries with precision and context awareness.
 
