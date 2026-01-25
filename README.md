@@ -10,10 +10,11 @@
         <img src="https://img.shields.io/badge/.NET-10.0-932BD4?logo=dotnet" alt=".NET 10"/>
         <img src="https://img.shields.io/badge/Akka.NET-932BD4?logo=nuget" alt="Akka.NET"/>
         <img src="https://img.shields.io/badge/Microsoft.Agents.AI-932BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
-        <img src="https://img.shields.io/badge/ModelContextProtocol.Core-932BD4?logo=nuget" alt="ModelContextProtocol.Core"/>
+        <img src="https://img.shields.io/badge/ModelContextProtocol-932BD4?logo=nuget" alt="ModelContextProtocol"/>
       </p>
-      <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/v/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana%20(Docker)&color=9f7aea" alt="Morgana Docker"></a>
-      <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/v/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron%20(Docker)&color=9f7aea" alt="Cauldron Docker"></a>
+      <a href="https://github.com/mdesalvo/Morgana/releases"><img src="https://img.shields.io/github/v/release/mdesalvo/Morgana?color=9f7aea&label=GitHub" alt="Morgana (GitHub Version)"></a>
+      <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/pulls/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana%20(Docker)&color=9f7aea" alt="Morgana (Docker Pulls)"></a>
+      <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/pulls/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron%20(Docker)&color=9f7aea" alt="Cauldron (Docker Pulls)"></a>
     </td>
   </tr>
 </table>
