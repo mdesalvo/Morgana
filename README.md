@@ -31,7 +31,7 @@ Morgana will kindly assist you with her magical AI potions just the way you **ne
 
 Traditional chatbot systems struggle with complexity—they either become monolithic and unmaintainable, or lack the contextual awareness needed for sophisticated interactions.
 
-Morgana **reimagines conversational AI** through 4 foundational pillars that work in harmony to deliver an orchestration framework that is powerful yet remarkably simple to configure.
+Morgana **reimagines conversational AI** through four foundational pillars that **work in harmony** to deliver an **orchestration framework** that is powerful yet remarkably simple to configure.
 
 **[🎭 Actor System](#-morgana-actor-system) [🤖 Agent System](#-morgana-agent-system) [📝 Prompting System](#-morgana-prompting-system) [💾 Context System](#-morgana-context-system)**
 
@@ -40,7 +40,7 @@ Morgana **reimagines conversational AI** through 4 foundational pillars that wor
 ### 🎭 Morgana Actor System
 *Resilient orchestration through Akka.NET message-driven architecture*
 
-Morgana leverages the **actor model** to create a fault-tolerant, scalable orchestration layer. Each conversation is managed by a hierarchy of specialized actors that collaborate through asynchronous message passing:
+Morgana leverages the **actor model** to create a fault-tolerant, scalable orchestration layer. Each conversation is managed by a hierarchy of **specialized actors that collaborate** through asynchronous message passing:
 
 - **ConversationManager**: Stable entry point owning the lifecycle of a single user session
 - **ConversationSupervisor**: Orchestrates the entire conversation flow and coordinates child actors
@@ -117,7 +117,7 @@ graph LR
 ### 🤖 Morgana Agent System
 *Declarative specialization with automatic discovery and dynamic capabilities*
 
-Agents in Morgana are domain specialists that self-register through **declarative attributes**, eliminating manual configuration and enabling true plugin-based extensibility. Each agent inherits from `MorganaAgent` and declares its responsibilities through simple annotations:
+Agents in Morgana are **domain specialists** that self-register through **declarative attributes**, eliminating manual configuration and enabling true plugin-based extensibility. Each agent inherits from `MorganaAgent` and declares its responsibilities through simple annotations:
 
 ```csharp
 [HandlesIntent("billing")]
@@ -126,7 +126,7 @@ public class BillingAgent : MorganaAgent { }
 
 At startup, Morgana automatically discovers all agents across configured assemblies and validates bidirectional consistency between declared intents and classifier configuration—**fail-fast guarantees** ensure errors are caught before reaching production.
 
-Agents express their capabilities through **tools**, which can be native implementations or dynamically acquired from external MCP servers:
+Agents express their capabilities through **tools**, which can be native implementations (inherited from `MorganaTool`) or dynamically acquired from external MCP servers:
 
 ```csharp
 [ProvidesToolForIntent("billing")]
@@ -139,7 +139,7 @@ public class BillingTool : MorganaTool
 public class MonkeyAgent : MorganaAgent { }  // Acquires tools at runtime!
 ```
 
-The **MCP integration** is particularly powerful: agents can extend their capabilities by consuming Model Context Protocol servers, where external tools become indistinguishable from native implementations. This enables rapid prototyping, microservice integration, and ecosystem-driven feature development—all without writing a single line of tool implementation code.
+The **MCP integration** is particularly powerful: agents can extend their capabilities by consuming **Model Context Protocol servers**, where external tools become indistinguishable from native implementations. This enables rapid prototyping, microservice integration, and ecosystem-driven feature development—all without writing a single line of tool implementation code.
 
 The framework provides adapters (`MorganaAgentAdapter`, `MorganaToolAdapter`) that bridge the declarative configuration with runtime activation, handling validation, dependency injection, and lifecycle management transparently.
 
@@ -157,14 +157,14 @@ A unique characteristic of Morgana is its **Layered Personality System**. Every 
 - **Global Layer**: Defines Morgana's fundamental character, tone, and values
 - **Agent Layer**: Adds contextual traits that complement (never contradict) the global personality
 
-For example, BillingAgent might be "pragmatic and concrete" while ContractAgent is "patient and empathetic"—both remain recognizably "Morgana" while adapting to domain-specific user needs. This creates vertical consistency across conversations with horizontal variation per expertise area, delivering a unified brand experience that feels naturally specialized.
+For example, BillingAgent might be "a pragmatic and concrete witch" while ContractAgent is "a patient and empathetic witch"—both remain recognizably "Morgana" while adapting to domain-specific user needs. This creates vertical consistency across conversations with horizontal variation per expertise area, delivering a **unified brand experience that feels naturally specialized**.
 
 Prompts also define **Global Policies** (critical rules like context handling, interaction tokens) that are automatically composed into agent instructions, ensuring system-wide behavioral consistency without repetition.
 
 ### 💾 Morgana Context System
 *Distributed memory with encrypted persistence and P2P synchronization*
 
-Morgana extends **Microsoft.Agents.AI** framework with a sophisticated context management layer that balances isolation, sharing, and persistence. Each agent maintains its own isolated context through `MorganaAIContextProvider`, a custom implementation that manages both conversation history and stateful variables.
+Morgana extends **Microsoft.Agents.AI** framework with a sophisticated context management layer that balances isolation, sharing, and persistence. Each agent maintains its own **isolated context** through `MorganaAIContextProvider`, a custom implementation that manages both conversation history and stateful variables.
 
 **Context isolation** ensures agents operate independently—their memories, variables, and state remain private by default. However, the system enables selective **P2P synchronization** for shared variables declared in configuration:
 
@@ -182,8 +182,12 @@ When one agent collects shared information (e.g., customer ID), the `RouterActor
 
 The persistence layer supports **multi-agent history reconciliation**: while agents maintain isolated threads, Morgana reconstructs a unified timeline for UI presentation, giving users an uninterrupted conversational experience regardless of which agents participated behind the scenes.
 
-This architecture delivers three critical benefits: **data security** through encryption and isolation, **intelligent context sharing** via P2P sync, and **resilient conversations** that survive system restarts—all configurable through declarative JSON rather than imperative code.
+This architecture delivers three critical benefits:
+- **data security** through encryption and isolation
+- **intelligent context sharing** via P2P sync
+- **resilient conversations** that survive system restarts
+All configurable through declarative JSON rather than imperative code.
 
 ---
 
-**The Morgana Difference**: These four pillars work together to create an orchestration framework where adding a new domain agent requires only configuration and attribute decoration—no changes to the core framework, no manual registration, no brittle coupling. It's conversational AI architecture designed for evolution at scale.
+**The Morgana Difference**: These four pillars work together to create an orchestration framework where adding a new domain agent requires only configuration and attribute decoration—no changes to the core framework, no manual registration, no brittle coupling. It's **conversational AI architecture designed for evolution at scale**.
