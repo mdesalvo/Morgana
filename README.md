@@ -50,7 +50,7 @@ Morgana leverages the **actor model** to create a fault-tolerant, scalable orche
 
 This architecture ensures that failures are isolated, system state remains consistent, and conversations can scale horizontally without bottlenecks.
 
-**Morgana Conversation Flow**
+**Actors Conversation Flow**
 
 ```mermaid
 graph LR
@@ -85,35 +85,6 @@ graph LR
   MA -. 9 Intent handling .-> LLM
 ```
 
-**Agent Conversation Flow**
-
-```mermaid
-graph LR
-  %% Frontend
-  U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron"}
-
-  %% Backend boundary
-  subgraph Morgana["Morgana Framework"]
-    CM@{shape: rounded, label: "Manager"}
-    SV@{shape: rounded, label: "Supervisor"}
-
-    G@{shape: rounded, label: "Guard"}
-    MA@{shape: rounded, label: "Agent"}
-  end
-
-  %% FE → BE
-  CLD --> CM
-  CM -- 1. Continues conversation and engages actor --> SV
-
-  %% Internal BE flow
-  SV -- 2. Asks for language compliance --> G
-  SV -- 4. Engages agent for intent handling --> MA
-
-  %% External systems
-  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
-  MA -. 5 Intent handling .-> LLM
-```
-
 ### 🤖 Morgana Agent System
 *Declarative specialization with automatic discovery and dynamic capabilities*
 
@@ -142,6 +113,35 @@ public class MonkeyAgent : MorganaAgent { }  // Acquires tools at runtime!
 The **MCP integration** is particularly powerful: agents can extend their capabilities by consuming **Model Context Protocol servers**, where external tools become indistinguishable from native implementations. This enables rapid prototyping, microservice integration, and ecosystem-driven feature development—all without writing a single line of tool implementation code.
 
 The framework provides adapters (`MorganaAgentAdapter`, `MorganaToolAdapter`) that bridge the declarative configuration with runtime activation, handling validation, dependency injection, and lifecycle management transparently.
+
+**Agents Conversation Flow**
+
+```mermaid
+graph LR
+  %% Frontend
+  U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron"}
+
+  %% Backend boundary
+  subgraph Morgana["Morgana Framework"]
+    CM@{shape: rounded, label: "Manager"}
+    SV@{shape: rounded, label: "Supervisor"}
+
+    G@{shape: rounded, label: "Guard"}
+    MA@{shape: rounded, label: "Agent"}
+  end
+
+  %% FE → BE
+  CLD --> CM
+  CM -- 1. Continues conversation and engages actor --> SV
+
+  %% Internal BE flow
+  SV -- 2. Asks for language compliance --> G
+  SV -- 4. Engages agent for intent handling --> MA
+
+  %% External systems
+  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+  MA -. 5 Intent handling .-> LLM
+```
 
 ### 📝 Morgana Prompting System
 *First-class artifacts with layered personality architecture*
@@ -182,11 +182,10 @@ When one agent collects shared information (e.g., customer ID), the `RouterActor
 
 The persistence layer supports **multi-agent history reconciliation**: while agents maintain isolated threads, Morgana reconstructs a unified timeline for UI presentation, giving users an uninterrupted conversational experience regardless of which agents participated behind the scenes.
 
-This architecture delivers three critical benefits:
+This architecture delivers three critical benefits—all configurable through declarative JSON rather than imperative code:
 - **data security** through encryption and isolation
 - **intelligent context sharing** via P2P sync
 - **resilient conversations** that survive system restarts
-All configurable through declarative JSON rather than imperative code.
 
 ---
 
