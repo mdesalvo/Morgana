@@ -29,7 +29,13 @@ Morgana will kindly assist you with her magical AI potions just the way you **ne
 
 ## Core Philosophy
 
-Traditional chatbot systems struggle with complexity—they either become monolithic and unmaintainable, or lack the contextual awareness needed for sophisticated interactions. Morgana reimagines conversational AI through four foundational pillars that work in harmony to deliver an orchestration framework that is powerful yet remarkably simple to configure.
+Traditional chatbot systems struggle with complexity—they either become monolithic and unmaintainable, or lack the contextual awareness needed for sophisticated interactions.
+
+Morgana **reimagines conversational AI** through 4 foundational pillars that work in harmony to deliver an orchestration framework that is powerful yet remarkably simple to configure.
+
+**[🎭 Actor System](#-morgana-actor-system) [🤖 Agent System](#-morgana-agent-system) [📝 Prompting System](#-morgana-prompting-system) [💾 Context System](#-morgana-context-system)**
+
+---
 
 ### 🎭 Morgana Actor System
 *Resilient orchestration through Akka.NET message-driven architecture*
