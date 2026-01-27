@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
-- Rewritten README.md to be simpler, clearer, not technical
+- Standardized failure handling across all actors using `Records.FailureContext` wrapper for consistent error routing
 
 ### 🐛 Fixed
 - Certain LLM providers (like OpenAI) generate response messages with Unix timestamps (no milliseconds)
+- Fixed dead letter issues in actor error handling by implementing unified `FailureContext` pattern to preserve sender references across async operations
 
 ### 🚀 Future Enablement
 
