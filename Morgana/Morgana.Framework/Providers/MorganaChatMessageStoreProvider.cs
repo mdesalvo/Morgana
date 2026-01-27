@@ -96,6 +96,13 @@ public class MorganaChatMessageStoreProvider : ChatMessageStore
         InvokedContext context,
         CancellationToken cancellationToken = default)
     {
+        // Override timestamp of LLM response messages (if valorized).
+        foreach (ChatMessage responseMessage in context.ResponseMessages ?? [])
+        {
+            if (responseMessage.CreatedAt.HasValue)
+                responseMessage.CreatedAt = DateTime.UtcNow;
+        }
+
         await innerStore.InvokedAsync(context, cancellationToken);
 
         // Log after successful storage
