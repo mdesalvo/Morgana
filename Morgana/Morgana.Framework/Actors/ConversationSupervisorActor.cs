@@ -119,12 +119,13 @@ public class ConversationSupervisorActor : MorganaActor
                      .PipeTo(
                         Self,
                         success: response => new Records.GuardCheckContext(response, ctx),
-                        failure: ex => new Status.Failure(ex));
+                        failure: ex => new Records.FailureContext(new Status.Failure(ex), originalSender));
 
             Become(() => AwaitingGuardCheck(ctx));
         });
 
-        Receive<Status.Failure>(HandleUnexpectedFailure);
+        // Handle unexpected failures
+        Receive<Records.FailureContext>(HandleUnexpectedFailure);
 
         // Re-register common handlers for FSM behavior consistency
         RegisterCommonHandlers();
@@ -334,7 +335,7 @@ public class ConversationSupervisorActor : MorganaActor
                         .PipeTo(
                             Self,
                             success: response => new Records.FollowUpContext(response, wrapper.Context.OriginalSender, wrapper.Context.OriginalMessage.Timestamp),
-                            failure: ex => new Status.Failure(ex));
+                            failure: ex => new Records.FailureContext(new Status.Failure(ex), wrapper.Context.OriginalSender));
 
                 Become(() => AwaitingFollowUpResponse(wrapper.Context.OriginalSender));
             }
@@ -349,17 +350,18 @@ public class ConversationSupervisorActor : MorganaActor
                         .PipeTo(
                             Self,
                             success: result => new Records.ClassificationContext(result, wrapper.Context, null),
-                            failure: ex => new Status.Failure(ex));
+                            failure: ex => new Records.FailureContext(new Status.Failure(ex), wrapper.Context.OriginalSender));
 
                 Become(() => AwaitingClassification(ctx));
             }
         });
 
-        Receive<Status.Failure>(failure =>
+        // Handle unexpected failures
+        Receive<Records.FailureContext>(failure =>
         {
-            actorLogger.Error(failure.Cause, "Guard check failed");
+            actorLogger.Error(failure.Failure.Cause, "Guard check failed");
 
-            ctx.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
+            failure.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
 
             Become(Idle);
         });
@@ -398,16 +400,17 @@ public class ConversationSupervisorActor : MorganaActor
                     .PipeTo(
                         Self,
                         success: response => new Records.AgentContext(response, updatedCtx),
-                        failure: ex => new Status.Failure(ex));
+                        failure: ex => new Records.FailureContext(new Status.Failure(ex), wrapper.Context.OriginalSender));
 
             Become(() => AwaitingAgentResponse(updatedCtx));
         });
 
-        Receive<Status.Failure>(failure =>
+        // Handle unexpected failures
+        Receive<Records.FailureContext>(failure =>
         {
-            actorLogger.Error(failure.Cause, "Classification failed");
+            actorLogger.Error(failure.Failure.Cause, "Classification failed");
 
-            ctx.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
+            failure.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
 
             Become(Idle);
         });
@@ -524,11 +527,12 @@ public class ConversationSupervisorActor : MorganaActor
             Become(Idle);
         });
 
-        Receive<Status.Failure>(failure =>
+        // Handle unexpected failures
+        Receive<Records.FailureContext>(failure =>
         {
-            actorLogger.Error(failure.Cause, "Router request failed");
+            actorLogger.Error(failure.Failure.Cause, "Router request failed");
 
-            ctx.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
+            failure.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
 
             Become(Idle);
         });
@@ -584,13 +588,14 @@ public class ConversationSupervisorActor : MorganaActor
             Become(Idle);
         });
 
-        Receive<Status.Failure>(failure =>
+        // Handle unexpected failures
+        Receive<Records.FailureContext>(failure =>
         {
-            actorLogger.Error(failure.Cause, "Active follow-up agent did not reply");
+            actorLogger.Error(failure.Failure.Cause, "Active follow-up agent did not reply");
 
             activeAgent = null;
             activeAgentIntent = null;
-            originalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
+            failure.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
 
             Become(Idle);
         });
@@ -626,11 +631,11 @@ public class ConversationSupervisorActor : MorganaActor
     /// Sends error message to sender and remains in Idle state.
     /// </summary>
     /// <param name="failure">Failure information</param>
-    private void HandleUnexpectedFailure(Status.Failure failure)
+    private void HandleUnexpectedFailure(Records.FailureContext failure)
     {
-        actorLogger.Error(failure.Cause, "Unexpected failure in ConversationSupervisorActor");
+        actorLogger.Error(failure.Failure.Cause, "Unexpected failure in ConversationSupervisorActor");
 
-        Sender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
+        failure.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
     }
 
     /// <summary>

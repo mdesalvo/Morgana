@@ -36,7 +36,7 @@ public class GuardActor : MorganaActor
         // Returns GuardCheckResponse with compliant flag and optional violation message
         ReceiveAsync<Records.GuardCheckRequest>(CheckComplianceAsync);
         Receive<Records.LLMCheckContext>(HandleLLMCheckResult);
-        Receive<Status.Failure>(HandleFailure);
+        Receive<Records.FailureContext>(HandleFailure);
     }
 
     /// <summary>
@@ -83,8 +83,7 @@ public class GuardActor : MorganaActor
         {
             actorLogger.Error(ex, "LLM policy check failed");
 
-            // Fallback on error: assume compliant to avoid blocking legitimate requests
-            Self.Tell(new Records.LLMCheckContext(new Records.GuardCheckResponse(true, null), originalSender));
+            Self.Tell(new Records.FailureContext(new Status.Failure(ex), originalSender));
         }
     }
 
@@ -105,11 +104,11 @@ public class GuardActor : MorganaActor
     /// Falls back to "compliant" status to avoid blocking legitimate requests on errors.
     /// </summary>
     /// <param name="failure">Failure information</param>
-    private void HandleFailure(Status.Failure failure)
+    private void HandleFailure(Records.FailureContext failure)
     {
-        actorLogger.Error(failure.Cause, "Guard check failed");
+        actorLogger.Error(failure.Failure.Cause, "Guard check failed");
 
         // Fallback: assume compliant on error to avoid blocking legitimate requests
-        Sender.Tell(new Records.GuardCheckResponse(true, null));
+        failure.OriginalSender.Tell(new Records.GuardCheckResponse(true, null));
     }
 }

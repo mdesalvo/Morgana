@@ -56,7 +56,7 @@ public class ClassifierActor : MorganaActor
         // - Falls back to "other" intent on classification failures to maintain conversation flow
         ReceiveAsync<Records.UserMessage>(ClassifyMessageAsync);
         Receive<Records.ClassificationContext>(HandleClassificationResult);
-        Receive<Status.Failure>(HandleFailure);
+        Receive<Records.FailureContext>(HandleFailure);
     }
 
     /// <summary>
@@ -97,16 +97,7 @@ public class ClassifierActor : MorganaActor
         {
             actorLogger.Error(ex, "Error classifying message");
 
-            // Fallback to "other" intent on classification failure
-            Records.ClassificationResult fallback = new Records.ClassificationResult(
-                "other",
-                new Dictionary<string, string>
-                {
-                    ["confidence"] = "0.00",
-                    ["error"] = "classification_failed"
-                });
-
-            Self.Tell(new Records.ClassificationContext(fallback, null, originalSender));
+            Self.Tell(new Records.FailureContext(new Status.Failure(ex), originalSender));
         }
     }
 
@@ -128,9 +119,9 @@ public class ClassifierActor : MorganaActor
     /// Falls back to "other" intent to maintain conversation flow.
     /// </summary>
     /// <param name="failure">Failure information</param>
-    private void HandleFailure(Status.Failure failure)
+    private void HandleFailure(Records.FailureContext failure)
     {
-        actorLogger.Error(failure.Cause, "Classification pipeline failed");
+        actorLogger.Error(failure.Failure.Cause, "Classification failed");
 
         // Fallback to "other" intent on pipeline failure
         Records.ClassificationResult fallback = new Records.ClassificationResult(
@@ -138,9 +129,9 @@ public class ClassifierActor : MorganaActor
             new Dictionary<string, string>
             {
                 ["confidence"] = "0.00",
-                ["error"] = "classification_pipeline_failed"
+                ["error"] = $"classification_failed: {failure.Failure.Cause.Message}"
             });
 
-        Sender.Tell(fallback);
+        failure.OriginalSender.Tell(fallback);
     }
 }

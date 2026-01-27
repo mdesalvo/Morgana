@@ -127,6 +127,7 @@ public class MorganaAgent : MorganaActor
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
         Receive<Records.ReceiveContextUpdate>(HandleContextUpdate);
+        ReceiveAsync<Records.FailureContext>(HandleAgentFailureAsync);
     }
 
     /// <summary>
@@ -360,11 +361,36 @@ public class MorganaAgent : MorganaActor
         {
             agentLogger.LogError(ex, $"Error in {GetType().Name}");
 
-            List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>("ErrorAnswers");
-            Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
-
-            senderRef.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
+            Self.Tell(new Records.FailureContext(new Status.Failure(ex), senderRef));
         }
+    }
+
+    /// <summary>
+    /// Handles agent execution failures that occur during message processing.
+    /// Sends a generic error response to the original sender to maintain conversation flow.
+    /// </summary>
+    /// <param name="failure">Failure context containing the exception and original sender reference</param>
+    /// <remarks>
+    /// <para>This handler is invoked when ExecuteAgentAsync encounters an unhandled exception.
+    /// It ensures the conversation doesn't get stuck by returning a user-friendly error message
+    /// and marking the interaction as completed (IsCompleted = true).</para>
+    /// <para><strong>Error Recovery Strategy:</strong></para>
+    /// <list type="bullet">
+    /// <item>Log the exception for debugging</item>
+    /// <item>Load generic error message from Morgana prompt configuration</item>
+    /// <item>Send fallback response to original sender</item>
+    /// <item>Mark interaction as completed to prevent stuck conversations</item>
+    /// </list>
+    /// </remarks>
+    private async Task HandleAgentFailureAsync(Records.FailureContext failure)
+    {
+        agentLogger.LogError(failure.Failure.Cause, $"Agent execution failed in {GetType().Name}");
+
+        Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync("Morgana");
+        List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>("ErrorAnswers");
+        Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
+
+        failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
     }
 
     /// <summary>

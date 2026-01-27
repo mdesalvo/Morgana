@@ -579,6 +579,16 @@ public static class Records
         IActorRef AgentRef,
         IActorRef OriginalSender);
 
+    /// <summary>
+    /// Context wrapper for failure via PipeTo in RouterActor.
+    /// Captures Akka.NET failure state and original sender for proper routing.
+    /// </summary>
+    /// <param name="Failure">Akka.NET failure status</param>
+    /// <param name="OriginalSender">Actor reference to reply to (typically ConversationSupervisorActor)</param>
+    public record FailureContext(
+        Status.Failure Failure,
+        IActorRef OriginalSender);
+
     // --- GuardActor Contexts ---
 
     /// <summary>

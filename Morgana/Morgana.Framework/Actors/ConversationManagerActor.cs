@@ -56,7 +56,7 @@ public class ConversationManagerActor : MorganaActor
         // - SupervisorResponseContext: successful response from supervisor → send to client via SignalR
         // - Status.Failure: timeout or exception from supervisor → send error message to client
         ReceiveAsync<Records.SupervisorResponseContext>(HandleSupervisorResponseAsync);
-        ReceiveAsync<Status.Failure>(HandleSupervisorFailureAsync);
+        ReceiveAsync<Records.FailureContext>(HandleSupervisorFailureAsync);
     }
 
     /// <summary>
@@ -142,7 +142,7 @@ public class ConversationManagerActor : MorganaActor
                 .PipeTo(
                     Self,
                     success: response => new Records.SupervisorResponseContext(response),
-                    failure: ex => new Status.Failure(ex));
+                    failure: ex => new Records.FailureContext(new Status.Failure(ex), supervisor));
     }
 
     /// <summary>
@@ -183,7 +183,7 @@ public class ConversationManagerActor : MorganaActor
                     "An error occurred while sending the response.",
                     "assistant",
                     null,
-                    "delivery_error",
+                    $"delivery_error: {ex.Message}",
                     "Morgana",
                     false);
             }
@@ -199,9 +199,9 @@ public class ConversationManagerActor : MorganaActor
     /// Sends an error message to the client via SignalR.
     /// </summary>
     /// <param name="failure">Failure information from supervisor</param>
-    private async Task HandleSupervisorFailureAsync(Status.Failure failure)
+    private async Task HandleSupervisorFailureAsync(Records.FailureContext failure)
     {
-        actorLogger.Error(failure.Cause, "Supervisor did not reply in time or failed");
+        actorLogger.Error(failure.Failure.Cause, "Supervisor did not reply in time or failed");
 
         // Send error message to client via SignalR
         try

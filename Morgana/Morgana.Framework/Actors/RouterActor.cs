@@ -54,7 +54,7 @@ public class RouterActor : MorganaActor
         // - Returns error messages for missing/unrecognized intents
         ReceiveAsync<Records.AgentRequest>(RouteToAgentAsync);
         Receive<Records.AgentResponseContext>(HandleAgentResponse);
-        Receive<Status.Failure>(HandleFailure);
+        Receive<Records.FailureContext>(HandleFailure);
 
         // Broadcast context updates from one agent to all other registered agents:
         // - Used for sharing context variables across agents (e.g., userId from BillingAgent → ContractAgent)
@@ -142,7 +142,7 @@ public class RouterActor : MorganaActor
                 .PipeTo(
                     Self,
                     success: response => new Records.AgentResponseContext(response, selectedAgent, originalSender),
-                    failure: ex => new Status.Failure(ex));
+                    failure: ex => new Records.FailureContext(new Status.Failure(ex), originalSender));
     }
 
     /// <summary>
@@ -168,12 +168,12 @@ public class RouterActor : MorganaActor
     /// Returns an error message to the sender using the unrecognized intent error template.
     /// </summary>
     /// <param name="failure">Failure information</param>
-    private void HandleFailure(Status.Failure failure)
+    private void HandleFailure(Records.FailureContext failure)
     {
-        actorLogger.Error(failure.Cause, "Agent routing failed");
+        actorLogger.Error(failure.Failure.Cause, "Agent routing failed");
 
         Records.Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
-        Sender.Tell(new Records.AgentResponse(
+        failure.OriginalSender.Tell(new Records.AgentResponse(
             classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), true));
     }
 
