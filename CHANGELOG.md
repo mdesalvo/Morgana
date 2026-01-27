@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
+- Rewritten README.md to be simpler, clearer, not technical
 
 ### 🐛 Fixed
 - Certain LLM providers (like OpenAI) generate response messages with Unix timestamps (no milliseconds)
