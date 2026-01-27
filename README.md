@@ -30,13 +30,13 @@ Morgana will kindly assist you with her magical AI potions just the way you **ne
 <table style="border:none;">
   <tr>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana-SparkleLoader.jpg" alt="Morgana Sparkle Loader" width="256"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana-SparkleLoader.jpg" alt="Morgana Sparkle Loader"/>
     </td>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana-Presentation.jpg" alt="Morgana Presentation" width="256"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana-Presentation.jpg" alt="Morgana Presentation"/>
     </td>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana-Chatting.jpg" alt="Morgana Chatting" width="256"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana-Chatting.jpg" alt="Morgana Chatting"/>
     </td>
   </tr>
 </table>
