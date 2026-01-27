@@ -31,7 +31,6 @@ public class ConversationController : ControllerBase
     private readonly ActorSystem actorSystem;
     private readonly ILogger logger;
     private readonly IConversationPersistenceService conversationPersistenceService;
-    private readonly IHubContext<ConversationHub> signalrContext;
 
     /// <summary>
     /// Initializes a new instance of the ConversationController.
@@ -39,17 +38,14 @@ public class ConversationController : ControllerBase
     /// <param name="actorSystem">Akka.NET actor system for conversation management</param>
     /// <param name="logger">Logger instance for diagnostic information</param>
     /// <param name="conversationPersistenceService">Service for recovering an existing conversation</param>
-    /// <param name="signalrContext">SignalR hub context for real-time client communication</param>
     public ConversationController(
         ActorSystem actorSystem,
         ILogger logger,
-        IConversationPersistenceService conversationPersistenceService,
-        IHubContext<ConversationHub> signalrContext)
+        IConversationPersistenceService conversationPersistenceService)
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
         this.conversationPersistenceService = conversationPersistenceService;
-        this.signalrContext = signalrContext;
     }
 
     /// <summary>
