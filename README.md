@@ -27,6 +27,20 @@ The system is powered by **Microsoft.Agents.AI**, enabling seamless integration 
 
 Morgana will kindly assist you with her magical AI potions just the way you **need**, just the way you **want**.
 
+<table style="border:none;">
+  <tr>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana-SparkleLoader.jpg" alt="Morgana Sparkle Loader" width="256"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana-Presentation.jpg" alt="Morgana Presentation" width="256"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana-Chatting.jpg" alt="Morgana Chatting" width="256"/>
+    </td>
+  </tr>
+</table>
+
 ## Core Philosophy
 
 Traditional chatbot systems struggle with complexity—they either become monolithic and unmaintainable, or lack the contextual awareness needed for sophisticated interactions.
