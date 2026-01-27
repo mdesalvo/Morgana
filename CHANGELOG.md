@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - UNDER DEVELOPMENT
+
+### ✨ Added
+
+### 🔄 Changed
+
+### 🐛 Fixed
+- Certain LLM providers (like OpenAI) generate response messages with Unix timestamps (no milliseconds)
+
+### 🚀 Future Enablement
+
+
 ## [0.12.1] - 2026-01-25
 ### 🎯 Major Feature: Production-Ready Docker Deployment
 This release introduces **complete Docker containerization** of both **Morgana (backend)** and **Cauldron (frontend)**, enabling **single-command deployment**, **reproducible builds**, and **seamless distribution** via Docker Hub with automated CI/CD pipelines.
