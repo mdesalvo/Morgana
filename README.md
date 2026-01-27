@@ -1,9 +1,9 @@
-<table style="border:none;">
+<table style="border:none;" width="100%">
   <tr>
     <td width="256">
       <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana.jpg" alt="Morgana Logo" width="256"/>
     </td>
-    <td>
+    <td style="width:calc(100% - 256px);">
       <h1>Morgana</h1>
       <p><strong>A magical witch assistant equipped with an enchanted AI-driven grimoire</strong></p>
       <p>
@@ -48,11 +48,14 @@ Morgana will kindly assist you with her magical AI potions just the way you **ne
 
 Traditional chatbot systems struggle with complexity—they either become monolithic and unmaintainable, or lack the contextual awareness needed for sophisticated interactions.
 
-Morgana **reimagines conversational AI** through four foundational pillars that **work in harmony** to deliver an **orchestration framework** that is powerful yet remarkably simple to configure.
+Morgana **reimagines conversational AI** through 4 foundational pillars that **work in harmony** to deliver an **orchestration framework** that is powerful yet remarkably simple to configure.
 
-**[🎭 Actor System](#-morgana-actor-system) [🤖 Agent System](#-morgana-agent-system) [📝 Prompting System](#-morgana-prompting-system) [💾 Context System](#-morgana-context-system)**
-
----
+<p align="center">
+  <a href="#-morgana-actor-system">🎭 Actor System</a> |
+  <a href="#-morgana-agent-system">🤖 Agent System</a> |
+  <a href="#-morgana-prompting-system">📝 Prompting System</a> |
+  <a href="#-morgana-context-system">💾 Context System</a>
+</p>
 
 ### 🎭 Morgana Actor System
 *Resilient orchestration through Akka.NET message-driven architecture*
@@ -206,4 +209,4 @@ This architecture delivers three critical benefits—all configurable through de
 
 ---
 
-**The Morgana Difference**: These four pillars work together to create an orchestration framework where adding a new domain agent requires only configuration and attribute decoration—no changes to the core framework, no manual registration, no brittle coupling. It's **conversational AI architecture designed for evolution at scale**.
+**The Morgana Difference**: These 4 pillars work together to create an orchestration framework where adding a new domain agent requires only configuration and attribute decoration—no changes to the core framework, no manual registration, no brittle coupling. It's **conversational AI architecture designed for evolution at scale**.
