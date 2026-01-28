@@ -66,8 +66,6 @@ public class ConversationManagerActor : MorganaActor
     /// <param name="msg">Conversation creation request message</param>
     private async Task HandleCreateConversationAsync(Records.CreateConversation msg)
     {
-        IActorRef senderRef = Sender;
-
         actorLogger.Info($"Creating conversation {msg.ConversationId}");
 
         if (supervisor is null)
@@ -87,8 +85,6 @@ public class ConversationManagerActor : MorganaActor
                 actorLogger.Info("Presentation generation triggered");
             }
         }
-
-        senderRef.Tell(new Records.ConversationCreated(msg.ConversationId));
     }
 
     /// <summary>

@@ -24,13 +24,6 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Confirmation message sent after a conversation is successfully created.
-    /// </summary>
-    /// <param name="ConversationId">Unique identifier of the created conversation</param>
-    public record ConversationCreated(
-        string ConversationId);
-
-    /// <summary>
     /// Final response message sent from ConversationSupervisorActor to ConversationManagerActor after processing a user message.
     /// Contains the AI response, metadata, agent information, and optional quick reply buttons.
     /// </summary>
@@ -105,7 +98,7 @@ public static class Records
         public string StoragePath { get; set; } = string.Empty;
 
         /// <summary>
-        /// Base64-encoded 256-bit AES encryption key for conversation data.
+        /// Base64-encoded 256-bit AES encryption key for conversation data.<br/>
         /// CRITICAL: Keep this key secure and never commit it to source control.
         /// </summary>
         /// <example>3q2+7w8e9r0t1y2u3i4o5p6a7s8d9f0g1h2j3k4l5z6x7c8v9b0n1m2==</example>
