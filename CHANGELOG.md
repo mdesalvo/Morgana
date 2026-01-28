@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 - Certain LLM providers (like OpenAI) generate response messages with Unix timestamps (no milliseconds)
-- Fixed dead letter issues in actor error handling by implementing unified `FailureContext` pattern to preserve sender references across async operations
+- Fixed dead letter issues in actor error handling by implementing unified `FailureContext` pattern to preserve sender references
 
 ### 🚀 Future Enablement
 
