@@ -1,11 +1,14 @@
+using System.Text.RegularExpressions;
 using Akka.Actor;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 using Morgana.Framework;
 using Morgana.Framework.Actors;
 using Morgana.Framework.Extensions;
 using Morgana.Framework.Interfaces;
 using Morgana.SignalR.Hubs;
+using Morgana.SignalR.Messages;
 
 namespace Morgana.SignalR.Controllers;
 
@@ -30,22 +33,34 @@ public class ConversationController : ControllerBase
 {
     private readonly ActorSystem actorSystem;
     private readonly ILogger logger;
+    private readonly IHubContext<ConversationHub> signalrContext;
     private readonly IConversationPersistenceService conversationPersistenceService;
+    private readonly IRateLimitService rateLimitService;
+    private readonly Records.RateLimitOptions rateLimitOptions; 
 
     /// <summary>
     /// Initializes a new instance of the ConversationController.
     /// </summary>
     /// <param name="actorSystem">Akka.NET actor system for conversation management</param>
     /// <param name="logger">Logger instance for diagnostic information</param>
+    /// <param name="signalrContext">SignalR hub context for real-time client communication</param>
     /// <param name="conversationPersistenceService">Service for recovering an existing conversation</param>
+    /// <param name="rateLimitService">Service for rate limiting an existing conversation</param>
+    /// <param name="rateLimitOptions">Options for configuration of the rate limiting service</param>
     public ConversationController(
         ActorSystem actorSystem,
         ILogger logger,
-        IConversationPersistenceService conversationPersistenceService)
+        IHubContext<ConversationHub> signalrContext,
+        IConversationPersistenceService conversationPersistenceService,
+        IRateLimitService rateLimitService,
+        IOptions<Records.RateLimitOptions> rateLimitOptions)
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
+        this.signalrContext = signalrContext;
         this.conversationPersistenceService = conversationPersistenceService;
+        this.rateLimitService = rateLimitService;
+        this.rateLimitOptions = rateLimitOptions.Value;
     }
 
     /// <summary>
@@ -286,6 +301,41 @@ public class ConversationController : ControllerBase
     {
         try
         {
+            #region Rate Limiting
+            Records.RateLimitResult rateLimitResult = await rateLimitService.CheckAndRecordAsync(request.ConversationId);
+            if (!rateLimitResult.IsAllowed)
+            {
+                logger.LogWarning(
+                    $"Rate limit exceeded for conversation {request.ConversationId}: {rateLimitResult.ViolatedLimit}");
+
+                // Send friendly error message to client via SignalR
+                string rateLimitViolation = GetRateLimitErrorMessage(rateLimitResult);
+                await signalrContext.Clients
+                    .Group(request.ConversationId)
+                    .SendAsync("ReceiveMessage", new SignalRMessage
+                    {
+                        ConversationId = request.ConversationId,
+                        Text = rateLimitViolation,
+                        Timestamp = DateTime.UtcNow,
+                        MessageType = "error",
+                        ErrorReason = "rate_limit_exceeded",
+                        AgentName = "Morgana",
+                        AgentCompleted = false,
+                        QuickReplies = null
+                    });
+
+                // Return 429 Too Many Requests with retry-after header
+                Response.Headers.Append("Retry-After", rateLimitResult.RetryAfterSeconds?.ToString() ?? "60");
+                return StatusCode(429, new
+                {
+                    error = "Rate limit exceeded",
+                    violatedLimit = rateLimitResult.ViolatedLimit,
+                    retryAfterSeconds = rateLimitResult.RetryAfterSeconds,
+                    message = rateLimitViolation
+                });
+            }
+            #endregion
+
             logger.LogInformation($"Sending message to conversation {request.ConversationId}");
 
             IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>(
@@ -329,4 +379,33 @@ public class ConversationController : ControllerBase
             uptime = actorSystem.Uptime
         });
     }
+
+    #region Utilities
+    /// <summary>
+    /// Gets user-friendly error message for rate limit violations from configuration.
+    /// Messages are customizable via appsettings.json (Morgana:RateLimiting section).
+    /// Supports {limit} placeholder for displaying the actual limit value.
+    /// </summary>
+    private string GetRateLimitErrorMessage(Records.RateLimitResult result)
+    {
+        string message = result.ViolatedLimit switch
+        {
+            { } s when s.Contains("PerMinute") => rateLimitOptions.ErrorMessagePerMinute,
+            { } s when s.Contains("PerHour") => rateLimitOptions.ErrorMessagePerHour,
+            { } s when s.Contains("PerDay") => rateLimitOptions.ErrorMessagePerDay,
+            _ => rateLimitOptions.ErrorMessageDefault
+        };
+
+        // Replace {limit} placeholder if present (e.g., "You've exceeded {limit} messages")
+        // Extract limit value from ViolatedLimit string (format: "MaxMessagesPerMinute (5)")
+        if (message.Contains("{limit}") && result.ViolatedLimit != null)
+        {
+            Match match = Regex.Match(result.ViolatedLimit, @"\((\d+)\)");
+            if (match.Success)
+                message = message.Replace("{limit}", match.Groups[1].Value);
+        }
+
+        return message;
+    }
+    #endregion
 }

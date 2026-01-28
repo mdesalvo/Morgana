@@ -133,17 +133,35 @@ builder.Services.AddSingleton<ILLMService>(sp => {
 builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMService>().GetChatClient());
 
 // ==============================================================================
-// SECTION 7: Conversation Persistence
+// SECTION 7.1: Conversation Persistence
 // ==============================================================================
 // Encrypted file-based persistence for conversation state (AgentSession + Context)
 // Enables resuming conversations across application restarts
 //
-// Storage Model: Each conversation stored as encrypted "{conversationId}.morgana.json" file
+// Storage Model: Each conversation stored as encrypted "morgana-{conversationId}.db" file
 // Configuration: Morgana:ConversationPersistence in appsettings.json
 
 builder.Services.Configure<Records.ConversationPersistenceOptions>(
-builder.Configuration.GetSection("Morgana:ConversationPersistence"));
+    builder.Configuration.GetSection("Morgana:ConversationPersistence"));
 builder.Services.AddSingleton<IConversationPersistenceService, SQLiteConversationPersistenceService>();
+
+
+// ==============================================================================
+// SECTION 7.2: Rate Limiting
+// ==============================================================================
+// Protects against spam, abuse, and cost explosion by enforcing message quotas
+// Stores request logs in the same SQLite database as conversation persistence
+//
+// Architecture:
+// - SQLiteRateLimitService depends on IConversationPersistenceService
+// - Delegates database initialization to persistence service (single source of truth)
+//
+// Configuration: Morgana:RateLimiting in appsettings.json
+// Storage: Reuses conversation SQLite databases (morgana-{conversationId}.db)
+
+builder.Services.Configure<Records.RateLimitOptions>(
+    builder.Configuration.GetSection("Morgana:RateLimiting"));
+builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 
 // ==============================================================================
 // SECTION 8: Agent Adapter

@@ -119,4 +119,23 @@ public interface IConversationPersistenceService
     Task<MorganaChatMessage[]> GetConversationHistoryAsync(
         string conversationId,
         JsonSerializerOptions? jsonSerializerOptions = null);
+
+    /// <summary>
+    /// Ensures the conversation database exists and is initialized with the latest schema.
+    /// Idempotent - safe to call multiple times (checks PRAGMA user_version).
+    /// </summary>
+    /// <param name="conversationId">Unique identifier of the conversation</param>
+    /// <returns>Task representing the async initialization operation</returns>
+    /// <remarks>
+    /// <para><strong>Use Cases:</strong></para>
+    /// <list type="bullet">
+    /// <item>Called by rate limiter before first message (if no agent executed yet)</item>
+    /// <item>Called by agent persistence before saving session</item>
+    /// <item>Ensures database exists even if user sends message before agent activation</item>
+    /// </list>
+    /// <para><strong>Schema Version Management:</strong></para>
+    /// <para>This method checks PRAGMA user_version and creates/migrates schema as needed.
+    /// Current version: 2 (adds rate_limit_log table).</para>
+    /// </remarks>
+    Task EnsureDatabaseInitializedAsync(string conversationId);
 }

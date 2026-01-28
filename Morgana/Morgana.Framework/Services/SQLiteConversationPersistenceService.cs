@@ -25,7 +25,6 @@ namespace Morgana.Framework.Services;
 /// Table structure (morgana):
 ///   - agent_identifier: TEXT PRIMARY KEY (e.g., "billing-conv12345")
 ///   - agent_name: TEXT UNIQUE (e.g., "billing")
-///   - conversation_id: TEXT (e.g., "conv12345")
 ///   - agent_session: BLOB (AES-256-CBC encrypted AgentSession JSON)
 ///   - creation_date: TEXT (ISO 8601: "yyyy-MM-ddTHH:mm:ss.fffZ")
 ///   - last_update: TEXT (ISO 8601: "yyyy-MM-ddTHH:mm:ss.fffZ")
@@ -86,6 +85,16 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             throw new ArgumentException("EncryptionKey must be a 256-bit (32-byte) key encoded as Base64");
 
         logger.LogInformation($"{nameof(SQLiteConversationPersistenceService)} initialized with storage path: {this.options.StoragePath}");
+    }
+
+    /// <inheritdoc/>
+    public async Task EnsureDatabaseInitializedAsync(string conversationId)
+    {
+        string connectionString = GetConnectionString(conversationId);
+        await using SqliteConnection connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+
+        await EnsureDatabaseInitializedAsync(connection);
     }
 
     /// <inheritdoc/>
@@ -196,10 +205,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
 
             // Query agent session
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
-            sqliteCommand.CommandText =
-"""
-SELECT agent_session FROM morgana WHERE agent_identifier = @agent_identifier;
-""";
+            sqliteCommand.CommandText = "SELECT agent_session FROM morgana WHERE agent_identifier = @agent_identifier;";
             sqliteCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
             await using SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync();
@@ -251,10 +257,7 @@ SELECT agent_session FROM morgana WHERE agent_identifier = @agent_identifier;
             await sqliteConnection.OpenAsync();
 
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
-            sqliteCommand.CommandText =
-"""
-SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIMIT 1;
-""";
+            sqliteCommand.CommandText = "SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIMIT 1;";
 
             object? result = await sqliteCommand.ExecuteScalarAsync();
 
@@ -297,10 +300,7 @@ SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIM
             await sqliteConnection.OpenAsync();
 
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
-            sqliteCommand.CommandText =
-"""
-SELECT agent_name, agent_session, is_active FROM morgana ORDER BY creation_date ASC;
-""";
+            sqliteCommand.CommandText = "SELECT agent_name, agent_session, is_active FROM morgana ORDER BY creation_date ASC;";
 
             await using SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync();
 
@@ -385,8 +385,8 @@ SELECT agent_name, agent_session, is_active FROM morgana ORDER BY creation_date 
     }
 
     /// <summary>
-    /// Ensures the database is initialized with schema.
-    /// Uses SQLite's user_version pragma to track initialization state - only runs once per database.
+    /// Internal implementation that works with an already-open connection.
+    /// Used by both public API and internal persistence operations.
     /// </summary>
     /// <param name="connection">Open SQLite connection</param>
     private async Task EnsureDatabaseInitializedAsync(SqliteConnection connection)
@@ -411,13 +411,20 @@ CREATE TABLE IF NOT EXISTS morgana (
     last_update TEXT NOT NULL,
     is_active INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS rate_limit_log (
+    request_timestamp TEXT NOT NULL
+);
 """;
         await schemaCommand.ExecuteNonQueryAsync();
 
-        // Mark database as initialized (once, forever)
+        // Mark database as initialized (version 2)
         await using SqliteCommand versionCommand = connection.CreateCommand();
         versionCommand.CommandText = "PRAGMA user_version = 2;";
         await versionCommand.ExecuteNonQueryAsync();
+
+        logger.LogInformation(
+            $"Initialized database schema v2 for: {Path.GetFileName(connection.DataSource)}");
     }
 
     /// <summary>

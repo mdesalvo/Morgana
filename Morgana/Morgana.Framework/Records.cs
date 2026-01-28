@@ -212,6 +212,104 @@ public static class Records
     }
 
     // ==========================================================================
+    // RATE LIMITING
+    // ==========================================================================
+
+    /// <summary>
+    /// Configuration options for conversation rate limiting.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Configuration Example:</strong></para>
+    /// <code>
+    /// {
+    ///   "Morgana": {
+    ///     "RateLimiting": {
+    ///       "Enabled": true,
+    ///       "MaxMessagesPerMinute": 5,
+    ///       "MaxMessagesPerHour": 30,
+    ///       "MaxMessagesPerDay": 100,
+    ///       "ErrorMessagePerMinute": "✋ Whoa there! You're casting spells too quickly...",
+    ///       "ErrorMessagePerHour": "⏰ You've reached your hourly spell quota...",
+    ///       "ErrorMessagePerDay": "🌙 You've exhausted today's magical energy...",
+    ///       "ErrorMessageDefault": "⚠️ You're sending messages too quickly..."
+    ///     }
+    ///   }
+    /// }
+    /// </code>
+    /// </remarks>
+    public record RateLimitOptions
+    {
+        /// <summary>
+        /// Master toggle for rate limiting feature.
+        /// Set to false to disable all rate limiting (useful for development/testing).
+        /// </summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>
+        /// Maximum messages allowed per minute per conversation.
+        /// Prevents burst spam. Set to 0 to disable this check.
+        /// </summary>
+        /// <example>5</example>
+        public int MaxMessagesPerMinute { get; set; } = 5;
+
+        /// <summary>
+        /// Maximum messages allowed per hour per conversation.
+        /// Prevents sustained abuse. Set to 0 to disable this check.
+        /// </summary>
+        /// <example>30</example>
+        public int MaxMessagesPerHour { get; set; } = 30;
+
+        /// <summary>
+        /// Maximum messages allowed per day per conversation.
+        /// Enforces daily quotas. Set to 0 to disable this check.
+        /// </summary>
+        /// <example>100</example>
+        public int MaxMessagesPerDay { get; set; } = 100;
+
+        /// <summary>
+        /// Error message displayed when per-minute limit is exceeded.
+        /// Supports placeholders: {limit} for the actual limit value.
+        /// </summary>
+        /// <example>✋ Whoa there! You're casting spells too quickly. Please wait a moment before trying again.</example>
+        public string ErrorMessagePerMinute { get; set; } = 
+            "✋ Whoa there! You're casting spells too quickly. Please wait a moment before trying again.";
+
+        /// <summary>
+        /// Error message displayed when per-hour limit is exceeded.
+        /// Supports placeholders: {limit} for the actual limit value.
+        /// </summary>
+        /// <example>⏰ You've reached your hourly spell quota. The magic cauldron needs time to recharge!</example>
+        public string ErrorMessagePerHour { get; set; } = 
+            "⏰ You've reached your hourly spell quota. The magic cauldron needs time to recharge!";
+
+        /// <summary>
+        /// Error message displayed when per-day limit is exceeded.
+        /// Supports placeholders: {limit} for the actual limit value.
+        /// </summary>
+        /// <example>🌙 You've exhausted today's magical energy. Return tomorrow for more spells!</example>
+        public string ErrorMessagePerDay { get; set; } = 
+            "🌙 You've exhausted today's magical energy. Return tomorrow for more spells!";
+
+        /// <summary>
+        /// Default error message for unknown/generic rate limit violations.
+        /// </summary>
+        /// <example>⚠️ You're sending messages too quickly. Please slow down.</example>
+        public string ErrorMessageDefault { get; set; } = 
+            "⚠️ You're sending messages too quickly. Please slow down.";
+    }
+
+    /// <summary>
+    /// Result of a rate limit check operation.
+    /// </summary>
+    /// <param name="IsAllowed">Whether the request is allowed to proceed</param>
+    /// <param name="ViolatedLimit">Description of which limit was exceeded (null if allowed)</param>
+    /// <param name="RetryAfterSeconds">Suggested wait time in seconds before retrying (null if allowed)</param>
+    public record RateLimitResult(
+        bool IsAllowed,
+        string? ViolatedLimit = null,
+        int? RetryAfterSeconds = null);
+
+    // ==========================================================================
     // USER MESSAGE HANDLING
     // ==========================================================================
 
