@@ -392,14 +392,14 @@ public class MorganaAgentAdapter
                 AIContextProviderFactory = (_, _) =>
                     new ValueTask<AIContextProvider>(morganaAIContextProvider),
 
-                // Give the agent a factory for ChatMessageStore
-                ChatMessageStoreFactory = (chatMessageStoreFactoryContext, _) =>
-                    new ValueTask<ChatMessageStore>(
-                        new MorganaChatMessageStoreProvider(
+                // Give the agent a factory for ChatHistoryProvider
+                ChatHistoryProviderFactory = (chatHistoryProviderFactoryContext, _) =>
+                    new ValueTask<ChatHistoryProvider>(
+                        new MorganaChatHistoryProvider(
                             conversationId,
                             intent,
-                            chatMessageStoreFactoryContext.SerializedState,
-                            chatMessageStoreFactoryContext.JsonSerializerOptions,
+                            chatHistoryProviderFactoryContext.SerializedState,
+                            chatHistoryProviderFactoryContext.JsonSerializerOptions,
                             logger)),
 
                 // Give the agent its identifiers

@@ -135,7 +135,7 @@ builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMServi
 // ==============================================================================
 // SECTION 7: Conversation Persistence
 // ==============================================================================
-// Encrypted file-based persistence for conversation state (AgentThread + Context)
+// Encrypted file-based persistence for conversation state (AgentSession + Context)
 // Enables resuming conversations across application restarts
 //
 // Storage Model: Each conversation stored as encrypted "{conversationId}.morgana.json" file

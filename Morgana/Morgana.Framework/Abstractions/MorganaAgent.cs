@@ -12,17 +12,17 @@ namespace Morgana.Framework.Abstractions;
 
 /// <summary>
 /// Base class for domain-specific conversational agents in the Morgana framework.
-/// Extends MorganaActor with AI agent capabilities, conversation threading, context management, and inter-agent communication.
+/// Extends MorganaActor with AI agent capabilities, conversation session, context management and inter-agent communication.
 /// </summary>
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
 /// <para>MorganaAgent provides the foundation for building specialized conversational agents that handle specific intents
-/// (e.g., BillingAgent, ContractAgent, MonkeysAgent). Each agent manages its own conversation thread,
+/// (e.g., BillingAgent, ContractAgent, MonkeysAgent). Each agent manages its own conversation session,
 /// context variables, and can communicate with other agents via the RouterActor.</para>
 /// <para><strong>Key Features:</strong></para>
 /// <list type="bullet">
 /// <item><term>AI Agent Integration</term><description>Uses Microsoft.Agents.AI for LLM interactions with tool calling</description></item>
-/// <item><term>Conversation Threading</term><description>Maintains conversation history via AgentThread for context-aware responses</description></item>
+/// <item><term>Conversation Session</term><description>Maintains conversation history via AgentSession for context-aware responses</description></item>
 /// <item><term>Context Management</term><description>MorganaContextProvider for reading/writing conversation variables</description></item>
 /// <item><term>Inter-Agent Communication</term><description>Broadcast and receive shared context variables across agents</description></item>
 /// <item><term>Interactive Token Detection</term><description>Detects #INT# token to signal multi-turn conversations</description></item>
@@ -52,16 +52,16 @@ public class MorganaAgent : MorganaActor
     /// Conversation thread maintaining the history of messages with this agent.
     /// Created lazily on first agent execution and reused for follow-up messages.
     /// </summary>
-    protected AgentThread? aiAgentThread;
+    protected AgentSession? aiAgentSession;
 
     /// <summary>
     /// Context provider for reading and writing conversation variables.
     /// Manages both local (agent-specific) and shared (cross-agent) context.
     /// </summary>
-    protected MorganaAIContextProvider contextProvider;
+    protected MorganaAIContextProvider aiContextProvider;
 
     /// <summary>
-    /// Service for persisting and loading conversation state (AgentThread + context) across application restarts.
+    /// Service for persisting and loading conversation state (AgentSession + context) across application restarts.
     /// Enables resuming conversations from encrypted file storage.
     /// </summary>
     protected readonly IConversationPersistenceService persistenceService;
@@ -93,7 +93,7 @@ public class MorganaAgent : MorganaActor
     /// <para><strong>Format:</strong> {intent}-{conversationId}</para>
     /// <para><strong>Example:</strong> "billing-conv_123", "contract-conv_456"</para>
     /// <para><strong>Why Needed:</strong></para>
-    /// <para>In Morgana, each agent maintains its own AgentThread within a conversation.
+    /// <para>In Morgana, each agent maintains its own AgentSession within a conversation.
     /// BillingAgent, ContractAgent, and MonkeyAgent all participate in the same
     /// conversation but have separate message histories and context. This property ensures
     /// each agent's state is persisted to a separate file.</para>
@@ -131,21 +131,21 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>
-    /// Deserializes a previously serialized AgentThread, restoring conversation history and context state.
+    /// Deserializes a previously serialized AgentSession, restoring conversation history and context state.
     /// Updates the existing context provider instance to preserve tool closures.
     /// </summary>
-    /// <param name="serializedThread">JSON element containing the serialized thread state from a previous Serialize() call</param>
+    /// <param name="serializedSession">JSON element containing the serialized session state from a previous Serialize() call</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (defaults to AgentAbstractionsJsonUtilities.DefaultOptions)</param>
-    /// <returns>Fully reconstituted AgentThread with restored message history, context variables, and chat message store</returns>
+    /// <returns>Fully reconstituted AgentSession with restored message history, context variables, and chat message store</returns>
     /// <remarks>
     /// <para><strong>Deserialization Process:</strong></para>
     /// <list type="number">
-    /// <item>Extract AIContextProviderState from serialized thread JSON</item>
+    /// <item>Extract AIContextProviderState from serialized session JSON</item>
     /// <item>Restore state into EXISTING MorganaContextProvider instance (preserves tool closures)</item>
     /// <item>Reconnect OnSharedContextUpdate callback for inter-agent communication</item>
     /// <item>Propagate shared variables to other agents</item>
-    /// <item>Delegate to underlying AIAgent.DeserializeThread to restore message history and chat store</item>
-    /// <item>Return fully functional AgentThread ready to continue the conversation</item>
+    /// <item>Delegate to underlying AIAgent.DeserializeSessionAsync to restore message history</item>
+    /// <item>Return fully functional AgentSession ready to continue the conversation</item>
     /// </list>
     /// <para><strong>CRITICAL - Tool Closure Preservation:</strong></para>
     /// <para>This method UPDATES the existing contextProvider instance instead of creating a new one.
@@ -156,33 +156,33 @@ public class MorganaAgent : MorganaActor
     /// <para>If we replaced the field with a new instance, tools would write to the old instance
     /// while the agent reads from the new one, causing quick_replies and other ephemeral data to be lost.</para>
     /// </remarks>
-    public virtual async Task<AgentThread> DeserializeThreadAsync(
-        JsonElement serializedThread,
+    public virtual async Task<AgentSession> DeserializeSessionAsync(
+        JsonElement serializedSession,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
         // Extract AIContextProviderState
         JsonElement aiContextProviderState = default;
-        if (serializedThread.TryGetProperty("aiContextProviderState", out JsonElement stateElement))
+        if (serializedSession.TryGetProperty("aiContextProviderState", out JsonElement stateElement))
             aiContextProviderState = stateElement;
 
         // Use it to restore internal state of MorganaContextProvider
         if (aiContextProviderState.ValueKind != JsonValueKind.Undefined)
-            contextProvider.RestoreState(aiContextProviderState, jsonSerializerOptions);
+            aiContextProvider.RestoreState(aiContextProviderState, jsonSerializerOptions);
 
         // Reconnect shared context update callback
-        contextProvider.OnSharedContextUpdate = OnSharedContextUpdate;
+        aiContextProvider.OnSharedContextUpdate = OnSharedContextUpdate;
 
         // Propagate shared variables with connected callback
-        contextProvider.PropagateSharedVariables();
+        aiContextProvider.PropagateSharedVariables();
 
-        // Delegate to underlying AIAgent to continue thread deserialization (ChatMessageStore)
-        aiAgentThread = await aiAgent.DeserializeThreadAsync(serializedThread, jsonSerializerOptions);
+        // Delegate to underlying AIAgent to complete session deserialization
+        aiAgentSession = await aiAgent.DeserializeSessionAsync(serializedSession, jsonSerializerOptions);
 
-        agentLogger.LogInformation($"Deserialized AgentThread for conversation {conversationId}");
+        agentLogger.LogInformation($"Deserialized AgentSession for conversation {conversationId}");
 
-        return aiAgentThread;
+        return aiAgentSession;
     }
 
     /// <summary>
@@ -244,32 +244,22 @@ public class MorganaAgent : MorganaActor
         agentLogger.LogInformation(
             $"Agent '{AgentIntent}' received shared context from '{msg.SourceAgentIntent}': {string.Join(", ", msg.UpdatedValues.Keys)}");
 
-        contextProvider.MergeSharedContext(msg.UpdatedValues);
+        aiContextProvider.MergeSharedContext(msg.UpdatedValues);
     }
 
     /// <summary>
-    /// Executes the agent using AgentThread for automatic conversation history and context management.
+    /// Executes the agent using AgentSession for automatic conversation history and context management.
     /// Handles conversation persistence, LLM interactions, interactive token detection, error handling, and response formatting.
     /// </summary>
     /// <param name="req">Agent request containing the user's message and optional classification</param>
     /// <returns>Task representing the async agent execution</returns>
     /// <remarks>
-    /// <para><strong>Execution Flow:</strong></para>
-    /// <list type="number">
-    /// <item>Load existing AgentThread from encrypted storage (if exists) or create new thread</item>
-    /// <item>Send user message to LLM via aiAgent.RunAsync</item>
-    /// <item>Detect #INT# token in response (signals incomplete interaction)</item>
-    /// <item>Detect quick replies which may have emitted by the LLM during tool's execution</item>
-    /// <item>Save updated AgentThread to encrypted storage</item>
-    /// <item>Remove #INT# token from production responses (kept in debug for testing)</item>
-    /// <item>Send AgentResponse with completion flag to supervisor</item>
-    /// </list>
     /// <para><strong>Conversation Persistence:</strong></para>
     /// <para>Every turn is automatically persisted to an encrypted .morgana.json file named by conversationId.
     /// This enables resuming conversations across application restarts with full context and message history.</para>
     /// <code>
     /// Turn 1: User asks about billing
-    /// → Load: No file exists, create new thread
+    /// → Load: No file exists, create new session
     /// → LLM processes, context saved
     /// → Save: conversationId.morgana.json created with encrypted state
     ///
@@ -303,21 +293,21 @@ public class MorganaAgent : MorganaActor
 
         try
         {
-            // Load existing agent's conversation thread from encrypted storage, or create new thread
-            aiAgentThread ??= await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
-            if (aiAgentThread != null)
+            // Load existing agent's conversation session from encrypted storage, or create new thread
+            aiAgentSession ??= await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
+            if (aiAgentSession != null)
             {
-                agentLogger.LogInformation($"Loaded existing conversation thread for {AgentIdentifier}");
+                agentLogger.LogInformation($"Loaded existing conversation session for {AgentIdentifier}");
             }
             else
             {
-                aiAgentThread = await aiAgent.GetNewThreadAsync();
-                agentLogger.LogInformation($"Created new conversation thread for {AgentIdentifier}");
+                aiAgentSession = await aiAgent.GetNewSessionAsync();
+                agentLogger.LogInformation($"Created new conversation session for {AgentIdentifier}");
             }
 
-            // Execute agent on its conversation thread (which has context and history)
+            // Execute agent on its conversation session (which has context and history)
             AgentResponse llmResponse = await aiAgent.RunAsync(
-                new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow }, aiAgentThread);
+                new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow }, aiAgentSession);
             string llmResponseText = llmResponse.Text;
 
             // Detect if LLM has emitted the special token for continuing the multi-turn conversation
@@ -335,7 +325,7 @@ public class MorganaAgent : MorganaActor
             // Drop immediately them from context to prevent serialization (they're ephemeral UI hints)
             if (hasQuickReplies)
             {
-                contextProvider.DropVariable("quick_replies");
+                aiContextProvider.DropVariable("quick_replies");
                 agentLogger.LogInformation($"Dropped {quickReplies!.Count} quick replies from context (ephemeral data)");
             }
 
@@ -348,7 +338,7 @@ public class MorganaAgent : MorganaActor
                 $"Agent response analysis: HasINT={hasInteractiveToken}, EndsWithQuestion={endsWithQuestion}, HasQR={hasQuickReplies}, IsCompleted={isCompleted}");
 
             // Persist updated agent's conversation state
-            await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgentThread, isCompleted);
+            await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgentSession, isCompleted);
             agentLogger.LogInformation($"Saved conversation state for {AgentIdentifier}");
 
             #if DEBUG
@@ -433,7 +423,7 @@ public class MorganaAgent : MorganaActor
                 agentLogger.LogError(ex, "Failed to deserialize quick replies from context");
 
                 // Clear corrupted data (prevent serialized context to be damaged)
-                contextProvider.DropVariable("quick_replies");
+                aiContextProvider.DropVariable("quick_replies");
             }
 
             return null;
@@ -441,7 +431,7 @@ public class MorganaAgent : MorganaActor
         #endregion
 
         // Retrieve quick_replies from context
-        object? ctxQuickReplies = contextProvider.GetVariable("quick_replies");
+        object? ctxQuickReplies = aiContextProvider.GetVariable("quick_replies");
 
         // We may find them in string format
         if (ctxQuickReplies is string ctxQuickRepliesJson && !string.IsNullOrEmpty(ctxQuickRepliesJson))

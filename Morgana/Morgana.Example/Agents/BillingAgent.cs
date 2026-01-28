@@ -17,6 +17,6 @@ public class BillingAgent : MorganaAgent
         ILogger logger,
         MorganaAgentAdapter morganaAgentAdapter) : base(conversationId, llmService, promptResolverService, conversationPersistenceService, logger)
     {
-        (aiAgent, contextProvider) = morganaAgentAdapter.CreateAgent(GetType(), conversationId, OnSharedContextUpdate);
+        (aiAgent, aiContextProvider) = morganaAgentAdapter.CreateAgent(GetType(), conversationId, OnSharedContextUpdate);
     }
 }

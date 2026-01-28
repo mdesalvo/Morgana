@@ -6,14 +6,14 @@ using System.Text.Json;
 namespace Morgana.Framework.Providers;
 
 /// <summary>
-/// Morgana wrapper around Microsoft's InMemoryChatMessageStore that adds conversation tracking and logging.
+/// Morgana wrapper around Microsoft's in-memory implementation that adds conversation tracking and logging.
 /// Delegates complex message management to the framework while providing Morgana-specific observability.
 /// </summary>
 /// <remarks>
 /// <para><strong>Architecture:</strong></para>
 /// <code>
-/// MorganaStoreProvider (Morgana layer)
-///   └── InMemoryChatMessageStore (Microsoft implementation)
+/// MorganaChatHistoryProvider (Morgana layer)
+///   └── InMemoryChatHistoryProvider (Microsoft implementation)
 ///         └── Handles message storage, filtering, serialization
 /// </code>
 /// <para><strong>Responsibilities:</strong></para>
@@ -24,33 +24,30 @@ namespace Morgana.Framework.Providers;
 /// </list>
 /// <para><strong>Integration with Framework:</strong></para>
 /// <code>
-/// AgentThread.Serialize() → combines:
-///   - MorganaStoreProvider.Serialize() → InMemoryChatMessageStore.Serialize()
-///   - MorganaContextProvider.Serialize()
+/// AgentSession.Serialize() → combines:
+///   - MorganaChatHistoryProvider.Serialize() → InMemoryChatHistoryProvider.Serialize()
+///   - MorganaAIContextProvider.Serialize()
 ///
-/// AgentThread.Deserialize() → restores both via factories
+/// AgentSession.Deserialize() → restores both via factories
 /// </code>
-/// <para><strong>Future Extensibility:</strong></para>
-/// <para>When database persistence is needed, replace innerStore with DatabaseChatMessageStore
-/// while keeping the same Morgana wrapper interface.</para>
 /// </remarks>
-public class MorganaChatMessageStoreProvider : ChatMessageStore
+public class MorganaChatHistoryProvider : ChatHistoryProvider
 {
-    private readonly InMemoryChatMessageStore innerStore;
+    private readonly InMemoryChatHistoryProvider innerProvider;
     private readonly string conversationId;
     private readonly string intent;
     private readonly ILogger logger;
 
     /// <summary>
-    /// Creates a new message store provider that wraps Microsoft's InMemoryChatMessageStore.
-    /// Used by ChatMessageStoreFactory during thread creation/resumption.
+    /// Creates a new message store provider that wraps Microsoft's in-memory implementation.
+    /// Used by ChatHistoryProviderFactory during session creation/resumption.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation</param>
     /// <param name="intent">Agent intent (e.g., "billing", "contract")</param>
-    /// <param name="serializedState">Serialized state from previous thread, or null for new thread</param>
+    /// <param name="serializedState">Serialized state from previous session, or null for new session</param>
     /// <param name="jsonSerializerOptions">JSON serialization options from framework</param>
     /// <param name="logger">Logger instance for diagnostics</param>
-    public MorganaChatMessageStoreProvider(
+    public MorganaChatHistoryProvider(
         string conversationId,
         string intent,
         JsonElement serializedState,
@@ -61,36 +58,36 @@ public class MorganaChatMessageStoreProvider : ChatMessageStore
         this.intent = intent;
         this.logger = logger;
 
-        // Delegate to Microsoft's battle-tested implementation
-        innerStore = new InMemoryChatMessageStore(
-            serializedStoreState: serializedState,
+        // Delegate to Microsoft's in-memory implementation
+        innerProvider = new InMemoryChatHistoryProvider(
+            serializedState: serializedState,
             jsonSerializerOptions: jsonSerializerOptions);
 
         logger.LogInformation(
             serializedState.ValueKind != JsonValueKind.Undefined
-                ? $"{nameof(MorganaChatMessageStoreProvider)} RESTORED for agent '{intent}' in conversation '{conversationId}'"
-                : $"{nameof(MorganaChatMessageStoreProvider)} CREATED for agent '{intent}' in conversation '{conversationId}'");
+                ? $"{nameof(MorganaChatHistoryProvider)} RESTORED for agent '{intent}' in conversation '{conversationId}'"
+                : $"{nameof(MorganaChatHistoryProvider)} CREATED for agent '{intent}' in conversation '{conversationId}'");
     }
 
     /// <summary>
     /// Called BEFORE agent invocation to retrieve messages for LLM context.
-    /// Delegates to Microsoft's InMemoryChatMessageStore for actual retrieval.
+    /// Delegates to Microsoft's in-memory implementation for actual retrieval.
     /// </summary>
     public override async ValueTask<IEnumerable<ChatMessage>> InvokingAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
-        IEnumerable<ChatMessage> messages = await innerStore.InvokingAsync(context, cancellationToken);
+        IEnumerable<ChatMessage> messages = await innerProvider.InvokingAsync(context, cancellationToken);
 
         logger.LogInformation(
-            $"{nameof(MorganaChatMessageStoreProvider)} INVOKING: Returning {messages.Count()} messages for agent '{intent}' in conversation '{conversationId}'");
+            $"{nameof(MorganaChatHistoryProvider)} INVOKING: Returning {messages.Count()} messages for agent '{intent}' in conversation '{conversationId}'");
 
         return messages;
     }
 
     /// <summary>
     /// Called AFTER agent invocation to store new messages.
-    /// Delegates to Microsoft's InMemoryChatMessageStore for actual storage.
+    /// Delegates to Microsoft's in-memory implementation for actual storage.
     /// </summary>
     public override async ValueTask InvokedAsync(
         InvokedContext context,
@@ -103,7 +100,7 @@ public class MorganaChatMessageStoreProvider : ChatMessageStore
                 responseMessage.CreatedAt = DateTime.UtcNow;
         }
 
-        await innerStore.InvokedAsync(context, cancellationToken);
+        await innerProvider.InvokedAsync(context, cancellationToken);
 
         // Log after successful storage
         int requestCount = context.RequestMessages?.Count() ?? 0;
@@ -112,22 +109,22 @@ public class MorganaChatMessageStoreProvider : ChatMessageStore
         int totalCount = requestCount + responseCount + contextProviderCount;
 
         logger.LogInformation(
-            $"{nameof(MorganaChatMessageStoreProvider)} INVOKED: Stored {totalCount} messages " +
+            $"{nameof(MorganaChatHistoryProvider)} INVOKED: Stored {totalCount} messages " +
             $"(request: {requestCount}, response: {responseCount}, context: {contextProviderCount}) " +
             $"for agent '{intent}' in conversation '{conversationId}'");
     }
 
     /// <summary>
-    /// Serializes message store state for AgentThread persistence.
-    /// Delegates to Microsoft's InMemoryChatMessageStore for actual serialization.
+    /// Serializes message store state for AgentSession persistence.
+    /// Delegates to Microsoft's in-memory implementation for actual serialization.
     /// Framework automatically combines this with MorganaContextProvider state.
     /// </summary>
     public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        JsonElement serialized = innerStore.Serialize(jsonSerializerOptions);
+        JsonElement serialized = innerProvider.Serialize(jsonSerializerOptions);
 
         logger.LogInformation(
-            $"{nameof(MorganaChatMessageStoreProvider)} SERIALIZED for agent '{intent}' in conversation '{conversationId}'");
+            $"{nameof(MorganaChatHistoryProvider)} SERIALIZED for agent '{intent}' in conversation '{conversationId}'");
 
         return serialized;
     }

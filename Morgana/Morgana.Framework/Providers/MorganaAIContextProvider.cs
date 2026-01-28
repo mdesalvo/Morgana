@@ -8,7 +8,7 @@ namespace Morgana.Framework.Providers;
 
 /// <summary>
 /// Morgana's extension of AIContextProvider that maintains agent conversation context variables.
-/// Supports automatic serialization/deserialization for persistence with AgentThread
+/// Supports automatic serialization/deserialization for persistence with AgentSession
 /// and cross-agent context sharing via RouterActor broadcast mechanism.
 /// </summary>
 /// <remarks>
@@ -21,7 +21,7 @@ namespace Morgana.Framework.Providers;
 /// <item><term>Variable Storage</term><description>Dictionary-based storage for conversation variables</description></item>
 /// <item><term>Shared Variables</term><description>Automatic broadcast of shared variables to other agents</description></item>
 /// <item><term>First-Write-Wins</term><description>Conflict resolution for cross-agent variable merging</description></item>
-/// <item><term>Serialization</term><description>JSON serialization for AgentThread persistence</description></item>
+/// <item><term>Serialization</term><description>JSON serialization for AgentSession persistence</description></item>
 /// <item><term>Logging</term><description>Comprehensive logging of all variable operations</description></item>
 /// </list>
 /// <para><strong>Architecture Integration:</strong></para>
@@ -88,7 +88,7 @@ public class MorganaAIContextProvider : AIContextProvider
 
     /// <summary>
     /// Initializes a new instance of MorganaContextProvider from serialized state (deserialization).
-    /// Used by AgentThread.DeserializeThread to restore provider state from persistence.
+    /// Used by AgentSession.DeserializeSessionAsync to restore provider state from persistence.
     /// </summary>
     /// <param name="logger">Logger instance for context operation diagnostics</param>
     /// <param name="serializedState">Serialized provider state from Serialize() method</param>
@@ -203,12 +203,12 @@ public class MorganaAIContextProvider : AIContextProvider
     /// <para><strong>Purpose:</strong></para>
     /// <para>When an agent is reloaded from persistence, its shared variables need to be broadcast
     /// to other agents so they can receive the context. This method is called explicitly after
-    /// the OnSharedContextUpdate callback has been reconnected in MorganaAgent.DeserializeThread.</para>
+    /// the OnSharedContextUpdate callback has been reconnected in MorganaAgent.DeserializeSessionAsync.</para>
     /// <para><strong>Timing:</strong></para>
     /// <list type="number">
     /// <item>MorganaContextProvider constructor deserializes state (callback still NULL)</item>
-    /// <item>MorganaAgent.DeserializeThread connects callback</item>
-    /// <item>MorganaAgent.DeserializeThread calls PropagateSharedVariables()</item>
+    /// <item>MorganaAgent.DeserializeSessionAsync connects callback</item>
+    /// <item>MorganaAgent.DeserializeSessionAsync calls PropagateSharedVariables()</item>
     /// <item>Shared variables broadcast to RouterActor</item>
     /// <item>RouterActor distributes to all other agents</item>
     /// </list>
@@ -283,7 +283,7 @@ public class MorganaAIContextProvider : AIContextProvider
     // =========================================================================
 
     /// <summary>
-    /// Serializes the provider's internal state for persistence with AgentThread.
+    /// Serializes the provider's internal state for persistence with AgentSession.
     /// </summary>
     public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {

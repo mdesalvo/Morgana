@@ -26,7 +26,7 @@ namespace Morgana.Framework.Services;
 ///   - agent_identifier: TEXT PRIMARY KEY (e.g., "billing-conv12345")
 ///   - agent_name: TEXT UNIQUE (e.g., "billing")
 ///   - conversation_id: TEXT (e.g., "conv12345")
-///   - agent_thread: BLOB (AES-256-CBC encrypted AgentThread JSON)
+///   - agent_session: BLOB (AES-256-CBC encrypted AgentSession JSON)
 ///   - creation_date: TEXT (ISO 8601: "yyyy-MM-ddTHH:mm:ss.fffZ")
 ///   - last_update: TEXT (ISO 8601: "yyyy-MM-ddTHH:mm:ss.fffZ")
 ///   - is_active: INTEGER (0 or 1)
@@ -35,7 +35,7 @@ namespace Morgana.Framework.Services;
 /// <para>Only ONE agent is active at a time per conversation. No concurrent writes occur.
 /// This allows for simplified SQLite configuration without WAL mode or complex locking.</para>
 /// <para><strong>Encryption:</strong></para>
-/// <para>Agent thread data is encrypted using AES-256-CBC with PKCS7 padding.
+/// <para>Agent session data is encrypted using AES-256-CBC with PKCS7 padding.
 /// IV is prepended to ciphertext. Encryption key from appsettings.json.</para>
 /// <para><strong>Configuration:</strong></para>
 /// <code>
@@ -91,7 +91,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     /// <inheritdoc/>
     public async Task SaveAgentConversationAsync(
         string agentIdentifier,
-        AgentThread agentThread,
+        AgentSession agentSession,
         bool isCompleted,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
@@ -107,12 +107,12 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             string agentName = agentIdentifierParts[0];
             string conversationId = agentIdentifierParts[1];
 
-            // Serialize AgentThread to JSON
-            JsonElement agentThreadJsonElement = agentThread.Serialize(jsonSerializerOptions);
-            string agentThreadJsonString = JsonSerializer.Serialize(agentThreadJsonElement, jsonSerializerOptions);
+            // Serialize AgentSession to JSON
+            JsonElement agentSessionJsonElement = agentSession.Serialize(jsonSerializerOptions);
+            string agentSessionJsonString = JsonSerializer.Serialize(agentSessionJsonElement, jsonSerializerOptions);
 
             // Encrypt JSON content
-            byte[] encryptedAgentThreadJsonString = Encrypt(agentThreadJsonString);
+            byte[] encryptedAgentSessionJsonString = Encrypt(agentSessionJsonString);
 
             // Get database connection
             string sqliteConnectionString = GetConnectionString(conversationId);
@@ -122,7 +122,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             // Initialize database only if needed (checked via user_version pragma)
             await EnsureDatabaseInitializedAsync(sqliteConnection);
 
-            // Upsert agent thread with transaction
+            // Upsert agent session with transaction
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
             try
             {
@@ -130,18 +130,17 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
                 sqliteCommand.Transaction = sqliteTransaction;
                 sqliteCommand.CommandText =
 """
-INSERT INTO morgana (agent_identifier, agent_name, conversation_id, agent_thread, creation_date, last_update, is_active)
-VALUES (@agent_identifier, @agent_name, @conversation_id, @agent_thread, @creation_date, @last_update, @is_active)
+INSERT INTO morgana (agent_identifier, agent_name, agent_session, creation_date, last_update, is_active)
+VALUES (@agent_identifier, @agent_name, @agent_session, @creation_date, @last_update, @is_active)
 ON CONFLICT(agent_identifier) DO UPDATE SET
-    agent_thread = excluded.agent_thread, last_update = @last_update, is_active = @is_active;
+    agent_session = excluded.agent_session, last_update = @last_update, is_active = @is_active;
 """;
 
                 string utcNow = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
 
                 sqliteCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
                 sqliteCommand.Parameters.AddWithValue("@agent_name", agentName);
-                sqliteCommand.Parameters.AddWithValue("@conversation_id", conversationId);
-                sqliteCommand.Parameters.AddWithValue("@agent_thread", encryptedAgentThreadJsonString);
+                sqliteCommand.Parameters.AddWithValue("@agent_session", encryptedAgentSessionJsonString);
                 sqliteCommand.Parameters.AddWithValue("@creation_date", utcNow);
                 sqliteCommand.Parameters.AddWithValue("@last_update", utcNow);
                 sqliteCommand.Parameters.AddWithValue("@is_active", isCompleted ? 0 : 1);
@@ -149,7 +148,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 await sqliteCommand.ExecuteNonQueryAsync();
                 await sqliteTransaction.CommitAsync();
 
-                logger.LogInformation($"Saved conversation {agentIdentifier} to database ({encryptedAgentThreadJsonString.Length} bytes encrypted)");
+                logger.LogInformation($"Saved conversation {agentIdentifier} to database ({encryptedAgentSessionJsonString.Length} bytes encrypted)");
             }
             catch
             {
@@ -165,7 +164,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     }
 
     /// <inheritdoc/>
-    public async Task<AgentThread?> LoadAgentConversationAsync(
+    public async Task<AgentSession?> LoadAgentConversationAsync(
         string agentIdentifier,
         MorganaAgent agent,
         JsonSerializerOptions? jsonSerializerOptions = null)
@@ -195,11 +194,11 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
 
-            // Query agent thread
+            // Query agent session
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText =
 """
-SELECT agent_thread FROM morgana WHERE agent_identifier = @agent_identifier;
+SELECT agent_session FROM morgana WHERE agent_identifier = @agent_identifier;
 """;
             sqliteCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
@@ -207,25 +206,25 @@ SELECT agent_thread FROM morgana WHERE agent_identifier = @agent_identifier;
 
             if (!await sqliteDataReader.ReadAsync())
             {
-                logger.LogInformation($"Agent thread {agentIdentifier} not found in SQLite database, returning null");
+                logger.LogInformation($"Agent session {agentIdentifier} not found in SQLite database, returning null");
                 return null;
             }
 
             // Read encrypted blob
-            byte[] agentThreadEncryptedJsonString = (byte[])sqliteDataReader["agent_thread"];
+            byte[] agentSessionEncryptedJsonString = (byte[])sqliteDataReader["agent_session"];
 
             // Decrypt content
-            string agentThreadJsonString = Decrypt(agentThreadEncryptedJsonString);
+            string agentSessionJsonString = Decrypt(agentSessionEncryptedJsonString);
 
             // Deserialize JSON to JsonElement
-            JsonElement agentThreadJsonElement = JsonSerializer.Deserialize<JsonElement>(agentThreadJsonString, jsonSerializerOptions);
+            JsonElement agentSessionJsonElement = JsonSerializer.Deserialize<JsonElement>(agentSessionJsonString, jsonSerializerOptions);
 
-            // Deserialize thread via MorganaAgent
-            AgentThread agentThread = await agent.DeserializeThreadAsync(agentThreadJsonElement, jsonSerializerOptions);
+            // Deserialize session via MorganaAgent
+            AgentSession agentSession = await agent.DeserializeSessionAsync(agentSessionJsonElement, jsonSerializerOptions);
 
-            logger.LogInformation($"Loaded conversation {agentIdentifier} from SQLite database ({agentThreadEncryptedJsonString.Length} bytes decrypted)");
+            logger.LogInformation($"Loaded conversation {agentIdentifier} from SQLite database ({agentSessionEncryptedJsonString.Length} bytes decrypted)");
 
-            return agentThread;
+            return agentSession;
         }
         catch (Exception ex)
         {
@@ -300,7 +299,7 @@ SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIM
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText =
 """
-SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date ASC;
+SELECT agent_name, agent_session, is_active FROM morgana ORDER BY creation_date ASC;
 """;
 
             await using SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync();
@@ -313,22 +312,21 @@ SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date A
                 string agentName = (string)sqliteDataReader["agent_name"];
                 bool agentCompleted = (long)sqliteDataReader["is_active"] == 0;
 
-                // Decrypt and deserialize agent thread
-                byte[] encryptedAgentThreadJsonString = (byte[])sqliteDataReader["agent_thread"];
-                string agentThreadJsonString = Decrypt(encryptedAgentThreadJsonString);
-                JsonElement agentThreadJsonElement = JsonSerializer.Deserialize<JsonElement>(
-                    agentThreadJsonString,
-                    jsonSerializerOptions);
+                // Decrypt and deserialize agent session
+                byte[] encryptedAgentSessionJsonString = (byte[])sqliteDataReader["agent_session"];
+                string agentSessionJsonString = Decrypt(encryptedAgentSessionJsonString);
+                JsonElement agentSessionJsonElement = JsonSerializer.Deserialize<JsonElement>(
+                    agentSessionJsonString, jsonSerializerOptions);
 
-                // Extract messages array from AgentThread structure
-                if (!agentThreadJsonElement.TryGetProperty("storeState", out JsonElement storeStateElement))
+                // Extract messages array from AgentSession structure
+                if (!agentSessionJsonElement.TryGetProperty("chatHistoryProviderState", out JsonElement chatHistoryProviderStateElement))
                 {
-                    logger.LogWarning($"AgentThread for {agentName} missing 'storeState' property, skipping");
+                    logger.LogWarning($"AgentSession for {agentName} missing 'chatHistoryProviderState' property, skipping");
                     continue;
                 }
-                if (!storeStateElement.TryGetProperty("messages", out JsonElement messagesElement))
+                if (!chatHistoryProviderStateElement.TryGetProperty("messages", out JsonElement messagesElement))
                 {
-                    logger.LogWarning($"AgentThread.storeState for {agentName} missing 'messages' property, skipping");
+                    logger.LogWarning($"AgentSession.chatHistoryProviderState for {agentName} missing 'messages' property, skipping");
                     continue;
                 }
 
@@ -398,7 +396,7 @@ SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date A
         checkCommand.CommandText = "PRAGMA user_version;";
         long currentVersion = (long)(await checkCommand.ExecuteScalarAsync() ?? 0L);
 
-        if (currentVersion >= 1)
+        if (currentVersion >= 2)
             return; // Already initialized
 
         // Create schema
@@ -408,20 +406,17 @@ SELECT agent_name, agent_thread, is_active FROM morgana ORDER BY creation_date A
 CREATE TABLE IF NOT EXISTS morgana (
     agent_identifier TEXT PRIMARY KEY NOT NULL,
     agent_name TEXT UNIQUE NOT NULL,
-    conversation_id TEXT NOT NULL,
-    agent_thread BLOB NOT NULL,
+    agent_session BLOB NOT NULL,
     creation_date TEXT NOT NULL,
     last_update TEXT NOT NULL,
     is_active INTEGER NOT NULL DEFAULT 0
 );
-
-CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
 """;
         await schemaCommand.ExecuteNonQueryAsync();
 
         // Mark database as initialized (once, forever)
         await using SqliteCommand versionCommand = connection.CreateCommand();
-        versionCommand.CommandText = "PRAGMA user_version = 1;";
+        versionCommand.CommandText = "PRAGMA user_version = 2;";
         await versionCommand.ExecuteNonQueryAsync();
     }
 
@@ -475,7 +470,7 @@ CREATE INDEX IF NOT EXISTS idx_conversation_id ON morgana(conversation_id);
     }
 
     /// <summary>
-    /// Processes raw messages from AgentThread into UI-ready MorganaChatMessage array.
+    /// Processes raw messages from AgentSession into UI-ready MorganaChatMessage array.
     /// Handles quick reply extraction, message filtering, and chronological ordering.
     /// </summary>
     private MorganaChatMessage[] ProcessMessagesForHistory(
