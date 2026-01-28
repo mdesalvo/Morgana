@@ -136,7 +136,7 @@ public class MorganaAgent : MorganaActor
     /// </summary>
     /// <param name="serializedSession">JSON element containing the serialized session state from a previous Serialize() call</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (defaults to AgentAbstractionsJsonUtilities.DefaultOptions)</param>
-    /// <returns>Fully reconstituted AgentSession with restored message history, context variables, and chat message store</returns>
+    /// <returns>Fully reconstituted AgentSession with restored message history and context variables</returns>
     /// <remarks>
     /// <para><strong>Deserialization Process:</strong></para>
     /// <list type="number">

@@ -18,7 +18,6 @@ namespace Morgana.Framework.Interfaces;
 /// <item><term>Message History</term><description>All user and assistant messages in the conversation</description></item>
 /// <item><term>Context Variables</term><description>Agent context variables (userId, invoiceId, etc.)</description></item>
 /// <item><term>Shared Variable Names</term><description>Configuration of which variables are shared across agents</description></item>
-/// <item><term>Chat Message Store State</term><description>Internal state of the message store</description></item>
 /// </list>
 /// <para><strong>Usage Pattern:</strong></para>
 /// <code>

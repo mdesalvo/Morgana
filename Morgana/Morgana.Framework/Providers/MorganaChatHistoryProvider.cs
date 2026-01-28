@@ -39,7 +39,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     private readonly ILogger logger;
 
     /// <summary>
-    /// Creates a new message store provider that wraps Microsoft's in-memory implementation.
+    /// Creates a new chat history provider that wraps Microsoft's in-memory implementation.
     /// Used by ChatHistoryProviderFactory during session creation/resumption.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation</param>
@@ -115,7 +115,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     }
 
     /// <summary>
-    /// Serializes message store state for AgentSession persistence.
+    /// Serializes chat history state for AgentSession persistence.
     /// Delegates to Microsoft's in-memory implementation for actual serialization.
     /// Framework automatically combines this with MorganaContextProvider state.
     /// </summary>
