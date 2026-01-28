@@ -38,7 +38,7 @@ namespace Morgana.Framework.Attributes;
 /// <item>Cannot be inherited by derived classes</item>
 /// <item>Can only be applied to classes (not methods or properties)</item>
 /// <item>Tool class must inherit from MorganaTool</item>
-/// <item>Tool class must have constructor: (ILogger, Func&lt;MorganaContextProvider&gt;)</item>
+/// <item>Tool class must have constructor: (ILogger, Func&lt;MorganaAIContextProvider&gt;)</item>
 /// </list>
 /// </remarks>
 /// <example>
@@ -49,7 +49,7 @@ namespace Morgana.Framework.Attributes;
 /// {
 ///     public BillingTool(
 ///         ILogger&lt;BillingTool&gt; toolLogger,
-///         Func&lt;MorganaContextProvider&gt; getContextProvider)
+///         Func&lt;MorganaAIContextProvider&gt; getContextProvider)
 ///         : base(toolLogger, getContextProvider)
 ///     {
 ///     }

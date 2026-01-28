@@ -117,7 +117,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// <summary>
     /// Serializes chat history state for AgentSession persistence.
     /// Delegates to Microsoft's in-memory implementation for actual serialization.
-    /// Framework automatically combines this with MorganaContextProvider state.
+    /// Framework automatically combines this with MorganaAIContextProvider state.
     /// </summary>
     public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
     {

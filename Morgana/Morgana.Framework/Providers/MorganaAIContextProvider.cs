@@ -27,20 +27,20 @@ namespace Morgana.Framework.Providers;
 /// <para><strong>Architecture Integration:</strong></para>
 /// <code>
 /// MorganaAgent
-///   └── MorganaContextProvider (one per agent instance)
+///   └── MorganaAIContextProvider (one per agent instance)
 ///         ├── AgentContext Dictionary (variable storage)
 ///         ├── SharedVariableNames HashSet (from tool definitions)
 ///         └── OnSharedContextUpdate Callback (broadcasts to RouterActor)
 ///
 /// MorganaTool
-///   ├── GetContextVariable() → MorganaContextProvider.GetVariable()
-///   └── SetContextVariable() → MorganaContextProvider.SetVariable()
+///   ├── GetContextVariable() → MorganaAIContextProvider.GetVariable()
+///   └── SetContextVariable() → MorganaAIContextProvider.SetVariable()
 ///                                  └── Triggers broadcast if shared
 /// </code>
 /// <para><strong>Shared Variable Flow:</strong></para>
 /// <code>
 /// 1. BillingAgent tool sets userId (shared variable)
-/// 2. MorganaContextProvider.SetVariable detects shared variable
+/// 2. MorganaAIContextProvider.SetVariable detects shared variable
 /// 3. Invokes OnSharedContextUpdate callback
 /// 4. BillingAgent.OnSharedContextUpdate broadcasts to RouterActor
 /// 5. RouterActor sends ReceiveContextUpdate to all other agents
@@ -71,7 +71,7 @@ public class MorganaAIContextProvider : AIContextProvider
     public Action<string, object>? OnSharedContextUpdate { get; set; }
 
     /// <summary>
-    /// Initializes a new instance of MorganaContextProvider.
+    /// Initializes a new instance of MorganaAIContextProvider.
     /// </summary>
     /// <param name="logger">Logger instance for context operation diagnostics</param>
     /// <param name="sharedVariableNames">
@@ -87,7 +87,7 @@ public class MorganaAIContextProvider : AIContextProvider
     }
 
     /// <summary>
-    /// Initializes a new instance of MorganaContextProvider from serialized state (deserialization).
+    /// Initializes a new instance of MorganaAIContextProvider from serialized state (deserialization).
     /// Used by AgentSession.DeserializeSessionAsync to restore provider state from persistence.
     /// </summary>
     /// <param name="logger">Logger instance for context operation diagnostics</param>
@@ -206,7 +206,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// the OnSharedContextUpdate callback has been reconnected in MorganaAgent.DeserializeSessionAsync.</para>
     /// <para><strong>Timing:</strong></para>
     /// <list type="number">
-    /// <item>MorganaContextProvider constructor deserializes state (callback still NULL)</item>
+    /// <item>MorganaAIContextProvider constructor deserializes state (callback still NULL)</item>
     /// <item>MorganaAgent.DeserializeSessionAsync connects callback</item>
     /// <item>MorganaAgent.DeserializeSessionAsync calls PropagateSharedVariables()</item>
     /// <item>Shared variables broadcast to RouterActor</item>

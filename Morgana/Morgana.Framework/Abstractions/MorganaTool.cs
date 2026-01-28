@@ -6,7 +6,7 @@ namespace Morgana.Framework.Abstractions;
 
 /// <summary>
 /// Base class for agent tools that provides context variable access (Get/Set operations).
-/// Tools can read from and write to the agent's conversation context via MorganaContextProvider.
+/// Tools can read from and write to the agent's conversation context via MorganaAIContextProvider.
 /// </summary>
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
@@ -18,7 +18,6 @@ namespace Morgana.Framework.Abstractions;
 /// MorganaTool (base class with context access)
 ///   ├── GetInvoices (domain-specific tool)
 ///   ├── GetContractDetails (domain-specific tool)
-///   ├── RunDiagnostics (domain-specific tool)
 ///   └── ... other custom tools
 /// </code>
 /// <para><strong>Context Variable Types:</strong></para>
@@ -55,32 +54,31 @@ public class MorganaTool
     protected readonly ILogger toolLogger;
 
     /// <summary>
-    /// Factory function to retrieve the current MorganaContextProvider instance.
+    /// Factory function to retrieve the current MorganaAIContextProvider instance.
     /// Uses a function to enable lazy evaluation and ensure correct scoping per request.
     /// </summary>
-    protected readonly Func<MorganaAIContextProvider> getContextProvider;
+    protected readonly Func<MorganaAIContextProvider> getAIContextProvider;
 
     /// <summary>
-    /// Direct access to the context provider instance. Lazily evaluated from getContextProvider.
-    /// </summary>
-    protected MorganaAIContextProvider contextProvider => getContextProvider();
-
-    /// <summary>
-    /// Initializes a new instance of MorganaTool with logging and context provider access.
+    /// Initializes a new instance of MorganaTool with logging and AI context provider access.
     /// </summary>
     /// <param name="toolLogger">Logger instance for tool diagnostics</param>
-    /// <param name="getContextProvider">Factory function to retrieve the context provider</param>
+    /// <param name="getAIContextProvider">Factory function to retrieve the AI context provider</param>
     /// <remarks>
-    /// The context provider is passed as a Func to ensure each tool call gets the correct
+    /// The AI context provider is passed as a Func to ensure each tool call gets the correct
     /// scoped provider instance for the current conversation and agent.
     /// </remarks>
     public MorganaTool(
         ILogger toolLogger,
-        Func<MorganaAIContextProvider> getContextProvider)
+        Func<MorganaAIContextProvider> getAIContextProvider)
     {
         this.toolLogger = toolLogger;
-        this.getContextProvider = getContextProvider;
+        this.getAIContextProvider = getAIContextProvider;
     }
+
+    // =========================================================================
+    // CONTEXT SYSTEM TOOLS
+    // =========================================================================
 
     /// <summary>
     /// Retrieves a context variable from the agent's conversation context.
@@ -119,19 +117,19 @@ public class MorganaTool
     /// </remarks>
     public Task<object> GetContextVariable(string variableName)
     {
-        MorganaAIContextProvider provider = getContextProvider();
-        object? value = provider.GetVariable(variableName);
+        MorganaAIContextProvider aiContextProvider = getAIContextProvider();
+        object? value = aiContextProvider.GetVariable(variableName);
 
         if (value != null)
         {
             toolLogger.LogInformation(
-                $"MorganaTool ({GetType().Name}) HIT variable '{variableName}' from agent context. Value is: {value}");
+                $"{nameof(MorganaTool)} ({GetType().Name}) HIT variable '{variableName}' from agent context. Value is: {value}");
 
             return Task.FromResult(value);
         }
 
         toolLogger.LogInformation(
-            $"MorganaTool ({GetType().Name}) MISS variable '{variableName}' from agent context.");
+            $"{nameof(MorganaTool)} ({GetType().Name}) MISS variable '{variableName}' from agent context.");
 
         return Task.FromResult<object>(
             $"Information {variableName} not available in context: you need to engage SetContextVariable to set it.");
@@ -151,7 +149,7 @@ public class MorganaTool
     /// <para><strong>Shared Variable Flow (example: userId):</strong></para>
     /// <list type="number">
     /// <item>BillingAgent calls SetContextVariable("userId", "P994E")</item>
-    /// <item>MorganaContextProvider.SetVariable checks configuration: userId is marked Shared=true</item>
+    /// <item>MorganaAIContextProvider.SetVariable checks configuration: userId is marked Shared=true</item>
     /// <item>Provider calls agent's OnSharedContextUpdate callback</item>
     /// <item>Agent broadcasts to RouterActor via BroadcastContextUpdate</item>
     /// <item>RouterActor sends ReceiveContextUpdate to all other agents</item>
@@ -161,7 +159,7 @@ public class MorganaTool
     /// <para><strong>Local Variable Flow (example: invoiceId):</strong></para>
     /// <list type="number">
     /// <item>BillingAgent calls SetContextVariable("invoiceId", "INV-2024-001")</item>
-    /// <item>MorganaContextProvider.SetVariable checks configuration: invoiceId is marked Shared=false</item>
+    /// <item>MorganaAIContextProvider.SetVariable checks configuration: invoiceId is marked Shared=false</item>
     /// <item>Variable stored locally, no broadcast occurs</item>
     /// <item>Only BillingAgent can access this variable</item>
     /// </list>
@@ -171,8 +169,8 @@ public class MorganaTool
     /// </remarks>
     public Task<object> SetContextVariable(string variableName, string variableValue)
     {
-        MorganaAIContextProvider provider = getContextProvider();
-        provider.SetVariable(variableName, variableValue);
+        MorganaAIContextProvider aiContextProvider = getAIContextProvider();
+        aiContextProvider.SetVariable(variableName, variableValue);
 
         return Task.FromResult<object>(
             $"Information {variableName} inserted in context with value: {variableValue}");
@@ -228,7 +226,6 @@ public class MorganaTool
     ///
     /// <para><strong>Design Guidelines for LLM:</strong></para>
     /// <list type="bullet">
-    /// <item><term>Limit to 3-5 options</term><description>UI constraint, too many buttons are overwhelming</description></item>
     /// <item><term>Use emoji in labels</term><description>Visual appeal: "🔧 Run Diagnostics" not "Run Diagnostics"</description></item>
     /// <item><term>Action-oriented labels</term><description>"Show Invoice Details" not "Invoice Details"</description></item>
     /// <item><term>Natural values</term><description>Value should be what user would naturally type</description></item>
@@ -248,7 +245,9 @@ public class MorganaTool
             }
 
             // Store the JSON string of the quick replies under a reserved context variable
-            contextProvider.SetVariable("quick_replies", quickReplies);
+            MorganaAIContextProvider aiContextProvider = getAIContextProvider();
+            aiContextProvider.SetVariable("quick_replies", quickReplies);
+
             toolLogger.LogInformation($"LLM set {parsedQuickReplies.Count} quick reply buttons via SetQuickReplies tool");
 
             // Return confirmation to LLM

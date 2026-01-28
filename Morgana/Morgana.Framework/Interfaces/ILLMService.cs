@@ -119,7 +119,7 @@ public interface ILLMService
     /// by actors directly.</para>
     /// <para><strong>Usage in MorganaAgentAdapter:</strong></para>
     /// <code>
-    /// public (AIAgent agent, MorganaContextProvider provider) CreateAgent(Type agentType)
+    /// public (AIAgent agent, MorganaAIContextProvider provider) CreateAgent(Type agentType)
     /// {
     ///     // ... agent setup ...
     ///

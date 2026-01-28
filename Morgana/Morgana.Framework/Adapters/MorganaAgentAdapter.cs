@@ -13,12 +13,12 @@ namespace Morgana.Framework.Adapters;
 
 /// <summary>
 /// Adapter for creating and configuring AIAgent instances from Morgana agent definitions.
-/// Handles agent instantiation, instruction composition, tool registration, context provider setup and MCP integration.
+/// Handles agent instantiation, instruction composition, tool registration, AI context provider setup and MCP integration.
 /// </summary>
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
 /// <para>MorganaAgentAdapter is the central factory for creating fully-configured AI agents with tool calling capabilities.
-/// It orchestrates the composition of agent instructions, registration of native and MCP tools, context provider setup,
+/// It orchestrates the composition of agent instructions, registration of native and MCP tools, AI context provider setup,
 /// and integration with the Microsoft.Agents.AI framework.</para>
 /// <para><strong>Key Responsibilities:</strong></para>
 /// <list type="bullet">
@@ -26,14 +26,14 @@ namespace Morgana.Framework.Adapters;
 /// <item><term>Base Tools Registration</term><description>Ensures every agent has GetContextVariable, SetContextVariable, SetQuickReplies</description></item>
 /// <item><term>Custom Tools Registration</term><description>Discovers and registers intent-specific MorganaTool implementations</description></item>
 /// <item><term>MCP Integration</term><description>Discovers and registers tools from external MCP servers</description></item>
-/// <item><term>Context Provider Setup</term><description>Configures shared variable broadcasting and context isolation</description></item>
+/// <item><term>AI Context Provider Setup</term><description>Configures shared variable broadcasting and context isolation</description></item>
 /// </list>
 /// <para><strong>Agent Creation Flow:</strong></para>
 /// <code>
 /// 1. Extract intent from [HandlesIntent] attribute
 /// 2. Load domain prompt from agents.json
 /// 3. Compose full instructions (framework + domain)
-/// 4. Create context provider with shared variable configuration
+/// 4. Create AI context provider with shared variable configuration
 /// 5. Register base tools (ALWAYS - GetContextVariable, SetContextVariable, SetQuickReplies)
 /// 6. Register custom tools (IF MorganaTool exists for intent)
 /// 7. Register MCP tools (IF [UsesMCPServers] attribute present)
@@ -268,7 +268,7 @@ public class MorganaAgentAdapter
 
     /// <summary>
     /// Creates a fully configured AIAgent instance from a Morgana agent type.
-    /// Orchestrates instruction composition, tool registration, context provider setup, and MCP integration.
+    /// Orchestrates instruction composition, tool registration, AI context provider setup, and MCP integration.
     /// </summary>
     /// <param name="agentType">
     /// Type of the agent class decorated with [HandlesIntent] attribute.
@@ -281,7 +281,7 @@ public class MorganaAgentAdapter
     /// <returns>
     /// Tuple containing:
     /// - agent: Configured AIAgent instance ready for LLM interactions
-    /// - provider: MorganaContextProvider instance for this agent's context management
+    /// - provider: MorganaAIContextProvider instance for this agent's context management
     /// </returns>
     /// <exception cref="InvalidOperationException">
     /// Thrown if agentType is not decorated with [HandlesIntent] attribute
@@ -293,7 +293,7 @@ public class MorganaAgentAdapter
     /// <item>Extract intent name from attribute</item>
     /// <item>Load domain prompt from agents.json via intent name</item>
     /// <item>Merge tool definitions (morgana.json + agents.json)</item>
-    /// <item>Create context provider with shared variable configuration</item>
+    /// <item>Create AI context provider with shared variable configuration</item>
     /// <item>Create tool adapter and register tools:
     ///   <list type="bullet">
     ///   <item>Base tools (ALWAYS): GetContextVariable, SetContextVariable, SetQuickReplies</item>
@@ -345,7 +345,7 @@ public class MorganaAgentAdapter
     ///     }
     /// }
     /// </code>
-    /// <para><strong>Context Provider Callback:</strong></para>
+    /// <para><strong>AI Context Provider Callback:</strong></para>
     /// <para>The sharedContextCallback enables cross-agent coordination. When an agent sets a shared
     /// variable (e.g., userId), the callback triggers broadcasting to other agents via RouterActor:</para>
     /// <code>
@@ -418,7 +418,7 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Creates and configures a MorganaContextProvider for an agent with shared variable detection.
+    /// Creates and configures a MorganaAIContextProvider for an agent with shared variable detection.
     /// Analyzes tool definitions to identify variables that should be broadcast across agents.
     /// </summary>
     /// <param name="agentName">Name of the agent for logging purposes (e.g., "billing")</param>
@@ -427,7 +427,7 @@ public class MorganaAgentAdapter
     /// Optional callback invoked when a shared variable is set.
     /// Wired to agent's OnSharedContextUpdate for broadcasting to RouterActor.
     /// </param>
-    /// <returns>Configured MorganaContextProvider instance for the agent</returns>
+    /// <returns>Configured MorganaAIContextProvider instance for the agent</returns>
     /// <remarks>
     /// <para><strong>Shared Variable Detection:</strong></para>
     /// <para>Scans all tool parameters for those marked with Scope="context" and Shared=true.
@@ -446,12 +446,12 @@ public class MorganaAgentAdapter
     /// Agent 'billing' has 1 shared variables: userId
     /// </code>
     /// <para><strong>Context Isolation:</strong></para>
-    /// <para>Each agent gets its own MorganaContextProvider instance, ensuring context isolation
+    /// <para>Each agent gets its own MorganaAIContextProvider instance, ensuring context isolation
     /// between agents. Shared variables are synchronized via explicit broadcasting through RouterActor,
     /// not via shared state.</para>
     /// <para><strong>Callback Wiring:</strong></para>
     /// <code>
-    /// MorganaContextProvider provider = new MorganaContextProvider(logger, sharedVariables);
+    /// MorganaAIContextProvider provider = new MorganaAIContextProvider(logger, sharedVariables);
     /// provider.OnSharedContextUpdate = sharedContextCallback;
     ///
     /// // Later, when tool sets shared variable:
@@ -500,7 +500,7 @@ public class MorganaAgentAdapter
     /// </summary>
     /// <param name="intent">Intent name for tool discovery (e.g., "billing", "contract")</param>
     /// <param name="tools">All tool definitions (morgana.json + agents.json already merged)</param>
-    /// <param name="aiContextProvider">Context provider instance for tool access to conversation variables</param>
+    /// <param name="aiContextProvider">AI Context provider instance for tool access to conversation variables</param>
     /// <returns>Configured MorganaToolAdapter with registered tool implementations</returns>
     /// <remarks>
     /// <para><strong>NEW BEHAVIOR - Base Tools Always Registered:</strong></para>
@@ -698,7 +698,7 @@ public class MorganaAgentAdapter
             logger.LogError(ex, $"Failed to instantiate custom tool {toolType.Name} for intent '{intent}'");
             throw new InvalidOperationException(
                 $"Could not create custom tool instance for intent '{intent}'. " +
-                $"Ensure {toolType.Name} has a constructor that accepts (ILogger, Func<MorganaContextProvider>).", ex);
+                $"Ensure {toolType.Name} has a constructor that accepts (ILogger, Func<MorganaAIContextProvider>).", ex);
         }
 
         RegisterToolsInAdapter(morganaToolAdapter, customToolInstance, intentSpecificTools);

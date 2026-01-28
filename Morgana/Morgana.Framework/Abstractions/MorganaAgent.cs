@@ -23,7 +23,7 @@ namespace Morgana.Framework.Abstractions;
 /// <list type="bullet">
 /// <item><term>AI Agent Integration</term><description>Uses Microsoft.Agents.AI for LLM interactions with tool calling</description></item>
 /// <item><term>Conversation Session</term><description>Maintains conversation history via AgentSession for context-aware responses</description></item>
-/// <item><term>Context Management</term><description>MorganaContextProvider for reading/writing conversation variables</description></item>
+/// <item><term>Context Management</term><description>MorganaAIContextProvider for reading/writing conversation variables</description></item>
 /// <item><term>Inter-Agent Communication</term><description>Broadcast and receive shared context variables across agents</description></item>
 /// <item><term>Interactive Token Detection</term><description>Detects #INT# token to signal multi-turn conversations</description></item>
 /// </list>
@@ -55,7 +55,7 @@ public class MorganaAgent : MorganaActor
     protected AgentSession? aiAgentSession;
 
     /// <summary>
-    /// Context provider for reading and writing conversation variables.
+    /// AI context provider for reading and writing conversation variables.
     /// Manages both local (agent-specific) and shared (cross-agent) context.
     /// </summary>
     protected MorganaAIContextProvider aiContextProvider;
@@ -132,7 +132,7 @@ public class MorganaAgent : MorganaActor
 
     /// <summary>
     /// Deserializes a previously serialized AgentSession, restoring conversation history and context state.
-    /// Updates the existing context provider instance to preserve tool closures.
+    /// Updates the existing AI context provider instance to preserve tool closures.
     /// </summary>
     /// <param name="serializedSession">JSON element containing the serialized session state from a previous Serialize() call</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (defaults to AgentAbstractionsJsonUtilities.DefaultOptions)</param>
@@ -141,7 +141,7 @@ public class MorganaAgent : MorganaActor
     /// <para><strong>Deserialization Process:</strong></para>
     /// <list type="number">
     /// <item>Extract AIContextProviderState from serialized session JSON</item>
-    /// <item>Restore state into EXISTING MorganaContextProvider instance (preserves tool closures)</item>
+    /// <item>Restore state into EXISTING MorganaAIContextProvider instance (preserves tool closures)</item>
     /// <item>Reconnect OnSharedContextUpdate callback for inter-agent communication</item>
     /// <item>Propagate shared variables to other agents</item>
     /// <item>Delegate to underlying AIAgent.DeserializeSessionAsync to restore message history</item>
@@ -167,7 +167,7 @@ public class MorganaAgent : MorganaActor
         if (serializedSession.TryGetProperty("aiContextProviderState", out JsonElement stateElement))
             aiContextProviderState = stateElement;
 
-        // Use it to restore internal state of MorganaContextProvider
+        // Use it to restore internal state of MorganaAIContextProvider
         if (aiContextProviderState.ValueKind != JsonValueKind.Undefined)
             aiContextProvider.RestoreState(aiContextProviderState, jsonSerializerOptions);
 
@@ -198,7 +198,7 @@ public class MorganaAgent : MorganaActor
     /// <para><strong>Example Flow:</strong></para>
     /// <list type="number">
     /// <item>BillingAgent tool calls SetContextVariable("userId", "P994E", shared: true)</item>
-    /// <item>MorganaContextProvider detects shared variable and calls OnSharedContextUpdate</item>
+    /// <item>MorganaAIContextProvider detects shared variable and calls OnSharedContextUpdate</item>
     /// <item>Agent broadcasts to RouterActor via BroadcastContextUpdate message</item>
     /// <item>RouterActor sends ReceiveContextUpdate to all other agents</item>
     /// <item>ContractAgent receives userId and can use it without asking user</item>

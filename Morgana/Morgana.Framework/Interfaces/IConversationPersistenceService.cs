@@ -65,7 +65,7 @@ public interface IConversationPersistenceService
 
     /// <summary>
     /// Loads a previously saved agent's conversation state from persistent storage.
-    /// Deserializes the AgentSession and reconnects all context providers and callbacks.
+    /// Deserializes the AgentSession and reconnects all AI context providers and callbacks.
     /// </summary>
     /// <param name="agentIdentifier">Unique identifier for the agent's conversation to load</param>
     /// <param name="agent">MorganaAgent instance that will receive the deserialized session</param>
