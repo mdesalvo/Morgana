@@ -48,7 +48,7 @@
                 @foreach (SignalRMessage temporaryMessage in temporaryMessages)
                 {
                     <FadingMessage Message="@temporaryMessage"
-                                   OnDismissed="@(() => HandleMessageDismissed(temporaryMessage))"/>
+                                   OnDismissed="@HandleMessageDismissed"/>
                 }
             </div>
         }
@@ -305,13 +305,13 @@
                     }
 
                     isInitialized = true;
-                    errorMessage = string.Empty;
+                    ClearErrorMessages();  // Clear any previous errors on successful init
                     Console.WriteLine($"🔵 Initialized with conversationId: {conversationId}");
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"❌ Storage check error: {ex.Message}");
-                    errorMessage = $"Initialization error: {ex.Message}";
+                    AddErrorMessage($"Initialization error: {ex.Message}", "initialization_failed");
                 }
                 finally
                 {
@@ -322,7 +322,8 @@
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Initialization error: {ex.Message}");
-            errorMessage = $"Initialization error: {ex.Message}";
+            AddErrorMessage($"Critical initialization error: {ex.Message}", "critical_initialization_failed");
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -574,13 +575,15 @@
             {
                 string errorContent = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"❌ Morgana error: {errorContent}");
-                errorMessage = $"Conversation start error: {response.StatusCode}";
+                AddErrorMessage($"Failed to start conversation: {response.StatusCode}", "conversation_start_http_error");
+                await InvokeAsync(StateHasChanged);
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ StartConversation exception: {ex.Message}");
-            errorMessage = $"Error: {ex.Message}";
+            AddErrorMessage($"Connection error: {ex.Message}", "conversation_start_exception");
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -604,7 +607,8 @@
         catch (Exception ex)
         {
             Console.WriteLine($"❌ {nameof(ClearConversationAsync)} exception: {ex.Message}");
-            errorMessage = $"Error starting new conversation: {ex.Message}";
+            AddErrorMessage($"Error starting new conversation: {ex.Message}", "new_conversation_failed");
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -675,14 +679,18 @@
 
             if (!response.IsSuccessStatusCode)
             {
-                string errorContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"❌ Morgana error: {errorContent}");
-
-                // Remove typing indicator and show error
+                Console.WriteLine($"❌ SendMessage failed: {response.StatusCode}");
+    
+                // Remove typing indicator
                 ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
                 if (typingMessage != null)
                 {
                     chatMessages.Remove(typingMessage);
+
+                    // Add temporary error banner (visible immediately, auto-dismiss after 10s)
+                    AddErrorMessage($"Message not sent: {response.StatusCode}. Please try again.", "send_message_http_error");
+
+                    // Add permanent error to chat history for debugging
                     chatMessages.Add(new ChatMessage
                     {
                         ConversationId = conversationId,
@@ -693,21 +701,25 @@
                         AgentName = currentAgentName,
                         Type = MessageType.Error
                     });
-                    StateHasChanged();
-                }
 
-                errorMessage = $"Error sending: {response.StatusCode}";
+                    await InvokeAsync(StateHasChanged);
+                }
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ SendMessage exception: {ex.Message}");
 
-            // Remove typing indicator and show error
+            // Remove typing indicator
             ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
             if (typingMessage != null)
             {
                 chatMessages.Remove(typingMessage);
+
+                // Add temporary error banner (visible immediately, auto-dismiss after 10s)
+                AddErrorMessage($"Connection error: {ex.Message}. Please try again.", "send_message_exception");
+
+                // Add permanent error to chat history for debugging
                 chatMessages.Add(new ChatMessage
                 {
                     ConversationId = conversationId,
@@ -719,8 +731,7 @@
                     Type = MessageType.Error
                 });
 
-                errorMessage = $"Error: {ex.Message}";
-                StateHasChanged();
+                await InvokeAsync(StateHasChanged);
             }
         }
         finally
@@ -1009,5 +1020,32 @@
     {
         string template = Configuration["Morgana:AgentExitMessage"] ?? "{0} has completed its spell. I'm back to you!";
         return string.Format(template, agentName);
+    }
+
+    /// <summary>
+    /// Adds a temporary error message displayed as FadingMessage banner.
+    /// Auto-dismisses after 10 seconds with fade-out animation.
+    /// </summary>
+    /// <param name="text">Error message text (⚠️ emoji will be prepended)</param>
+    /// <param name="errorReason">Specific error reason for debugging/icon selection</param>
+    private void AddErrorMessage(string text, string errorReason)
+    {
+        temporaryMessages.Add(new SignalRMessage
+        {
+            ConversationId = conversationId,
+            Text = $"⚠️ {text}",
+            Timestamp = DateTime.UtcNow,
+            MessageType = "error",
+            ErrorReason = errorReason
+        });
+    }
+
+    /// <summary>
+    /// Removes all error-type temporary messages.
+    /// Called on successful operations to clear previous errors.
+    /// </summary>
+    private void ClearErrorMessages()
+    {
+        temporaryMessages.RemoveAll(m => string.Equals(m.MessageType, "error", StringComparison.OrdinalIgnoreCase));
     }
 }

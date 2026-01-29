@@ -1,6 +1,6 @@
 @* 
     FadingMessage Component - Temporary System Warning Banner
-
+    
     Features:
     - Auto-dismiss after 10 seconds
     - Smooth fade-out animation (last 2 seconds)
@@ -29,11 +29,19 @@
     public SignalRMessage Message { get; set; } = null!;
 
     /// <summary>
-    /// Callback invoked when the message is auto-dismissed after 10 seconds.
+    /// Callback invoked when the message is auto-dismissed after duration expires.
     /// Parent component should remove message from its list.
+    /// Passes the dismissed message as parameter.
     /// </summary>
     [Parameter]
-    public EventCallback OnDismissed { get; set; }
+    public EventCallback<SignalRMessage> OnDismissed { get; set; }
+
+    /// <summary>
+    /// Total duration in seconds before auto-dismiss.
+    /// Default: 10 seconds (8s visible + 2s fade-out).
+    /// </summary>
+    [Parameter]
+    public int DurationSeconds { get; set; } = 10;
 
     /// <summary>
     /// Controls banner visibility (for smooth mount/unmount).
@@ -58,31 +66,35 @@
 
     /// <summary>
     /// Starts the auto-dismiss timer with fade-out animation.
-    /// Timeline: 8s visible → 2s fading → dismiss
+    /// Timeline: (duration-2)s visible → 2s fading → dismiss
     /// </summary>
     private void StartAutoDismissTimer()
     {
         cancellationTokenSource = new CancellationTokenSource();
 
+        // Calculate visible phase duration (total - 2s fade-out)
+        int visibleDuration = Math.Max(1, DurationSeconds - 2) * 1000; // Min 1s
+        const int fadeDuration = 2000; // 2 seconds fade-out
+
         _ = Task.Run(async () =>
         {
             try
             {
-                // Phase 1: Visible for 8 seconds
-                await Task.Delay(8000, cancellationTokenSource.Token);
+                // Phase 1: Visible
+                await Task.Delay(visibleDuration, cancellationTokenSource.Token);
 
-                // Phase 2: Trigger fade-out animation (2 seconds)
+                // Phase 2: Trigger fade-out animation
                 isFading = true;
                 await InvokeAsync(StateHasChanged);
 
-                await Task.Delay(2000, cancellationTokenSource.Token);
+                await Task.Delay(fadeDuration, cancellationTokenSource.Token);
 
                 // Phase 3: Hide and notify parent
                 isVisible = false;
                 await InvokeAsync(StateHasChanged);
 
-                // Notify parent to remove from list
-                await OnDismissed.InvokeAsync();
+                // Notify parent to remove this specific message from list
+                await OnDismissed.InvokeAsync(Message);
             }
             catch (TaskCanceledException)
             {
