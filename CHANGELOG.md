@@ -11,11 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🔄 Changed
 - Standardized failure handling across all actors using `Records.FailureContext` wrapper for consistent error routing
 - Updated `Akka.NET` dependency to 1.5.59
-- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260128.1
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260128.1 (**BREAKING CHANGES**: `AgentThread` -> `AgentSession`)
 - Updated `ModelContextProtocol.Core` dependency to 0.7.0-preview.1
 
 ### 🐛 Fixed
-- Certain LLM providers (like OpenAI) generate response messages with Unix timestamps (no milliseconds)
+- Certain LLM providers (like OpenAI) generate response messages with Unix timestamps (without milliseconds component)
 - Fixed dead letter issues in actor error handling by implementing unified `FailureContext` pattern to preserve sender references
 - Fixed residual dead letter in `ConversationManagerActor` which still responded to conversation creation or resume
 
