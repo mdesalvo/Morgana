@@ -5,11 +5,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.13.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Conversation Rate Limiting Protection
+This release introduces **intelligent conversation rate limiting**, protecting Morgana from excessive usage and token consumption while maintaining excellent user experience through **configurable limits**, **graceful degradation**, and **user-friendly feedback**.
 
 ### ✨ Added
+**IRateLimitService**
+- Abstraction for pluggable rate limiting strategies (in-memory, Redis, distributed)
+- Sliding window algorithm for accurate request counting over time periods
+- Support for multiple concurrent limits: per-minute, per-hour, per-day
+
+**SQLiteRateLimitService**
+- Default implementation storing rate limit state in conversation-specific SQLite databases
+- Automatic schema migration: adds `rate_limit_log` table to existing conversation databases
+- Sliding window implementation: counts requests in last N seconds/hours/days
+- Automatic cleanup of expired records (>24 hours old) to prevent database bloat
+- Delegates to `IConversationPersistenceService` for schema initialization
+
+**Database Schema Enhancement**
+```sql
+CREATE TABLE rate_limit_log (
+    request_timestamp TEXT NOT NULL,  -- ISO 8601 format
+);
+```
+
+**Rate Limiting Configuration**
+```json
+"Morgana": {
+  "RateLimiting": {
+    "MaxMessagesPerMinute": 5,
+    "MaxMessagesPerHour": 50,
+    "MaxMessagesPerDay": 100,
+    "ErrorMessagePerMinute": "✋ Whoa there! You're casting spells too quickly...",
+    "ErrorMessagePerHour": "🕐 You've reached the hourly limit of {limit} messages...",
+    "ErrorMessagePerDay": "📅 Daily limit of {limit} messages reached...",
+    "ErrorMessageDefault": "⚠️ Rate limit exceeded. Please slow down."
+  }
+}
+```
 
 ### 🔄 Changed
 - Standardized failure handling across all actors using `Records.FailureContext` wrapper for consistent error routing
+- Unified error and warning handling in Cauldron: All runtime errors and system warnings now use auto-dismissing `FadingMessage` component with severity-appropriate durations, replacing scattered error banner implementations
 - Updated `Akka.NET` dependency to 1.5.59
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260128.1 (**BREAKING CHANGES**: `AgentThread` -> `AgentSession`)
 - Updated `ModelContextProtocol.Core` dependency to 0.7.0-preview.1
