@@ -317,7 +317,7 @@ public class ConversationController : ControllerBase
                         ConversationId = request.ConversationId,
                         Text = rateLimitViolation,
                         Timestamp = DateTime.UtcNow,
-                        MessageType = "error",
+                        MessageType = "system_warning",
                         ErrorReason = "rate_limit_exceeded",
                         AgentName = "Morgana",
                         AgentCompleted = false,

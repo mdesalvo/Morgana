@@ -1,0 +1,95 @@
+/* ============================================================ */
+/* FADING MESSAGE                                               */
+/* ============================================================ */
+
+/* Container for all temporary messages (sticky positioning) */
+.temporary-messages-container {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    margin-bottom: 16px;
+}
+
+/* Individual banner styling */
+.temporary-message-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    /* Warning gradient using Cauldron theme colors */
+    background: linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(239, 68, 68, 0.1) 100%);
+    border-left: 4px solid var(--secondary-color); /* Pink */
+    border-radius: 12px;
+    /* Match existing shadow from error-banner */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    /* Slide down animation on mount */
+    animation: slideDown 0.3s ease-out;
+    margin-bottom: 8px;
+    backdrop-filter: blur(10px);
+}
+
+/* Icon styling */
+.temporary-message-banner .banner-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    /* Glow effect matching secondary color */
+    filter: drop-shadow(0 0 4px var(--secondary-color));
+}
+
+/* Text styling */
+.temporary-message-banner .banner-text {
+    flex: 1;
+    /* Use existing text-primary variable */
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.4;
+    font-weight: 500;
+}
+
+/* ============================================================ */
+/* ANIMATIONS                                                   */
+/* ============================================================ */
+
+/* Slide down animation (on mount) */
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Fade out animation (last 2 seconds before dismissal) */
+/* Applied when FadingMessage component sets isFading=true */
+.temporary-message-banner.fading {
+    animation: fadeOut 2s ease-out forwards;
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-20px); /* Slide up slightly while fading */
+    }
+}
+
+/* Smaller padding and font sizes on mobile */
+@media (max-width: 640px) {
+    .temporary-message-banner {
+        padding: 10px 12px;
+    }
+
+    .temporary-message-banner .banner-icon {
+        font-size: 18px;
+    }
+
+    .temporary-message-banner .banner-text {
+        font-size: 13px;
+    }
+}

@@ -40,6 +40,20 @@
 
     <!-- Messages Area -->
     <div class="messages-container">
+
+        @* ============ TEMPORARY SYSTEM WARNINGS (always on top) ================================ *@
+        @if (temporaryMessages.Any())
+        {
+            <div class="temporary-messages-container">
+                @foreach (SignalRMessage temporaryMessage in temporaryMessages)
+                {
+                    <FadingMessage Message="@temporaryMessage"
+                                   OnDismissed="@(() => HandleMessageDismissed(temporaryMessage))"/>
+                }
+            </div>
+        }
+        @* ======================================================================================= *@
+
         @if (chatMessages.Count == 0)
         {
             <!-- Loading state with magical animation -->
@@ -77,10 +91,10 @@
                     @if (chatMessage.Role == "assistant")
                     {
                         <!-- Agent avatar with dynamic border color -->
-                        <img src="images/morgana-avatar.png" 
-                             alt="@chatMessage.AgentName" 
+                        <img src="images/morgana-avatar.png"
+                             alt="@chatMessage.AgentName"
                              class="message-avatar"
-                             style="border: 2px solid @GetAvatarBorderColor(chatMessage.AgentName);" />
+                             style="border: 2px solid @GetAvatarBorderColor(chatMessage.AgentName);"/>
                     }
                     <div class="message-bubble">
                         @if (chatMessage.IsTyping)
@@ -104,7 +118,7 @@
                                 <QuickReplyButton Replies="@chatMessage.QuickReplies"
                                                   OnSelect="@((reply) => SelectQuickReplyAsync(reply, chatMessage))"
                                                   IsDisabled="@(chatMessage.SelectedQuickReplyId != null || chatMessage.IsLastHistoryMessage == false)"
-                                                  SelectedReplyId="@chatMessage.SelectedQuickReplyId" />
+                                                  SelectedReplyId="@chatMessage.SelectedQuickReplyId"/>
                             }
 
                             <!-- Message timestamp -->
@@ -154,14 +168,6 @@
             </span>
         </button>
     </div>
-
-    @if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <!-- Error banner -->
-        <div class="error-banner">
-            ⚠️ @errorMessage
-        </div>
-    }
 </div>
 
 <!-- Confirmation Modal for New Conversation -->
@@ -183,6 +189,12 @@
     /// Includes user messages, agent responses, typing indicators, and presentation messages.
     /// </summary>
     private List<ChatMessage> chatMessages = [];
+
+    /// <summary>
+    /// List of active temporary system warnings (rate limit errors, etc.).
+    /// Rendered as auto-dismissing banners via FadingMessage component.
+    /// </summary>
+    private List<SignalRMessage> temporaryMessages = [];
 
     /// <summary>
     /// Current text input from the user (two-way bound to textarea).
@@ -212,12 +224,6 @@
     /// True after SignalR connection and conversation start succeed.
     /// </summary>
     private bool isInitialized;
-
-    /// <summary>
-    /// Error message to display in error banner.
-    /// Empty string when no error present.
-    /// </summary>
-    private string errorMessage = string.Empty;
 
     /// <summary>
     /// Controls visibility of the new conversation confirmation modal.
@@ -745,6 +751,19 @@
             Console.WriteLine($"🟣 Agent: {signalrMessage.AgentName}, Completed: {signalrMessage.AgentCompleted}");
             Console.WriteLine($"🟣 QuickReplies count: {signalrMessage.QuickReplies?.Count ?? 0}");
 
+            #region Temporary Messages
+            if (string.Equals(signalrMessage.MessageType, "system_warning", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(signalrMessage.MessageType, "error", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"⚠️ Temporary message received: {signalrMessage.MessageType}-{signalrMessage.ErrorReason}");
+
+                temporaryMessages.Add(signalrMessage);
+                await InvokeAsync(StateHasChanged);
+
+                return;
+            }
+            #endregion
+
             // Verify message is for this conversation
             if (conversationId != signalrMessage.ConversationId)
             {
@@ -804,6 +823,17 @@
         {
             Console.WriteLine($"❌ Error in HandleMessageReceived: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Callback invoked when FadingMessage component auto-dismisses.
+    /// Removes the message from the temporary messages list.
+    /// </summary>
+    /// <param name="message">The message to remove</param>
+    private void HandleMessageDismissed(SignalRMessage message)
+    {
+        temporaryMessages.Remove(message);
+        Console.WriteLine($"✅ Temporary message dismissed and removed from list");
     }
 
     // =========================================================================

@@ -1,0 +1,115 @@
+@* 
+    FadingMessage Component - Temporary System Warning Banner
+
+    Features:
+    - Auto-dismiss after 10 seconds
+    - Smooth fade-out animation (last 2 seconds)
+    - Self-contained state management
+    - Configurable icon based on error reason
+    
+    Usage:
+    <FadingMessage Message="@tempMessage" OnDismissed="@(() => HandleDismiss(tempMessage))" />
+*@
+
+@if (isVisible)
+{
+    <div class="temporary-message-banner @(isFading ? "fading" : "")">
+        <span class="banner-icon">
+            @GetIcon()
+        </span>
+        <span class="banner-text">@Message.Text</span>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// The SignalR message to display in the banner.
+    /// </summary>
+    [Parameter]
+    public SignalRMessage Message { get; set; } = null!;
+
+    /// <summary>
+    /// Callback invoked when the message is auto-dismissed after 10 seconds.
+    /// Parent component should remove message from its list.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnDismissed { get; set; }
+
+    /// <summary>
+    /// Controls banner visibility (for smooth mount/unmount).
+    /// </summary>
+    private bool isVisible = true;
+
+    /// <summary>
+    /// Tracks if banner is in fading state (last 2 seconds before removal).
+    /// </summary>
+    private bool isFading = false;
+
+    /// <summary>
+    /// Cancellation token for cleanup on component disposal.
+    /// </summary>
+    private CancellationTokenSource? cancellationTokenSource;
+
+    protected override void OnInitialized()
+    {
+        // Start auto-dismiss timer
+        StartAutoDismissTimer();
+    }
+
+    /// <summary>
+    /// Starts the auto-dismiss timer with fade-out animation.
+    /// Timeline: 8s visible → 2s fading → dismiss
+    /// </summary>
+    private void StartAutoDismissTimer()
+    {
+        cancellationTokenSource = new CancellationTokenSource();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // Phase 1: Visible for 8 seconds
+                await Task.Delay(8000, cancellationTokenSource.Token);
+
+                // Phase 2: Trigger fade-out animation (2 seconds)
+                isFading = true;
+                await InvokeAsync(StateHasChanged);
+
+                await Task.Delay(2000, cancellationTokenSource.Token);
+
+                // Phase 3: Hide and notify parent
+                isVisible = false;
+                await InvokeAsync(StateHasChanged);
+
+                // Notify parent to remove from list
+                await OnDismissed.InvokeAsync();
+            }
+            catch (TaskCanceledException)
+            {
+                // Component disposed before timer completed - cleanup handled
+            }
+        }, cancellationTokenSource.Token);
+    }
+
+    /// <summary>
+    /// Gets the appropriate icon based on error reason.
+    /// </summary>
+    /// <returns>Emoji icon string</returns>
+    private string GetIcon()
+    {
+        return Message.ErrorReason switch
+        {
+            "rate_limit_exceeded" => "✋",
+            _ => "⚠️"
+        };
+    }
+
+    /// <summary>
+    /// Cleanup cancellation token on component disposal.
+    /// </summary>
+    public void Dispose()
+    {
+        cancellationTokenSource?.Cancel();
+        cancellationTokenSource?.Dispose();
+    }
+}
