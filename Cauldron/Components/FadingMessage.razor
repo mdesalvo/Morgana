@@ -1,19 +1,16 @@
 @* 
-    FadingMessage Component - Temporary System Warning Banner
-    
+    FadingMessage - Temporary System Warning Banner
+
     Features:
     - Auto-dismiss after configurable N seconds (default 10)
     - Smooth fade-out animation (last 2 seconds)
     - Self-contained state management
     - Configurable icon based on error reason
-    
-    Usage:
-    <FadingMessage Message="@tempMessage" OnDismissed="@(() => HandleDismiss(tempMessage))" />
 *@
 
 @if (isVisible)
 {
-    <div class="temporary-message-banner @(isFading ? "fading" : "")">
+    <div class="temporary-message-banner @(isFading ? "fading" : "") @GetBannerClass()">
         <span class="banner-icon">
             @GetIcon()
         </span>
@@ -114,6 +111,15 @@
             "rate_limit_exceeded" => "✋",
             _ => "⚠️"
         };
+    }
+
+    /// <summary>
+    /// Gets the CSS class for banner styling based on MessageType.
+    /// </summary>
+    /// <returns>CSS class name ("error" for errors, empty for warnings)</returns>
+    private string GetBannerClass()
+    {
+        return string.Equals(Message.MessageType, "error", StringComparison.OrdinalIgnoreCase) ? "error" : "";
     }
 
     /// <summary>

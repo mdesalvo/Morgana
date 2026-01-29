@@ -102,4 +102,10 @@ public sealed class SignalRMessage
     /// Default: false
     /// </summary>
     public bool AgentCompleted { get; init; }
+
+    /// <summary>
+    /// Duration of the eventual fading message which will be generated
+    /// by this SignalR message (depending on its MessageType).
+    /// </summary>
+    public int? FadingMessageDurationSeconds { get; set; } = 10;
 }

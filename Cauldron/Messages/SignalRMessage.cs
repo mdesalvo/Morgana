@@ -87,4 +87,10 @@ public sealed class SignalRMessage
     /// When true, UI should return to default Morgana state.
     /// </summary>
     public bool AgentCompleted { get; set; }
+
+    /// <summary>
+    /// Duration of the eventual fading message which will be generated
+    /// by this SignalR message (depending on its MessageType).
+    /// </summary>
+    public int? FadingMessageDurationSeconds { get; set; } = 10;
 }

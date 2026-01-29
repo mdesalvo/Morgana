@@ -48,6 +48,7 @@
                 @foreach (SignalRMessage temporaryMessage in temporaryMessages)
                 {
                     <FadingMessage Message="@temporaryMessage"
+                                   DurationSeconds="@(temporaryMessage.FadingMessageDurationSeconds ?? 10)"
                                    OnDismissed="@HandleMessageDismissed"/>
                 }
             </div>
@@ -311,7 +312,7 @@
                 catch (Exception ex)
                 {
                     Console.WriteLine($"❌ Storage check error: {ex.Message}");
-                    AddErrorMessage($"Initialization error: {ex.Message}", "initialization_failed");
+                    AddErrorMessage($"Initialization error: {ex.Message}", "initialization_failed", 20);
                 }
                 finally
                 {
@@ -322,7 +323,7 @@
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Initialization error: {ex.Message}");
-            AddErrorMessage($"Critical initialization error: {ex.Message}", "critical_initialization_failed");
+            AddErrorMessage($"Critical initialization error: {ex.Message}", "critical_initialization_failed", 30);
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -575,14 +576,14 @@
             {
                 string errorContent = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"❌ Morgana error: {errorContent}");
-                AddErrorMessage($"Failed to start conversation: {response.StatusCode}", "conversation_start_http_error");
+                AddErrorMessage($"Failed to start conversation: {response.StatusCode}", "conversation_start_http_error", 12);
                 await InvokeAsync(StateHasChanged);
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ StartConversation exception: {ex.Message}");
-            AddErrorMessage($"Connection error: {ex.Message}", "conversation_start_exception");
+            AddErrorMessage($"Connection error: {ex.Message}", "conversation_start_exception", 20);
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -607,7 +608,7 @@
         catch (Exception ex)
         {
             Console.WriteLine($"❌ {nameof(ClearConversationAsync)} exception: {ex.Message}");
-            AddErrorMessage($"Error starting new conversation: {ex.Message}", "new_conversation_failed");
+            AddErrorMessage($"Error starting new conversation: {ex.Message}", "new_conversation_failed", 12);
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -1028,15 +1029,17 @@
     /// </summary>
     /// <param name="text">Error message text (⚠️ emoji will be prepended)</param>
     /// <param name="errorReason">Specific error reason for debugging/icon selection</param>
-    private void AddErrorMessage(string text, string errorReason)
+    /// <param name="fadingMessageDurationSeconds">Optional duration of the fading message that will be displayed</param>
+    private void AddErrorMessage(string text, string errorReason, int? fadingMessageDurationSeconds=10)
     {
         temporaryMessages.Add(new SignalRMessage
         {
             ConversationId = conversationId,
-            Text = $"⚠️ {text}",
+            Text = text,
             Timestamp = DateTime.UtcNow,
             MessageType = "error",
-            ErrorReason = errorReason
+            ErrorReason = errorReason,
+            FadingMessageDurationSeconds = fadingMessageDurationSeconds
         });
     }
 
