@@ -209,4 +209,4 @@ This architecture delivers three critical benefits—all configurable through de
 
 ---
 
-**The Morgana Difference**: These 4 pillars work together to create an orchestration framework where adding a new domain agent requires only configuration and attribute decoration—no changes to the core framework, no manual registration, no brittle coupling. It's **conversational AI architecture designed for evolution at scale**.
+**The Morgana Difference**: These 4 pillars work together to create an orchestration framework where adding a new domain agent requires only configuration and attribute decoration—no changes to the core framework, no manual registration, no brittle coupling. It's **conversational AI architecture designed for domain-driven evolution at scale**.
