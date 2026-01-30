@@ -240,67 +240,9 @@ body {
     text-align: right;
 }
 
-/* =========================================================================
-   STREAMING CURSOR & EFFECTS
-   ========================================================================= */
-
-/* Blinking cursor that appears at the end of streaming text */
-.streaming-cursor {
-    display: inline-block;
-    margin-left: 2px;
-    font-weight: 600;
-    color: var(--primary-color);
-    animation: blink-cursor 1s step-end infinite;
-    line-height: 1;
-    vertical-align: baseline;
-}
-
-/* Blinking animation - classic terminal cursor effect */
-@keyframes blink-cursor {
-    0%, 49% {
-        opacity: 1;
-    }
-    50%, 100% {
-        opacity: 0;
-    }
-}
-
-/* Specialized agent streaming cursor (pink) */
-.message.assistant .message-bubble.streaming .streaming-cursor {
-    color: var(--secondary-color);
-}
-
-/* Subtle pulsing glow on streaming message bubble */
-.message.assistant .message-bubble.streaming {
-    animation: streaming-pulse 2s ease-in-out infinite;
-    position: relative;
-}
-
-@keyframes streaming-pulse {
-    0%, 100% {
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    50% {
-        box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25);
-    }
-}
-
 /* Accessibility: Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {
-    .streaming-cursor {
-        animation: none;
-        opacity: 0.7;
-    }
-
     .message.assistant .message-bubble.streaming {
         animation: none;
-    }
-}
-
-/* Responsive: Ensure cursor scales properly on mobile */
-@media (max-width: 640px) {
-    .streaming-cursor {
-        font-size: 0.95em;
-        margin-left: 1px;
     }
 }

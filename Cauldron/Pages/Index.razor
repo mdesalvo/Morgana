@@ -112,11 +112,6 @@
                             <!-- Message content -->
                             <div class="message-text @(chatMessage.Type == MessageType.Presentation ? "completion-text" : "")">
                                 @chatMessage.Text
-                                @if (chatMessage.IsStreaming)
-                                {
-                                    <!-- Streaming cursor (blinking) -->
-                                    <span class="streaming-cursor">▊</span>
-                                }
                             </div>
 
                             @if (chatMessage.QuickReplies is { Count: > 0 } && !chatMessage.IsStreaming)
