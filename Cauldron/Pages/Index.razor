@@ -114,7 +114,7 @@
                                 @chatMessage.Text
                             </div>
 
-                            @if (chatMessage.QuickReplies is { Count: > 0 } && !chatMessage.IsStreaming)
+                            @if (chatMessage is { QuickReplies: { Count: > 0 }, IsStreaming: false })
                             {
                                 <QuickReplyButton Replies="@chatMessage.QuickReplies"
                                                   OnSelect="@((reply) => SelectQuickReplyAsync(reply, chatMessage))"
@@ -975,7 +975,7 @@
                 // Start typewriter timer (fires every configurable N milliseconds by consuming configurable K characters)
                 int.TryParse(Configuration["Morgana:StreamingResponse:TypewriterTickMilliseconds"], out int typewriterTickMilliseconds);
                 if (typewriterTickMilliseconds <= 0)
-                    typewriterTickMilliseconds = 25;
+                    typewriterTickMilliseconds = 20;
                 int.TryParse(Configuration["Morgana:StreamingResponse:TypewriterTickChars"], out int typewriterTickChars);
                 if (typewriterTickChars <= 0)
                     typewriterTickChars = 1;
@@ -996,7 +996,7 @@
 
     /// <summary>
     /// Timer callback for typewriter effect.
-    /// Consumes K characters (default: 1) from the streaming buffer every configurable N milliseconds (default: 25).
+    /// Consumes K characters (default: 1) from the streaming buffer every configurable N milliseconds (default: 20).
     /// Auto-stops when buffer is empty and streaming is complete.
     /// </summary>
     /// <param name="timerParameters">Timer input parameters (int: the number of characters to be consumed)</param>
