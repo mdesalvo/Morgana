@@ -56,6 +56,8 @@ CREATE TABLE rate_limit_log (
 - Fixed residual dead letter in `ConversationManagerActor` which still responded to conversation creation or resume
 
 ### 🚀 Future Enablement
+- **Operational cost control and budget predictability** - Direct protection against uncontrolled token and API resource consumption, enabling production deployment of Morgana with predictable and sustainable costs, even with large user bases
+- **Tiered monetization and premium models** - Foundation for your commercial strategies based on usage limits (e.g: freemium with basic thresholds, premium tiers with higher limits, enterprise with custom quotas), transforming rate limiting from pure cost protection into a revenue driver
 
 
 ## [0.12.1] - 2026-01-25
