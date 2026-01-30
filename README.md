@@ -202,7 +202,7 @@ When one agent collects shared information (e.g., customer ID), the `RouterActor
 
 The persistence layer supports **multi-agent history reconciliation**: while agents maintain isolated threads, Morgana reconstructs a unified timeline for UI presentation, giving users an uninterrupted conversational experience regardless of which agents participated behind the scenes.
 
-This architecture delivers three critical benefits—all configurable through declarative JSON rather than imperative code:
+This architecture delivers 3 critical benefits—all configurable through declarative JSON rather than imperative code:
 - **data security** through encryption and isolation
 - **intelligent context sharing** via P2P sync
 - **resilient conversations** that survive system restarts
