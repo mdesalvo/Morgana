@@ -184,43 +184,6 @@ public class RouterActor : MorganaActor
         }
     }
 
-    /* REMOVED - Now using HandleAgentResponseDirect for Tell-based responses
-    /// <summary>
-    /// Handles successful responses from specialized agents (via PipeTo).
-    /// Wraps the response with agent reference and completion status before forwarding to original sender.
-    /// </summary>
-    /// <param name="ctx">Context containing agent response, agent reference, and original sender</param>
-    private void HandleAgentResponse(Records.AgentResponseContext ctx)
-    {
-        actorLogger.Info($"Received response from agent {ctx.AgentRef.Path}, " +
-                         $"completed: {ctx.Response.IsCompleted}, " +
-                         $"#quickReplies: {ctx.Response.QuickReplies?.Count ?? 0}");
-
-        // Clean up streaming context (response received, streaming done)
-        streamingContexts.Remove(ctx.AgentRef);
-
-        ctx.OriginalSender.Tell(new Records.ActiveAgentResponse(
-            ctx.Response.Response,
-            ctx.Response.IsCompleted,
-            ctx.AgentRef,
-            ctx.Response.QuickReplies));
-    }
-
-    /// <summary>
-    /// Handles failures during agent routing or processing (via PipeTo).
-    /// Returns an error message to the sender using the unrecognized intent error template.
-    /// </summary>
-    /// <param name="failure">Failure information</param>
-    private void HandleFailure(Records.FailureContext failure)
-    {
-        actorLogger.Error(failure.Failure.Cause, "Agent routing failed");
-
-        Records.Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
-        failure.OriginalSender.Tell(new Records.AgentResponse(
-            classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), true));
-    }
-    */
-
     /// <summary>
     /// Handles context update broadcasts from one agent to all other registered agents.
     /// Creates agents on-demand if they don't exist yet.
