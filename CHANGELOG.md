@@ -33,7 +33,7 @@ CREATE TABLE rate_limit_log (
 "Morgana": {
   "RateLimiting": {
     "MaxMessagesPerMinute": 5,
-    "MaxMessagesPerHour": 50,
+    "MaxMessagesPerHour": 30,
     "MaxMessagesPerDay": 100,
     "ErrorMessagePerMinute": "✋ Whoa there! You're casting spells too quickly...",
     "ErrorMessagePerHour": "🕐 You've reached the hourly limit of {limit} messages...",
