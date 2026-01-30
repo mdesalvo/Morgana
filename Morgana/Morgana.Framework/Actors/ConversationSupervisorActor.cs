@@ -327,17 +327,14 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 actorLogger.Info($"Active agent exists, routing to follow-up flow with agent {activeAgent.Path}");
 
-                // Route directly to active agent (follow-up)
-                _ = activeAgent
-                        .Ask<Records.AgentResponse>(
-                            new Records.AgentRequest(wrapper.Context.OriginalMessage.ConversationId, wrapper.Context.OriginalMessage.Text, null),
-                            TimeSpan.FromSeconds(60))
-                        .PipeTo(
-                            Self,
-                            success: response => new Records.FollowUpContext(response, wrapper.Context.OriginalSender, wrapper.Context.OriginalMessage.Timestamp),
-                            failure: ex => new Records.FailureContext(new Status.Failure(ex), wrapper.Context.OriginalSender));
-
+                // IMPORTANT: Become BEFORE Tell so we're ready to receive streaming chunks
                 Become(() => AwaitingFollowUpResponse(wrapper.Context.OriginalSender));
+
+                // Route directly to active agent (follow-up) using Tell
+                activeAgent.Tell(new Records.AgentRequest(
+                    wrapper.Context.OriginalMessage.ConversationId, 
+                    wrapper.Context.OriginalMessage.Text, 
+                    null));
             }
             else
             {
@@ -361,7 +358,8 @@ public class ConversationSupervisorActor : MorganaActor
         {
             actorLogger.Error(failure.Failure.Cause, "Guard check failed");
 
-            failure.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
+            failure.OriginalSender.Tell(
+                new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
 
             Become(Idle);
         });
@@ -391,28 +389,14 @@ public class ConversationSupervisorActor : MorganaActor
 
             Records.ProcessingContext updatedCtx = ctx with { Classification = wrapper.Classification };
 
-            _ = router
-                    .Ask<object>(
-                        new Records.AgentRequest(
-                            wrapper.Context.OriginalMessage.ConversationId,
-                            wrapper.Context.OriginalMessage.Text,
-                            wrapper.Classification), TimeSpan.FromSeconds(60))
-                    .PipeTo(
-                        Self,
-                        success: response => new Records.AgentContext(response, updatedCtx),
-                        failure: ex => new Records.FailureContext(new Status.Failure(ex), wrapper.Context.OriginalSender));
-
+            // IMPORTANT: Become BEFORE Tell so we're ready to receive streaming chunks
             Become(() => AwaitingAgentResponse(updatedCtx));
-        });
 
-        // Handle unexpected failures
-        Receive<Records.FailureContext>(failure =>
-        {
-            actorLogger.Error(failure.Failure.Cause, "Classification failed");
-
-            failure.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
-
-            Become(Idle);
+            // Route to router using Tell (not Ask) to support streaming
+            router.Tell(new Records.AgentRequest(
+                wrapper.Context.OriginalMessage.ConversationId,
+                wrapper.Context.OriginalMessage.Text,
+                wrapper.Classification));
         });
 
         // Re-register common handlers for FSM behavior consistency
@@ -434,6 +418,9 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingAgentResponse");
 
+        // Forward streaming chunks from router/agent to manager (and then to client)
+        Receive<Records.AgentStreamChunk>(chunk => ctx.OriginalSender.Tell(chunk));
+
         // Handle restoreAgentResponse from specialized agent (via RouterActor):
         // - ActiveAgentResponse: restoreAgentResponse from intent-specific agent (BillingAgent, ContractAgent, etc.)
         // - AgentResponse: fallback restoreAgentResponse from RouterActor (no agent found for intent)
@@ -447,92 +434,38 @@ public class ConversationSupervisorActor : MorganaActor
         //
         // Then return → Idle to await next user message
         // (synchronous because there are no async/await needs)
-        Receive<Records.AgentContext>(wrapper =>
+        // Handle response from router (which received it from specialized agent)
+        Receive<Records.ActiveAgentResponse>(activeAgentResponse =>
         {
             string agentName = GetAgentDisplayName(ctx.Classification?.Intent);
+            int quickRepliesCount = activeAgentResponse.QuickReplies?.Count ?? 0;
+            
+            actorLogger.Info($"Received ActiveAgentResponse from {activeAgentResponse.AgentRef.Path}, " +
+                             $"completed: {activeAgentResponse.IsCompleted}, quickReplies: {quickRepliesCount}");
 
-            switch (wrapper.Response)
+            if (!activeAgentResponse.IsCompleted)
             {
-                case Records.ActiveAgentResponse activeAgentResponse:
-                    {
-                        int quickRepliesCount = activeAgentResponse.QuickReplies?.Count ?? 0;
-                        actorLogger.Info($"Received ActiveAgentResponse from {activeAgentResponse.AgentRef.Path}, completed: {activeAgentResponse.IsCompleted}, quickReplies: {quickRepliesCount}");
+                activeAgent = activeAgentResponse.AgentRef;
+                activeAgentIntent = ctx.Classification?.Intent;
 
-                        if (!activeAgentResponse.IsCompleted)
-                        {
-                            activeAgent = activeAgentResponse.AgentRef;
-                            activeAgentIntent = ctx.Classification?.Intent;
+                actorLogger.Info($"Active agent set to {activeAgent.Path} with intent {activeAgentIntent}");
+            }
+            else
+            {
+                activeAgent = null;
+                activeAgentIntent = null;
 
-                            actorLogger.Info($"Active agent set to {activeAgent.Path} with intent {activeAgentIntent}");
-                        }
-                        else
-                        {
-                            activeAgent = null;
-                            activeAgentIntent = null;
-
-                            actorLogger.Info("Agent completed and cleared");
-                        }
-
-                        wrapper.Context.OriginalSender.Tell(new Records.ConversationResponse(
-                            activeAgentResponse.Response,
-                            wrapper.Context.Classification?.Intent,
-                            wrapper.Context.Classification?.Metadata,
-                            agentName,
-                            activeAgentResponse.IsCompleted,
-                            activeAgentResponse.QuickReplies,
-                            wrapper.Context.OriginalMessage.Timestamp));
-
-                        break;
-                    }
-                case Records.AgentResponse routerFallbackResponse:
-                    {
-                        actorLogger.Warning("Received AgentResponse instead of ActiveAgentResponse (router fallback)");
-
-                        if (!routerFallbackResponse.IsCompleted)
-                        {
-                            activeAgent = router;
-                            activeAgentIntent = ctx.Classification?.Intent;
-
-                            actorLogger.Warning($"Fallback active agent = {router.Path} with intent {activeAgentIntent}");
-                        }
-                        else
-                        {
-                            activeAgent = null;
-                            activeAgentIntent = null;
-
-                            actorLogger.Info("Router fallback completed, active agent cleared");
-                        }
-
-                        wrapper.Context.OriginalSender.Tell(new Records.ConversationResponse(
-                            routerFallbackResponse.Response,
-                            wrapper.Context.Classification?.Intent,
-                            wrapper.Context.Classification?.Metadata,
-                            agentName,
-                            routerFallbackResponse.IsCompleted,
-                            routerFallbackResponse.QuickReplies,
-                            wrapper.Context.OriginalMessage.Timestamp));
-
-                        break;
-                    }
-                default:
-                    {
-                        actorLogger.Error($"Unexpected message type: {wrapper.Response?.GetType()}");
-
-                        wrapper.Context.OriginalSender.Tell(new Records.ConversationResponse("Unexpected internal error.", null, null, "Morgana", false));
-
-                        break;
-                    }
+                actorLogger.Info("Agent completed and cleared");
             }
 
-            Become(Idle);
-        });
-
-        // Handle unexpected failures
-        Receive<Records.FailureContext>(failure =>
-        {
-            actorLogger.Error(failure.Failure.Cause, "Router request failed");
-
-            failure.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
+            ctx.OriginalSender.Tell(new Records.ConversationResponse(
+                activeAgentResponse.Response,
+                ctx.Classification?.Intent,
+                ctx.Classification?.Metadata,
+                agentName,
+                activeAgentResponse.IsCompleted,
+                activeAgentResponse.QuickReplies,
+                ctx.OriginalMessage.Timestamp));
 
             Become(Idle);
         });
@@ -551,24 +484,15 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingFollowUpResponse");
 
-        // Handle follow-up restoreAgentResponse from currently active agent (multi-turn conversation):
-        // - Guard check already passed before routing here
-        // - Agent was previously set as active (IsCompleted=false in prior restoreAgentResponse)
-        // 
-        // If agent signals IsCompleted=true:
-        //   - Clear activeAgent reference (multi-turn conversation ended)
-        //   - Next user message will go through full flow again (guard → classifier → router)
-        // If agent signals IsCompleted=false:
-        //   - Keep activeAgent reference (conversation continues)
-        //   - Next user message routes directly to guard → same agent again
-        //
-        // Then return → Idle to await next user message
-        // (synchronous because there are no async/await needs)
-        Receive<Records.FollowUpContext>(wrapper =>
+        // Forward streaming chunks from active agent to manager (and then to client)
+        Receive<Records.AgentStreamChunk>(originalSender.Tell);
+
+        // Handle follow-up response from currently active agent (direct Tell, not PipeTo)
+        Receive<Records.AgentResponse>(response =>
         {
             string agentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
 
-            if (wrapper.Response.IsCompleted)
+            if (response.IsCompleted)
             {
                 actorLogger.Info("Active agent signaled completion, clearing active agent");
 
@@ -576,26 +500,14 @@ public class ConversationSupervisorActor : MorganaActor
                 activeAgentIntent = null;
             }
 
-            wrapper.OriginalSender.Tell(new Records.ConversationResponse(
-                wrapper.Response.Response,
+            originalSender.Tell(new Records.ConversationResponse(
+                response.Response,
                 null,
                 null,
                 agentName,
-                wrapper.Response.IsCompleted,
-                wrapper.Response.QuickReplies,
-                wrapper.OriginalMessageTimestamp));
-
-            Become(Idle);
-        });
-
-        // Handle unexpected failures
-        Receive<Records.FailureContext>(failure =>
-        {
-            actorLogger.Error(failure.Failure.Cause, "Active follow-up agent did not reply");
-
-            activeAgent = null;
-            activeAgentIntent = null;
-            failure.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
+                response.IsCompleted,
+                response.QuickReplies,
+                DateTime.UtcNow));
 
             Become(Idle);
         });
@@ -635,7 +547,8 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Error(failure.Failure.Cause, "Unexpected failure in ConversationSupervisorActor");
 
-        failure.OriginalSender.Tell(new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
+        failure.OriginalSender.Tell(
+            new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
     }
 
     /// <summary>

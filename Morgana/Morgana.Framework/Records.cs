@@ -442,6 +442,13 @@ public static class Records
         IActorRef AgentRef,
         List<QuickReply>? QuickReplies = null);
 
+    /// <summary>
+    /// Represents a streaming chunk from an agent during real-time response generation.
+    /// Sent incrementally to enable progressive UI rendering.
+    /// </summary>
+    public record AgentStreamChunk(
+        string Text);
+
     // ==========================================================================
     // AGENT COMMUNICATION MESSAGES
     // ==========================================================================

@@ -42,8 +42,7 @@ public class ConversationManagerActor : MorganaActor
 
         // Handle incoming user messages from SignalR:
         // - Ensures supervisor exists (creates if missing)
-        // - Forwards message to supervisor using Ask pattern with PipeTo for non-blocking processing
-        // - Includes 60-second timeout for supervisor response
+        // - Forwards message to supervisor using Tell to support streaming
         ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
 
         // Handle conversation lifecycle requests:
@@ -52,11 +51,13 @@ public class ConversationManagerActor : MorganaActor
         ReceiveAsync<Records.CreateConversation>(HandleCreateConversationAsync);
         ReceiveAsync<Records.TerminateConversation>(HandleTerminateConversationAsync);
 
-        // Handle supervisor responses via PipeTo pattern:
-        // - SupervisorResponseContext: successful response from supervisor → send to client via SignalR
-        // - Status.Failure: timeout or exception from supervisor → send error message to client
-        ReceiveAsync<Records.SupervisorResponseContext>(HandleSupervisorResponseAsync);
-        ReceiveAsync<Records.FailureContext>(HandleSupervisorFailureAsync);
+        // Handle supervisor responses (direct Tell, not PipeTo):
+        // - ConversationResponse: final response from supervisor → send to client via SignalR
+        ReceiveAsync<Records.ConversationResponse>(HandleConversationResponseAsync);
+        
+        // Handle streaming chunks from supervisor and forward to client via SignalR
+        // Handle streaming chunks from supervisor and forward to client via SignalR
+        ReceiveAsync<Records.AgentStreamChunk>(HandleStreamChunkAsync);
     }
 
     /// <summary>
@@ -110,12 +111,11 @@ public class ConversationManagerActor : MorganaActor
 
     /// <summary>
     /// Handles incoming user messages.
-    /// Ensures supervisor exists, then forwards the message using Ask pattern with PipeTo for non-blocking processing.
+    /// Ensures supervisor exists, then forwards the message using Tell to support streaming.
     /// </summary>
     /// <param name="msg">User message to process</param>
     /// <remarks>
-    /// Uses PipeTo pattern to avoid blocking the actor mailbox while waiting for supervisor response.
-    /// Includes 60-second timeout for supervisor processing.
+    /// Uses Tell pattern to support streaming chunks and final response separately.
     /// </remarks>
     private async Task HandleUserMessageAsync(Records.UserMessage msg)
     {
@@ -133,39 +133,54 @@ public class ConversationManagerActor : MorganaActor
 
         actorLogger.Info("Forwarding message to supervisor at {0}", supervisor.Path);
 
-        _ = supervisor
-                .Ask<Records.ConversationResponse>(msg, TimeSpan.FromSeconds(60))
-                .PipeTo(
-                    Self,
-                    success: response => new Records.SupervisorResponseContext(response),
-                    failure: ex => new Records.FailureContext(new Status.Failure(ex), supervisor));
+        // Use Tell instead of Ask to support streaming
+        supervisor.Tell(msg);
     }
 
     /// <summary>
-    /// Handles successful responses from the supervisor (via PipeTo).
+    /// Handles streaming chunks from the supervisor and forwards them to the client via SignalR.
+    /// Enables real-time progressive response rendering in the UI.
+    /// </summary>
+    /// <param name="chunk">Streaming chunk containing partial response text</param>
+    private async Task HandleStreamChunkAsync(Records.AgentStreamChunk chunk)
+    {
+        // Forward chunk to client via SignalR for progressive rendering
+        try
+        {
+            await signalRBridgeService.SendStreamChunkAsync(conversationId, chunk.Text);
+        }
+        catch (Exception ex)
+        {
+            actorLogger.Error(ex, "Failed to send stream chunk to client");
+            // Don't propagate error - continue streaming
+        }
+    }
+
+    /// <summary>
+    /// Handles final response from supervisor (direct Tell, not PipeTo wrapper).
     /// Sends the response to the client via SignalR with appropriate metadata.
     /// </summary>
-    /// <param name="ctx">Context containing the supervisor's response</param>
-    private async Task HandleSupervisorResponseAsync(Records.SupervisorResponseContext ctx)
+    /// <param name="response">ConversationResponse from supervisor</param>
+    private async Task HandleConversationResponseAsync(Records.ConversationResponse response)
     {
         actorLogger.Info(
-            $"Received response from supervisor (agent: {ctx.Response.AgentName ?? "unknown"}, completed: {ctx.Response.AgentCompleted}): " +
-            $"{ctx.Response.Response[..Math.Min(50, ctx.Response.Response.Length)]}..., #quickReplies: {ctx.Response.QuickReplies?.Count ?? 0}");
+            $"Received response from supervisor (agent: {response.AgentName ?? "unknown"}, completed: {response.AgentCompleted}): " +
+            $"{response.Response[..Math.Min(50, response.Response.Length)]}..., #quickReplies: {response.QuickReplies?.Count ?? 0}");
 
         // Send response to client via SignalR
         try
         {
             await signalRBridgeService.SendStructuredMessageAsync(
                 conversationId,
-                ctx.Response.Response,
+                response.Response,
                 "assistant",
-                ctx.Response.QuickReplies,
+                response.QuickReplies,
                 null,
-                ctx.Response.AgentName,
-                ctx.Response.AgentCompleted,
-                ctx.Response.OriginalTimestamp);
+                response.AgentName,
+                response.AgentCompleted,
+                response.OriginalTimestamp);
 
-            actorLogger.Info($"Response sent successfully to client via SignalR (#quickReplies: {ctx.Response.QuickReplies?.Count ?? 0})");
+            actorLogger.Info($"Response sent successfully to client via SignalR (#quickReplies: {response.QuickReplies?.Count ?? 0})");
         }
         catch (Exception ex)
         {
@@ -187,33 +202,6 @@ public class ConversationManagerActor : MorganaActor
             {
                 actorLogger.Error(fallbackEx, "Failed to send error notification to client");
             }
-        }
-    }
-
-    /// <summary>
-    /// Handles supervisor failures (timeout or exception via PipeTo).
-    /// Sends an error message to the client via SignalR.
-    /// </summary>
-    /// <param name="failure">Failure information from supervisor</param>
-    private async Task HandleSupervisorFailureAsync(Records.FailureContext failure)
-    {
-        actorLogger.Error(failure.Failure.Cause, "Supervisor did not reply in time or failed");
-
-        // Send error message to client via SignalR
-        try
-        {
-            await signalRBridgeService.SendStructuredMessageAsync(
-                conversationId,
-                "An internal error occurred.",
-                "assistant",
-                null,
-                "supervisor_error",
-                "Morgana",
-                false);
-        }
-        catch (Exception ex)
-        {
-            actorLogger.Error(ex, "Failed to send error message to client");
         }
     }
 

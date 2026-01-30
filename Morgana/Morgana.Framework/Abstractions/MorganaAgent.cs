@@ -5,6 +5,7 @@ using Morgana.Framework.Attributes;
 using Morgana.Framework.Interfaces;
 using Morgana.Framework.Providers;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 
@@ -289,7 +290,6 @@ public class MorganaAgent : MorganaActor
     protected async Task ExecuteAgentAsync(Records.AgentRequest req)
     {
         IActorRef? senderRef = Sender;
-        Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync("Morgana");
 
         try
         {
@@ -306,9 +306,18 @@ public class MorganaAgent : MorganaActor
             }
 
             // Execute agent on its conversation session (which has context and history)
-            AgentResponse llmResponse = await aiAgent.RunAsync(
-                new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow }, aiAgentSession);
-            string llmResponseText = llmResponse.Text;
+            StringBuilder fullResponse = new StringBuilder();
+            await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(
+                new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow }, aiAgentSession))
+            {
+                if (!string.IsNullOrEmpty(chunk.Text))
+                {
+                    fullResponse.Append(chunk.Text);
+
+                    senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
+                }
+            }
+            string llmResponseText = fullResponse.ToString();
 
             // Detect if LLM has emitted the special token for continuing the multi-turn conversation
             bool hasInteractiveToken = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);

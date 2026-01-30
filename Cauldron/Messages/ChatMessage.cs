@@ -121,6 +121,13 @@ public class ChatMessage
     /// Optional flag indicating that this is the last message of a resumed conversation.
     /// </summary>
     public bool? IsLastHistoryMessage { get; init; }
+
+    /// <summary>
+    /// Indicates whether this message is currently being streamed from the backend.
+    /// When true, the message text is progressively updated by the typewriter effect.
+    /// When false, the message is complete and immutable.
+    /// </summary>
+    public bool IsStreaming { get; set; }
 }
 
 /// <summary>
