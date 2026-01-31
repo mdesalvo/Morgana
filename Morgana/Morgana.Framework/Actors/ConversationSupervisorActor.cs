@@ -100,6 +100,9 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("↗ State: Idle");
 
+        // Clear any lingering timeout from previous states
+        Context.SetReceiveTimeout(null);
+
         // Generate and send welcome message with quick reply buttons on conversation start
         ReceiveAsync<Records.GeneratePresentationMessage>(HandlePresentationRequestAsync);
         ReceiveAsync<Records.PresentationContext>(HandlePresentationGenerated);
@@ -123,9 +126,6 @@ public class ConversationSupervisorActor : MorganaActor
 
             Become(() => AwaitingGuardCheck(ctx));
         });
-
-        // Handle unexpected failures
-        Receive<Records.FailureContext>(HandleUnexpectedFailure);
 
         // Re-register common handlers for FSM behavior consistency
         RegisterCommonHandlers();
@@ -327,7 +327,7 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 actorLogger.Info($"Active agent exists, routing to follow-up flow with agent {activeAgent.Path}");
 
-                // IMPORTANT: Become BEFORE Tell so we're ready to receive streaming chunks
+                // Become BEFORE Tell so we're ready to receive streaming chunks
                 Become(() => AwaitingFollowUpResponse(wrapper.Context.OriginalSender));
 
                 // Route directly to active agent (follow-up) using Tell
@@ -389,7 +389,7 @@ public class ConversationSupervisorActor : MorganaActor
 
             Records.ProcessingContext updatedCtx = ctx with { Classification = wrapper.Classification };
 
-            // IMPORTANT: Become BEFORE Tell so we're ready to receive streaming chunks
+            // Become BEFORE Tell so we're ready to receive streaming chunks
             Become(() => AwaitingAgentResponse(updatedCtx));
 
             // Route to router using Tell (not Ask) to support streaming
@@ -418,8 +418,36 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingAgentResponse");
 
+        // Set timeout for agent response (90 seconds)
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(90));
+
+        // Handle timeout if agent doesn't respond
+        Receive<ReceiveTimeout>(_ =>
+        {
+            actorLogger.Error($"Timeout waiting for agent response (classification: {ctx.Classification?.Intent})");
+            
+            Context.SetReceiveTimeout(null); // Clear timeout
+            
+            ctx.OriginalSender.Tell(new Records.ConversationResponse(
+                "I apologize, but the request took too long to process. Please try again.",
+                ctx.Classification?.Intent,
+                ctx.Classification?.Metadata,
+                GetAgentDisplayName(ctx.Classification?.Intent),
+                false,
+                null,
+                ctx.OriginalMessage.Timestamp));
+            
+            Become(Idle);
+        });
+
         // Forward streaming chunks from router/agent to manager (and then to client)
-        Receive<Records.AgentStreamChunk>(chunk => ctx.OriginalSender.Tell(chunk));
+        // Reset timeout on each chunk to prevent timeout during active streaming
+        Receive<Records.AgentStreamChunk>(chunk =>
+        {
+            // Reset timeout - we're getting data, agent is alive
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(90));
+            ctx.OriginalSender.Tell(chunk);
+        });
 
         // Handle restoreAgentResponse from specialized agent (via RouterActor):
         // - ActiveAgentResponse: restoreAgentResponse from intent-specific agent (BillingAgent, ContractAgent, etc.)
@@ -437,37 +465,58 @@ public class ConversationSupervisorActor : MorganaActor
         // Handle response from router (which received it from specialized agent)
         Receive<Records.ActiveAgentResponse>(activeAgentResponse =>
         {
-            string agentName = GetAgentDisplayName(ctx.Classification?.Intent);
-            int quickRepliesCount = activeAgentResponse.QuickReplies?.Count ?? 0;
+            // Clear timeout immediately upon receiving response
+            Context.SetReceiveTimeout(null);
             
-            actorLogger.Info($"Received ActiveAgentResponse from {activeAgentResponse.AgentRef.Path}, " +
-                             $"completed: {activeAgentResponse.IsCompleted}, quickReplies: {quickRepliesCount}");
-
-            if (!activeAgentResponse.IsCompleted)
+            try
             {
-                activeAgent = activeAgentResponse.AgentRef;
-                activeAgentIntent = ctx.Classification?.Intent;
+                string agentName = GetAgentDisplayName(ctx.Classification?.Intent);
+                int quickRepliesCount = activeAgentResponse.QuickReplies?.Count ?? 0;
+                
+                actorLogger.Info($"Received ActiveAgentResponse from {activeAgentResponse.AgentRef.Path}, completed: {activeAgentResponse.IsCompleted}, quickReplies: {quickRepliesCount}");
 
-                actorLogger.Info($"Active agent set to {activeAgent.Path} with intent {activeAgentIntent}");
+                if (!activeAgentResponse.IsCompleted)
+                {
+                    activeAgent = activeAgentResponse.AgentRef;
+                    activeAgentIntent = ctx.Classification?.Intent;
+
+                    actorLogger.Info($"Active agent set to {activeAgent.Path} with intent {activeAgentIntent}");
+                }
+                else
+                {
+                    activeAgent = null;
+                    activeAgentIntent = null;
+
+                    actorLogger.Info("Agent completed and cleared");
+                }
+
+                ctx.OriginalSender.Tell(new Records.ConversationResponse(
+                    activeAgentResponse.Response,
+                    ctx.Classification?.Intent,
+                    ctx.Classification?.Metadata,
+                    agentName,
+                    activeAgentResponse.IsCompleted,
+                    activeAgentResponse.QuickReplies,
+                    ctx.OriginalMessage.Timestamp));
+
+                Become(Idle);
             }
-            else
+            catch (Exception ex)
             {
-                activeAgent = null;
-                activeAgentIntent = null;
-
-                actorLogger.Info("Agent completed and cleared");
+                actorLogger.Error(ex, "Error processing ActiveAgentResponse");
+                
+                // Send error response to manager
+                ctx.OriginalSender.Tell(new Records.ConversationResponse(
+                    "An error occurred while processing the response. Please try again.",
+                    ctx.Classification?.Intent,
+                    ctx.Classification?.Metadata,
+                    GetAgentDisplayName(ctx.Classification?.Intent),
+                    false,
+                    null,
+                    ctx.OriginalMessage.Timestamp));
+                
+                Become(Idle);
             }
-
-            ctx.OriginalSender.Tell(new Records.ConversationResponse(
-                activeAgentResponse.Response,
-                ctx.Classification?.Intent,
-                ctx.Classification?.Metadata,
-                agentName,
-                activeAgentResponse.IsCompleted,
-                activeAgentResponse.QuickReplies,
-                ctx.OriginalMessage.Timestamp));
-
-            Become(Idle);
         });
 
         // Re-register common handlers for FSM behavior consistency
@@ -484,32 +533,90 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingFollowUpResponse");
 
+        // Set timeout for follow-up agent response (90 seconds)
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(90));
+
+        // Handle timeout if agent doesn't respond
+        Receive<ReceiveTimeout>(_ =>
+        {
+            actorLogger.Error($"Timeout waiting for follow-up response from active agent (intent: {activeAgentIntent})");
+            
+            Context.SetReceiveTimeout(null); // Clear timeout
+            
+            // Clear active agent on timeout
+            activeAgent = null;
+            activeAgentIntent = null;
+            
+            originalSender.Tell(new Records.ConversationResponse(
+                "I apologize, but the request took too long to process. Please try again.",
+                null,
+                null,
+                "Morgana",
+                false,
+                null,
+                DateTime.UtcNow));
+            
+            Become(Idle);
+        });
+
         // Forward streaming chunks from active agent to manager (and then to client)
-        Receive<Records.AgentStreamChunk>(originalSender.Tell);
+        // Reset timeout on each chunk to prevent timeout during active streaming
+        Receive<Records.AgentStreamChunk>(chunk =>
+        {
+            // Reset timeout - we're getting data, agent is alive
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(90));
+            originalSender.Tell(chunk);
+        });
 
         // Handle follow-up response from currently active agent (direct Tell, not PipeTo)
         Receive<Records.AgentResponse>(response =>
         {
-            string agentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
-
-            if (response.IsCompleted)
+            // Clear timeout immediately upon receiving response
+            Context.SetReceiveTimeout(null);
+            
+            try
             {
-                actorLogger.Info("Active agent signaled completion, clearing active agent");
+                string agentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
 
+                if (response.IsCompleted)
+                {
+                    actorLogger.Info("Active agent signaled completion, clearing active agent");
+
+                    activeAgent = null;
+                    activeAgentIntent = null;
+                }
+
+                originalSender.Tell(new Records.ConversationResponse(
+                    response.Response,
+                    null,
+                    null,
+                    agentName,
+                    response.IsCompleted,
+                    response.QuickReplies,
+                    DateTime.UtcNow)); // Using UtcNow since we don't have original timestamp with Tell
+
+                Become(Idle);
+            }
+            catch (Exception ex)
+            {
+                actorLogger.Error(ex, "Error processing follow-up AgentResponse");
+                
+                // Clear active agent on error
                 activeAgent = null;
                 activeAgentIntent = null;
+                
+                // Send error response to manager
+                originalSender.Tell(new Records.ConversationResponse(
+                    "An error occurred while processing the response. Please try again.",
+                    null,
+                    null,
+                    "Morgana",
+                    false,
+                    null,
+                    DateTime.UtcNow));
+                
+                Become(Idle);
             }
-
-            originalSender.Tell(new Records.ConversationResponse(
-                response.Response,
-                null,
-                null,
-                agentName,
-                response.IsCompleted,
-                response.QuickReplies,
-                DateTime.UtcNow));
-
-            Become(Idle);
         });
 
         // Re-register common handlers for FSM behavior consistency
@@ -609,6 +716,7 @@ public class ConversationSupervisorActor : MorganaActor
         // Specific handlers for supervisor
         Receive<Records.RestoreActiveAgent>(HandleRestoreActiveAgent);
         Receive<Records.RestoreAgentResponse>(HandleRestoreAgentResponse);
+        Receive<Records.FailureContext>(HandleUnexpectedFailure);
     }
 
     #endregion

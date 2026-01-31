@@ -56,7 +56,6 @@ public class ConversationManagerActor : MorganaActor
         ReceiveAsync<Records.ConversationResponse>(HandleConversationResponseAsync);
         
         // Handle streaming chunks from supervisor and forward to client via SignalR
-        // Handle streaming chunks from supervisor and forward to client via SignalR
         ReceiveAsync<Records.AgentStreamChunk>(HandleStreamChunkAsync);
     }
 

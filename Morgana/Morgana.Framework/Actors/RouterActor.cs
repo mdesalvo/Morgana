@@ -63,6 +63,9 @@ public class RouterActor : MorganaActor
         
         // Forward streaming chunks from agents to supervisor
         Receive<Records.AgentStreamChunk>(HandleAgentStreamChunk);
+        
+        // Handle agent failures during execution
+        Receive<Records.FailureContext>(HandleAgentFailure);
 
         // Broadcast context updates from one agent to all other registered agents:
         // - Used for sharing context variables across agents (e.g., userId from BillingAgent → ContractAgent)
@@ -181,6 +184,38 @@ public class RouterActor : MorganaActor
         else
         {
             actorLogger.Warning($"Received response from unknown agent {agentSender.Path}");
+        }
+    }
+
+    /// <summary>
+    /// Handles agent execution failures reported via FailureContext.
+    /// Sends error response to supervisor and cleans up streaming context.
+    /// </summary>
+    /// <param name="failure">Failure context from agent</param>
+    private void HandleAgentFailure(Records.FailureContext failure)
+    {
+        IActorRef agentSender = Sender;
+        
+        actorLogger.Error(failure.Failure.Cause, $"Agent execution failed: {agentSender.Path}");
+
+        // Check if this failure is from an agent we're routing
+        if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
+        {
+            actorLogger.Info($"Forwarding failure to supervisor for agent {agentSender.Path}");
+            
+            // Send error response wrapped as ActiveAgentResponse so supervisor can handle it
+            originalSender.Tell(new Records.ActiveAgentResponse(
+                "An error occurred while processing your request. Please try again.",
+                true, // Mark as completed to reset conversation state
+                agentSender,
+                null));
+
+            // Clean up streaming context
+            streamingContexts.Remove(agentSender);
+        }
+        else
+        {
+            actorLogger.Warning($"Received failure from unknown agent {agentSender.Path} - no streaming context found");
         }
     }
 
