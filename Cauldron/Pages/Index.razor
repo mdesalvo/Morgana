@@ -100,11 +100,11 @@
                     <div class="message-bubble @(chatMessage.IsStreaming ? "streaming" : "")">
                         @if (chatMessage.IsTyping)
                         {
-                            <!-- Typing indicator (three animated dots) -->
-                            <div class="typing-indicator">
-                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
-                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
-                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
+                            <!-- Typing indicator (sparkles stars) -->
+                            <div class="typing-indicator @(IsSpecializedAgent(chatMessage.AgentName) ? "specialized" : "base")">
+                                <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
+                                <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
+                                <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
                             </div>
                         }
                         else
