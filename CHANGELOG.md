@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [0.14.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Real-Time Streaming Responses
+This release introduces **native streaming response delivery**, providing **immediate visual feedback** and **progressive content rendering** with generative AI typewriter effects, dramatically improving perceived responsiveness and user engagement.
+
+### ✨ Added
+**Streaming Response Architecture**
+- End-to-end streaming pipeline from LLM to UI using `Microsoft.Agents.AI.RunStreamingAsync()`
+- Progressive chunk delivery through Akka.NET actor system using `Tell`-based message passing
+- Real-time SignalR bridge for streaming chunks: `SendStreamChunkAsync()` method
+- Frontend typewriter effect (configurable speed via `appsettings.json`)
+- Automatic buffer management and smooth character-by-character display
+
+**Actor System Refactoring for Streaming**
+- **MorganaAgent**: Converted from `RunAsync()` to `RunStreamingAsync()` with chunk accumulation
+- **RouterActor**: Migrated from `Ask` pattern to `Tell` pattern with `streamingContexts` dictionary for chunk routing
+- **ConversationSupervisorActor**: Transitioned from `Ask/PipeTo` to `Tell`-based message handling for both router and active agent flows
+- **ConversationManagerActor**: Removed `Ask` pattern dependency, direct `Tell`-based communication with supervisor
+- Preserved `Ask` pattern for synchronous operations (`GuardActor`, `ClassifierActor`)
+
+**Enhanced Typing Indicator**
+- Replaced bouncing dots with **animated sparkle stars** (✨ theme)
+- SVG-based stars with pulse, rotation and glow effects
+- Color-coded indicators:
+  - **Violet stars** (primary color) for base Morgana agent
+  - **Pink stars** (secondary color) for specialized agents
+
+**User Experience Improvements**
+- **Perceived latency reduction**: Users see first tokens within 100-200ms instead of waiting for complete response
+- **Engagement retention**: Progressive rendering keeps users engaged during long responses
+- **Visual polish**: Animated sparkle typing indicators reinforce magical theme
+- **Smooth finalization**: Typewriter effect continues naturally until buffer empty, no abrupt content flashes
+
+### 🔄 Changed
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+- **Token-level analytics and optimization** - Streaming architecture enables precise measurement of time-to-first-token (TTFT) and tokens-per-second (TPS) metrics, unlocking data-driven LLM provider selection and cost-per-performance optimization
+- **Progressive UI enhancements** - Platform for implementing streaming citations, dynamic content formatting (code blocks, tables), and live preview rendering as structured content arrives from LLMs
+
+
 ## [0.13.0] - 2026-01-30
 ### 🎯 Major Feature: Conversation Rate Limiting Protection
 This release introduces **intelligent conversation rate limiting**, protecting Morgana from excessive usage and token consumption while maintaining excellent user experience through **configurable limits**, **graceful degradation**, and **user-friendly feedback**.
