@@ -184,9 +184,6 @@
     // =========================================================================
     // STATE VARIABLES
     // =========================================================================
-    
-    // NOTE: ChatMessage model requires an IsStreaming property (bool) for streaming support
-    // Add to ChatMessage.cs: public bool IsStreaming { get; set; }
 
     /// <summary>
     /// List of all chat messages in the current conversation.
@@ -972,7 +969,7 @@
 
                 chatMessages.Add(currentStreamingMessage);
 
-                // Start typewriter timer (fires every configurable N milliseconds by consuming configurable K characters)
+                // Start typewriter timer (fires every configurable N(=20) milliseconds by consuming configurable K(=1) characters)
                 int.TryParse(Configuration["Morgana:StreamingResponse:TypewriterTickMilliseconds"], out int typewriterTickMilliseconds);
                 if (typewriterTickMilliseconds <= 0)
                     typewriterTickMilliseconds = 20;
@@ -1018,7 +1015,7 @@
             return;
         }
 
-        // Extract next N characters from buffer (default: 1)
+        // Extract next N characters from buffer
         int charsToTake = Math.Min((int)timerParameters!, streamingBuffer.Length);
         string nextChars = streamingBuffer[..charsToTake];
         streamingBuffer = streamingBuffer[charsToTake..];
