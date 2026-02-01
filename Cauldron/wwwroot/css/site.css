@@ -239,3 +239,10 @@ body {
     margin-top: 8px;
     text-align: right;
 }
+
+/* Accessibility: Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    .message.assistant .message-bubble.streaming {
+        animation: none;
+    }
+}

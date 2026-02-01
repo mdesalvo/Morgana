@@ -36,6 +36,28 @@ public class MorganaSignalRService : IAsyncDisposable
     public event Func<SignalRMessage, Task>? OnMessageReceived;
 
     /// <summary>
+    /// Event raised when a streaming chunk is received from the backend via SignalR.
+    /// Enables real-time progressive rendering of agent responses as they are generated.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Streaming Protocol:</strong></para>
+    /// <para>Chunks arrive via "ReceiveStreamChunk" event during agent response generation.
+    /// Each chunk contains partial text that should be appended to the current message being displayed.</para>
+    /// <para><strong>Usage Pattern:</strong></para>
+    /// <code>
+    /// signalRService.OnStreamChunkReceived += async (chunkText) => {
+    ///     // Append chunk to currently streaming message in UI
+    ///     currentStreamingMessage.Text += chunkText;
+    ///     StateHasChanged();
+    /// };
+    /// </code>
+    /// <para><strong>Completion:</strong></para>
+    /// <para>When streaming finishes, a complete message arrives via OnMessageReceived with full metadata
+    /// (quick replies, agent completion status, etc.).</para>
+    /// </remarks>
+    public event Func<string, Task>? OnStreamChunkReceived;
+
+    /// <summary>
     /// Event raised when SignalR connection state changes.
     /// </summary>
     /// <remarks>
@@ -99,6 +121,12 @@ public class MorganaSignalRService : IAsyncDisposable
 
             // Invoke event with DTO (no parameter unpacking needed)
             await (OnMessageReceived?.Invoke(message) ?? Task.CompletedTask);
+        });
+
+        // Subscribe to ReceiveStreamChunk for progressive response rendering
+        hubConnection.On<string>("ReceiveStreamChunk", async (chunkText) =>
+        {
+            await (OnStreamChunkReceived?.Invoke(chunkText) ?? Task.CompletedTask);
         });
 
         // Subscribe to connection state changes

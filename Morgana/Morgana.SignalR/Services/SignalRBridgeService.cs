@@ -132,4 +132,41 @@ public class SignalRBridgeService : ISignalRBridgeService
         await hubContext.Clients.Group(conversationId)
             .SendAsync("ReceiveMessage", message);
     }
+
+    /// <summary>
+    /// Sends a streaming chunk to a conversation group via SignalR for progressive response rendering.
+    /// Optimized for high-frequency streaming with minimal overhead (no logging, fire-and-forget).
+    /// </summary>
+    /// <param name="conversationId">Unique identifier of the conversation (SignalR group name)</param>
+    /// <param name="chunkText">Partial response text to append to the current message</param>
+    /// <returns>Task representing the async send operation</returns>
+    /// <remarks>
+    /// <para><strong>Streaming Protocol:</strong></para>
+    /// <para>Sends chunks via "ReceiveStreamChunk" SignalR event with minimal payload:</para>
+    /// <code>
+    /// {
+    ///   "text": "chunk content here"
+    /// }
+    /// </code>
+    /// <para><strong>No Logging:</strong></para>
+    /// <para>Intentionally omits logging to avoid spamming logs with hundreds of partial text fragments.
+    /// Only errors are logged if chunk delivery fails.</para>
+    /// <para><strong>Client Expectations:</strong></para>
+    /// <para>Clients should buffer chunks and append them to the current message being displayed.
+    /// The final complete message arrives via the standard "ReceiveMessage" event with full metadata.</para>
+    /// </remarks>
+    public async Task SendStreamChunkAsync(string conversationId, string chunkText)
+    {
+        try
+        {
+            // Send chunk with minimal payload (just the text)
+            await hubContext.Clients.Group(conversationId)
+                .SendAsync("ReceiveStreamChunk", chunkText);
+        }
+        catch (Exception ex)
+        {
+            // Log errors but don't propagate - continue streaming
+            logger.LogError(ex, $"Failed to send stream chunk to conversation {conversationId}");
+        }
+    }
 }

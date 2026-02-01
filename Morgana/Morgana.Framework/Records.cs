@@ -442,6 +442,13 @@ public static class Records
         IActorRef AgentRef,
         List<QuickReply>? QuickReplies = null);
 
+    /// <summary>
+    /// Represents a streaming chunk from an agent during real-time response generation.
+    /// Sent incrementally to enable progressive UI rendering.
+    /// </summary>
+    public record AgentStreamChunk(
+        string Text);
+
     // ==========================================================================
     // AGENT COMMUNICATION MESSAGES
     // ==========================================================================
@@ -627,48 +634,7 @@ public static class Records
         ProcessingContext? Context,
         IActorRef? OriginalSender);
 
-    /// <summary>
-    /// Context wrapper for RouterActor/Agent response via PipeTo.
-    /// Preserves the original processing context alongside the agent's response.
-    /// </summary>
-    /// <param name="Response">Agent response (can be ActiveAgentResponse or AgentResponse)</param>
-    /// <param name="Context">Original processing context</param>
-    public record AgentContext(
-        object Response,
-        ProcessingContext Context);
-
-    /// <summary>
-    /// Context wrapper for active agent follow-up response via PipeTo.
-    /// Used when routing subsequent messages directly to an active agent.
-    /// </summary>
-    /// <param name="Response">Agent's follow-up response</param>
-    /// <param name="OriginalSender">Actor reference to reply to</param>
-    public record FollowUpContext(
-        AgentResponse Response,
-        IActorRef OriginalSender,
-        DateTime OriginalMessageTimestamp);
-
-    /// <summary>
-    /// Context wrapper for ConversationSupervisorActor response via PipeTo.
-    /// Wraps the final conversation response for delivery to ConversationManagerActor.
-    /// </summary>
-    /// <param name="Response">Final conversation response with AI message and metadata</param>
-    public record SupervisorResponseContext(
-        ConversationResponse Response);
-
     // --- RouterActor Contexts ---
-
-    /// <summary>
-    /// Context wrapper for specialized agent response via PipeTo in RouterActor.
-    /// Captures agent reference, response, and original sender for proper routing.
-    /// </summary>
-    /// <param name="Response">Agent's response</param>
-    /// <param name="AgentRef">Reference to the agent that generated the response</param>
-    /// <param name="OriginalSender">Actor reference to reply to (typically ConversationSupervisorActor)</param>
-    public record AgentResponseContext(
-        AgentResponse Response,
-        IActorRef AgentRef,
-        IActorRef OriginalSender);
 
     /// <summary>
     /// Context wrapper for failure via PipeTo in RouterActor.

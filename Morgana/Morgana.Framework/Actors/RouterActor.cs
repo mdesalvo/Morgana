@@ -26,6 +26,12 @@ public class RouterActor : MorganaActor
     private readonly Dictionary<string, IActorRef> agents = [];
 
     /// <summary>
+    /// Dictionary mapping agent references to their original senders for streaming chunk forwarding.
+    /// Populated when a request is routed to an agent, cleaned up when response is received.
+    /// </summary>
+    private readonly Dictionary<IActorRef, IActorRef> streamingContexts = [];
+
+    /// <summary>
     /// Service for discovering agent types from intent names.
     /// </summary>
     private readonly IAgentRegistryService agentResolverService;
@@ -49,12 +55,17 @@ public class RouterActor : MorganaActor
         // Route classified requests to specialized agents based on intent:
         // - Validates classification exists and intent is recognized
         // - Creates agent on-demand if not yet created
-        // - Forwards request to appropriate agent (BillingAgent, ContractAgent, etc.) using Ask pattern
-        // - Wraps agent response with agent reference and completion status
+        // - Forwards request to appropriate agent (BillingAgent, ContractAgent, etc.) using Tell
+        // - Receives both streaming chunks and final response via Tell
         // - Returns error messages for missing/unrecognized intents
         ReceiveAsync<Records.AgentRequest>(RouteToAgentAsync);
-        Receive<Records.AgentResponseContext>(HandleAgentResponse);
-        Receive<Records.FailureContext>(HandleFailure);
+        Receive<Records.AgentResponse>(HandleAgentResponseDirect);
+        
+        // Forward streaming chunks from agents to supervisor
+        Receive<Records.AgentStreamChunk>(HandleAgentStreamChunk);
+        
+        // Handle agent failures during execution
+        Receive<Records.FailureContext>(HandleAgentFailure);
 
         // Broadcast context updates from one agent to all other registered agents:
         // - Used for sharing context variables across agents (e.g., userId from BillingAgent → ContractAgent)
@@ -102,12 +113,13 @@ public class RouterActor : MorganaActor
     /// <summary>
     /// Routes an agent request to the appropriate specialized agent based on intent classification.
     /// Creates agent on-demand if not yet created.
-    /// Uses Ask pattern with PipeTo for non-blocking communication.
+    /// Uses Ask pattern with PipeTo for non-blocking communication, while streaming chunks flow separately.
     /// </summary>
     /// <param name="req">Agent request containing classification and message data</param>
     /// <remarks>
     /// Returns error messages for missing classification or unrecognized intents.
     /// Captures original sender before async operations to ensure correct response routing.
+    /// Streaming chunks arrive via separate Tell messages and are forwarded to original sender.
     /// Includes 60-second timeout for agent processing.
     /// </remarks>
     private async Task RouteToAgentAsync(Records.AgentRequest req)
@@ -136,45 +148,75 @@ public class RouterActor : MorganaActor
 
         actorLogger.Info($"Routing intent '{req.Classification.Intent}' to agent {selectedAgent.Path}");
 
-        // Route to agent using Ask pattern with PipeTo
-        _ = selectedAgent
-                .Ask<Records.AgentResponse>(req, TimeSpan.FromSeconds(60))
-                .PipeTo(
-                    Self,
-                    success: response => new Records.AgentResponseContext(response, selectedAgent, originalSender),
-                    failure: ex => new Records.FailureContext(new Status.Failure(ex), originalSender));
+        // Store streaming context for chunk and response forwarding
+        streamingContexts[selectedAgent] = originalSender;
+
+        // Route to agent using Tell (not Ask) to support streaming
+        // Both chunks and final response will arrive via Tell and be handled separately
+        selectedAgent.Tell(req);
     }
 
     /// <summary>
-    /// Handles successful responses from specialized agents (via PipeTo).
-    /// Wraps the response with agent reference and completion status before forwarding to original sender.
+    /// Handles agent responses (final message after streaming completes).
+    /// Wraps the response with agent reference and forwards to original sender.
     /// </summary>
-    /// <param name="ctx">Context containing agent response, agent reference, and original sender</param>
-    private void HandleAgentResponse(Records.AgentResponseContext ctx)
+    /// <param name="response">Agent response from specialized agent</param>
+    private void HandleAgentResponseDirect(Records.AgentResponse response)
     {
-        actorLogger.Info($"Received response from agent {ctx.AgentRef.Path}, " +
-                         $"completed: {ctx.Response.IsCompleted}, " +
-                         $"#quickReplies: {ctx.Response.QuickReplies?.Count ?? 0}");
+        IActorRef agentSender = Sender;
+        
+        if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
+        {
+            actorLogger.Info($"Received response from agent {agentSender.Path}, " +
+                             $"completed: {response.IsCompleted}, " +
+                             $"#quickReplies: {response.QuickReplies?.Count ?? 0}");
 
-        ctx.OriginalSender.Tell(new Records.ActiveAgentResponse(
-            ctx.Response.Response,
-            ctx.Response.IsCompleted,
-            ctx.AgentRef,
-            ctx.Response.QuickReplies));
+            // Clean up streaming context (response received, streaming done)
+            streamingContexts.Remove(agentSender);
+
+            // Forward to supervisor wrapped as ActiveAgentResponse
+            originalSender.Tell(new Records.ActiveAgentResponse(
+                response.Response,
+                response.IsCompleted,
+                agentSender,
+                response.QuickReplies));
+        }
+        else
+        {
+            actorLogger.Warning($"Received response from unknown agent {agentSender.Path}");
+        }
     }
 
     /// <summary>
-    /// Handles failures during agent routing or processing (via PipeTo).
-    /// Returns an error message to the sender using the unrecognized intent error template.
+    /// Handles agent execution failures reported via FailureContext.
+    /// Sends error response to supervisor and cleans up streaming context.
     /// </summary>
-    /// <param name="failure">Failure information</param>
-    private void HandleFailure(Records.FailureContext failure)
+    /// <param name="failure">Failure context from agent</param>
+    private void HandleAgentFailure(Records.FailureContext failure)
     {
-        actorLogger.Error(failure.Failure.Cause, "Agent routing failed");
+        IActorRef agentSender = Sender;
+        
+        actorLogger.Error(failure.Failure.Cause, $"Agent execution failed: {agentSender.Path}");
 
-        Records.Prompt classifierPrompt = promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
-        failure.OriginalSender.Tell(new Records.AgentResponse(
-            classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), true));
+        // Check if this failure is from an agent we're routing
+        if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
+        {
+            actorLogger.Info($"Forwarding failure to supervisor for agent {agentSender.Path}");
+            
+            // Send error response wrapped as ActiveAgentResponse so supervisor can handle it
+            originalSender.Tell(new Records.ActiveAgentResponse(
+                "An error occurred while processing your request. Please try again.",
+                true, // Mark as completed to reset conversation state
+                agentSender,
+                null));
+
+            // Clean up streaming context
+            streamingContexts.Remove(agentSender);
+        }
+        else
+        {
+            actorLogger.Warning($"Received failure from unknown agent {agentSender.Path} - no streaming context found");
+        }
     }
 
     /// <summary>
@@ -211,6 +253,31 @@ public class RouterActor : MorganaActor
         }
 
         actorLogger.Info($"Context update broadcast complete: {broadcastCount} agent(s) notified");
+    }
+
+    /// <summary>
+    /// Handles streaming chunks from agents and forwards them to the original sender (supervisor).
+    /// Uses streamingContexts map to find the correct destination.
+    /// Enables real-time progressive response rendering.
+    /// </summary>
+    /// <param name="chunk">Streaming chunk from agent</param>
+    private void HandleAgentStreamChunk(Records.AgentStreamChunk chunk)
+    {
+        // Find the original sender for this agent's stream
+        IActorRef agentSender = Sender;
+        
+        if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
+        {
+            // Forward chunk to original sender (supervisor)
+            // No logging to avoid spamming logs with partial text
+            originalSender.Tell(chunk);
+        }
+        else
+        {
+            // Fallback: forward to parent (supervisor) - should not happen in normal flow
+            actorLogger.Warning($"Streaming chunk received from unknown agent {agentSender.Path}, forwarding to parent");
+            Context.Parent.Tell(chunk);
+        }
     }
 
     /// <summary>

@@ -97,14 +97,14 @@
                              class="message-avatar"
                              style="border: 2px solid @GetAvatarBorderColor(chatMessage.AgentName);"/>
                     }
-                    <div class="message-bubble">
+                    <div class="message-bubble @(chatMessage.IsStreaming ? "streaming" : "")">
                         @if (chatMessage.IsTyping)
                         {
-                            <!-- Typing indicator (three animated dots) -->
-                            <div class="typing-indicator">
-                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
-                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
-                                <span style="background: @GetAvatarBorderColor(chatMessage.AgentName);"></span>
+                            <!-- Typing indicator (sparkles stars) -->
+                            <div class="typing-indicator @(IsSpecializedAgent(chatMessage.AgentName) ? "specialized" : "base")">
+                                <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
+                                <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
+                                <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
                             </div>
                         }
                         else
@@ -114,7 +114,7 @@
                                 @chatMessage.Text
                             </div>
 
-                            @if (chatMessage.QuickReplies is { Count: > 0 })
+                            @if (chatMessage is { QuickReplies: { Count: > 0 }, IsStreaming: false })
                             {
                                 <QuickReplyButton Replies="@chatMessage.QuickReplies"
                                                   OnSelect="@((reply) => SelectQuickReplyAsync(reply, chatMessage))"
@@ -249,6 +249,28 @@
     private bool hasCheckedStorage;
 
     // =========================================================================
+    // STREAMING STATE VARIABLES
+    // =========================================================================
+
+    /// <summary>
+    /// Buffer containing chunks received from backend that haven't been displayed yet.
+    /// Used by the typewriter effect to progressively render text.
+    /// </summary>
+    private string streamingBuffer = string.Empty;
+
+    /// <summary>
+    /// Timer for typewriter effect animation.
+    /// Fires every 50ms to display next character from streaming buffer.
+    /// </summary>
+    private Timer? typewriterTimer;
+
+    /// <summary>
+    /// Reference to the message currently being streamed.
+    /// Null when no streaming is in progress.
+    /// </summary>
+    private ChatMessage? currentStreamingMessage;
+
+    // =========================================================================
     // LIFECYCLE METHODS
     // =========================================================================
 
@@ -274,6 +296,9 @@
 
             // Subscribe to message received events
             SignalRService.OnMessageReceived += HandleMessageReceivedAsync;
+
+            // Subscribe to streaming chunks for progressive rendering
+            SignalRService.OnStreamChunkReceived += HandleStreamChunkReceivedAsync;
 
             // Subscribe to connection state changes
             SignalRService.OnConnectionStateChanged += (connected) =>
@@ -783,6 +808,57 @@
                 return;
             }
 
+            // If streaming is active, finalize it with the complete message
+            if (currentStreamingMessage != null)
+            {
+                Console.WriteLine("🎬 Streaming complete - finalizing message");
+
+                // DON'T flush buffer immediately - let typewriter finish naturally
+                // The timer will continue draining the buffer at typewriter speed
+
+                // Just add metadata (text will complete via typewriter)
+                currentStreamingMessage.QuickReplies = signalrMessage.QuickReplies;
+                currentStreamingMessage.AgentName = signalrMessage.AgentName ?? "Morgana";
+                
+                // Mark as no longer streaming (removes cursor when typewriter finishes)
+                currentStreamingMessage.IsStreaming = false;
+
+                // DON'T stop streaming timer yet - let it finish draining buffer
+                // Timer will auto-stop when buffer is empty (check TypewriterTick)
+
+                // Update header
+                if (!string.IsNullOrEmpty(signalrMessage.AgentName))
+                {
+                    currentAgentName = signalrMessage.AgentName;
+                    Console.WriteLine($"🎨 Header updated: {currentAgentName}");
+                }
+
+                if (signalrMessage.AgentCompleted)
+                {
+                    currentAgentName = "Morgana";
+                    Console.WriteLine($"🎨 Header reset to: {currentAgentName}");
+                }
+
+                // If agent completed and is specialized, add completion message
+                if (signalrMessage.AgentCompleted && IsSpecializedAgent(signalrMessage.AgentName))
+                {
+                    chatMessages.Add(new ChatMessage
+                    {
+                        ConversationId = signalrMessage.ConversationId,
+                        Text = GetCompletionMessage(signalrMessage.AgentName!),
+                        Role = "assistant",
+                        Timestamp = signalrMessage.Timestamp.AddMilliseconds(5),
+                        AgentName = "Morgana",
+                        AgentCompleted = true,
+                        Type = MessageType.Presentation
+                    });
+                }
+
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            // Normal message handling (non-streaming path)
             // Remove typing indicator
             ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
             if (typingMessage != null)
@@ -844,8 +920,123 @@
     /// <param name="message">The message to remove</param>
     private void HandleMessageDismissed(SignalRMessage message)
     {
+        Console.WriteLine($"🗑️ Dismissing temporary message: {message.MessageType}");
         temporaryMessages.Remove(message);
-        Console.WriteLine($"✅ Temporary message dismissed and removed from list");
+        StateHasChanged();
+    }
+
+    // =========================================================================
+    // STREAMING HANDLERS
+    // =========================================================================
+
+    /// <summary>
+    /// Handles incoming streaming chunks from SignalR.
+    /// Starts streaming mode if needed and buffers chunks for typewriter effect.
+    /// </summary>
+    /// <param name="chunkText">Partial response text to append</param>
+    /// <returns>Task representing the async chunk handling</returns>
+    /// <remarks>
+    /// <para><strong>Streaming Flow:</strong></para>
+    /// <list type="number">
+    /// <item>First chunk: Remove typing indicator, create streaming message, start typewriter timer</item>
+    /// <item>Subsequent chunks: Append to streaming buffer</item>
+    /// <item>Typewriter timer: Progressively displays buffered text</item>
+    /// <item>Final message: HandleMessageReceivedAsync stops streaming and adds complete message</item>
+    /// </list>
+    /// </remarks>
+    private async Task HandleStreamChunkReceivedAsync(string chunkText)
+    {
+        try
+        {
+            // First chunk - initialize streaming
+            if (currentStreamingMessage == null)
+            {
+                // Remove typing indicator
+                ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
+                if (typingMessage != null)
+                    chatMessages.Remove(typingMessage);
+
+                // Create new streaming message
+                currentStreamingMessage = new ChatMessage
+                {
+                    ConversationId = conversationId,
+                    Text = string.Empty,
+                    Role = "assistant",
+                    Timestamp = DateTime.UtcNow,
+                    AgentName = currentAgentName,
+                    IsStreaming = true
+                };
+
+                chatMessages.Add(currentStreamingMessage);
+
+                // Start typewriter timer (fires every configurable N(=25) milliseconds by consuming configurable K(=1) characters)
+                int.TryParse(Configuration["Morgana:StreamingResponse:TypewriterTickMilliseconds"], out int typewriterTickMilliseconds);
+                if (typewriterTickMilliseconds <= 0)
+                    typewriterTickMilliseconds = 25;
+                int.TryParse(Configuration["Morgana:StreamingResponse:TypewriterTickChars"], out int typewriterTickChars);
+                if (typewriterTickChars <= 0)
+                    typewriterTickChars = 1;
+                typewriterTimer?.Dispose();
+                typewriterTimer = new Timer(TypewriterTick, typewriterTickChars, 0, typewriterTickMilliseconds);
+
+                await InvokeAsync(StateHasChanged);
+            }
+
+            // Append chunk to buffer
+            streamingBuffer += chunkText;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error in HandleStreamChunkReceived: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Timer callback for typewriter effect.
+    /// Consumes K characters from the streaming buffer every configurable N milliseconds.
+    /// Auto-stops when buffer is empty and streaming is complete.
+    /// </summary>
+    /// <param name="timerParameters">Timer input parameters (int: the number of characters to be consumed)</param>
+    private void TypewriterTick(object? timerParameters)
+    {
+        if (currentStreamingMessage == null)
+            return;
+
+        // If buffer is empty
+        if (string.IsNullOrEmpty(streamingBuffer))
+        {
+            // If streaming is complete (IsStreaming = false), cleanup and stop
+            if (!currentStreamingMessage.IsStreaming)
+            {
+                Console.WriteLine("✅ Typewriter finished - buffer empty and streaming complete");
+                StopStreaming();
+            }
+            // Otherwise, just wait for more chunks
+            return;
+        }
+
+        // Extract next N characters from buffer
+        int charsToTake = Math.Min((int)timerParameters!, streamingBuffer.Length);
+        string nextChars = streamingBuffer[..charsToTake];
+        streamingBuffer = streamingBuffer[charsToTake..];
+
+        // Append to streaming message
+        currentStreamingMessage.Text += nextChars;
+
+        // Update UI
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Stops streaming mode and cleans up resources.
+    /// Called when final complete message arrives via HandleMessageReceivedAsync.
+    /// </summary>
+    private void StopStreaming()
+    {
+        typewriterTimer?.Dispose();
+        typewriterTimer = null;
+        streamingBuffer = string.Empty;
+        currentStreamingMessage = null;
     }
 
     // =========================================================================
@@ -977,6 +1168,10 @@
     {
         // Unsubscribe from events
         SignalRService.OnMessageReceived -= HandleMessageReceivedAsync;
+        SignalRService.OnStreamChunkReceived -= HandleStreamChunkReceivedAsync;
+
+        // Clean up streaming resources
+        typewriterTimer?.Dispose();
         
         // Stop SignalR connection
         await SignalRService.StopAsync();
@@ -1025,7 +1220,7 @@
 
     /// <summary>
     /// Adds a temporary error message displayed as FadingMessage banner.
-    /// Auto-dismisses after 10 seconds with fade-out animation.
+    /// Auto-dismisses after configurable N seconds with fade-out animation.
     /// </summary>
     /// <param name="text">Error message text (⚠️ emoji will be prepended)</param>
     /// <param name="errorReason">Specific error reason for debugging/icon selection</param>
