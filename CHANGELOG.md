@@ -31,12 +31,6 @@ This release introduces **native streaming response delivery**, providing **imme
   - **Violet stars** (primary color) for base Morgana agent
   - **Pink stars** (secondary color) for specialized agents
 
-**User Experience Improvements**
-- **Perceived latency reduction**: Users see first tokens within 100-200ms instead of waiting for complete response
-- **Engagement retention**: Progressive rendering keeps users engaged during long responses
-- **Visual polish**: Animated sparkle typing indicators reinforce magical theme
-- **Smooth finalization**: Typewriter effect continues naturally until buffer empty, no abrupt content flashes
-
 ### 🔄 Changed
 
 ### 🐛 Fixed
