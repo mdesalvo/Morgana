@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.14.0] - UNDER DEVELOPMENT
+## [0.14.0] - 2026-02-01
 ### 🎯 Major Feature: Real-Time Streaming Responses
 This release introduces **native streaming response delivery**, providing **immediate visual feedback** and **progressive content rendering** with generative AI typewriter effects, dramatically improving perceived responsiveness and user engagement.
 
