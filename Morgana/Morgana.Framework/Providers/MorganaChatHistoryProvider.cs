@@ -65,11 +65,15 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         this.intent = intent;
         this.logger = logger;
 
-        // Delegate to Microsoft's in-memory implementation
+        // Delegate to Microsoft's in-memory implementation:
+        // the reducer (if given) will operate on InvokingAsync hint,
+        // so that LLM will immediately receive compacted history.
+        // This is perfect for context window management.
         innerProvider = new InMemoryChatHistoryProvider(
             chatReducer: chatReducer,
             serializedState: serializedState,
-            jsonSerializerOptions: jsonSerializerOptions);
+            jsonSerializerOptions: jsonSerializerOptions,
+            reducerTriggerEvent: InMemoryChatHistoryProvider.ChatReducerTriggerEvent.BeforeMessagesRetrieval);
 
         string reducerInfo = chatReducer != null ? $"with reducer={chatReducer.GetType().Name}" : "without reducer";
 
