@@ -11,6 +11,11 @@ using System.Text;
 
 namespace Morgana.Framework.Adapters;
 
+// This suppresses the experimental API warning for IChatReducer usage.
+// Microsoft marks IChatReducer as experimental (MEAI001) but recommends it
+// for production use in context window management scenarios.
+#pragma warning disable MEAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
+
 /// <summary>
 /// Adapter for creating and configuring AIAgent instances from Morgana agent definitions.
 /// Handles agent instantiation, instruction composition, tool registration, AI context provider setup and MCP integration.
@@ -40,43 +45,11 @@ namespace Morgana.Framework.Adapters;
 /// 8. Create AIAgent with chatClient.CreateAIAgent()
 /// 9. Return (agent, morganaAIContextProvider) tuple
 /// </code>
-/// <para><strong>Tool Registration Strategy (NEW in this version):</strong></para>
-/// <para>The adapter now guarantees that ALL agents receive the 3 fundamental tools from MorganaTool,
+/// <para><strong>Tool Registration Strategy:</strong></para>
+/// <para>The adapter guarantees that ALL agents receive the N fundamental tools from MorganaTool,
 /// regardless of whether a custom MorganaTool implementation exists for the intent. This enables
 /// "MCP-only" agents that rely entirely on external tools while still having context access and
 /// quick reply capabilities.</para>
-/// <code>
-/// // Traditional agent with custom tools
-/// [HandlesIntent("billing")]
-/// [ProvidesToolForIntent("billing")] // BillingTool exists
-/// public class BillingAgent : MorganaAgent
-/// Result: 3 base tools + 2 BillingTool methods + 0 MCP tools = 5 tools
-///
-/// // Modern MCP-only agent (NEW SCENARIO SUPPORTED)
-/// [HandlesIntent("research")]
-/// [UsesMCPServers("brave-search")]
-/// // No [ProvidesToolForIntent] needed!
-/// public class ResearchAgent : MorganaAgent
-/// Result: 3 base tools + 0 custom tools + 15 MCP tools = 18 tools
-/// </code>
-/// <para><strong>Usage Pattern:</strong></para>
-/// <code>
-/// // In MorganaAgent constructor
-/// public BillingAgent(
-///     string conversationId,
-///     ILLMService llmService,
-///     IPromptResolverService promptResolverService,
-///     ILogger agentLogger,
-///     MorganaAgentAdapter agentAdapter)
-///     : base(conversationId, llmService, promptResolverService, agentLogger)
-/// {
-///     (aiAgent, morganaAIContextProvider) = agentAdapter.CreateAgent(
-///         GetType(),
-///         OnSharedContextUpdate);
-///
-///     ReceiveAsync&lt;Records.AgentRequest&gt;(ExecuteAgentAsync);
-/// }
-/// </code>
 /// </remarks>
 public class MorganaAgentAdapter
 {
@@ -104,6 +77,12 @@ public class MorganaAgentAdapter
     protected readonly IMCPClientRegistryService imcpClientRegistryService;
 
     /// <summary>
+    /// Service for creating IChatReducer instances for context window management.
+    /// Creates SummarizingChatReducer based on configuration to optimize LLM costs.
+    /// </summary>
+    protected readonly ChatReducerService chatReducerService;
+
+    /// <summary>
     /// Logger instance for agent creation diagnostics and tool registration tracking.
     /// </summary>
     protected readonly ILogger logger;
@@ -122,6 +101,7 @@ public class MorganaAgentAdapter
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="toolRegistryService">Service for discovering custom MorganaTool implementations</param>
     /// <param name="imcpClientRegistryService">Service for managing MCP server connections</param>
+    /// <param name="chatReducerService">Service for reducing context window sent to LLM</param>
     /// <param name="logger">Logger instance for diagnostics</param>
     /// <remarks>
     /// <para><strong>Initialization:</strong></para>
@@ -145,12 +125,14 @@ public class MorganaAgentAdapter
         IPromptResolverService promptResolverService,
         IToolRegistryService toolRegistryService,
         IMCPClientRegistryService imcpClientRegistryService,
+        ChatReducerService chatReducerService,
         ILogger logger)
     {
         this.chatClient = chatClient;
         this.promptResolverService = promptResolverService;
         this.toolRegistryService = toolRegistryService;
         this.imcpClientRegistryService = imcpClientRegistryService;
+        this.chatReducerService = chatReducerService;
         this.logger = logger;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
@@ -210,27 +192,6 @@ public class MorganaAgentAdapter
     /// <item>Agent Instructions (domain-specific behavioral rules)</item>
     /// <item>Agent Formatting (domain-specific formatting overrides, if any)</item>
     /// </list>
-    /// <para><strong>Example Result (BillingAgent):</strong></para>
-    /// <code>
-    /// TARGET: You are a digital assistant. You listen to user requests...
-    ///
-    /// PERSONALITY: Your name is Morgana: you are a 'good witch'...
-    ///
-    /// ContextHandling: CRITICAL RULE ABOUT CONTEXT - Before asking for ANY information...
-    /// InteractiveToken: OPERATIONAL RULE ABOUT INTERACTION TOKEN...
-    ///
-    /// INSTRUCTIONS: Ongoing conversation between you (assistant) and user...
-    ///
-    /// FORMATTING: Prefer clean, readable text formatting...
-    ///
-    /// You know the book of spells called 'Billing and Payments'...
-    ///
-    /// You are a formal and pragmatic witch, focused on precision...
-    ///
-    /// Never invent procedures you don't explicitly possess...
-    ///
-    /// [Domain-specific formatting if any]
-    /// </code>
     /// <para><strong>Design Rationale:</strong></para>
     /// <para>Framework prompts establish the base personality and critical rules that apply to ALL agents,
     /// while domain prompts overlay specialized knowledge and behavioral nuances for specific intents.
@@ -305,57 +266,9 @@ public class MorganaAgentAdapter
     /// <item>Create AIAgent with chatClient.CreateAIAgent()</item>
     /// <item>Return (agent, morganaAIContextProvider) tuple</item>
     /// </list>
-    /// <para><strong>Tool Registration Guarantee (NEW):</strong></para>
-    /// <para>This version ALWAYS registers the 3 base tools from MorganaTool, even if no custom
-    /// MorganaTool implementation exists for the intent. This enables "MCP-only" agents that rely
-    /// entirely on external tools while still having context access and quick reply capabilities.</para>
-    /// <code>
-    /// // Traditional agent with custom tools
-    /// [HandlesIntent("billing")]
-    /// public class BillingAgent : MorganaAgent
-    /// // BillingTool exists with [ProvidesToolForIntent("billing")]
-    /// Result: 3 base + 2 custom + 0 MCP = 5 tools
-    ///
-    /// // Modern MCP-only agent (NEW SCENARIO)
-    /// [HandlesIntent("research")]
-    /// [UsesMCPServers("brave-search")]
-    /// public class ResearchAgent : MorganaAgent
-    /// // NO BillingTool needed!
-    /// Result: 3 base + 0 custom + 15 MCP = 18 tools
-    /// </code>
-    /// <para><strong>Usage Example:</strong></para>
-    /// <code>
-    /// public class BillingAgent : MorganaAgent
-    /// {
-    ///     public BillingAgent(
-    ///         string conversationId,
-    ///         ILLMService llmService,
-    ///         IPromptResolverService promptResolverService,
-    ///         ILogger agentLogger,
-    ///         MorganaAgentAdapter agentAdapter)
-    ///         : base(conversationId, llmService, promptResolverService, agentLogger)
-    ///     {
-    ///         // Create agent with tool calling capabilities
-    ///         (aiAgent, morganaAIContextProvider) = agentAdapter.CreateAgent(
-    ///             GetType(),
-    ///             OnSharedContextUpdate);
-    ///
-    ///         // Register message handler
-    ///         ReceiveAsync&lt;Records.AgentRequest&gt;(ExecuteAgentAsync);
-    ///     }
-    /// }
-    /// </code>
     /// <para><strong>AI Context Provider Callback:</strong></para>
     /// <para>The sharedContextCallback enables cross-agent coordination. When an agent sets a shared
     /// variable (e.g., userId), the callback triggers broadcasting to other agents via RouterActor:</para>
-    /// <code>
-    /// // In MorganaAgent
-    /// protected void OnSharedContextUpdate(string key, object value)
-    /// {
-    ///     Context.ActorSelection($"/user/router-{conversationId}")
-    ///         .Tell(new Records.BroadcastContextUpdate(intent, new Dictionary&lt;string, object&gt; { [key] = value }));
-    /// }
-    /// </code>
     /// </remarks>
     public (AIAgent agent, MorganaAIContextProvider provider) CreateAgent(
         Type agentType,
@@ -385,6 +298,8 @@ public class MorganaAgentAdapter
 
         RegisterMCPTools(agentType, morganaToolAdapter);
 
+        IChatReducer? chatReducer = chatReducerService.CreateReducer(chatClient);
+
         AIAgent aiAgent = chatClient.AsAIAgent(
             new ChatClientAgentOptions
             {
@@ -400,6 +315,7 @@ public class MorganaAgentAdapter
                             intent,
                             chatHistoryProviderFactoryContext.SerializedState,
                             chatHistoryProviderFactoryContext.JsonSerializerOptions,
+                            chatReducer,
                             logger)),
 
                 // Give the agent its identifiers
@@ -503,7 +419,7 @@ public class MorganaAgentAdapter
     /// <param name="aiContextProvider">AI Context provider instance for tool access to conversation variables</param>
     /// <returns>Configured MorganaToolAdapter with registered tool implementations</returns>
     /// <remarks>
-    /// <para><strong>NEW BEHAVIOR - Base Tools Always Registered:</strong></para>
+    /// <para><strong>Base Tools Always Registered:</strong></para>
     /// <para>This version guarantees that ALL agents receive the 3 fundamental tools from MorganaTool,
     /// regardless of whether a custom MorganaTool implementation exists for the intent. This is a critical
     /// change that enables "MCP-only" agents while ensuring every agent has context access and quick reply capabilities.</para>
@@ -551,93 +467,6 @@ public class MorganaAgentAdapter
     /// Even if two ToolDefinitions have the same Name, they may have different Parameter array references,
     /// causing Except() to not exclude them properly. The ToolDefinitionNameComparer ensures we match solely
     /// by Name, avoiding hardcoded tool names and maintaining configuration-driven behavior.</para>
-    /// <para><strong>Supported Agent Scenarios:</strong></para>
-    /// <code>
-    /// SCENARIO A: Traditional Agent with Custom Tools
-    /// ===============================================
-    /// [HandlesIntent("billing")]
-    /// public class BillingAgent : MorganaAgent
-    ///
-    /// [ProvidesToolForIntent("billing")]
-    /// public class BillingTool : MorganaTool
-    /// {
-    ///     public Task&lt;InvoiceList&gt; GetInvoices(int count) { ... }
-    ///     public Task&lt;InvoiceDetails&gt; GetInvoiceDetails(string invoiceId) { ... }
-    /// }
-    ///
-    /// agents.json:
-    /// {
-    ///   "ID": "Billing",
-    ///   "AdditionalProperties": [
-    ///     {
-    ///       "Tools": [
-    ///         { "Name": "GetInvoices", ... },
-    ///         { "Name": "GetInvoiceDetails", ... }
-    ///       ]
-    ///     }
-    ///   ]
-    /// }
-    ///
-    /// Log Output:
-    /// ✅ Registered 3 base tools for intent 'billing'
-    /// ✅ Found custom native tool: BillingTool for intent 'billing' via ToolRegistry
-    /// ✅ Registered 2 custom tools for intent 'billing'
-    ///
-    /// Total: 5 tools available
-    ///
-    /// SCENARIO B: Modern MCP-Only Agent (NEW SCENARIO SUPPORTED)
-    /// ==========================================================
-    /// [HandlesIntent("research")]
-    /// [UsesMCPServers("brave-search")]
-    /// public class ResearchAgent : MorganaAgent
-    ///
-    /// // NO custom MorganaTool class needed!
-    ///
-    /// agents.json:
-    /// {
-    ///   "ID": "Research",
-    ///   "AdditionalProperties": [
-    ///     {
-    ///       "Tools": []  // Empty or omitted - no intent-specific tools
-    ///     }
-    ///   ]
-    /// }
-    ///
-    /// Log Output:
-    /// ✅ Registered 3 base tools for intent 'research'
-    /// ℹ️  No intent-specific tools defined for intent 'research' (agent has base tools only)
-    /// [Later in RegisterMCPTools]
-    /// ✅ Discovered 15 tools from MCP server: brave-search
-    /// ✅ Successfully registered 15 MCP tools from brave-search
-    ///
-    /// Total: 18 tools available (3 base + 15 MCP)
-    ///
-    /// SCENARIO C: Configuration Mismatch (Warning Case)
-    /// =================================================
-    /// [HandlesIntent("contract")]
-    /// public class ContractAgent : MorganaAgent
-    ///
-    /// // NO ContractTool implementation exists!
-    ///
-    /// agents.json:
-    /// {
-    ///   "ID": "Contract",
-    ///   "AdditionalProperties": [
-    ///     {
-    ///       "Tools": [
-    ///         { "Name": "GetContractDetails", ... }  // Defined but not implemented
-    ///       ]
-    ///     }
-    ///   ]
-    /// }
-    ///
-    /// Log Output:
-    /// ✅ Registered 3 base tools for intent 'contract'
-    /// ⚠️  Intent 'contract' has 1 tool(s) defined in agents.json but no MorganaTool implementation found.
-    ///     Tools will be ignored: GetContractDetails
-    ///
-    /// Total: 3 tools available (base tools only - orphaned definitions ignored)
-    /// </code>
     /// <para><strong>Why This Change Matters:</strong></para>
     /// <list type="bullet">
     /// <item><term>Context Access</term><description>Every agent can use GetContextVariable/SetContextVariable for conversation state</description></item>

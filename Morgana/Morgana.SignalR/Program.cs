@@ -164,6 +164,13 @@ builder.Services.Configure<Records.RateLimitOptions>(
 builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 
 // ==============================================================================
+// SECTION 7.3: Context Window Management
+// ==============================================================================
+// Service for reducing history messages sent to LLM (configurable summarization)
+
+builder.Services.AddSingleton<ChatReducerService>();
+
+// ==============================================================================
 // SECTION 8: Agent Adapter
 // ==============================================================================
 // Adapter for integrating Morgana agents with Microsoft.Extensions.AI abstractions
