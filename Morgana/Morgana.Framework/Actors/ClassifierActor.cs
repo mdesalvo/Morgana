@@ -11,9 +11,11 @@ namespace Morgana.Framework.Actors;
 /// Uses LLM-based classification to match messages against configured intent definitions.
 /// </summary>
 /// <remarks>
-/// This actor loads intent definitions from the domain configuration and formats them for LLM classification.
-/// Returns classification results with intent name and confidence score.
-/// Falls back to "other" intent on classification failures to maintain conversation flow.
+/// <para><strong>Tell Pattern:</strong></para>
+/// <para>This actor uses direct Sender.Tell() to reply to the supervisor, avoiding temporary actors
+/// from Ask pattern. Replies with ClassificationResult or Status.Failure on errors.</para>
+/// <para>Loads intent definitions from the domain configuration and formats them for LLM classification.
+/// Falls back to "other" intent on classification failures to maintain conversation flow.</para>
 /// </remarks>
 public class ClassifierActor : MorganaActor
 {
@@ -52,11 +54,9 @@ public class ClassifierActor : MorganaActor
 
         // Analyze incoming user messages to determine their underlying intent:
         // - Invokes LLM with pre-formatted intent definitions
-        // - Returns ClassificationResult with intent name and confidence score
+        // - Replies directly to Sender with ClassificationResult (Tell pattern, no Ask)
         // - Falls back to "other" intent on classification failures to maintain conversation flow
         ReceiveAsync<Records.UserMessage>(ClassifyMessageAsync);
-        Receive<Records.ClassificationContext>(HandleClassificationResult);
-        Receive<Records.FailureContext>(HandleFailure);
     }
 
     /// <summary>
@@ -65,8 +65,12 @@ public class ClassifierActor : MorganaActor
     /// </summary>
     /// <param name="msg">User message to classify</param>
     /// <remarks>
-    /// Captures the original sender before async operations to ensure correct response routing.
-    /// Falls back to "other" intent with 0.5 confidence on classification errors.
+    /// <para><strong>Tell Pattern:</strong></para>
+    /// <para>Captures sender reference early and replies directly via Sender.Tell().
+    /// No internal Self.Tell() messages or wrapper records needed.</para>
+    /// <para><strong>Error Handling:</strong></para>
+    /// <para>On LLM failure, sends Status.Failure to supervisor for proper error handling.
+    /// Supervisor will fall back to "other" intent to maintain conversation flow.</para>
     /// </remarks>
     private async Task ClassifyMessageAsync(Records.UserMessage msg)
     {
@@ -81,7 +85,8 @@ public class ClassifierActor : MorganaActor
                 classifierPromptTarget,
                 msg.Text);
 
-            Records.ClassificationResponse? classificationResponse = JsonSerializer.Deserialize<Records.ClassificationResponse>(response);
+            Records.ClassificationResponse? classificationResponse = 
+                JsonSerializer.Deserialize<Records.ClassificationResponse>(response);
 
             Records.ClassificationResult result = new Records.ClassificationResult(
                 classificationResponse?.Intent ?? "other",
@@ -91,47 +96,17 @@ public class ClassifierActor : MorganaActor
                     ["confidence"] = (classificationResponse?.Confidence ?? 0.5).ToString("F2")
                 });
 
-            Self.Tell(new Records.ClassificationContext(result, null, originalSender));
+            actorLogger.Info($"Classification complete: intent='{result.Intent}', " +
+                $"confidence={result.Metadata.GetValueOrDefault("confidence", "N/A")}");
+
+            originalSender.Tell(result);
         }
         catch (Exception ex)
         {
             actorLogger.Error(ex, "Error classifying message");
 
-            Self.Tell(new Records.FailureContext(new Status.Failure(ex), originalSender));
+            // Send failure to supervisor for fallback handling
+            originalSender.Tell(new Status.Failure(ex));
         }
-    }
-
-    /// <summary>
-    /// Handles the classification result after LLM processing.
-    /// Routes the result back to the original sender.
-    /// </summary>
-    /// <param name="ctx">Context containing classification result and original sender reference</param>
-    private void HandleClassificationResult(Records.ClassificationContext ctx)
-    {
-        actorLogger.Info($"Classification complete: intent='{ctx.Classification.Intent}', " +
-            $"confidence={ctx.Classification.Metadata.GetValueOrDefault("confidence", "N/A")}");
-
-        ctx.OriginalSender.Tell(ctx.Classification);
-    }
-
-    /// <summary>
-    /// Handles failures during classification processing.
-    /// Falls back to "other" intent to maintain conversation flow.
-    /// </summary>
-    /// <param name="failure">Failure information</param>
-    private void HandleFailure(Records.FailureContext failure)
-    {
-        actorLogger.Error(failure.Failure.Cause, "Classification failed");
-
-        // Fallback to "other" intent on pipeline failure
-        Records.ClassificationResult fallback = new Records.ClassificationResult(
-            "other",
-            new Dictionary<string, string>
-            {
-                ["confidence"] = "0.00",
-                ["error"] = $"classification_failed: {failure.Failure.Cause.Message}"
-            });
-
-        failure.OriginalSender.Tell(fallback);
     }
 }

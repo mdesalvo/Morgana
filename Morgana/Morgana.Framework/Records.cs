@@ -542,28 +542,6 @@ public static class Records
         [property: JsonPropertyName("message")] string Message,
         [property: JsonPropertyName("quickReplies")] List<QuickReply> QuickReplies);
 
-    /// <summary>
-    /// Structured message sent to clients via SignalR with full metadata support.
-    /// Supports different message types, quick replies, error codes, and agent information.
-    /// </summary>
-    /// <param name="ConversationId">Unique identifier of the conversation</param>
-    /// <param name="Text">Message text content</param>
-    /// <param name="Timestamp">Timestamp when the message was created</param>
-    /// <param name="MessageType">Type for client-side rendering ("assistant", "presentation", "system", "error")</param>
-    /// <param name="QuickReplies">Optional list of interactive buttons for user</param>
-    /// <param name="ErrorReason">Optional error code for error messages (e.g., "llm_error", "timeout")</param>
-    /// <param name="AgentName">Optional name of the agent that generated the message</param>
-    /// <param name="AgentCompleted">Flag indicating if the agent completed its task</param>
-    public record StructuredMessage(
-        string ConversationId,
-        string Text,
-        DateTime Timestamp,
-        string MessageType,
-        List<QuickReply>? QuickReplies = null,
-        string? ErrorReason = null,
-        string? AgentName = null,
-        bool AgentCompleted = false);
-
     // ==========================================================================
     // PRESENTATION FLOW MESSAGES
     // ==========================================================================
@@ -611,29 +589,6 @@ public static class Records
         IActorRef OriginalSender,
         ClassificationResult? Classification = null);
 
-    /// <summary>
-    /// Context wrapper for GuardActor response via PipeTo.
-    /// Preserves the original processing context alongside the guard check result.
-    /// </summary>
-    /// <param name="Response">Guard check result (compliant or violation)</param>
-    /// <param name="Context">Original processing context</param>
-    public record GuardCheckContext(
-        GuardCheckResponse Response,
-        ProcessingContext Context);
-
-    /// <summary>
-    /// Context wrapper for ClassifierActor response via PipeTo.
-    /// Preserves the original processing context alongside the classification result.
-    /// This record is shared between supervisor (needing context) and router (needing sender).
-    /// </summary>
-    /// <param name="Classification">Intent classification result</param>
-    /// <param name="Context">Original processing context</param>
-    /// <param name="OriginalSender">Actor reference to reply to (typically ConversationSupervisorActor)</param>
-    public record ClassificationContext(
-        ClassificationResult Classification,
-        ProcessingContext? Context,
-        IActorRef? OriginalSender);
-
     // --- RouterActor Contexts ---
 
     /// <summary>
@@ -644,18 +599,6 @@ public static class Records
     /// <param name="OriginalSender">Actor reference to reply to (typically ConversationSupervisorActor)</param>
     public record FailureContext(
         Status.Failure Failure,
-        IActorRef OriginalSender);
-
-    // --- GuardActor Contexts ---
-
-    /// <summary>
-    /// Context wrapper for LLM policy check response via PipeTo in GuardActor.
-    /// Preserves the original sender reference across the async LLM call.
-    /// </summary>
-    /// <param name="Response">LLM policy check result</param>
-    /// <param name="OriginalSender">Actor reference to reply to (typically ConversationSupervisorActor)</param>
-    public record LLMCheckContext(
-        GuardCheckResponse Response,
         IActorRef OriginalSender);
 
     // ==========================================================================
