@@ -37,6 +37,7 @@ This release introduces **automatic conversation history management** through **
 ```
 
 ### 🔄 Changed
+- Converted residual Akka.NET `.Ask` flows into `.Tell` pattern, eliminating temporary actors and improving guard+classifier performances
 
 ### 🐛 Fixed
 
