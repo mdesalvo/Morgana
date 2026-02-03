@@ -5,6 +5,11 @@ using System.Text.Json;
 
 namespace Morgana.Framework.Providers;
 
+// This suppresses the experimental API warning for IChatReducer usage.
+// Microsoft marks IChatReducer as experimental (MEAI001) but recommends it
+// for production use in context window management scenarios.
+#pragma warning disable MEAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
+
 /// <summary>
 /// Morgana wrapper around Microsoft's in-memory implementation that adds conversation tracking and logging.
 /// Delegates complex message management to the framework while providing Morgana-specific observability.
@@ -14,6 +19,7 @@ namespace Morgana.Framework.Providers;
 /// <code>
 /// MorganaChatHistoryProvider (Morgana layer)
 ///   └── InMemoryChatHistoryProvider (Microsoft implementation)
+///         ├── Optional: IChatReducer (context window management)
 ///         └── Handles message storage, filtering, serialization
 /// </code>
 /// <para><strong>Responsibilities:</strong></para>
@@ -52,26 +58,35 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         string intent,
         JsonElement serializedState,
         JsonSerializerOptions? jsonSerializerOptions,
+        IChatReducer? chatReducer,
         ILogger logger)
     {
         this.conversationId = conversationId;
         this.intent = intent;
         this.logger = logger;
 
-        // Delegate to Microsoft's in-memory implementation
+        // Delegate to Microsoft's in-memory implementation:
+        // the reducer (if given) will operate on InvokingAsync hint,
+        // so that LLM will immediately receive compacted history.
+        // This is perfect for context window management.
         innerProvider = new InMemoryChatHistoryProvider(
+            chatReducer: chatReducer,
             serializedState: serializedState,
-            jsonSerializerOptions: jsonSerializerOptions);
+            jsonSerializerOptions: jsonSerializerOptions,
+            reducerTriggerEvent: InMemoryChatHistoryProvider.ChatReducerTriggerEvent.BeforeMessagesRetrieval);
+
+        string reducerInfo = chatReducer != null ? $"with reducer={chatReducer.GetType().Name}" : "without reducer";
 
         logger.LogInformation(
             serializedState.ValueKind != JsonValueKind.Undefined
-                ? $"{nameof(MorganaChatHistoryProvider)} RESTORED for agent '{intent}' in conversation '{conversationId}'"
-                : $"{nameof(MorganaChatHistoryProvider)} CREATED for agent '{intent}' in conversation '{conversationId}'");
+                ? $"{nameof(MorganaChatHistoryProvider)} RESTORED {reducerInfo} for agent '{intent}' in conversation '{conversationId}'"
+                : $"{nameof(MorganaChatHistoryProvider)} CREATED {reducerInfo} for agent '{intent}' in conversation '{conversationId}'");
     }
 
     /// <summary>
     /// Called BEFORE agent invocation to retrieve messages for LLM context.
     /// Delegates to Microsoft's in-memory implementation for actual retrieval.
+    /// If a reducer is configured, it will process the messages here.
     /// </summary>
     public override async ValueTask<IEnumerable<ChatMessage>> InvokingAsync(
         InvokingContext context,
