@@ -22,7 +22,7 @@ This release introduces **automatic conversation history management** through **
 - Reducer applies **before** LLM receives messages (**immediate cost savings**)
 - Full history always stored in `InMemoryChatHistoryProvider` (**reducer never modifies storage**)
 
-**Configuration Section: HistoryManagement**
+**Configuration Section: HistoryReducer**
 ```json
 {
   "Morgana": {
