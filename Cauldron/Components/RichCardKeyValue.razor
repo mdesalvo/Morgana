@@ -1,0 +1,11 @@
+@namespace Cauldron.Components
+
+<div class="rich-card-key-value @(Component.Emphasize ? "rich-card-key-value-emphasized" : "")">
+    <span class="rich-card-key">@Component.Key:</span>
+    <span class="rich-card-value">@Component.Value</span>
+</div>
+
+@code {
+    [Parameter]
+    public required KeyValueComponent Component { get; set; }
+}

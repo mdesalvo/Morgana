@@ -1,0 +1,28 @@
+@namespace Cauldron.Components
+
+<div class="rich-card">
+    @* Card header *@
+    <div class="rich-card-header">
+        <h3 class="rich-card-title">@Card.Title</h3>
+        @if (!string.IsNullOrWhiteSpace(Card.Subtitle))
+        {
+            <p class="rich-card-subtitle">@Card.Subtitle</p>
+        }
+    </div>
+
+    @* Card body with components *@
+    <div class="rich-card-body">
+        @foreach (var component in Card.Components)
+        {
+            <RichCardComponent Component="@component" Depth="1" />
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// The rich card data to render.
+    /// </summary>
+    [Parameter]
+    public Cauldron.Messages.RichCard? Card { get; set; }
+}

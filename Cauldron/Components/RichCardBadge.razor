@@ -1,0 +1,10 @@
+@namespace Cauldron.Components
+
+<span class="rich-card-badge rich-card-badge-@Component.Variant.ToString().ToLower()">
+    @Component.Text
+</span>
+
+@code {
+    [Parameter]
+    public required BadgeComponent Component { get; set; }
+}
