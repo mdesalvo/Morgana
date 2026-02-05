@@ -179,7 +179,8 @@ public class RouterActor : MorganaActor
                 response.Response,
                 response.IsCompleted,
                 agentSender,
-                response.QuickReplies));
+                response.QuickReplies,
+                response.RichCard));
         }
         else
         {
@@ -208,6 +209,7 @@ public class RouterActor : MorganaActor
                 "An error occurred while processing your request. Please try again.",
                 true, // Mark as completed to reset conversation state
                 agentSender,
+                null,
                 null));
 
             // Clean up streaming context

@@ -109,11 +109,18 @@
                         }
                         else
                         {
-                            <!-- Message content -->
+                            @* Message content (text) *@
                             <div class="message-text @(chatMessage.Type == MessageType.Presentation ? "completion-text" : "")">
                                 @chatMessage.Text
                             </div>
+                            
+                            @* Rich card (if present) *@
+                            @if (chatMessage.RichCard != null)
+                            {
+                                <RichCard Card="@chatMessage.RichCard" />
+                            }
 
+                            @* Quick replies (if present) *@
                             @if (chatMessage is { QuickReplies: { Count: > 0 }, IsStreaming: false })
                             {
                                 <QuickReplyButton Replies="@chatMessage.QuickReplies"
@@ -818,6 +825,7 @@
 
                 // Just add metadata (text will complete via typewriter)
                 currentStreamingMessage.QuickReplies = signalrMessage.QuickReplies;
+                currentStreamingMessage.RichCard = signalrMessage.RichCard;
                 currentStreamingMessage.AgentName = signalrMessage.AgentName ?? "Morgana";
                 
                 // Mark as no longer streaming (removes cursor when typewriter finishes)
@@ -887,7 +895,8 @@
                 Timestamp = signalrMessage.Timestamp,
                 QuickReplies = signalrMessage.QuickReplies,
                 AgentName = signalrMessage.AgentName ?? "Morgana",
-                AgentCompleted = false
+                AgentCompleted = false,
+                RichCard = signalrMessage.RichCard
             });
 
             // If agent completed and is specialized, add completion message from Morgana
@@ -1067,7 +1076,8 @@
     private async Task SelectQuickReplyAsync(QuickReply reply, ChatMessage message)
     {
         // Prevent multiple selections
-        if (message.SelectedQuickReplyId != null) return;
+        if (message.SelectedQuickReplyId != null)
+            return;
 
         Console.WriteLine($"🟡 Quick reply selected: {reply.Label}");
 
@@ -1121,6 +1131,13 @@
     /// <returns>True if any message has ending quick replies that haven't been selected yet</returns>
     private bool HasActiveQuickReplies() =>
         chatMessages.Any(m => m is { QuickReplies: not null, SelectedQuickReplyId: null, IsLastHistoryMessage: true });
+
+    /// <summary>
+    /// Checks if there are any rich cards in the tail of message list.
+    /// </summary>
+    /// <returns>True if any message has ending rich card</returns>
+    private bool HasActiveRichCard() =>
+        chatMessages.Any(m => m is { RichCard: not null, IsLastHistoryMessage: true });
 
     /// <summary>
     /// Gets a value indicating whether the send button should be disabled.

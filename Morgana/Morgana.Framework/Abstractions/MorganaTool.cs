@@ -263,4 +263,156 @@ public class MorganaTool
                 "[{\"id\": \"option1\", \"label\": \"🔧 Option 1\", \"value\": \"User message for option 1\"}]");
         }
     }
+
+    // =========================================================================
+    // RICH CARD SYSTEM TOOL
+    // =========================================================================
+
+    /// <summary>
+    /// Sets a rich card for structured visual presentation of complex data.
+    /// LLM calls this tool when presenting invoices, profiles, reports, or any structured information
+    /// that benefits from visual hierarchy instead of plain text.
+    /// </summary>
+    /// <param name="richCardJson">
+    /// JSON string containing the rich card structure with title, subtitle, and components array.
+    /// </param>
+    /// <returns>Confirmation message for the LLM indicating the card was set</returns>
+    /// <remarks>
+    /// <para><strong>Purpose:</strong></para>
+    /// <para>SetRichCard is a SYSTEM TOOL enabling the LLM to present structured data visually.
+    /// Similar to SetQuickReplies but for data presentation rather than user actions.</para>
+    ///
+    /// <para><strong>LLM Decision Making:</strong></para>
+    /// <para>The LLM should call SetRichCard when presenting:</para>
+    /// <list type="bullet">
+    /// <item>Invoices, receipts, financial documents</item>
+    /// <item>User or product profiles</item>
+    /// <item>Structured reports with sections</item>
+    /// <item>Comparisons or side-by-side data</item>
+    /// <item>Any data that benefits from visual organization</item>
+    /// </list>
+    ///
+    /// <para><strong>JSON Format Expected:</strong></para>
+    /// <code>
+    /// {
+    ///   "title": "Invoice #2024-001",
+    ///   "subtitle": "Issued on 15/01/2024",
+    ///   "components": [
+    ///     { "type": "key_value", "key": "Customer", "value": "Acme Corp" },
+    ///     { "type": "divider" },
+    ///     { "type": "section", "title": "Line Items", "components": [
+    ///       { "type": "list", "items": ["Consulting: €800", "Development: €450"], "style": "plain" }
+    ///     ]},
+    ///     { "type": "key_value", "key": "Total", "value": "€1,250.00", "emphasize": true },
+    ///     { "type": "badge", "text": "Paid", "variant": "success" }
+    ///   ]
+    /// }
+    /// </code>
+    ///
+    /// <para><strong>Constraints:</strong></para>
+    /// <list type="bullet">
+    /// <item>Maximum nesting depth: 3 levels (validated before storage)</item>
+    /// <item>Maximum 50 components total (prevents abuse)</item>
+    /// <item>Keep cards focused: 10-20 components recommended</item>
+    /// </list>
+    /// </remarks>
+    public Task<object> SetRichCard(string richCardJson)
+    {
+        try
+        {
+            // Validate JSON by attempting to deserialize
+            Records.RichCard? richCard = JsonSerializer.Deserialize<Records.RichCard>(
+                richCardJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+            if (richCard == null)
+            {
+                toolLogger.LogWarning("SetRichCard called with invalid JSON structure");
+                return Task.FromResult<object>("Error: Rich card JSON structure is invalid.");
+            }
+
+            // Validate depth constraint (max 3 levels)
+            int depth = CalculateMaxDepth(richCard.Components, 1);
+            if (depth > 3)
+            {
+                toolLogger.LogWarning($"SetRichCard called with excessive nesting depth: {depth} (max 3)");
+                return Task.FromResult<object>(
+                    $"Error: Rich card exceeds maximum nesting depth of 3 (found: {depth}). " +
+                    $"Please simplify the card structure.");
+            }
+
+            // Validate component count (max 50 to prevent abuse)
+            int totalComponents = CountComponents(richCard.Components);
+            if (totalComponents > 50)
+            {
+                toolLogger.LogWarning($"SetRichCard called with too many components: {totalComponents} (max 50)");
+                return Task.FromResult<object>(
+                    $"Error: Rich card has too many components: {totalComponents} (max 50). " +
+                    $"Please create a more focused card.");
+            }
+
+            // Store the rich card JSON under a reserved context variable
+            MorganaAIContextProvider aiContextProvider = getAIContextProvider();
+            aiContextProvider.SetVariable("rich_card", richCardJson);
+
+            toolLogger.LogInformation(
+                $"LLM set rich card '{richCard.Title}' with {totalComponents} components " +
+                $"(depth: {depth}) via SetRichCard tool");
+
+            // Return confirmation to LLM
+            return Task.FromResult<object>(
+                $"Rich card set successfully. The user will see a structured visual card titled '{richCard.Title}'. " +
+                $"You can now provide additional context or explanation in text if needed.");
+        }
+        catch (JsonException ex)
+        {
+            toolLogger.LogError(ex, "Failed to parse rich card JSON in SetRichCard");
+            return Task.FromResult<object>(
+                "Error: Rich card JSON format is invalid. Please check the structure and try again.");
+        }
+    }
+
+    /// <summary>
+    /// Calculates the maximum nesting depth of components in a card.
+    /// Used by SetRichCard to enforce 3-level depth constraint.
+    /// </summary>
+    /// <param name="components">List of card components to analyze</param>
+    /// <param name="currentDepth">Current depth level (starts at 1)</param>
+    /// <returns>Maximum depth found in the component tree</returns>
+    private int CalculateMaxDepth(List<Records.CardComponent> components, int currentDepth)
+    {
+        int maxDepth = currentDepth;
+
+        foreach (Records.CardComponent component in components)
+        {
+            if (component is Records.SectionComponent section)
+            {
+                int sectionDepth = CalculateMaxDepth(section.Components, currentDepth + 1);
+                maxDepth = Math.Max(maxDepth, sectionDepth);
+            }
+        }
+
+        return maxDepth;
+    }
+
+    /// <summary>
+    /// Counts total number of components recursively (including nested sections).
+    /// Used by SetRichCard to enforce 50-component limit.
+    /// </summary>
+    /// <param name="components">List of card components to count</param>
+    /// <returns>Total component count including all nested components</returns>
+    private int CountComponents(List<Records.CardComponent> components)
+    {
+        int count = components.Count;
+
+        foreach (Records.CardComponent component in components)
+        {
+            if (component is Records.SectionComponent section)
+            {
+                count += CountComponents(section.Components);
+            }
+        }
+
+        return count;
+    }
 }

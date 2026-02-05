@@ -163,8 +163,11 @@ public class ConversationManagerActor : MorganaActor
     private async Task HandleConversationResponseAsync(Records.ConversationResponse response)
     {
         actorLogger.Info(
-            $"Received response from supervisor (agent: {response.AgentName ?? "unknown"}, completed: {response.AgentCompleted}): " +
-            $"{response.Response[..Math.Min(50, response.Response.Length)]}..., #quickReplies: {response.QuickReplies?.Count ?? 0}");
+            $"Received response from supervisor (agent: {response.AgentName ?? "unknown"}," +
+            $"completed: {response.AgentCompleted}): " +
+            $"{response.Response[..Math.Min(50, response.Response.Length)]}...," +
+            $"#quickReplies: {response.QuickReplies?.Count ?? 0}" +
+            $"#richCard: {response.RichCard != null}");
 
         // Send response to client via SignalR
         try
@@ -177,9 +180,13 @@ public class ConversationManagerActor : MorganaActor
                 null,
                 response.AgentName,
                 response.AgentCompleted,
-                response.OriginalTimestamp);
+                response.OriginalTimestamp,
+                response.RichCard);
 
-            actorLogger.Info($"Response sent successfully to client via SignalR (#quickReplies: {response.QuickReplies?.Count ?? 0})");
+            actorLogger.Info(
+                $"Response sent successfully to client via SignalR " +
+                $"(#quickReplies: {response.QuickReplies?.Count ?? 0}," +
+                $"hasRichCard: {response.RichCard != null})");
         }
         catch (Exception ex)
         {
@@ -195,7 +202,8 @@ public class ConversationManagerActor : MorganaActor
                     null,
                     $"delivery_error: {ex.Message}",
                     "Morgana",
-                    false);
+                    false,
+                    null);
             }
             catch (Exception fallbackEx)
             {

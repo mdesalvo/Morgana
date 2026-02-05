@@ -60,6 +60,12 @@
               "Description": "Use the value directly from the user's request, without going through the GetContextVariable tool.",
               "Type": "Operational",
               "Priority": 1
+            },
+            {
+              "Name": "RichCardUsageGuidance",
+              "Description": "Use SetRichCard when presenting structured data (invoices, profiles, reports, comparisons) that benefits from visual organization. Avoid for simple Q&A or single data points. Cards should be focused (10-20 components) and well-organized with sections for logical grouping. Always accompany cards with brief contextual text.",
+              "Type": "Operational",
+              "Priority": 2
             }
           ],
           "ErrorAnswers": [
@@ -109,6 +115,20 @@
                 {
                   "Name": "quickReplies",
                   "Description": "JSON string containing an array of quick reply button definitions. Each button must have three fields: 'id' (unique identifier, like for example 'no-internet' or 'invoice-001'), 'label' (display text with emoji for visual appeal, e.g., '🔴 No Internet Connection' or '📄 Invoice INV-001'), 'value' (the complete natural message that will be sent when the user clicks, e.g., 'Show me the no-internet assistance guide' or 'Show details for invoice INV-001'). Format: [{\"id\":\"option1\",\"label\":\"🔧 Option 1\",\"value\":\"User message for option 1\"},{\"id\":\"option2\",\"label\":\"📖 Option 2\",\"value\":\"User message for option 2\"}]. Use clear action-oriented labels. Make values natural user messages.",
+                  "Required": true,
+                  "Scope": "context",
+                  "Shared": false
+                }
+              ]
+            },
+            {
+              "Name": "SetRichCard",
+              "Description": "Render structured information as a visual card instead of plain text. Use for invoices, profiles, reports, comparisons, or any data benefiting from visual hierarchy. Components: text_block (narrative text with style: normal|bold|muted|small), key_value (label-value pairs with optional emphasize: true|false), divider (visual separator), list (items array with style: bullet|numbered|plain), section (nestable grouping with title/subtitle/components, max depth: 3), grid (columns: 2-4 with key-value items), badge (text with variant: success|warning|error|info|neutral). Keep cards focused (10-20 components recommended). Maximum 50 components total, maximum nesting depth: 3 levels.",
+              "Parameters": [
+                {
+                  "Name": "richCardJson",
+                  "Type": "string",
+                  "Description": "JSON string containing rich card structure with required 'title' (string), optional 'subtitle' (string), and required 'components' (array of component objects). Each component must have a 'type' field matching one of the available component types. Example structure: {\"title\":\"Invoice #001\",\"subtitle\":\"Issued 15/01/2024\",\"components\":[{\"type\":\"key_value\",\"key\":\"Customer\",\"value\":\"Acme Corp\"},{\"type\":\"divider\"},{\"type\":\"badge\",\"text\":\"Paid\",\"variant\":\"success\"}]}",
                   "Required": true,
                   "Scope": "context",
                   "Shared": false
