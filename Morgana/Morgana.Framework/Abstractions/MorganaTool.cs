@@ -324,7 +324,6 @@ public class MorganaTool
             Records.RichCard? richCard = JsonSerializer.Deserialize<Records.RichCard>(
                 richCardJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
             );
-
             if (richCard == null)
             {
                 toolLogger.LogWarning("SetRichCard called with invalid JSON structure");
