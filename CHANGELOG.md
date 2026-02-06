@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.15.0] - UNDER DEVELOPMENT
+## [0.15.0] - 2026-02-06
 ### 🎯 Major Feature: Intelligent Context Window Management
 This release introduces **automatic conversation history management** through **LLM-based summarization**, dramatically reducing token costs (**60%+ savings**) for long conversations while maintaining **complete transparency** for users and **seamless agent handoffs** through incremental summary generation.
 
@@ -38,6 +38,8 @@ This release introduces **automatic conversation history management** through **
 
 ### 🔄 Changed
 - Converted residual Akka.NET `.Ask` flows into `.Tell` pattern, eliminating temporary actors and improving guard+classifier performances
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260205.1 (**BREAKING CHANGES**: `AIAgent.GetNewSessionAsync` -> `AIAgent.CreateSessionAsync`. `AgentSession.Serialize` -> `AIAgent.SerializeSession`)
+- Updated `ModelContextProtocol.Core` dependency to 0.8.0-preview.1
 
 ### 🐛 Fixed
 
