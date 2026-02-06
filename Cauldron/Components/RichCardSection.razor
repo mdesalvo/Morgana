@@ -1,0 +1,31 @@
+@namespace Cauldron.Components
+
+<div class="rich-card-section rich-card-section-depth-@Depth">
+    @* Section header *@
+    <div class="rich-card-section-header">
+        <h4 class="rich-card-section-title">@Component.Title</h4>
+        @if (!string.IsNullOrWhiteSpace(Component.Subtitle))
+        {
+            <p class="rich-card-section-subtitle">@Component.Subtitle</p>
+        }
+    </div>
+
+    @* Section body with nested components *@
+    <div class="rich-card-section-body">
+        @foreach (CardComponent child in Component.Components)
+        {
+            <RichCardComponent Component="@child" Depth="@(Depth + 1)" />
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public required SectionComponent Component { get; set; }
+
+    /// <summary>
+    /// Current nesting depth. Used for styling and validation.
+    /// </summary>
+    [Parameter]
+    public int Depth { get; set; } = 1;
+}

@@ -1,0 +1,53 @@
+@switch (Component)
+{
+    case TextBlockComponent textBlock:
+        <RichCardTextBlock Component="@textBlock" />
+        break;
+
+    case KeyValueComponent keyValue:
+        <RichCardKeyValue Component="@keyValue" />
+        break;
+
+    case DividerComponent:
+        <RichCardDivider />
+        break;
+
+    case ListComponent list:
+        <RichCardList Component="@list" />
+        break;
+
+    case SectionComponent sectionComponent:
+        <RichCardSection Component="@sectionComponent" Depth="@Depth" />
+        break;
+
+    case GridComponent grid:
+        <RichCardGrid Component="@grid" />
+        break;
+
+    case BadgeComponent badge:
+        <RichCardBadge Component="@badge" />
+        break;
+
+    default:
+        @* Graceful fallback for unknown component types *@
+        <div class="rich-card-unknown">
+            <span class="rich-card-unknown-icon">⚠️</span>
+            <span class="rich-card-unknown-text">Unknown component type: @Component.GetType().Name</span>
+        </div>
+        break;
+}
+
+@code {
+    /// <summary>
+    /// The component to render.
+    /// </summary>
+    [Parameter]
+    public required CardComponent Component { get; set; }
+
+    /// <summary>
+    /// Current nesting depth (for section components).
+    /// Used to enforce depth limits and adjust styling.
+    /// </summary>
+    [Parameter]
+    public int Depth { get; set; } = 1;
+}

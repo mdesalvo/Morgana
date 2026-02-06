@@ -2,7 +2,7 @@
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Attributes;
 using Morgana.Framework.Providers;
-using System.Text;
+using System.Text.Json;
 
 namespace Morgana.Example.Tools;
 
@@ -91,7 +91,6 @@ public class BillingTool : MorganaTool
             ],
             PaymentMethod: null),
 
-
         new Invoice(
             InvoiceId: "INV-2025-002",
             Period: "September 2025",
@@ -111,7 +110,6 @@ public class BillingTool : MorganaTool
             ],
             PaymentMethod: new PaymentMethod("DirectDebit", "4532")),
 
-
         new Invoice(
             InvoiceId: "INV-2025-003",
             Period: "June - August 2025",
@@ -130,7 +128,6 @@ public class BillingTool : MorganaTool
                 new InvoiceLineItem("Installation Fee Refund", -25.00m, 1, "refund", -25.00m)
             ],
             PaymentMethod: new PaymentMethod("CreditCard", "8901")),
-
 
         new Invoice(
             InvoiceId: "INV-2025-004",
@@ -158,139 +155,167 @@ public class BillingTool : MorganaTool
     // =========================================================================
 
     /// <summary>
-    /// Retrieves the most recent invoices for a user.
-    /// Returns detailed invoice information including line items and payment status.
+    /// Retrieves the most recent invoices for a user as structured JSON.
     /// </summary>
     /// <param name="userId">User identifier (retrieved from context)</param>
     /// <param name="count">Number of recent invoices to retrieve (1-10)</param>
-    /// <returns>Formatted invoice list with summary information</returns>
+    /// <returns>JSON array of invoice summaries</returns>
     public async Task<string> GetInvoices(string userId, int count)
     {
-        await Task.Delay(100); // Simulate database query
+        await Task.Delay(50);
 
         count = Math.Clamp(count, 1, 10);
         List<Invoice> invoices = _mockInvoices.Take(count).ToList();
 
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"📄 Recent Invoices for User {userId} (Showing {invoices.Count})");
-        sb.AppendLine();
-
-        foreach (Invoice invoice in invoices)
+        var result = new
         {
-            string statusIcon = invoice.Status switch
+            userId,
+            totalCount = invoices.Count,
+            invoices = invoices.Select(inv => new
             {
-                InvoiceStatus.Paid => "✅",
-                InvoiceStatus.Pending => "⏳",
-                InvoiceStatus.Overdue => "⚠️",
-                InvoiceStatus.Cancelled => "❌",
-                _ => "📋"
-            };
+                invoiceId = inv.InvoiceId,
+                period = inv.Period,
+                issueDate = inv.IssueDate.ToString("dd/MM/yyyy"),
+                dueDate = inv.DueDate.ToString("dd/MM/yyyy"),
+                total = inv.Total,
+                status = inv.Status.ToString(),
+                statusIcon = inv.Status switch
+                {
+                    InvoiceStatus.Paid => "✅",
+                    InvoiceStatus.Pending => "⏳",
+                    InvoiceStatus.Overdue => "⚠️",
+                    InvoiceStatus.Cancelled => "❌",
+                    _ => "📋"
+                },
+                paidDate = inv.PaidDate?.ToString("dd/MM/yyyy"),
+                daysOverdue = inv.Status == InvoiceStatus.Pending 
+                    ? Math.Max(0, -(inv.DueDate - DateTime.UtcNow).Days)
+                    : (int?)null
+            }).ToList()
+        };
 
-            sb.AppendLine($"{statusIcon} {invoice.InvoiceId}");
-            sb.AppendLine($"   Period: {invoice.Period}");
-            sb.AppendLine($"   Amount: €{invoice.Total:F2}");
-            sb.AppendLine($"   Status: {invoice.Status}");
-
-            if (invoice.Status == InvoiceStatus.Pending)
-            {
-                sb.AppendLine($"   Due Date: {invoice.DueDate:dd/MM/yyyy}");
-            }
-            else if (invoice.PaidDate.HasValue)
-            {
-                sb.AppendLine($"   Paid: {invoice.PaidDate.Value:dd/MM/yyyy}");
-            }
-
-            sb.AppendLine();
-        }
-
-        sb.AppendLine($"💡 To see detailed line items for any invoice, ask me about a specific invoice ID (e.g., '{invoices.First().InvoiceId}').");
-
-        return sb.ToString();
+        return JsonSerializer.Serialize(result, new JsonSerializerOptions 
+        { 
+            WriteIndented = false,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
+        });
     }
 
     /// <summary>
-    /// Retrieves detailed information about a specific invoice including all line items.
-    /// Provides comprehensive breakdown of charges, taxes, and payment details.
+    /// Retrieves detailed information about a specific invoice as structured JSON.
     /// </summary>
     /// <param name="userId">User identifier (retrieved from context)</param>
     /// <param name="invoiceId">Specific invoice identifier (e.g., "INV-2025-001")</param>
-    /// <returns>Detailed invoice breakdown with all line items</returns>
+    /// <returns>JSON object with complete invoice details</returns>
     public async Task<string> GetInvoiceDetails(string userId, string invoiceId)
     {
-        await Task.Delay(100); // Simulate database query
+        await Task.Delay(50);
 
         Invoice? invoice = _mockInvoices.FirstOrDefault(inv =>
             inv.InvoiceId.Equals(invoiceId, StringComparison.OrdinalIgnoreCase));
 
         if (invoice == null)
         {
-            return $"❌ Invoice '{invoiceId}' not found for user {userId}. " +
-                   $"Available invoices: {string.Join(", ", _mockInvoices.Select(i => i.InvoiceId))}";
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"📄 Invoice Details: {invoice.InvoiceId}");
-        sb.AppendLine();
-        sb.AppendLine($"Billing Period: {invoice.Period}");
-        sb.AppendLine($"Issue Date: {invoice.IssueDate:dd/MM/yyyy}");
-        sb.AppendLine($"Due Date: {invoice.DueDate:dd/MM/yyyy}");
-        sb.AppendLine($"Status: {GetStatusDescription(invoice.Status)}");
-
-        if (invoice.PaidDate.HasValue)
-        {
-            sb.AppendLine($"Paid Date: {invoice.PaidDate.Value:dd/MM/yyyy}");
-        }
-
-        if (invoice.PaymentMethod != null)
-        {
-            sb.AppendLine($"Payment Method: {FormatPaymentMethod(invoice.PaymentMethod)}");
-        }
-
-        sb.AppendLine();
-        sb.AppendLine("Line Items:");
-
-        foreach (InvoiceLineItem item in invoice.LineItems)
-        {
-            string quantityInfo = item.Quantity > 1
-                ? $"{item.Quantity} {item.Unit} × €{item.UnitPrice:F2}"
-                : "";
-
-            string amountSign = item.Amount < 0 ? "" : " ";
-            sb.AppendLine($"{item.Description,-50} {quantityInfo,-20} {amountSign}€{item.Amount,8:F2}");
-        }
-
-        sb.AppendLine(new string('-', 80));
-        sb.AppendLine($"{"Subtotal",-70} €{invoice.Subtotal,8:F2}");
-        sb.AppendLine($"{"Tax (22%)",-70} €{invoice.Tax,8:F2}");
-        sb.AppendLine($"{"TOTAL",-70} €{invoice.Total,8:F2}");
-
-        if (invoice.Status == InvoiceStatus.Pending)
-        {
-            sb.AppendLine();
-            int daysUntilDue = (invoice.DueDate - DateTime.UtcNow).Days;
-            if (daysUntilDue > 0)
+            var error = new
             {
-                sb.AppendLine($"⏰ Payment due in {daysUntilDue} days");
-            }
-            else
-            {
-                sb.AppendLine($"⚠️ Payment is {Math.Abs(daysUntilDue)} days overdue");
-            }
+                error = "Invoice not found",
+                requestedInvoiceId = invoiceId,
+                availableInvoices = _mockInvoices.Select(i => i.InvoiceId).ToList()
+            };
+            return JsonSerializer.Serialize(error, new JsonSerializerOptions 
+            { 
+                WriteIndented = false,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
+            });
         }
 
-        return sb.ToString();
+        int daysUntilDue = (invoice.DueDate - DateTime.UtcNow).Days;
+
+        var result = new
+        {
+            invoiceId = invoice.InvoiceId,
+            period = invoice.Period,
+            dates = new
+            {
+                issueDate = invoice.IssueDate.ToString("dd/MM/yyyy"),
+                dueDate = invoice.DueDate.ToString("dd/MM/yyyy"),
+                paidDate = invoice.PaidDate?.ToString("dd/MM/yyyy")
+            },
+            status = new
+            {
+                value = invoice.Status.ToString(),
+                icon = invoice.Status switch
+                {
+                    InvoiceStatus.Paid => "✅",
+                    InvoiceStatus.Pending => "⏳",
+                    InvoiceStatus.Overdue => "⚠️",
+                    InvoiceStatus.Cancelled => "❌",
+                    _ => "📋"
+                },
+                description = invoice.Status switch
+                {
+                    InvoiceStatus.Paid => "Paid",
+                    InvoiceStatus.Pending => "Pending Payment",
+                    InvoiceStatus.Overdue => "Overdue",
+                    InvoiceStatus.Cancelled => "Cancelled",
+                    _ => invoice.Status.ToString()
+                },
+                daysUntilDue = invoice.Status == InvoiceStatus.Pending ? daysUntilDue : (int?)null,
+                isOverdue = invoice.Status == InvoiceStatus.Pending && daysUntilDue < 0,
+                daysOverdue = invoice.Status == InvoiceStatus.Pending && daysUntilDue < 0 
+                    ? Math.Abs(daysUntilDue) 
+                    : (int?)null
+            },
+            lineItems = invoice.LineItems.Select(item => new
+            {
+                description = item.Description,
+                unitPrice = item.UnitPrice,
+                quantity = item.Quantity,
+                unit = item.Unit,
+                amount = item.Amount,
+                formattedQuantity = item.Quantity > 1 
+                    ? $"{item.Quantity} {item.Unit} × €{item.UnitPrice:F2}"
+                    : null
+            }).ToList(),
+            amounts = new
+            {
+                subtotal = invoice.Subtotal,
+                tax = invoice.Tax,
+                taxRate = "22%",
+                total = invoice.Total
+            },
+            paymentMethod = invoice.PaymentMethod != null 
+                ? new
+                {
+                    type = invoice.PaymentMethod.Type,
+                    lastFourDigits = invoice.PaymentMethod.LastFourDigits,
+                    formatted = invoice.PaymentMethod.Type switch
+                    {
+                        "CreditCard" => $"Credit Card ending in {invoice.PaymentMethod.LastFourDigits}",
+                        "BankTransfer" => $"Bank Transfer from account ending in {invoice.PaymentMethod.LastFourDigits}",
+                        "DirectDebit" => $"Direct Debit from account ending in {invoice.PaymentMethod.LastFourDigits}",
+                        _ => $"{invoice.PaymentMethod.Type} ({invoice.PaymentMethod.LastFourDigits})"
+                    }
+                }
+                : null
+        };
+
+        return JsonSerializer.Serialize(result, new JsonSerializerOptions 
+        { 
+            WriteIndented = false,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
+        });
     }
 
     /// <summary>
-    /// Retrieves payment history for a user showing all settled invoices.
-    /// Useful for financial tracking and payment verification.
+    /// Retrieves payment history for a user as structured JSON.
     /// </summary>
     /// <param name="userId">User identifier (retrieved from context)</param>
     /// <param name="months">Number of months of history to retrieve (1-12)</param>
-    /// <returns>Payment history with dates, amounts, and methods</returns>
+    /// <returns>JSON object with payment history</returns>
     public async Task<string> GetPaymentHistory(string userId, int months = 6)
     {
-        await Task.Delay(120);
+        await Task.Delay(50);
 
         months = Math.Clamp(months, 1, 12);
         DateTime cutoffDate = DateTime.UtcNow.AddMonths(-months);
@@ -302,50 +327,60 @@ public class BillingTool : MorganaTool
 
         if (!paidInvoices.Any())
         {
-            return $"📊 No payment history found for the last {months} months.";
+            var noData = new
+            {
+                userId,
+                months,
+                hasData = false,
+                message = $"No payment history found for the last {months} months."
+            };
+            return JsonSerializer.Serialize(noData, new JsonSerializerOptions 
+            { 
+                WriteIndented = false,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
+            });
         }
 
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"💳 Payment History for User {userId} (Last {months} months)");
-        sb.AppendLine();
+        decimal totalPaid = paidInvoices.Sum(i => i.Total);
 
-        decimal totalPaid = 0m;
-
-        foreach (Invoice invoice in paidInvoices)
+        var result = new
         {
-            sb.AppendLine($"✅ {invoice.InvoiceId} - {invoice.Period}");
-            sb.AppendLine($"   Amount: €{invoice.Total:F2}");
-            sb.AppendLine($"   Paid: {invoice.PaidDate!.Value:dd/MM/yyyy}");
-            sb.AppendLine($"   Method: {FormatPaymentMethod(invoice.PaymentMethod!)}");
-            sb.AppendLine();
+            userId,
+            months,
+            hasData = true,
+            summary = new
+            {
+                totalPayments = paidInvoices.Count,
+                totalAmount = totalPaid,
+                averageMonthly = totalPaid / paidInvoices.Count
+            },
+            payments = paidInvoices.Select(inv => new
+            {
+                invoiceId = inv.InvoiceId,
+                period = inv.Period,
+                amount = inv.Total,
+                paidDate = inv.PaidDate!.Value.ToString("dd/MM/yyyy"),
+                paymentMethod = inv.PaymentMethod != null 
+                    ? new
+                    {
+                        type = inv.PaymentMethod.Type,
+                        lastFourDigits = inv.PaymentMethod.LastFourDigits,
+                        formatted = inv.PaymentMethod.Type switch
+                        {
+                            "CreditCard" => $"Credit Card ending in {inv.PaymentMethod.LastFourDigits}",
+                            "BankTransfer" => $"Bank Transfer (...{inv.PaymentMethod.LastFourDigits})",
+                            "DirectDebit" => $"Direct Debit (...{inv.PaymentMethod.LastFourDigits})",
+                            _ => $"{inv.PaymentMethod.Type} (...{inv.PaymentMethod.LastFourDigits})"
+                        }
+                    }
+                    : null
+            }).ToList()
+        };
 
-            totalPaid += invoice.Total;
-        }
-
-        sb.AppendLine($"Total Paid (Last {months} months): €{totalPaid:F2}");
-        sb.AppendLine($"Average Monthly Spend: €{totalPaid / paidInvoices.Count:F2}");
-
-        return sb.ToString();
+        return JsonSerializer.Serialize(result, new JsonSerializerOptions 
+        { 
+            WriteIndented = false,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
+        });
     }
-
-    // =========================================================================
-    // HELPER METHODS
-    // =========================================================================
-
-    private static string GetStatusDescription(InvoiceStatus status) => status switch
-    {
-        InvoiceStatus.Paid => "✅ Paid",
-        InvoiceStatus.Pending => "⏳ Pending Payment",
-        InvoiceStatus.Overdue => "⚠️ Overdue",
-        InvoiceStatus.Cancelled => "❌ Cancelled",
-        _ => status.ToString()
-    };
-
-    private static string FormatPaymentMethod(PaymentMethod method) => method.Type switch
-    {
-        "CreditCard" => $"Credit Card ending in {method.LastFourDigits}",
-        "BankTransfer" => $"Bank Transfer from account ending in {method.LastFourDigits}",
-        "DirectDebit" => $"Direct Debit from account ending in {method.LastFourDigits}",
-        _ => $"{method.Type} ({method.LastFourDigits})"
-    };
 }

@@ -487,7 +487,25 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
         JsonSerializerOptions jsonSerializerOptions)
     {
         // =============================================================================
-        // PASS 1: Extract quick replies from SetQuickReplies function calls
+        // PASS 1A: Extract rich cards from SetRichCard function calls
+        // =============================================================================
+        Dictionary<string, RichCard> richCardsByCallId = allMessages
+            .Where(m => m.message.Role == ChatRole.Assistant)
+            .SelectMany(m => m.message.Contents?
+                .OfType<FunctionCallContent>()
+                .Where(fc => fc.Name == "SetRichCard") ?? [])
+            .Select(fc => new
+            {
+                CallId = fc.CallId,
+                RichCard = TryParseRichCardFromDictionary(fc.Arguments, jsonSerializerOptions)
+            })
+            .Where(x => x.RichCard != null)
+            .ToDictionary(x => x.CallId, x => x.RichCard!);
+
+        logger.LogDebug($"Extracted rich cards from {richCardsByCallId.Count} SetRichCard calls");
+
+        // =============================================================================
+        // PASS 1B: Extract quick replies from SetQuickReplies function calls
         // =============================================================================
         Dictionary<string, List<QuickReply>> quickRepliesByCallId = allMessages
             .Where(m => m.message.Role == ChatRole.Assistant)
@@ -505,39 +523,73 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
         logger.LogDebug($"Extracted quick replies from {quickRepliesByCallId.Count} SetQuickReplies calls");
 
         // =============================================================================
-        // PASS 2: Filter and map messages with quick replies attachment
+        // PASS 2: Filter and map messages with rich card and quick replies attachments
         // =============================================================================
-        List<MorganaChatMessage> result = [];
+        List<MorganaChatMessage> historyMessages = [];
         string? pendingQuickRepliesCallId = null;
+        string? pendingRichCardCallId = null;
         int msgIndex = 0;
         bool isLastHistoryMessage = false;
 
-        foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in allMessages)
+        // Before collecting messages from history, ensure to strip out eventual
+        // summarization messages which may have been automatically emitted and
+        // inserted by the history provider: they are "assistant" messages having
+        // text (the summarization sentence) but they don't have an identifier.
+        List<(string agentName, bool agentCompleted, ChatMessage message)> filteredMessages =
+            [.. allMessages.Where(m => !(m.message.Role == ChatRole.Assistant
+                                          && !string.IsNullOrEmpty(m.message.Text)
+                                          && string.IsNullOrEmpty(m.message.MessageId)))];
+
+        foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in filteredMessages)
         {
+            bool chatMessageHasToolCalls = false;
+
             // Determine if the current message is the last one
             msgIndex++;
-            if (msgIndex == allMessages.Count)
+            if (msgIndex == filteredMessages.Count)
                 isLastHistoryMessage = true;
 
             // Skip tool messages
             if (chatMessage.Role == ChatRole.Tool)
                 continue;
 
+            // Check for SetRichCard function call
+            FunctionCallContent? setRichCardCall = chatMessage.Contents?
+                .OfType<FunctionCallContent>()
+                .FirstOrDefault(fc => fc.Name == "SetRichCard");
+            if (setRichCardCall != null)
+            {
+                pendingRichCardCallId = setRichCardCall.CallId;
+                chatMessageHasToolCalls = true;
+            }
+
             // Check for SetQuickReplies function call
             FunctionCallContent? setQuickRepliesCall = chatMessage.Contents?
                 .OfType<FunctionCallContent>()
                 .FirstOrDefault(fc => fc.Name == "SetQuickReplies");
-
             if (setQuickRepliesCall != null)
             {
                 pendingQuickRepliesCallId = setQuickRepliesCall.CallId;
-                continue; // Skip empty tool call message
+                chatMessageHasToolCalls = true;
             }
+
+            // Skip message if it contains any tool calls
+            if (chatMessageHasToolCalls)
+                continue;
 
             // Process messages with text content
             string messageText = ExtractTextFromMessage(chatMessage);
             if (string.IsNullOrWhiteSpace(messageText))
                 continue;
+
+            // Attach rich card to assistant message following SetRichCard
+            RichCard? richCard = null;
+            if (pendingRichCardCallId != null
+                 && chatMessage.Role == ChatRole.Assistant
+                 && richCardsByCallId.TryGetValue(pendingRichCardCallId, out richCard))
+            {
+                pendingRichCardCallId = null; // Reset after attachment
+            }
 
             // Attach quick replies to assistant message following SetQuickReplies
             List<QuickReply>? quickReplies = null;
@@ -545,16 +597,19 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
                  && chatMessage.Role == ChatRole.Assistant
                  && quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
             {
-                pendingQuickRepliesCallId = null;
+                pendingQuickRepliesCallId = null; // Reset after attachment
             }
 
-            result.Add(MapToMorganaChatMessage(conversationId, agentName, agentCompleted, chatMessage, isLastHistoryMessage, quickReplies));
+            // Add message with both attachments (if present)
+            historyMessages.Add(
+                MapToMorganaChatMessage(conversationId, agentName, agentCompleted,
+                                        chatMessage, isLastHistoryMessage, quickReplies, richCard));
         }
 
         logger.LogInformation(
-            $"Processed {result.Count} messages (filtered from {allMessages.Count} raw messages) for {conversationId}");
+            $"Processed {historyMessages.Count} messages (filtered from {allMessages.Count} raw messages) for {conversationId}");
 
-        return result.ToArray();
+        return historyMessages.ToArray();
     }
 
     /// <summary>
@@ -592,6 +647,38 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
     }
 
     /// <summary>
+    /// Attempts to parse rich cards from SetRichCard function call arguments dictionary.
+    /// Returns null if parsing fails (graceful degradation).
+    /// </summary>
+    private RichCard? TryParseRichCardFromDictionary(
+        IDictionary<string, object?>? arguments,
+        JsonSerializerOptions jsonSerializerOptions)
+    {
+        if (arguments == null || !arguments.TryGetValue("richCard", out object? richCardsValue))
+            return null;
+
+        try
+        {
+            // The value might be a string (JSON) or already a JsonElement
+            string richCardString = richCardsValue switch
+            {
+                string str => str,
+                JsonElement jsonElement => jsonElement.GetString() ?? "[]",
+                _ => JsonSerializer.Serialize(richCardsValue, jsonSerializerOptions)
+            };
+
+            return JsonSerializer.Deserialize<RichCard>(
+                richCardString,
+                jsonSerializerOptions);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to parse rich card from function arguments");
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Extracts and concatenates all TextContent blocks from a ChatMessage.
     /// </summary>
     private string ExtractTextFromMessage(ChatMessage chatMessage)
@@ -603,10 +690,12 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
             .OfType<TextContent>()
             .Where(tc => !string.IsNullOrEmpty(tc.Text))
             .Select(tc => tc.Text!.Trim()));
+
+        //TODO: in future we may have more content types handled here
     }
 
     /// <summary>
-    /// Maps a Microsoft.Agents.AI.ChatMessage to MorganaChatMessage record.
+    /// Maps a Microsoft.Agents.AI.ChatMessage to MorganaChatMessage record
     /// </summary>
     private MorganaChatMessage MapToMorganaChatMessage(
         string conversationId,
@@ -614,7 +703,8 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
         bool agentCompleted,
         ChatMessage chatMessage,
         bool isLastHistoryMessage,
-        List<QuickReply>? quickReplies = null)
+        List<QuickReply>? quickReplies = null,
+        RichCard? richCard = null)
     {
         string messageText = ExtractTextFromMessage(chatMessage);
 
@@ -639,7 +729,8 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
             AgentName = displayAgentName,
             AgentCompleted = agentCompleted,
             QuickReplies = quickReplies,
-            IsLastHistoryMessage = isLastHistoryMessage
+            IsLastHistoryMessage = isLastHistoryMessage,
+            RichCard = richCard
         };
     }
 

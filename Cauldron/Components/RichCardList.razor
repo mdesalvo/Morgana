@@ -1,0 +1,34 @@
+@namespace Cauldron.Components
+
+@if (Component.Style == ListStyle.Bullet)
+{
+    <ul class="rich-card-list rich-card-list-bullet">
+        @foreach (var item in Component.Items)
+        {
+            <li>@item</li>
+        }
+    </ul>
+}
+else if (Component.Style == ListStyle.Numbered)
+{
+    <ol class="rich-card-list rich-card-list-numbered">
+        @foreach (var item in Component.Items)
+        {
+            <li>@item</li>
+        }
+    </ol>
+}
+else
+{
+    <div class="rich-card-list rich-card-list-plain">
+        @foreach (var item in Component.Items)
+        {
+            <div class="rich-card-list-item">@item</div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public required ListComponent Component { get; set; }
+}

@@ -41,7 +41,8 @@ public static class Records
         string? AgentName = null,
         bool AgentCompleted = false,
         List<QuickReply>? QuickReplies = null,
-        DateTime? OriginalTimestamp = null);
+        DateTime? OriginalTimestamp = null,
+        RichCard? RichCard = null);
 
     /// <summary>
     /// Request to create a new conversation and initialize the actor hierarchy.
@@ -191,6 +192,12 @@ public static class Records
         /// Optional flag indicating that this is the last message of a resumed conversation.
         /// </summary>
         public bool? IsLastHistoryMessage { get; init; }
+
+        /// <summary>
+        /// Optional rich card attached to this message.
+        /// Reconstructed from SetRichCard tool calls when loading conversation history.
+        /// </summary>
+        public RichCard? RichCard { get; init; }
     }
 
     /// <summary>
@@ -426,7 +433,8 @@ public static class Records
     public record AgentResponse(
         string Response,
         bool IsCompleted = true,
-        List<QuickReply>? QuickReplies = null);
+        List<QuickReply>? QuickReplies = null,
+        RichCard? RichCard = null);
 
     /// <summary>
     /// Response from RouterActor containing both the agent's response and a reference to the agent actor.
@@ -440,7 +448,8 @@ public static class Records
         string Response,
         bool IsCompleted,
         IActorRef AgentRef,
-        List<QuickReply>? QuickReplies = null);
+        List<QuickReply>? QuickReplies = null,
+        RichCard? RichCard = null);
 
     /// <summary>
     /// Represents a streaming chunk from an agent during real-time response generation.
@@ -541,6 +550,188 @@ public static class Records
     public record PresentationResponse(
         [property: JsonPropertyName("message")] string Message,
         [property: JsonPropertyName("quickReplies")] List<QuickReply> QuickReplies);
+
+    // ==========================================================================
+    // RICH CARD SYSTEM
+    // ==========================================================================
+    // Add this section to Morgana.Framework/Records.cs
+
+    /// <summary>
+    /// Rich card container for structured visual presentation of complex data.
+    /// Used to render information (invoices, profiles, reports) with visual hierarchy
+    /// instead of plain text walls.
+    /// </summary>
+    /// <param name="Title">Main title of the card</param>
+    /// <param name="Subtitle">Optional subtitle or secondary information</param>
+    /// <param name="Components">Array of visual components to render</param>
+    /// <remarks>
+    /// <para><strong>Usage:</strong></para>
+    /// <para>LLM generates rich cards via SetRichCard tool when presenting structured data.
+    /// Cards flow through actor pipeline (Agent → Router → Supervisor → Manager → SignalR → Cauldron).</para>
+    /// <para><strong>Constraints:</strong></para>
+    /// <list type="bullet">
+    /// <item>Maximum nesting depth: 3 levels (enforced by SetRichCard tool)</item>
+    /// <item>Maximum 50 components total (prevents abuse)</item>
+    /// <item>Components must be from known dictionary (unknown types fallback to text in Cauldron)</item>
+    /// </list>
+    /// </remarks>
+    public record RichCard(
+        [property: JsonPropertyName("title")] string Title,
+        [property: JsonPropertyName("subtitle")] string? Subtitle,
+        [property: JsonPropertyName("components")] List<CardComponent> Components
+    );
+
+    /// <summary>
+    /// Base class for all card components.
+    /// Uses JSON polymorphic serialization for type discrimination.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Component Dictionary:</strong></para>
+    /// <list type="bullet">
+    /// <item><term>text_block</term><description>Free-form narrative text</description></item>
+    /// <item><term>key_value</term><description>Label-value pairs for structured data</description></item>
+    /// <item><term>divider</term><description>Visual separator between sections</description></item>
+    /// <item><term>list</term><description>Bulleted, numbered, or plain item lists</description></item>
+    /// <item><term>section</term><description>Nestable grouping with title/subtitle</description></item>
+    /// <item><term>grid</term><description>2-4 column layout for side-by-side data</description></item>
+    /// <item><term>badge</term><description>Status indicators (success, warning, error, info, neutral)</description></item>
+    /// </list>
+    /// <para><strong>Extensibility:</strong></para>
+    /// <para>Implementers can add new component types by:</para>
+    /// <list type="number">
+    /// <item>Adding new record inheriting from CardComponent</item>
+    /// <item>Adding JsonDerivedType attribute to CardComponent</item>
+    /// <item>Creating corresponding Razor component in Cauldron</item>
+    /// </list>
+    /// </remarks>
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+    [JsonDerivedType(typeof(TextBlockComponent), "text_block")]
+    [JsonDerivedType(typeof(KeyValueComponent), "key_value")]
+    [JsonDerivedType(typeof(DividerComponent), "divider")]
+    [JsonDerivedType(typeof(ListComponent), "list")]
+    [JsonDerivedType(typeof(SectionComponent), "section")]
+    [JsonDerivedType(typeof(GridComponent), "grid")]
+    [JsonDerivedType(typeof(BadgeComponent), "badge")]
+    public abstract record CardComponent;
+
+    /// <summary>
+    /// Free-form text block component for narrative content within cards.
+    /// </summary>
+    /// <param name="Content">Text content (supports multiline)</param>
+    /// <param name="Style">Visual styling for the text</param>
+    public record TextBlockComponent(
+        [property: JsonPropertyName("content")] string Content,
+        [property: JsonPropertyName("style")] TextStyle Style = TextStyle.Normal
+    ) : CardComponent;
+
+    /// <summary>
+    /// Key-value pair component for structured label-value data.
+    /// </summary>
+    /// <param name="Key">Label/field name (e.g., "Cliente", "Totale")</param>
+    /// <param name="Value">Corresponding value (e.g., "Acme Corp", "€1.250,00")</param>
+    /// <param name="Emphasize">True to highlight this pair visually (e.g., bold, larger font)</param>
+    public record KeyValueComponent(
+        [property: JsonPropertyName("key")] string Key,
+        [property: JsonPropertyName("value")] string Value,
+        [property: JsonPropertyName("emphasize")] bool Emphasize = false
+    ) : CardComponent;
+
+    /// <summary>
+    /// Visual divider/separator component.
+    /// Renders as horizontal line to separate logical sections.
+    /// </summary>
+    public record DividerComponent() : CardComponent;
+
+    /// <summary>
+    /// List component for displaying multiple related items.
+    /// </summary>
+    /// <param name="Items">Array of text items to display</param>
+    /// <param name="Style">List presentation style (bullet, numbered, plain)</param>
+    public record ListComponent(
+        [property: JsonPropertyName("items")] List<string> Items,
+        [property: JsonPropertyName("style")] ListStyle Style = ListStyle.Bullet
+    ) : CardComponent;
+
+    /// <summary>
+    /// Section component for logical grouping with nesting support.
+    /// Enables hierarchical organization of card content (max depth: 3).
+    /// </summary>
+    /// <param name="Title">Section title/heading</param>
+    /// <param name="Subtitle">Optional section subtitle</param>
+    /// <param name="Components">Child components within this section (can include nested sections)</param>
+    public record SectionComponent(
+        [property: JsonPropertyName("title")] string Title,
+        [property: JsonPropertyName("subtitle")] string? Subtitle,
+        [property: JsonPropertyName("components")] List<CardComponent> Components
+    ) : CardComponent;
+
+    /// <summary>
+    /// Grid component for side-by-side data presentation.
+    /// </summary>
+    /// <param name="Columns">Number of columns (2-4 recommended)</param>
+    /// <param name="Items">Grid cells with key-value pairs</param>
+    public record GridComponent(
+        [property: JsonPropertyName("columns")] int Columns,
+        [property: JsonPropertyName("items")] List<GridItem> Items
+    ) : CardComponent;
+
+    /// <summary>
+    /// Individual grid cell containing a key-value pair.
+    /// </summary>
+    /// <param name="Key">Label for this grid cell</param>
+    /// <param name="Value">Value for this grid cell</param>
+    public record GridItem(
+        [property: JsonPropertyName("key")] string Key,
+        [property: JsonPropertyName("value")] string Value
+    );
+
+    /// <summary>
+    /// Badge component for status indicators and categorical labels.
+    /// </summary>
+    /// <param name="Text">Badge text (e.g., "Pagata", "In sospeso")</param>
+    /// <param name="Variant">Visual variant determining color/style</param>
+    public record BadgeComponent(
+        [property: JsonPropertyName("text")] string Text,
+        [property: JsonPropertyName("variant")] BadgeVariant Variant = BadgeVariant.Neutral
+    ) : CardComponent;
+
+    // Enums for component styling
+
+    /// <summary>
+    /// Text styling options for TextBlockComponent.
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<TextStyle>))]
+    public enum TextStyle
+    {
+        [JsonPropertyName("normal")] Normal,
+        [JsonPropertyName("bold")] Bold,
+        [JsonPropertyName("muted")] Muted,
+        [JsonPropertyName("small")] Small
+    }
+
+    /// <summary>
+    /// List presentation styles for ListComponent.
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<ListStyle>))]
+    public enum ListStyle
+    {
+        [JsonPropertyName("bullet")] Bullet,
+        [JsonPropertyName("numbered")] Numbered,
+        [JsonPropertyName("plain")] Plain
+    }
+
+    /// <summary>
+    /// Badge color variants for BadgeComponent.
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<BadgeVariant>))]
+    public enum BadgeVariant
+    {
+        [JsonPropertyName("success")] Success,
+        [JsonPropertyName("warning")] Warning,
+        [JsonPropertyName("error")] Error,
+        [JsonPropertyName("info")] Info,
+        [JsonPropertyName("neutral")] Neutral
+    }
 
     // ==========================================================================
     // PRESENTATION FLOW MESSAGES

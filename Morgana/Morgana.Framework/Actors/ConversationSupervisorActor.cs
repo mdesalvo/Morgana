@@ -177,7 +177,8 @@ public class ConversationSupervisorActor : MorganaActor
                     [], // No quick replies
                     null,
                     "Morgana",
-                    false);
+                    false,
+                    null); // No rich card
 
                 return;
             }
@@ -268,7 +269,8 @@ public class ConversationSupervisorActor : MorganaActor
                 quickReplies,
                 null,
                 "Morgana",
-                false);
+                false,
+                null); // No rich card
 
             actorLogger.Info("Presentation sent successfully");
         }
@@ -462,8 +464,9 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.Classification?.Metadata,
                 GetAgentDisplayName(ctx.Classification?.Intent),
                 false,
-                null,
-                ctx.OriginalMessage.Timestamp));
+                null, // No quick replies
+                ctx.OriginalMessage.Timestamp,
+                null)); // No rich card
 
             Become(Idle);
         });
@@ -512,7 +515,8 @@ public class ConversationSupervisorActor : MorganaActor
                     agentName,
                     response.IsCompleted,
                     response.QuickReplies,
-                    ctx.OriginalMessage.Timestamp));
+                    ctx.OriginalMessage.Timestamp,
+                    response.RichCard));
 
                 Become(Idle);
             }
@@ -531,8 +535,9 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.Classification?.Metadata,
                     GetAgentDisplayName(ctx.Classification?.Intent),
                     false,
-                    null,
-                    ctx.OriginalMessage.Timestamp));
+                    null, // No quick replies
+                    ctx.OriginalMessage.Timestamp,
+                    null)); // No rich card
 
                 Become(Idle);
             }
@@ -555,7 +560,8 @@ public class ConversationSupervisorActor : MorganaActor
                     "Morgana",
                     true,
                     response.QuickReplies,
-                    DateTime.UtcNow));
+                    DateTime.UtcNow,
+                    response.RichCard));
 
                 Become(Idle);
             }
@@ -569,8 +575,9 @@ public class ConversationSupervisorActor : MorganaActor
                     null,
                     "Morgana",
                     false,
-                    null,
-                    DateTime.UtcNow));
+                    null, // No quick replies
+                    DateTime.UtcNow,
+                    null)); // No rich card
 
                 Become(Idle);
             }
@@ -610,8 +617,9 @@ public class ConversationSupervisorActor : MorganaActor
                 null,
                 "Morgana",
                 false,
-                null,
-                DateTime.UtcNow));
+                null, // No quick replies
+                DateTime.UtcNow,
+                null)); // No rich card
 
             Become(Idle);
         });
@@ -650,7 +658,8 @@ public class ConversationSupervisorActor : MorganaActor
                     agentName,
                     response.IsCompleted,
                     response.QuickReplies,
-                    DateTime.UtcNow)); // Using UtcNow since we don't have original timestamp with Tell
+                    DateTime.UtcNow, // Using UtcNow since we don't have original timestamp with Tell
+                    response.RichCard));
 
                 Become(Idle);
             }
@@ -669,8 +678,9 @@ public class ConversationSupervisorActor : MorganaActor
                     null,
                     "Morgana",
                     false,
-                    null,
-                    DateTime.UtcNow));
+                    null, // No quick replies
+                    DateTime.UtcNow,
+                    null)); // No rich card
 
                 Become(Idle);
             }

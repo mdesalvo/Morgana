@@ -331,29 +331,45 @@ public class MorganaAgent : MorganaActor
             List<Records.QuickReply>? quickReplies = GetQuickRepliesFromContext();
             bool hasQuickReplies = quickReplies?.Count > 0;
 
-            // Drop immediately them from context to prevent serialization (they're ephemeral UI hints)
+            // Retrieve rich card from context (if LLM set one via SetRichCard tool)
+            Records.RichCard? richCard = GetRichCardFromContext();
+            bool hasRichCard = richCard != null;
+
+            // Drop quick replies from context to prevent serialization (they're ephemeral UI hints)
             if (hasQuickReplies)
             {
                 aiContextProvider.DropVariable("quick_replies");
                 agentLogger.LogInformation($"Dropped {quickReplies!.Count} quick replies from context (ephemeral data)");
             }
 
+            // Drop rich card from context to prevent serialization (it is ephemeral UI hint)
+            if (hasRichCard)
+            {
+                aiContextProvider.DropVariable("rich_card");
+                agentLogger.LogInformation($"Dropped rich card '{richCard!.Title}' from context (ephemeral data)");
+            }
+
             // Request is completed when no further user engagement has been requested.
             // If agent offers QuickReplies, it MUST remain active to handle clicks
-            // Otherwise, clicks would go through Classifier and risk "other" intent fallback
-            bool isCompleted = !hasInteractiveToken && !endsWithQuestion && !hasQuickReplies;
+            // (otherwise, clicks would go through Classifier and risk "other" intent fallback).
+            // If agent offers RichCard, it also MUST remain active to handle feedback.
+            bool isCompleted = !hasInteractiveToken && !endsWithQuestion && !hasQuickReplies && !hasRichCard;
 
             agentLogger.LogInformation(
-                $"Agent response analysis: HasINT={hasInteractiveToken}, EndsWithQuestion={endsWithQuestion}, HasQR={hasQuickReplies}, IsCompleted={isCompleted}");
+                $"Agent response analysis: HasINT={hasInteractiveToken}," +
+                $"EndsWithQuestion={endsWithQuestion}," +
+                $"HasQuickReplies={hasQuickReplies}," +
+                $"HasRichCard={hasRichCard}," +
+                $"IsCompleted={isCompleted}");
 
             // Persist updated agent's conversation state
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
             agentLogger.LogInformation($"Saved conversation state for {AgentIdentifier}");
 
             #if DEBUG
-                senderRef.Tell(new Records.AgentResponse(llmResponseText, isCompleted, quickReplies));
+                senderRef.Tell(new Records.AgentResponse(llmResponseText, isCompleted, quickReplies, richCard));
             #else
-                senderRef.Tell(new Records.AgentResponse(llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim(), isCompleted, quickReplies));
+                senderRef.Tell(new Records.AgentResponse(llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim(), isCompleted, quickReplies, richCard));
             #endif
         }
         catch (Exception ex)
@@ -449,6 +465,60 @@ public class MorganaAgent : MorganaActor
         // Or we may find them in JsonElement format
         if (ctxQuickReplies is JsonElement ctxQuickRepliesJsonElement && ctxQuickRepliesJsonElement.ValueKind == JsonValueKind.String)
             return GetQuickReplies(ctxQuickRepliesJsonElement.GetString()!);
+
+        return null;
+    }
+
+    /// <summary>
+    /// Retrieves LLM-generated rich card from agent context after tool execution.
+    /// Returns null if no rich card was set via SetRichCard tool.
+    /// </summary>
+    /// <returns>Deserialized RichCard object or null if not present/invalid</returns>
+    /// <remarks>
+    /// <para>This method is called after agent execution completes to extract any rich card
+    /// that the LLM may have generated via the SetRichCard tool during its response generation.</para>
+    /// <para>The rich card JSON is stored in the context under the reserved key "rich_card"
+    /// and is dropped immediately after extraction (ephemeral data, not persisted).</para>
+    /// </remarks>
+    protected Records.RichCard? GetRichCardFromContext()
+    {
+        #region Utilities
+        Records.RichCard? GetRichCard(string richCardJSON)
+        {
+            try
+            {
+                // Deserialize JSON string to RichCard
+                Records.RichCard? richCard = JsonSerializer.Deserialize<Records.RichCard>(
+                    richCardJSON, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (richCard != null)
+                {
+                    agentLogger.LogInformation($"Retrieved rich card from context");
+
+                    return richCard;
+                }
+            }
+            catch (JsonException ex)
+            {
+                agentLogger.LogError(ex, "Failed to deserialize rich card from context");
+
+                // Clear corrupted data (prevent serialized context to be damaged)
+                aiContextProvider.DropVariable("rich_card");
+            }
+
+            return null;
+        }
+        #endregion
+
+        // Retrieve rich_card from context
+        object? ctxRichCard = aiContextProvider.GetVariable("rich_card");
+
+        // We may find it in string format
+        if (ctxRichCard is string ctxRichCardJson && !string.IsNullOrEmpty(ctxRichCardJson))
+            return GetRichCard(ctxRichCardJson);
+
+        // Or we may find it in JsonElement format
+        if (ctxRichCard is JsonElement ctxRichCardJsonElement && ctxRichCardJsonElement.ValueKind == JsonValueKind.String)
+            return GetRichCard(ctxRichCardJsonElement.GetString()!);
 
         return null;
     }

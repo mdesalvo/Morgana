@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR;
+using Morgana.Framework;
 using Morgana.Framework.Interfaces;
 using Morgana.SignalR.Hubs;
 using Morgana.SignalR.Messages;
@@ -69,40 +70,8 @@ public class SignalRBridgeService : ISignalRBridgeService
     /// <param name="agentName">Optional name of the agent that generated the response</param>
     /// <param name="agentCompleted">Flag indicating if the agent has completed its task</param>
     /// <param name="originalTimestamp">Timestamp of the message when create at UI level</param>
+    /// <param name="richCard">Optional rich card for presentation of structured data</param>
     /// <returns>Task representing the async send operation</returns>
-    /// <remarks>
-    /// <para><strong>Message Structure:</strong></para>
-    /// <para>Creates a StructuredMessage and sends it to the SignalR group with this JSON format:</para>
-    /// <code>
-    /// {
-    ///   "conversationId": "conv-123",
-    ///   "text": "Message content here",
-    ///   "timestamp": "2024-01-05T10:30:00Z",
-    ///   "messageType": "assistant",
-    ///   "quickReplies": [
-    ///     { "id": "billing", "label": "📄 View Invoices", "value": "Show my invoices" }
-    ///   ],
-    ///   "errorReason": null,
-    ///   "agentName": "Morgana (Billing)",
-    ///   "agentCompleted": true
-    /// }
-    /// </code>
-    /// <para><strong>Client-side Handler:</strong></para>
-    /// <para>Clients listen for the "ReceiveMessage" event:</para>
-    /// <code>
-    /// connection.on("ReceiveMessage", (message) => {
-    ///   console.log(`${message.agentName}: ${message.text}`);
-    ///   if (message.agentCompleted) {
-    ///     // Agent finished, return conversation to idle state
-    ///   }
-    ///   if (message.quickReplies) {
-    ///     // Render quick reply buttons
-    ///   }
-    /// });
-    /// </code>
-    /// <para><strong>Logging:</strong></para>
-    /// <para>Logs message type, conversation ID, agent name, and completion status for diagnostics.</para>
-    /// </remarks>
     public async Task SendStructuredMessageAsync(
         string conversationId,
         string text,
@@ -111,9 +80,13 @@ public class SignalRBridgeService : ISignalRBridgeService
         string? errorReason = null,
         string? agentName = null,
         bool agentCompleted = false,
-        DateTime? originalTimestamp = null)
+        DateTime? originalTimestamp = null,
+        RichCard? richCard = null)
     {
-        logger.LogInformation($"Sending {messageType} message to conversation {conversationId} via SignalR (agent: {agentName ?? "Morgana"}, completed: {agentCompleted})");
+        logger.LogInformation(
+            $"Sending structured message to conversation {conversationId}: " +
+            $"type={messageType}, agent={agentName ?? "Morgana"}, completed={agentCompleted}, " +
+            $"#quickReplies={quickReplies?.Count ?? 0}, hasRichCard={richCard != null}");
 
         // Create strongly-typed DTO with contract mapping
         SignalRMessage message = new SignalRMessage
@@ -125,7 +98,8 @@ public class SignalRBridgeService : ISignalRBridgeService
             QuickReplies = quickReplies,
             ErrorReason = errorReason,
             AgentName = agentName ?? "Morgana",
-            AgentCompleted = agentCompleted
+            AgentCompleted = agentCompleted,
+            RichCard = richCard
         };
 
         // Send strongly-typed DTO (SignalR serializes to JSON automatically)

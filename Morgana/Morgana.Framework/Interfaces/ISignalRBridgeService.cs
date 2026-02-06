@@ -55,6 +55,7 @@ public interface ISignalRBridgeService
     /// <param name="agentName">Optional name of the agent that generated the response (e.g., "Morgana", "Morgana (Billing)")</param>
     /// <param name="agentCompleted">Flag indicating if the agent has completed its task (affects UI state, conversation flow)</param>
     /// <param name="originalTimestamp">Timestamp of the message when created in UI</param>
+    /// <param name="richCard">Optional rich card for structured visual presentation of complex data</param>
     /// <returns>Task representing the async send operation</returns>
     /// <remarks>
     /// <para><strong>Message Types:</strong></para>
@@ -107,7 +108,8 @@ public interface ISignalRBridgeService
         string? errorReason = null,
         string? agentName = null,
         bool agentCompleted = false,
-        DateTime? originalTimestamp = null);
+        DateTime? originalTimestamp = null,
+        Records.RichCard? richCard = null);
 
     /// <summary>
     /// Sends a streaming chunk to a conversation group via SignalR for progressive response rendering.

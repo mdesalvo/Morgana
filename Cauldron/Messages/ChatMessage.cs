@@ -51,6 +51,13 @@ public class ChatMessage
     public List<QuickReply>? QuickReplies { get; set; }
 
     /// <summary>
+    /// Optional rich card for structured visual presentation of complex data.
+    /// When present, renders structured components instead of plain text formatting.
+    /// Rendered between message text and quick replies.
+    /// </summary>
+    public RichCard? RichCard { get; set; }
+
+    /// <summary>
     /// Optional error reason if Type = Error.
     /// Contains technical error details for debugging.
     /// </summary>
