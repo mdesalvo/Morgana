@@ -12,7 +12,7 @@
 
     @* Card body with components *@
     <div class="rich-card-body">
-        @foreach (var component in Card.Components)
+        @foreach (CardComponent component in Card.Components)
         {
             <RichCardComponent Component="@component" Depth="1" />
         }
