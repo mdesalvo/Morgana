@@ -301,7 +301,7 @@ public class MorganaAgent : MorganaActor
             }
             else
             {
-                aiAgentSession = await aiAgent.GetNewSessionAsync();
+                aiAgentSession = await aiAgent.CreateSessionAsync();
                 agentLogger.LogInformation($"Created new conversation session for {AgentIdentifier}");
             }
 
@@ -347,7 +347,7 @@ public class MorganaAgent : MorganaActor
                 $"Agent response analysis: HasINT={hasInteractiveToken}, EndsWithQuestion={endsWithQuestion}, HasQR={hasQuickReplies}, IsCompleted={isCompleted}");
 
             // Persist updated agent's conversation state
-            await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgentSession, isCompleted);
+            await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
             agentLogger.LogInformation($"Saved conversation state for {AgentIdentifier}");
 
             #if DEBUG
