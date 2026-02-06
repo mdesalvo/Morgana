@@ -322,7 +322,11 @@ public class MorganaTool
         {
             // Validate JSON by attempting to deserialize
             Records.RichCard? richCard = JsonSerializer.Deserialize<Records.RichCard>(
-                richCardJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                richCardJson, new JsonSerializerOptions
+                {
+                    AllowOutOfOrderMetadataProperties = true,
+                    PropertyNameCaseInsensitive = true
+                }
             );
             if (richCard == null)
             {
