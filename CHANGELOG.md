@@ -5,6 +5,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.16.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Rich Card System for Structured Data Visualization
+This release introduces **Rich Cards**, a compositional visual presentation system that complements Quick Replies by transforming unstructured tool outputs into **scannable, elegantly organized visual cards**. LLMs can now construct sophisticated data presentations using **7 semantic building blocks** (text_block, key_value, divider, list, section, grid, badge) instead of overwhelming users with walls of text.
+
+### ✨ Added
+**SetRichCard System Tool**
+- New LLM-callable system tool `SetRichCard` for creating structured visual cards from tool outputs
+- **Compositional design**: 7 basic component types combine like LEGO blocks to create complex layouts
+- **Component dictionary**: text_block (narrative), key_value (labeled data), divider (separation), list (enumeration), section (nestable grouping), grid (multi-column), badge (status indicators)
+- Supports up to **3 levels of nesting** for hierarchical information organization
+- Maximum **50 components** per card with comprehensive validation
+
+**Rich Card Architecture**
+- **Backend**: Complete type hierarchy with `JsonPolymorphic` serialization for 7 component types
+- **Data flow**: Agent → `GetRichCardFromContext()` → ephemeral extraction → propagation through actor pipeline → SignalR → Cauldron
+- **Frontend**: 8 Razor components (RichCard.razor dispatcher + 7 type-specific renderers)
+- **Morgana theme**: Purple/indigo gradients, glowing effects, depth-based visual hierarchy, mobile-responsive layouts
+
+**Conversation Persistence for Rich Cards**
+- Rich cards automatically saved and restored during conversation resume
+- Follows exact pattern of Quick Replies: extracted from `SetRichCard` function calls, attached to subsequent assistant messages
+
+### 🔄 Changed
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+- **Tool output standardization** - Rich Cards establish a pattern for tool developers: return structured JSON, let LLM handle presentation through SetRichCard, separating data retrieval from visualization concerns
+- **Advanced visualizations** - Foundation for future component types (charts, timelines, progress indicators, interactive forms) while maintaining compositional architecture
+- **Cross-agent consistency** - All agents now present complex data using same visual language, creating cohesive UX across domain boundaries (billing, contracts, support tickets, analytics)
+
+
 ## [0.15.0] - 2026-02-06
 ### 🎯 Major Feature: Intelligent Context Window Management
 This release introduces **automatic conversation history management** through **LLM-based summarization**, dramatically reducing token costs (**60%+ savings**) for long conversations while maintaining **complete transparency** for users and **seamless agent handoffs** through incremental summary generation.
