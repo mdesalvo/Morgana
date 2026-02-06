@@ -978,7 +978,7 @@
 
                 chatMessages.Add(currentStreamingMessage);
 
-                // Start typewriter timer (fires every configurable N(=25) milliseconds by consuming configurable K(=1) characters)
+                // Start typewriter timer (fires every configurable N milliseconds by consuming configurable K characters)
                 int.TryParse(Configuration["Morgana:StreamingResponse:TypewriterTickMilliseconds"], out int typewriterTickMilliseconds);
                 if (typewriterTickMilliseconds <= 0)
                     typewriterTickMilliseconds = 25;
