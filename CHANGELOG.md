@@ -38,7 +38,7 @@ This release introduces **automatic conversation history management** through **
 
 ### 🔄 Changed
 - Converted residual Akka.NET `.Ask` flows into `.Tell` pattern, eliminating temporary actors and improving guard+classifier performances
-- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260205.1 (**BREAKING CHANGES**: `AIAgent.GetNewSessionAsync` -> `AIAgent.CreateSessionAsync`. `AgentSession.Serialize` -> `AIAgent.SerializeSession`)
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260205.1 (**BREAKING CHANGES**: `AIAgent.GetNewSessionAsync` -> `AIAgent.CreateSessionAsync`, `AgentSession.Serialize` -> `AIAgent.SerializeSession`)
 - Updated `ModelContextProtocol.Core` dependency to 0.8.0-preview.1
 
 ### 🐛 Fixed
