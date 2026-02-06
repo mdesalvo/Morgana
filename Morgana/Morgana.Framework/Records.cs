@@ -694,6 +694,7 @@ public static class Records
     /// <summary>
     /// Text styling options for TextBlockComponent.
     /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<TextStyle>))]
     public enum TextStyle
     {
         [JsonPropertyName("normal")] Normal,
@@ -705,6 +706,7 @@ public static class Records
     /// <summary>
     /// List presentation styles for ListComponent.
     /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<ListStyle>))]
     public enum ListStyle
     {
         [JsonPropertyName("bullet")] Bullet,
@@ -715,6 +717,7 @@ public static class Records
     /// <summary>
     /// Badge color variants for BadgeComponent.
     /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<BadgeVariant>))]
     public enum BadgeVariant
     {
         [JsonPropertyName("success")] Success,

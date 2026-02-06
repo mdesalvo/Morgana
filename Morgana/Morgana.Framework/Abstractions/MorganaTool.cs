@@ -326,7 +326,7 @@ public class MorganaTool
                 richCardJson, new JsonSerializerOptions
                 {
                     AllowOutOfOrderMetadataProperties = true,
-                    Converters = { new JsonStringEnumConverter() },
+                    Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
                     PropertyNameCaseInsensitive = true
                 }
             );

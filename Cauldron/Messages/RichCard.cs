@@ -32,6 +32,8 @@ public abstract class CardComponent
 public class TextBlockComponent : CardComponent
 {
     public required string Content { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter<TextStyle>))]
     public TextStyle Style { get; set; } = TextStyle.Normal;
 }
 
@@ -49,6 +51,8 @@ public class DividerComponent : CardComponent
 public class ListComponent : CardComponent
 {
     public required List<string> Items { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter<ListStyle>))]
     public ListStyle Style { get; set; } = ListStyle.Bullet;
 }
 
@@ -74,10 +78,13 @@ public class GridItem
 public class BadgeComponent : CardComponent
 {
     public required string Text { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter<BadgeVariant>))]
     public BadgeVariant Variant { get; set; } = BadgeVariant.Neutral;
 }
 
 // Enums
+
 public enum TextStyle
 {
     Normal,
