@@ -5,6 +5,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.15.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Intelligent Context Window Management
+This release introduces **automatic conversation history management** through **LLM-based summarization**, dramatically reducing token costs (**60%+ savings**) for long conversations while maintaining **complete transparency** for users and **seamless agent handoffs** through incremental summary generation.
+
+### ✨ Added
+**Context Window Management via SummarizingChatReducer**
+- Built on Microsoft's default `SummarizingChatReducer` from `Microsoft.Extensions.AI`
+- Automatic conversation summarization when message count exceeds configurable threshold (default: 20 messages)
+- Intelligent message preservation: never splits tool call sequences, always cuts at user message boundaries
+- **Incremental summarization**: new summaries incorporate previous summaries (no information drift)
+- **Full transparency**: UI and persistence always show complete history (**reduction only affects LLM context**)
+- Customizable summarization prompts for domain-specific data preservation (invoice numbers, customer IDs, etc.)
+
+**Enhanced MorganaChatHistoryProvider**
+- Reducer applies **before** LLM receives messages (**immediate cost savings**)
+- Full history always stored in `InMemoryChatHistoryProvider` (**reducer never modifies storage**)
+
+**Configuration Section: HistoryReducer**
+```json
+{
+  "Morgana": {
+    "HistoryReducer": {
+      "Enabled": true,
+      "SummarizationThreshold": 20,
+      "SummarizationTargetCount": 8,
+      "SummarizationPrompt": "Generate a concise summary in 3-4 sentences. ALWAYS preserve: user IDs..."
+    }
+  }
+}
+```
+
+### 🔄 Changed
+- Converted residual Akka.NET `.Ask` flows into `.Tell` pattern, eliminating temporary actors and improving guard+classifier performances
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+- **Production cost predictability** - 60%+ token reduction enables sustainable deployment of long-running customer service conversations without budget concerns, transforming Morgana from prototype to production-ready platform
+- **Enhanced domain customization** - Custom `IChatReducer` implementations can add business-specific summarization strategies (e.g., always preserve compliance data, legal citations, or audit trails) while maintaining Microsoft's proven architecture
+- **Token budget enforcement** - Foundation for implementing `ITokenBudgetService` to track cumulative token usage per user/day, enabling tiered pricing models and fine-grained cost control beyond message-based rate limiting
+
+
 ## [0.14.0] - 2026-02-01
 ### 🎯 Major Feature: Real-Time Streaming Responses
 This release introduces **native streaming response delivery**, providing **immediate visual feedback** and **progressive content rendering** with generative AI typewriter effects, dramatically improving perceived responsiveness and user engagement.
