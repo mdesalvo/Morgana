@@ -45,6 +45,7 @@ public interface IConversationPersistenceService
     /// Serializes the AgentSession including message history, context variables, and metadata.
     /// </summary>
     /// <param name="agentIdentifier">Unique identifier for the agent's conversation</param>
+    /// <param name="agent">AIAgent instance corresponding to the running agent</param>
     /// <param name="agentSession">AgentSession instance containing the complete conversation state</param>
     /// <param name="isCompleted">Flag indicating if the agent is signalling completion of the conversation</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (optional, uses AgentAbstractionsJsonUtilities.DefaultOptions if null)</param>
@@ -59,6 +60,7 @@ public interface IConversationPersistenceService
     /// </remarks>
     Task SaveAgentConversationAsync(
         string agentIdentifier,
+        AIAgent agent,
         AgentSession agentSession,
         bool isCompleted,
         JsonSerializerOptions? jsonSerializerOptions = null);
