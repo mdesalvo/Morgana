@@ -100,6 +100,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     /// <inheritdoc/>
     public async Task SaveAgentConversationAsync(
         string agentIdentifier,
+        AIAgent agent,
         AgentSession agentSession,
         bool isCompleted,
         JsonSerializerOptions? jsonSerializerOptions = null)
@@ -117,7 +118,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             string conversationId = agentIdentifierParts[1];
 
             // Serialize AgentSession to JSON
-            JsonElement agentSessionJsonElement = agentSession.Serialize(jsonSerializerOptions);
+            JsonElement agentSessionJsonElement = agent.SerializeSession(agentSession, jsonSerializerOptions);
             string agentSessionJsonString = JsonSerializer.Serialize(agentSessionJsonElement, jsonSerializerOptions);
 
             // Encrypt JSON content

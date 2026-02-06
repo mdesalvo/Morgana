@@ -220,7 +220,7 @@ public class Anthropic : MorganaLLM
         AnthropicClient anthropicClient = new AnthropicClient(
             new ClientOptions
             {
-                APIKey = this.configuration["Morgana:LLM:Anthropic:ApiKey"]!
+                ApiKey = this.configuration["Morgana:LLM:Anthropic:ApiKey"]!
             });
         string anthropicModel = this.configuration["Morgana:LLM:Anthropic:Model"]!;
 
