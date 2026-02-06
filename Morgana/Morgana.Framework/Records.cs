@@ -192,6 +192,12 @@ public static class Records
         /// Optional flag indicating that this is the last message of a resumed conversation.
         /// </summary>
         public bool? IsLastHistoryMessage { get; init; }
+
+        /// <summary>
+        /// Optional rich card attached to this message.
+        /// Reconstructed from SetRichCard tool calls when loading conversation history.
+        /// </summary>
+        public RichCard? RichCard { get; init; }
     }
 
     /// <summary>

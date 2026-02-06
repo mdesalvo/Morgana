@@ -274,7 +274,7 @@ public class MorganaTool
     /// LLM calls this tool when presenting invoices, profiles, reports, or any structured information
     /// that benefits from visual hierarchy instead of plain text.
     /// </summary>
-    /// <param name="richCardJson">
+    /// <param name="richCard">
     /// JSON string containing the rich card structure with title, subtitle, and components array.
     /// </param>
     /// <returns>Confirmation message for the LLM indicating the card was set</returns>
@@ -317,27 +317,27 @@ public class MorganaTool
     /// <item>Keep cards focused: 10-20 components recommended</item>
     /// </list>
     /// </remarks>
-    public Task<object> SetRichCard(string richCardJson)
+    public Task<object> SetRichCard(string richCard)
     {
         try
         {
             // Validate JSON by attempting to deserialize
-            Records.RichCard? richCard = JsonSerializer.Deserialize<Records.RichCard>(
-                richCardJson, new JsonSerializerOptions
+            Records.RichCard? parsedRichCard = JsonSerializer.Deserialize<Records.RichCard>(
+                richCard, new JsonSerializerOptions
                 {
                     AllowOutOfOrderMetadataProperties = true,
                     Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
                     PropertyNameCaseInsensitive = true
                 }
             );
-            if (richCard == null)
+            if (parsedRichCard == null)
             {
                 toolLogger.LogWarning("SetRichCard called with invalid JSON structure");
                 return Task.FromResult<object>("Error: Rich card JSON structure is invalid.");
             }
 
             // Validate depth constraint (max 3 levels)
-            int depth = CalculateMaxDepth(richCard.Components, 1);
+            int depth = CalculateMaxDepth(parsedRichCard.Components, 1);
             if (depth > 3)
             {
                 toolLogger.LogWarning($"SetRichCard called with excessive nesting depth: {depth} (max 3)");
@@ -347,7 +347,7 @@ public class MorganaTool
             }
 
             // Validate component count (max 50 to prevent abuse)
-            int totalComponents = CountComponents(richCard.Components);
+            int totalComponents = CountComponents(parsedRichCard.Components);
             if (totalComponents > 50)
             {
                 toolLogger.LogWarning($"SetRichCard called with too many components: {totalComponents} (max 50)");
@@ -358,15 +358,15 @@ public class MorganaTool
 
             // Store the rich card JSON under a reserved context variable
             MorganaAIContextProvider aiContextProvider = getAIContextProvider();
-            aiContextProvider.SetVariable("rich_card", richCardJson);
+            aiContextProvider.SetVariable("rich_card", richCard);
 
             toolLogger.LogInformation(
-                $"LLM set rich card '{richCard.Title}' with {totalComponents} components " +
+                $"LLM set rich card '{parsedRichCard.Title}' with {totalComponents} components " +
                 $"(depth: {depth}) via SetRichCard tool");
 
             // Return confirmation to LLM
             return Task.FromResult<object>(
-                $"Rich card set successfully. The user will see a structured visual card titled '{richCard.Title}'. " +
+                $"Rich card set successfully. The user will see a structured visual card titled '{parsedRichCard.Title}'. " +
                 $"You can now provide additional context or explanation in text if needed.");
         }
         catch (JsonException ex)

@@ -351,14 +351,15 @@ public class MorganaAgent : MorganaActor
 
             // Request is completed when no further user engagement has been requested.
             // If agent offers QuickReplies, it MUST remain active to handle clicks
-            // Otherwise, clicks would go through Classifier and risk "other" intent fallback
-            bool isCompleted = !hasInteractiveToken && !endsWithQuestion && !hasQuickReplies;
+            // (otherwise, clicks would go through Classifier and risk "other" intent fallback).
+            // If agent offers RichCard, it also MUST remain active to handle feedback.
+            bool isCompleted = !hasInteractiveToken && !endsWithQuestion && !hasQuickReplies && !hasRichCard;
 
             agentLogger.LogInformation(
                 $"Agent response analysis: HasINT={hasInteractiveToken}," +
                 $"EndsWithQuestion={endsWithQuestion}," +
-                $"HasQR={hasQuickReplies}," +
-                $"HasRC={hasRichCard}," +
+                $"HasQuickReplies={hasQuickReplies}," +
+                $"HasRichCard={hasRichCard}," +
                 $"IsCompleted={isCompleted}");
 
             // Persist updated agent's conversation state
