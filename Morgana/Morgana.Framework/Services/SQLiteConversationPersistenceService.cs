@@ -542,6 +542,8 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
 
         foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in filteredMessages)
         {
+            bool chatMessageHasToolCalls = false;
+
             // Determine if the current message is the last one
             msgIndex++;
             if (msgIndex == filteredMessages.Count)
@@ -558,7 +560,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
             if (setRichCardCall != null)
             {
                 pendingRichCardCallId = setRichCardCall.CallId;
-                continue; // Skip empty tool call message
+                chatMessageHasToolCalls = true;
             }
 
             // Check for SetQuickReplies function call
@@ -568,8 +570,12 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
             if (setQuickRepliesCall != null)
             {
                 pendingQuickRepliesCallId = setQuickRepliesCall.CallId;
-                continue; // Skip empty tool call message
+                chatMessageHasToolCalls = true;
             }
+
+            // Skip message if it contains any tool calls
+            if (chatMessageHasToolCalls)
+                continue;
 
             // Process messages with text content
             string messageText = ExtractTextFromMessage(chatMessage);
@@ -582,7 +588,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
                  && chatMessage.Role == ChatRole.Assistant
                  && richCardsByCallId.TryGetValue(pendingRichCardCallId, out richCard))
             {
-                pendingRichCardCallId = null;
+                pendingRichCardCallId = null; // Reset after attachment
             }
 
             // Attach quick replies to assistant message following SetQuickReplies
@@ -591,12 +597,13 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
                  && chatMessage.Role == ChatRole.Assistant
                  && quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
             {
-                pendingQuickRepliesCallId = null;
+                pendingQuickRepliesCallId = null; // Reset after attachment
             }
 
+            // Add message with both attachments (if present)
             historyMessages.Add(
-                    MapToMorganaChatMessage(conversationId, agentName, agentCompleted,
-                                            chatMessage, isLastHistoryMessage, quickReplies, richCard));
+                MapToMorganaChatMessage(conversationId, agentName, agentCompleted,
+                                        chatMessage, isLastHistoryMessage, quickReplies, richCard));
         }
 
         logger.LogInformation(
