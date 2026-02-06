@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Morgana.Framework.Providers;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Morgana.Framework.Abstractions;
 
@@ -325,6 +326,7 @@ public class MorganaTool
                 richCardJson, new JsonSerializerOptions
                 {
                     AllowOutOfOrderMetadataProperties = true,
+                    Converters = { new JsonStringEnumConverter() },
                     PropertyNameCaseInsensitive = true
                 }
             );
