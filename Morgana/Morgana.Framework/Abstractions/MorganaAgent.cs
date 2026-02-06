@@ -135,7 +135,7 @@ public class MorganaAgent : MorganaActor
     /// Deserializes a previously serialized AgentSession, restoring conversation history and context state.
     /// Updates the existing AI context provider instance to preserve tool closures.
     /// </summary>
-    /// <param name="serializedSession">JSON element containing the serialized session state from a previous Serialize() call</param>
+    /// <param name="serializedState">JSON element containing the serialized session state from a previous Serialize() call</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (defaults to AgentAbstractionsJsonUtilities.DefaultOptions)</param>
     /// <returns>Fully reconstituted AgentSession with restored message history and context variables</returns>
     /// <remarks>
@@ -158,14 +158,14 @@ public class MorganaAgent : MorganaActor
     /// while the agent reads from the new one, causing quick_replies and other ephemeral data to be lost.</para>
     /// </remarks>
     public virtual async Task<AgentSession> DeserializeSessionAsync(
-        JsonElement serializedSession,
+        JsonElement serializedState,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
         // Extract AIContextProviderState
         JsonElement aiContextProviderState = default;
-        if (serializedSession.TryGetProperty("aiContextProviderState", out JsonElement stateElement))
+        if (serializedState.TryGetProperty("aiContextProviderState", out JsonElement stateElement))
             aiContextProviderState = stateElement;
 
         // Use it to restore internal state of MorganaAIContextProvider
@@ -179,7 +179,7 @@ public class MorganaAgent : MorganaActor
         aiContextProvider.PropagateSharedVariables();
 
         // Delegate to underlying AIAgent to complete session deserialization
-        aiAgentSession = await aiAgent.DeserializeSessionAsync(serializedSession, jsonSerializerOptions);
+        aiAgentSession = await aiAgent.DeserializeSessionAsync(serializedState, jsonSerializerOptions);
 
         agentLogger.LogInformation($"Deserialized AgentSession for conversation {conversationId}");
 
