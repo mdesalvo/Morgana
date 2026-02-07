@@ -595,6 +595,7 @@ public static class Records
     /// <item><term>section</term><description>Nestable grouping with title/subtitle</description></item>
     /// <item><term>grid</term><description>2-4 column layout for side-by-side data</description></item>
     /// <item><term>badge</term><description>Status indicators (success, warning, error, info, neutral)</description></item>
+    /// <item><term>image</term><description>Multimedia content of type image</description></item>
     /// </list>
     /// <para><strong>Extensibility:</strong></para>
     /// <para>Implementers can add new component types by:</para>
@@ -612,6 +613,7 @@ public static class Records
     [JsonDerivedType(typeof(SectionComponent), "section")]
     [JsonDerivedType(typeof(GridComponent), "grid")]
     [JsonDerivedType(typeof(BadgeComponent), "badge")]
+    [JsonDerivedType(typeof(ImageComponent), "image")]
     public abstract record CardComponent;
 
     /// <summary>
@@ -695,6 +697,21 @@ public static class Records
         [property: JsonPropertyName("variant")] BadgeVariant Variant = BadgeVariant.Neutral
     ) : CardComponent;
 
+    /// <summary>
+    /// Image component for displaying visual content from URLs.
+    /// Supports captions, alt text, and size variants.
+    /// </summary>
+    /// <param name="Src">Image URL (must be publicly accessible, HTTPS recommended)</param>
+    /// <param name="Alt">Alternative text for accessibility (optional but recommended)</param>
+    /// <param name="Caption">Optional caption displayed below the image</param>
+    /// <param name="Size">Display size variant (small, medium, large, or full)</param>
+    public record ImageComponent(
+        [property: JsonPropertyName("src")] string Src,
+        [property: JsonPropertyName("alt")] string? Alt = null,
+        [property: JsonPropertyName("caption")] string? Caption = null,
+        [property: JsonPropertyName("size")] ImageSize Size = ImageSize.Medium
+    ) : CardComponent;
+
     // Enums for component styling
 
     /// <summary>
@@ -731,6 +748,29 @@ public static class Records
         [JsonPropertyName("error")] Error,
         [JsonPropertyName("info")] Info,
         [JsonPropertyName("neutral")] Neutral
+    }
+
+    /// <summary>
+    /// Size variants for image components.
+    /// Controls maximum width of displayed images with responsive behavior.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Size Guidelines:</strong></para>
+    /// <list type="bullet">
+    /// <item><term>Small</term><description>200px max-width - for thumbnails, icons, small avatars</description></item>
+    /// <item><term>Medium</term><description>400px max-width - default, good for most images</description></item>
+    /// <item><term>Large</term><description>600px max-width - for detailed images, diagrams</description></item>
+    /// <item><term>Full</term><description>100% container width - for banners, wide images</description></item>
+    /// </list>
+    /// <para>On mobile devices (&lt;768px), Medium and Large automatically scale to 100% width.</para>
+    /// </remarks>
+    [JsonConverter(typeof(JsonStringEnumConverter<ImageSize>))]
+    public enum ImageSize
+    {
+        [JsonPropertyName("small")] Small,
+        [JsonPropertyName("medium")] Medium,
+        [JsonPropertyName("large")] Large,
+        [JsonPropertyName("full")] Full
     }
 
     // ==========================================================================

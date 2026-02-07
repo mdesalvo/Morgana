@@ -28,6 +28,10 @@
         <RichCardBadge Component="@badge" />
         break;
 
+    case ImageComponent image:
+        <RichCardImage Component="@image" />
+        break;
+
     default:
         @* Graceful fallback for unknown component types *@
         <div class="rich-card-unknown">

@@ -300,6 +300,95 @@
     box-shadow: 0 0 8px rgba(138, 43, 226, 0.2);
 }
 
+
+/* Image component */
+.rich-card-image {
+    margin: 12px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(138, 43, 226, 0.08) 0%, rgba(75, 0, 130, 0.08) 100%);
+    border: 1px solid rgba(138, 43, 226, 0.2);
+    transition: all 0.3s ease;
+}
+
+.rich-card-image:hover {
+    border-color: rgba(138, 43, 226, 0.4);
+    box-shadow: 0 4px 12px rgba(138, 43, 226, 0.2);
+    transform: translateY(-2px);
+}
+
+.rich-card-image-content {
+    width: 100%;
+    height: auto;
+    display: block;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.rich-card-image-content:hover {
+    opacity: 0.9;
+}
+
+/* Loading state (native browser lazy loading shimmer effect) */
+.rich-card-image-content[loading="lazy"] {
+    background: linear-gradient(90deg,
+    rgba(138, 43, 226, 0.1) 25%,
+    rgba(138, 43, 226, 0.2) 50%,
+    rgba(138, 43, 226, 0.1) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.rich-card-image-caption {
+    padding: 10px 12px;
+    margin: 0;
+    font-size: 0.875rem;
+    color: rgba(224, 224, 224, 0.7);
+    font-style: italic;
+    background: rgba(138, 43, 226, 0.05);
+    border-top: 1px solid rgba(138, 43, 226, 0.1);
+}
+
+/* Size variants */
+.rich-card-image-small .rich-card-image-content {
+    max-width: 200px;
+    margin: 0 auto;
+}
+
+.rich-card-image-medium .rich-card-image-content {
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.rich-card-image-large .rich-card-image-content {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.rich-card-image-full .rich-card-image-content {
+    max-width: 100%;
+}
+
+/* Mobile responsive - scale down large images on small screens */
+@media (max-width: 768px) {
+    .rich-card-image-medium .rich-card-image-content,
+    .rich-card-image-large .rich-card-image-content {
+        max-width: 100%;
+    }
+}
+
+/* Accessibility - focus state for keyboard navigation */
+.rich-card-image-content:focus {
+    outline: 2px solid rgba(138, 43, 226, 0.6);
+    outline-offset: 2px;
+}
+
 /* Unknown component fallback */
 .rich-card-unknown {
     display: flex;
@@ -322,7 +411,7 @@
 }
 
 /* Responsive adjustments */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
     .rich-card {
         margin: 8px 0;
     }

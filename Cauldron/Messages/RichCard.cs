@@ -25,6 +25,7 @@ public class RichCard
 [JsonDerivedType(typeof(SectionComponent), "section")]
 [JsonDerivedType(typeof(GridComponent), "grid")]
 [JsonDerivedType(typeof(BadgeComponent), "badge")]
+[JsonDerivedType(typeof(ImageComponent), "image")]
 public abstract class CardComponent
 {
 }
@@ -83,6 +84,16 @@ public class BadgeComponent : CardComponent
     public BadgeVariant Variant { get; set; } = BadgeVariant.Neutral;
 }
 
+public class ImageComponent : CardComponent
+{
+    public required string Src { get; set; }
+    public string? Alt { get; set; }
+    public string? Caption { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter<ImageSize>))]
+    public ImageSize Size { get; set; } = ImageSize.Medium;
+}
+
 // Enums
 
 public enum TextStyle
@@ -107,4 +118,12 @@ public enum BadgeVariant
     Error,
     Info,
     Neutral
+}
+
+public enum ImageSize
+{
+    Small,
+    Medium,
+    Large,
+    Full
 }
