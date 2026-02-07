@@ -41,7 +41,6 @@
     <!-- Messages Area -->
     <div class="messages-container">
 
-        @* ============ TEMPORARY SYSTEM WARNINGS (always on top) ================================ *@
         @if (temporaryMessages.Any())
         {
             <div class="temporary-messages-container">
@@ -53,7 +52,6 @@
                 }
             </div>
         }
-        @* ======================================================================================= *@
 
         @if (chatMessages.Count == 0)
         {
@@ -787,6 +785,13 @@
     /// <item><term>Agent Completed</term><description>message.AgentCompleted = true, header returns to "Morgana"</description></item>
     /// </list>
     /// </remarks>
+    /// <remarks>
+    /// <para><strong>Two Message Paths:</strong></para>
+    /// <list type="number">
+    /// <item><term>Streaming Path</term><description>Finalizes active streaming message (95%+ of cases)</description></item>
+    /// <item><term>Non-Streaming Path</term><description>Adds complete message directly (presentation, history restore)</description></item>
+    /// </list>
+    /// </remarks>
     private async Task HandleMessageReceivedAsync(SignalRMessage signalrMessage)
     {
         try
@@ -815,7 +820,9 @@
                 return;
             }
 
-            // If streaming is active, finalize it with the complete message
+            // =====================================================================
+            // PATH 1: Finalize active streaming
+            // =====================================================================
             if (currentStreamingMessage != null)
             {
                 Console.WriteLine("🎬 Streaming complete - finalizing message");
@@ -823,68 +830,35 @@
                 // DON'T flush buffer immediately - let typewriter finish naturally
                 // The timer will continue draining the buffer at typewriter speed
 
-                // Just add metadata (text will complete via typewriter)
+                // Attach metadata to streaming message (text already being drained by typewriter)
                 currentStreamingMessage.QuickReplies = signalrMessage.QuickReplies;
                 currentStreamingMessage.RichCard = signalrMessage.RichCard;
                 currentStreamingMessage.AgentName = signalrMessage.AgentName ?? "Morgana";
-                
-                // Mark as no longer streaming
                 currentStreamingMessage.IsStreaming = false;
 
                 // DON'T stop streaming timer yet - let it finish draining buffer
                 // Timer will auto-stop when buffer is empty (check TypewriterTick)
 
-                // Update header
-                if (!string.IsNullOrEmpty(signalrMessage.AgentName))
-                {
-                    currentAgentName = signalrMessage.AgentName;
-                    Console.WriteLine($"🎨 Header updated: {currentAgentName}");
-                }
-
-                if (signalrMessage.AgentCompleted)
-                {
-                    currentAgentName = "Morgana";
-                    Console.WriteLine($"🎨 Header reset to: {currentAgentName}");
-                }
-
-                // If agent completed and is specialized, add completion message
-                if (signalrMessage.AgentCompleted && IsSpecializedAgent(signalrMessage.AgentName))
-                {
-                    chatMessages.Add(new ChatMessage
-                    {
-                        ConversationId = signalrMessage.ConversationId,
-                        Text = GetCompletionMessage(signalrMessage.AgentName!),
-                        Role = "assistant",
-                        Timestamp = signalrMessage.Timestamp.AddMilliseconds(5),
-                        AgentName = "Morgana",
-                        AgentCompleted = true,
-                        Type = MessageType.Presentation
-                    });
-                }
+                // Update header and add completion message if needed (shared logic)
+                UpdateHeaderForAgent(signalrMessage);
+                AddCompletionMessageIfNeeded(signalrMessage);
 
                 await InvokeAsync(StateHasChanged);
                 return;
             }
 
-            // Normal message handling (non-streaming path)
-            // Remove typing indicator
+            // =====================================================================
+            // PATH 2: Handle non-streaming message (presentation, history restore)
+            // =====================================================================
+            Console.WriteLine("📨 Non-streaming message - adding directly");
+
+            // Remove typing indicator if present
             ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
             if (typingMessage != null)
                 chatMessages.Remove(typingMessage);
 
-            // Update header with current agent name
-            if (!string.IsNullOrEmpty(signalrMessage.AgentName))
-            {
-                currentAgentName = signalrMessage.AgentName;
-                Console.WriteLine($"🎨 Header updated: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
-            }
-
-            // If agent has completed, return header to Morgana
-            if (signalrMessage.AgentCompleted)
-            {
-                currentAgentName = "Morgana";
-                Console.WriteLine($"🎨 Header reset to: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
-            }
+            // Update header (shared logic)
+            UpdateHeaderForAgent(signalrMessage);
 
             // Add main agent message
             chatMessages.Add(new ChatMessage
@@ -899,20 +873,8 @@
                 RichCard = signalrMessage.RichCard
             });
 
-            // If agent completed and is specialized, add completion message from Morgana
-            if (signalrMessage.AgentCompleted && IsSpecializedAgent(signalrMessage.AgentName))
-            {
-                chatMessages.Add(new ChatMessage
-                {
-                    ConversationId = signalrMessage.ConversationId,
-                    Text = GetCompletionMessage(signalrMessage.AgentName!),
-                    Role = "assistant",
-                    Timestamp = signalrMessage.Timestamp.AddMilliseconds(5),
-                    AgentName = "Morgana",
-                    AgentCompleted = true,
-                    Type = MessageType.Presentation
-                });
-            }
+            // Add completion message if needed (shared logic)
+            AddCompletionMessageIfNeeded(signalrMessage);
 
             await InvokeAsync(StateHasChanged);
         }
@@ -923,10 +885,47 @@
     }
 
     /// <summary>
-    /// Callback invoked when FadingMessage component auto-dismisses.
-    /// Removes the message from the temporary messages list.
+    /// Updates the header agent name based on the message's agent information.
+    /// Shared logic used by both streaming and non-streaming message paths.
     /// </summary>
-    /// <param name="message">The message to remove</param>
+    /// <param name="signalrMessage">Message containing agent name and completion status</param>
+    private void UpdateHeaderForAgent(SignalRMessage signalrMessage)
+    {
+        if (!string.IsNullOrEmpty(signalrMessage.AgentName))
+        {
+            currentAgentName = signalrMessage.AgentName;
+            Console.WriteLine($"🎨 Header updated: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
+        }
+
+        if (signalrMessage.AgentCompleted)
+        {
+            currentAgentName = "Morgana";
+            Console.WriteLine($"🎨 Header reset to: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
+        }
+    }
+
+    /// <summary>
+    /// Adds a completion message from Morgana when a specialized agent finishes.
+    /// Shared logic used by both streaming and non-streaming message paths.
+    /// </summary>
+    /// <param name="signalrMessage">Message containing agent completion information</param>
+    private void AddCompletionMessageIfNeeded(SignalRMessage signalrMessage)
+    {
+        if (signalrMessage.AgentCompleted && IsSpecializedAgent(signalrMessage.AgentName))
+        {
+            chatMessages.Add(new ChatMessage
+            {
+                ConversationId = signalrMessage.ConversationId,
+                Text = GetCompletionMessage(signalrMessage.AgentName!),
+                Role = "assistant",
+                Timestamp = signalrMessage.Timestamp.AddMilliseconds(5),
+                AgentName = "Morgana",
+                AgentCompleted = true,
+                Type = MessageType.Presentation
+            });
+        }
+    }
+
     private void HandleMessageDismissed(SignalRMessage message)
     {
         Console.WriteLine($"🗑️ Dismissing temporary message: {message.MessageType}");
