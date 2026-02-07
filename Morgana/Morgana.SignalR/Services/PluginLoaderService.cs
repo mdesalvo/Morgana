@@ -17,13 +17,16 @@ namespace Morgana.SignalR.Services;
 /// {
 ///   "Plugins": {
 ///     "Directories": [
-///       "plugins",              // Relative to app base directory (RECOMMENDED)
-///       "./custom-plugins",     // Also relative
-///       "C:/Morgana/Plugins"    // Absolute path
+///       "custom-plugins",       // Additional directories (optional)
+///       "C:/Shared/Plugins"     // Absolute paths also supported
 ///     ]
 ///   }
 /// }
 /// </code>
+/// <para><strong>Default Behavior:</strong></para>
+/// <para>The "plugins" directory is ALWAYS scanned first, even if not configured.
+/// If no configuration is provided, only "plugins" is scanned.
+/// If "plugins" appears in the configuration, it won't be scanned twice.</para>
 /// <para><strong>Path Resolution:</strong></para>
 /// <para>Relative paths are resolved against AppDomain.CurrentDomain.BaseDirectory.
 /// For a published app in C:\MyApp\, the path "plugins" resolves to C:\MyApp\plugins\</para>
@@ -60,16 +63,23 @@ public class PluginLoaderService
     /// <summary>
     /// Loads all plugin assemblies from configured directories.
     /// Scans each directory for .dll files and validates they contain MorganaAgent subclasses.
+    /// The "plugins" directory is always searched first, regardless of configuration.
     /// </summary>
     /// <remarks>
     /// <para><strong>Loading Process:</strong></para>
     /// <list type="number">
     /// <item>Read plugin directories from configuration (Morgana:Plugins:Directories section)</item>
+    /// <item>Ensure "plugins" is always the first directory to scan</item>
     /// <item>Scan each directory for .dll files</item>
     /// <item>Load each assembly using Assembly.LoadFrom (from filesystem path)</item>
     /// <item>Validate assembly contains MorganaAgent-derived classes</item>
     /// <item>Log success/failure for each assembly</item>
     /// </list>
+    /// <para><strong>Default Behavior:</strong></para>
+    /// <para>If no directories are configured, defaults to ["plugins"].</para>
+    /// <para><strong>Priority:</strong></para>
+    /// <para>"plugins" is always searched first. If configured directories include "plugins",
+    /// it won't be scanned twice.</para>
     /// <para><strong>Error Handling:</strong></para>
     /// <list type="bullet">
     /// <item><term>DirectoryNotFoundException</term><description>Plugin directory does not exist</description></item>
@@ -89,15 +99,26 @@ public class PluginLoaderService
     /// </remarks>
     public void LoadPluginAssemblies()
     {
-        string[]? pluginDirectories = configuration.GetSection("Morgana:Plugins:Directories").Get<string[]>();
+        string[]? configuredDirectories = configuration.GetSection("Morgana:Plugins:Directories").Get<string[]>();
 
-        if (pluginDirectories == null || pluginDirectories.Length == 0)
+        // Build the final list of directories with "plugins" always first
+        List<string> pluginDirectories = [ "plugins" ];
+        
+        // Add other configured directories (skip if "plugins" is already in the list)
+        if (configuredDirectories is { Length: > 0 })
         {
-            logger.LogWarning("No plugin directories configured. Morgana will run without custom agents!");
-            return;
+            foreach (string configuredDirectory in configuredDirectories)
+            {
+                // Normalize path for comparison (handle "./plugins", "plugins", etc.)
+                string normalizedDirectory = configuredDirectory.TrimStart('.', '/', '\\').TrimStart('/', '\\');
+                string normalizedPlugins = "plugins".TrimStart('.', '/', '\\').TrimStart('/', '\\');
+                
+                if (!normalizedDirectory.Equals(normalizedPlugins, StringComparison.OrdinalIgnoreCase))
+                    pluginDirectories.Add(configuredDirectory);
+            }
         }
 
-        logger.LogInformation($"Scanning {pluginDirectories.Length} plugin directories...");
+        logger.LogInformation($"Scanning {pluginDirectories.Count} plugin directories (priority order)...");
 
         int totalLoaded = 0;
         int totalAgents = 0;
@@ -121,47 +142,47 @@ public class PluginLoaderService
 
                 logger.LogInformation($"📁 Scanning plugin directory: {fullPath}");
 
-                string[] dllFiles = Directory.GetFiles(fullPath, "*.dll", SearchOption.TopDirectoryOnly);
+                string[] pluginAssemblies = Directory.GetFiles(fullPath, "*.dll", SearchOption.TopDirectoryOnly);
 
-                if (dllFiles.Length == 0)
+                if (pluginAssemblies.Length == 0)
                 {
                     logger.LogInformation($"📭 No .dll files found in {fullPath}");
                     continue;
                 }
 
-                foreach (string dllFile in dllFiles)
+                foreach (string pluginAssembly in pluginAssemblies)
                 {
                     try
                     {
                         // Load assembly from filesystem path
-                        Assembly assembly = Assembly.LoadFrom(dllFile);
+                        Assembly assembly = Assembly.LoadFrom(pluginAssembly);
 
                         // Validate assembly contains at least one MorganaAgent subclass
-                        int detectedAgentsInAssembly = assembly.GetTypes()
+                        int detectedAgents = assembly.GetTypes()
                             .Count(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)));
 
-                        if (detectedAgentsInAssembly > 0)
+                        if (detectedAgents > 0)
                         {
-                            logger.LogInformation($"✅ Loaded plugin assembly with {detectedAgentsInAssembly} Morgana agents: \"{Path.GetFileName(dllFile)}\"");
+                            logger.LogInformation($"✅ Loaded plugin assembly with {detectedAgents} Morgana agents: \"{Path.GetFileName(pluginAssembly)}\"");
                             totalLoaded++;
-                            totalAgents += detectedAgentsInAssembly;
+                            totalAgents += detectedAgents;
                         }
                         else
                         {
-                            logger.LogDebug($"⚠️  Skipped assembly {Path.GetFileName(dllFile)}: no MorganaAgent subclasses found");
+                            logger.LogDebug($"⚠️  Skipped assembly {Path.GetFileName(pluginAssembly)}: no MorganaAgent subclasses found");
                         }
                     }
                     catch (BadImageFormatException)
                     {
-                        logger.LogWarning($"⚠️  Skipped {Path.GetFileName(dllFile)}: not a valid .NET assembly");
+                        logger.LogWarning($"⚠️  Skipped {Path.GetFileName(pluginAssembly)}: not a valid .NET assembly");
                     }
                     catch (FileLoadException ex)
                     {
-                        logger.LogError($"❌ Failed to load {Path.GetFileName(dllFile)}: {ex.Message}");
+                        logger.LogError($"❌ Failed to load {Path.GetFileName(pluginAssembly)}: {ex.Message}");
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError(ex, $"❌ Unexpected error loading {Path.GetFileName(dllFile)}");
+                        logger.LogError(ex, $"❌ Unexpected error loading {Path.GetFileName(pluginAssembly)}");
                     }
                 }
             }
