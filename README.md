@@ -13,8 +13,8 @@
         <img src="https://img.shields.io/badge/ModelContextProtocol-932BD4?logo=nuget" alt="ModelContextProtocol"/>
       </p>
       <a href="https://github.com/mdesalvo/Morgana/releases"><img src="https://img.shields.io/github/v/release/mdesalvo/Morgana?color=9f7aea&label=GitHub" alt="Morgana (GitHub Version)"></a>
-      <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/pulls/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana%20(Docker)&color=9f7aea" alt="Morgana (Docker Pulls)"></a>
-      <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/pulls/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron%20(Docker)&color=9f7aea" alt="Cauldron (Docker Pulls)"></a>
+      <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/pulls/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana&color=9f7aea" alt="Morgana (Docker Pulls)"></a>
+      <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/pulls/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron&color=9f7aea" alt="Cauldron (Docker Pulls)"></a>
     </td>
   </tr>
 </table>
