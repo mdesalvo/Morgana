@@ -828,7 +828,7 @@
                 currentStreamingMessage.RichCard = signalrMessage.RichCard;
                 currentStreamingMessage.AgentName = signalrMessage.AgentName ?? "Morgana";
                 
-                // Mark as no longer streaming (removes cursor when typewriter finishes)
+                // Mark as no longer streaming
                 currentStreamingMessage.IsStreaming = false;
 
                 // DON'T stop streaming timer yet - let it finish draining buffer

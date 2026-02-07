@@ -8,31 +8,6 @@ namespace Cauldron.Messages;
 /// <para><strong>Purpose:</strong></para>
 /// <para>Quick replies guide users to available actions and reduce typing friction.
 /// They are typically displayed below presentation messages to showcase conversation capabilities.</para>
-/// <para><strong>User Interaction Flow:</strong></para>
-/// <list type="number">
-/// <item>Presentation message displays with quick reply buttons</item>
-/// <item>User clicks a quick reply button</item>
-/// <item>Button shows checkmark, all buttons become disabled</item>
-/// <item>Visual feedback delay (250ms)</item>
-/// <item>Button's Value is sent as user message to backend</item>
-/// <item>Agent processes the message normally</item>
-/// </list>
-/// <para><strong>Configuration Source:</strong></para>
-/// <para>Quick replies are generated from intent definitions in agents.json:</para>
-/// <code>
-/// {
-///   "Name": "billing",
-///   "Label": "📄 View Invoices",
-///   "DefaultValue": "Show me my latest invoices"
-/// }
-///
-/// → Becomes QuickReply:
-/// {
-///   "Id": "billing",
-///   "Label": "📄 View Invoices",
-///   "Value": "Show me my latest invoices"
-/// }
-/// </code>
 /// <para><strong>Single-Use Pattern:</strong></para>
 /// <para>Once a quick reply is selected, all quick replies in that message become disabled
 /// (tracked via ChatMessage.SelectedQuickReplyId). This prevents confusion and duplicate submissions.</para>
