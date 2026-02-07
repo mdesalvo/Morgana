@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Morgana.Example\Morgana.Example.csproj" />
     <ProjectReference Include="..\Morgana.Framework\Morgana.Framework.csproj" />
   </ItemGroup>
 
