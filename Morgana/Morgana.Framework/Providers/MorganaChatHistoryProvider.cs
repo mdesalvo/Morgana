@@ -52,6 +52,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// <param name="intent">Agent intent (e.g., "billing", "contract")</param>
     /// <param name="serializedState">Serialized state from previous session, or null for new session</param>
     /// <param name="jsonSerializerOptions">JSON serialization options from framework</param>
+    /// <param name="chatReducer">Reducer automatically used on the LLM context</param>
     /// <param name="logger">Logger instance for diagnostics</param>
     public MorganaChatHistoryProvider(
         string conversationId,

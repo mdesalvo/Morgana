@@ -235,6 +235,9 @@ public class MorganaAgentAdapter
     /// Type of the agent class decorated with [HandlesIntent] attribute.
     /// Must be a subclass of MorganaAgent.
     /// </param>
+    /// <param name="conversationId">
+    /// Identifier of the ongoing conversation.
+    /// </param>
     /// <param name="sharedContextCallback">
     /// Optional callback invoked when agent sets a shared context variable.
     /// Typically wired to MorganaAgent.OnSharedContextUpdate for broadcasting to RouterActor.
