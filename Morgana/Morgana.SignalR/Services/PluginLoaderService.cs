@@ -90,7 +90,7 @@ public class PluginLoaderService
     /// <para><strong>Logging Output Examples:</strong></para>
     /// <code>
     /// 📁 Scanning plugin directory: ./plugins
-    /// ✅ Loaded plugin assembly with 3 Morgana agents: "Morgana.Example.dll"
+    /// ✅ Loaded plugin assembly with 3 Morgana agents: "Morgana.Examples.dll"
     /// ⚠️  Skipped assembly CustomLib.dll: no MorganaAgent subclasses found
     /// ❌ Failed to load invalid.dll: not a valid assembly
     /// </code>

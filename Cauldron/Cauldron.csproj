@@ -8,6 +8,7 @@
 
     <ItemGroup>
       <Folder Include="wwwroot\images\" />
+      <Folder Include="wwwroot\css\" />
     </ItemGroup>
 
 </Project>

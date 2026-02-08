@@ -86,7 +86,7 @@ builder.Services.AddSingleton<ILogger>(sp =>
 // This enables domain-specific agents to be developed separately and loaded
 // without modifying the core Morgana framework.
 //
-// Example plugin: Morgana.Example (contains BillingAgent, ContractAgent, etc.)
+// Example plugin: Morgana.Examples (contains BillingAgent, ContractAgent, etc.)
 
 using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddConsole()))
 {

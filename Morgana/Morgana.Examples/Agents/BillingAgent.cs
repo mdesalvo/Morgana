@@ -4,19 +4,18 @@ using Morgana.Framework.Adapters;
 using Morgana.Framework.Attributes;
 using Morgana.Framework.Interfaces;
 
-namespace Morgana.Example.Agents;
+namespace Morgana.Examples.Agents;
 
-[HandlesIntent("contract")]
-public class ContractAgent : MorganaAgent
+[HandlesIntent("billing")]
+public class BillingAgent : MorganaAgent
 {
-    public ContractAgent(
+    public BillingAgent(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         IConversationPersistenceService conversationPersistenceService,
         ILogger logger,
         MorganaAgentAdapter morganaAgentAdapter) : base(conversationId, llmService, promptResolverService, conversationPersistenceService, logger)
-
     {
         (aiAgent, aiContextProvider) = morganaAgentAdapter.CreateAgent(GetType(), conversationId, OnSharedContextUpdate);
     }

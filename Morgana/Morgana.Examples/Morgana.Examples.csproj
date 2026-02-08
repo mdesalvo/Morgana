@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Title>Morgana.Example</Title>
-    <PackageId>Morgana.Example</PackageId>
+    <Title>Morgana.Examples</Title>
+    <PackageId>Morgana.Examples</PackageId>
     <OutputType>Library</OutputType>
     <!-- Enable dynamic loading for plugin support -->
     <EnableDynamicLoading>true</EnableDynamicLoading>

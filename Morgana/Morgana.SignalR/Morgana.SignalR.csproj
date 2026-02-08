@@ -1,9 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <Title>Morgana.SignalR</Title>
+    <PackageId>Morgana.SignalR</PackageId>
     <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
   </PropertyGroup>
 

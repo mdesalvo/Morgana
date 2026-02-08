@@ -4,7 +4,7 @@ using Morgana.Framework.Attributes;
 using Morgana.Framework.Providers;
 using System.Text.Json;
 
-namespace Morgana.Example.Tools;
+namespace Morgana.Examples.Tools;
 
 /// <summary>
 /// Professional billing tool with structured domain objects and comprehensive invoice management.

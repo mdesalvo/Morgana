@@ -4,7 +4,6 @@
     <Title>Morgana.Framework</Title>
     <PackageId>Morgana.Framework</PackageId>
     <OutputType>Library</OutputType>
-    <UserSecretsId>532b69f3-7b3e-4497-976a-f5bdf0ee0173</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

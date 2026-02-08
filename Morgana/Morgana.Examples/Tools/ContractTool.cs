@@ -4,7 +4,7 @@ using Morgana.Framework.Attributes;
 using Morgana.Framework.Providers;
 using System.Text.Json;
 
-namespace Morgana.Example.Tools;
+namespace Morgana.Examples.Tools;
 
 /// <summary>
 /// Professional contract management tool with structured contract details, clauses, and termination procedures.
