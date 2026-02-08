@@ -1,3 +1,4 @@
+using Cauldron.Messages;
 using Microsoft.AspNetCore.SignalR.Client;
 
 namespace Cauldron.Services;

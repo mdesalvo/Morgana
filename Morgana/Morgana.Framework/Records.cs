@@ -642,7 +642,7 @@ public static class Records
     /// Visual divider/separator component.
     /// Renders as horizontal line to separate logical sections.
     /// </summary>
-    public record DividerComponent() : CardComponent;
+    public record DividerComponent : CardComponent;
 
     /// <summary>
     /// List component for displaying multiple related items.

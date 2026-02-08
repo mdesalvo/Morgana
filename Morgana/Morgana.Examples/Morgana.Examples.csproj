@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Title>Morgana.Examples</Title>
+    <PackageId>Morgana.Examples</PackageId>
+    <OutputType>Library</OutputType>
+    <!-- Enable dynamic loading for plugin support -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="agents.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Morgana.Framework\Morgana.Framework.csproj">
+      <!-- Don't copy Framework assemblies to plugin output -->
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- Copy plugin to Morgana.SignalR plugins directory after build -->
+  <Target Name="CopyPluginToHost" AfterTargets="Build">
+    <PropertyGroup>
+      <PluginDestDir>$(SolutionDir)Morgana.SignalR\$(OutputPath)plugins\</PluginDestDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <!-- Only copy the plugin DLL itself, not all dependencies -->
+      <PluginFiles Include="$(TargetPath)" />
+      <!-- Include any embedded resources (like agents.json if compiled separately) -->
+      <PluginFiles Include="$(TargetDir)agents.json" Condition="Exists('$(TargetDir)agents.json')" />
+    </ItemGroup>
+    <Message Text="Copying plugin to: $(PluginDestDir)" Importance="high" />
+    <MakeDir Directories="$(PluginDestDir)" Condition="!Exists('$(PluginDestDir)')" />
+    <Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(PluginDestDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

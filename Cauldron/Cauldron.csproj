@@ -6,8 +6,4 @@
        <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
     </PropertyGroup>
 
-    <ItemGroup>
-      <Folder Include="wwwroot\images\" />
-    </ItemGroup>
-
 </Project>

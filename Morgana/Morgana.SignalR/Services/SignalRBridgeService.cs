@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.SignalR;
-using Morgana.Framework;
 using Morgana.Framework.Interfaces;
 using Morgana.SignalR.Hubs;
 using Morgana.SignalR.Messages;

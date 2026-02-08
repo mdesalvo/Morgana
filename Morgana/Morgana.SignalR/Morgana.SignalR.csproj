@@ -1,18 +1,22 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
     <Title>Morgana.SignalR</Title>
     <PackageId>Morgana.SignalR</PackageId>
+    <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Morgana.Example\Morgana.Example.csproj" />
     <ProjectReference Include="..\Morgana.Framework\Morgana.Framework.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="Properties\launchSettings.json" />
-  </ItemGroup>
+  <!-- Create plugins directory automatically after build -->
+  <Target Name="CreatePluginsDirectory" AfterTargets="Build">
+    <PropertyGroup>
+      <PluginsDir>$(OutputPath)plugins\</PluginsDir>
+    </PropertyGroup>
+    <Message Text="Ensuring plugins directory exists: $(PluginsDir)" Importance="high" />
+    <MakeDir Directories="$(PluginsDir)" Condition="!Exists('$(PluginsDir)')" />
+  </Target>
 
 </Project>

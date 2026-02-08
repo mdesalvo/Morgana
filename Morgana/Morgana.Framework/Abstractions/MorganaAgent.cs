@@ -463,7 +463,7 @@ public class MorganaAgent : MorganaActor
             return GetQuickReplies(ctxQuickRepliesJson);
 
         // Or we may find them in JsonElement format
-        if (ctxQuickReplies is JsonElement ctxQuickRepliesJsonElement && ctxQuickRepliesJsonElement.ValueKind == JsonValueKind.String)
+        if (ctxQuickReplies is JsonElement { ValueKind: JsonValueKind.String } ctxQuickRepliesJsonElement)
             return GetQuickReplies(ctxQuickRepliesJsonElement.GetString()!);
 
         return null;
@@ -517,7 +517,7 @@ public class MorganaAgent : MorganaActor
             return GetRichCard(ctxRichCardJson);
 
         // Or we may find it in JsonElement format
-        if (ctxRichCard is JsonElement ctxRichCardJsonElement && ctxRichCardJsonElement.ValueKind == JsonValueKind.String)
+        if (ctxRichCard is JsonElement { ValueKind: JsonValueKind.String } ctxRichCardJsonElement)
             return GetRichCard(ctxRichCardJsonElement.GetString()!);
 
         return null;

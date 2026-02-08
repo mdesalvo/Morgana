@@ -57,18 +57,17 @@ public class MorganaConversationHistoryService : IConversationHistoryService
 
                 return history;
             }
-            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 _logger.LogWarning($"Conversation {conversationId} not found (404)");
                 return null;
             }
-            else
-            {
-                string errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError(
-                    $"Failed to retrieve history for {conversationId}: {response.StatusCode} - {errorContent}");
-                return null;
-            }
+
+            string errorContent = await response.Content.ReadAsStringAsync();
+            _logger.LogError(
+                $"Failed to retrieve history for {conversationId}: {response.StatusCode} - {errorContent}");
+            return null;
         }
         catch (Exception ex)
         {

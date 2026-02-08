@@ -119,7 +119,7 @@
                             }
 
                             @* Quick replies (if present) *@
-                            @if (chatMessage is { QuickReplies: { Count: > 0 }, IsStreaming: false })
+                            @if (chatMessage is { QuickReplies.Count: > 0, IsStreaming: false })
                             {
                                 <QuickReplyButton Replies="@chatMessage.QuickReplies"
                                                   OnSelect="@((reply) => SelectQuickReplyAsync(reply, chatMessage))"
@@ -445,7 +445,7 @@
                                     chatMessages.Add(new ChatMessage
                                     {
                                         ConversationId = history.Messages[i].ConversationId,
-                                        Text = GetCompletionMessage(history.Messages[i-1].AgentName!),
+                                        Text = GetCompletionMessage(history.Messages[i-1].AgentName),
                                         Role = "assistant",
                                         Timestamp = history.Messages[i].Timestamp.AddMilliseconds(-5),
                                         AgentName = "Morgana",
@@ -469,7 +469,7 @@
                             chatMessages.Add(new ChatMessage
                             {
                                 ConversationId = lastHistoryMessage.ConversationId,
-                                Text = GetCompletionMessage(lastHistoryMessage.AgentName!),
+                                Text = GetCompletionMessage(lastHistoryMessage.AgentName),
                                 Role = "assistant",
                                 Timestamp = lastHistoryMessage.Timestamp.AddMilliseconds(-5),
                                 AgentName = "Morgana",
@@ -916,7 +916,7 @@
             chatMessages.Add(new ChatMessage
             {
                 ConversationId = signalrMessage.ConversationId,
-                Text = GetCompletionMessage(signalrMessage.AgentName!),
+                Text = GetCompletionMessage(signalrMessage.AgentName),
                 Role = "assistant",
                 Timestamp = signalrMessage.Timestamp.AddMilliseconds(5),
                 AgentName = "Morgana",
