@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
-- Changed `PluginLoaderService` to follow *directories-to-scan* paradigm instead of *assemblies-to-scan*. This finally gives Morgana a **true plugin system**.
+- `PluginLoaderService` now follows *directories-to-scan* paradigm instead of *assemblies-to-scan*. This finally gives Morgana a **true plugin system**.
 
 ### 🐛 Fixed
 
