@@ -1,31 +1,38 @@
 @namespace Cauldron.Components
 
-@if (Component.Style == ListStyle.Bullet)
+@switch (Component.Style)
 {
-    <ul class="rich-card-list rich-card-list-bullet">
-        @foreach (var item in Component.Items)
-        {
-            <li>@item</li>
-        }
-    </ul>
-}
-else if (Component.Style == ListStyle.Numbered)
-{
-    <ol class="rich-card-list rich-card-list-numbered">
-        @foreach (var item in Component.Items)
-        {
-            <li>@item</li>
-        }
-    </ol>
-}
-else
-{
-    <div class="rich-card-list rich-card-list-plain">
-        @foreach (var item in Component.Items)
-        {
-            <div class="rich-card-list-item">@item</div>
-        }
-    </div>
+    case ListStyle.Bullet:
+    {
+        <ul class="rich-card-list rich-card-list-bullet">
+            @foreach (string item in Component.Items)
+            {
+                <li>@item</li>
+            }
+        </ul>
+        break;
+    }
+    case ListStyle.Numbered:
+    {
+        <ol class="rich-card-list rich-card-list-numbered">
+            @foreach (string item in Component.Items)
+            {
+                <li>@item</li>
+            }
+        </ol>
+        break;
+    }
+    case ListStyle.Plain:
+    default:
+    {
+        <div class="rich-card-list rich-card-list-plain">
+            @foreach (string item in Component.Items)
+            {
+                <div class="rich-card-list-item">@item</div>
+            }
+        </div>
+        break;
+    }
 }
 
 @code {

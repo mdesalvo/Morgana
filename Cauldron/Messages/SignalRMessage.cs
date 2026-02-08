@@ -1,4 +1,4 @@
-﻿using Cauldron.Messages;
+﻿namespace Cauldron.Messages;
 
 /// <summary>
 /// <para>

@@ -26,9 +26,7 @@ public class RichCard
 [JsonDerivedType(typeof(GridComponent), "grid")]
 [JsonDerivedType(typeof(BadgeComponent), "badge")]
 [JsonDerivedType(typeof(ImageComponent), "image")]
-public abstract class CardComponent
-{
-}
+public abstract class CardComponent;
 
 public class TextBlockComponent : CardComponent
 {
@@ -45,9 +43,7 @@ public class KeyValueComponent : CardComponent
     public bool Emphasize { get; set; }
 }
 
-public class DividerComponent : CardComponent
-{
-}
+public class DividerComponent : CardComponent;
 
 public class ListComponent : CardComponent
 {
