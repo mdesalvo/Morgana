@@ -38,9 +38,6 @@ namespace Morgana.Framework.Services;
 /// <item><term>Enabled=false</term><description>Returns null, no history management</description></item>
 /// <item><term>Enabled=true</term><description>Returns SummarizingChatReducer with configured thresholds</description></item>
 /// </list>
-/// <para><strong>Cost Impact:</strong></para>
-/// <para>Summarization triggers LLM calls (~$0.003-0.008 per summarization), but saves 60%+ on
-/// ongoing conversation costs by reducing context window size.</para>
 /// </remarks>
 public class SummarizingChatReducerService
 {
