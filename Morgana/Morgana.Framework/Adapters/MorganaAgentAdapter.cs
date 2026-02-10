@@ -80,7 +80,7 @@ public class MorganaAgentAdapter
     /// Service for creating IChatReducer instances for context window management.
     /// Creates SummarizingChatReducer based on configuration to optimize LLM costs.
     /// </summary>
-    protected readonly ChatReducerService chatReducerService;
+    protected readonly SummarizingChatReducerService chatReducerService;
 
     /// <summary>
     /// Logger instance for agent creation diagnostics and tool registration tracking.
@@ -125,7 +125,7 @@ public class MorganaAgentAdapter
         IPromptResolverService promptResolverService,
         IToolRegistryService toolRegistryService,
         IMCPClientRegistryService imcpClientRegistryService,
-        ChatReducerService chatReducerService,
+        SummarizingChatReducerService chatReducerService,
         ILogger logger)
     {
         this.chatClient = chatClient;

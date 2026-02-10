@@ -42,17 +42,17 @@ namespace Morgana.Framework.Services;
 /// <para>Summarization triggers LLM calls (~$0.003-0.008 per summarization), but saves 60%+ on
 /// ongoing conversation costs by reducing context window size.</para>
 /// </remarks>
-public class ChatReducerService
+public class SummarizingChatReducerService
 {
     private readonly IConfiguration configuration;
     private readonly ILogger logger;
 
     /// <summary>
-    /// Initializes a new instance of ChatReducerService.
+    /// Initializes a new instance of SummarizingChatReducerService.
     /// </summary>
     /// <param name="configuration">Application configuration for reading HistoryReducer settings</param>
     /// <param name="logger">Logger for diagnostics and monitoring</param>
-    public ChatReducerService(
+    public SummarizingChatReducerService(
         IConfiguration configuration,
         ILogger logger)
     {

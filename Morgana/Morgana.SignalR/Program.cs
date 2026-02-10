@@ -168,7 +168,7 @@ builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 // ==============================================================================
 // Service for reducing history messages sent to LLM (configurable summarization)
 
-builder.Services.AddSingleton<ChatReducerService>();
+builder.Services.AddSingleton<SummarizingChatReducerService>();
 
 // ==============================================================================
 // SECTION 8: Agent Adapter
