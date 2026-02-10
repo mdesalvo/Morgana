@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 - Arguments of `SummarizingChatReducer` in `SummarizingChatReducerService.CreateReducer` were swapped (correct order: targetCount, threshold)
+- Conversation history is now fully preserved after refresh (reducer applies only to LLM view, never to the storage)
 
 ### 🚀 Future Enablement
 
