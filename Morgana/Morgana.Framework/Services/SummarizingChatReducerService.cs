@@ -95,10 +95,10 @@ public class ChatReducerService
             return null;
         }
 
-        int threshold = config.GetValue<int>("SummarizationThreshold", 20);
         int target = config.GetValue<int>("SummarizationTargetCount", 8);
+        int threshold = config.GetValue<int>("SummarizationThreshold", 20);
 
-        SummarizingChatReducer chatReducer = new SummarizingChatReducer(chatClient, threshold, target);
+        SummarizingChatReducer chatReducer = new SummarizingChatReducer(chatClient, target, threshold);
 
         string? summaryPrompt = config.GetValue<string?>("SummarizationPrompt");
         if (!string.IsNullOrWhiteSpace(summaryPrompt))

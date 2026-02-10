@@ -325,6 +325,6 @@ public class MorganaAIContextProvider : AIContextProvider
         // at the end of this single roundtrip. It is useful for inspecting response
         // messages and executing targeted context updates based on it...
 
-        return base.InvokedAsync(context, cancellationToken);
+        return ValueTask.CompletedTask;
     }
 }
