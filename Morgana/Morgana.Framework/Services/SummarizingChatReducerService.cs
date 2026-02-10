@@ -27,8 +27,8 @@ namespace Morgana.Framework.Services;
 ///   "Morgana": {
 ///     "HistoryReducer": {
 ///       "Enabled": true,
-///       "SummarizationThreshold": 20,
 ///       "SummarizationTargetCount": 8
+///       "SummarizationThreshold": 20
 ///     }
 ///   }
 /// }
