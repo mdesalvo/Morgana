@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 - `PluginLoaderService` now follows *directories-to-scan* paradigm instead of *assemblies-to-scan*. This finally gives Morgana a **true plugin system**.
+- Updated `Akka.NET` dependency to 1.5.60
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260209.1 (**BREAKING CHANGES**: `AIContextProvider/ChatHistoryProvider` invoke hooks)
 
 ### 🐛 Fixed
 
