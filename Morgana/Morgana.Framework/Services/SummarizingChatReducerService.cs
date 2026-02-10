@@ -72,9 +72,6 @@ public class SummarizingChatReducerService
     /// <item>Summarizes them using the provided chatClient into 1-2 summary messages</item>
     /// <item>Returns [Summary] + recent messages (e.g., messages 13-20)</item>
     /// </list>
-    /// <para><strong>Important:</strong></para>
-    /// <para>The reducer only affects what is sent to the LLM. The full conversation history
-    /// is still persisted to SQLite and displayed in the UI. This is transparent to the user.</para>
     /// <para><strong>Performance Characteristics:</strong></para>
     /// <list type="bullet">
     /// <item>First 20 messages: No overhead, full context preserved</item>
