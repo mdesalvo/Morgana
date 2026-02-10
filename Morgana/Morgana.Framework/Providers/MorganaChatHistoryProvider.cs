@@ -104,7 +104,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// Delegates to Microsoft's in-memory implementation for actual retrieval.
     /// If a reducer is configured, it will process the messages here.
     /// </summary>
-    public override async ValueTask<IEnumerable<ChatMessage>> InvokingAsync(
+    protected override async ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
@@ -120,7 +120,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// Called AFTER agent invocation to store new messages.
     /// Delegates to Microsoft's in-memory implementation for actual storage.
     /// </summary>
-    public override async ValueTask InvokedAsync(
+    protected override async ValueTask InvokedCoreAsync(
         InvokedContext context,
         CancellationToken cancellationToken = default)
     {
