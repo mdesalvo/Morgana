@@ -23,7 +23,7 @@ namespace Morgana.SignalR.Services;
 /// </remarks>
 public class SignalRBridgeService : ISignalRBridgeService
 {
-    private readonly IHubContext<ConversationHub> hubContext;
+    private readonly IHubContext<MorganaHub> hubContext;
     private readonly ILogger logger;
 
     /// <summary>
@@ -31,7 +31,7 @@ public class SignalRBridgeService : ISignalRBridgeService
     /// </summary>
     /// <param name="hubContext">SignalR hub context for sending messages to clients</param>
     /// <param name="logger">Logger instance for message delivery diagnostics</param>
-    public SignalRBridgeService(IHubContext<ConversationHub> hubContext, ILogger logger)
+    public SignalRBridgeService(IHubContext<MorganaHub> hubContext, ILogger logger)
     {
         this.hubContext = hubContext;
         this.logger = logger;

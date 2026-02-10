@@ -45,7 +45,7 @@ builder.Services.AddEndpointsApiExplorer();
 // SECTION 2: SignalR Configuration
 // ==============================================================================
 // Real-time communication infrastructure for bi-directional client-server messaging
-// - ConversationHub: SignalR hub for conversation group management
+// - MorganaHub: SignalR hub for conversation group management
 // - ISignalRBridgeService: Actor-to-SignalR bridge for sending messages to clients
 
 builder.Services.AddSignalR();
@@ -213,13 +213,13 @@ builder.Services.AddHostedService<AkkaHostedService>();
 
 WebApplication app = builder.Build();
 
-app.UseCors("AllowBlazor");                      // Enable CORS for Blazor client
-app.UseHttpsRedirection();                       // Redirect HTTP to HTTPS
-app.UseStaticFiles();                            // Serve static files (if any)
-app.UseRouting();                                // Enable endpoint routing
-app.UseAuthorization();                          // Enable authorization middleware
-app.MapControllers();                            // Map REST API controllers
-app.MapHub<ConversationHub>("/conversationHub"); // Map SignalR hub endpoint
+app.UseCors("AllowBlazor");               // Enable CORS for Blazor client
+app.UseHttpsRedirection();                // Redirect HTTP to HTTPS
+app.UseStaticFiles();                     // Serve static files (if any)
+app.UseRouting();                         // Enable endpoint routing
+app.UseAuthorization();                   // Enable authorization middleware
+app.MapControllers();                     // Map REST API controllers
+app.MapHub<MorganaHub>("/morganaHub");    // Map SignalR hub endpoint
 
 // ==============================================================================
 // SECTION 11: Application Startup
@@ -233,7 +233,7 @@ await app.RunAsync();
 // ==============================================================================
 //
 // 1. CLIENT CONNECTS
-//    - Establishes SignalR connection to /conversationHub
+//    - Establishes SignalR connection to /morganaHub
 //    - Calls JoinConversation(conversationId) hub method
 //
 // 2. CLIENT STARTS CONVERSATION

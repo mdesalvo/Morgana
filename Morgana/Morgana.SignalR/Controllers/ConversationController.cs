@@ -33,7 +33,7 @@ public class ConversationController : ControllerBase
 {
     private readonly ActorSystem actorSystem;
     private readonly ILogger logger;
-    private readonly IHubContext<ConversationHub> signalrContext;
+    private readonly IHubContext<MorganaHub> signalrContext;
     private readonly IConversationPersistenceService conversationPersistenceService;
     private readonly IRateLimitService rateLimitService;
     private readonly Records.RateLimitOptions rateLimitOptions; 
@@ -50,7 +50,7 @@ public class ConversationController : ControllerBase
     public ConversationController(
         ActorSystem actorSystem,
         ILogger logger,
-        IHubContext<ConversationHub> signalrContext,
+        IHubContext<MorganaHub> signalrContext,
         IConversationPersistenceService conversationPersistenceService,
         IRateLimitService rateLimitService,
         IOptions<Records.RateLimitOptions> rateLimitOptions)

@@ -86,7 +86,7 @@ public class MorganaSignalRService : IAsyncDisposable
     /// <para><strong>Connection Configuration:</strong></para>
     /// <list type="bullet">
     /// <item>Automatic reconnection with delays: 0s, 2s, 10s, 30s</item>
-    /// <item>Hub endpoint from configuration: "{Morgana:BaseUrl}/conversationHub"</item>
+    /// <item>Hub endpoint from configuration: "{Morgana:BaseUrl}/morganaHub"</item>
     /// <item>WebSocket preferred, Server-Sent Events fallback</item>
     /// </list>
     /// <para><strong>Event Subscription:</strong></para>
@@ -103,7 +103,7 @@ public class MorganaSignalRService : IAsyncDisposable
 
         // Build SignalR hub connection with automatic reconnect
         hubConnection = new HubConnectionBuilder()
-            .WithUrl($"{apiBaseUrl}/conversationHub")
+            .WithUrl($"{apiBaseUrl}/morganaHub")
             .WithAutomaticReconnect(
             [
                 TimeSpan.Zero,           // Attempt 1: immediate

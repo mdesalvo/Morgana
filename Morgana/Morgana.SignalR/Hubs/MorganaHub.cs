@@ -24,15 +24,15 @@ namespace Morgana.SignalR.Hubs;
 /// <para>Clients must join a conversation group to receive messages. Multiple clients can join the same conversation
 /// for collaborative scenarios (e.g., customer + support agent both seeing the AI conversation).</para>
 /// </remarks>
-public class ConversationHub : Hub
+public class MorganaHub : Hub
 {
     private readonly ILogger logger;
 
     /// <summary>
-    /// Initializes a new instance of the ConversationHub.
+    /// Initializes a new instance of the MorganaHub.
     /// </summary>
     /// <param name="logger">Logger instance for connection tracking and diagnostics</param>
-    public ConversationHub(ILogger logger)
+    public MorganaHub(ILogger logger)
     {
         this.logger = logger;
     }
