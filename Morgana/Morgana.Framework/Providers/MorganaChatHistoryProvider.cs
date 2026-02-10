@@ -85,6 +85,21 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     }
 
     /// <summary>
+    /// Serializes chat history state for AgentSession persistence.
+    /// Delegates to Microsoft's in-memory implementation for actual serialization.
+    /// Framework automatically combines this with MorganaAIContextProvider state.
+    /// </summary>
+    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
+    {
+        JsonElement serialized = innerProvider.Serialize(jsonSerializerOptions);
+
+        logger.LogInformation(
+            $"{nameof(MorganaChatHistoryProvider)} SERIALIZED for agent '{intent}' in conversation '{conversationId}'");
+
+        return serialized;
+    }
+
+    /// <summary>
     /// Called BEFORE agent invocation to retrieve messages for LLM context.
     /// Delegates to Microsoft's in-memory implementation for actual retrieval.
     /// If a reducer is configured, it will process the messages here.
@@ -125,20 +140,5 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         logger.LogInformation(
             $"{nameof(MorganaChatHistoryProvider)} INVOKED: Stored {requestCount + responseCount} messages " +
             $"(request: {requestCount}, response: {responseCount}, for agent '{intent}' in conversation '{conversationId}'");
-    }
-
-    /// <summary>
-    /// Serializes chat history state for AgentSession persistence.
-    /// Delegates to Microsoft's in-memory implementation for actual serialization.
-    /// Framework automatically combines this with MorganaAIContextProvider state.
-    /// </summary>
-    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-    {
-        JsonElement serialized = innerProvider.Serialize(jsonSerializerOptions);
-
-        logger.LogInformation(
-            $"{nameof(MorganaChatHistoryProvider)} SERIALIZED for agent '{intent}' in conversation '{conversationId}'");
-
-        return serialized;
     }
 }
