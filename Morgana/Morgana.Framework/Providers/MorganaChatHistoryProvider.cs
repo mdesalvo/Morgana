@@ -89,7 +89,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// Delegates to Microsoft's in-memory implementation for actual retrieval.
     /// If a reducer is configured, it will process the messages here.
     /// </summary>
-    public override async ValueTask<IEnumerable<ChatMessage>> InvokingAsync(
+    protected override async ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
@@ -105,7 +105,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// Called AFTER agent invocation to store new messages.
     /// Delegates to Microsoft's in-memory implementation for actual storage.
     /// </summary>
-    public override async ValueTask InvokedAsync(
+    protected override async ValueTask InvokedCoreAsync(
         InvokedContext context,
         CancellationToken cancellationToken = default)
     {
@@ -121,13 +121,10 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         // Log after successful storage
         int requestCount = context.RequestMessages?.Count() ?? 0;
         int responseCount = context.ResponseMessages?.Count() ?? 0;
-        int contextProviderCount = context.AIContextProviderMessages?.Count() ?? 0;
-        int totalCount = requestCount + responseCount + contextProviderCount;
 
         logger.LogInformation(
-            $"{nameof(MorganaChatHistoryProvider)} INVOKED: Stored {totalCount} messages " +
-            $"(request: {requestCount}, response: {responseCount}, context: {contextProviderCount}) " +
-            $"for agent '{intent}' in conversation '{conversationId}'");
+            $"{nameof(MorganaChatHistoryProvider)} INVOKED: Stored {requestCount + responseCount} messages " +
+            $"(request: {requestCount}, response: {responseCount}, for agent '{intent}' in conversation '{conversationId}'");
     }
 
     /// <summary>

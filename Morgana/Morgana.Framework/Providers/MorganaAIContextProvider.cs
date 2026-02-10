@@ -303,7 +303,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// <summary>
     /// Hook called BEFORE agent invocation (USER -> AGENT)
     /// </summary>
-    public override ValueTask<AIContext> InvokingAsync(
+    protected override ValueTask<AIContext> InvokingCoreAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
@@ -317,7 +317,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// <summary>
     /// Hook called AFTER agent invocation (AGENT -> USER)
     /// </summary>
-    public override ValueTask InvokedAsync(
+    protected override ValueTask InvokedCoreAsync(
         InvokedContext context,
         CancellationToken cancellationToken = default)
     {
@@ -325,6 +325,6 @@ public class MorganaAIContextProvider : AIContextProvider
         // at the end of this single roundtrip. It is useful for inspecting response
         // messages and executing targeted context updates based on it...
 
-        return base.InvokedAsync(context, cancellationToken);
+        return base.InvokedCoreAsync(context, cancellationToken);
     }
 }
