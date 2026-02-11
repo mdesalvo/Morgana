@@ -303,7 +303,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// <summary>
     /// Hook called BEFORE agent invocation (USER -> AGENT)
     /// </summary>
-    protected override ValueTask<AIContext> InvokingCoreAsync(
+    public override ValueTask<AIContext> InvokingAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
@@ -317,7 +317,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// <summary>
     /// Hook called AFTER agent invocation (AGENT -> USER)
     /// </summary>
-    protected override ValueTask InvokedCoreAsync(
+    public override ValueTask InvokedAsync(
         InvokedContext context,
         CancellationToken cancellationToken = default)
     {
