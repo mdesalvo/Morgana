@@ -4,7 +4,7 @@
 # Multi-stage build for optimized image with all required projects:
 # - Morgana.SignalR (API + SignalR Hub)
 # - Morgana.Framework (core framework)
-# - Morgana.Example (example plugin with agents)
+# - Morgana.Examples (example plugins with 3 agents)
 
 # ==============================================================================
 # BUILD ARGUMENTS
