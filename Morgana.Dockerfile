@@ -21,7 +21,7 @@ WORKDIR /src
 # Copy project files for all required projects (layer caching optimization)
 COPY ["Morgana/Morgana.SignalR/Morgana.SignalR.csproj", "Morgana.SignalR/"]
 COPY ["Morgana/Morgana.Framework/Morgana.Framework.csproj", "Morgana.Framework/"]
-COPY ["Morgana/Morgana.Example/Morgana.Example.csproj", "Morgana.Example/"]
+COPY ["Morgana/Morgana.Examples/Morgana.Examples.csproj", "Morgana.Examples/"]
 COPY ["Morgana/Directory.Build.props", "Directory.Build.props"]
 
 # Restore NuGet dependencies
@@ -30,7 +30,7 @@ RUN dotnet restore "Morgana.SignalR/Morgana.SignalR.csproj"
 # Copy all source code from all projects
 COPY Morgana/Morgana.SignalR/ Morgana.SignalR/
 COPY Morgana/Morgana.Framework/ Morgana.Framework/
-COPY Morgana/Morgana.Example/ Morgana.Example/
+COPY Morgana/Morgana.Examples/ Morgana.Examples/
 
 # Build main project (automatically includes dependencies)
 WORKDIR "/src/Morgana.SignalR"
