@@ -72,7 +72,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         {
             JsonSerializerOptions jso = jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions;
 
-            if (serializedState.TryGetProperty("Messages", out JsonElement messagesElement))
+            if (serializedState.TryGetProperty("messages", out JsonElement messagesElement))
             {
                 List<ChatMessage>? messages = messagesElement.Deserialize<List<ChatMessage>>(jso);
                 if (messages != null)
