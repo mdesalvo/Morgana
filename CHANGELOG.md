@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.18.0] - UNDER DEVELOPMENT
+## [0.17.0] - 2026-02-11
 
 ### ✨ Added
 
@@ -15,9 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 - Arguments of `SummarizingChatReducer` in `SummarizingChatReducerService.CreateReducer` were swapped (correct order: targetCount, threshold)
-- Conversation history is now fully preserved after refresh (reducer applies only to LLM view, never to the storage)
+- Conversation history is now fully preserved after refresh: reducer applies only to LLM view, never to the storage
 
 ### 🚀 Future Enablement
+- **Extensibility via plugin system**: Foundation for industrial evolution of the plugin system (e.g: even MorganaLLM implementations may be plugged)
 
 
 ## [0.16.0] - 2026-02-07
