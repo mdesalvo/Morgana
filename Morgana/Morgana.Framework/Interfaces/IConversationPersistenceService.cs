@@ -1,5 +1,5 @@
-using Microsoft.Agents.AI;
 using System.Text.Json;
+using Microsoft.Agents.AI;
 using static Morgana.Framework.Records;
 
 namespace Morgana.Framework.Interfaces;

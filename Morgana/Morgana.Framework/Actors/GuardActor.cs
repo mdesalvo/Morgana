@@ -1,8 +1,9 @@
+using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
+using Microsoft.Extensions.Configuration;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Interfaces;
-using System.Text.Json;
 
 namespace Morgana.Framework.Actors;
 
@@ -27,10 +28,12 @@ public class GuardActor : MorganaActor
     /// <param name="conversationId">Unique identifier for this conversation</param>
     /// <param name="llmService">LLM service for policy-based content checks</param>
     /// <param name="promptResolverService">Service for resolving guard prompt templates</param>
+    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     public GuardActor(
         string conversationId,
         ILLMService llmService,
-        IPromptResolverService promptResolverService) : base(conversationId, llmService, promptResolverService)
+        IPromptResolverService promptResolverService,
+        IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         // Perform two-level content moderation check on incoming user messages:
         // 1. Fast synchronous profanity check against configured term list (immediate rejection if found)

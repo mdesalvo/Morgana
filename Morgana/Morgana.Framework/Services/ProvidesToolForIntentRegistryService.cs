@@ -1,8 +1,8 @@
+using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Attributes;
 using Morgana.Framework.Interfaces;
-using System.Reflection;
 
 namespace Morgana.Framework.Services;
 

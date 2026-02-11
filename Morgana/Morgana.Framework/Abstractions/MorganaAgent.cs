@@ -1,13 +1,14 @@
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
 using Akka.Actor;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.Framework.Attributes;
 using Morgana.Framework.Interfaces;
 using Morgana.Framework.Providers;
-using System.Reflection;
-using System.Text;
-using System.Text.Json;
-using Microsoft.Extensions.AI;
 
 namespace Morgana.Framework.Abstractions;
 
@@ -116,12 +117,14 @@ public class MorganaAgent : MorganaActor
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="persistenceService">Service for persisting conversation state to encrypted storage</param>
     /// <param name="agentLogger">Logger instance for agent-level diagnostics</param>
+    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     public MorganaAgent(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         IConversationPersistenceService persistenceService,
-        ILogger agentLogger) : base(conversationId, llmService, promptResolverService)
+        ILogger agentLogger,
+        IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         this.persistenceService = persistenceService;
         this.agentLogger = agentLogger;
@@ -307,15 +310,27 @@ public class MorganaAgent : MorganaActor
 
             // Execute agent on its conversation session (which has context and history)
             StringBuilder fullResponse = new StringBuilder();
-            await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(
-                new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow }, aiAgentSession))
+            IConfigurationSection config = configuration.GetSection("Morgana:StreamingResponse");
+            if (config.GetValue("Enabled", true))
             {
-                if (!string.IsNullOrEmpty(chunk.Text))
+                // Consume LLM response in streaming mode (chunked)
+                await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(
+                                   new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow }, aiAgentSession))
                 {
-                    fullResponse.Append(chunk.Text);
+                    if (!string.IsNullOrEmpty(chunk.Text))
+                    {
+                        fullResponse.Append(chunk.Text);
 
-                    senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
+                        senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
+                    }
                 }
+            }
+            else
+            {
+                // Consume LLM response blocking mode (awaited)
+                AgentResponse response = await aiAgent.RunAsync(
+                    new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow }, aiAgentSession);
+                fullResponse.Append(response.Text);
             }
             string llmResponseText = fullResponse.ToString();
 

@@ -1,7 +1,7 @@
-using Microsoft.Extensions.Logging;
-using Morgana.Framework.Interfaces;
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Morgana.Framework.Interfaces;
 
 namespace Morgana.Framework.Services;
 

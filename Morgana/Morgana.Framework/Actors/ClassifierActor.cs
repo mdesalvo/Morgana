@@ -1,8 +1,9 @@
+using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
+using Microsoft.Extensions.Configuration;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Interfaces;
-using System.Text.Json;
 
 namespace Morgana.Framework.Actors;
 
@@ -33,11 +34,13 @@ public class ClassifierActor : MorganaActor
     /// <param name="llmService">LLM service for intent classification</param>
     /// <param name="promptResolverService">Service for resolving classifier prompt templates</param>
     /// <param name="agentConfigService">Service for loading intent definitions from domain</param>
+    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     public ClassifierActor(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        IAgentConfigurationService agentConfigService) : base(conversationId, llmService, promptResolverService)
+        IAgentConfigurationService agentConfigService,
+        IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         // Load intents from domain
         List<Records.IntentDefinition> intents = agentConfigService.GetIntentsAsync().GetAwaiter().GetResult();

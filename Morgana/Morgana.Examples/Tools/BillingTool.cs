@@ -1,8 +1,8 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Attributes;
 using Morgana.Framework.Providers;
-using System.Text.Json;
 
 namespace Morgana.Examples.Tools;
 

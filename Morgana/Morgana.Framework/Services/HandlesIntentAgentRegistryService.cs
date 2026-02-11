@@ -1,7 +1,7 @@
-﻿using Morgana.Framework.Abstractions;
+﻿using System.Reflection;
+using Morgana.Framework.Abstractions;
 using Morgana.Framework.Attributes;
 using Morgana.Framework.Interfaces;
-using System.Reflection;
 
 namespace Morgana.Framework.Services;
 

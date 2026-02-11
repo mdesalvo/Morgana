@@ -1,5 +1,6 @@
 using Akka.Actor;
 using Akka.Event;
+using Microsoft.Extensions.Configuration;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Extensions;
 using Morgana.Framework.Interfaces;
@@ -44,11 +45,13 @@ public class RouterActor : MorganaActor
     /// <param name="llmService">LLM service for AI completions</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="agentResolverService">Service for agent discovery and resolution</param>
+    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     public RouterActor(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        IAgentRegistryService agentResolverService) : base(conversationId, llmService, promptResolverService)
+        IAgentRegistryService agentResolverService,
+        IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         this.agentResolverService = agentResolverService;
 

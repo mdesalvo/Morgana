@@ -1,5 +1,5 @@
-﻿using Microsoft.Extensions.AI;
-using System.Reflection;
+﻿using System.Reflection;
+using Microsoft.Extensions.AI;
 
 namespace Morgana.Framework.Adapters;
 

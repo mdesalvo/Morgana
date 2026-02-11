@@ -1,5 +1,6 @@
 using Akka.Actor;
 using Akka.Event;
+using Microsoft.Extensions.Configuration;
 using Morgana.Framework.Interfaces;
 
 namespace Morgana.Framework.Abstractions;
@@ -57,21 +58,29 @@ public class MorganaActor : ReceiveActor
     protected readonly ILoggingAdapter actorLogger;
 
     /// <summary>
+    /// Morgana configuration (layered by ASP.NET)
+    /// </summary>
+    protected readonly IConfiguration configuration;
+
+    /// <summary>
     /// Initializes a new instance of MorganaActor with core infrastructure services.
     /// Sets up conversation context, services, logging, and timeout handling.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation this actor will handle</param>
     /// <param name="llmService">LLM service for AI completions</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
+    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     protected MorganaActor(
         string conversationId,
         ILLMService llmService,
-        IPromptResolverService promptResolverService)
+        IPromptResolverService promptResolverService,
+        IConfiguration configuration)
     {
         this.conversationId = conversationId;
         this.llmService = llmService;
         this.promptResolverService = promptResolverService;
-        actorLogger = Context.GetLogger();
+        this.configuration = configuration;
+        this.actorLogger = Context.GetLogger();
 
         // Global timeout for all MorganaActor instances
         SetReceiveTimeout(TimeSpan.FromSeconds(60));

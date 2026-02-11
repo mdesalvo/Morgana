@@ -1,6 +1,6 @@
-﻿using Akka.Actor;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
+using Akka.Actor;
 
 namespace Morgana.Framework;
 

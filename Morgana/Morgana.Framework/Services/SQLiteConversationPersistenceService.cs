@@ -1,12 +1,12 @@
-﻿using Microsoft.Agents.AI;
+﻿using System.Security.Cryptography;
+using System.Text.Json;
+using Microsoft.Agents.AI;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Interfaces;
-using System.Security.Cryptography;
-using System.Text.Json;
 using static Morgana.Framework.Records;
 
 namespace Morgana.Framework.Services;
@@ -689,7 +689,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
         return string.Join(" ", chatMessage.Contents
             .OfType<TextContent>()
             .Where(tc => !string.IsNullOrEmpty(tc.Text))
-            .Select(tc => tc.Text!.Trim()));
+            .Select(tc => tc.Text.Trim()));
 
         //TODO: in future we may have more content types handled here
     }

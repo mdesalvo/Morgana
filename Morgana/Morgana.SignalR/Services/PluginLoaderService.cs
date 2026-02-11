@@ -1,5 +1,5 @@
-using Morgana.Framework.Abstractions;
 using System.Reflection;
+using Morgana.Framework.Abstractions;
 
 namespace Morgana.SignalR.Services;
 

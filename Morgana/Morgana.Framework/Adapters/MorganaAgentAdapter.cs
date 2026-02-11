@@ -1,4 +1,6 @@
-﻿using Microsoft.Agents.AI;
+﻿using System.Reflection;
+using System.Text;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.Framework.Abstractions;
@@ -6,8 +8,6 @@ using Morgana.Framework.Attributes;
 using Morgana.Framework.Interfaces;
 using Morgana.Framework.Providers;
 using Morgana.Framework.Services;
-using System.Reflection;
-using System.Text;
 
 namespace Morgana.Framework.Adapters;
 
@@ -834,7 +834,7 @@ public class MorganaAgentAdapter
     {
         logger.LogInformation($"Registering MCP tools from server: {serverName}");
 
-        MCPClient mcpClient = imcpClientRegistryService!.GetOrCreateClientAsync(serverName)
+        MCPClient mcpClient = imcpClientRegistryService.GetOrCreateClientAsync(serverName)
             .GetAwaiter()
             .GetResult();
 

@@ -1,5 +1,6 @@
 using Akka.Actor;
 using Akka.Event;
+using Microsoft.Extensions.Configuration;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Extensions;
 using Morgana.Framework.Interfaces;
@@ -32,11 +33,13 @@ public class ConversationManagerActor : MorganaActor
     /// <param name="signalRBridgeService">Service for sending messages to clients via SignalR</param>
     /// <param name="llmService">LLM service for AI completions</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
+    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     public ConversationManagerActor(
         string conversationId,
         ISignalRBridgeService signalRBridgeService,
         ILLMService llmService,
-        IPromptResolverService promptResolverService) : base(conversationId, llmService, promptResolverService)
+        IPromptResolverService promptResolverService,
+        IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         this.signalRBridgeService = signalRBridgeService;
 

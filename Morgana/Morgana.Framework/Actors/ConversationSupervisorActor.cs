@@ -1,9 +1,10 @@
+using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
+using Microsoft.Extensions.Configuration;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Extensions;
 using Morgana.Framework.Interfaces;
-using System.Text.Json;
 
 namespace Morgana.Framework.Actors;
 
@@ -68,12 +69,14 @@ public class ConversationSupervisorActor : MorganaActor
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="signalRBridgeService">Service for sending messages to clients via SignalR</param>
     /// <param name="agentConfigService">Service for loading intent and agent configurations</param>
+    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     public ConversationSupervisorActor(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         ISignalRBridgeService signalRBridgeService,
-        IAgentConfigurationService agentConfigService) : base(conversationId, llmService, promptResolverService)
+        IAgentConfigurationService agentConfigService,
+        IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         this.signalRBridgeService = signalRBridgeService;
         this.agentConfigService = agentConfigService;
