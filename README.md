@@ -78,7 +78,7 @@ graph LR
   U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron"}
 
   %% Backend boundary
-  subgraph Morgana["Morgana Framework"]
+  subgraph Morgana["Morgana"]
     CM@{shape: rounded, label: "Manager"}
     SV@{shape: rounded, label: "Supervisor"}
 
@@ -142,7 +142,7 @@ graph LR
   U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron"}
 
   %% Backend boundary
-  subgraph Morgana["Morgana Framework"]
+  subgraph Morgana["Morgana"]
     CM@{shape: rounded, label: "Manager"}
     SV@{shape: rounded, label: "Supervisor"}
 
