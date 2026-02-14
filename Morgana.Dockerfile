@@ -5,11 +5,11 @@
 # - Morgana.SignalR (API + SignalR Hub)
 # - Morgana.Framework (core framework)
 # - Morgana.Examples (example plugins with 3 agents)
+# ==============================================================================
 
 # ==============================================================================
 # BUILD ARGUMENTS
 # ==============================================================================
-# Version is passed from docker-compose or GitHub Actions
 ARG VERSION=latest
 
 # ==============================================================================
@@ -32,7 +32,7 @@ COPY Morgana/Morgana.SignalR/ Morgana.SignalR/
 COPY Morgana/Morgana.Framework/ Morgana.Framework/
 COPY Morgana/Morgana.Examples/ Morgana.Examples/
 
-# Build main project (automatically includes dependencies)
+# Build main project
 WORKDIR "/src/Morgana.SignalR"
 RUN dotnet build "Morgana.SignalR.csproj" -c Release -o /app/build
 
@@ -40,9 +40,19 @@ RUN dotnet build "Morgana.SignalR.csproj" -c Release -o /app/build
 # STAGE 2: PUBLISH
 # ==============================================================================
 FROM build AS publish
+
+# Publish Morgana.SignalR (main application)
+WORKDIR "/src/Morgana.SignalR"
 RUN dotnet publish "Morgana.SignalR.csproj" \
     -c Release \
     -o /app/publish \
+    /p:UseAppHost=false
+
+# Publish Morgana.Examples to plugins/ directory
+WORKDIR "/src/Morgana.Examples"
+RUN dotnet publish "Morgana.Examples.csproj" \
+    -c Release \
+    -o /app/publish/plugins \
     /p:UseAppHost=false
 
 # ==============================================================================
@@ -71,6 +81,11 @@ COPY --from=publish /app/publish .
 
 # Create directory for SQLite databases (conversation persistence)
 RUN mkdir -p /app/data
+
+# Verify plugins directory exists and contains Morgana.Examples.dll
+RUN ls -la /app/plugins/ && \
+    test -f /app/plugins/Morgana.Examples.dll || \
+    (echo "ERROR: Morgana.Examples.dll not found in plugins/" && exit 1)
 
 # Configure ASP.NET Core environment variables
 ENV ASPNETCORE_URLS=http://+:5001
