@@ -34,11 +34,11 @@ services:
 
       # LLM Provider (anthropic or azureopenai)
       - Morgana__LLM__Provider=${LLM_PROVIDER}
-      - Morgana__LLM__Anthropic__ApiKey=${ANTHROPIC_API_KEY}
+      - Morgana__LLM__Anthropic__ApiKey=${ANTHROPIC_APIKEY}
       - Morgana__LLM__Anthropic__Model=${ANTHROPIC_MODEL}
+      - Morgana__LLM__AzureOpenAI__ApiKey=${AZURE_OPENAI_APIKEY}
+      - Morgana__LLM__AzureOpenAI__DeploymentName=${AZURE_OPENAI_DEPLOYMENTNAME}
       - Morgana__LLM__AzureOpenAI__Endpoint=${AZURE_OPENAI_ENDPOINT}
-      - Morgana__LLM__AzureOpenAI__ApiKey=${AZURE_OPENAI_KEY}
-      - Morgana__LLM__AzureOpenAI__DeploymentName=${AZURE_OPENAI_DEPLOYMENT}
 
       # CORS: Cauldron frontend URL
       - Morgana__Cauldron__BaseUrl=http://cauldron:5002
