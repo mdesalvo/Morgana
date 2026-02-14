@@ -57,7 +57,7 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.2.0-preview.1.26063.2" />
     <PackageReference Include="ModelContextProtocol.Core" Version="0.8.0-preview.1" />
     <!-- Services -->
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />
   </ItemGroup>
 
 </Project>
