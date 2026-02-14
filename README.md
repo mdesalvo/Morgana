@@ -210,3 +210,49 @@ This architecture delivers 3 critical benefits—all configurable through declar
 ---
 
 **The Morgana Difference**: These 4 pillars work together to create an orchestration framework where adding a new domain agent requires only configuration and attribute decoration—no changes to the core framework, no manual registration, no brittle coupling. It's **conversational AI architecture designed for domain-driven evolution at scale**.
+
+---
+## 🚀 Quick Start (Docker Hub)
+
+To use latest images from [Docker Hub](https://hub.docker.com/u/mdesalvo):
+```bash
+# 📋 Copy the production template
+cp production.env.template .env
+
+# ✏️ Configure your secrets
+nano .env  # or use your favorite editor
+
+# 🐳 Start the containers
+docker compose up
+
+# ✅ Open your browser at http://localhost:5002
+
+# 🛑 Stop the containers
+docker compose down
+```
+
+## 🛠️ Development (Build from source)
+
+For developers who want to build from source code:
+```bash
+# 📋 Copy the development template
+cp development.env.template .env
+
+# ✏️ Configure your secrets
+nano .env
+
+# 🔨 Build .NET projects (from project root)
+dotnet build ./Morgana
+dotnet build ./Cauldron
+
+# 🐳 Build Docker images
+docker compose --env-file .env --env-file .env.versions build
+
+# 🚀 Start the containers
+docker compose --env-file .env --env-file .env.versions up
+
+# ✅ Open your browser at http://localhost:5002
+
+# 🛑 Stop the containers
+docker compose --env-file .env --env-file .env.versions down
+```
