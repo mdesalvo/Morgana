@@ -118,7 +118,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             string conversationId = agentIdentifierParts[1];
 
             // Serialize AgentSession to JSON
-            JsonElement agentSessionJsonElement = agent.SerializeSession(agentSession, jsonSerializerOptions);
+            JsonElement agentSessionJsonElement = await agent.SerializeSessionAsync(agentSession, jsonSerializerOptions);
             string agentSessionJsonString = JsonSerializer.Serialize(agentSessionJsonElement, jsonSerializerOptions);
 
             // Encrypt JSON content

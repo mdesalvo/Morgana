@@ -96,7 +96,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// If reducer is configured, creates a TEMPORARY reduced view using Microsoft's smart algorithms.
     /// IMPORTANT: fullHistory is NEVER modified - reduction is only for LLM consumption.
     /// </summary>
-    public override async ValueTask<IEnumerable<ChatMessage>> InvokingAsync(
+    protected override async ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
@@ -127,7 +127,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// ALWAYS appends to fullHistory - NEVER applies reduction to storage.
     /// This ensures complete conversation history is preserved across sessions.
     /// </summary>
-    public override ValueTask InvokedAsync(
+    protected override ValueTask InvokedCoreAsync(
         InvokedContext context,
         CancellationToken cancellationToken = default)
     {
