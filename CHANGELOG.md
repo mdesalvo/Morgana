@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 - Make streaming response mode configurable under `StreamingResponse:Enabled` appsetting
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260212.1 (**BREAKING CHANGES**: `AIContextProvider/ChatHistoryProvider` renamed invocation hooks)
+- Updated `Microsoft.Extensions.AI` dependency to 12.3.0 (**BREAKING CHANGES**: we have to wait a fix for a regression impacting our MCP tooling system)
 
 ### 🐛 Fixed
 - Docker images did not copy `Morgana.Examples.dll` into `plugins` directory (generating an agentless Morgana...)
