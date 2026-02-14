@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
-- Make streaming response mode configurable
+- Make streaming response mode configurable under `StreamingResponse:Enabled` appsetting
 
 ### 🐛 Fixed
 - Docker images did not copy `Morgana.Examples.dll` into `plugins` directory (generating an agentless Morgana...)
