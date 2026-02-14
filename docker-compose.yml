@@ -29,16 +29,16 @@ services:
       - ASPNETCORE_URLS=http://+:5001
 
       # Conversation persistence (SQLite)
+      - Morgana__ConversationPersistence__EncryptionKey=${ENCRYPTIONKEY}
       - Morgana__ConversationPersistence__StoragePath=/app/data
-      - Morgana__ConversationPersistence__EncryptionKey=${ENCRYPTION_KEY}
 
       # LLM Provider (anthropic or azureopenai)
       - Morgana__LLM__Provider=${LLM_PROVIDER}
       - Morgana__LLM__Anthropic__ApiKey=${ANTHROPIC_APIKEY}
       - Morgana__LLM__Anthropic__Model=${ANTHROPIC_MODEL}
-      - Morgana__LLM__AzureOpenAI__ApiKey=${AZURE_OPENAI_APIKEY}
-      - Morgana__LLM__AzureOpenAI__DeploymentName=${AZURE_OPENAI_DEPLOYMENTNAME}
-      - Morgana__LLM__AzureOpenAI__Endpoint=${AZURE_OPENAI_ENDPOINT}
+      - Morgana__LLM__AzureOpenAI__ApiKey=${AZUREOPENAI_APIKEY}
+      - Morgana__LLM__AzureOpenAI__DeploymentName=${AZUREOPENAI_DEPLOYMENTNAME}
+      - Morgana__LLM__AzureOpenAI__Endpoint=${AZUREOPENAI_ENDPOINT}
 
       # CORS: Cauldron frontend URL
       - Morgana__Cauldron__BaseUrl=http://cauldron:5002
