@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
-- Make streaming response mode configurable and switch if off by default (due to weird bugs in latest `Microsoft.Agents.AI` preview)
+- Make streaming response mode configurable
 
 ### 🐛 Fixed
 
