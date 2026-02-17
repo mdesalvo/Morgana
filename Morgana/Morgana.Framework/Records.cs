@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Diagnostics;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Akka.Actor;
 
@@ -326,10 +327,12 @@ public static class Records
     /// <param name="ConversationId">Unique identifier of the conversation</param>
     /// <param name="Text">User's message text</param>
     /// <param name="Timestamp">Timestamp when the message was created</param>
+    /// <param name="TurnContext">OpenTelemetry activity context for the current turn span.</param>
     public record UserMessage(
         string ConversationId,
         string Text,
-        DateTime Timestamp);
+        DateTime Timestamp,
+        ActivityContext TurnContext = default);
 
     // ==========================================================================
     // GUARD (CONTENT MODERATION) MESSAGES
@@ -391,10 +394,12 @@ public static class Records
     /// <param name="ConversationId">Unique identifier of the conversation</param>
     /// <param name="Content">User message text to process (null for tool-only interactions)</param>
     /// <param name="Classification">Optional intent classification result (null for follow-up messages to active agents)</param>
+    /// <param name="TurnContext">OpenTelemetry activity context for the current turn span.</param>
     public record AgentRequest(
         string ConversationId,
         string? Content,
-        ClassificationResult? Classification);
+        ClassificationResult? Classification,
+        ActivityContext TurnContext = default);
 
     /// <summary>
     /// Response message from MorganaAgent instances after processing a request.
@@ -815,10 +820,12 @@ public static class Records
     /// <param name="OriginalMessage">The user message being processed</param>
     /// <param name="OriginalSender">Actor reference to reply to (typically ConversationManagerActor)</param>
     /// <param name="Classification">Intent classification result (populated after ClassifierActor processes message)</param>
+    /// <param name="TurnContext">OpenTelemetry activity context for the current turn span.</param>
     public record ProcessingContext(
         UserMessage OriginalMessage,
         IActorRef OriginalSender,
-        ClassificationResult? Classification = null);
+        ClassificationResult? Classification = null,
+        ActivityContext TurnContext = default);
 
     // --- RouterActor Contexts ---
 

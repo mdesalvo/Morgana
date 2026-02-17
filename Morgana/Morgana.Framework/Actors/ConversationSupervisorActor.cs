@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
@@ -5,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Extensions;
 using Morgana.Framework.Interfaces;
+using Morgana.Framework.Telemetry;
 
 namespace Morgana.Framework.Actors;
 
@@ -31,6 +33,10 @@ namespace Morgana.Framework.Actors;
 /// <para><strong>Active Agent Tracking:</strong></para>
 /// <para>When an agent signals incomplete processing (IsCompleted = false), the supervisor remembers the active agent
 /// and routes subsequent messages directly to it (after guard check) until the agent signals completion.</para>
+/// <para><strong>OpenTelemetry:</strong></para>
+/// <para>The supervisor opens child spans (morgana.guard, morgana.classifier) using the TurnContext carried
+/// inside ProcessingContext. The TurnContext for the agent span is passed via AgentRequest.TurnContext
+/// so that MorganaAgent can open morgana.agent as a child of the correct turn span.</para>
 /// </remarks>
 public class ConversationSupervisorActor : MorganaActor
 {
@@ -64,12 +70,6 @@ public class ConversationSupervisorActor : MorganaActor
     /// Initializes a new instance of the ConversationSupervisorActor.
     /// Creates child actors (guard, classifier, router) and enters Idle state.
     /// </summary>
-    /// <param name="conversationId">Unique identifier for this conversation</param>
-    /// <param name="llmService">LLM service for AI completions</param>
-    /// <param name="promptResolverService">Service for resolving prompt templates</param>
-    /// <param name="signalRBridgeService">Service for sending messages to clients via SignalR</param>
-    /// <param name="agentConfigService">Service for loading intent and agent configurations</param>
-    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     public ConversationSupervisorActor(
         string conversationId,
         ILLMService llmService,
@@ -103,48 +103,33 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("↗ State: Idle");
 
-        // Clear any lingering timeout from previous states
         Context.SetReceiveTimeout(null);
 
-        // Generate and send welcome message with quick reply buttons on conversation start
         ReceiveAsync<Records.GeneratePresentationMessage>(HandlePresentationRequestAsync);
         ReceiveAsync<Records.PresentationContext>(HandlePresentationGenerated);
 
-        // Handle incoming user messages - route through guard check using Tell pattern
         Receive<Records.UserMessage>(msg =>
         {
             IActorRef originalSender = Sender;
 
             actorLogger.Info("User message received, routing through guard check");
 
-            Records.ProcessingContext ctx = new Records.ProcessingContext(msg, originalSender);
+            // Lift TurnContext from UserMessage into ProcessingContext so it flows
+            // through all FSM states without further changes to individual state handlers.
+            Records.ProcessingContext ctx = new Records.ProcessingContext(
+                msg, originalSender, TurnContext: msg.TurnContext);
 
-            // Become FIRST, then Tell
             Become(() => AwaitingGuardCheck(ctx));
 
             guard.Tell(new Records.GuardCheckRequest(msg.ConversationId, msg.Text));
         });
 
-        // Re-register common handlers for FSM behavior consistency
         RegisterCommonHandlers();
     }
 
     /// <summary>
     /// Handles presentation generation requests.
-    /// Generates a welcome message with quick replies using LLM or falls back to static template.
     /// </summary>
-    /// <param name="_">Presentation request message (unused)</param>
-    /// <remarks>
-    /// <para>Presentation flow:</para>
-    /// <list type="number">
-    /// <item>Load presentation prompt from framework configuration</item>
-    /// <item>Load available intents from domain configuration</item>
-    /// <item>Call LLM to generate dynamic welcome message with quick replies</item>
-    /// <item>On LLM failure, use fallback static message</item>
-    /// <item>Send message to client via SignalR</item>
-    /// </list>
-    /// <para>Skips if presentation was already shown.</para>
-    /// </remarks>
     private async Task HandlePresentationRequestAsync(Records.GeneratePresentationMessage _)
     {
         if (hasPresented)
@@ -158,12 +143,8 @@ public class ConversationSupervisorActor : MorganaActor
 
         try
         {
-            // Load presentation prompt from morgana.json (framework)
             Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync("Presentation");
-
-            // Load intents from domain
             List<Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
-
             Records.IntentCollection intentCollection = new Records.IntentCollection(allIntents);
             List<Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
 
@@ -171,26 +152,24 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 actorLogger.Warning("No displayable intents available, sending presentation without quick replies");
 
-                await Task.Delay(750); // Give SignalR time to join conversation
+                await Task.Delay(750);
 
                 await signalRBridgeService.SendStructuredMessageAsync(
                     conversationId,
                     presentationPrompt.GetAdditionalProperty<string>("NoAgentsMessage"),
                     "presentation",
-                    [], // No quick replies
+                    [],
                     null,
                     "Morgana",
                     false,
-                    null); // No rich card
+                    null);
 
                 return;
             }
 
-            // Format intents for LLM
             string formattedIntents = string.Join("\n",
                 displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
 
-            // Build LLM prompt
             string systemPrompt = $"{presentationPrompt.Target}\n\n{presentationPrompt.Instructions}"
                 .Replace("((intents))", formattedIntents);
 
@@ -224,12 +203,10 @@ public class ConversationSupervisorActor : MorganaActor
         {
             actorLogger.Error(ex, "LLM presentation generation failed, using fallback");
 
-            // Fallback: use static message
             Records.Prompt fallbackPrompt = await promptResolverService.ResolveAsync("Presentation");
             string fallbackMessage = fallbackPrompt.GetAdditionalProperty<string>("FallbackMessage");
 
             List<Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
-
             Records.IntentCollection intentCollection = new Records.IntentCollection(allIntents);
             List<Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
 
@@ -251,19 +228,17 @@ public class ConversationSupervisorActor : MorganaActor
     /// <summary>
     /// Handles the generated presentation and sends it to the client via SignalR.
     /// </summary>
-    /// <param name="ctx">Context containing the presentation message and quick replies</param>
     private async Task HandlePresentationGenerated(Records.PresentationContext ctx)
     {
         actorLogger.Info("Sending presentation to client via SignalR");
 
-        // Convert LLM-generated quick replies to SignalR format
         List<Records.QuickReply> quickReplies = ctx.LLMQuickReplies?
             .Select(qr => new Records.QuickReply(qr.Id, qr.Label, qr.Value))
             .ToList() ?? [];
 
         try
         {
-            await Task.Delay(750); // Give SignalR time to join conversation
+            await Task.Delay(750);
 
             await signalRBridgeService.SendStructuredMessageAsync(
                 conversationId,
@@ -273,7 +248,7 @@ public class ConversationSupervisorActor : MorganaActor
                 null,
                 "Morgana",
                 false,
-                null); // No rich card
+                null);
 
             actorLogger.Info("Presentation sent successfully");
         }
@@ -284,26 +259,26 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
-    /// <para>
     /// AwaitingGuardCheck state: waiting for content moderation result from GuardActor.
-    /// This state is reached from BOTH new requests AND follow-ups.
-    /// </para>
-    /// <para>
-    /// On pass: transitions to next appropriate state (Classification for new, FollowUp for active agent)
-    /// On fail: sends violation message to client and returns to Idle (user can retry)
-    /// </para>
+    /// Opens a morgana.guard child span using the TurnContext from ProcessingContext.
     /// </summary>
-    /// <param name="ctx">Processing context containing original message and sender</param>
+    /// <param name="ctx">Processing context containing original message, sender, and OTel TurnContext</param>
     private void AwaitingGuardCheck(Records.ProcessingContext ctx)
     {
         actorLogger.Info("→ State: AwaitingGuardCheck");
 
-        // Handle content moderation result from GuardActor:
-        // - If compliant AND activeAgent exists: route to active agent (follow-up flow)
-        // - If compliant AND no activeAgent: route to classifier (new request flow)
-        // - If violation: send rejection message and return to Idle (allow user retry)
         ReceiveAsync<Records.GuardCheckResponse>(async response =>
         {
+            // Open guard span as child of the turn span
+            using Activity? guardSpan = MorganaTelemetry.Source.StartActivity(
+                MorganaTelemetry.GuardActivity,
+                ActivityKind.Internal,
+                ctx.TurnContext);
+            guardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+            guardSpan?.SetTag(MorganaTelemetry.GuardCompliant, response.Compliant);
+            if (!response.Compliant && response.Violation != null)
+                guardSpan?.SetTag(MorganaTelemetry.GuardViolation, response.Violation);
+
             if (!response.Compliant)
             {
                 actorLogger.Warning($"Message rejected by guard: {response.Violation}");
@@ -316,7 +291,6 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
                     guardAnswer, ctx.Classification?.Intent, null, currentAgentName, false));
 
-                // Return to Idle - user can retry the message
                 Become(Idle);
                 return;
             }
@@ -327,20 +301,18 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 actorLogger.Info($"Active agent exists, routing to follow-up flow with agent {activeAgent.Path}");
 
-                // Become BEFORE Tell so we're ready to receive streaming chunks
                 Become(() => AwaitingFollowUpResponse(ctx.OriginalSender));
 
-                // Route directly to active agent (follow-up) using Tell
                 activeAgent.Tell(new Records.AgentRequest(
                     ctx.OriginalMessage.ConversationId,
                     ctx.OriginalMessage.Text,
-                    null));
+                    null,
+                    ctx.TurnContext));        // propagate context to agent
             }
             else
             {
                 actorLogger.Info("No active agent, proceeding to classification for new request");
 
-                // Become FIRST, then Tell classifier
                 Become(() => AwaitingClassification(ctx));
 
                 classifier.Tell(ctx.OriginalMessage);
@@ -350,68 +322,67 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Status.Failure>(failure =>
         {
             actorLogger.Error(failure.Cause, "Guard check failed");
-
-            // Fail-open: allow message through on guard error
             actorLogger.Warning("Guard check failed, failing open (allowing message)");
 
             if (activeAgent != null)
             {
-                // Become FIRST, then Tell active agent
                 Become(() => AwaitingFollowUpResponse(ctx.OriginalSender));
 
                 activeAgent.Tell(new Records.AgentRequest(
                     ctx.OriginalMessage.ConversationId,
                     ctx.OriginalMessage.Text,
-                    null));
+                    null,
+                    ctx.TurnContext));
             }
             else
             {
-                // Become FIRST, then Tell classifier
                 Become(() => AwaitingClassification(ctx));
 
                 classifier.Tell(ctx.OriginalMessage);
             }
         });
 
-        // Re-register common handlers for FSM behavior consistency
         RegisterCommonHandlers();
     }
 
     /// <summary>
     /// AwaitingClassification state: waiting for intent classification result from ClassifierActor.
-    /// Only reached after guard check passes for NEW requests (no active agent).
-    /// On success: forwards to RouterActor and transitions to AwaitingAgentResponse.
-    /// On failure: falls back to "other" intent to maintain conversation flow.
+    /// Opens a morgana.classifier child span using the TurnContext from ProcessingContext.
     /// </summary>
-    /// <param name="ctx">Processing context containing original message and sender</param>
+    /// <param name="ctx">Processing context containing original message, sender, and OTel TurnContext</param>
     private void AwaitingClassification(Records.ProcessingContext ctx)
     {
         actorLogger.Info("→ State: AwaitingClassification");
 
-        // Handle intent classification result from ClassifierActor:
-        // - Classification successful: forward to RouterActor to find appropriate agent → AwaitingAgentResponse
-        // - Updates processing context with classification metadata for agent routing
         Receive<Records.ClassificationResult>(classification =>
         {
             actorLogger.Info($"Classification result: {classification.Intent}");
 
+            // Open classifier span as child of the turn span
+            using Activity? classifierSpan = MorganaTelemetry.Source.StartActivity(
+                MorganaTelemetry.ClassifierActivity,
+                ActivityKind.Internal,
+                ctx.TurnContext);
+            classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+            classifierSpan?.SetTag(MorganaTelemetry.ClassificationIntent, classification.Intent);
+            if (classification.Metadata.TryGetValue("confidence", out string? confidence))
+                classifierSpan?.SetTag(MorganaTelemetry.ClassificationConfidence, confidence);
+
             Records.ProcessingContext updatedCtx = ctx with { Classification = classification };
 
-            // Become BEFORE Tell so we're ready to receive streaming chunks
             Become(() => AwaitingAgentResponse(updatedCtx));
 
-            // Route to router using Tell (not Ask) to support streaming
             router.Tell(new Records.AgentRequest(
                 ctx.OriginalMessage.ConversationId,
                 ctx.OriginalMessage.Text,
-                classification));
+                classification,
+                ctx.TurnContext));           // propagate context to router → agent
         });
 
         Receive<Status.Failure>(failure =>
         {
             actorLogger.Error(failure.Cause, "Classification failed");
 
-            // Fallback to "other" intent to maintain conversation flow
             Records.ClassificationResult fallbackClassification = new Records.ClassificationResult(
                 "other",
                 new Dictionary<string, string>
@@ -423,43 +394,34 @@ public class ConversationSupervisorActor : MorganaActor
             actorLogger.Info("Falling back to 'other' intent");
             Records.ProcessingContext updatedCtx = ctx with { Classification = fallbackClassification };
 
-            // Become FIRST, then Tell router
             Become(() => AwaitingAgentResponse(updatedCtx));
 
             router.Tell(new Records.AgentRequest(
                 ctx.OriginalMessage.ConversationId,
                 ctx.OriginalMessage.Text,
-                fallbackClassification));
+                fallbackClassification,
+                ctx.TurnContext));
         });
 
-        // Re-register common handlers for FSM behavior consistency
         RegisterCommonHandlers();
     }
 
     /// <summary>
     /// AwaitingAgentResponse state: waiting for specialized agent to process the request.
-    /// Only reached after classification for NEW requests.
-    /// Handles both ActiveAgentResponse (from specialized agents) and AgentResponse (from router fallback).
-    /// Updates active agent tracking based on agent completion status.
+    /// Annotates the turn span with agent name and intent on response.
     /// </summary>
     /// <param name="ctx">Processing context containing original message, sender, and classification</param>
-    /// <remarks>
-    /// If agent signals incomplete (IsCompleted = false), the agent becomes "active" and subsequent messages
-    /// are routed directly to it (after guard check) until it signals completion.
-    /// </remarks>
     private void AwaitingAgentResponse(Records.ProcessingContext ctx)
     {
         actorLogger.Info("→ State: AwaitingAgentResponse");
 
-        // Set timeout for agent response (90 seconds)
         Context.SetReceiveTimeout(TimeSpan.FromSeconds(90));
 
-        // Handle timeout if agent doesn't respond
         Receive<ReceiveTimeout>(_ =>
         {
             actorLogger.Error($"Timeout waiting for agent response (classification: {ctx.Classification?.Intent})");
 
-            Context.SetReceiveTimeout(null); // Clear timeout
+            Context.SetReceiveTimeout(null);
 
             ctx.OriginalSender.Tell(new Records.ConversationResponse(
                 "I apologize, but the request took too long to process. Please try again.",
@@ -467,48 +429,50 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.Classification?.Metadata,
                 GetAgentDisplayName(ctx.Classification?.Intent),
                 false,
-                null, // No quick replies
+                null,
                 ctx.OriginalMessage.Timestamp,
-                null)); // No rich card
+                null));
 
             Become(Idle);
         });
 
-        // Forward streaming chunks from agent to manager (and then to client)
-        // Reset timeout on each chunk to prevent timeout during active streaming
         Receive<Records.AgentStreamChunk>(chunk =>
         {
-            // Reset timeout - we're getting data, agent is alive
             Context.SetReceiveTimeout(TimeSpan.FromSeconds(90));
             ctx.OriginalSender.Tell(chunk);
         });
 
-        // Handle specialized agent response with active agent tracking (direct Tell from router)
         Receive<Records.ActiveAgentResponse>(response =>
         {
-            // Clear timeout immediately upon receiving response
             Context.SetReceiveTimeout(null);
 
             try
             {
                 string agentName = GetAgentDisplayName(ctx.Classification?.Intent);
                 int quickRepliesCount = response.QuickReplies?.Count ?? 0;
-                
+
                 actorLogger.Info($"Received ActiveAgentResponse from {response.AgentRef.Path}, completed: {response.IsCompleted}, quickReplies: {quickRepliesCount}");
+
+                // Annotate the turn span with the outcome now that we have the full picture
+                Activity? turnSpan = MorganaTelemetry.Source.StartActivity(
+                    MorganaTelemetry.RouterActivity,
+                    ActivityKind.Internal,
+                    ctx.TurnContext);
+                turnSpan?.SetTag(MorganaTelemetry.RouterIntent, ctx.Classification?.Intent);
+                turnSpan?.SetTag(MorganaTelemetry.RouterAgentPath, response.AgentRef.Path.ToString());
+                turnSpan?.Dispose();
 
                 if (response.IsCompleted)
                 {
                     actorLogger.Info("Agent signaled completion, clearing active agent");
-
                     activeAgent = null;
                     activeAgentIntent = null;
                 }
                 else
                 {
                     actorLogger.Info($"Agent signaled incomplete, setting as active agent: {response.AgentRef.Path}");
-
                     activeAgent = response.AgentRef;
-                    activeAgentIntent = ctx.Classification?.Intent; // Store intent from classification
+                    activeAgentIntent = ctx.Classification?.Intent;
                 }
 
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
@@ -527,29 +491,25 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 actorLogger.Error(ex, "Error processing ActiveAgentResponse");
 
-                // Clear active agent on error
                 activeAgent = null;
                 activeAgentIntent = null;
 
-                // Send error response to manager
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
                     "An error occurred while processing the response. Please try again.",
                     ctx.Classification?.Intent,
                     ctx.Classification?.Metadata,
                     GetAgentDisplayName(ctx.Classification?.Intent),
                     false,
-                    null, // No quick replies
+                    null,
                     ctx.OriginalMessage.Timestamp,
-                    null)); // No rich card
+                    null));
 
                 Become(Idle);
             }
         });
 
-        // Handle fallback response from router (no specialized agent available)
         Receive<Records.AgentResponse>(response =>
         {
-            // Clear timeout immediately upon receiving response
             Context.SetReceiveTimeout(null);
 
             try
@@ -578,21 +538,19 @@ public class ConversationSupervisorActor : MorganaActor
                     null,
                     "Morgana",
                     false,
-                    null, // No quick replies
+                    null,
                     DateTime.UtcNow,
-                    null)); // No rich card
+                    null));
 
                 Become(Idle);
             }
         });
 
-        // Re-register common handlers for FSM behavior consistency
         RegisterCommonHandlers();
     }
 
     /// <summary>
     /// AwaitingFollowUpResponse state: waiting for active agent to process follow-up message.
-    /// Only reached when an active agent exists (multi-turn conversation).
     /// Routes messages directly to the active agent, bypassing classification.
     /// </summary>
     /// <param name="originalSender">Original sender reference for response routing</param>
@@ -600,17 +558,14 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingFollowUpResponse");
 
-        // Set timeout for follow-up agent response (90 seconds)
         Context.SetReceiveTimeout(TimeSpan.FromSeconds(90));
 
-        // Handle timeout if agent doesn't respond
         Receive<ReceiveTimeout>(_ =>
         {
             actorLogger.Error($"Timeout waiting for follow-up response from active agent (intent: {activeAgentIntent})");
 
-            Context.SetReceiveTimeout(null); // Clear timeout
+            Context.SetReceiveTimeout(null);
 
-            // Clear active agent on timeout
             activeAgent = null;
             activeAgentIntent = null;
 
@@ -620,26 +575,21 @@ public class ConversationSupervisorActor : MorganaActor
                 null,
                 "Morgana",
                 false,
-                null, // No quick replies
+                null,
                 DateTime.UtcNow,
-                null)); // No rich card
+                null));
 
             Become(Idle);
         });
 
-        // Forward streaming chunks from active agent to manager (and then to client)
-        // Reset timeout on each chunk to prevent timeout during active streaming
         Receive<Records.AgentStreamChunk>(chunk =>
         {
-            // Reset timeout - we're getting data, agent is alive
             Context.SetReceiveTimeout(TimeSpan.FromSeconds(90));
             originalSender.Tell(chunk);
         });
 
-        // Handle follow-up response from currently active agent (direct Tell, not PipeTo)
         Receive<Records.AgentResponse>(response =>
         {
-            // Clear timeout immediately upon receiving response
             Context.SetReceiveTimeout(null);
 
             try
@@ -649,7 +599,6 @@ public class ConversationSupervisorActor : MorganaActor
                 if (response.IsCompleted)
                 {
                     actorLogger.Info("Active agent signaled completion, clearing active agent");
-
                     activeAgent = null;
                     activeAgentIntent = null;
                 }
@@ -661,7 +610,7 @@ public class ConversationSupervisorActor : MorganaActor
                     agentName,
                     response.IsCompleted,
                     response.QuickReplies,
-                    DateTime.UtcNow, // Using UtcNow since we don't have original timestamp with Tell
+                    DateTime.UtcNow,
                     response.RichCard));
 
                 Become(Idle);
@@ -670,26 +619,23 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 actorLogger.Error(ex, "Error processing follow-up AgentResponse");
 
-                // Clear active agent on error
                 activeAgent = null;
                 activeAgentIntent = null;
 
-                // Send error response to manager
                 originalSender.Tell(new Records.ConversationResponse(
                     "An error occurred while processing the response. Please try again.",
                     null,
                     null,
                     "Morgana",
                     false,
-                    null, // No quick replies
+                    null,
                     DateTime.UtcNow,
-                    null)); // No rich card
+                    null));
 
                 Become(Idle);
             }
         });
 
-        // Re-register common handlers for FSM behavior consistency
         RegisterCommonHandlers();
     }
 
@@ -697,83 +643,49 @@ public class ConversationSupervisorActor : MorganaActor
 
     #region Helper Methods
 
-    /// <summary>
-    /// Gets the display name for an agent based on its intent.
-    /// Returns "Morgana" for the "other" intent or missing intents.
-    /// Returns "Morgana (Intent)" for specialized intents.
-    /// </summary>
-    /// <param name="intent">Intent name to format</param>
-    /// <returns>Formatted agent display name</returns>
     private string GetAgentDisplayName(string? intent)
     {
         if (string.IsNullOrEmpty(intent) || string.Equals(intent, "other", StringComparison.OrdinalIgnoreCase))
             return "Morgana";
 
-        // Capitalize first letter of intent for display
         string capitalizedIntent = char.ToUpper(intent[0]) + intent[1..];
-
         return $"Morgana ({capitalizedIntent})";
     }
 
-    /// <summary>
-    /// Handles unexpected failures in the Idle state.
-    /// Sends error message to sender and remains in Idle state.
-    /// </summary>
-    /// <param name="failure">Failure information</param>
     private void HandleUnexpectedFailure(Records.FailureContext failure)
     {
         actorLogger.Error(failure.Failure.Cause, "Unexpected failure in ConversationSupervisorActor");
-
         failure.OriginalSender.Tell(
             new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
     }
 
-    /// <summary>
-    /// Restores the active agent state when resuming a conversation from persistence.
-    /// This allows multi-turn conversations to continue seamlessly after application restart.
-    /// Registered as common handler across all FSM states.
-    /// </summary>
-    /// <param name="msg">Restoration request containing the agent intent</param>
     private void HandleRestoreActiveAgent(Records.RestoreActiveAgent msg)
     {
         actorLogger.Info($"Restoring active agent: {msg.AgentIntent}");
 
-        // No active agent -> Fallback to Morgana
         if (string.Equals(msg.AgentIntent, "Morgana", StringComparison.OrdinalIgnoreCase))
         {
-            // Fallback: clear active agent, next message will reclassify
             activeAgent = null;
             activeAgentIntent = null;
-
             actorLogger.Info($"No active agent detected: fallback to Morgana");
             return;
         }
 
-        // Delegate to router for agent resolution and caching using Tell pattern
         router.Tell(new Records.RestoreAgentRequest(msg.AgentIntent));
     }
 
-    /// <summary>
-    /// Handles the response from RouterActor after agent restoration request.
-    /// Sets or clears the active agent based on resolution success.
-    /// </summary>
-    /// <param name="response">Response containing resolved agent reference or null</param>
     private void HandleRestoreAgentResponse(Records.RestoreAgentResponse response)
     {
         if (response.AgentRef != null)
         {
             activeAgent = response.AgentRef;
             activeAgentIntent = response.AgentIntent;
-
             actorLogger.Info($"Active agent restored: {activeAgent.Path} with intent {activeAgentIntent}");
         }
         else
         {
-            // Intent not recognized or agent not available
-            // Fallback: clear active agent, next message will reclassify
             activeAgent = null;
             activeAgentIntent = null;
-
             actorLogger.Warning($"Could not restore agent for intent '{response.AgentIntent}' - clearing active agent");
         }
     }
@@ -783,7 +695,6 @@ public class ConversationSupervisorActor : MorganaActor
     {
         base.RegisterCommonHandlers();
 
-        // Specific handlers for supervisor
         Receive<Records.RestoreActiveAgent>(HandleRestoreActiveAgent);
         Receive<Records.RestoreAgentResponse>(HandleRestoreAgentResponse);
         Receive<Records.FailureContext>(HandleUnexpectedFailure);

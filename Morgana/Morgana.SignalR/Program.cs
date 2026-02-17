@@ -6,6 +6,7 @@ using Morgana.Framework;
 using Morgana.Framework.Adapters;
 using Morgana.Framework.Interfaces;
 using Morgana.Framework.Services;
+using Morgana.Framework.Telemetry;
 using Morgana.SignalR.Hubs;
 using Morgana.SignalR.Services;
 
@@ -67,6 +68,29 @@ builder.Services.AddCors(options =>
               .AllowCredentials();
     });
 });
+
+// ==============================================================================
+// SECTION 3.5: OpenTelemetry
+// ==============================================================================
+// Distributed tracing for conversation-level observability.
+// Produces a trace per conversation with child spans for each turn, guard check,
+// intent classification, agent routing, and agent execution.
+//
+// Trace structure:
+//   morgana.conversation            ← lifetime of a conversation
+//     morgana.turn                  ← one per user message
+//       morgana.guard               ← content moderation result
+//       morgana.classifier          ← intent + confidence
+//       morgana.router              ← selected agent path
+//       morgana.agent               ← LLM execution, TTFT, response preview
+//
+// Configuration: appsettings.json → Morgana:OpenTelemetry
+//   Enabled:       true/false
+//   ServiceName:   "Morgana"
+//   Exporter:      "otlp" | "console" | "none"
+//   OtlpEndpoint:  "http://localhost:4317"  (for Jaeger, Grafana Tempo, Azure Monitor, etc.)
+
+builder.Services.AddMorganaOpenTelemetry(builder.Configuration);
 
 // ==============================================================================
 // SECTION 4: Logging Infrastructure
