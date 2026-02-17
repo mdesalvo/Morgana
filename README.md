@@ -214,7 +214,7 @@ This architecture delivers 3 critical benefits—all configurable through declar
 ---
 ## 🚀 Quick Start (Docker Hub)
 
-To use latest images from [Docker Hub](https://hub.docker.com/u/mdesalvo):
+To use latest images from [Docker Hub](https://hub.docker.com/u/mdesalvo) (example showcase for what Morgana **looks like** and **how it works**):
 ```bash
 # 📋 Copy the production template
 cp production.env.template .env
@@ -233,7 +233,7 @@ docker compose down
 
 ## 🛠️ Development (Build from source)
 
-For developers who want to build from source code:
+For developers who want to build from source code (**you** will give Morgana **your** domain knowledge in terms of **intents, agents and tools**):
 ```bash
 # 📋 Copy the development template
 cp development.env.template .env
