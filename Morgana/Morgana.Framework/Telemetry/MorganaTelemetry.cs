@@ -137,6 +137,9 @@ public static class MorganaTelemetry
     /// <summary>Intent handled by this agent (e.g. "billing").</summary>
     public const string AgentIntent = "agent.intent";
 
+    /// <summary>Identifier of this agent (e.g. "billing-conv12345").</summary>
+    public const string AgentIdentifier = "agent.identifier";
+
     /// <summary>True if the agent completed its task (no follow-up expected).</summary>
     public const string AgentIsCompleted = "agent.is_completed";
 
@@ -152,6 +155,12 @@ public static class MorganaTelemetry
     // ==============================================================================
     // EVENT NAMES
     // ==============================================================================
+
+    /// <summary>Event emitted on the agent activity when the conversation is created.</summary>
+    public const string CreateAgentConversation = "create_agent_conversation";
+
+    /// <summary>Event emitted on the agent activity when the conversation is resumed.</summary>
+    public const string ResumeAgentConversation = "resume_agent_conversation";
 
     /// <summary>Event emitted on the agent activity when the first streaming chunk arrives.</summary>
     public const string EventFirstChunk = "first_chunk";

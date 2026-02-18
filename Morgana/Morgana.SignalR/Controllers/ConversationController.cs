@@ -86,7 +86,7 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Starting conversation {request.ConversationId}");
 
-            IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>(
+            IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", request.ConversationId);
 
             manager.Tell(new Records.CreateConversation(request.ConversationId, false));
@@ -122,7 +122,7 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Ending conversation {conversationId}");
 
-            IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>(
+            IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", conversationId);
 
             manager.Tell(new Records.TerminateConversation(conversationId));
@@ -154,7 +154,7 @@ public class ConversationController : ControllerBase
         {
             logger.LogInformation($"Resuming conversation {conversationId}");
 
-            IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>(
+            IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", conversationId);
 
             manager.Tell(new Records.CreateConversation(conversationId, true));
@@ -164,7 +164,7 @@ public class ConversationController : ControllerBase
                 .GetMostRecentActiveAgentAsync(conversationId);
 
             // Tell supervisor to restore active agent
-            IActorRef supervisor = await actorSystem.GetOrCreateActor<ConversationSupervisorActor>(
+            IActorRef supervisor = await actorSystem.GetOrCreateActorAsync<ConversationSupervisorActor>(
                 "supervisor", conversationId);
             supervisor.Tell(new Records.RestoreActiveAgent(lastActiveAgent ?? "Morgana"));
 
@@ -285,7 +285,7 @@ public class ConversationController : ControllerBase
             // Capture context before entering actor system (Activity.Current may differ on actor threads)
             ActivityContext turnContext = turnActivity?.Context ?? default;
 
-            IActorRef manager = await actorSystem.GetOrCreateActor<ConversationManagerActor>(
+            IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", request.ConversationId);
 
             manager.Tell(new Records.UserMessage(

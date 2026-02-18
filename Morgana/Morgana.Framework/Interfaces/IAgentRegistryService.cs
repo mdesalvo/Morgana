@@ -16,7 +16,7 @@
 /// 4. Finds classes with [HandlesIntent] attribute
 /// 5. Builds intent → Type mapping dictionary
 /// 6. RouterActor queries registry to discover agents
-/// 7. Creates agent instances via ActorSystem.GetOrCreateAgent
+/// 7. Creates agent instances via ActorSystem.GetOrCreateAgentAsync
 /// </code>
 /// <para><strong>Integration with RouterActor:</strong></para>
 /// <code>
@@ -26,7 +26,7 @@
 ///     Type? agentType = agentResolverService.ResolveAgentFromIntent(intent);
 ///     if (agentType != null)
 ///     {
-///         agents[intent] = await Context.System.GetOrCreateAgent(
+///         agents[intent] = await Context.System.GetOrCreateAgentAsync(
 ///             agentType,
 ///             intent,
 ///             conversationId
@@ -66,7 +66,7 @@ public interface IAgentRegistryService
     /// if (agentType != null)
     /// {
     ///     // Found: typeof(BillingAgent) decorated with [HandlesIntent("billing")]
-    ///     IActorRef agent = await Context.System.GetOrCreateAgent(
+    ///     IActorRef agent = await Context.System.GetOrCreateAgentAsync(
     ///         agentType,
     ///         "billing",
     ///         conversationId
@@ -113,7 +113,7 @@ public interface IAgentRegistryService
     /// foreach (string intent in agentRegistryService.GetAllIntents())
     /// {
     ///     Type? agentType = agentRegistryService.ResolveAgentFromIntent(intent);
-    ///     agents[intent] = await Context.System.GetOrCreateAgent(agentType, intent, conversationId);
+    ///     agents[intent] = await Context.System.GetOrCreateAgentAsync(agentType, intent, conversationId);
     /// }
     /// </code>
     /// <para><strong>Configuration Mismatch Detection:</strong></para>

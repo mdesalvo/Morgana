@@ -28,7 +28,7 @@ namespace Morgana.Framework.Extensions;
 /// <item>Prevents duplicate actor creation for the same conversation</item>
 /// <item>Integrates with Akka.NET DependencyInjection for service resolution</item>
 /// <item>Simplifies actor creation with consistent naming pattern</item>
-/// <item>Handles both typed actors (GetOrCreateActor) and dynamic types (GetOrCreateAgent)</item>
+/// <item>Handles both typed actors (GetOrCreateActorAsync) and dynamic types (GetOrCreateAgentAsync)</item>
 /// </list>
 /// </remarks>
 public static class ActorSystemExtensions
@@ -58,14 +58,14 @@ public static class ActorSystemExtensions
         /// <para><strong>Usage Examples:</strong></para>
         /// <code>
         /// // In ConversationSupervisorActor constructor
-        /// guard = await Context.System.GetOrCreateActor&lt;GuardActor&gt;("guard", conversationId);
-        /// classifier = await Context.System.GetOrCreateActor&lt;ClassifierActor&gt;("classifier", conversationId);
-        /// router = await Context.System.GetOrCreateActor&lt;RouterActor&gt;("router", conversationId);
+        /// guard = await Context.System.GetOrCreateActorAsync&lt;GuardActor&gt;("guard", conversationId);
+        /// classifier = await Context.System.GetOrCreateActorAsync&lt;ClassifierActor&gt;("classifier", conversationId);
+        /// router = await Context.System.GetOrCreateActorAsync&lt;RouterActor&gt;("router", conversationId);
         ///
         /// // Result: /user/guard-conv123, /user/classifier-conv123, /user/router-conv123
         /// </code>
         /// </remarks>
-        public async Task<IActorRef> GetOrCreateActor<T>(string actorSuffix, string conversationId)
+        public async Task<IActorRef> GetOrCreateActorAsync<T>(string actorSuffix, string conversationId)
             where T : MorganaActor
         {
             string actorName = $"{actorSuffix}-{conversationId}";
@@ -115,7 +115,7 @@ public static class ActorSystemExtensions
         ///     if (agentType != null)
         ///     {
         ///         // Create agent for this intent
-        ///         agents[intent] = await Context.System.GetOrCreateAgent(
+        ///         agents[intent] = await Context.System.GetOrCreateAgentAsync(
         ///             agentType,
         ///             intent,        // actorSuffix = intent name
         ///             conversationId
@@ -131,10 +131,10 @@ public static class ActorSystemExtensions
         /// dynamically without compile-time knowledge of their types. The RouterActor discovers
         /// them via [HandlesIntent] attributes and creates them using this method.</para>
         /// <para><strong>Dependency Injection:</strong></para>
-        /// <para>Like GetOrCreateActor, this method uses DependencyResolver to inject constructor
+        /// <para>Like GetOrCreateActorAsync, this method uses DependencyResolver to inject constructor
         /// dependencies, supporting both framework services and custom plugin services.</para>
         /// </remarks>
-        public async Task<IActorRef> GetOrCreateAgent(Type agentType, string actorSuffix, string conversationId)
+        public async Task<IActorRef> GetOrCreateAgentAsync(Type agentType, string actorSuffix, string conversationId)
         {
             string agentName = $"{actorSuffix}-{conversationId}";
 

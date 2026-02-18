@@ -7,7 +7,9 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.Framework.Actors;
 using Morgana.Framework.Attributes;
+using Morgana.Framework.Extensions;
 using Morgana.Framework.Interfaces;
 using Morgana.Framework.Providers;
 using Morgana.Framework.Telemetry;
@@ -83,11 +85,10 @@ public class MorganaAgent : MorganaActor
     {
         agentLogger.LogInformation($"Agent {AgentIntent} broadcasting shared context variable: {key}");
 
-        Context.ActorSelection($"/user/router-{conversationId}")
-            .Tell(new Records.BroadcastContextUpdate(
-                AgentIntent,
-                new Dictionary<string, object> { [key] = value }
-            ));
+        Context.System.GetOrCreateActorAsync<RouterActor>("router", conversationId)
+            .GetAwaiter()
+            .GetResult()
+            .Tell(new Records.BroadcastContextUpdate(AgentIntent, new Dictionary<string, object> { [key] = value }));
     }
 
     private void HandleContextUpdate(Records.ReceiveContextUpdate msg)
@@ -118,26 +119,32 @@ public class MorganaAgent : MorganaActor
         agentSpan?.SetTag(MorganaTelemetry.AgentName, GetType().Name);
         agentSpan?.SetTag(MorganaTelemetry.AgentIntent, AgentIntent);
 
-        Stopwatch agentStopwatch = Stopwatch.StartNew();
-        bool firstChunkEmitted = false;
-
         try
         {
             aiAgentSession ??= await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
             if (aiAgentSession != null)
             {
                 agentLogger.LogInformation($"Loaded existing conversation session for {AgentIdentifier}");
+
+                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.CreateAgentConversation));
+                agentSpan?.SetTag(MorganaTelemetry.AgentIdentifier, AgentIdentifier);
             }
             else
             {
                 aiAgentSession = await aiAgent.CreateSessionAsync();
                 agentLogger.LogInformation($"Created new conversation session for {AgentIdentifier}");
+
+                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.ResumeAgentConversation));
+                agentSpan?.SetTag(MorganaTelemetry.AgentIdentifier, AgentIdentifier);
             }
 
             StringBuilder fullResponse = new StringBuilder();
             IConfigurationSection config = configuration.GetSection("Morgana:StreamingResponse");
             if (config.GetValue("Enabled", true))
             {
+                Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
+                bool firstChunkEmitted = false;
+
                 await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(
                                    new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow }, aiAgentSession))
                 {
@@ -150,7 +157,8 @@ public class MorganaAgent : MorganaActor
                         if (!firstChunkEmitted)
                         {
                             firstChunkEmitted = true;
-                            long ttft = agentStopwatch.ElapsedMilliseconds;
+                            long ttft = firstChunkStopwatch.ElapsedMilliseconds;
+                            firstChunkStopwatch.Stop();
                             agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
                             agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, ttft);
                         }

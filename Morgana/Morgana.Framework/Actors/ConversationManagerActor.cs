@@ -73,7 +73,7 @@ public class ConversationManagerActor : MorganaActor
 
         if (supervisor is null)
         {
-            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>(
+            supervisor = await Context.System.GetOrCreateActorAsync<ConversationSupervisorActor>(
                 "supervisor", msg.ConversationId);
 
             Context.Watch(supervisor);
@@ -125,7 +125,7 @@ public class ConversationManagerActor : MorganaActor
 
         if (supervisor == null)
         {
-            supervisor = await Context.System.GetOrCreateActor<ConversationSupervisorActor>(
+            supervisor = await Context.System.GetOrCreateActorAsync<ConversationSupervisorActor>(
                 "supervisor", msg.ConversationId);
 
             Context.Watch(supervisor);

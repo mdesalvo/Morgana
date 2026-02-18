@@ -59,7 +59,7 @@ namespace Morgana.Framework.Services;
 /// foreach (string intent in agentRegistryService.GetAllIntents())
 /// {
 ///     Type? agentType = agentRegistryService.ResolveAgentFromIntent(intent);
-///     agents[intent] = await Context.System.GetOrCreateAgent(agentType, intent, conversationId);
+///     agents[intent] = await Context.System.GetOrCreateAgentAsync(agentType, intent, conversationId);
 /// }
 /// // Result: All configured intents have instantiated agents ready for routing
 /// </code>
