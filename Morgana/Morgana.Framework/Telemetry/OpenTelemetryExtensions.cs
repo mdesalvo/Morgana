@@ -49,9 +49,11 @@ public static class TelemetryExtensions
 
                 ExporterConfig[] exporters = section.GetSection("Exporters").Get<ExporterConfig[]>() ?? [];
 
+                // For Production environment, where OTLP-enabled platforms consume Morgana activities (e.g: Jaeger, ...)
                 if (exporters.FirstOrDefault(e => e.Name.Equals("otlp", StringComparison.OrdinalIgnoreCase)) is { Enabled:true } otlpConfig)
                     tracing.AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpConfig.Endpoint ?? "http://localhost:4317"));
 
+                // For Development environment, where console quickly shows to developers what's happening
                 if (exporters.Any(e => e.Name.Equals("console", StringComparison.OrdinalIgnoreCase) && e.Enabled))
                     tracing.AddConsoleExporter();
             });

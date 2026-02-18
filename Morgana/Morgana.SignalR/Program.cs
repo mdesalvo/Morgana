@@ -87,8 +87,7 @@ builder.Services.AddCors(options =>
 // Configuration: appsettings.json → Morgana:OpenTelemetry
 //   Enabled:       true/false
 //   ServiceName:   "Morgana"
-//   Exporter:      "otlp" | "console" | "none"
-//   OtlpEndpoint:  "http://localhost:4317"  (for Jaeger, Grafana Tempo, Azure Monitor, etc.)
+//   Exporter:      "otlp" | "console"
 
 builder.Services.AddMorganaOpenTelemetry(builder.Configuration);
 
