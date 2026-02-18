@@ -32,7 +32,7 @@ namespace Morgana.Framework.Telemetry;
 /// <c>Activity.Current</c>, the <see cref="ActivityContext"/> of the turn span is carried
 /// explicitly inside <see cref="Morgana.Framework.Records.ProcessingContext"/> and
 /// <see cref="Morgana.Framework.Records.AgentRequest"/>. Each actor reconstructs the
-/// parent link via <see cref="ActivitySource.StartActivity(string, ActivityKind, ActivityContext)"/>.</para>
+/// parent link via <see cref="ActivitySource.StartActivity(string, ActivityKind)"/>.</para>
 /// </remarks>
 public static class MorganaTelemetry
 {
@@ -42,16 +42,12 @@ public static class MorganaTelemetry
 
     /// <summary>
     /// The single <see cref="ActivitySource"/> for the entire Morgana framework.
-    /// Must be registered with <c>AddSource("Morgana")</c> in the OTel SDK setup.
     /// </summary>
-    public static readonly ActivitySource Source = new("Morgana", "1.0.0");
+    public static readonly ActivitySource Source = new ActivitySource("Morgana");
 
     // ==============================================================================
     // ACTIVITY NAMES
     // ==============================================================================
-
-    /// <summary>Root activity that lives for the entire conversation lifetime.</summary>
-    public const string ConversationActivity = "morgana.conversation";
 
     /// <summary>Activity wrapping a single user turn (from HTTP POST to final response).</summary>
     public const string TurnActivity = "morgana.turn";
@@ -68,9 +64,6 @@ public static class MorganaTelemetry
     /// <summary>Activity wrapping a MorganaAgent execution (includes streaming).</summary>
     public const string AgentActivity = "morgana.agent";
 
-    /// <summary>Activity emitted when a conversation is terminated.</summary>
-    public const string ConversationEndActivity = "morgana.conversation.end";
-
     // ==============================================================================
     // ATTRIBUTE NAMES — CONVERSATION
     // ==============================================================================
@@ -82,20 +75,8 @@ public static class MorganaTelemetry
     // ATTRIBUTE NAMES — TURN
     // ==============================================================================
 
-    /// <summary>Sequential index of the turn within the conversation (1-based).</summary>
-    public const string TurnIndex = "turn.index";
-
     /// <summary>User message text, truncated to 200 characters.</summary>
     public const string TurnUserMessage = "turn.user_message";
-
-    /// <summary>True when the turn is a follow-up routed directly to the active agent.</summary>
-    public const string TurnIsFollowUp = "turn.is_followup";
-
-    /// <summary>Display name of the agent that handled this turn (e.g. "Morgana (Billing)").</summary>
-    public const string TurnAgentName = "turn.agent_name";
-
-    /// <summary>Classified intent for this turn (e.g. "billing", "contract", "other").</summary>
-    public const string TurnIntent = "turn.intent";
 
     // ==============================================================================
     // ATTRIBUTE NAMES — GUARD
