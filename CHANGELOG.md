@@ -48,7 +48,7 @@ This release introduces **end-to-end distributed tracing** across the entire Mor
 - Updated `Microsoft.Extensions.AI` dependency to 12.3.0 (**BREAKING CHANGES**: we have to wait a fix for a regression impacting our MCP tooling system)
 
 ### 🐛 Fixed
-- Docker images did not copy `Morgana.Examples.dll` into `plugins` directory (generating an agentless Morgana...)
+- Docker images did not copy `Morgana.Examples.dll` into `plugins` directory, generating an agentless Morgana...
 
 ### 🚀 Future Enablement
 - **Production observability** — With an OTLP backend (Jaeger, Grafana Tempo, Azure Monitor, ...), every Morgana conversation becomes fully navigable: intent distribution, per-agent TTFT trends, guard violation rates and pipeline latencies all visible on a single dashboard
