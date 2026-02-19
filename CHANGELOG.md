@@ -25,7 +25,7 @@ This release introduces **end-to-end distributed tracing** across the entire Mor
 
 **Flexible Exporter Configuration**
 - Array-based exporter configuration supporting multiple simultaneous exporters
-- Built-in exporters: `console` (development), `otlp` (Jaeger, Grafana Tempo, Azure Monitor, Datadog)
+- Built-in exporters: `console` (development), `otlp` (Jaeger, Grafana Tempo, Azure Monitor, Datadog, ...)
 
 ```json
 {
