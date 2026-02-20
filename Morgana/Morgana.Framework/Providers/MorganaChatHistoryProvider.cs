@@ -25,6 +25,7 @@ namespace Morgana.Framework.Providers;
 /// </remarks>
 public class MorganaChatHistoryProvider : ChatHistoryProvider
 {
+    /// <summary>Logger for provider-level diagnostics.</summary>
     private readonly ILogger logger;
 
     /// <summary>
