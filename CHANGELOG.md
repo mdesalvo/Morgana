@@ -4,10 +4,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-
 ## [0.18.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: OpenTelemetry Distributed Tracing
+This release introduces **end-to-end distributed tracing** across the entire Morgana conversation pipeline, providing deep observability for both technical diagnostics and functional conversation analytics. Traces are structured to be meaningful to **IT operators** (latencies, errors, TTFT) and **non-technical stakeholders** (intent, agent name, response preview).
 
 ### ✨ Added
+**OpenTelemetry Tracing Architecture**
+- New `Morgana.Framework/Telemetry/` module with `MorganaTelemetry` (ActivitySource + attribute constants) and `OpenTelemetryExtensions` (`AddMorganaOpenTelemetry()` registration)
+- Per-turn span (`morgana.turn`) opened at the HTTP boundary in `ConversationController`, propagated into the Akka.NET actor system via `UserMessage.TurnContext`
+- Child spans for each pipeline stage: `morgana.guard`, `morgana.classifier`, `morgana.router`, `morgana.agent`
+- Explicit `ActivityContext` propagation through `UserMessage`, `ProcessingContext` and `AgentRequest` records — solving Akka.NET's ambient `Activity.Current` breakage across thread pool boundaries
+
+**Span Attributes**
+- `conversation.id`, `turn.user_message` (truncated 200 chars) for conversation correlation
+- `guard.compliant`, `guard.violation` for content moderation visibility
+- `classification.intent`, `classification.confidence` for routing diagnostics
+- `router.intent`, `router.agent_path` for agent selection tracking
+- `agent.name`, `agent.intent`, `agent.ttft_ms` (time-to-first-token), `agent.response_preview` (first 150 chars), `agent.is_completed`, `agent.has_quick_replies`
+- `first_chunk` ActivityEvent on first LLM streaming chunk for precise TTFT measurement
+
+**Flexible Exporter Configuration**
+- Array-based exporter configuration supporting multiple simultaneous exporters
+- Built-in exporters: `console` (development), `otlp` (Jaeger, Grafana Tempo, Azure Monitor, Datadog, ...)
+
+```json
+{
+  "Morgana": {
+    "OpenTelemetry": {
+      "Enabled": true,
+      "ServiceName": "Morgana",
+      "Exporters": [
+        { "Name": "console", "Enabled": true },
+        { "Name": "otlp", "Enabled": true, "Endpoint": "http://localhost:4317" }
+      ]
+    }
+  }
+}
+```
 
 ### 🔄 Changed
 - Make streaming response mode configurable under `StreamingResponse:Enabled` appsetting
@@ -15,9 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `Microsoft.Extensions.AI` dependency to 12.3.0 (**BREAKING CHANGES**: we have to wait a fix for a regression impacting our MCP tooling system)
 
 ### 🐛 Fixed
-- Docker images did not copy `Morgana.Examples.dll` into `plugins` directory (generating an agentless Morgana...)
+- Docker images did not copy `Morgana.Examples.dll` into `plugins` directory, generating an agentless Morgana...
 
 ### 🚀 Future Enablement
+- **Production observability** — With an OTLP backend (Jaeger, Grafana Tempo, Azure Monitor, ...), every Morgana conversation becomes fully navigable: intent distribution, per-agent TTFT trends, guard violation rates and pipeline latencies all visible on a single dashboard
 
 
 ## [0.17.0] - 2026-02-11
