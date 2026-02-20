@@ -106,9 +106,8 @@ public class MorganaAgent : MorganaActor
     {
         agentLogger.LogInformation($"Agent {AgentIntent} broadcasting shared context variable: {key}");
 
-        Context.System.GetOrCreateActorAsync<RouterActor>("router", conversationId)
-            .GetAwaiter()
-            .GetResult()
+        Context.System
+            .ActorSelection($"/user/router-{conversationId}")
             .Tell(new Records.BroadcastContextUpdate(AgentIntent, new Dictionary<string, object> { [key] = value }));
     }
 
