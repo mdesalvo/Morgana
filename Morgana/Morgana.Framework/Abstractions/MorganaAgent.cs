@@ -133,7 +133,6 @@ public class MorganaAgent : MorganaActor
     /// <summary>
     /// Processes an incoming <see cref="Records.AgentRequest"/>, running the LLM turn
     /// and streaming or batching the response back to the sender.
-    /// Opens a <c>morgana.agent</c> OTel span as child of <c>AgentRequest.TurnContext</c>.
     /// </summary>
     /// <param name="req">Agent request containing the user's message, optional classification, and OTel TurnContext</param>
     protected virtual async Task ExecuteAgentAsync(Records.AgentRequest req)
