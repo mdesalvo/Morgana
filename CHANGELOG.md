@@ -50,6 +50,7 @@ This release introduces **end-to-end distributed tracing** across the entire Mor
 
 ### 🐛 Fixed
 - Docker images did not copy `Morgana.Examples.dll` into `plugins` directory, generating an agentless Morgana...
+- Ensure to queue shared context updates received before first agent session is established
 
 ### 🚀 Future Enablement
 - **Production observability** — With an OTLP backend (Jaeger, Grafana Tempo, Azure Monitor, ...), every Morgana conversation becomes fully navigable: intent distribution, per-agent TTFT trends, guard violation rates and pipeline latencies all visible on a single dashboard
