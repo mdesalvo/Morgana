@@ -123,7 +123,7 @@ public class MorganaAgentAdapter
     /// A tuple of (AIAgent, MorganaAIContextProvider, MorganaChatHistoryProvider) —
     /// all three singletons for this agent instance.
     /// </returns>
-    public (AIAgent agent, MorganaAIContextProvider provider, MorganaChatHistoryProvider historyProvider) CreateAgent(
+    public (AIAgent agent, MorganaAIContextProvider contextProvider, MorganaChatHistoryProvider historyProvider) CreateAgent(
         Type agentType,
         string conversationId,
         Func<AgentSession?> sessionAccessor,
@@ -131,17 +131,16 @@ public class MorganaAgentAdapter
     {
         HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>()
             ?? throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
-        string intent = intentAttribute.Intent;
 
-        logger.LogInformation($"Creating agent for intent '{intent}'...");
+        logger.LogInformation($"Creating agent for intent '{intentAttribute.Intent}'...");
 
-        Records.Prompt agentPrompt = promptResolverService.ResolveAsync(intent).GetAwaiter().GetResult();
+        Records.Prompt agentPrompt = promptResolverService.ResolveAsync(intentAttribute.Intent).GetAwaiter().GetResult();
 
         Records.ToolDefinition[] agentTools = [.. morganaPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools")
                                                     .Union(agentPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools"))];
 
         MorganaAIContextProvider morganaAIContextProvider = CreateAIContextProvider(
-            intent,
+            intentAttribute.Intent,
             agentTools,
             sharedContextCallback);
 
@@ -151,14 +150,14 @@ public class MorganaAgentAdapter
         {
             AgentSession session = sessionAccessor()
                 ?? throw new InvalidOperationException(
-                    $"Agent '{intent}' has no active session during tool execution. " +
+                    $"Agent '{intentAttribute.Intent}' has no active session during tool execution. " +
                     $"Ensure ExecuteAgentAsync sets aiAgentSession before invoking the agent.");
 
             return new MorganaTool.ToolContext(morganaAIContextProvider, session);
         };
 
         MorganaToolAdapter morganaToolAdapter = CreateToolAdapterForIntent(
-            intent,
+            intentAttribute.Intent,
             agentTools,
             toolContextFactory);
 
@@ -167,7 +166,7 @@ public class MorganaAgentAdapter
         IChatReducer? chatReducer = chatReducerService.CreateReducer(chatClient);
 
         MorganaChatHistoryProvider chatHistoryProvider = new MorganaChatHistoryProvider(
-            intent,
+            intentAttribute.Intent,
             chatReducer,
             logger);
 
@@ -181,8 +180,8 @@ public class MorganaAgentAdapter
                 ChatHistoryProvider = chatHistoryProvider,
 
                 // Give the agent its identifiers
-                Id = $"{intent.ToLower()}-{conversationId}",
-                Name = intent,
+                Id = $"{intentAttribute.Intent.ToLower()}-{conversationId}",
+                Name = intentAttribute.Intent,
 
                 // Give the agent its instructions and tools
                 ChatOptions = new ChatOptions
