@@ -319,15 +319,22 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 JsonElement agentSessionJsonElement = JsonSerializer.Deserialize<JsonElement>(
                     agentSessionJsonString, jsonSerializerOptions);
 
-                // Extract messages array from AgentSession structure
-                if (!agentSessionJsonElement.TryGetProperty("chatHistoryProviderState", out JsonElement chatHistoryProviderStateElement))
+                // Extract messages array from AgentSession structure.
+                // Microsoft.Agents.AI framework serializes provider state under: stateBag → {StateKey} → {payload}.
+                // MorganaChatHistoryProvider.StateKey = "MorganaChatHistoryProvider"
+                if (!agentSessionJsonElement.TryGetProperty("stateBag", out JsonElement stateBagElement))
                 {
-                    logger.LogWarning($"AgentSession for {agentName} missing 'chatHistoryProviderState' property, skipping");
+                    logger.LogWarning($"AgentSession for {agentName} missing 'stateBag' property, skipping");
+                    continue;
+                }
+                if (!stateBagElement.TryGetProperty("MorganaChatHistoryProvider", out JsonElement chatHistoryProviderStateElement))
+                {
+                    logger.LogWarning($"AgentSession.stateBag for {agentName} missing 'MorganaChatHistoryProvider' property, skipping");
                     continue;
                 }
                 if (!chatHistoryProviderStateElement.TryGetProperty("messages", out JsonElement messagesElement))
                 {
-                    logger.LogWarning($"AgentSession.chatHistoryProviderState for {agentName} missing 'messages' property, skipping");
+                    logger.LogWarning($"AgentSession.stateBag.MorganaChatHistoryProvider for {agentName} missing 'messages' property, skipping");
                     continue;
                 }
 
