@@ -1,80 +1,62 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.Framework.Providers;
 
 namespace Morgana.Framework.Abstractions;
 
 /// <summary>
-/// Base class for agent tools that provides context variable access (Get/Set operations).
-/// Tools can read from and write to the agent's conversation context via MorganaAIContextProvider.
+/// Base class for agent tools. Provides built-in context variable access (Get/Set/Drop)
+/// and UI output tools (quick replies, rich cards). Domain-specific tools extend this class.
 /// </summary>
 /// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>MorganaTool provides a foundation for building tools that agents can call during LLM interactions.
-/// The most critical feature is context variable management, which allows agents to remember information
-/// across multiple turns and share information with other agents.</para>
-/// <para><strong>Architecture:</strong></para>
-/// <code>
-/// MorganaTool (base class with context access)
-///   ├── GetInvoices (domain-specific tool)
-///   ├── GetContractDetails (domain-specific tool)
-///   └── ... other custom tools
-/// </code>
-/// <para><strong>Context Variable Types:</strong></para>
-/// <list type="bullet">
-/// <item><term>Local variables</term><description>Agent-specific, not shared with other agents</description></item>
-/// <item><term>Shared variables</term><description>Broadcast to all agents via RouterActor for cross-agent coordination</description></item>
-/// </list>
-/// <para><strong>Usage Pattern:</strong></para>
-/// <para>Tools inherit from MorganaTool and use GetContextVariable/SetContextVariable to interact with
-/// conversation context. The LLM decides when to call these operations based on agent prompts.</para>
-/// <para><strong>Example:</strong></para>
-/// <code>
-/// public class GetInvoicesTool : MorganaTool
-/// {
-///     [ProvideToolForIntent("billing")]
-///     public async Task&lt;InvoiceList&gt; GetInvoices(int count)
-///     {
-///         // First, try to get userId from context
-///         object userId = await GetContextVariable("userId");
+/// <para>Tools access the session's conversation context through a <see cref="ToolContext"/> instance
+/// returned by the <c>getToolContext</c> factory supplied at construction. The factory is evaluated
+/// lazily on each invocation so it always captures the in-flight <see cref="AgentSession"/>
+/// from <see cref="MorganaAgent.CurrentSession"/>.</para>
 ///
-///         // If missing, prompt LLM to ask user
-///         // If present, fetch invoices from backend
+/// <para>Keeping <see cref="AgentSession"/> out of tool method signatures is intentional:
+/// tool methods are inspected by <c>AIFunctionFactory</c> via reflection to generate LLM tool schemas.
+/// Session must not appear as a parameter or it would be exposed to the LLM.</para>
 ///
-///         return invoices;
-///     }
-/// }
+/// <para><strong>Integration overview:</strong></para>
+/// <code>
+/// MorganaTool (base — context + UI tools)
+///   └── BillingTool / ContractTool / ... (domain-specific tools)
+///
+/// Wiring in concrete agent constructor:
+///   new BillingTool(
+///       logger,
+///       () => new ToolContext(aiContextProvider, CurrentSession!));
 /// </code>
 /// </remarks>
 public class MorganaTool
 {
-    /// <summary>
-    /// Logger instance for tool-level diagnostics and context operation tracking.
-    /// </summary>
+    /// <summary>Logger for tool-level diagnostics.</summary>
     protected readonly ILogger toolLogger;
 
     /// <summary>
-    /// Factory function to retrieve the current MorganaAIContextProvider instance.
-    /// Uses a function to enable lazy evaluation and ensure correct scoping per request.
+    /// Factory that returns the provider + session pair for the current turn.
+    /// Evaluated lazily on each tool invocation so it always reflects the active <see cref="AgentSession"/>.
     /// </summary>
-    protected readonly Func<MorganaAIContextProvider> getAIContextProvider;
+    protected readonly Func<ToolContext> getToolContext;
 
     /// <summary>
-    /// Initializes a new instance of MorganaTool with logging and AI context provider access.
+    /// Initializes a new instance of <see cref="MorganaTool"/>.
     /// </summary>
-    /// <param name="toolLogger">Logger instance for tool diagnostics</param>
-    /// <param name="getAIContextProvider">Factory function to retrieve the AI context provider</param>
-    /// <remarks>
-    /// The AI context provider is passed as a Func to ensure each tool call gets the correct
-    /// scoped provider instance for the current conversation and agent.
-    /// </remarks>
+    /// <param name="toolLogger">Logger for tool diagnostics.</param>
+    /// <param name="getToolContext">
+    /// Factory returning the <see cref="ToolContext"/> for the current turn.
+    /// Typically wired as <c>() =&gt; new ToolContext(aiContextProvider, CurrentSession!)</c>
+    /// inside the concrete agent constructor.
+    /// </param>
     public MorganaTool(
         ILogger toolLogger,
-        Func<MorganaAIContextProvider> getAIContextProvider)
+        Func<ToolContext> getToolContext)
     {
         this.toolLogger = toolLogger;
-        this.getAIContextProvider = getAIContextProvider;
+        this.getToolContext = getToolContext;
     }
 
     // =========================================================================
@@ -83,43 +65,23 @@ public class MorganaTool
 
     /// <summary>
     /// Retrieves a context variable from the agent's conversation context.
-    /// Used by agents (via LLM tool calling) to check if information is already available before asking the user.
+    /// Agents should call this before asking the user for any piece of information
+    /// that may already be available.
     /// </summary>
-    /// <param name="variableName">Name of the context variable to retrieve (e.g., "userId", "invoiceId")</param>
+    /// <param name="variableName">Name of the variable to retrieve (e.g. "userId", "invoiceId").</param>
     /// <returns>
-    /// Task containing the variable value if found, or an instructional message if missing.
-    /// The LLM interprets the returned message and decides whether to call SetContextVariable or ask the user.
+    /// The variable value if found, or an instructional message directing the LLM
+    /// to call <see cref="SetContextVariable"/> or ask the user.
     /// </returns>
     /// <remarks>
-    /// <para><strong>Critical Rule (from SKILL.md):</strong></para>
-    /// <para>"Before asking for ANY information from the user, ALWAYS attempt to retrieve it from context using GetContextVariable.
-    /// If the tool returns a valid value, USE IT without asking the user. Ask the user ONLY if the tool indicates the information is missing."</para>
-    /// <para><strong>Return Values:</strong></para>
-    /// <list type="bullet">
-    /// <item><term>Variable found (HIT)</term><description>Returns the variable value directly</description></item>
-    /// <item><term>Variable not found (MISS)</term><description>Returns instructional message for LLM</description></item>
-    /// </list>
-    /// <para><strong>Example LLM Interaction:</strong></para>
-    /// <code>
-    /// LLM: "I need the userId to fetch invoices. Let me check context first."
-    /// Tool call: GetContextVariable("userId")
-    /// Response: "P994E" (HIT)
-    /// LLM: "Great! I have the userId. Proceeding to fetch invoices..."
-    ///
-    /// vs.
-    ///
-    /// LLM: "I need the userId to fetch invoices. Let me check context first."
-    /// Tool call: GetContextVariable("userId")
-    /// Response: "Information userId not available in context: you need to engage SetContextVariable to set it." (MISS)
-    /// LLM: "Could you please provide your customer ID? #INT#"
-    /// </code>
-    /// <para><strong>Logging:</strong></para>
-    /// <para>Logs HIT/MISS status with variable name and value for debugging context management issues.</para>
+    /// <para><strong>Skill rule:</strong> Before asking for ANY information from the user,
+    /// ALWAYS attempt to retrieve it from context using <see cref="GetContextVariable"/>.
+    /// Ask the user only if this tool indicates the information is missing.</para>
     /// </remarks>
     public Task<object> GetContextVariable(string variableName)
     {
-        MorganaAIContextProvider aiContextProvider = getAIContextProvider();
-        object? value = aiContextProvider.GetVariable(variableName);
+        ToolContext ctx = getToolContext();
+        object? value = ctx.Provider.GetVariable(ctx.Session, variableName);
 
         if (value != null)
         {
@@ -137,41 +99,16 @@ public class MorganaTool
     }
 
     /// <summary>
-    /// Sets a context variable in the agent's conversation context.
-    /// If the variable is marked as shared (in configuration), the provider automatically broadcasts it to other agents.
+    /// Stores a variable in the agent's conversation context.
+    /// If the variable is declared as shared in configuration, it is automatically broadcast to sibling agents.
     /// </summary>
-    /// <param name="variableName">Name of the context variable to set (e.g., "userId", "invoiceId")</param>
-    /// <param name="variableValue">Value to store in the context</param>
-    /// <returns>Task containing a confirmation message for the LLM</returns>
-    /// <remarks>
-    /// <para><strong>Shared vs Local Variables:</strong></para>
-    /// <para>Whether a variable is shared or local is determined by tool configuration in agents.json.
-    /// Tools declare parameters with "Scope": "context" and "Shared": true/false.</para>
-    /// <para><strong>Shared Variable Flow (example: userId):</strong></para>
-    /// <list type="number">
-    /// <item>BillingAgent calls SetContextVariable("userId", "P994E")</item>
-    /// <item>MorganaAIContextProvider.SetVariable checks configuration: userId is marked Shared=true</item>
-    /// <item>Provider calls agent's OnSharedContextUpdate callback</item>
-    /// <item>Agent broadcasts to RouterActor via BroadcastContextUpdate</item>
-    /// <item>RouterActor sends ReceiveContextUpdate to all other agents</item>
-    /// <item>ContractAgent and MonkeysAgent receive and merge the userId</item>
-    /// <item>All agents can now use userId without asking the user again</item>
-    /// </list>
-    /// <para><strong>Local Variable Flow (example: invoiceId):</strong></para>
-    /// <list type="number">
-    /// <item>BillingAgent calls SetContextVariable("invoiceId", "INV-2024-001")</item>
-    /// <item>MorganaAIContextProvider.SetVariable checks configuration: invoiceId is marked Shared=false</item>
-    /// <item>Variable stored locally, no broadcast occurs</item>
-    /// <item>Only BillingAgent can access this variable</item>
-    /// </list>
-    /// <para><strong>LLM Feedback:</strong></para>
-    /// <para>Returns a confirmation message that the LLM sees, confirming the variable was stored.
-    /// This helps the LLM understand that the information is now available for future tool calls.</para>
-    /// </remarks>
+    /// <param name="variableName">Name of the variable to set (e.g. "userId", "invoiceId").</param>
+    /// <param name="variableValue">Value to store.</param>
+    /// <returns>Confirmation message for the LLM.</returns>
     public Task<object> SetContextVariable(string variableName, string variableValue)
     {
-        MorganaAIContextProvider aiContextProvider = getAIContextProvider();
-        aiContextProvider.SetVariable(variableName, variableValue);
+        ToolContext ctx = getToolContext();
+        ctx.Provider.SetVariable(ctx.Session, variableName, variableValue);
 
         return Task.FromResult<object>(
             $"Information {variableName} inserted in context with value: {variableValue}");
@@ -182,62 +119,29 @@ public class MorganaTool
     // =========================================================================
 
     /// <summary>
-    /// System tool that allows the LLM to set quick reply buttons for the user interface.
-    /// This tool gives the LLM control over when and how to offer guided interaction options.
+    /// Sets quick reply buttons to be rendered in the user interface below the agent's response.
     /// </summary>
     /// <param name="quickReplies">
-    /// JSON string containing an array of quick reply definitions.
-    /// Each quick reply has: id (identifier), label (display text with emoji), value (message to send).
+    /// JSON array of quick reply definitions. Each object requires:
+    /// <c>id</c> (identifier), <c>label</c> (display text, may include emoji), <c>value</c> (message sent on tap).
     /// </param>
-    /// <returns>Confirmation message for the LLM indicating quick replies were set</returns>
+    /// <returns>Confirmation message for the LLM.</returns>
     /// <remarks>
-    /// <para><strong>Purpose:</strong></para>
-    /// <para>SetQuickReplies is a SYSTEM TOOL that the LLM can call when it wants to provide
-    /// guided interaction options to the user. This gives the LLM full control over quick reply
-    /// generation based on conversation context.</para>
-    ///
-    /// <para><strong>LLM Decision Making:</strong></para>
-    /// <para>The LLM decides to call SetQuickReplies when:</para>
-    /// <list type="bullet">
-    /// <item>Presenting multiple options to choose from (guides, invoices, actions)</item>
-    /// <item>Asking a question with predefined answers (yes/no, selections)</item>
-    /// <item>Offering next steps after completing an operation</item>
-    /// <item>Providing navigation options in a multi-step workflow</item>
-    /// </list>
-    ///
-    /// <para><strong>JSON Format Expected:</strong></para>
+    /// <para><strong>Expected JSON format:</strong></para>
     /// <code>
     /// [
     ///   {
     ///     "id": "no-internet",
     ///     "label": "🔴 No Internet Connection",
     ///     "value": "Show me the no-internet assistance guide"
-    ///   },
-    ///   {
-    ///     "id": "slow-speed",
-    ///     "label": "🐌 Slow Connection Speed",
-    ///     "value": "Show me the slow-connection assistance guide"
     ///   }
     /// ]
     /// </code>
-    ///
-    /// <para><strong>Single Record Design:</strong></para>
-    /// <para>Uses QuickReply with JsonPropertyName attributes.
-    /// Same record serves as both runtime model and JSON DTO - no duplication!</para>
-    ///
-    /// <para><strong>Design Guidelines for LLM:</strong></para>
-    /// <list type="bullet">
-    /// <item><term>Use emoji in labels</term><description>Visual appeal: "🔧 Run Diagnostics" not "Run Diagnostics"</description></item>
-    /// <item><term>Action-oriented labels</term><description>"Show Invoice Details" not "Invoice Details"</description></item>
-    /// <item><term>Natural values</term><description>Value should be what user would naturally type</description></item>
-    /// <item><term>Clear IDs</term><description>Use descriptive IDs like "invoice-001" not "btn1"</description></item>
-    /// </list>
     /// </remarks>
     public Task<object> SetQuickReplies(string quickReplies)
     {
         try
         {
-            // Validate JSON by attempting to parse
             List<Records.QuickReply>? parsedQuickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickReplies);
             if (parsedQuickReplies == null || !parsedQuickReplies.Any())
             {
@@ -245,13 +149,11 @@ public class MorganaTool
                 return Task.FromResult<object>("Warning: No quick replies were set (empty or invalid data).");
             }
 
-            // Store the JSON string of the quick replies under a reserved context variable
-            MorganaAIContextProvider aiContextProvider = getAIContextProvider();
-            aiContextProvider.SetVariable("quick_replies", quickReplies);
+            ToolContext ctx = getToolContext();
+            ctx.Provider.SetVariable(ctx.Session, "quick_replies", quickReplies);
 
             toolLogger.LogInformation($"LLM set {parsedQuickReplies.Count} quick reply buttons via SetQuickReplies tool");
 
-            // Return confirmation to LLM
             return Task.FromResult<object>(
                 $"Quick reply buttons set successfully. The user will see {parsedQuickReplies.Count} interactive options. " +
                 $"Now provide your text response to the user - the quick reply buttons will appear below your message.");
@@ -270,73 +172,38 @@ public class MorganaTool
     // =========================================================================
 
     /// <summary>
-    /// Sets a rich card for structured visual presentation of complex data.
-    /// LLM calls this tool when presenting invoices, profiles, reports, or any structured information
-    /// that benefits from visual hierarchy instead of plain text.
+    /// Sets a rich card for structured visual presentation of complex data in the user interface.
+    /// Use when presenting invoices, profiles, reports, or any content that benefits from
+    /// visual hierarchy over plain text.
     /// </summary>
     /// <param name="richCard">
     /// JSON string containing the rich card structure with title, subtitle, and components array.
     /// </param>
-    /// <returns>Confirmation message for the LLM indicating the card was set</returns>
+    /// <returns>Confirmation message for the LLM.</returns>
     /// <remarks>
-    /// <para><strong>Purpose:</strong></para>
-    /// <para>SetRichCard is a SYSTEM TOOL enabling the LLM to present structured data visually.
-    /// Similar to SetQuickReplies but for data presentation rather than user actions.</para>
-    ///
-    /// <para><strong>LLM Decision Making:</strong></para>
-    /// <para>The LLM should call SetRichCard when presenting:</para>
-    /// <list type="bullet">
-    /// <item>Invoices, receipts, financial documents</item>
-    /// <item>User or product profiles</item>
-    /// <item>Structured reports with sections</item>
-    /// <item>Comparisons or side-by-side data</item>
-    /// <item>Any data that benefits from visual organization</item>
-    /// </list>
-    ///
-    /// <para><strong>JSON Format Expected:</strong></para>
-    /// <code>
-    /// {
-    ///   "title": "Invoice #2024-001",
-    ///   "subtitle": "Issued on 15/01/2024",
-    ///   "components": [
-    ///     { "type": "key_value", "key": "Customer", "value": "Acme Corp" },
-    ///     { "type": "divider" },
-    ///     { "type": "section", "title": "Line Items", "components": [
-    ///       { "type": "list", "items": ["Consulting: €800", "Development: €450"], "style": "plain" }
-    ///     ]},
-    ///     { "type": "key_value", "key": "Total", "value": "€1,250.00", "emphasize": true },
-    ///     { "type": "badge", "text": "Paid", "variant": "success" }
-    ///   ]
-    /// }
-    /// </code>
-    ///
     /// <para><strong>Constraints:</strong></para>
     /// <list type="bullet">
-    /// <item>Maximum nesting depth: 3 levels (validated before storage)</item>
-    /// <item>Maximum 50 components total (prevents abuse)</item>
-    /// <item>Keep cards focused: 10-20 components recommended</item>
+    /// <item>Maximum nesting depth: 3 levels</item>
+    /// <item>Maximum 50 components total</item>
     /// </list>
     /// </remarks>
     public Task<object> SetRichCard(string richCard)
     {
         try
         {
-            // Validate JSON by attempting to deserialize
             Records.RichCard? parsedRichCard = JsonSerializer.Deserialize<Records.RichCard>(
                 richCard, new JsonSerializerOptions
                 {
                     AllowOutOfOrderMetadataProperties = true,
                     Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
                     PropertyNameCaseInsensitive = true
-                }
-            );
+                });
             if (parsedRichCard == null)
             {
                 toolLogger.LogWarning("SetRichCard called with invalid JSON structure");
                 return Task.FromResult<object>("Error: Rich card JSON structure is invalid.");
             }
 
-            // Validate depth constraint (max 3 levels)
             int depth = CalculateMaxDepth(parsedRichCard.Components, 1);
             if (depth > 3)
             {
@@ -346,7 +213,6 @@ public class MorganaTool
                     $"Please simplify the card structure.");
             }
 
-            // Validate component count (max 50 to prevent abuse)
             int totalComponents = CountComponents(parsedRichCard.Components);
             if (totalComponents > 50)
             {
@@ -356,15 +222,13 @@ public class MorganaTool
                     $"Please create a more focused card.");
             }
 
-            // Store the rich card JSON under a reserved context variable
-            MorganaAIContextProvider aiContextProvider = getAIContextProvider();
-            aiContextProvider.SetVariable("rich_card", richCard);
+            ToolContext ctx = getToolContext();
+            ctx.Provider.SetVariable(ctx.Session, "rich_card", richCard);
 
             toolLogger.LogInformation(
                 $"LLM set rich card '{parsedRichCard.Title}' with {totalComponents} components " +
                 $"(depth: {depth}) via SetRichCard tool");
 
-            // Return confirmation to LLM
             return Task.FromResult<object>(
                 $"Rich card set successfully. The user will see a structured visual card titled '{parsedRichCard.Title}'. " +
                 $"You can now provide additional context or explanation in text if needed.");
@@ -413,11 +277,39 @@ public class MorganaTool
         foreach (Records.CardComponent component in components)
         {
             if (component is Records.SectionComponent section)
-            {
                 count += CountComponents(section.Components);
-            }
         }
 
         return count;
+    }
+
+    // =========================================================================
+    // TOOL CONTEXT
+    // =========================================================================
+
+    /// <summary>
+    /// Pairs the <see cref="MorganaAIContextProvider"/> singleton with the current <see cref="AgentSession"/>.
+    /// Returned by the <c>getToolContext</c> factory on each tool invocation.
+    /// </summary>
+    /// <remarks>
+    /// <para>Bundling provider and session in a struct keeps tool method signatures clean:
+    /// the LLM sees only the declared parameters, not the infrastructure objects required
+    /// to execute the call.</para>
+    /// <para>The factory is evaluated lazily at call time, so <see cref="Session"/> always
+    /// reflects the in-flight turn (see <see cref="MorganaAgent.CurrentSession"/>).</para>
+    /// </remarks>
+    public readonly struct ToolContext
+    {
+        /// <summary>The singleton context provider for this agent.</summary>
+        public MorganaAIContextProvider Provider { get; }
+
+        /// <summary>The active session for the current turn.</summary>
+        public AgentSession Session { get; }
+
+        public ToolContext(MorganaAIContextProvider provider, AgentSession session)
+        {
+            Provider = provider;
+            Session = session;
+        }
     }
 }

@@ -1,51 +1,39 @@
-using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 
 namespace Morgana.Framework.Providers;
 
 /// <summary>
-/// Morgana's extension of AIContextProvider that maintains agent conversation context variables.
-/// Supports automatic serialization/deserialization for persistence with AgentSession
-/// and cross-agent context sharing via RouterActor broadcast mechanism.
+/// Manages per-session conversation context variables for a Morgana agent.
+/// Supports cross-agent variable sharing via the RouterActor broadcast mechanism.
 /// </summary>
 /// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>This provider serves as the central storage for conversation variables (e.g., userId, invoiceId)
-/// that agents need to remember across multiple turns. It integrates with the Microsoft.Agents.AI framework
-/// while adding Morgana-specific features like shared variable broadcasting.</para>
-/// <para><strong>Key Features:</strong></para>
+/// <para>One instance is created per agent intent and shared across all sessions of that agent.
+/// Session-specific state (the variable dictionary) lives in <see cref="AgentSession"/> via
+/// <see cref="ProviderSessionState{T}"/> and is serialized automatically by the framework.</para>
+///
+/// <para><strong>Key behaviours:</strong></para>
 /// <list type="bullet">
-/// <item><term>Variable Storage</term><description>Dictionary-based storage for conversation variables</description></item>
-/// <item><term>Shared Variables</term><description>Automatic broadcast of shared variables to other agents</description></item>
-/// <item><term>First-Write-Wins</term><description>Conflict resolution for cross-agent variable merging</description></item>
-/// <item><term>Serialization</term><description>JSON serialization for AgentSession persistence</description></item>
-/// <item><term>Logging</term><description>Comprehensive logging of all variable operations</description></item>
+/// <item><term>Variable storage</term><description>Per-session dictionary persisted inside AgentSession.</description></item>
+/// <item><term>Shared variables</term><description>Variables declared as shared are broadcast to sibling agents via <see cref="OnSharedContextUpdate"/>.</description></item>
+/// <item><term>Merge strategy</term><description>First-write-wins: incoming shared values are ignored if the variable is already set locally.</description></item>
 /// </list>
-/// <para><strong>Architecture Integration:</strong></para>
+///
+/// <para><strong>Integration overview:</strong></para>
 /// <code>
-/// MorganaAgent
-///   └── MorganaAIContextProvider (one per agent instance)
-///         ├── AgentContext Dictionary (variable storage)
-///         ├── SharedVariableNames HashSet (from tool definitions)
-///         └── OnSharedContextUpdate Callback (broadcasts to RouterActor)
+/// MorganaAgent (one per intent)
+///   └── MorganaAIContextProvider (singleton, attached to AIAgent)
+///         ├── ProviderSessionState&lt;MorganaContextState&gt; → AgentSession (per-session)
+///         ├── SharedVariableNames (derived from tool definitions at startup)
+///         └── OnSharedContextUpdate → RouterActor broadcast
 ///
 /// MorganaTool
-///   ├── GetContextVariable() → MorganaAIContextProvider.GetVariable()
-///   └── SetContextVariable() → MorganaAIContextProvider.SetVariable()
-///                                  └── Triggers broadcast if shared
-/// </code>
-/// <para><strong>Shared Variable Flow:</strong></para>
-/// <code>
-/// 1. BillingAgent tool sets userId (shared variable)
-/// 2. MorganaAIContextProvider.SetVariable detects shared variable
-/// 3. Invokes OnSharedContextUpdate callback
-/// 4. BillingAgent.OnSharedContextUpdate broadcasts to RouterActor
-/// 5. RouterActor sends ReceiveContextUpdate to all other agents
-/// 6. ContractAgent receives and calls MergeSharedContext
-/// 7. ContractAgent now has userId without asking user
+///   ├── GetContextVariable → MorganaAIContextProvider.GetVariable(session, name)
+///   └── SetContextVariable → MorganaAIContextProvider.SetVariable(session, name, value)
+///                                └── triggers broadcast if variable is shared
 /// </code>
 /// </remarks>
 public class MorganaAIContextProvider : AIContextProvider
@@ -53,77 +41,51 @@ public class MorganaAIContextProvider : AIContextProvider
     private readonly ILogger logger;
 
     /// <summary>
-    /// Set of "shared" variable names, which are subject to the automatic broadcasting
-    /// algorythm occurring between all the Morgana agents during tool's writing
+    /// Names of variables subject to automatic cross-agent broadcasting.
+    /// Derived from tool definitions (Scope="context", Shared=true) at construction time.
     /// </summary>
-    private ImmutableHashSet<string> SharedVariableNames;
+    private readonly ImmutableHashSet<string> sharedVariableNames;
 
     /// <summary>
-    /// Source of truth for agent context variables (persistent across turns).
-    /// Stores all conversation variables accessible via GetContextVariable/SetContextVariable tools.
+    /// Manages storage and retrieval of <see cref="MorganaContextState"/> within <see cref="AgentSession"/>.
     /// </summary>
-    private ConcurrentDictionary<string, object> AgentContext = [];
+    private readonly ProviderSessionState<MorganaContextState> sessionState;
 
     /// <summary>
-    /// Callback invoked when a shared variable is set.
-    /// Typically wired to MorganaAgent.OnSharedContextUpdate for broadcasting to RouterActor.
+    /// Invoked when a shared variable is written.
+    /// Wired by MorganaAgent to broadcast the update to the RouterActor.
     /// </summary>
     public Action<string, object>? OnSharedContextUpdate { get; set; }
 
     /// <summary>
-    /// Initializes a new instance of MorganaAIContextProvider.
+    /// Key used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
     /// </summary>
-    /// <param name="logger">Logger instance for context operation diagnostics</param>
+    public override string StateKey => nameof(MorganaAIContextProvider);
+
+    /// <summary>
+    /// Initializes a new singleton instance of <see cref="MorganaAIContextProvider"/>.
+    /// </summary>
+    /// <param name="logger">Logger for context operation diagnostics.</param>
     /// <param name="sharedVariableNames">
     /// Names of variables that should be broadcast to other agents when set.
-    /// Extracted from tool definitions where Scope="context" and Shared=true.
+    /// Typically extracted from tool definitions where Scope="context" and Shared=true.
+    /// </param>
+    /// <param name="jsonSerializerOptions">
+    /// JSON serialization options for state persistence.
+    /// Defaults to <c>AgentAbstractionsJsonUtilities.DefaultOptions</c>.
     /// </param>
     public MorganaAIContextProvider(
         ILogger logger,
-        IEnumerable<string>? sharedVariableNames = null)
-    {
-        this.logger = logger;
-        this.SharedVariableNames = [.. sharedVariableNames ?? []];
-    }
-
-    /// <summary>
-    /// Initializes a new instance of MorganaAIContextProvider from serialized state (deserialization).
-    /// Used by AgentSession.DeserializeSessionAsync to restore provider state from persistence.
-    /// </summary>
-    /// <param name="logger">Logger instance for context operation diagnostics</param>
-    /// <param name="serializedState">Serialized provider state from Serialize() method</param>
-    /// <param name="jsonSerializerOptions">JSON serialization options (defaults to AgentAbstractionsJsonUtilities.DefaultOptions)</param>
-    public MorganaAIContextProvider(
-        ILogger logger,
-        JsonElement serializedState,
+        IEnumerable<string>? sharedVariableNames = null,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
         this.logger = logger;
+        this.sharedVariableNames = [.. sharedVariableNames ?? []];
 
-        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
-
-        // Deserialize AgentContext
-        if (serializedState.TryGetProperty(nameof(AgentContext), out JsonElement contextElement))
-        {
-            AgentContext = contextElement.Deserialize<ConcurrentDictionary<string, object>>(jsonSerializerOptions) ?? [];
-        }
-        else
-        {
-            AgentContext = [];
-        }
-
-        // Deserialize SharedVariableNames
-        if (serializedState.TryGetProperty(nameof(SharedVariableNames), out JsonElement sharedElement))
-        {
-            SharedVariableNames = sharedElement.Deserialize<ImmutableHashSet<string>>(jsonSerializerOptions) ?? [];
-        }
-        else
-        {
-            SharedVariableNames = [];
-        }
-
-        logger.LogInformation(
-            $"{nameof(MorganaAIContextProvider)} DESERIALIZED {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
+        sessionState = new ProviderSessionState<MorganaContextState>(
+            stateInitializer: _ => new MorganaContextState(),
+            stateKey: StateKey,
+            jsonSerializerOptions: jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions);
     }
 
     // =========================================================================
@@ -131,12 +93,14 @@ public class MorganaAIContextProvider : AIContextProvider
     // =========================================================================
 
     /// <summary>
-    /// Retrieves a variable from the agent's persistent context.
-    /// Used by GetContextVariable tool to check if information is already available.
+    /// Retrieves a variable from the session's conversation context.
+    /// Returns <c>null</c> if the variable has not been set.
     /// </summary>
-    public object? GetVariable(string variableName)
+    public object? GetVariable(AgentSession session, string variableName)
     {
-        if (AgentContext.TryGetValue(variableName, out object? value))
+        MorganaContextState contextState = sessionState.GetOrInitializeState(session);
+
+        if (contextState.Variables.TryGetValue(variableName, out object? value))
         {
             logger.LogInformation($"{nameof(MorganaAIContextProvider)} GET '{variableName}' = '{value}'");
             return value;
@@ -147,14 +111,17 @@ public class MorganaAIContextProvider : AIContextProvider
     }
 
     /// <summary>
-    /// Sets a variable in the agent's persistent context.
-    /// If the variable is marked as shared, invokes the callback to notify RouterActor for broadcasting.
+    /// Writes a variable to the session's conversation context.
+    /// If the variable is declared as shared, <see cref="OnSharedContextUpdate"/> is invoked
+    /// to broadcast the new value to sibling agents via the RouterActor.
     /// </summary>
-    public void SetVariable(string variableName, object variableValue)
+    public void SetVariable(AgentSession session, string variableName, object variableValue)
     {
-        AgentContext.AddOrUpdate(variableName, variableValue, (_, _) => variableValue);
+        MorganaContextState contextState = sessionState.GetOrInitializeState(session);
+        contextState.Variables[variableName] = variableValue;
+        sessionState.SaveState(session, contextState);
 
-        bool isShared = SharedVariableNames.Contains(variableName);
+        bool isShared = sharedVariableNames.Contains(variableName);
 
         logger.LogInformation(
             $"{nameof(MorganaAIContextProvider)} SET {(isShared ? "SHARED" : "PRIVATE")} '{variableName}' = '{variableValue}'");
@@ -164,25 +131,35 @@ public class MorganaAIContextProvider : AIContextProvider
     }
 
     /// <summary>
-    /// Removes a temporary variable from the agent's persistent context, freeing memory immediately.
+    /// Removes a variable from the session's conversation context.
+    /// Used to discard ephemeral data (e.g. quick replies, rich cards) after they have been consumed.
     /// </summary>
-    public void DropVariable(string variableName)
+    public void DropVariable(AgentSession session, string variableName)
     {
-        if (AgentContext.Remove(variableName, out _))
+        MorganaContextState contextState = sessionState.GetOrInitializeState(session);
+
+        if (contextState.Variables.Remove(variableName))
+        {
+            sessionState.SaveState(session, contextState);
             logger.LogInformation($"{nameof(MorganaAIContextProvider)} DROPPED '{variableName}'");
+        }
     }
 
     /// <summary>
-    /// Merges shared context variables received from other agents (peer-to-peer context synchronization).
-    /// Uses first-write-wins strategy: accepts only variables not already present in local context.
+    /// Merges shared context variables received from a sibling agent.
+    /// Applies first-write-wins: variables already present in local context are not overwritten.
     /// </summary>
-    public void MergeSharedContext(Dictionary<string, object> sharedContext)
+    public void MergeSharedContext(AgentSession session, Dictionary<string, object> sharedContext)
     {
+        MorganaContextState contextState = sessionState.GetOrInitializeState(session);
+        bool changed = false;
+
         foreach (KeyValuePair<string, object> kvp in sharedContext)
         {
-            if (!AgentContext.TryGetValue(kvp.Key, out object? value))
+            if (!contextState.Variables.TryGetValue(kvp.Key, out object? existing))
             {
-                AgentContext[kvp.Key] = kvp.Value;
+                contextState.Variables[kvp.Key] = kvp.Value;
+                changed = true;
 
                 logger.LogInformation(
                     $"{nameof(MorganaAIContextProvider)} MERGED shared context '{kvp.Key}' = '{kvp.Value}'");
@@ -190,42 +167,33 @@ public class MorganaAIContextProvider : AIContextProvider
             else
             {
                 logger.LogInformation(
-                    $"{nameof(MorganaAIContextProvider)} IGNORED shared context '{kvp.Key}' (already set to '{value}')");
+                    $"{nameof(MorganaAIContextProvider)} IGNORED shared context '{kvp.Key}' (already set to '{existing}')");
             }
         }
+
+        if (changed)
+            sessionState.SaveState(session, contextState);
     }
 
     /// <summary>
-    /// Propagates all shared context variables to other agents via OnSharedContextUpdate callback.
-    /// Called after deserialization once the callback has been reconnected.
+    /// Re-broadcasts all shared variables for a session via <see cref="OnSharedContextUpdate"/>.
+    /// Called after a session is loaded so that sibling agents receive any shared values
+    /// that were established during a previous conversation turn.
     /// </summary>
-    /// <remarks>
-    /// <para><strong>Purpose:</strong></para>
-    /// <para>When an agent is reloaded from persistence, its shared variables need to be broadcast
-    /// to other agents so they can receive the context. This method is called explicitly after
-    /// the OnSharedContextUpdate callback has been reconnected in MorganaAgent.DeserializeSessionAsync.</para>
-    /// <para><strong>Timing:</strong></para>
-    /// <list type="number">
-    /// <item>MorganaAIContextProvider constructor deserializes state (callback still NULL)</item>
-    /// <item>MorganaAgent.DeserializeSessionAsync connects callback</item>
-    /// <item>MorganaAgent.DeserializeSessionAsync calls PropagateSharedVariables()</item>
-    /// <item>Shared variables broadcast to RouterActor</item>
-    /// <item>RouterActor distributes to all other agents</item>
-    /// </list>
-    /// </remarks>
-    public void PropagateSharedVariables()
+    public void PropagateSharedVariables(AgentSession session)
     {
+        MorganaContextState contextState = sessionState.GetOrInitializeState(session);
         int propagatedCount = 0;
 
-        foreach (string sharedVariableName in SharedVariableNames)
+        foreach (string sharedVariableName in sharedVariableNames)
         {
-            if (AgentContext.TryGetValue(sharedVariableName, out object? sharedVariableValue))
+            if (contextState.Variables.TryGetValue(sharedVariableName, out object? value))
             {
-                OnSharedContextUpdate?.Invoke(sharedVariableName, sharedVariableValue);
+                OnSharedContextUpdate?.Invoke(sharedVariableName, value);
                 propagatedCount++;
 
                 logger.LogInformation(
-                    $"{nameof(MorganaAIContextProvider)} PROPAGATED shared variable '{sharedVariableName}' = '{sharedVariableValue}'");
+                    $"{nameof(MorganaAIContextProvider)} PROPAGATED shared variable '{sharedVariableName}' = '{value}'");
             }
         }
 
@@ -236,95 +204,40 @@ public class MorganaAIContextProvider : AIContextProvider
         }
     }
 
-    /// <summary>
-    /// Restores the internal state of this provider from serialized data.
-    /// Used during deserialization to update the existing provider instance instead of creating a new one.
-    /// This preserves tool closures that captured the provider instance.
-    /// </summary>
-    /// <param name="serializedState">Serialized provider state from persistence</param>
-    /// <param name="jsonSerializerOptions">JSON serialization options</param>
-    /// <remarks>
-    /// <para><strong>Why This Exists:</strong></para>
-    /// <para>Tools are created with closures that capture the contextProvider field:
-    /// <code>
-    /// () => contextProvider
-    /// </code></para>
-    /// <para>If we create a new provider instance during deserialization, the tool closures
-    /// still point to the old instance, causing a mismatch where tools write to one instance
-    /// but the agent reads from another.</para>
-    /// <para>By restoring state into the existing instance, we preserve the tool closures.</para>
-    /// </remarks>
-    public void RestoreState(JsonElement serializedState, JsonSerializerOptions? jsonSerializerOptions = null)
-    {
-        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
-
-        // Restore AgentContext
-        if (serializedState.TryGetProperty(nameof(AgentContext), out JsonElement agentContextJsonElement))
-        {
-            ConcurrentDictionary<string, object>? agentContext = agentContextJsonElement.Deserialize<ConcurrentDictionary<string, object>>(jsonSerializerOptions);
-            if (agentContext != null)
-                AgentContext = agentContext;
-        }
-
-        // Restore SharedVariableNames
-        if (serializedState.TryGetProperty(nameof(SharedVariableNames), out JsonElement sharedVariableNamesJsonElement))
-        {
-            ImmutableHashSet<string>? sharedVariableNames = sharedVariableNamesJsonElement.Deserialize<ImmutableHashSet<string>>(jsonSerializerOptions);
-            if (sharedVariableNames != null)
-                SharedVariableNames = sharedVariableNames;
-        }
-
-        logger.LogInformation(
-            $"{nameof(MorganaAIContextProvider)} CONTEXT RESTORED: {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
-    }
-
     // =========================================================================
-    // AIContextProvider (Microsoft.Agents.AI)
+    // AIContextProvider overrides
     // =========================================================================
 
     /// <summary>
-    /// Serializes the provider's internal state for persistence with AgentSession.
+    /// Called BEFORE each agent invocation.
     /// </summary>
-    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-    {
-        logger.LogInformation(
-            $"{nameof(MorganaAIContextProvider)} SERIALIZING {AgentContext.Count} variables and {SharedVariableNames.Count} shared names");
-
-        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
-
-        return JsonSerializer.SerializeToElement(
-            new Dictionary<string, JsonElement>
-            {
-                { nameof(AgentContext), JsonSerializer.SerializeToElement(AgentContext, jsonSerializerOptions) },
-                { nameof(SharedVariableNames), JsonSerializer.SerializeToElement(SharedVariableNames, jsonSerializerOptions) }
-            }, jsonSerializerOptions);
-    }
-
-    /// <summary>
-    /// Hook called BEFORE agent invocation (USER -> AGENT)
-    /// </summary>
-    protected override ValueTask<AIContext> InvokingCoreAsync(
+    protected override ValueTask<AIContext> ProvideAIContextAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
-        // For future usage: this AIContext can be given ephemeral instructions
-        // which will be visible to the agent only during this single roundtrip.
-        // It is useful for injecting transient LLM conditioning strategies...
-
+        // Reserved for future use: inject transient system prompt additions based on current context state.
         return ValueTask.FromResult(new AIContext());
     }
 
     /// <summary>
-    /// Hook called AFTER agent invocation (AGENT -> USER)
+    /// Called AFTER each agent invocation. Override to inspect response messages and apply context updates.
     /// </summary>
-    protected override ValueTask InvokedCoreAsync(
+    protected override ValueTask StoreAIContextAsync(
         InvokedContext context,
         CancellationToken cancellationToken = default)
     {
-        // For future usage: the context we are receiving is returned by the agent
-        // at the end of this single roundtrip. It is useful for inspecting response
-        // messages and executing targeted context updates based on it...
-
+        // Reserved for future use: extract state from response messages and persist via sessionState.SaveState.
         return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Per-session state stored inside <see cref="AgentSession"/> via <see cref="ProviderSessionState{T}"/>.
+    /// Serialized and restored automatically by the framework as part of session persistence.
+    /// </summary>
+    public sealed class MorganaContextState
+    {
+        /// <summary>Conversation variables for this session (e.g. userId, invoiceId).</summary>
+        [JsonPropertyName("variables")]
+        public Dictionary<string, object> Variables { get; set; } = [];
     }
 }

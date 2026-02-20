@@ -18,21 +18,46 @@ namespace Morgana.Framework.Abstractions;
 
 /// <summary>
 /// Base class for domain-specific conversational agents in the Morgana framework.
-/// Extends MorganaActor with AI agent capabilities, conversation session, context management and inter-agent communication.
+/// Extends <see cref="MorganaActor"/> with AI agent capabilities, session management,
+/// conversation context and inter-agent communication.
 /// </summary>
 /// <remarks>
-/// <para><strong>OpenTelemetry:</strong></para>
-/// <para>ExecuteAgentAsync opens a morgana.agent Activity as child of AgentRequest.TurnContext.
-/// It emits a "first_chunk" event on TTFT (time-to-first-token) and sets agent.ttft_ms,
-/// agent.response_preview, agent.is_completed, and agent.has_quick_replies at close time.</para>
+/// <para>Each concrete agent subclass handles one intent. Providers (<see cref="MorganaAIContextProvider"/>,
+/// <see cref="MorganaChatHistoryProvider"/>) are singletons attached to the <see cref="AIAgent"/> instance
+/// and shared across all sessions. All per-session state lives inside <see cref="AgentSession"/>
+/// and is serialized automatically by the framework.</para>
+///
+/// <para><see cref="CurrentSession"/> is set at the start of each <see cref="ExecuteAgentAsync"/> turn
+/// and is the session passed to all provider calls within that turn, including tool invocations.
+/// Because <see cref="MorganaAgent"/> is an Akka actor (single-thread message processing),
+/// there is no concurrent access to <see cref="CurrentSession"/>.</para>
+///
+/// <para><strong>OpenTelemetry:</strong> <see cref="ExecuteAgentAsync"/> opens a <c>morgana.agent</c>
+/// Activity as child of <c>AgentRequest.TurnContext</c>, emits a <c>first_chunk</c> event on TTFT,
+/// and tags the span with <c>agent.ttft_ms</c>, <c>agent.response_preview</c>,
+/// <c>agent.is_completed</c>, and <c>agent.has_quick_replies</c>.</para>
 /// </remarks>
 public class MorganaAgent : MorganaActor
 {
     protected AIAgent aiAgent;
     protected AgentSession? aiAgentSession;
     protected MorganaAIContextProvider aiContextProvider;
+    protected MorganaChatHistoryProvider aiChatHistoryProvider;
     protected readonly IConversationPersistenceService persistenceService;
     protected readonly ILogger agentLogger;
+
+    /// <summary>
+    /// Shared context variables received before this agent's first session was established.
+    /// Drained and applied at the start of the first <see cref="ExecuteAgentAsync"/> turn.
+    /// </summary>
+    private readonly List<Dictionary<string, object>> pendingContextMerges = [];
+
+    /// <summary>
+    /// The active <see cref="AgentSession"/> for the current turn.
+    /// Exposed so that tool closures can pass it to provider calls (GetVariable, SetVariable, etc.).
+    /// Always non-null during a live agent invocation.
+    /// </summary>
+    public AgentSession? CurrentSession => aiAgentSession;
 
     protected string AgentIntent => GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent
                                      ?? throw new InvalidOperationException($"Agent {GetType().Name} must be decorated with [HandlesIntent] attribute");
@@ -56,25 +81,21 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>
-    /// Deserializes a previously serialized AgentSession, restoring conversation history and context state.
+    /// Restores a serialized <see cref="AgentSession"/>, including conversation history and context state.
+    /// After loading, reconnects the <see cref="MorganaAIContextProvider.OnSharedContextUpdate"/> callback
+    /// and re-broadcasts shared variables to sibling agents.
     /// </summary>
     public virtual async Task<AgentSession> DeserializeSessionAsync(
         JsonElement serializedState,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
-
-        JsonElement aiContextProviderState = default;
-        if (serializedState.TryGetProperty("aiContextProviderState", out JsonElement stateElement))
-            aiContextProviderState = stateElement;
-
-        if (aiContextProviderState.ValueKind != JsonValueKind.Undefined)
-            aiContextProvider.RestoreState(aiContextProviderState, jsonSerializerOptions);
-
-        aiContextProvider.OnSharedContextUpdate = OnSharedContextUpdate;
-        aiContextProvider.PropagateSharedVariables();
-
         aiAgentSession = await aiAgent.DeserializeSessionAsync(serializedState, jsonSerializerOptions);
+
+        // Reconnect the broadcast callback — delegates are not serialized.
+        aiContextProvider.OnSharedContextUpdate = OnSharedContextUpdate;
+
+        // Re-broadcast shared variables so sibling agents are up to date.
+        aiContextProvider.PropagateSharedVariables(aiAgentSession);
 
         agentLogger.LogInformation($"Deserialized AgentSession for conversation {conversationId}");
 
@@ -96,15 +117,27 @@ public class MorganaAgent : MorganaActor
         agentLogger.LogInformation(
             $"Agent '{AgentIntent}' received shared context from '{msg.SourceAgentIntent}': {string.Join(", ", msg.UpdatedValues.Keys)}");
 
-        aiContextProvider.MergeSharedContext(msg.UpdatedValues);
+        if (aiAgentSession is null)
+        {
+            // No session yet — queue the merge for the next turn.
+            pendingContextMerges.Add(msg.UpdatedValues);
+
+            agentLogger.LogInformation(
+                $"Agent '{AgentIntent}' queued pending context merge ({pendingContextMerges.Count} total) " +
+                $"from '{msg.SourceAgentIntent}': {string.Join(", ", msg.UpdatedValues.Keys)}");
+            return;
+        }
+
+        aiContextProvider.MergeSharedContext(aiAgentSession, msg.UpdatedValues);
     }
 
     /// <summary>
-    /// Executes the agent using AgentSession for automatic conversation history and context management.
-    /// Opens a morgana.agent OTel span as child of AgentRequest.TurnContext. Records TTFT on first chunk.
+    /// Processes an incoming <see cref="Records.AgentRequest"/>, running the LLM turn
+    /// and streaming or batching the response back to the sender.
+    /// Opens a <c>morgana.agent</c> OTel span as child of <c>AgentRequest.TurnContext</c>.
     /// </summary>
     /// <param name="req">Agent request containing the user's message, optional classification, and OTel TurnContext</param>
-    protected async Task ExecuteAgentAsync(Records.AgentRequest req)
+    protected virtual async Task ExecuteAgentAsync(Records.AgentRequest req)
     {
         IActorRef? senderRef = Sender;
 
@@ -126,16 +159,29 @@ public class MorganaAgent : MorganaActor
             {
                 agentLogger.LogInformation($"Loaded existing conversation session for {AgentIdentifier}");
 
-                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.CreateAgentConversation));
+                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.ResumeAgentConversation));
                 agentSpan?.SetTag(MorganaTelemetry.AgentIdentifier, AgentIdentifier);
             }
             else
             {
                 aiAgentSession = await aiAgent.CreateSessionAsync();
+
                 agentLogger.LogInformation($"Created new conversation session for {AgentIdentifier}");
 
-                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.ResumeAgentConversation));
+                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.CreateAgentConversation));
                 agentSpan?.SetTag(MorganaTelemetry.AgentIdentifier, AgentIdentifier);
+            }
+
+            // Apply any shared context merges that arrived before the session existed.
+            if (pendingContextMerges.Count > 0)
+            {
+                agentLogger.LogInformation(
+                    $"Agent '{AgentIntent}' applying {pendingContextMerges.Count} pending context merge(s)");
+
+                foreach (Dictionary<string, object> pending in pendingContextMerges)
+                    aiContextProvider.MergeSharedContext(aiAgentSession, pending);
+
+                pendingContextMerges.Clear();
             }
 
             StringBuilder fullResponse = new StringBuilder();
@@ -177,23 +223,25 @@ public class MorganaAgent : MorganaActor
             bool hasInteractiveToken = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
             bool endsWithQuestion = llmResponseText.EndsWith('?');
 
-            List<Records.QuickReply>? quickReplies = GetQuickRepliesFromContext();
+            #region LLM tools
+            List<Records.QuickReply>? quickReplies = GetQuickRepliesFromContext(aiAgentSession);
             bool hasQuickReplies = quickReplies?.Count > 0;
 
-            Records.RichCard? richCard = GetRichCardFromContext();
+            Records.RichCard? richCard = GetRichCardFromContext(aiAgentSession);
             bool hasRichCard = richCard != null;
 
             if (hasQuickReplies)
             {
-                aiContextProvider.DropVariable("quick_replies");
+                aiContextProvider.DropVariable(aiAgentSession, "quick_replies");
                 agentLogger.LogInformation($"Dropped {quickReplies!.Count} quick replies from context (ephemeral data)");
             }
 
             if (hasRichCard)
             {
-                aiContextProvider.DropVariable("rich_card");
+                aiContextProvider.DropVariable(aiAgentSession, "rich_card");
                 agentLogger.LogInformation($"Dropped rich card '{richCard!.Title}' from context (ephemeral data)");
             }
+            #endregion
 
             bool isCompleted = !hasInteractiveToken && !endsWithQuestion && !hasQuickReplies && !hasRichCard;
 
@@ -204,10 +252,8 @@ public class MorganaAgent : MorganaActor
                 $"HasRichCard={hasRichCard}," +
                 $"IsCompleted={isCompleted}");
 
-            // Finalise agent span with outcome attributes
-            string responsePreview = llmResponseText.Length > 150
-                ? llmResponseText[..150]
-                : llmResponseText;
+            // Finalize agent span with outcome attributes
+            string responsePreview = llmResponseText.Length > 150 ? llmResponseText[..150] : llmResponseText;
             agentSpan?.SetTag(MorganaTelemetry.AgentIsCompleted, isCompleted);
             agentSpan?.SetTag(MorganaTelemetry.AgentHasQuickReplies, hasQuickReplies);
             agentSpan?.SetTag(MorganaTelemetry.AgentResponsePreview,
@@ -244,7 +290,7 @@ public class MorganaAgent : MorganaActor
         failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
     }
 
-    protected List<Records.QuickReply>? GetQuickRepliesFromContext()
+    protected List<Records.QuickReply>? GetQuickRepliesFromContext(AgentSession session)
     {
         #region Utilities
         List<Records.QuickReply>? GetQuickReplies(string quickRepliesJSON)
@@ -261,14 +307,14 @@ public class MorganaAgent : MorganaActor
             catch (JsonException ex)
             {
                 agentLogger.LogError(ex, "Failed to deserialize quick replies from context");
-                aiContextProvider.DropVariable("quick_replies");
+                aiContextProvider.DropVariable(session, "quick_replies");
             }
 
             return null;
         }
         #endregion
 
-        object? ctxQuickReplies = aiContextProvider.GetVariable("quick_replies");
+        object? ctxQuickReplies = aiContextProvider.GetVariable(session, "quick_replies");
 
         if (ctxQuickReplies is string ctxQuickRepliesJson && !string.IsNullOrEmpty(ctxQuickRepliesJson))
             return GetQuickReplies(ctxQuickRepliesJson);
@@ -279,7 +325,7 @@ public class MorganaAgent : MorganaActor
         return null;
     }
 
-    protected Records.RichCard? GetRichCardFromContext()
+    protected Records.RichCard? GetRichCardFromContext(AgentSession session)
     {
         #region Utilities
         Records.RichCard? GetRichCard(string richCardJSON)
@@ -297,14 +343,14 @@ public class MorganaAgent : MorganaActor
             catch (JsonException ex)
             {
                 agentLogger.LogError(ex, "Failed to deserialize rich card from context");
-                aiContextProvider.DropVariable("rich_card");
+                aiContextProvider.DropVariable(session, "rich_card");
             }
 
             return null;
         }
         #endregion
 
-        object? ctxRichCard = aiContextProvider.GetVariable("rich_card");
+        object? ctxRichCard = aiContextProvider.GetVariable(session, "rich_card");
 
         if (ctxRichCard is string ctxRichCardJson && !string.IsNullOrEmpty(ctxRichCardJson))
             return GetRichCard(ctxRichCardJson);

@@ -15,7 +15,7 @@ public class ContractTool : MorganaTool
 {
     public ContractTool(
         ILogger toolLogger,
-        Func<MorganaAIContextProvider> getContextProvider) : base(toolLogger, getContextProvider) { }
+        Func<ToolContext> getToolContext) : base(toolLogger, getToolContext) { }
 
     // =========================================================================
     // DOMAIN MODELS

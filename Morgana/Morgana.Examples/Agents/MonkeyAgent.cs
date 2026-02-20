@@ -36,8 +36,8 @@ public class MonkeyAgent : MorganaAgent
         ILogger logger,
         MorganaAgentAdapter morganaAgentAdapter,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, conversationPersistenceService, logger, configuration)
-
     {
-        (aiAgent, aiContextProvider) = morganaAgentAdapter.CreateAgent(GetType(), conversationId, OnSharedContextUpdate);
+        (aiAgent, aiContextProvider, aiChatHistoryProvider)
+            = morganaAgentAdapter.CreateAgent(GetType(), conversationId, () => CurrentSession, OnSharedContextUpdate);
     }
 }
