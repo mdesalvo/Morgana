@@ -25,6 +25,8 @@ namespace Morgana.Framework.Providers;
 /// </remarks>
 public class MorganaChatHistoryProvider : ChatHistoryProvider
 {
+    private readonly ILogger logger;
+
     /// <summary>
     /// Optional reducer applied to produce an optimized context window for the LLM.
     /// Never modifies the stored history.
@@ -33,8 +35,6 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
 
     /// <summary>Agent intent label used in log output.</summary>
     private readonly string agentIntent;
-
-    private readonly ILogger logger;
 
     /// <summary>
     /// Manages storage and retrieval of <see cref="MorganaHistoryState"/> within <see cref="AgentSession"/>.
