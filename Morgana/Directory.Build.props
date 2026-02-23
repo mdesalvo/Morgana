@@ -55,7 +55,7 @@
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.3.0" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.3.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.3.0" />
-    <PackageReference Include="ModelContextProtocol.Core" Version="0.9.0-preview.1" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="0.9.0-preview.2" />
     <!-- Services -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />
     <!-- OpenTelemetry -->
