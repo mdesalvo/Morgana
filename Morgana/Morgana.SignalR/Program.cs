@@ -260,12 +260,12 @@ await app.RunAsync();
 //    - Calls JoinConversation(conversationId) hub method
 //
 // 2. CLIENT STARTS CONVERSATION
-//    - POST /api/conversation/start { conversationId: "..." }
+//    - POST /api/morgana/conversation/start { conversationId: "..." }
 //    - Creates ConversationManagerActor and ConversationSupervisorActor
 //    - Supervisor automatically generates and sends presentation via SignalR
 //
 // 3. CLIENT SENDS MESSAGE
-//    - POST /api/conversation/{id}/message { text: "..." }
+//    - POST /api/morgana/conversation/{id}/message { text: "..." }
 //    - Message flows through actor pipeline:
 //      GuardActor → ClassifierActor → RouterActor → SpecializedAgent
 //    - Response sent to client via SignalR (ReceiveMessage event)
@@ -276,7 +276,7 @@ await app.RunAsync();
 //    - Agent signals IsCompleted=true when done, conversation returns to idle
 //
 // 5. CLIENT ENDS CONVERSATION
-//    - POST /api/conversation/{id}/end
+//    - POST /api/morgana/conversation/{id}/end
 //    - Stops ConversationManagerActor and all child actors
 //    - Client calls LeaveConversation(conversationId) and disconnects SignalR
 //

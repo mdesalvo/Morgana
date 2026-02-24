@@ -41,6 +41,9 @@ Morgana will kindly assist you with her magical AI potions just the way you **ne
     <td>
       <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana-Agent.jpg?raw=true" alt="Morgana Agent"/>
     </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Morgana-RichCards.jpg?raw=true" alt="Morgana Rich Cards"/>
+    </td>
   </tr>
 </table>
 

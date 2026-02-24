@@ -35,13 +35,13 @@ builder.Services.AddScoped(sp => new HttpClient
 });
 
 // ==============================================================================
-// SECTION 4: Logging Infrastructure
+// 3. LOGGING INFRASTRUCTURE
 // ==============================================================================
 builder.Services.AddSingleton<ILogger>(sp =>
     sp.GetRequiredService<ILoggerFactory>().CreateLogger("Cauldron"));
 
 // ============================================================================
-// 3. CUSTOM SERVICES
+// 4. CUSTOM SERVICES
 // ============================================================================
 // Register Cauldron-specific services for SignalR client and message handling.
 
@@ -60,7 +60,7 @@ builder.Services.AddScoped<IConversationStorageService, ProtectedLocalStorageSer
 builder.Services.AddScoped<IConversationHistoryService, MorganaConversationHistoryService>();
 
 // ============================================================================
-// 4. APPLICATION PIPELINE
+// 5. APPLICATION PIPELINE
 // ============================================================================
 // Build the application and configure the HTTP request processing pipeline.
 
@@ -83,7 +83,7 @@ app.MapBlazorHub();                     // SignalR hub for Blazor Server UI upda
 app.MapFallbackToPage("/_Host");        // Fallback to _Host.cshtml for all unmatched routes (SPA behavior)
 
 // ============================================================================
-// 5. APPLICATION STARTUP
+// 6. APPLICATION STARTUP
 // ============================================================================
 // Start the application and listen for requests.
 

@@ -26,21 +26,6 @@
 /// <item>Optional fields can be added without breaking compatibility (use default values)</item>
 /// <item>Field removal or type changes are BREAKING and require coordinated deployment</item>
 /// </list>
-/// <para><strong>Wire Format (JSON):</strong></para>
-/// <code>
-/// {
-///   "conversationId": "abc123",
-///   "text": "Hello! How can I help you today?",
-///   "timestamp": "2025-01-23T10:30:00Z",
-///   "messageType": "assistant",
-///   "quickReplies": [
-///     { "id": "billing", "label": "💳 Billing", "value": "Show invoices", "termination": false }
-///   ],
-///   "errorReason": null,
-///   "agentName": "Morgana (Billing)",
-///   "agentCompleted": true
-/// }
-/// </code>
 /// </remarks>
 public sealed class SignalRMessage
 {

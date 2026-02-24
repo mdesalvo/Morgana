@@ -371,7 +371,7 @@
     /// <remarks>
     /// <para><strong>Resume Flow:</strong></para>
     /// <list type="number">
-    /// <item>POST to /api/conversation/{id}/resume</item>
+    /// <item>POST to /api/morgana/conversation/{id}/resume</item>
     /// <item>Backend restores actor hierarchy and loads AgentThread from SQLite</item>
     /// <item>Join SignalR group for this conversation</item>
     /// <item>Backend may send welcome-back message via SignalR (optional)</item>
@@ -391,7 +391,7 @@
 
             // Call Morgana to resume the conversation
             HttpResponseMessage response = await Http.PostAsync(
-                $"/api/conversation/{savedConversationId}/resume", null);
+                $"/api/morgana/conversation/{savedConversationId}/resume", null);
 
             Console.WriteLine($"🟡 Resume response status: {response.StatusCode}");
 
@@ -555,14 +555,14 @@
 
     /// <summary>
     /// Starts a new conversation with Morgana backend.
-    /// Sends POST request to /api/conversation/start, joins SignalR group, saves to storage, and displays presentation message.
+    /// Sends POST request to /api/morgana/conversation/start, joins SignalR group, saves to storage, and displays presentation message.
     /// </summary>
     /// <returns>Task representing the async conversation start operation</returns>
     /// <remarks>
     /// <para><strong>Flow:</strong></para>
     /// <list type="number">
     /// <item>Generate new conversation ID (GUID)</item>
-    /// <item>POST to /api/conversation/start</item>
+    /// <item>POST to /api/morgana/conversation/start</item>
     /// <item>Extract conversationId from response</item>
     /// <item>Join SignalR conversation group</item>
     /// <item>Save conversationId to ProtectedLocalStorage</item>
@@ -577,7 +577,7 @@
             Console.WriteLine("🟢 StartConversation: Calling Morgana...");
 
             // Generate new conversation ID
-            HttpResponseMessage response = await Http.PostAsJsonAsync("/api/conversation/start", new
+            HttpResponseMessage response = await Http.PostAsJsonAsync("/api/morgana/conversation/start", new
             {
                 conversationId = Guid.NewGuid().ToString("N")
             });
@@ -659,7 +659,7 @@
     /// <item>Add user message to messages list</item>
     /// <item>Add typing indicator to messages list</item>
     /// <item>Update UI</item>
-    /// <item>POST to /api/conversation/{conversationId}/message</item>
+    /// <item>POST to /api/morgana/conversation/{conversationId}/message</item>
     /// <item>Wait for response via SignalR (async)</item>
     /// <item>HandleMessageReceived removes typing indicator and adds agent response</item>
     /// </list>
@@ -700,7 +700,7 @@
         try
         {
             // Send message to backend
-            HttpResponseMessage response = await Http.PostAsJsonAsync($"/api/conversation/{conversationId}/message", new
+            HttpResponseMessage response = await Http.PostAsJsonAsync($"/api/morgana/conversation/{conversationId}/message", new
             {
                 conversationId = conversationId,
                 text = messageText

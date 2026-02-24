@@ -1,7 +1,7 @@
 namespace Cauldron.Messages;
 
 /// <summary>
-/// Response model from POST /api/conversation/{id}/resume endpoint.
+/// Response model from POST /api/morgana/conversation/{id}/resume endpoint.
 /// </summary>
 public class ConversationResumeResponse
 {

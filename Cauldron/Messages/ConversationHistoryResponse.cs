@@ -1,15 +1,15 @@
 namespace Cauldron.Messages;
 
 /// <summary>
-/// Response model from GET /api/conversation/{id}/history endpoint.
+/// Response model from GET /api/morgana/conversation/{id}/history endpoint.
 /// Contains the complete conversation history for UI rendering.
 /// </summary>
 /// <remarks>
 /// <para><strong>Usage Flow:</strong></para>
 /// <list type="number">
-/// <item>Client resumes conversation (POST /api/conversation/{id}/resume)</item>
+/// <item>Client resumes conversation (POST /api/morgana/conversation/{id}/resume)</item>
 /// <item>Client joins SignalR group (await SignalRService.JoinConversation)</item>
-/// <item>Client calls GET /api/conversation/{id}/history</item>
+/// <item>Client calls GET /api/morgana/conversation/{id}/history</item>
 /// <item>Backend returns ConversationHistoryResponse with messages array</item>
 /// <item>Client maps MorganaChatMessage[] to ChatMessage[] and populates UI</item>
 /// </list>

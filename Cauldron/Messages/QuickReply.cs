@@ -52,7 +52,7 @@ public class QuickReply
     /// </list>
     /// <para><strong>Processing:</strong></para>
     /// <para>When clicked, this value is sent as a regular user message:
-    /// POST /api/conversation/{id}/message with body: { "text": "{Value}" }</para>
+    /// POST /api/morgana/conversation/{id}/message with body: { "text": "{Value}" }</para>
     /// </remarks>
     public string Value { get; set; } = string.Empty;
 

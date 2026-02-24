@@ -45,7 +45,7 @@ public class MorganaConversationHistoryService : IConversationHistoryService
             _logger.LogInformation($"Retrieving history for conversation {conversationId}");
 
             HttpResponseMessage response = await _httpClient.GetAsync(
-                $"/api/conversation/{conversationId}/history");
+                $"/api/morgana/conversation/{conversationId}/history");
 
             if (response.IsSuccessStatusCode)
             {

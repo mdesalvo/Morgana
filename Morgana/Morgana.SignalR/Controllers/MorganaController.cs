@@ -35,8 +35,8 @@ namespace Morgana.SignalR.Controllers;
 /// breaking ambient Activity.Current across thread pool boundaries.</para>
 /// </remarks>
 [ApiController]
-[Route("api/[controller]")]
-public class ConversationController : ControllerBase
+[Route("api/morgana")]
+public class MorganaController : ControllerBase
 {
     private readonly ActorSystem actorSystem;
     private readonly ILogger logger;
@@ -47,7 +47,7 @@ public class ConversationController : ControllerBase
 
     // ==============================================================================
     /// <summary>
-    /// Initializes a new instance of the ConversationController.
+    /// Initializes a new instance of the MorganaController.
     /// </summary>
     /// <param name="actorSystem">Akka.NET actor system for conversation management</param>
     /// <param name="logger">Logger instance for diagnostic information</param>
@@ -55,7 +55,7 @@ public class ConversationController : ControllerBase
     /// <param name="conversationPersistenceService">Service for recovering an existing conversation</param>
     /// <param name="rateLimitService">Service for rate limiting an existing conversation</param>
     /// <param name="rateLimitOptions">Options for configuration of the rate limiting service</param>
-    public ConversationController(
+    public MorganaController(
         ActorSystem actorSystem,
         ILogger logger,
         IHubContext<MorganaHub> signalrContext,
@@ -79,7 +79,7 @@ public class ConversationController : ControllerBase
     /// 202 Accepted with conversation details immediately.
     /// 500 Internal Server Error on failure.
     /// </returns>
-    [HttpPost("start")]
+    [HttpPost("conversation/start")]
     public async Task<IActionResult> StartConversation([FromBody] Records.StartConversationRequest request)
     {
         try
@@ -115,7 +115,7 @@ public class ConversationController : ControllerBase
     /// 200 OK on successful termination.
     /// 500 Internal Server Error on failure.
     /// </returns>
-    [HttpPost("{conversationId}/end")]
+    [HttpPost("conversation/{conversationId}/end")]
     public async Task<IActionResult> EndConversation(string conversationId)
     {
         try
@@ -147,7 +147,7 @@ public class ConversationController : ControllerBase
     /// 202 Accepted with conversation details and restored active agent immediately.
     /// 500 Internal Server Error on failure.
     /// </returns>
-    [HttpPost("{conversationId}/resume")]
+    [HttpPost("conversation/{conversationId}/resume")]
     public async Task<IActionResult> ResumeConversation(string conversationId)
     {
         try
@@ -195,7 +195,7 @@ public class ConversationController : ControllerBase
     /// 404 Not Found if conversation doesn't exist.
     /// 500 Internal Server Error on failure.
     /// </returns>
-    [HttpGet("{conversationId}/history")]
+    [HttpGet("conversation/{conversationId}/history")]
     public async Task<IActionResult> GetConversationHistory(string conversationId)
     {
         try
@@ -232,7 +232,7 @@ public class ConversationController : ControllerBase
     /// 202 Accepted immediately after message is queued.
     /// 500 Internal Server Error on failure to queue message.
     /// </returns>
-    [HttpPost("{conversationId}/message")]
+    [HttpPost("conversation/{conversationId}/message")]
     public async Task<IActionResult> SendMessage([FromBody] Records.SendMessageRequest request)
     {
         try

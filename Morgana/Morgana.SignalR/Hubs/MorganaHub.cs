@@ -15,9 +15,9 @@ namespace Morgana.SignalR.Hubs;
 /// </list>
 /// <para><strong>Communication Flow:</strong></para>
 /// <code>
-/// Client → HTTP POST /api/conversation/start
+/// Client → HTTP POST /api/morgana/conversation/start
 /// Client → SignalR JoinConversation(conversationId)
-/// Client → HTTP POST /api/conversation/{id}/message
+/// Client → HTTP POST /api/morgana/conversation/{id}/message
 /// Server → Actor Pipeline → IHubContext → SignalR Group → Client receives message
 /// </code>
 /// <para><strong>Group Management:</strong></para>

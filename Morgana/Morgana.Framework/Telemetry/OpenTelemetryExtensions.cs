@@ -44,7 +44,7 @@ public static class TelemetryExtensions
                         .AddService(serviceName))
                         // Register the Morgana ActivitySource
                         .AddSource(MorganaTelemetry.Source.Name)
-                        // Include inbound HTTP requests (ConversationController endpoints)
+                        // Include inbound HTTP requests (MorganaController endpoints)
                         .AddAspNetCoreInstrumentation();
 
                 ExporterConfig[] exporters = section.GetSection("Exporters").Get<ExporterConfig[]>() ?? [];

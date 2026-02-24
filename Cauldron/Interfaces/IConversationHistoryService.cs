@@ -8,7 +8,7 @@ namespace Cauldron.Interfaces;
 /// </summary>
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
-/// <para>This service abstracts the HTTP call to GET /api/conversation/{id}/history,
+/// <para>This service abstracts the HTTP call to GET /api/morgana/conversation/{id}/history,
 /// enabling the Cauldron frontend to load complete conversation history when resuming
 /// a conversation from ProtectedLocalStorage.</para>
 /// <para><strong>Usage Pattern:</strong></para>

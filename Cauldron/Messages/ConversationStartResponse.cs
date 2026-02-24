@@ -1,13 +1,13 @@
 namespace Cauldron.Messages;
 
 /// <summary>
-/// Response model from POST /api/conversation/start endpoint.
+/// Response model from POST /api/morgana/conversation/start endpoint.
 /// Contains the unique conversation identifier and initial status message.
 /// </summary>
 /// <remarks>
 /// <para><strong>Usage Flow:</strong></para>
 /// <list type="number">
-/// <item>Client calls POST /api/conversation/start with new GUID</item>
+/// <item>Client calls POST /api/morgana/conversation/start with new GUID</item>
 /// <item>Backend creates conversation, supervisor, and initiates presentation</item>
 /// <item>Backend returns ConversationStartResponse with conversationId</item>
 /// <item>Client joins SignalR group using conversationId</item>
