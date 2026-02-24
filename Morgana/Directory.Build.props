@@ -37,8 +37,6 @@
         through guard rails, policy enforcement, and comprehensive conversation archival.
     </Description>
 
-    <!-- Disable packaging by default (enable per-project as needed) -->
-    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <!-- Package References -->

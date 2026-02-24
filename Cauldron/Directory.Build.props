@@ -32,8 +32,6 @@
       Cauldron is the official Morgana's frontend.
     </Description>
 
-    <!-- Disable packaging by default (enable per-project as needed) -->
-    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <!-- Package References -->
