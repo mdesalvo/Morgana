@@ -892,16 +892,17 @@
     /// <param name="signalrMessage">Message containing agent name and completion status</param>
     private void UpdateHeaderForAgent(SignalRMessage signalrMessage)
     {
-        if (!string.IsNullOrEmpty(signalrMessage.AgentName))
-        {
-            currentAgentName = signalrMessage.AgentName;
-            Console.WriteLine($"🎨 Header updated: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
-        }
-
         if (signalrMessage.AgentCompleted)
         {
             currentAgentName = "Morgana";
             Console.WriteLine($"🎨 Header reset to: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(signalrMessage.AgentName))
+        {
+            currentAgentName = signalrMessage.AgentName;
+            Console.WriteLine($"🎨 Header updated: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
         }
     }
 
