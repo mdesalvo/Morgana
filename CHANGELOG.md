@@ -44,8 +44,8 @@ This release introduces **end-to-end distributed tracing** across the entire Mor
 
 ### 🔄 Changed
 - Make streaming response mode configurable under `StreamingResponse:Enabled` appsetting
-- Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.1 (**BREAKING CHANGES**: Microsoft's architectural changes inverting provider/session coupling)
-- Updated `Microsoft.Extensions.AI` dependency to 12.3.0 (**BREAKING CHANGES**: we have to wait a fix for a regression impacting our MCP tooling system)
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.1
+- Updated `Microsoft.Extensions.AI` dependency to 12.3.0 (**we have to wait 12.4.0 which should fix a regression impacting our MCP tooling system**)
 - Updated `ModelContextProtocol.Core` dependency to 1.0.0
 
 ### 🐛 Fixed
