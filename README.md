@@ -236,7 +236,7 @@ docker compose down
 
 ## 🛠️ Development (Build from source)
 
-For developers who want to build from source code (**you** will give Morgana **your** domain knowledge in terms of **intents, agents and tools**):
+For developers who want to build from source code (recommended, since **you** will give Morgana **your** domain knowledge in terms of **intents, agents and tools**):
 ```bash
 # 📋 Copy the development template
 cp development.env.template .env
