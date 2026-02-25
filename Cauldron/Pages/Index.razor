@@ -150,18 +150,19 @@
             @onclick="SendMessageAsync"
             disabled="@IsSendButtonDisabled"
             class="send-button @(isSending ? "sending" : "") @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")">
-            <!-- Animated cauldron icon with magical effects -->
             <span class="cauldron-wrapper">
                 <span class="cauldron-icon">
-                    <span class="cauldron-body @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")"></span>
-                    <span class="brew-surface"></span>
-                    <span class="bubble b1"></span>
-                    <span class="bubble b2"></span>
-                    <span class="bubble b3"></span>
-                    <span class="bubble b4"></span>
-                    <span class="steam st1"></span>
-                    <span class="steam st2"></span>
-                    <span class="steam st3"></span>
+                    <svg viewBox="115 500 160 250" xmlns="http://www.w3.org/2000/svg" class="cauldron-svg" preserveAspectRatio="xMidYMid meet">
+                        <g class="bubbles" transform="translate(-0.20804, 7.0001)">
+                            <circle class="bubble" cx="177.89" cy="597.13" r="12.11"/>
+                            <circle class="bubble" cx="210.61" cy="588.24" r="11.30"/>
+                            <circle class="bubble" cx="191.21" cy="555.96" r="10.10"/>
+                            <circle class="bubble" cx="207.36" cy="539" r="9.29"/>
+                            <circle class="bubble" cx="187.57" cy="522.44" r="8.08"/>
+                        </g>
+                        <path class="cauldron-body" 
+                              d="m143.93 615.04c-10.45 13.545-18.926 28.781-18.926 47.238 0 40.006 30.358 73 68 73 37.64 0 68-32.993 68-73 0-18.461-8.4889-33.212-19.53-47.238-4.1402-4.3446-10.118-3.6986-14.469-0.91856-12.733 6.5886-19.606 9.2209-34.001 9.1565-13.922-0.0624-21.237-2.336-33.97-9.2774-4.3514-2.6592-10.964-3.3052-15.104 1.0394zm9.0742 11.238c13.198 7.2975 24.969 11 40 11 15.044 0 26.795-3.7025 40-11 7.2055 10.16 14 22.758 14 36 0 32.801-24.175 59-54 59-29.826 0-55-26.199-55-59 0-13.225 7.7788-25.832 15-36z"/>
+                    </svg>
                 </span>
                 <span class="magic-glow"></span>
                 <span class="magic-ring"></span>

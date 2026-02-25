@@ -56,266 +56,90 @@
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -40%);
-    width: 36px;
-    height: 36px;
+    transform: translate(-50%, -50%);
+    width: 48px;
+    height: 48px;
     z-index: 3;
 }
 
-.cauldron-body {
-    position: absolute;
-    bottom: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 34px;
-    height: 28px;
-    background: linear-gradient(180deg, #252538 0%, #16161f 40%, #0d0d15 100%);
-    border-radius: 45% 45% 50% 50%;
-}
-.cauldron-body.morgana {
-    border: 2.5px solid var(--primary-color);
-    box-shadow: 
-        inset 0 4px 12px var(--primary-color),
-        inset 0 -3px 8px rgba(0, 0, 0, 0.9),
-        inset 2px 0 6px rgba(0, 0, 0, 0.5),
-        inset -2px 0 6px rgba(0, 0, 0, 0.5),
-        0 3px 10px rgba(0, 0, 0, 0.6);
-}
-.cauldron-body.agent {
-    border: 2.5px solid var(--secondary-color);
-    box-shadow:
-        inset 0 4px 12px var(--secondary-color),
-        inset 0 -3px 8px rgba(0, 0, 0, 0.9),
-        inset 2px 0 6px rgba(0, 0, 0, 0.5),
-        inset -2px 0 6px rgba(0, 0, 0, 0.5),
-        0 3px 10px rgba(0, 0, 0, 0.6);
+.cauldron-svg {
+    width: 100%;
+    height: 100%;
 }
 
-.cauldron-body::before {
-    content: '';
-    position: absolute;
-    top: -1px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 32px;
-    height: 4px;
-    border-radius: 50%;
-}
-.cauldron-body.morgana::before {
-    background: linear-gradient(180deg, var(--primary-color) 0%, #7c3aed 100%);
-    box-shadow:
-        0 0 8px var(--primary-color),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.5);
-}
-.cauldron-body.agent::before {
-    background: linear-gradient(180deg, var(--secondary-color) 0%, #7c3aed 100%);
-    box-shadow:
-        0 0 8px var(--secondary-color),
-        inset 0 -1px 2px rgba(0, 0, 0, 0.5);
+.cauldron-svg .cauldron-body {
+    stroke-width: 3px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
-.brew-surface {
-    position: absolute;
-    bottom: 14px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 26px;
-    height: 11px;
-    background: radial-gradient(ellipse,
-    rgba(167, 139, 250, 0.9) 0%,
-    rgba(139, 92, 246, 0.7) 40%,
-    rgba(109, 40, 217, 0.5) 70%,
-    transparent 100%);
-    border-radius: 50%;
-    animation: brewGlow 2s ease-in-out infinite;
-    box-shadow:
-            0 0 10px rgba(167, 139, 250, 0.6),
-            inset 0 -1px 3px rgba(0, 0, 0, 0.3);
+.send-button.morgana .cauldron-svg .cauldron-body {
+    fill: var(--primary-color);
+    stroke: var(--primary-color);
 }
 
-@keyframes brewGlow {
-    0%, 100% {
-        opacity: 0.6;
-        transform: translateX(-50%) scale(0.95);
-    }
-    50% {
-        opacity: 1;
-        transform: translateX(-50%) scale(1.05);
-    }
+.send-button.agent .cauldron-svg .cauldron-body {
+    fill: var(--secondary-color);
+    stroke: var(--secondary-color);
 }
 
-.bubble {
-    position: absolute;
-    width: 3px;
-    height: 3px;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.9), rgba(167, 139, 250, 0.6));
-    border-radius: 50%;
-    opacity: 0;
-    z-index: 1;
-    box-shadow: 0 0 4px rgba(167, 139, 250, 0.8);
+.cauldron-svg .bubble {
+    opacity: 1;
+    stroke-width: 0;
+    animation: fade-in 1.4s infinite, float 1.4s ease infinite reverse;
 }
-.bubble.b1 {
-    bottom: 14px;
-    left: 35%;
-    animation: bubbleRise1 3s ease-in-out infinite;
+
+.send-button.morgana .cauldron-svg .bubble {
+    fill: var(--primary-color);
 }
-.bubble.b2 {
-    bottom: 14px;
-    left: 50%;
-    animation: bubbleRise2 3.5s ease-in-out infinite;
-    animation-delay: 0.5s;
+
+.send-button.agent .cauldron-svg .bubble {
+    fill: var(--secondary-color);
 }
-.bubble.b3 {
-    bottom: 14px;
-    left: 65%;
-    animation: bubbleRise3 3.2s ease-in-out infinite;
+
+.cauldron-svg .bubble:nth-of-type(1) {
+    animation-delay: 0.2s;
+}
+.cauldron-svg .bubble:nth-of-type(2) {
+    animation-delay: 0.4s;
+}
+.cauldron-svg .bubble:nth-of-type(3) {
+    animation-delay: 0.6s;
+}
+.cauldron-svg .bubble:nth-of-type(4) {
+    animation-delay: 0.8s;
+}
+.cauldron-svg .bubble:nth-of-type(5) {
     animation-delay: 1s;
 }
-.bubble.b4 {
-    bottom: 14px;
-    left: 42%;
-    animation: bubbleRise1 3.8s ease-in-out infinite;
-    animation-delay: 1.5s;
-}
 
-@keyframes bubbleRise1 {
-    0%, 100% {
-        opacity: 0;
-        transform: translateY(0) scale(0.5);
-    }
-    20% {
-        opacity: 1;
-        transform: translateY(-3px) scale(1);
-    }
-    80% {
-        opacity: 0.8;
-        transform: translateY(-10px) scale(0.8);
+@keyframes float {
+    0% {
+        transform: translateY(0em);
     }
     100% {
-        opacity: 0;
-        transform: translateY(-14px) scale(0.3);
+        transform: translateY(2em);
     }
 }
 
-@keyframes bubbleRise2 {
-    0%, 100% {
-        opacity: 0;
-        transform: translateY(0) scale(0.4);
-    }
-    25% {
-        opacity: 1;
-        transform: translateY(-4px) scale(1.1);
-    }
-    75% {
-        opacity: 0.7;
-        transform: translateY(-12px) scale(0.7);
-    }
-    100% {
-        opacity: 0;
-        transform: translateY(-16px) scale(0.2);
-    }
-}
-
-@keyframes bubbleRise3 {
-    0%, 100% {
-        opacity: 0;
-        transform: translateY(0) scale(0.6);
-    }
-    30% {
-        opacity: 1;
-        transform: translateY(-5px) scale(1);
-    }
-    70% {
-        opacity: 0.6;
-        transform: translateY(-11px) scale(0.6);
-    }
-    100% {
-        opacity: 0;
-        transform: translateY(-15px) scale(0.2);
-    }
-}
-
-.steam {
-    position: absolute;
-    width: 6px;
-    height: 6px;
-    background: radial-gradient(circle, rgba(167, 139, 250, 0.5), transparent 70%);
-    border-radius: 50%;
-    opacity: 0;
-    filter: blur(1px);
-}
-.steam.st1 {
-    bottom: 34px;
-    left: 40%;
-    animation: steamRise1 4s ease-out infinite;
-}
-.steam.st2 {
-    bottom: 34px;
-    left: 55%;
-    animation: steamRise2 4.5s ease-out infinite;
-    animation-delay: 1s;
-}
-.steam.st3 {
-    bottom: 34px;
-    left: 48%;
-    animation: steamRise3 4.2s ease-out infinite;
-    animation-delay: 2s;
-}
-
-@keyframes steamRise1 {
+@keyframes fade-in {
     0% {
         opacity: 0;
-        transform: translateY(0) scale(0.5);
     }
-    20% {
-        opacity: 0.6;
-        transform: translateY(-8px) scale(1);
-    }
-    80% {
-        opacity: 0.3;
-        transform: translateY(-25px) scale(1.5);
+    60% {
+        opacity: 0.10;
     }
     100% {
-        opacity: 0;
-        transform: translateY(-35px) scale(2);
+        opacity: 1;
     }
 }
 
-@keyframes steamRise2 {
-    0% {
-        opacity: 0;
-        transform: translateY(0) translateX(0) scale(0.6);
-    }
-    25% {
-        opacity: 0.7;
-        transform: translateY(-10px) translateX(3px) scale(1.1);
-    }
-    75% {
-        opacity: 0.2;
-        transform: translateY(-28px) translateX(5px) scale(1.8);
+@keyframes fade-out {
+    0%, 85% {
+        opacity: 1;
     }
     100% {
         opacity: 0;
-        transform: translateY(-38px) translateX(6px) scale(2.2);
-    }
-}
-
-@keyframes steamRise3 {
-    0% {
-        opacity: 0;
-        transform: translateY(0) translateX(0) scale(0.5);
-    }
-    30% {
-        opacity: 0.5;
-        transform: translateY(-12px) translateX(-4px) scale(1);
-    }
-    70% {
-        opacity: 0.25;
-        transform: translateY(-30px) translateX(-6px) scale(1.6);
-    }
-    100% {
-        opacity: 0;
-        transform: translateY(-40px) translateX(-8px) scale(2);
     }
 }
 
@@ -327,9 +151,9 @@
     width: 56px;
     height: 56px;
     background: radial-gradient(circle,
-        rgba(167, 139, 250, 0.6) 0%,
-        rgba(139, 92, 246, 0.4) 40%,
-        transparent 70%);
+    rgba(167, 139, 250, 0.6) 0%,
+    rgba(139, 92, 246, 0.4) 40%,
+    transparent 70%);
     border-radius: 50%;
     z-index: 1;
     opacity: 0;
@@ -359,8 +183,8 @@
     opacity: 0;
     z-index: 2;
     box-shadow:
-        0 0 8px rgba(255, 255, 255, 0.9),
-        0 0 12px rgba(167, 139, 250, 0.6);
+            0 0 8px rgba(255, 255, 255, 0.9),
+            0 0 12px rgba(167, 139, 250, 0.6);
 }
 .send-button .sparkle.s1 {
     top: 12%;
@@ -405,14 +229,14 @@
     0%, 100% {
         transform: scale(1);
         box-shadow:
-            0 0 40px rgba(139, 92, 246, 0.8),
-            0 0 80px rgba(139, 92, 246, 0.4);
+                0 0 40px rgba(139, 92, 246, 0.8),
+                0 0 80px rgba(139, 92, 246, 0.4);
     }
     50% {
         transform: scale(1.08);
         box-shadow:
-            0 0 60px rgba(167, 139, 250, 1),
-            0 0 120px rgba(167, 139, 250, 0.6);
+                0 0 60px rgba(167, 139, 250, 1),
+                0 0 120px rgba(167, 139, 250, 0.6);
     }
 }
 
@@ -473,59 +297,28 @@
     }
 }
 
-.send-button.sending .brew-surface {
-    animation: brewIntense 1s ease-in-out infinite;
+.send-button.sending .cauldron-svg .bubble {
+    animation: fade-in 1s infinite, float 1s ease infinite reverse;
 }
 
-@keyframes brewIntense {
-    0%, 100% {
-        opacity: 0.9;
-        transform: translateX(-50%) scale(1);
-        box-shadow:
-                0 0 12px rgba(167, 139, 250, 0.9),
-                inset 0 -1px 3px rgba(0, 0, 0, 0.3);
-    }
-    50% {
-        opacity: 1;
-        transform: translateX(-50%) scale(1.15);
-        box-shadow:
-                0 0 20px rgba(167, 139, 250, 1),
-                0 0 30px rgba(139, 92, 246, 0.6),
-                inset 0 -1px 3px rgba(0, 0, 0, 0.3);
-    }
+.send-button.sending .cauldron-svg .bubble:nth-of-type(1) {
+    animation-delay: 0.1s;
 }
 
-.send-button.sending .bubble.b1 {
-    animation: bubbleRise1 1.2s ease-in-out infinite;
-}
-
-.send-button.sending .bubble.b2 {
-    animation: bubbleRise2 1.4s ease-in-out infinite;
+.send-button.sending .cauldron-svg .bubble:nth-of-type(2) {
     animation-delay: 0.2s;
 }
 
-.send-button.sending .bubble.b3 {
-    animation: bubbleRise3 1.3s ease-in-out infinite;
+.send-button.sending .cauldron-svg .bubble:nth-of-type(3) {
+    animation-delay: 0.3s;
+}
+
+.send-button.sending .cauldron-svg .bubble:nth-of-type(4) {
     animation-delay: 0.4s;
 }
 
-.send-button.sending .bubble.b4 {
-    animation: bubbleRise1 1.5s ease-in-out infinite;
-    animation-delay: 0.6s;
-}
-
-.send-button.sending .steam.st1 {
-    animation: steamRise1 2s ease-out infinite;
-}
-
-.send-button.sending .steam.st2 {
-    animation: steamRise2 2.2s ease-out infinite;
+.send-button.sending .cauldron-svg .bubble:nth-of-type(5) {
     animation-delay: 0.5s;
-}
-
-.send-button.sending .steam.st3 {
-    animation: steamRise3 2.1s ease-out infinite;
-    animation-delay: 1s;
 }
 
 .send-button.sending .sparkle {
