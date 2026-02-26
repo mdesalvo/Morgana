@@ -4,21 +4,24 @@
 
 .magical-loader {
     text-align: center;
-    padding: 80px 20px;
+    padding: 40px 20px;
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    flex: 1;
     min-height: 400px;
 }
 
 /* Magic Sparkle Core - Main glowing center */
 .magic-sparkle-core {
     position: relative;
-    width: 300px;
-    height: 300px;
-    margin: 0 auto 60px auto;
+    width: min(300px, 40vw);
+    height: min(300px, 40vw);
+    max-width: 500px;
+    max-height: 500px;
+    margin: 0 auto 40px auto;
     animation: coreFloat 4s ease-in-out infinite;
 }
 
