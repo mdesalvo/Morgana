@@ -1,5 +1,7 @@
 @namespace Cauldron.Components
 
+@* Send button component with magical Morgana theme *@
+
 <button
     @onclick="OnClick"
     disabled="@IsDisabled"
@@ -45,8 +47,15 @@
     private bool IsSpecializedAgent => 
         !string.IsNullOrEmpty(AgentName) && AgentName.Contains("(") && AgentName.Contains(")");
 
+    protected override void OnParametersSet()
+    {
+        Console.WriteLine($"🎨 SendButton: IsSending={IsSending}, AgentName={AgentName}, IsDisabled={IsDisabled}");
+        base.OnParametersSet();
+    }
+
     protected override bool ShouldRender()
     {
         return true; // Let Blazor's parameter change detection handle it
     }
 }
+

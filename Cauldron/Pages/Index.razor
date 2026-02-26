@@ -141,7 +141,6 @@
         <textarea
             @bind="inputText"
             @bind:event="oninput"
-            @onkeyup="HandleKeyPressAsync"
             placeholder="Consult @(currentAgentName)..."
             rows="1"
             disabled="@IsTextareaDisabled"
@@ -742,9 +741,8 @@
 
                 await InvokeAsync(StateHasChanged);
             }
-        }
-        finally
-        {
+            
+            // Reset sending state on error
             isSending = false;
             StateHasChanged();
         }
@@ -821,6 +819,9 @@
                 UpdateHeaderForAgent(signalrMessage);
                 AddCompletionMessageIfNeeded(signalrMessage);
 
+                // Reset sending state - message received via SignalR
+                isSending = false;
+
                 // Always re-render when message finalized (may have quick replies, cards, etc)
                 await InvokeAsync(StateHasChanged);
                 return;
@@ -854,6 +855,9 @@
 
             // Add completion message if needed (shared logic)
             AddCompletionMessageIfNeeded(signalrMessage);
+
+            // Reset sending state - message received via SignalR
+            isSending = false;
 
             await InvokeAsync(StateHasChanged);
         }
@@ -1041,20 +1045,6 @@
     // =========================================================================
     // UI INTERACTION HANDLERS
     // =========================================================================
-
-    /// <summary>
-    /// Handles keyboard events in textarea (Enter to send, Shift+Enter for newline).
-    /// </summary>
-    /// <param name="e">Keyboard event args</param>
-    /// <returns>Task representing the async key handling</returns>
-    private async Task HandleKeyPressAsync(KeyboardEventArgs e)
-    {
-        // Send message on Enter (without Shift)
-        if (e is { Key: "Enter", ShiftKey: false })
-        {
-            await SendMessageAsync();
-        }
-    }
 
     /// <summary>
     /// Handles quick reply button selection.
