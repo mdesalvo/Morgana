@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <Title>Morgana.SignalR</Title>
-    <PackageId>Morgana.SignalR</PackageId>
+    <PackageId>Morgana.Web</PackageId>
     <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
   </PropertyGroup>
 

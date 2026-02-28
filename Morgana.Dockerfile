@@ -2,7 +2,7 @@
 # MORGANA - SIGNALR BACKEND DOCKERFILE
 # ==============================================================================
 # Multi-stage build for optimized image with all required projects:
-# - Morgana.SignalR (API + SignalR Hub)
+# - Morgana.Web (API + SignalR Hub)
 # - Morgana.Framework (core framework)
 # - Morgana.Examples (example plugins with 3 agents)
 # ==============================================================================
@@ -19,31 +19,31 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy project files for all required projects (layer caching optimization)
-COPY ["Morgana/Morgana.SignalR/Morgana.SignalR.csproj", "Morgana.SignalR/"]
+COPY ["Morgana/Morgana.Web/Morgana.Web.csproj", "Morgana.Web/"]
 COPY ["Morgana/Morgana.Framework/Morgana.Framework.csproj", "Morgana.Framework/"]
 COPY ["Morgana/Morgana.Examples/Morgana.Examples.csproj", "Morgana.Examples/"]
 COPY ["Morgana/Directory.Build.props", "Directory.Build.props"]
 
 # Restore NuGet dependencies
-RUN dotnet restore "Morgana.SignalR/Morgana.SignalR.csproj"
+RUN dotnet restore "Morgana.Web/Morgana.Web.csproj"
 
 # Copy all source code from all projects
-COPY Morgana/Morgana.SignalR/ Morgana.SignalR/
+COPY Morgana/Morgana.Web/ Morgana.Web/
 COPY Morgana/Morgana.Framework/ Morgana.Framework/
 COPY Morgana/Morgana.Examples/ Morgana.Examples/
 
 # Build main project
-WORKDIR "/src/Morgana.SignalR"
-RUN dotnet build "Morgana.SignalR.csproj" -c Release -o /app/build
+WORKDIR "/src/Morgana.Web"
+RUN dotnet build "Morgana.Web.csproj" -c Release -o /app/build
 
 # ==============================================================================
 # STAGE 2: PUBLISH
 # ==============================================================================
 FROM build AS publish
 
-# Publish Morgana.SignalR (main application)
-WORKDIR "/src/Morgana.SignalR"
-RUN dotnet publish "Morgana.SignalR.csproj" \
+# Publish Morgana.Web (main application)
+WORKDIR "/src/Morgana.Web"
+RUN dotnet publish "Morgana.Web.csproj" \
     -c Release \
     -o /app/publish \
     /p:UseAppHost=false
@@ -92,4 +92,4 @@ ENV ASPNETCORE_URLS=http://+:5001
 ENV ASPNETCORE_ENVIRONMENT=Production
 
 # Application startup
-ENTRYPOINT ["dotnet", "Morgana.SignalR.dll"]
+ENTRYPOINT ["dotnet", "Morgana.Web.dll"]

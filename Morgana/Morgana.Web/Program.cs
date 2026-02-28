@@ -7,8 +7,8 @@ using Morgana.Framework.Adapters;
 using Morgana.Framework.Interfaces;
 using Morgana.Framework.Services;
 using Morgana.Framework.Telemetry;
-using Morgana.SignalR.Hubs;
-using Morgana.SignalR.Services;
+using Morgana.Web.Hubs;
+using Morgana.Web.Services;
 
 // ==============================================================================
 // MORGANA - AI CONVERSATION FRAMEWORK

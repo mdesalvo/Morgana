@@ -4,5 +4,5 @@
   </Folder>
   <Project Path="Morgana.Examples\Morgana.Examples.csproj" />
   <Project Path="Morgana.Framework/Morgana.Framework.csproj" />
-  <Project Path="Morgana.SignalR/Morgana.SignalR.csproj" />
+  <Project Path="Morgana.Web\Morgana.Web.csproj" />
 </Solution>

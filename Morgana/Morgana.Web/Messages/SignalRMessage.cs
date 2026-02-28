@@ -1,6 +1,6 @@
 ﻿using static Morgana.Framework.Records;
 
-namespace Morgana.SignalR.Messages;
+namespace Morgana.Web.Messages;
 
 
 /// <summary>
