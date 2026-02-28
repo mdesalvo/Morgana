@@ -27,9 +27,9 @@
     
     <!-- Common Description -->
     <Description>
-      Cauldron is a modular web layer that talks with the Morgana conversational AI framework.
-      Built on cutting-edge .NET 10 and leveraging the Blazor Server + SignalR development platform,
-      Cauldron is the official Morgana's frontend.
+    Cauldron is a modular web layer that talks with the Morgana conversational AI framework.
+    Built on cutting-edge .NET 10 and leveraging the Blazor Server + SignalR development platform,
+    Cauldron is the official (and recommended) Morgana's frontend.
     </Description>
 
   </PropertyGroup>
