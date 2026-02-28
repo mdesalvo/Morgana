@@ -457,43 +457,31 @@
                         }
                         #endregion
 
+                        await InvokeAsync(StateHasChanged);
+                        
                         Console.WriteLine($"🟡 Conversation history loaded successfully");
                     }
                     else
                     {
                         Console.WriteLine($"⚠️ No history found for conversation {conversationId}");
 
-                        // Add a system message to force UI resume
-                        chatMessages.Add(new ChatMessage
-                        {
-                            ConversationId = conversationId,
-                            Text = LandingMessageService.GetRandomResumingMessage(),
-                            Role = "assistant",
-                            Timestamp = DateTime.UtcNow,
-                            AgentName = currentAgentName,
-                            Type = MessageType.Assistant
-                        });
+                        // Clear existing storage
+                        await StorageService.ClearConversationIdAsync();
+                
+                        // Fallback to new conversation
+                        await StartConversationAsync();
                     }
                 }
                 catch (Exception historyEx)
                 {
                     Console.WriteLine($"⚠️ Failed to load history: {historyEx.Message}");
 
-                    // Add a system message to force UI resume
-                    chatMessages.Add(new ChatMessage
-                    {
-                        ConversationId = conversationId,
-                        Text = LandingMessageService.GetRandomResumingMessage(),
-                        Role = "assistant",
-                        Timestamp = DateTime.UtcNow,
-                        AgentName = currentAgentName,
-                        Type = MessageType.Assistant
-                    });
+                    // Clear corrupted/expired storage
+                    await StorageService.ClearConversationIdAsync();
+                
+                    // Fallback to new conversation
+                    await StartConversationAsync();
                 }
-
-                await InvokeAsync(StateHasChanged);
-
-                Console.WriteLine($"🟡 Joined SignalR group, waiting for conversation history...");
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
