@@ -27,14 +27,14 @@
     
     <!-- Common Description -->
     <Description>
-        Morgana is an advanced conversational AI system designed to handle complex
-        customer service scenarios through a sophisticated multi-agent architecture.
-        Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET,
-        Morgana orchestrates specialized AI agents that collaborate to understand,
-        classify, and resolve customer inquiries with precision and context awareness.
-        The system is powered by Microsoft's Agent Framework, enabling seamless
-        integration with Large Language Models (LLMs) while maintaining strict governance
-        through guard rails, policy enforcement, and comprehensive conversation archival.
+    Morgana is an advanced conversational AI system designed to handle complex
+    customer service scenarios through a sophisticated multi-agent architecture.
+    Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET,
+    Morgana orchestrates specialized AI agents that collaborate to understand,
+    classify, and resolve customer inquiries with precision and context awareness.
+    The system is powered by Microsoft's Agent Framework, enabling seamless
+    integration with Large Language Models (LLMs) while maintaining strict governance
+    through guard rails, policy enforcement, and comprehensive conversation archival.
     </Description>
 
   </PropertyGroup>
@@ -42,11 +42,11 @@
   <!-- Package References -->
   <ItemGroup>
     <!-- Actors -->
-    <PackageReference Include="Akka" Version="1.5.60" />
-    <PackageReference Include="Akka.DependencyInjection" Version="1.5.60" />
+    <PackageReference Include="Akka" Version="1.5.61" />
+    <PackageReference Include="Akka.DependencyInjection" Version="1.5.61" />
     <!-- Agents -->
     <PackageReference Include="Azure.AI.OpenAI" Version="2.8.0-beta.1" />
-    <PackageReference Include="Azure.Identity" Version="1.17.1" />
+    <PackageReference Include="Azure.Identity" Version="1.18.0" />
     <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-rc2" />
     <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.0.0-rc2" />
     <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.0.0-rc2" />
