@@ -141,6 +141,7 @@
         <textarea
             @bind="inputText"
             @bind:event="oninput"
+            @onkeyup="HandleKeyPressAsync"
             placeholder="Consult @(currentAgentName)..."
             rows="1"
             disabled="@IsTextareaDisabled"
@@ -975,7 +976,7 @@
                 // Start typewriter timer (fires every configurable N milliseconds by consuming configurable K characters)
                 int.TryParse(Configuration["Morgana:StreamingResponse:TypewriterTickMilliseconds"], out int typewriterTickMilliseconds);
                 if (typewriterTickMilliseconds <= 0)
-                    typewriterTickMilliseconds = 25;
+                    typewriterTickMilliseconds = 15;
                 int.TryParse(Configuration["Morgana:StreamingResponse:TypewriterTickChars"], out int typewriterTickChars);
                 if (typewriterTickChars <= 0)
                     typewriterTickChars = 1;
@@ -1045,6 +1046,20 @@
     // =========================================================================
     // UI INTERACTION HANDLERS
     // =========================================================================
+
+    /// <summary>
+    /// Handles keyboard events in textarea (Enter to send, Shift+Enter for newline).
+    /// </summary>
+    /// <param name="e">Keyboard event args</param>
+    /// <returns>Task representing the async key handling</returns>
+    private async Task HandleKeyPressAsync(KeyboardEventArgs e)
+    {
+        // Send message on Enter (without Shift)
+        if (e is { Key: "Enter", ShiftKey: false })
+        {
+            await SendMessageAsync();
+        }
+    }
 
     /// <summary>
     /// Handles quick reply button selection.
