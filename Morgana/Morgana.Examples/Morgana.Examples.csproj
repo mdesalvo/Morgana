@@ -20,10 +20,10 @@
     </ProjectReference>
   </ItemGroup>
 
-  <!-- Copy plugin to Morgana.SignalR plugins directory after build -->
+  <!-- Copy plugin to Morgana.Web plugins directory after build -->
   <Target Name="CopyPluginToHost" AfterTargets="Build">
     <PropertyGroup>
-      <PluginDestDir>$(SolutionDir)Morgana.SignalR\$(OutputPath)plugins\</PluginDestDir>
+      <PluginDestDir>$(SolutionDir)Morgana.Web\$(OutputPath)plugins\</PluginDestDir>
     </PropertyGroup>
     <ItemGroup>
       <!-- Only copy the plugin DLL itself, not all dependencies -->

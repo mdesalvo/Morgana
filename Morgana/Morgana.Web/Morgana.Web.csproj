@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <Title>Morgana.SignalR</Title>
+    <Title>Morgana.Web</Title>
     <PackageId>Morgana.Web</PackageId>
     <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
   </PropertyGroup>

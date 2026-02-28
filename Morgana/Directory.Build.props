@@ -16,14 +16,16 @@
     <!-- Package Metadata -->
     <Authors>Marco De Salvo</Authors>
     <Company>Marco De Salvo</Company>
-    <Product>Morgana</Product>
     <Copyright>Marco De Salvo</Copyright>
-    
-    <!-- Repository Information -->
+    <Product>Morgana</Product>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
+    <PackageTags>actor-model akka-actors agents-ai ai ai-assistant chatbot intent-classification mcp mcp-client multiagent</PackageTags>
+
+    <!-- Repository Information -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <RepositoryUrl>https://github.com/mdesalvo/Morgana.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageLicenseUrl>https://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
     
     <!-- Common Description -->
     <Description>
