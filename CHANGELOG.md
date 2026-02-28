@@ -43,8 +43,9 @@ This release introduces **end-to-end distributed tracing** across the entire Mor
 ```
 
 ### 🔄 Changed
+- Morgana's avatar has magical glowing effects when thinking
+- Send button has been componentized and totally restyled
 - Make streaming response mode configurable under `StreamingResponse:Enabled` appsetting
-- Replaced CSS-based cauldron icon with SVG version
 - Updated `Akka.NET` dependency to 1.5.61
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.2
 - Updated `Microsoft.Extensions.AI` dependency to 12.3.0
