@@ -16,10 +16,20 @@
     <div class="chat-header">
         <div class="header-content">
 
-            <img src="images/morgana-avatar.png" 
-                 alt="Morgana" 
-                 class="header-avatar"
-                 style="border: 3px solid @GetAvatarBorderColor(currentAgentName);" />
+            <div class="header-avatar-wrapper @(isSending ? "sending" : "") @GetAgentClass(currentAgentName)">
+                <div class="magic-glow"></div>
+                <div class="magic-ring"></div>
+                <span class="sparkle s1"></span>
+                <span class="sparkle s2"></span>
+                <span class="sparkle s3"></span>
+                <span class="sparkle s4"></span>
+                <span class="sparkle s5"></span>
+                <span class="sparkle s6"></span>
+                <img src="images/morgana-avatar.png"
+                     alt="Morgana"
+                     class="header-avatar"
+                     style="border: 3px solid @GetAvatarBorderColor(currentAgentName);" />
+            </div>
 
             <div class="header-info">
                 <h1 style="color: @GetAvatarBorderColor(currentAgentName);">@currentAgentName</h1>
@@ -1193,6 +1203,15 @@
     }
 
     /// <summary>
+    /// Returns the CSS class string for the agent type: "agent" for specialized, "morgana" for base.
+    /// Used to apply the correct color theme to the header-avatar-wrapper.
+    /// </summary>
+    /// <param name="agentName">Name of the current agent</param>
+    /// <returns>"agent" or "morgana"</returns>
+    private string GetAgentClass(string? agentName) =>
+        IsSpecializedAgent(agentName) ? "agent" : "morgana";
+
+    /// <summary>
     /// Gets the CSS color variable for the avatar border based on agent type.
     /// </summary>
     /// <param name="agentName">Name of the current agent</param>
@@ -1222,7 +1241,7 @@
     /// Adds a temporary error message displayed as FadingMessage banner.
     /// Auto-dismisses after configurable N seconds with fade-out animation.
     /// </summary>
-    /// <param name="text">Error message text (⚠️ emoji will be prepended)</param>
+    /// <param name="text">Error message text</param>
     /// <param name="errorReason">Specific error reason for debugging/icon selection</param>
     /// <param name="fadingMessageDurationSeconds">Optional duration of the fading message that will be displayed</param>
     private void AddErrorMessage(string text, string errorReason, int? fadingMessageDurationSeconds=10)

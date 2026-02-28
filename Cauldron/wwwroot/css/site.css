@@ -50,12 +50,225 @@ body {
     gap: 16px;
 }
 
+.header-avatar-wrapper {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    width: 64px;
+    height: 64px;
+}
+
 .header-avatar {
     width: 64px;
     height: 64px;
     border-radius: 50%;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-    transition: border-color 0.3s ease;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+    z-index: 2;
+}
+
+.header-avatar-wrapper.sending.morgana .header-avatar {
+    animation: avatarPulseMorgana 1.5s ease-in-out infinite;
+}
+
+.header-avatar-wrapper.sending.agent .header-avatar {
+    animation: avatarPulseAgent 1.5s ease-in-out infinite;
+}
+
+@keyframes avatarPulseMorgana {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow:
+                0 0 40px rgba(139, 92, 246, 0.8),
+                0 0 80px rgba(139, 92, 246, 0.4);
+    }
+    50% {
+        transform: scale(1.08);
+        box-shadow:
+                0 0 60px rgba(167, 139, 250, 1),
+                0 0 120px rgba(167, 139, 250, 0.6);
+    }
+}
+
+@keyframes avatarPulseAgent {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow:
+                0 0 40px rgba(236, 72, 153, 0.8),
+                0 0 80px rgba(236, 72, 153, 0.4);
+    }
+    50% {
+        transform: scale(1.08);
+        box-shadow:
+                0 0 60px rgba(244, 114, 182, 1),
+                0 0 120px rgba(244, 114, 182, 0.6);
+    }
+}
+
+.header-avatar-wrapper .magic-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 74px;
+    height: 74px;
+    border-radius: 50%;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    filter: blur(6px);
+    pointer-events: none;
+}
+
+.header-avatar-wrapper.sending.morgana .magic-glow {
+    background: radial-gradient(circle,
+    rgba(167, 139, 250, 0.6) 0%,
+    rgba(139, 92, 246, 0.4) 40%,
+    transparent 70%);
+    opacity: 1;
+    animation: glowPulseMorgana 1.5s ease-in-out infinite;
+}
+
+.header-avatar-wrapper.sending.agent .magic-glow {
+    background: radial-gradient(circle,
+    rgba(244, 114, 182, 0.6) 0%,
+    rgba(236, 72, 153, 0.4) 40%,
+    transparent 70%);
+    opacity: 1;
+    animation: glowPulseAgent 1.5s ease-in-out infinite;
+}
+
+@keyframes glowPulseMorgana {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.7;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.6);
+        opacity: 1;
+    }
+}
+
+@keyframes glowPulseAgent {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.7;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.6);
+        opacity: 1;
+    }
+}
+
+.header-avatar-wrapper .magic-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 84px;
+    height: 84px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    z-index: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.header-avatar-wrapper.sending.morgana .magic-ring {
+    opacity: 1;
+    animation: ringExpandMorgana 2s ease-out infinite;
+}
+
+.header-avatar-wrapper.sending.agent .magic-ring {
+    opacity: 1;
+    animation: ringExpandAgent 2s ease-out infinite;
+}
+
+@keyframes ringExpandMorgana {
+    0% {
+        transform: translate(-50%, -50%) scale(0.8) rotate(0deg);
+        opacity: 0;
+        border-color: rgba(167, 139, 250, 0.8);
+    }
+    50% {
+        opacity: 0.6;
+        border-color: rgba(139, 92, 246, 0.6);
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.4) rotate(180deg);
+        opacity: 0;
+        border-color: rgba(109, 40, 217, 0);
+    }
+}
+
+@keyframes ringExpandAgent {
+    0% {
+        transform: translate(-50%, -50%) scale(0.8) rotate(0deg);
+        opacity: 0;
+        border-color: rgba(244, 114, 182, 0.8);
+    }
+    50% {
+        opacity: 0.6;
+        border-color: rgba(236, 72, 153, 0.6);
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.4) rotate(180deg);
+        opacity: 0;
+        border-color: rgba(219, 39, 119, 0);
+    }
+}
+
+.header-avatar-wrapper .sparkle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: radial-gradient(circle, #ffffff 0%, #e9d5ff 50%, transparent 100%);
+    border-radius: 50%;
+    opacity: 0;
+    z-index: 3;
+    pointer-events: none;
+    box-shadow:
+            0 0 8px rgba(255, 255, 255, 0.9),
+            0 0 12px rgba(167, 139, 250, 0.6);
+}
+
+.header-avatar-wrapper .sparkle.s1 { top:  8%; left: 16%; }
+.header-avatar-wrapper .sparkle.s2 { top: 12%; right: 12%; }
+.header-avatar-wrapper .sparkle.s3 { bottom: 12%; left: 12%; }
+.header-avatar-wrapper .sparkle.s4 { top: 28%; left: 44%; }
+.header-avatar-wrapper .sparkle.s5 { bottom: 22%; right: 16%; }
+.header-avatar-wrapper .sparkle.s6 { top: 38%; right:  8%; }
+
+.header-avatar-wrapper.sending .sparkle    { animation: sparkleFloat 1.8s ease-out infinite; }
+.header-avatar-wrapper.sending .sparkle.s1 { animation-delay: 0.0s; }
+.header-avatar-wrapper.sending .sparkle.s2 { animation-delay: 0.3s; }
+.header-avatar-wrapper.sending .sparkle.s3 { animation-delay: 0.6s; }
+.header-avatar-wrapper.sending .sparkle.s4 { animation-delay: 0.9s; }
+.header-avatar-wrapper.sending .sparkle.s5 { animation-delay: 1.2s; }
+.header-avatar-wrapper.sending .sparkle.s6 { animation-delay: 1.5s; }
+
+@keyframes sparkleFloat {
+    0% {
+        opacity: 0;
+        transform: translate(0, 0) scale(0) rotate(0deg);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(0, 0) scale(1.2) rotate(90deg);
+    }
+    40% {
+        opacity: 1;
+        transform: translate(0, -12px) scale(1) rotate(180deg);
+    }
+    70% {
+        opacity: 0.8;
+        transform: translate(0, -28px) scale(0.8) rotate(270deg);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(0, -40px) scale(0.3) rotate(360deg);
+    }
 }
 
 .header-info h1 {
@@ -240,7 +453,6 @@ body {
     text-align: right;
 }
 
-/* Accessibility: Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {
     .message.assistant .message-bubble.streaming {
         animation: none;
