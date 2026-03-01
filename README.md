@@ -260,3 +260,14 @@ docker compose --env-file .env --env-file .env.versions up
 # 🛑 Stop the containers
 docker compose --env-file .env --env-file .env.versions down
 ```
+
+## 🧩 Build your Morgana Agents --> coming soon in v0.18
+
+`Morgana.Framework` is now available as [NuGet package](https://www.nuget.org/packages/Morgana.Framework), so you can build your specialized agents without touching Morgana's source code.
+
+Just reference the package in any .NET project, model your agents along with their tools and prompts, and build — the resulting assembly is a ready-to-use **Morgana plugin**.
+Drop it into the `plugins/` folder of your Morgana instance and it will be automatically discovered and executed at startup.
+
+A concrete example is already in front of you: **Morgana.Examples** is exactly such a plugin — it references `Morgana.Framework` via NuGet, defines a set of specialized agents, and is the one powering the production Docker distribution out of the box.
+
+This is the foundation of the **Morgana Agent Ecosystem**: independent, shareable, domain-specific plugin agents that can be developed, distributed, and adopted across any Morgana-powered application.
