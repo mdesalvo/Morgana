@@ -13,11 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Morgana.Framework\Morgana.Framework.csproj">
-      <!-- Don't copy Framework assemblies to plugin output -->
-      <Private>false</Private>
-      <ExcludeAssets>runtime</ExcludeAssets>
-    </ProjectReference>
+    <PackageReference Include="Morgana.Framework" Version="0.18.0" />
   </ItemGroup>
 
   <!-- Copy plugin to Morgana.Web plugins directory after build -->
