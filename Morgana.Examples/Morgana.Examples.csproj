@@ -1,0 +1,54 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <Title>Morgana.Examples</Title>
+    <PackageId>Morgana.Examples</PackageId>
+    <OutputType>Library</OutputType>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Version>0.18.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <Authors>Marco De Salvo</Authors>
+    <Company>Marco De Salvo</Company>
+    <Copyright>Marco De Salvo</Copyright>
+    <Product>Morgana</Product>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
+
+    <Description>
+    Morgana.Examples is a showcase demostrating modeling of domain agents with Morgana.Framework.
+    It includes 3 agents serving "billing", "contract" and "monkeys" intents. Each agent encodes
+    its prompt defining target, personality and the available tools (see agents.json).
+    </Description>
+
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="agents.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Morgana.Framework" Version="0.18.0" />
+  </ItemGroup>
+
+  <!-- Copy plugin to Morgana.Web plugins directory after build -->
+  <Target Name="CopyPluginToHost" AfterTargets="Build">
+    <PropertyGroup>
+      <PluginDestDir>$(SolutionDir)\..\Morgana\Morgana.Web\$(OutputPath)plugins\</PluginDestDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <!-- Only copy the plugin DLL itself, not all dependencies -->
+      <PluginFiles Include="$(TargetPath)" />
+    </ItemGroup>
+    <Message Text="Copying plugin to: $(PluginDestDir)" Importance="high" />
+    <MakeDir Directories="$(PluginDestDir)" Condition="!Exists('$(PluginDestDir)')" />
+    <Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(PluginDestDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
