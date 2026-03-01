@@ -104,12 +104,10 @@ builder.Services.AddSingleton<ILogger>(sp =>
 // SECTION 5: Plugin System - Dynamic Agent Loading
 // ==============================================================================
 // Loads external assemblies containing custom Morgana agents at startup
-// Configuration: appsettings.json -> Morgana:Plugins:Assemblies
+// Configuration: appsettings.json -> Morgana:Plugins:Directories
 // 
 // This enables domain-specific agents to be developed separately and loaded
 // without modifying the core Morgana framework.
-//
-// Example plugin: Morgana.Examples (contains BillingAgent, ContractAgent, etc.)
 
 using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddConsole()))
 {
