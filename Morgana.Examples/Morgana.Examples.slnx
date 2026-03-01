@@ -2,6 +2,6 @@
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />
   </Folder>
-  <Project Path="Morgana.Examples\Morgana.Examples.csproj" />
+  <Project Path="Morgana.Examples.csproj" />
 </Solution>
 
