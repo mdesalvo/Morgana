@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.18.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: OpenTelemetry Distributed Tracing
 This release introduces **end-to-end distributed tracing** across the entire Morgana conversation pipeline, providing deep observability for both technical diagnostics and functional conversation analytics. Traces are structured to be meaningful to **IT operators** (latencies, errors, TTFT) and **non-technical stakeholders** (intent, agent name, response preview).
+### 🎯 Major Feature: Morgana.Framework as NuGet
+This release sets the milestone of distributing **Morgana.Framework** as **NuGet** package, making it straightforward to model your specialized agents and package them as plugins — ready to be discovered and executed by Morgana.
 
 ### ✨ Added
 **OpenTelemetry Tracing Architecture**
@@ -43,12 +45,12 @@ This release introduces **end-to-end distributed tracing** across the entire Mor
 ```
 
 ### 🔄 Changed
-- Morgana's avatar has magical glowing effects when thinking
+- Morgana's avatar with magical glowing effects when thinking
 - Send button has been componentized and totally restyled
 - Make streaming response mode configurable under `StreamingResponse:Enabled` appsetting
 - Updated `Akka.NET` dependency to 1.5.61
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.2
-- Updated `Microsoft.Extensions.AI` dependency to 12.3.0
+- Updated `Microsoft.Extensions.AI` dependency to 12.3.0 (**waiting for 12.4.0, which solves MCP regressions**)
 - Updated `ModelContextProtocol.Core` dependency to 1.0.0
 
 ### 🐛 Fixed
@@ -58,6 +60,7 @@ This release introduces **end-to-end distributed tracing** across the entire Mor
 
 ### 🚀 Future Enablement
 - **Production observability** — With an OTLP backend (Jaeger, Grafana Tempo, Azure Monitor, ...), every Morgana conversation becomes fully navigable: intent distribution, per-agent TTFT trends, guard violation rates and pipeline latencies all visible on a single dashboard
+- **Morgana Agents ecosystem** — Having **Morgana.Framework** as a solid development foundation packed as NuGet, it lays the groundwork for an ecosystem of reusable, shareable agent libraries — paving the way for curated Morgana Agent Repositories where domain-specific plugins can be discovered, distributed, and adopted across projects.
 
 
 ## [0.17.0] - 2026-02-11
