@@ -129,6 +129,7 @@ public class BillingTool : MorganaTool
     public async Task<string> GetInvoices(string userId, int count) { }
 }
 
+[HandlesIntent("monkeys")]
 [UsesMCPServers("MonkeyMCP")]
 public class MonkeyAgent : MorganaAgent { }  // Acquires tools at runtime!
 ```
