@@ -77,12 +77,12 @@ builder.Services.AddCors(options =>
 // intent classification, agent routing, and agent execution.
 //
 // Trace structure:
-//   morgana.conversation            ← lifetime of a conversation
-//     morgana.turn                  ← one per user message
-//       morgana.guard               ← content moderation result
-//       morgana.classifier          ← intent + confidence
-//       morgana.router              ← selected agent path
-//       morgana.agent               ← LLM execution, TTFT, response preview
+//   morgana.conversation     ← lifetime of a conversation
+//     morgana.turn           ← one per user message
+//       morgana.guard        ← content moderation result
+//       morgana.classifier   ← intent + confidence
+//       morgana.router       ← selected agent path
+//       morgana.agent        ← LLM execution, TTFT, response preview
 //
 // Configuration: appsettings.json → Morgana:OpenTelemetry
 //   Enabled:       true/false
@@ -94,7 +94,7 @@ builder.Services.AddMorganaOpenTelemetry(builder.Configuration);
 // ==============================================================================
 // SECTION 4: Logging Infrastructure
 // ==============================================================================
-// Singleton logger for framework-level logging (not actor-specific)
+// Singleton logger for framework-level logging
 // Actor loggers are created separately within each actor
 
 builder.Services.AddSingleton<ILogger>(sp =>
@@ -135,10 +135,6 @@ builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistr
 builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
-
-// LLM Service Configuration
-// Supports multiple LLM providers via configuration (Morgana:LLM:Provider)
-// Valid values: "anthropic", "azureopenai"
 builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
@@ -234,13 +230,13 @@ builder.Services.AddHostedService<AkkaHostedService>();
 
 WebApplication app = builder.Build();
 
-app.UseCors("AllowBlazor");               // Enable CORS for Blazor client
-app.UseHttpsRedirection();                // Redirect HTTP to HTTPS
-app.UseStaticFiles();                     // Serve static files (if any)
-app.UseRouting();                         // Enable endpoint routing
-app.UseAuthorization();                   // Enable authorization middleware
-app.MapControllers();                     // Map REST API controllers
-app.MapHub<MorganaHub>("/morganaHub");    // Map SignalR hub endpoint
+app.UseCors("AllowBlazor");             // Enable CORS for Blazor client
+app.UseHttpsRedirection();              // Redirect HTTP to HTTPS
+app.UseStaticFiles();                   // Serve static files (if any)
+app.UseRouting();                       // Enable endpoint routing
+app.UseAuthorization();                 // Enable authorization middleware
+app.MapControllers();                   // Map REST API controllers
+app.MapHub<MorganaHub>("/morganaHub");  // Map SignalR hub endpoint
 
 // ==============================================================================
 // SECTION 11: Application Startup
