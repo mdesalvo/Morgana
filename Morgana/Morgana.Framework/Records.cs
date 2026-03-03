@@ -415,26 +415,11 @@ public static class Records
     /// Agents can provide guided choices for better UX (e.g., contract sections, invoice selection).
     /// If null, no quick replies are shown.
     /// </param>
-    /// <remarks>
-    /// <para><strong>Quick Reply Usage:</strong></para>
-    /// <para>Agents can emit quick replies to guide users through complex workflows:</para>
-    /// <code>
-    /// // Billing agent offering invoice options
-    /// new AgentResponse(
-    ///     "I can help with your invoices.",
-    ///     IsCompleted: false,
-    ///     QuickReplies: new List&lt;QuickReply&gt; {
-    ///         new("diag", "🔧 Show recent invoices", "Show me my invoices"),
-    ///         new("guide", "📖 Show payment history", "Show me history of my payments")
-    ///     });
-    /// </code>
-    /// <para><strong>Best Practices:</strong></para>
-    /// <list type="bullet">
-    /// <item>Use clear, action-oriented labels with emoji for visual appeal</item>
-    /// <item>Set IsCompleted=false when quick replies represent continuation of workflow</item>
-    /// <item>Quick reply values should be natural user messages that trigger appropriate agent behavior</item>
-    /// </list>
-    /// </remarks>
+    /// <param name="RichCard">
+    /// Optional rich card to display to the user.
+    /// Agents can provide structured contents for more engaging UX (e.g., contract terms,  invoice details).
+    /// If null, no rich cards are shown.
+    /// </param>
     public record AgentResponse(
         string Response,
         bool IsCompleted = true,
@@ -449,6 +434,7 @@ public static class Records
     /// <param name="IsCompleted">Whether the agent has completed its task</param>
     /// <param name="AgentRef">Actor reference to the agent that generated this response</param>
     /// <param name="QuickReplies">Optional list of quick reply buttons from the agent</param>
+    /// <param name="RichCard">Optional rich card from the agent</param>
     public record ActiveAgentResponse(
         string Response,
         bool IsCompleted,
@@ -498,7 +484,7 @@ public static class Records
     /// <param name="InitialContext">Optional initial context information (reserved for future use)</param>
     public record StartConversationRequest(
         string ConversationId,
-        string? InitialContext = null);
+        Dictionary<string, object>? InitialContext = null);
 
     /// <summary>
     /// HTTP request model for sending a message to a conversation via REST API.
@@ -523,6 +509,7 @@ public static class Records
     /// <param name="Id">Unique identifier for the quick reply (typically matches intent name or action)</param>
     /// <param name="Label">Display text shown on the button with emoji (e.g., "📄 View Invoices")</param>
     /// <param name="Value">Message text sent when user clicks the button (e.g., "Show my invoices")</param>
+    /// <param name="Termination">Reserved flag indicating that the button is the one for exiting to Morgana</param>
     /// <remarks>
     /// <para><strong>Dual Purpose:</strong></para>
     /// <para>This record serves both as a runtime model and JSON serialization DTO:</para>
