@@ -1,9 +1,8 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using Morgana.Framework.Attributes;
 using Morgana.Framework.Interfaces;
 
 namespace Morgana.Framework.Services;
@@ -12,122 +11,95 @@ namespace Morgana.Framework.Services;
 /// Service implementation for managing MCP client connections.
 /// Provides connection pooling, lazy initialization, and lifecycle management.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Clients are pooled by a key derived from the <see cref="UsesMCPServerAttribute"/>:
+/// the URI for Http transport, the command path for Stdio transport.
+/// No external configuration is required — agents are fully self-contained.
+/// </para>
+/// </remarks>
 public class MCPClientRegistryService : IMCPClientRegistryService
 {
-    private readonly IConfiguration configuration;
     private readonly ILogger logger;
-
     private readonly ConcurrentDictionary<string, MCPClient> mcpClients;
-    private readonly Dictionary<string, Records.MCPServerConfig> serverConfigs;
     private bool disposed;
 
-    public MCPClientRegistryService(IConfiguration configuration, ILogger logger)
+    public MCPClientRegistryService(ILogger logger)
     {
-        this.configuration = configuration;
         this.logger = logger;
         this.mcpClients = new ConcurrentDictionary<string, MCPClient>();
-        this.serverConfigs = new Dictionary<string, Records.MCPServerConfig>();
-
-        LoadServerConfigurations();
     }
 
     /// <summary>
-    /// Loads MCP server configurations from appsettings.json on service initialization.
+    /// Derives a stable pool key from a <see cref="UsesMCPServerAttribute"/>.
+    /// Http  → the URI string.
+    /// Stdio → "stdio:{command}" (args are intentionally excluded: same executable
+    ///          is expected to be registered once per agent).
     /// </summary>
-    private void LoadServerConfigurations()
-    {
-        IConfigurationSection? mcpSection = configuration.GetSection("Morgana:MCPServers");
-        if (mcpSection == null || !mcpSection.Exists())
-        {
-            logger.LogInformation("No MCP servers configured in appsettings.json");
-            return;
-        }
-
-        List<Records.MCPServerConfig>? configs = mcpSection.Get<List<Records.MCPServerConfig>>();
-        if (configs == null || configs.Count == 0)
-        {
-            logger.LogInformation("MCP servers section exists but contains no configurations");
-            return;
-        }
-
-        foreach (Records.MCPServerConfig config in configs)
-        {
-            if (config.Enabled)
-            {
-                serverConfigs[config.Name] = config;
-                logger.LogInformation($"Loaded MCP server config: {config.Name} ({config.Uri})");
-            }
-            else
-            {
-                logger.LogInformation($"Skipped disabled MCP server: {config.Name}");
-            }
-        }
-
-        logger.LogInformation($"Loaded {serverConfigs.Count} enabled MCP server configurations");
-    }
+    private static string PoolKey(UsesMCPServerAttribute attr) =>
+        attr.Transport == Records.MCPTransport.Stdio
+            ? $"stdio:{attr.Command}"
+            : attr.Command;
 
     /// <summary>
-    /// Gets or creates an MCP client for the specified server.
-    /// Thread-safe - uses ConcurrentDictionary.GetOrAdd for atomic get-or-create.
+    /// Gets an existing MCP client for the given server declaration, or creates and connects a new one.
+    /// Thread-safe — uses ConcurrentDictionary to guarantee a single client per pool key.
     /// </summary>
-    public async Task<MCPClient> GetOrCreateClientAsync(string serverName)
+    public async Task<MCPClient> GetOrCreateClientAsync(UsesMCPServerAttribute serverAttribute)
     {
         if (disposed)
             throw new ObjectDisposedException(nameof(MCPClientRegistryService));
 
-        // Check if server config exists
-        if (!serverConfigs.TryGetValue(serverName, out Records.MCPServerConfig? config))
-        {
-            throw new InvalidOperationException(
-                $"MCP server '{serverName}' not found in configuration. " +
-                $"Available servers: {string.Join(", ", serverConfigs.Keys)}");
-        }
+        string key = PoolKey(serverAttribute);
 
         // Check if client already exists
-        if (mcpClients.TryGetValue(serverName, out MCPClient? existingClient))
+        if (mcpClients.TryGetValue(key, out MCPClient? existingClient))
         {
+            logger.LogDebug($"Reusing existing MCP client for: {key}");
             return existingClient;
         }
 
         // Create new client (MCPClient.ConnectAsync is static factory method)
         try
         {
-            logger.LogInformation($"Creating new MCP client for server: {serverName}");
-            MCPClient client = await MCPClient.ConnectAsync(config, logger);
+            logger.LogInformation($"Creating new MCP client for: {key}");
+            MCPClient client = await MCPClient.ConnectAsync(serverAttribute, logger);
 
-            // Try to add to pool (another thread might have added it meanwhile)
-            if (mcpClients.TryAdd(serverName, client))
+            // TryAdd is atomic — if another thread won the race, dispose ours and use theirs
+            if (mcpClients.TryAdd(key, client))
             {
-                logger.LogInformation($"Successfully connected to MCP server: {serverName}");
+                logger.LogInformation($"Successfully connected to MCP server: {key}");
                 return client;
             }
 
             // Another thread won the race - dispose our client and use theirs
             await client.DisposeAsync();
-            return mcpClients[serverName];
+            return mcpClients[key];
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to connect to MCP server: {serverName}");
-            throw new InvalidOperationException($"Failed to connect to MCP server '{serverName}'", ex);
+            logger.LogError(ex, $"Failed to connect to MCP server: {key}");
+            throw new InvalidOperationException($"Failed to connect to MCP server '{key}'", ex);
         }
     }
 
     /// <summary>
-    /// Disconnects a specific MCP client and removes it from the pool.
+    /// Disconnects and removes a specific MCP client from the pool.
     /// </summary>
-    public async Task DisconnectClientAsync(string serverName)
+    public async Task DisconnectClientAsync(UsesMCPServerAttribute serverAttribute)
     {
-        if (mcpClients.TryRemove(serverName, out MCPClient? client))
+        string key = PoolKey(serverAttribute);
+
+        if (mcpClients.TryRemove(key, out MCPClient? client))
         {
             try
             {
                 await client.DisposeAsync();
-                logger.LogInformation($"Disconnected MCP client: {serverName}");
+                logger.LogInformation($"Disconnected MCP client: {key}");
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Error disconnecting MCP client: {serverName}");
+                logger.LogError(ex, $"Error disconnecting MCP client: {key}");
             }
         }
     }
@@ -172,6 +144,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
             disposed = true;
         }
     }
+
     public async ValueTask DisposeAsync()
     {
         if (!disposed)
@@ -183,136 +156,114 @@ public class MCPClientRegistryService : IMCPClientRegistryService
 }
 
 /// <summary>
-/// MCP client using ModelContextProtocol.Core to interact with MCP servers
+/// MCP client using ModelContextProtocol.Core to interact with a single MCP server.
 /// </summary>
 public class MCPClient : IAsyncDisposable
 {
     private readonly McpClient mcpClient;
     private readonly ILogger logger;
-    private readonly Records.MCPServerConfig mcpServerConfig;
+    private readonly string serverLabel;
 
-    private MCPClient(McpClient mcpClient, Records.MCPServerConfig mcpServerConfig, ILogger logger)
+    private MCPClient(McpClient mcpClient, string serverLabel, ILogger logger)
     {
-        this.mcpClient = mcpClient;
-        this.mcpServerConfig = mcpServerConfig;
-        this.logger = logger;
+        this.mcpClient   = mcpClient;
+        this.serverLabel = serverLabel;
+        this.logger      = logger;
     }
 
     /// <summary>
-    /// Creates and connects to MCP server
+    /// Creates and connects to an MCP server described by a <see cref="UsesMCPServerAttribute"/>.
+    /// Dispatches to the appropriate transport (Http or Stdio) based on the attribute.
     /// </summary>
     public static async Task<MCPClient> ConnectAsync(
-        Records.MCPServerConfig config,
+        UsesMCPServerAttribute attr,
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
-        logger.LogInformation($"Connecting to MCP server: {config.Name} ({config.Uri})");
-
-        Uri uri = new Uri(config.Uri);
         IClientTransport transport;
+        string label;
 
-        switch (uri.Scheme.ToLower())
+        switch (attr.Transport)
         {
-            case "stdio":
+            case Records.MCPTransport.Http:
             {
-                // stdio transport
-                string command = uri.LocalPath;
-                IList<string>? args = null;
-                if (config.AdditionalSettings?.TryGetValue("Args", out string? argsJson) == true)
-                    args = JsonSerializer.Deserialize<string[]>(argsJson);
+                label = attr.Command;
+                logger.LogInformation($"Connecting to HTTP MCP server: {label}");
+
+                HttpClientTransportOptions options = new HttpClientTransportOptions
+                {
+                    Endpoint = new Uri(attr.Command),
+                    Name     = label
+                };
+
+                transport = new HttpClientTransport(options);
+                logger.LogDebug($"Created HTTP transport: {label}");
+                break;
+            }
+
+            case Records.MCPTransport.Stdio:
+            {
+                label = $"stdio:{attr.Command}";
+                logger.LogInformation($"Connecting to stdio MCP server: {attr.Command}");
 
                 StdioClientTransportOptions options = new StdioClientTransportOptions
                 {
-                    Command = command,
-                    Arguments = args,
-                    Name = config.Name
+                    Command   = attr.Command,
+                    Arguments = attr.Args.Length > 0 ? attr.Args : null,
+                    Name      = label
                 };
 
                 transport = new StdioClientTransport(options);
-                logger.LogDebug($"Created stdio transport: {command}");
+                logger.LogDebug($"Created stdio transport: {attr.Command} {string.Join(" ", attr.Args)}");
                 break;
             }
-            case "https":
-            case "http":
-            {
-                // HTTP transport (SSE or Streamable HTTP)
-                HttpClientTransportOptions options = new HttpClientTransportOptions
-                {
-                    Endpoint = uri,
-                    Name = config.Name
-                };
 
-                // Add custom headers if present
-                if (config.AdditionalSettings != null)
-                {
-                    Dictionary<string, string> headers = [];
-                    foreach (KeyValuePair<string, string> kvp in config.AdditionalSettings)
-                    {
-                        if (kvp.Key != "Args") // Skip Args, only for stdio
-                        {
-                            headers[kvp.Key] = kvp.Value;
-                        }
-                    }
-                    if (headers.Count > 0)
-                    {
-                        options.AdditionalHeaders = headers;
-                    }
-                }
-
-                transport = new HttpClientTransport(options);
-                logger.LogDebug($"Created HTTP transport: {uri}");
-                break;
-            }
             default:
                 throw new NotSupportedException(
-                    $"Unsupported scheme: {uri.Scheme}. Use 'stdio://', 'http://', or 'https://'");
+                    $"Unsupported MCPTransport value '{attr.Transport}'.");
         }
 
         try
         {
-            // McpClient.CreateAsync handles connection + initialize handshake
             McpClient mcpClient = await McpClient.CreateAsync(
                 transport,
-                clientOptions: null, // Use defaults
+                clientOptions: null,
                 cancellationToken: cancellationToken);
 
-            logger.LogInformation($"Connected to MCP server: {config.Name}");
-            return new MCPClient(mcpClient, config, logger);
+            logger.LogInformation($"Connected to MCP server: {label}");
+            return new MCPClient(mcpClient, label, logger);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to connect to MCP server: {config.Name}");
+            logger.LogError(ex, $"Failed to connect to MCP server: {label}");
             throw;
         }
     }
 
     /// <summary>
-    /// Discovers tools via ListToolsAsync
+    /// Discovers all tools available on the connected MCP server.
     /// </summary>
     public async Task<IList<Tool>> DiscoverToolsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            logger.LogDebug($"Discovering tools from: {mcpServerConfig.Name}");
+            logger.LogDebug($"Discovering tools from: {serverLabel}");
 
-            // McpClient.ListToolsAsync returns IList<McpClientTool>
             IList<McpClientTool> mcpTools = await mcpClient.ListToolsAsync(cancellationToken: cancellationToken);
-
-            // Extract protocol Tool metadata
             List<Tool> tools = mcpTools.Select(t => t.ProtocolTool).ToList();
 
-            logger.LogInformation($"Discovered {tools.Count} tools from: {mcpServerConfig.Name}");
+            logger.LogInformation($"Discovered {tools.Count} tools from: {serverLabel}");
             return tools;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to discover tools from: {mcpServerConfig.Name}");
+            logger.LogError(ex, $"Failed to discover tools from: {serverLabel}");
             throw;
         }
     }
 
     /// <summary>
-    /// Calls a tool via CallToolAsync
+    /// Invokes a tool on the connected MCP server.
     /// </summary>
     public async Task<CallToolResult> CallToolAsync(
         string toolName,
@@ -321,9 +272,8 @@ public class MCPClient : IAsyncDisposable
     {
         try
         {
-            logger.LogDebug($"Calling tool '{toolName}' on: {mcpServerConfig.Name}");
+            logger.LogDebug($"Calling tool '{toolName}' on: {serverLabel}");
 
-            // McpClient.CallToolAsync accepts IReadOnlyDictionary<string, object?>
             CallToolResult result = await mcpClient.CallToolAsync(
                 toolName,
                 arguments as IReadOnlyDictionary<string, object?>,
@@ -334,24 +284,24 @@ public class MCPClient : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to call tool '{toolName}' on: {mcpServerConfig.Name}");
+            logger.LogError(ex, $"Failed to call tool '{toolName}' on: {serverLabel}");
             throw;
         }
     }
 
     /// <summary>
-    /// Disconnects from MCP server
+    /// Disconnects from the MCP server.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
         try
         {
-            logger.LogInformation($"Disconnecting from: {mcpServerConfig.Name}");
+            logger.LogInformation($"Disconnecting from: {serverLabel}");
             await mcpClient.DisposeAsync();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Error disconnecting from: {mcpServerConfig.Name}");
+            logger.LogError(ex, $"Error disconnecting from: {serverLabel}");
         }
     }
 }

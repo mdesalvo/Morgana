@@ -1,3 +1,4 @@
+using Morgana.Framework.Attributes;
 using Morgana.Framework.Services;
 
 namespace Morgana.Framework.Interfaces;
@@ -9,18 +10,21 @@ namespace Morgana.Framework.Interfaces;
 public interface IMCPClientRegistryService : IDisposable, IAsyncDisposable
 {
     /// <summary>
-    /// Gets an existing MCP client or creates a new one if not already connected.
-    /// Thread-safe - multiple concurrent calls with same serverName return the same client instance.
+    /// Gets an existing MCP client for the given server declaration, or creates and connects a new one.
+    /// Thread-safe — multiple concurrent calls with the same attribute return the same client instance.
     /// </summary>
-    /// <param name="serverName">Name of the MCP server from configuration</param>
+    /// <param name="serverAttribute">
+    /// The <see cref="UsesMCPServerAttribute"/> declared on the agent class.
+    /// Carries transport type, command/URI, and optional arguments.
+    /// </param>
     /// <returns>Connected MCPClient instance ready for tool discovery and invocation</returns>
-    Task<MCPClient> GetOrCreateClientAsync(string serverName);
+    Task<MCPClient> GetOrCreateClientAsync(UsesMCPServerAttribute serverAttribute);
 
     /// <summary>
     /// Disconnects and removes a specific MCP client from the pool.
     /// </summary>
-    /// <param name="serverName">Name of the MCP server to disconnect</param>
-    Task DisconnectClientAsync(string serverName);
+    /// <param name="serverAttribute">The attribute identifying the server to disconnect</param>
+    Task DisconnectClientAsync(UsesMCPServerAttribute serverAttribute);
 
     /// <summary>
     /// Disconnects all MCP clients and clears the connection pool.

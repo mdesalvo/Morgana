@@ -8,24 +8,27 @@ using Morgana.Framework.Interfaces;
 namespace Morgana.Examples.Agents;
 
 /// <summary>
-/// <para>
-/// Example agent demonstrating MonkeyMCP server integration.
-/// This agent can retrieve information about monkeys from a public MCP server.
-/// </para>
-/// <para>
-/// Available tools:
-/// - get_all_monkeys: Returns list of all monkeys
-/// - find_monkey_by_name: Finds specific monkey by name
-/// </para>
-/// <para>
-/// Test queries:
-/// - "Get me a list of all monkeys"
-/// - "Find information about the Baboon"
-/// - "Tell me about monkeys from Africa"
-/// </para>
+/// Example agent demonstrating MCP server integration via direct URI declaration.
+/// Retrieves information about monkeys from the public MonkeyMCP server.
 /// </summary>
+/// <remarks>
+/// <para><strong>Automatically acquired tools:</strong></para>
+/// <list type="bullet">
+/// <item>get_monkeys — returns the full list of monkeys</item>
+/// <item>get_monkey(name) — finds a specific monkey by name</item>
+/// <item>get_monkey_journey(name) — returns the journey of a specific monkey</item>
+/// <item>get_all_monkey_journeys — returns all monkey journeys</item>
+/// <item>get_monkey_business — returns monkey business data 🐵</item>
+/// </list>
+/// <para><strong>Test queries:</strong></para>
+/// <list type="bullet">
+/// <item>"Get me a list of all monkeys"</item>
+/// <item>"Find information about the Baboon"</item>
+/// <item>"Tell me about monkeys from Africa"</item>
+/// </list>
+/// </remarks>
 [HandlesIntent("monkeys")]
-[UsesMCPServers("MonkeyMCP")]
+[UsesMCPServer("https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/")]
 public class MonkeyAgent : MorganaAgent
 {
     public MonkeyAgent(

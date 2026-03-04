@@ -377,20 +377,20 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Registers MCP (Model Context Protocol) tools for an agent based on [UsesMCPServers] attribute.
-    /// Discovers tools from external MCP servers and integrates them into the agent's tool adapter.
+    /// Discovers tools from all MCP servers declared on the agent and registers them
+    /// into the agent's tool adapter.
     /// </summary>
-    /// <param name="agentType">Agent type to check for [UsesMCPServers] attribute</param>
+    /// <param name="agentType">Agent type to inspect for [UsesMCPServer] attributes</param>
     /// <param name="morganaToolAdapter">Target adapter to register discovered MCP tools into</param>
     /// <remarks>
     /// <para><strong>MCP Integration Flow:</strong></para>
     /// <list type="number">
-    /// <item>Check if agent has [UsesMCPServers] attribute</item>
-    /// <item>If no attribute or empty ServerNames array, skip (agent doesn't use MCP)</item>
-    /// <item>For each declared server name:
+    /// <item>Collect all [UsesMCPServer] attributes on the agent class</item>
+    /// <item>If none found, skip (agent doesn't use MCP)</item>
+    /// <item>For each attribute:
     ///   <list type="bullet">
     ///   <item>Get or create MCP client connection via IMCPClientRegistryService</item>
-    ///   <item>Discover available tools from server via DiscoverToolsAsync</item>
+    ///   <item>Discover available tools via DiscoverToolsAsync</item>
     ///   <item>Convert MCP tools to Morgana format via MCPToolAdapter</item>
     ///   <item>Register converted tools in MorganaToolAdapter</item>
     ///   </list>
@@ -399,67 +399,63 @@ public class MorganaAgentAdapter
     /// </remarks>
     private void RegisterMCPTools(Type agentType, MorganaToolAdapter morganaToolAdapter)
     {
-        UsesMCPServersAttribute? attribute = agentType.GetCustomAttribute<UsesMCPServersAttribute>();
-        if (attribute == null || attribute.ServerNames.Length == 0)
+        UsesMCPServerAttribute[] attributes = agentType
+            .GetCustomAttributes<UsesMCPServerAttribute>()
+            .ToArray();
+
+        if (attributes.Length == 0)
         {
             logger.LogDebug($"Agent {agentType.Name} does not use MCP servers");
             return;
         }
 
-        logger.LogInformation($"Agent {agentType.Name} declares {attribute.ServerNames.Length} MCP servers: {string.Join(", ", attribute.ServerNames)}");
+        logger.LogInformation($"Agent {agentType.Name} declares {attributes.Length} MCP server(s)");
 
-        foreach (string serverName in attribute.ServerNames)
+        foreach (UsesMCPServerAttribute attribute in attributes)
         {
             try
             {
-                RegisterMCPToolsFromServer(serverName, morganaToolAdapter);
+                RegisterMCPToolsFromServer(attribute, morganaToolAdapter);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Failed to register MCP tools from server: {serverName}");
+                logger.LogError(ex, $"Failed to register MCP tools from server: {attribute.Command}");
             }
         }
     }
 
     /// <summary>
-    /// Registers tools from a specific MCP server into the MorganaToolAdapter.
-    /// Handles connection, tool discovery, conversion, and registration for a single MCP server.
+    /// Registers tools from a single MCP server into the MorganaToolAdapter.
+    /// Handles connection, tool discovery, conversion, and registration.
     /// </summary>
-    /// <param name="serverName">Name of the MCP server from configuration (e.g., "brave-search")</param>
+    /// <param name="serverAttribute">Attribute declaring the MCP server (transport, command, args)</param>
     /// <param name="morganaToolAdapter">Target adapter to register discovered tools into</param>
     /// <remarks>
-    /// <para><strong>Server Integration Process:</strong></para>
-    /// <list type="number">
-    /// <item>Get or create MCP client connection (connection pooling via IMCPClientRegistryService)</item>
-    /// <item>Discover available tools via client.DiscoverToolsAsync()</item>
-    /// <item>If no tools found, log warning and return early</item>
-    /// <item>Create MCPToolAdapter to convert MCP tools to Morgana format</item>
-    /// <item>For each converted tool:
-    ///   <list type="bullet">
-    ///   <item>Create ToolDefinition with tool name and parameters</item>
-    ///   <item>Register delegate and definition in MorganaToolAdapter</item>
-    ///   <item>Log successful registration</item>
-    ///   </list>
-    /// </item>
-    /// </list>
+    /// <para><strong>Tool naming:</strong></para>
+    /// <para>
+    /// Tools are registered using the names as declared by the MCP server itself (e.g. "get_monkeys").
+    /// No prefix is added.
+    /// </para>
     /// </remarks>
-    private void RegisterMCPToolsFromServer(string serverName, MorganaToolAdapter morganaToolAdapter)
+    private void RegisterMCPToolsFromServer(UsesMCPServerAttribute serverAttribute, MorganaToolAdapter morganaToolAdapter)
     {
-        logger.LogInformation($"Registering MCP tools from server: {serverName}");
+        logger.LogInformation($"Registering MCP tools from server: {serverAttribute.Command}");
 
-        MCPClient mcpClient = imcpClientRegistryService.GetOrCreateClientAsync(serverName)
+        MCPClient mcpClient = imcpClientRegistryService.GetOrCreateClientAsync(serverAttribute)
             .GetAwaiter()
             .GetResult();
 
-        IList<ModelContextProtocol.Protocol.Tool> mcpTools = mcpClient.DiscoverToolsAsync().GetAwaiter().GetResult();
+        IList<ModelContextProtocol.Protocol.Tool> mcpTools = mcpClient.DiscoverToolsAsync()
+            .GetAwaiter()
+            .GetResult();
 
         if (mcpTools.Count == 0)
         {
-            logger.LogWarning($"No tools discovered from MCP server: {serverName}");
+            logger.LogWarning($"No tools discovered from MCP server: {serverAttribute.Command}");
             return;
         }
 
-        logger.LogInformation($"Discovered {mcpTools.Count} tools from MCP server: {serverName}");
+        logger.LogInformation($"Discovered {mcpTools.Count} tools from MCP server: {serverAttribute.Command}");
 
         MCPToolAdapter mcpToolAdapter = new MCPToolAdapter(mcpClient, logger);
         Dictionary<string, (Delegate toolDelegate, Records.ToolDefinition toolDefinition)> convertedTools =
@@ -475,11 +471,11 @@ public class MorganaAgentAdapter
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Failed to register MCP tool: {kvp.Key} from {serverName}");
+                logger.LogError(ex, $"Failed to register MCP tool: {kvp.Key} from {serverAttribute.Command}");
             }
         }
 
-        logger.LogInformation($"Successfully registered {convertedTools.Count} MCP tools from {serverName}");
+        logger.LogInformation($"Successfully registered {convertedTools.Count} MCP tools from {serverAttribute.Command}");
     }
 
     private class ToolDefinitionNameComparer : IEqualityComparer<Records.ToolDefinition>

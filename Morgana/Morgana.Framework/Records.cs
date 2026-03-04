@@ -1073,12 +1073,21 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// MCP server configuration from appsettings.json.
-    /// Defines how to connect to and initialize MCP servers.
+    /// Declares the transport mechanism used to communicate with an MCP server.
+    /// Used by <see cref="Morgana.Framework.Attributes.UsesMCPServerAttribute"/> to disambiguate
+    /// between remote HTTP servers and local stdio process-based servers.
     /// </summary>
-    public record MCPServerConfig(
-        string Name,
-        string Uri,
-        bool Enabled,
-        Dictionary<string, string>? AdditionalSettings = null);
+    public enum MCPTransport
+    {
+        /// <summary>
+        /// HTTP or HTTPS transport. The MCP server is a remote process reachable via a URL.
+        /// </summary>
+        Http,
+
+        /// <summary>
+        /// Standard I/O transport. The MCP server is a local executable spawned as a child process.
+        /// Communication happens via stdin/stdout streams.
+        /// </summary>
+        Stdio
+    }
 }
