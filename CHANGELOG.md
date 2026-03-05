@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🎯 Major Feature: OpenTelemetry Distributed Tracing
 This release introduces **end-to-end distributed tracing** across the entire Morgana conversation pipeline, providing deep observability for both technical diagnostics and functional conversation analytics. Traces are structured to be meaningful to **IT operators** (latencies, errors, TTFT) and **non-technical stakeholders** (intent, agent name, response preview).
 ### 🎯 Major Feature: Morgana.Framework as NuGet
-This release sets the milestone of distributing **Morgana.Framework** as **NuGet** package, making it straightforward to model your specialized agents and package them as plugins — ready to be discovered and executed by Morgana.
+This release sets the milestone of distributing **Morgana.Framework** as **NuGet** package, making it straightforward to model your specialized agents and package them as plugins ready to be discovered and executed by Morgana.
 
 ### ✨ Added
 **OpenTelemetry Tracing Architecture**
@@ -45,22 +45,22 @@ This release sets the milestone of distributing **Morgana.Framework** as **NuGet
 ```
 
 ### 🔄 Changed
-- Morgana's avatar with magical glowing effects when thinking
+- Morgana's avatar has magical glowing effects when thinking
 - Send button has been componentized and totally restyled
 - Make streaming response mode configurable under `StreamingResponse:Enabled` appsetting
 - Updated `Akka.NET` dependency to 1.5.62
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.3
-- Updated `Microsoft.Extensions.AI` dependency to 12.3.0 (**waiting for 12.4.0, which solves MCP regressions**)
+- Updated `Microsoft.Extensions.AI` dependency to 12.3.0 (**waiting for 12.4.0, which solves MCP regression**)
 - Updated `ModelContextProtocol.Core` dependency to 1.0.0
 
 ### 🐛 Fixed
-- Docker images did not copy `Morgana.Examples.dll` into `plugins` directory, generating an agentless Morgana...
+- Docker images did not copy `Morgana.Examples.dll` into `plugins` directory, generating an agentless Morgana
 - Ensure to queue shared context updates received before first agent session is established
 - Fixed visual glitch where send button briefly flashed wrong color when specialized agent returned control to Morgana
 
 ### 🚀 Future Enablement
 - **Production observability** — With an OTLP backend (Jaeger, Grafana Tempo, Azure Monitor, ...), every Morgana conversation becomes fully navigable: intent distribution, per-agent TTFT trends, guard violation rates and pipeline latencies all visible on a single dashboard
-- **Morgana Agents ecosystem** — Having **Morgana.Framework** as a solid development foundation packed as NuGet, it lays the groundwork for an ecosystem of reusable, shareable agent libraries — paving the way for curated Morgana Agent Repositories where domain-specific plugins can be discovered, distributed, and adopted across projects.
+- **Morgana Agents Ecosystem** — Being **Morgana.Framework** a reference development foundation packed as NuGet, it lays the groundwork for an ecosystem of reusable, shareable agent libraries — paving the way for curated Morgana Agent Ecosystem where domain-specific plugins can be discovered, distributed and adopted across projects.
 
 
 ## [0.17.0] - 2026-02-11
