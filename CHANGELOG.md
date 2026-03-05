@@ -48,8 +48,8 @@ This release sets the milestone of distributing **Morgana.Framework** as **NuGet
 - Morgana's avatar with magical glowing effects when thinking
 - Send button has been componentized and totally restyled
 - Make streaming response mode configurable under `StreamingResponse:Enabled` appsetting
-- Updated `Akka.NET` dependency to 1.5.61
-- Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.2
+- Updated `Akka.NET` dependency to 1.5.62
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.3
 - Updated `Microsoft.Extensions.AI` dependency to 12.3.0 (**waiting for 12.4.0, which solves MCP regressions**)
 - Updated `ModelContextProtocol.Core` dependency to 1.0.0
 

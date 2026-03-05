@@ -59,9 +59,9 @@ public class MorganaAIContextProvider : AIContextProvider
     public Action<string, object>? OnSharedContextUpdate { get; set; }
 
     /// <summary>
-    /// Key used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
+    /// Keys used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
     /// </summary>
-    public override string StateKey => nameof(MorganaAIContextProvider);
+    public override IReadOnlyList<string> StateKeys => [ nameof(MorganaAIContextProvider) ];
 
     /// <summary>
     /// Initializes a new singleton instance of <see cref="MorganaAIContextProvider"/>.
@@ -85,7 +85,7 @@ public class MorganaAIContextProvider : AIContextProvider
 
         sessionState = new ProviderSessionState<MorganaContextState>(
             stateInitializer: _ => new MorganaContextState(),
-            stateKey: StateKey,
+            stateKey: StateKeys[0],
             jsonSerializerOptions: jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions);
     }
 

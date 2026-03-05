@@ -43,9 +43,9 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     private readonly ProviderSessionState<MorganaHistoryState> sessionState;
 
     /// <summary>
-    /// Key used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
+    /// Keys used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
     /// </summary>
-    public override string StateKey => nameof(MorganaChatHistoryProvider);
+    public override IReadOnlyList<string> StateKeys => [ nameof(MorganaChatHistoryProvider) ];
 
     /// <summary>
     /// Initializes a new singleton instance of <see cref="MorganaChatHistoryProvider"/>.
@@ -76,7 +76,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
 
         sessionState = new ProviderSessionState<MorganaHistoryState>(
             stateInitializer: _ => new MorganaHistoryState(),
-            stateKey: StateKey,
+            stateKey: StateKeys[0],
             jsonSerializerOptions: jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions);
     }
 
