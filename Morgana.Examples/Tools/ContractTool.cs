@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Logging;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Attributes;
-using Morgana.Framework.Providers;
 
 namespace Morgana.Examples.Tools;
 

@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Logging;
 using Morgana.Framework.Abstractions;
 using Morgana.Framework.Attributes;
-using Morgana.Framework.Providers;
 
 namespace Morgana.Examples.Tools;
 
@@ -325,7 +324,7 @@ public class BillingTool : MorganaTool
             .OrderByDescending(i => i.PaidDate)
             .ToList();
 
-        if (!paidInvoices.Any())
+        if (paidInvoices.Count == 0)
         {
             var noData = new
             {
