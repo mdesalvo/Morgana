@@ -397,7 +397,7 @@
                 }
                 else
                 {
-                    currentAgentName = $"Morgana ({char.ToUpper(result.ActiveAgent[0]) + result.ActiveAgent.Substring(1)})";
+                    currentAgentName = $"Morgana ({char.ToUpper(result.ActiveAgent[0]) + result.ActiveAgent[1..]})";
                 }
                 Console.WriteLine($"🟡 Conversation resumed: {conversationId}, Active agent: {result?.ActiveAgent}");
 
@@ -978,7 +978,8 @@
                 int.TryParse(Configuration["Morgana:StreamingResponse:TypewriterTickChars"], out int typewriterTickChars);
                 if (typewriterTickChars <= 0)
                     typewriterTickChars = 1;
-                typewriterTimer?.Dispose();
+                if (typewriterTimer is not null)
+                    await typewriterTimer.DisposeAsync();
                 typewriterTimer = new Timer(TypewriterTick, typewriterTickChars, 0, typewriterTickMilliseconds);
 
                 await InvokeAsync(StateHasChanged);
@@ -1181,7 +1182,8 @@
         SignalRService.OnStreamChunkReceived -= HandleStreamChunkReceivedAsync;
 
         // Clean up streaming resources
-        typewriterTimer?.Dispose();
+        if (typewriterTimer is not null)
+            await typewriterTimer.DisposeAsync();
         
         // Stop SignalR connection
         await SignalRService.StopAsync();
