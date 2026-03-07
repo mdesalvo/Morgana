@@ -51,7 +51,7 @@ This release sets the milestone of distributing **Morgana.Framework** as **NuGet
 - Updated `Akka.NET` dependency to 1.5.62
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.3
 - Updated `Microsoft.Extensions.AI` dependency to 12.3.0 (**waiting for 12.4.0, which solves MCP regression**)
-- Updated `ModelContextProtocol.Core` dependency to 1.0.0
+- Updated `ModelContextProtocol.Core` dependency to 1.1.0
 
 ### 🐛 Fixed
 - Docker images did not copy `Morgana.Examples.dll` into `plugins` directory, generating an agentless Morgana
