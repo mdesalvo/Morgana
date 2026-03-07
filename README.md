@@ -265,8 +265,8 @@ docker compose --env-file .env --env-file .env.versions down
 
 `Morgana.Framework` is now available as [NuGet package](https://www.nuget.org/packages/Morgana.Framework), so you can build your specialized agents without touching Morgana's source code.
 
-Just reference it in any .NET project, model your agents and tools, then build: the resulting assembly is a ready-to-use **Morgana plugin**.
-Drop it into the `plugins/` folder of your Morgana instance (or any of the configured plugin directories) and it will be automatically discovered and executed at startup, empowering Morgana with new domain-driven capabilities and traits.
+Just reference it in your .NET project, model your agents and tools, prepare their prompts with an `agents.json` compiled as embedded resource, then build: the resulting assembly is a ready-to-use **Morgana plugin**!
+Drop it into the `plugins/` folder of your Morgana instance (or any of the configured plugin directories) and it will be automatically discovered and executed at startup, empowering Morgana with **new domain-driven capabilities and traits**.
 
 A concrete example is already in front of you: **Morgana.Examples** is exactly such a plugin: it references `Morgana.Framework` via NuGet, defines a set of specialized agents, and is the one powering the production (showcase) Docker distribution out of the box.
 
