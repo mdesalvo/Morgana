@@ -45,7 +45,7 @@ This release sets the milestone of distributing **Morgana.Framework** as **NuGet
 ```
 
 ### 🔄 Changed
-- Morgana's avatar has magical glowing effects when thinking
+- Morgana's avatar is now animated (with magical glowing effects when thinking)
 - Send button has been componentized and totally restyled
 - Make streaming response mode configurable under `StreamingResponse:Enabled` appsetting
 - Updated `Akka.NET` dependency to 1.5.62
