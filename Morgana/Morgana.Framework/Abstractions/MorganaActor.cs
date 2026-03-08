@@ -28,7 +28,7 @@ namespace Morgana.Framework.Abstractions;
 /// <item>LLM access: Direct access to ILLMService for AI completions</item>
 /// <item>Prompt resolution: Access to IPromptResolverService for loading templates</item>
 /// <item>Logging: Pre-configured ILoggingAdapter for actor-specific logging</item>
-/// <item>Timeout handling: Global 60-second receive timeout with virtual handler for override</item>
+/// <item>Timeout handling: Global 120-second receive timeout with virtual handler for override</item>
 /// </list>
 /// </remarks>
 public class MorganaActor : ReceiveActor
@@ -83,7 +83,7 @@ public class MorganaActor : ReceiveActor
         this.actorLogger = Context.GetLogger();
 
         // Global timeout for all MorganaActor instances
-        SetReceiveTimeout(TimeSpan.FromSeconds(60));
+        SetReceiveTimeout(TimeSpan.FromSeconds(120));
         Receive<ReceiveTimeout>(HandleReceiveTimeout);
     }
 

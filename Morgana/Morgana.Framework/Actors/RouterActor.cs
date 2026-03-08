@@ -123,7 +123,7 @@ public class RouterActor : MorganaActor
     /// Returns error messages for missing classification or unrecognized intents.
     /// Captures original sender before async operations to ensure correct response routing.
     /// Streaming chunks arrive via separate Tell messages and are forwarded to original sender.
-    /// Includes 60-second timeout for agent processing.
+    /// Includes 120-second timeout for agent processing.
     /// </remarks>
     private async Task RouteToAgentAsync(Records.AgentRequest req)
     {
