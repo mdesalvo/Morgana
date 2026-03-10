@@ -540,9 +540,9 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
 
         // Before collecting messages from history, ensure to strip out eventual
         // summarization messages which may have been automatically emitted and
-        // inserted by the history provider.
+        // inserted by the history provider (they have specific metadata).
         List<(string agentName, bool agentCompleted, ChatMessage message)> filteredMessages =
-            [.. allMessages.Where(m => m.message.AdditionalProperties?.ContainsKey("__summary__") != true)];;
+            [.. allMessages.Where(m => m.message.AdditionalProperties?.ContainsKey("__summary__") != true)];
 
         foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in filteredMessages)
         {
