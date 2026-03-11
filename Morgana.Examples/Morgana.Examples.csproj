@@ -22,7 +22,7 @@
     <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
 
     <Description>
-    Morgana.Examples is a showcase demostrating modeling of domain agents with Morgana.Framework.
+    Morgana.Examples is a showcase demostrating modeling of domain agents with Morgana.AI framework.
     It includes 3 agents serving "billing", "contract" and "monkeys" intents. Each agent encodes
     its prompt defining target, personality and the available tools (see agents.json).
     </Description>
@@ -34,7 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Morgana.Framework" Version="0.18.0" />
+    <PackageReference Include="Morgana.AI" Version="0.18.0" />
   </ItemGroup>
 
   <!-- Copy plugin to Morgana.Web plugins directory after build -->

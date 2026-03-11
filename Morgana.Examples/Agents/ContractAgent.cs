@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Morgana.Framework.Abstractions;
-using Morgana.Framework.Adapters;
-using Morgana.Framework.Attributes;
-using Morgana.Framework.Interfaces;
+using Morgana.AI.Abstractions;
+using Morgana.AI.Adapters;
+using Morgana.AI.Attributes;
+using Morgana.AI.Interfaces;
 
 namespace Morgana.Examples.Agents;
 

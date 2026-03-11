@@ -3,8 +3,8 @@
 # ==============================================================================
 # Multi-stage build for optimized image with all required projects:
 # - Morgana.Web (API + SignalR Hub)
-# - Morgana.Framework (core framework)
-# - Morgana.Examples (example plugins with 3 agents)
+# - Morgana.AI (AI framework)
+# - Morgana.Examples (showcase plugins with 3 agents)
 # ==============================================================================
 
 # ==============================================================================
@@ -20,7 +20,7 @@ WORKDIR /src
 
 # Copy project files for all required projects (layer caching optimization)
 COPY ["Morgana/Morgana.Web/Morgana.Web.csproj", "Morgana.Web/"]
-COPY ["Morgana/Morgana.Framework/Morgana.Framework.csproj", "Morgana.Framework/"]
+COPY ["Morgana/Morgana.AI/Morgana.AI.csproj", "Morgana.AI/"]
 COPY ["Morgana.Examples/Morgana.Examples.csproj", "Morgana.Examples/"]
 COPY ["Morgana/Directory.Build.props", "Directory.Build.props"]
 
@@ -29,7 +29,7 @@ RUN dotnet restore "Morgana.Web/Morgana.Web.csproj"
 
 # Copy all source code from all projects
 COPY Morgana/Morgana.Web/ Morgana.Web/
-COPY Morgana/Morgana.Framework/ Morgana.Framework/
+COPY Morgana/Morgana.AI/ Morgana.AI/
 COPY Morgana.Examples/ Morgana.Examples/
 
 # Build main project
