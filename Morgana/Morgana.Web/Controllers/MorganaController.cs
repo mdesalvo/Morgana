@@ -4,11 +4,11 @@ using Akka.Actor;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
-using Morgana.Framework;
-using Morgana.Framework.Actors;
-using Morgana.Framework.Extensions;
-using Morgana.Framework.Interfaces;
-using Morgana.Framework.Telemetry;
+using Morgana.AI;
+using Morgana.AI.Actors;
+using Morgana.AI.Extensions;
+using Morgana.AI.Interfaces;
+using Morgana.AI.Telemetry;
 using Morgana.Web.Hubs;
 using Morgana.Web.Messages;
 

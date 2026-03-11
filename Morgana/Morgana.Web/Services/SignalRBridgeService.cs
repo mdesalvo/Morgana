@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.SignalR;
-using Morgana.Framework.Interfaces;
+using Morgana.AI.Interfaces;
 using Morgana.Web.Hubs;
 using Morgana.Web.Messages;
-using static Morgana.Framework.Records;
+using static Morgana.AI.Records;
 
 namespace Morgana.Web.Services;
 

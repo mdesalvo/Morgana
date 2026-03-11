@@ -1,5 +1,5 @@
 using System.Reflection;
-using Morgana.Framework.Abstractions;
+using Morgana.AI.Abstractions;
 
 namespace Morgana.Web.Services;
 

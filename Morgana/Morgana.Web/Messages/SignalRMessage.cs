@@ -1,4 +1,4 @@
-﻿using static Morgana.Framework.Records;
+﻿using static Morgana.AI.Records;
 
 namespace Morgana.Web.Messages;
 

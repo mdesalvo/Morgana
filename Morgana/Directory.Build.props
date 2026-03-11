@@ -29,7 +29,7 @@
     
     <!-- Common Description -->
     <Description>
-    Morgana is an advanced conversational AI system designed to handle complex
+    Morgana is an advanced conversational AI framework designed to handle complex
     customer service scenarios through a sophisticated multi-agent architecture.
     Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET,
     Morgana orchestrates specialized AI agents that collaborate to understand,

@@ -2,11 +2,11 @@ using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
 using Microsoft.Extensions.AI;
-using Morgana.Framework;
-using Morgana.Framework.Adapters;
-using Morgana.Framework.Interfaces;
-using Morgana.Framework.Services;
-using Morgana.Framework.Telemetry;
+using Morgana.AI;
+using Morgana.AI.Adapters;
+using Morgana.AI.Interfaces;
+using Morgana.AI.Services;
+using Morgana.AI.Telemetry;
 using Morgana.Web.Hubs;
 using Morgana.Web.Services;
 
@@ -142,8 +142,8 @@ builder.Services.AddSingleton<ILLMService>(sp => {
 
     return llmProvider.ToLowerInvariant() switch
     {
-        "anthropic"   => new Morgana.Framework.Abstractions.Anthropic(config, promptResolver),
-        "azureopenai" => new Morgana.Framework.Abstractions.AzureOpenAI(config, promptResolver),
+        "anthropic"   => new Morgana.AI.Abstractions.Anthropic(config, promptResolver),
+        "azureopenai" => new Morgana.AI.Abstractions.AzureOpenAI(config, promptResolver),
         _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'AzureOpenAI', 'Anthropic'")
     };
 });
