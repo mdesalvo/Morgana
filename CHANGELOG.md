@@ -4,15 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.18.0] - UNDER DEVELOPMENT
+
+## [0.18.0] - 2026-03-11
 ### 🎯 Major Feature: OpenTelemetry Distributed Tracing
 This release introduces **end-to-end distributed tracing** across the entire Morgana conversation pipeline, providing deep observability for both technical diagnostics and functional conversation analytics. Traces are structured to be meaningful to **IT operators** (latencies, errors, TTFT) and **non-technical stakeholders** (intent, agent name, response preview).
-### 🎯 Major Feature: Morgana.Framework as NuGet
-This release sets the milestone of distributing **Morgana.Framework** as **NuGet** package, making it straightforward to model your specialized agents and package them as plugins ready to be discovered and executed by Morgana.
+### 🎯 Major Feature: Morgana.AI as NuGet
+This release sets the milestone of distributing **Morgana.AI** as **NuGet** package, making it straightforward to model your specialized agents and package them as plugins ready to be discovered and executed by Morgana.
 
 ### ✨ Added
 **OpenTelemetry Tracing Architecture**
-- New `Morgana.Framework/Telemetry/` module with `MorganaTelemetry` (ActivitySource + attribute constants) and `OpenTelemetryExtensions` (`AddMorganaOpenTelemetry()` registration)
+- New `Morgana.AI/Telemetry/` module with `MorganaTelemetry` (ActivitySource + attribute constants) and `OpenTelemetryExtensions` (`AddMorganaOpenTelemetry()` registration)
 - Per-turn span (`morgana.turn`) opened at the HTTP boundary in `ConversationController`, propagated into the Akka.NET actor system via `UserMessage.TurnContext`
 - Child spans for each pipeline stage: `morgana.guard`, `morgana.classifier`, `morgana.router`, `morgana.agent`
 - Explicit `ActivityContext` propagation through `UserMessage`, `ProcessingContext` and `AgentRequest` records — solving Akka.NET's ambient `Activity.Current` breakage across thread pool boundaries
@@ -60,7 +61,7 @@ This release sets the milestone of distributing **Morgana.Framework** as **NuGet
 
 ### 🚀 Future Enablement
 - **Production observability** — With an OTLP backend (Jaeger, Grafana Tempo, Azure Monitor, ...), every Morgana conversation becomes fully navigable: intent distribution, per-agent TTFT trends, guard violation rates and pipeline latencies all visible on a single dashboard
-- **Morgana Agents Ecosystem** — Being **Morgana.Framework** a reference development foundation packed as NuGet, it lays the groundwork for an ecosystem of reusable, shareable agent libraries — paving the way for curated Morgana Agent Ecosystem where domain-specific plugins can be discovered, distributed and adopted across projects.
+- **Morgana Agents Ecosystem** — Being **Morgana.AI** a development foundation packed as NuGet, it lays the groundwork for an ecosystem of reusable, shareable agent libraries — paving the way for curated Morgana Agent Ecosystem where domain-specific plugins can be discovered, distributed and adopted across projects.
 
 
 ## [0.17.0] - 2026-02-11

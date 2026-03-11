@@ -130,7 +130,7 @@ public class BillingTool : MorganaTool
 }
 
 [HandlesIntent("monkeys")]
-[UsesMCPServers("MonkeyMCP")]
+[UsesMCPServer("https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/")]
 public class MonkeyAgent : MorganaAgent { }  // Acquires tools at runtime!
 ```
 
@@ -218,7 +218,7 @@ This architecture delivers 3 critical benefits—all configurable through declar
 ---
 ## 🚀 Quick Start (Docker Hub)
 
-To use latest images from [Docker Hub](https://hub.docker.com/u/mdesalvo) (example showcase for what Morgana **looks like** and **how it works**):
+To use latest images from [Docker Hub](https://hub.docker.com/u/mdesalvo) (showcase for what Morgana **looks like** and **how it works**):
 ```bash
 # 📋 Copy the production template
 cp production.env.template .env
@@ -237,7 +237,7 @@ docker compose down
 
 ## 🛠️ Development (Build from source)
 
-For developers who want to build from source code (recommended, since **you** will give Morgana **your** domain knowledge in terms of **intents, agents and tools**):
+For developers who want to build from source code (recommended, since **you** will give Morgana **your** domain in terms of **intents, agents, prompts and tools**):
 ```bash
 # 📋 Copy the development template
 cp development.env.template .env
@@ -261,13 +261,13 @@ docker compose --env-file .env --env-file .env.versions up
 docker compose --env-file .env --env-file .env.versions down
 ```
 
-## 🧩 Build your Morgana Agents --> coming soon in v0.18
+## 🧩 Build your Morgana Agents
 
-`Morgana.Framework` is now available as [NuGet package](https://www.nuget.org/packages/Morgana.Framework), so you can build your specialized agents without touching Morgana's source code.
+`Morgana.AI` is now available as [NuGet package](https://www.nuget.org/packages/Morgana.AI), so you can build your specialized agents without touching Morgana's source code.
 
 Just reference it in your project, model your agents (`MorganaAgent`) and tools (`MorganaTool`), prepare their prompts with an `agents.json` compiled as embedded resource, then build: the resulting assembly is a ready-to-use **Morgana plugin**!
 Drop it into the `plugins/` folder of your Morgana instance (or any of the configured plugin directories) and it will be automatically discovered and executed at startup, empowering Morgana with **new domain-driven capabilities and traits**.
 
-A concrete example is already in front of you: **Morgana.Examples** is exactly such a plugin. It references `Morgana.Framework` package and defines 3 specialized agents which empower the production (showcase) Docker distribution of Morgana out of the box.
+A concrete example is already in front of you: **Morgana.Examples** is exactly such a plugin. It references `Morgana.AI` package and defines 3 specialized agents which empower the production (showcase) Docker distribution of Morgana out of the box.
 
 This is the foundation of the **Morgana Agent Ecosystem**: independent, shareable, domain-specific plugin agents that can be developed, distributed and adopted across any Morgana-powered application.
