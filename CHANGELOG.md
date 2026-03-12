@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.19.0] - UNDER DEVELOPMENT
+
+### ✨ Added
+
+### 🔄 Changed
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.4
+- Updated `ModelContextProtocol.Core` dependency to 1.1.0
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+
+
 ## [0.18.0] - 2026-03-11
 ### 🎯 Major Feature: OpenTelemetry Distributed Tracing
 This release introduces **end-to-end distributed tracing** across the entire Morgana conversation pipeline, providing deep observability for both technical diagnostics and functional conversation analytics. Traces are structured to be meaningful to **IT operators** (latencies, errors, TTFT) and **non-technical stakeholders** (intent, agent name, response preview).
