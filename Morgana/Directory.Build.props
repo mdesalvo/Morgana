@@ -9,7 +9,7 @@
     <LangVersion>latest</LangVersion>
 
     <!-- Version Information -->
-    <Version>0.18.0</Version>
+    <Version>0.19.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
 
@@ -48,9 +48,9 @@
     <PackageReference Include="Akka.DependencyInjection" Version="1.5.62" />
     <!-- Agents -->
     <PackageReference Include="Azure.AI.OpenAI" Version="2.8.0-beta.1" />
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-rc3" />
-    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.0.0-rc3" />
-    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.0.0-rc3" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-rc4" />
+    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.0.0-rc4" />
+    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.0.0-rc4" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.0" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.4.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.0" />
