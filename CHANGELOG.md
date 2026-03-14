@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
+- Updated `Azure.AI.OpenAI` dependency to 2.9.0-beta.1
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.4
 - Updated `ModelContextProtocol.Core` dependency to 1.1.0
 
