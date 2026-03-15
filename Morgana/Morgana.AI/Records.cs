@@ -358,6 +358,26 @@ public static class Records
         [property: JsonPropertyName("compliant")] bool Compliant,
         [property: JsonPropertyName("violation")] string? Violation);
 
+    /// <summary>
+    /// Result returned by <see cref="Interfaces.IGuardRailService"/> after evaluating
+    /// a user message against content and policy rules.
+    /// </summary>
+    /// <param name="Compliant">
+    /// <c>true</c> if the message passes all guard-rail checks; <c>false</c> if it violates a rule.
+    /// </param>
+    /// <param name="Violation">
+    /// Human-readable description of the violated rule when <paramref name="Compliant"/> is <c>false</c>;
+    /// <c>null</c> otherwise.
+    /// </param>
+    /// <remarks>
+    /// This record is the public contract of <see cref="Interfaces.IGuardRailService"/> and is
+    /// intentionally decoupled from <see cref="GuardCheckResponse"/>, which is an LLM wire-format DTO
+    /// used only by <see cref="Services.LLMGuardRailService"/> internally.
+    /// </remarks>
+    public record GuardRailResult(
+        bool Compliant,
+        string? Violation);
+
     // ==========================================================================
     // CLASSIFICATION MESSAGES
     // ==========================================================================

@@ -127,6 +127,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IAgentConfigurationService: Loads agent and intent configurations
 // - IPromptResolverService: Resolves prompt templates from configuration
 // - IAgentRegistryService: Maps intents to agent types for routing
+// - IGuardRailService: Checks user messages for content safety and compliance
 // - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI)
 // - IChatClient: Microsoft.Extensions.AI chat client for LLM interactions
 
@@ -135,6 +136,7 @@ builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistr
 builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
+builder.Services.AddSingleton<IGuardRailService, LLMGuardRailService>();
 builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();

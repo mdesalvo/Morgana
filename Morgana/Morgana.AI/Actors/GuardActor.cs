@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
 using Microsoft.Extensions.Configuration;
@@ -8,94 +7,76 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Actors;
 
 /// <summary>
-/// Content moderation actor that performs two-level filtering on user messages.
-/// First level: synchronous profanity check against a configured list.
-/// Second level: asynchronous LLM-based policy check for complex content violations.
+/// Content moderation actor that enforces guard-rail policies on every incoming user message.
 /// </summary>
 /// <remarks>
-/// <para><strong>Hybrid Approach for Performance:</strong></para>
-/// <list type="bullet">
-/// <item>Fast synchronous check for known bad terms (immediate rejection)</item>
-/// <item>Slower async LLM check for nuanced policy violations (spam, phishing, violence, etc.)</item>
-/// </list>
-/// <para>Falls back to "compliant" status on errors to avoid blocking legitimate requests.</para>
+/// <para>
+/// This actor is intentionally thin: all moderation logic is delegated to
+/// <see cref="IGuardRailService"/>, which is resolved from DI and can be swapped
+/// without touching the actor system. The default implementation
+/// (<see cref="Services.LLMGuardRailService"/>) reproduces the two-level strategy
+/// (fast profanity check + async LLM policy check) that was previously embedded here.
+/// </para>
+///
+/// <para><strong>Tell Pattern:</strong></para>
+/// <para>Captures the sender reference before the async call and replies directly via
+/// <c>originalSender.Tell()</c>, avoiding temporary Ask actors and the associated
+/// lifecycle overhead.</para>
+///
+/// <para><strong>Error Handling:</strong></para>
+/// <para><see cref="IGuardRailService"/> implementations are expected to fail open on
+/// transient errors (see interface contract). Should the service itself throw an unhandled
+/// exception, this actor propagates a <see cref="Status.Failure"/> to the supervisor so
+/// it can apply its own fail-open fallback.</para>
 /// </remarks>
 public class GuardActor : MorganaActor
 {
+    private readonly IGuardRailService guardRailService;
+
     /// <summary>
-    /// Initializes a new instance of the GuardActor.
+    /// Initialises a new instance of <see cref="GuardActor"/>.
     /// </summary>
-    /// <param name="conversationId">Unique identifier for this conversation</param>
-    /// <param name="llmService">LLM service for policy-based content checks</param>
-    /// <param name="promptResolverService">Service for resolving guard prompt templates</param>
-    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
+    /// <param name="conversationId">Unique identifier for this conversation.</param>
+    /// <param name="llmService">LLM service (passed to base; not used directly here).</param>
+    /// <param name="promptResolverService">Prompt resolver (passed to base; not used directly here).</param>
+    /// <param name="guardRailService">Guard-rail service that encapsulates all content moderation logic.</param>
+    /// <param name="configuration">Morgana configuration (layered by ASP.NET).</param>
     public GuardActor(
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
+        IGuardRailService guardRailService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
-        // Perform two-level content moderation check on incoming user messages:
-        // 1. Fast synchronous profanity check against configured term list (immediate rejection if found)
-        // 2. Slower async LLM-based policy check for complex violations (spam, phishing, violence, etc.)
-        // Replies directly to Sender with GuardCheckResponse (Tell pattern, no Ask)
+        this.guardRailService = guardRailService;
+
         ReceiveAsync<Records.GuardCheckRequest>(CheckComplianceAsync);
     }
 
     /// <summary>
-    /// Performs two-level compliance check on user message.
-    /// Level 1: Synchronous profanity check (immediate response if violation found).
-    /// Level 2: Asynchronous LLM-based policy check (for spam, phishing, violence, etc.).
+    /// Delegates the compliance check to <see cref="IGuardRailService"/> and replies to the sender.
     /// </summary>
-    /// <param name="req">Guard check request containing the message to validate</param>
-    /// <remarks>
-    /// <para><strong>Tell Pattern:</strong></para>
-    /// <para>Captures sender reference early and replies directly via Sender.Tell().
-    /// No internal Self.Tell() messages or wrapper records needed.</para>
-    /// <para><strong>Error Handling:</strong></para>
-    /// <para>On LLM failure, sends Status.Failure to supervisor for proper error handling.
-    /// Supervisor will fall back to "compliant" status to avoid blocking legitimate requests.</para>
-    /// </remarks>
+    /// <param name="req">Guard check request containing the conversation ID and the message to evaluate.</param>
     private async Task CheckComplianceAsync(Records.GuardCheckRequest req)
     {
         IActorRef originalSender = Sender;
-        Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
 
-        // Level 1: Basic profanity check (synchronous, fast)
-        foreach (string term in guardPrompt.GetAdditionalProperty<List<string>>("ProfanityTerms"))
-        {
-            if (req.Message.Contains(term, StringComparison.OrdinalIgnoreCase))
-            {
-                actorLogger.Info($"Profanity detected: '{term}'");
-                
-                originalSender.Tell(new Records.GuardCheckResponse(
-                    false, guardPrompt.GetAdditionalProperty<string>("LanguageViolation")));
-                
-                return;
-            }
-        }
-
-        actorLogger.Info("Basic profanity check passed, engaging LLM policy check");
-
-        // Level 2: Advanced LLM-based policy check (async, slower)
         try
         {
-            string response = await llmService.CompleteWithSystemPromptAsync(
-                conversationId,
-                $"{guardPrompt.Target}\n{guardPrompt.Instructions}",
-                req.Message);
+            Records.GuardRailResult result = await guardRailService.CheckAsync(req.ConversationId, req.Message);
 
-            Records.GuardCheckResponse? result = JsonSerializer.Deserialize<Records.GuardCheckResponse>(response);
+            actorLogger.Info(
+                "Guard check complete for conversation {0}: compliant={1}",
+                req.ConversationId, result.Compliant);
 
-            actorLogger.Info($"LLM policy check result: compliant={result?.Compliant ?? true}");
-
-            originalSender.Tell(result ?? new Records.GuardCheckResponse(true, null));
+            // Map GuardRailResult → GuardCheckResponse (the message the supervisor expects)
+            originalSender.Tell(new Records.GuardCheckResponse(result.Compliant, result.Violation));
         }
         catch (Exception ex)
         {
-            actorLogger.Error(ex, "LLM policy check failed");
+            actorLogger.Error(ex, "GuardActor: unexpected error during compliance check");
 
-            // Send failure to supervisor for fail-open handling
+            // Propagate failure to supervisor — it will apply its own fail-open fallback
             originalSender.Tell(new Status.Failure(ex));
         }
     }
