@@ -564,6 +564,26 @@ public static class Records
         [property: JsonPropertyName("message")] string Message,
         [property: JsonPropertyName("quickReplies")] List<QuickReply> QuickReplies);
 
+    /// <summary>
+    /// Result returned by <see cref="Interfaces.IPresenterService.GenerateAsync"/> containing
+    /// the welcome message and quick reply buttons for the start of a conversation.
+    /// </summary>
+    /// <param name="Message">
+    /// Welcome/presentation message text to display to the user (2-4 sentences).
+    /// </param>
+    /// <param name="QuickReplies">
+    /// List of quick reply buttons derived from displayable intents.
+    /// May be empty if no intents are configured; never null.
+    /// </param>
+    /// <remarks>
+    /// This record is the public contract of <see cref="Interfaces.IPresenterService"/> and is
+    /// intentionally decoupled from <see cref="PresentationResponse"/>, which is an LLM
+    /// wire-format DTO used only by <see cref="Services.LLMPresenterService"/> internally.
+    /// </remarks>
+    public record PresentationResult(
+        string Message,
+        List<QuickReply> QuickReplies);
+
     // ==========================================================================
     // RICH CARD SYSTEM
     // ==========================================================================

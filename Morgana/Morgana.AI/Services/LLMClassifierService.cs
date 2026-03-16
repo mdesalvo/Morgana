@@ -56,7 +56,6 @@ public class LLMClassifierService : IClassifierService
         this.llmService = llmService;
         this.logger = logger;
 
-        // Build classifier prompt once — mirrors the logic previously in ClassifierActor constructor
         List<Records.IntentDefinition> intents =
             agentConfigService.GetIntentsAsync().GetAwaiter().GetResult();
 

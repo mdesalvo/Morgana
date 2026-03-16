@@ -7,11 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.19.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Morgana.AI Extension Points
-This release improves extensibility of **Morgana.AI**, decoupling content moderation and intent classification from the actor infrastructure, allowing any guard-rail and classification solutions to be plugged in via DI without touching the actor system.
+This release improves extensibility of **Morgana.AI**, decoupling many foundational aspects from the actor infrastructure, allowing any custom solution to be plugged in via DI without touching the actor system.
 
 ### ✨ Added
 - Introduced `IGuardRailService` as an **extension point for content moderation**: `LLMGuardRailService` ships as the default implementation (two-level profanity + LLM policy check) and can be replaced in DI with any alternative backend (e.g. Microsoft Purview, Azure AI Content Safety, ...) without touching the actor system.
 - Introduced `IClassifierService` as an **extension point for intent classification**: `LLMClassifierService` ships as the default implementation (agents.json + morgana.json LLM classification) and can be replaced in DI with any alternative backend (e.g. Azure AI Language, Amazon Lex, Google Natural Language AI, ...) without touching the actor system.
+- Introduced `IPresenterService` as an **extension point for welcome presentation**: `LLMPresenterService` ships as the default implementation (LLM-driven welcome message with intent-based quick replies) and can be replaced in DI with any alternative strategy (static templates, tenant-specific content, CMS-driven messages, A/B variants) without touching the actor system.
 
 ### 🔄 Changed
 - Updated `Azure.AI.OpenAI` dependency to 2.9.0-beta.1

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
 using Microsoft.Extensions.Configuration;
@@ -42,6 +41,7 @@ public class ConversationSupervisorActor : MorganaActor
 {
     private readonly ISignalRBridgeService signalRBridgeService;
     private readonly IAgentConfigurationService agentConfigService;
+    private readonly IPresenterService presenterService;
 
     /* Actors directly orchestrated by the supervisor */
     private readonly IActorRef guard;
@@ -76,10 +76,12 @@ public class ConversationSupervisorActor : MorganaActor
         IPromptResolverService promptResolverService,
         ISignalRBridgeService signalRBridgeService,
         IAgentConfigurationService agentConfigService,
+        IPresenterService presenterService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         this.signalRBridgeService = signalRBridgeService;
         this.agentConfigService = agentConfigService;
+        this.presenterService = presenterService;
 
         guard = Context.System.GetOrCreateActorAsync<GuardActor>(
             "guard", conversationId).GetAwaiter().GetResult();
@@ -129,6 +131,7 @@ public class ConversationSupervisorActor : MorganaActor
 
     /// <summary>
     /// Handles presentation generation requests.
+    /// Loads displayable intents then delegates entirely to <see cref="IPresenterService"/>.
     /// </summary>
     private async Task HandlePresentationRequestAsync(Records.GeneratePresentationMessage _)
     {
@@ -137,92 +140,20 @@ public class ConversationSupervisorActor : MorganaActor
             actorLogger.Info("Presentation already shown, skipping");
             return;
         }
-
+ 
         hasPresented = true;
-        actorLogger.Info("Generating LLM-driven presentation message");
-
-        try
+        actorLogger.Info("Generating presentation message via IPresenterService");
+ 
+        List<Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
+        Records.IntentCollection intentCollection = new Records.IntentCollection(allIntents);
+        List<Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
+ 
+        Records.PresentationResult result = await presenterService.GenerateAsync(displayableIntents);
+ 
+        Self.Tell(new Records.PresentationContext(result.Message, displayableIntents)
         {
-            Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync("Presentation");
-            List<Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
-            Records.IntentCollection intentCollection = new Records.IntentCollection(allIntents);
-            List<Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
-
-            if (displayableIntents.Count == 0)
-            {
-                actorLogger.Warning("No displayable intents available, sending presentation without quick replies");
-
-                await Task.Delay(750);
-
-                await signalRBridgeService.SendStructuredMessageAsync(
-                    conversationId,
-                    presentationPrompt.GetAdditionalProperty<string>("NoAgentsMessage"),
-                    "presentation",
-                    [],
-                    null,
-                    "Morgana",
-                    false,
-                    null);
-
-                return;
-            }
-
-            string formattedIntents = string.Join("\n",
-                displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
-
-            string systemPrompt = $"{presentationPrompt.Target}\n\n{presentationPrompt.Instructions}"
-                .Replace("((intents))", formattedIntents);
-
-            actorLogger.Info("Invoking LLM to generate presentation message");
-
-            string llmResponse = await llmService.CompleteWithSystemPromptAsync(
-                conversationId,
-                systemPrompt,
-                "Generate the presentation");
-
-            actorLogger.Info("LLM presentation generated successfully");
-
-            Records.PresentationResponse? presentation =
-                JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse);
-
-            if (presentation != null)
-            {
-                actorLogger.Info($"LLM generated {presentation.QuickReplies.Count} quick replies");
-
-                Self.Tell(new Records.PresentationContext(presentation.Message, displayableIntents)
-                {
-                    LLMQuickReplies = presentation.QuickReplies
-                });
-            }
-            else
-            {
-                throw new InvalidOperationException("LLM returned null presentation");
-            }
-        }
-        catch (Exception ex)
-        {
-            actorLogger.Error(ex, "LLM presentation generation failed, using fallback");
-
-            Records.Prompt fallbackPrompt = await promptResolverService.ResolveAsync("Presentation");
-            string fallbackMessage = fallbackPrompt.GetAdditionalProperty<string>("FallbackMessage");
-
-            List<Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
-            Records.IntentCollection intentCollection = new Records.IntentCollection(allIntents);
-            List<Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
-
-            List<Records.QuickReply> fallbackReplies = displayableIntents
-                .ConvertAll(intent => new Records.QuickReply(
-                    intent.Name,
-                    intent.Label ?? intent.Name,
-                    intent.DefaultValue ?? $"Help me with {intent.Name}"));
-
-            actorLogger.Info($"Using fallback presentation with {fallbackReplies.Count} quick replies");
-
-            Self.Tell(new Records.PresentationContext(fallbackMessage, displayableIntents)
-            {
-                LLMQuickReplies = fallbackReplies
-            });
-        }
+            LLMQuickReplies = result.QuickReplies
+        });
     }
 
     /// <summary>
@@ -231,15 +162,15 @@ public class ConversationSupervisorActor : MorganaActor
     private async Task HandlePresentationGenerated(Records.PresentationContext ctx)
     {
         actorLogger.Info("Sending presentation to client via SignalR");
-
+ 
         List<Records.QuickReply> quickReplies = ctx.LLMQuickReplies?
             .Select(qr => new Records.QuickReply(qr.Id, qr.Label, qr.Value))
             .ToList() ?? [];
-
+ 
         try
         {
             await Task.Delay(750);
-
+ 
             await signalRBridgeService.SendStructuredMessageAsync(
                 conversationId,
                 ctx.Message,
@@ -248,8 +179,9 @@ public class ConversationSupervisorActor : MorganaActor
                 null,
                 "Morgana",
                 false,
+                null,
                 null);
-
+ 
             actorLogger.Info("Presentation sent successfully");
         }
         catch (Exception ex)
