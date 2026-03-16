@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.19.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Morgana.AI Extension Points
-This release improves extensibility of **Morgana.AI**, decoupling content moderation from the actor infrastructure, allowing any guard-rail backend to be plugged in via DI without touching the actor system.
+This release improves extensibility of **Morgana.AI**, decoupling content moderation and intent classification from the actor infrastructure, allowing any guard-rail and classification solutions to be plugged in via DI without touching the actor system.
 
 ### ✨ Added
-- Introduced `IGuardRailService` as a **Morgana.AI extension point for content moderation**: `LLMGuardRailService` ships as the default implementation (two-level profanity + LLM policy check, identical to previous behaviour) and can be replaced in DI with any alternative backend (e.g. Microsoft Purview, Azure AI Content Safety, custom rule engines) without touching the actor system.
+- Introduced `IGuardRailService` as an **extension point for content moderation**: `LLMGuardRailService` ships as the default implementation (two-level profanity + LLM policy check) and can be replaced in DI with any alternative backend (e.g. Microsoft Purview, Azure AI Content Safety, ...) without touching the actor system.
+- Introduced `IClassifierService` as an **extension point for intent classification**: `LLMClassifierService` ships as the default implementation (agents.json + morgana.json LLM classification) and can be replaced in DI with any alternative backend (e.g. Azure AI Language, Amazon Lex, Google Natural Language AI, ...) without touching the actor system.
 
 ### 🔄 Changed
 - Updated `Azure.AI.OpenAI` dependency to 2.9.0-beta.1
@@ -20,7 +21,7 @@ This release improves extensibility of **Morgana.AI**, decoupling content modera
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
-- **Morgana.AI Extension Points ecosystem** — `IGuardRailService` establishes the pattern for a growing set of actor-level extension points: every behavioural concern in the pipeline (classification, routing, context management, ...) can progressively become a swappable interface, turning Morgana.AI into a fully customizable conversational AI framework where the default implementations ship as sensible out-of-the-box baselines.
+- **Morgana.AI Extensibility** — Morgana.AI becomes a fully customizable conversational AI framework where the default implementations ship as sensible out-of-the-box baselines.
 
 
 ## [0.18.0] - 2026-03-11
