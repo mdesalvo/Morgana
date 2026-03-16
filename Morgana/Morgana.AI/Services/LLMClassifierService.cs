@@ -62,7 +62,7 @@ public class LLMClassifierService : IClassifierService
 
         logger.LogInformation(
             intents.Count == 0
-                ? $"{nameof(LLMClassifierService)}: no intents loaded — classifier will always return 'other'"
+                ? $"{nameof(LLMClassifierService)}: no intents loaded — Morgana seems to be running in 'agentless' configuration"
                 : $"{nameof(LLMClassifierService)}: loaded {intents.Count} intents for classification");
 
         Records.IntentCollection intentCollection = new Records.IntentCollection(intents);
