@@ -237,7 +237,7 @@ public class AzureOpenAI : MorganaLLM
 
 /// <summary>
 /// OpenAI implementation of ILLMService
-/// Supports GPT models via OpenAI Service
+/// Supports GPT models via OpenAI Service (GPT-4O, ...)
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
