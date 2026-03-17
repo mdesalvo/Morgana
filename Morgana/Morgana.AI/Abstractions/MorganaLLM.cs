@@ -147,7 +147,7 @@ public class MorganaLLM : ILLMService
 
 /// <summary>
 /// Anthropic implementation of ILLMService
-/// Supports Claude models (Claude Sonnet 4.5, ...)
+/// Supports Claude models (claude-opus-4-5, claude-sonnet-4-5, ...)
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
@@ -237,7 +237,7 @@ public class AzureOpenAI : MorganaLLM
 
 /// <summary>
 /// OpenAI implementation of ILLMService
-/// Supports GPT models via OpenAI Service (GPT-4O, ...)
+/// Supports GPT models via OpenAI Service (gpt-4o, gpt-4o-mini, ...)
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
