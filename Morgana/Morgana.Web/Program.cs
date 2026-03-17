@@ -150,8 +150,9 @@ builder.Services.AddSingleton<ILLMService>(sp => {
     {
         "anthropic"   => new Morgana.AI.Abstractions.Anthropic(config, promptResolver),
         "azureopenai" => new Morgana.AI.Abstractions.AzureOpenAI(config, promptResolver),
+        "ollama"      => new Morgana.AI.Abstractions.Ollama(config, promptResolver),
         "openai"      => new Morgana.AI.Abstractions.OpenAI(config, promptResolver),
-        _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'Anthropic', 'AzureOpenAI', 'OpenAI'")
+        _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'Anthropic', 'AzureOpenAI', 'Ollama', 'OpenAI'")
     };
 });
 builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMService>().GetChatClient());

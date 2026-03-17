@@ -6,6 +6,7 @@ using Azure.AI.OpenAI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Morgana.AI.Interfaces;
+using OllamaSharp;
 using OpenAI;
 
 namespace Morgana.AI.Abstractions;
@@ -261,7 +262,7 @@ public class OpenAI : MorganaLLM
     /// Initializes a new instance of OpenAI.
     /// Creates OpenAI client and wraps it with Microsoft.Extensions.AI IChatClient.
     /// </summary>
-    /// <param name="configuration">Application configuration containing Azure endpoint, key, and deployment</param>
+    /// <param name="configuration">Application configuration containing OpenAI key and model</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     public OpenAI(
         IConfiguration configuration,
@@ -273,5 +274,49 @@ public class OpenAI : MorganaLLM
 
         // Get chat client for specific deployment and wrap with Microsoft.Extensions.AI abstraction
         chatClient = openaiClient.GetChatClient(model).AsIChatClient();
+    }
+}
+
+/// <summary>
+/// Ollama implementation of ILLMService.
+/// Supports local models via OllamaSharp (llama3.2, qwen2.5, mistral-nemo, ...).
+/// </summary>
+/// <remarks>
+/// <para><strong>Configuration (appsettings.json):</strong></para>
+/// <code>
+/// {
+///   "Morgana": {
+///     "LLM": {
+///       "Provider": "ollama",
+///       "Ollama": {
+///         "Endpoint": "http://localhost:11434",
+///         "Model": "qwen2.5:7b"
+///       }
+///     }
+///   }
+/// }
+/// </code>
+/// <para><strong>Note:</strong></para>
+/// <para>Morgana relies heavily on tool calling (context variables, quick replies, rich cards).
+/// Choose a model with solid function calling support for best results.</para>
+/// </remarks>
+public class Ollama : MorganaLLM
+{
+    /// <summary>
+    /// Initializes a new instance of Ollama.
+    /// Creates Ollama client and wraps it with Microsoft.Extensions.AI IChatClient.
+    /// </summary>
+    /// <param name="configuration">Application configuration containing Ollama endpoint and model</param>
+    /// <param name="promptResolverService">Service for resolving prompt templates</param>
+    public Ollama(
+        IConfiguration configuration,
+        IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
+    {
+        OllamaApiClient ollamaClient = new OllamaApiClient(
+            new Uri(this.configuration["Morgana:LLM:Ollama:Endpoint"]!),
+            this.configuration["Morgana:LLM:Ollama:Model"]!);
+
+        // Get chat client for specific deployment and wrap with Microsoft.Extensions.AI abstraction
+        chatClient = ollamaClient;
     }
 }
