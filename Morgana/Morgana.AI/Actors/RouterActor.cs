@@ -2,8 +2,8 @@ using Akka.Actor;
 using Akka.Event;
 using Microsoft.Extensions.Configuration;
 using Morgana.AI.Abstractions;
-using Morgana.AI.Interfaces;
 using Morgana.AI.Extensions;
+using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Actors;
 

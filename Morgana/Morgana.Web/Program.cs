@@ -130,7 +130,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IGuardRailService: Checks user messages for content safety and compliance
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
-// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI)
+// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, OpenAI)
 // - IChatClient: Microsoft.Extensions.AI chat client for LLM interactions
 
 builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryService>();
@@ -150,7 +150,8 @@ builder.Services.AddSingleton<ILLMService>(sp => {
     {
         "anthropic"   => new Morgana.AI.Abstractions.Anthropic(config, promptResolver),
         "azureopenai" => new Morgana.AI.Abstractions.AzureOpenAI(config, promptResolver),
-        _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'AzureOpenAI', 'Anthropic'")
+        "openai"      => new Morgana.AI.Abstractions.OpenAI(config, promptResolver),
+        _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'Anthropic', 'AzureOpenAI', 'OpenAI'")
     };
 });
 builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMService>().GetChatClient());

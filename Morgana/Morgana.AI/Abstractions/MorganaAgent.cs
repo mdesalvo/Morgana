@@ -7,12 +7,12 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Actors;
 using Morgana.AI.Attributes;
+using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.AI.Telemetry;
-using Morgana.AI.Actors;
-using Morgana.AI.Extensions;
 
 namespace Morgana.AI.Abstractions;
 

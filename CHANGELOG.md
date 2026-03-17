@@ -6,10 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.19.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: OpenAI LLM Implementation
+This release adds support for **OpenAI** as a third LLM provider, alongside the existing **Anthropic** and **Azure OpenAI** implementations.
 ### 🎯 Major Feature: Morgana.AI Extension Points
 This release completes the **Morgana.AI extension points** model: `IGuardRailService`, `IClassifierService` and `IPresenterService` join the existing suite of pluggable interfaces (`ILLMService`, `IConversationPersistenceService`, `IRateLimitService`, `IAgentConfigurationService`, `IPromptResolverService`), making every behavioural concern of the actor pipeline independently overridable via DI — without touching a single line of framework code.
 
 ### ✨ Added
+- Added `OpenAI` as available `MorganaLLM` implementation, enabling Morgana to connect to OpenAI's API using native `OpenAIClient` wrapped via Microsoft.Extensions.AI abstraction.
 - Introduced `IGuardRailService` as an **extension point for content moderation**: `LLMGuardRailService` ships as the default implementation (two-level profanity + LLM policy check) and can be replaced in DI with any alternative backend (e.g. Microsoft Purview, Azure AI Content Safety, ...) without touching the actor system.
 - Introduced `IClassifierService` as an **extension point for intent classification**: `LLMClassifierService` ships as the default implementation (agents.json + morgana.json LLM classification) and can be replaced in DI with any alternative backend (e.g. Azure AI Language, Amazon Lex, Google Natural Language AI, ...) without touching the actor system.
 - Introduced `IPresenterService` as an **extension point for welcome presentation**: `LLMPresenterService` ships as the default implementation (LLM-driven welcome message with intent-based quick replies) and can be replaced in DI with any alternative strategy (static templates, tenant-specific content, CMS-driven messages, A/B variants) without touching the actor system.
