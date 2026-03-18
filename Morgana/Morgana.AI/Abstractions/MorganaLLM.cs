@@ -74,20 +74,6 @@ public class MorganaLLM : ILLMService
     public IPromptResolverService GetPromptResolverService() => promptResolverService;
 
     /// <summary>
-    /// Performs a completion with the Morgana system prompt and user message.
-    /// Uses the base Morgana prompt as the system context.
-    /// </summary>
-    /// <param name="conversationId">Unique identifier of the conversation</param>
-    /// <param name="prompt">User message to process</param>
-    /// <returns>LLM response text</returns>
-    /// <remarks>
-    /// This method is a convenience wrapper around CompleteWithSystemPromptAsync
-    /// using the Morgana framework prompt as the system context.
-    /// </remarks>
-    public async Task<string> CompleteAsync(string conversationId, string prompt)
-        => await CompleteWithSystemPromptAsync(conversationId, morganaPrompt.Target, prompt);
-
-    /// <summary>
     /// Performs a completion with an explicit system prompt and user message.
     /// Primary method for actors performing stateless LLM operations (classification, guard checks).
     /// </summary>
@@ -177,7 +163,7 @@ public class Anthropic : MorganaLLM
 
 /// <summary>
 /// Azure OpenAI implementation of ILLMService.<br/>
-/// Supports GPT models via Azure OpenAI Service (gpt-4o, ...)
+/// Supports GPT models deployed via Azure OpenAI Service (gpt-4o, ...)
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
@@ -195,9 +181,6 @@ public class Anthropic : MorganaLLM
 ///   }
 /// }
 /// </code>
-/// <para><strong>Deployment Notes:</strong></para>
-/// <para>Azure OpenAI requires pre-deployed models in your Azure resource.
-/// The DeploymentName must match your Azure deployment, not the base model name.</para>
 /// </remarks>
 public class AzureOpenAI : MorganaLLM
 {
@@ -223,7 +206,7 @@ public class AzureOpenAI : MorganaLLM
 
 /// <summary>
 /// Ollama implementation of ILLMService.<br/>
-/// Supports local models via OllamaSharp (qwen3:8b, mistral:7b-instruct ...).
+/// Supports local models via Ollama interface (qwen3:8b, phi4 ...).
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
@@ -234,7 +217,7 @@ public class AzureOpenAI : MorganaLLM
 ///       "Provider": "ollama",
 ///       "Ollama": {
 ///         "Endpoint": "http://localhost:11434/",
-///         "Model": "your-ollama-model" //e.g: qwen3:8b, mistral:7b-instruct, ...
+///         "Model": "your-ollama-model" //e.g: qwen3:8b, phi4, ...
 ///       }
 ///     }
 ///   }
@@ -242,7 +225,7 @@ public class AzureOpenAI : MorganaLLM
 /// </code>
 /// <para><strong>Important Notes:</strong></para>
 /// <para>- Morgana is an AI orchestrator which relies heavily on tool calling (context variables, quick replies, rich cards).
-/// For best result, please choose a model with solid function calling support (e.g: qwen3:b).</para>
+/// For best result, please choose a model with solid function calling support (e.g: qwen3:8b, phi4-mini).</para>
 /// <para>- Before starting Morgana, check with "ollama ps" that your model is already loaded into memory!</para>
 /// </remarks>
 public class Ollama : MorganaLLM
@@ -257,7 +240,7 @@ public class Ollama : MorganaLLM
         IConfiguration configuration,
         IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
     {
-        // Get chat client for specific Ollama model (it is already compatible with Microsoft.Extensions.AI abstractions)
+        // Get chat client for specific Ollama model (it is already compatible with Microsoft.Extensions.AI abstraction)
         chatClient = new OllamaApiClient(
             new HttpClient
             {
