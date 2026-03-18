@@ -21,20 +21,8 @@ namespace Morgana.AI.Abstractions;
 /// MorganaLLM (abstract base)
 ///   ├── Anthropic (Anthropic Claude models)
 ///   ├── AzureOpenAI (Azure OpenAI GPT models)
+///   ├── Ollama (Ollama local models)
 ///   └── OpenAI (OpenAI GPT models)
-/// </code>
-/// <para><strong>Provider Selection:</strong></para>
-/// <para>The active implementation is selected in Program.cs based on configuration:</para>
-/// <code>
-/// builder.Services.AddSingleton&lt;ILLMService&gt;(sp => {
-///     string provider = config["Morgana:LLM:Provider"];
-///     return provider.ToLowerInvariant() switch {
-///         "anthropic"   => new Anthropic(config, promptResolver),
-///         "azureopenai" => new AzureOpenAI(config, promptResolver),
-///         "openai" => new OpenAI(config, promptResolver),
-///         _ => throw new InvalidOperationException("Unsupported provider")
-///     };
-/// });
 /// </code>
 /// <para><strong>Key Features:</strong></para>
 /// <list type="bullet">
@@ -192,7 +180,7 @@ public class Anthropic : MorganaLLM
 
 /// <summary>
 /// Azure OpenAI implementation of ILLMService
-/// Supports GPT models via Azure OpenAI Service
+/// Supports GPT models via Azure OpenAI Service (gpt-4o, ...)
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
@@ -237,6 +225,48 @@ public class AzureOpenAI : MorganaLLM
 }
 
 /// <summary>
+/// Ollama implementation of ILLMService.
+/// Supports local models via OllamaSharp (llama3.2, qwen3:8b, ...).
+/// </summary>
+/// <remarks>
+/// <para><strong>Configuration (appsettings.json):</strong></para>
+/// <code>
+/// {
+///   "Morgana": {
+///     "LLM": {
+///       "Provider": "ollama",
+///       "Ollama": {
+///         "Endpoint": "http://localhost:11434",
+///         "Model": "qwen3:8b"
+///       }
+///     }
+///   }
+/// }
+/// </code>
+/// <para><strong>Note:</strong></para>
+/// <para>Morgana relies heavily on tool calling (context variables, quick replies, rich cards).
+/// Choose a model with solid function calling support for best results.</para>
+/// </remarks>
+public class Ollama : MorganaLLM
+{
+    /// <summary>
+    /// Initializes a new instance of Ollama.
+    /// Creates Ollama client and wraps it with Microsoft.Extensions.AI IChatClient.
+    /// </summary>
+    /// <param name="configuration">Application configuration containing Ollama endpoint and model</param>
+    /// <param name="promptResolverService">Service for resolving prompt templates</param>
+    public Ollama(
+        IConfiguration configuration,
+        IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
+    {
+        // Get chat client for specific Ollama model, it is already compatible with Microsoft.Extensions.AI abstractions
+        chatClient = new OllamaApiClient(
+            new Uri(this.configuration["Morgana:LLM:Ollama:Endpoint"]!),
+            this.configuration["Morgana:LLM:Ollama:Model"]!);
+    }
+}
+
+/// <summary>
 /// OpenAI implementation of ILLMService
 /// Supports GPT models via OpenAI Service (gpt-4o, gpt-4o-mini, ...)
 /// </summary>
@@ -274,49 +304,5 @@ public class OpenAI : MorganaLLM
 
         // Get chat client for specific deployment and wrap with Microsoft.Extensions.AI abstraction
         chatClient = openaiClient.GetChatClient(model).AsIChatClient();
-    }
-}
-
-/// <summary>
-/// Ollama implementation of ILLMService.
-/// Supports local models via OllamaSharp (llama3.2, qwen2.5, mistral-nemo, ...).
-/// </summary>
-/// <remarks>
-/// <para><strong>Configuration (appsettings.json):</strong></para>
-/// <code>
-/// {
-///   "Morgana": {
-///     "LLM": {
-///       "Provider": "ollama",
-///       "Ollama": {
-///         "Endpoint": "http://localhost:11434",
-///         "Model": "qwen2.5:7b"
-///       }
-///     }
-///   }
-/// }
-/// </code>
-/// <para><strong>Note:</strong></para>
-/// <para>Morgana relies heavily on tool calling (context variables, quick replies, rich cards).
-/// Choose a model with solid function calling support for best results.</para>
-/// </remarks>
-public class Ollama : MorganaLLM
-{
-    /// <summary>
-    /// Initializes a new instance of Ollama.
-    /// Creates Ollama client and wraps it with Microsoft.Extensions.AI IChatClient.
-    /// </summary>
-    /// <param name="configuration">Application configuration containing Ollama endpoint and model</param>
-    /// <param name="promptResolverService">Service for resolving prompt templates</param>
-    public Ollama(
-        IConfiguration configuration,
-        IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
-    {
-        OllamaApiClient ollamaClient = new OllamaApiClient(
-            new Uri(this.configuration["Morgana:LLM:Ollama:Endpoint"]!),
-            this.configuration["Morgana:LLM:Ollama:Model"]!);
-
-        // Get chat client for specific deployment and wrap with Microsoft.Extensions.AI abstraction
-        chatClient = ollamaClient;
     }
 }
