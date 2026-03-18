@@ -8,17 +8,6 @@ namespace Morgana.AI.Interfaces;
 /// <para><strong>Purpose:</strong></para>
 /// <para>This service acts as a bridge between the Akka.NET actor system and SignalR, allowing actors to send
 /// messages to clients without direct knowledge of SignalR implementation details.</para>
-/// <para><strong>Responsibilities:</strong></para>
-/// <list type="bullet">
-/// <item>Format messages according to client protocol (messageType, metadata, quick replies)</item>
-/// <item>Route messages to appropriate SignalR conversation groups</item>
-/// <item>Handle error notifications and delivery failures</item>
-/// <item>Support rich message types (text, presentation, quick replies, agent metadata)</item>
-/// </list>
-/// <para><strong>Usage Pattern:</strong></para>
-/// <para>Injected into actors (particularly ConversationManagerActor and ConversationSupervisorActor)
-/// to send responses back to clients after processing through the actor pipeline.</para>
-/// </remarks>
 public interface ISignalRBridgeService
 {
     /// <summary>
@@ -29,15 +18,6 @@ public interface ISignalRBridgeService
     /// <param name="text">Message text to send to clients</param>
     /// <param name="errorReason">Optional error reason code for error messages (e.g., "guard_violation", "timeout")</param>
     /// <returns>Task representing the async send operation</returns>
-    /// <remarks>
-    /// <para><strong>Use cases:</strong></para>
-    /// <list type="bullet">
-    /// <item>Simple text responses from agents</item>
-    /// <item>Error notifications to clients</item>
-    /// <item>System messages (e.g., "Processing...", "Connection restored")</item>
-    /// </list>
-    /// <para><strong>Note:</strong> For rich messages with quick replies or agent metadata, use SendStructuredMessageAsync instead.</para>
-    /// </remarks>
     Task SendMessageToConversationAsync(
         string conversationId,
         string text,
@@ -57,49 +37,6 @@ public interface ISignalRBridgeService
     /// <param name="originalTimestamp">Timestamp of the message when created in UI</param>
     /// <param name="richCard">Optional rich card for structured visual presentation of complex data</param>
     /// <returns>Task representing the async send operation</returns>
-    /// <remarks>
-    /// <para><strong>Message Types:</strong></para>
-    /// <list type="bullet">
-    /// <item><term>"assistant"</term><description>Standard AI response from an agent</description></item>
-    /// <item><term>"presentation"</term><description>Initial welcome message with quick replies</description></item>
-    /// <item><term>"system"</term><description>System notifications (not AI-generated)</description></item>
-    /// <item><term>"error"</term><description>Error messages with errorReason code</description></item>
-    /// </list>
-    /// <para><strong>Quick Replies:</strong></para>
-    /// <para>Interactive buttons displayed to the user for common actions or intent selection.
-    /// Used primarily in presentation messages to guide users to available capabilities.</para>
-    /// <para><strong>Agent Metadata:</strong></para>
-    /// <list type="bullet">
-    /// <item><term>agentName</term><description>Displayed in UI to show which specialized agent is responding</description></item>
-    /// <item><term>agentCompleted</term><description>When true, signals the client that the multi-turn interaction is complete
-    /// and the conversation returns to idle state (affects UI indicators, enables new intent classification)</description></item>
-    /// <item><term>originalTimestamp</term><description>Timestamp of the message when created in UI</description></item>
-    /// </list>
-    /// <para><strong>Example Usage:</strong></para>
-    /// <code>
-    /// // Send presentation with quick replies
-    /// await SendStructuredMessageAsync(
-    ///     conversationId: "conv-123",
-    ///     text: "Welcome! How can I help you?",
-    ///     messageType: "presentation",
-    ///     quickReplies: [new QuickReply("billing", "📄 View Invoices", "Show my invoices")],
-    ///     agentName: "Morgana",
-    ///     agentCompleted: false,
-    ///     originalTimestamp: "2026-01-23T12:15:00Z"
-    /// );
-    ///
-    /// // Send agent response with completion
-    /// await SendStructuredMessageAsync(
-    ///     conversationId: "conv-123",
-    ///     text: "Here are your recent invoices...",
-    ///     messageType: "assistant",
-    ///     quickReplies: null,
-    ///     agentName: "Morgana (Billing)",
-    ///     agentCompleted: true,  // Billing agent finished, return to idle
-    ///     originalTimestamp: "2026-01-23T12:15:00Z"
-    /// );
-    /// </code>
-    /// </remarks>
     Task SendStructuredMessageAsync(
         string conversationId,
         string text,
@@ -118,29 +55,6 @@ public interface ISignalRBridgeService
     /// <param name="conversationId">Unique identifier of the conversation (SignalR group name)</param>
     /// <param name="chunkText">Partial response text to append to the current message</param>
     /// <returns>Task representing the async send operation</returns>
-    /// <remarks>
-    /// <para><strong>Purpose:</strong></para>
-    /// <para>This method enables streaming responses from agents, allowing clients to display partial results
-    /// in real-time as the LLM generates them. This significantly improves perceived latency and user experience.</para>
-    /// <para><strong>Usage Pattern:</strong></para>
-    /// <list type="number">
-    /// <item>Agent begins streaming response via RunStreamingAsync</item>
-    /// <item>Each chunk flows: Agent → Router → Supervisor → Manager → SignalR → Client</item>
-    /// <item>Client appends chunks to current message in UI</item>
-    /// <item>When streaming completes, final AgentResponse is sent with metadata (quick replies, completion status)</item>
-    /// </list>
-    /// <para><strong>Client-side Handler:</strong></para>
-    /// <code>
-    /// connection.on("ReceiveStreamChunk", (chunk) => {
-    ///   // Append chunk to currently displaying message
-    ///   currentMessage.text += chunk;
-    ///   updateUI(currentMessage);
-    /// });
-    /// </code>
-    /// <para><strong>Performance:</strong></para>
-    /// <para>Chunks are sent as fire-and-forget operations without logging to minimize overhead.
-    /// Error handling is intentionally silent to prevent stream interruption on partial delivery failures.</para>
-    /// </remarks>
     Task SendStreamChunkAsync(
         string conversationId,
         string chunkText);
