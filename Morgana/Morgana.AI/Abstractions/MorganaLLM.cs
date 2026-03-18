@@ -100,20 +100,17 @@ public class MorganaLLM : ILLMService
     /// </returns>
     public async Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt)
     {
-        List<ChatMessage> messages =
-        [
-            new ChatMessage(ChatRole.System, systemPrompt),
-            new ChatMessage(ChatRole.User, userPrompt)
-        ];
-
-        ChatOptions chatOptions = new ChatOptions
-        {
-            ConversationId = conversationId
-        };
-
         try
         {
-            ChatResponse response = await chatClient.GetResponseAsync(messages, chatOptions);
+            ChatResponse response = await chatClient.GetResponseAsync(
+                [
+                    new ChatMessage(ChatRole.System, systemPrompt),
+                    new ChatMessage(ChatRole.User, userPrompt)
+                ],
+                new ChatOptions
+                {
+                    ConversationId = conversationId
+                });
 
             // Strip markdown code fences from JSON responses
             return response.Text
@@ -259,10 +256,14 @@ public class Ollama : MorganaLLM
         IConfiguration configuration,
         IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
     {
-        // Get chat client for specific Ollama model, it is already compatible with Microsoft.Extensions.AI abstractions
-        chatClient = new OllamaApiClient(
-            new Uri(this.configuration["Morgana:LLM:Ollama:Endpoint"]!),
-            this.configuration["Morgana:LLM:Ollama:Model"]!);
+        HttpClient ollamaHttpClient = new HttpClient
+        {
+            BaseAddress = new Uri(this.configuration["Morgana:LLM:Ollama:Endpoint"]!),
+            Timeout = TimeSpan.FromSeconds(180)
+        };
+
+        // Get chat client for specific Ollama model (it is already compatible with Microsoft.Extensions.AI abstractions)
+        chatClient = new OllamaApiClient(ollamaHttpClient, this.configuration["Morgana:LLM:Ollama:Model"]!);
     }
 }
 
