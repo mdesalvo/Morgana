@@ -223,7 +223,7 @@ public class AzureOpenAI : MorganaLLM
 
 /// <summary>
 /// Ollama implementation of ILLMService.<br/>
-/// Supports local models via OllamaSharp (qwen3:8b, ...).
+/// Supports local models via OllamaSharp (qwen2.5:14b-instruct-q4_K_M, ...).
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
@@ -234,7 +234,7 @@ public class AzureOpenAI : MorganaLLM
 ///       "Provider": "ollama",
 ///       "Ollama": {
 ///         "Endpoint": "http://localhost:11434/",
-///         "Model": "your-ollama-model" //e.g: qwen3:8b, ...
+///         "Model": "your-ollama-model" //e.g: qwen2.5:14b-instruct-q4_K_M, ...
 ///         "TimeoutSeconds": 180
 ///       }
 ///     }
@@ -242,9 +242,9 @@ public class AzureOpenAI : MorganaLLM
 /// }
 /// </code>
 /// <para><strong>Important Notes:</strong></para>
-/// <para>Morgana is an AI orchestrator which relies heavily on tool calling (context variables, quick replies, rich cards).
-/// Choose a model with solid function calling support for best results. Morgana is officially tested on "qwen3:8b".</para>
-/// <para>Check with "ollama ps" that your model is already loaded into memory before starting Morgana.</para>
+/// <para>- Morgana is an AI orchestrator which relies heavily on tool calling (context variables, quick replies, rich cards).
+/// Choose a model with solid function calling support for best results (e.g: qwen2.5:14b-instruct-q4_K_M).</para>
+/// <para>- Before starting Morgana, check with "ollama ps" that your model is already loaded into memory!</para>
 /// </remarks>
 public class Ollama : MorganaLLM
 {
