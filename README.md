@@ -103,7 +103,7 @@ graph LR
   R -- 7. Activates agent for intent handling --> MA
 
   %% External systems
-  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Anthropic, Azure OpenAI, Ollama, OpenAI)"}
   C -. 5 Prompts for intent classification .-> LLM
   MA -. 8 MCP tool discovery .-> MCP@{shape: das, label: "MCP Server"}
   MA -. 9 Intent handling .-> LLM
@@ -164,7 +164,7 @@ graph LR
   SV -- 4. Engages agent for intent handling --> MA
 
   %% External systems
-  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Azure OpenAI, Anthropic)"}
+  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Anthropic, Azure OpenAI, Ollama, OpenAI)"}
   MA -. 5 Intent handling .-> LLM
 ```
 
@@ -264,7 +264,7 @@ docker compose --env-file .env --env-file .env.versions down
 
 ## 🧩 Build your Morgana Agents
 
-`Morgana.AI` is now available as [NuGet](https://www.nuget.org/packages/Morgana.AI), so you can build your agents without touching Morgana at all.
+`Morgana.AI` is also available as [NuGet](https://www.nuget.org/packages/Morgana.AI), so you can build your agents without touching Morgana at all.
 
 Just reference it in your project, model your agents (`MorganaAgent`) and tools (`MorganaTool`), prepare their prompts with an `agents.json` compiled as embedded resource, then build: the resulting assembly is a ready-to-use **Morgana plugin**!
 Drop it into the `plugins/` folder of your Morgana instance (or any of the configured plugin directories) and it will be automatically discovered and executed at startup, giving Morgana **new domain-driven capabilities and traits**.
