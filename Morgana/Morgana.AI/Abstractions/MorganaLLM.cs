@@ -132,7 +132,7 @@ public class MorganaLLM : ILLMService
 /* Provider-Specific Implementations */
 
 /// <summary>
-/// Anthropic implementation of ILLMService
+/// Anthropic implementation of ILLMService.<br/>
 /// Supports Claude models (claude-opus-4-5, claude-sonnet-4-5, ...)
 /// </summary>
 /// <remarks>
@@ -176,7 +176,7 @@ public class Anthropic : MorganaLLM
 }
 
 /// <summary>
-/// Azure OpenAI implementation of ILLMService
+/// Azure OpenAI implementation of ILLMService.<br/>
 /// Supports GPT models via Azure OpenAI Service (gpt-4o, ...)
 /// </summary>
 /// <remarks>
@@ -222,8 +222,8 @@ public class AzureOpenAI : MorganaLLM
 }
 
 /// <summary>
-/// Ollama implementation of ILLMService.
-/// Supports local models via OllamaSharp (llama3.2, qwen3:8b, ...).
+/// Ollama implementation of ILLMService.<br/>
+/// Supports local models via OllamaSharp (qwen3:8b, gemma3:12b, ...).
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
@@ -233,8 +233,9 @@ public class AzureOpenAI : MorganaLLM
 ///     "LLM": {
 ///       "Provider": "ollama",
 ///       "Ollama": {
-///         "Endpoint": "http://localhost:11434",
-///         "Model": "qwen3:8b"
+///         "Endpoint": "http://localhost:11434/",
+///         "Model": "your-ollama-model" //e.g: qwen3:8b, gemma3:12b, ...
+///         "TimeoutSeconds": 180
 ///       }
 ///     }
 ///   }
@@ -256,19 +257,18 @@ public class Ollama : MorganaLLM
         IConfiguration configuration,
         IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
     {
-        HttpClient ollamaHttpClient = new HttpClient
-        {
-            BaseAddress = new Uri(this.configuration["Morgana:LLM:Ollama:Endpoint"]!),
-            Timeout = TimeSpan.FromSeconds(180)
-        };
-
         // Get chat client for specific Ollama model (it is already compatible with Microsoft.Extensions.AI abstractions)
-        chatClient = new OllamaApiClient(ollamaHttpClient, this.configuration["Morgana:LLM:Ollama:Model"]!);
+        chatClient = new OllamaApiClient(
+            new HttpClient
+            {
+                BaseAddress = new Uri(this.configuration["Morgana:LLM:Ollama:Endpoint"]!),
+                Timeout = TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:LLM:Ollama:TimeoutSeconds"]))
+            }, this.configuration["Morgana:LLM:Ollama:Model"]!);
     }
 }
 
 /// <summary>
-/// OpenAI implementation of ILLMService
+/// OpenAI implementation of ILLMService.<br/>
 /// Supports GPT models via OpenAI Service (gpt-4o, gpt-4o-mini, ...)
 /// </summary>
 /// <remarks>
@@ -280,7 +280,7 @@ public class Ollama : MorganaLLM
 ///       "Provider": "openai",
 ///       "OpenAI": {
 ///         "ApiKey": "your-api-key",
-///         "Model": "gpt-4o"
+///         "Model": "your-openai-model" //e.g: gpt-4o
 ///       }
 ///     }
 ///   }

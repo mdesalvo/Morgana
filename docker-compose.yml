@@ -41,6 +41,7 @@ services:
       - Morgana__LLM__AzureOpenAI__Endpoint=${AZUREOPENAI_ENDPOINT}
       - Morgana__LLM__Ollama__Endpoint=${OLLAMA_ENDPOINT}
       - Morgana__LLM__Ollama__Model=${OLLAMA_MODEL}
+      - Morgana__LLM__Ollama__TimeoutSeconds=${OLLAMA_TIMEOUT_SECONDS}
       - Morgana__LLM__OpenAI__ApiKey=${OPENAI_APIKEY}
       - Morgana__LLM__OpenAI__Model=${OPENAI_MODEL}
 
