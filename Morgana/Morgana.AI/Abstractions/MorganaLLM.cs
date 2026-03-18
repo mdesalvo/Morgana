@@ -223,7 +223,7 @@ public class AzureOpenAI : MorganaLLM
 
 /// <summary>
 /// Ollama implementation of ILLMService.<br/>
-/// Supports local models via OllamaSharp (qwen3:8b, gemma3:12b, ...).
+/// Supports local models via OllamaSharp (qwen3:8b, ...).
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
@@ -234,7 +234,7 @@ public class AzureOpenAI : MorganaLLM
 ///       "Provider": "ollama",
 ///       "Ollama": {
 ///         "Endpoint": "http://localhost:11434/",
-///         "Model": "your-ollama-model" //e.g: qwen3:8b, gemma3:12b, ...
+///         "Model": "your-ollama-model" //e.g: qwen3:8b, ...
 ///         "TimeoutSeconds": 180
 ///       }
 ///     }
