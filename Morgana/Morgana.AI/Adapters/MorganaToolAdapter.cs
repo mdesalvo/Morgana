@@ -142,22 +142,22 @@ public class MorganaToolAdapter
         Dictionary<string, object?> additionalProperties = [];
         foreach (Records.ToolParameter parameter in definition.Parameters)
         {
-            string parameterGuidance = parameter.Scope?.ToLowerInvariant().Trim() switch
-            {
-                "context" => $"{parameter.Description}. {contextGuidance}",
-                "request" => $"{parameter.Description}. {requestGuidance}",
-                _ => parameter.Description
-            };
-
-            additionalProperties[parameter.Name] = parameterGuidance;
+            additionalProperties[parameter.Name] =
+                parameter.Scope?.ToLowerInvariant().Trim() switch
+                {
+                    "context" => $"{parameter.Description}. {contextGuidance}",
+                    "request" => $"{parameter.Description}. {requestGuidance}",
+                    _ => parameter.Description
+                };
         }
 
-        return AIFunctionFactory.Create(implementation, new AIFunctionFactoryOptions
-        {
-            Name = definition.Name,
-            Description = definition.Description,
-            AdditionalProperties = new AdditionalPropertiesDictionary(additionalProperties)
-        });
+        return AIFunctionFactory.Create(implementation,
+            new AIFunctionFactoryOptions
+            {
+                Name = definition.Name,
+                Description = definition.Description,
+                AdditionalProperties = new AdditionalPropertiesDictionary(additionalProperties)
+            });
     }
 
     /// <summary>
