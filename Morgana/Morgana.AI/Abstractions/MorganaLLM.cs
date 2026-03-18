@@ -241,9 +241,10 @@ public class AzureOpenAI : MorganaLLM
 ///   }
 /// }
 /// </code>
-/// <para><strong>Note:</strong></para>
-/// <para>Morgana relies heavily on tool calling (context variables, quick replies, rich cards).
-/// Choose a model with solid function calling support for best results.</para>
+/// <para><strong>Important Notes:</strong></para>
+/// <para>Morgana is an AI orchestrator which relies heavily on tool calling (context variables, quick replies, rich cards).
+/// Choose a model with solid function calling support for best results. Morgana is officially tested on "qwen3:8b".</para>
+/// <para>Check with "ollama ps" that your model is already loaded into memory before starting Morgana.</para>
 /// </remarks>
 public class Ollama : MorganaLLM
 {
