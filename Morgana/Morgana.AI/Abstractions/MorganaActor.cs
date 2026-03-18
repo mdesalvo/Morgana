@@ -28,7 +28,7 @@ namespace Morgana.AI.Abstractions;
 /// <item>LLM access: Direct access to ILLMService for AI completions</item>
 /// <item>Prompt resolution: Access to IPromptResolverService for loading templates</item>
 /// <item>Logging: Pre-configured ILoggingAdapter for actor-specific logging</item>
-/// <item>Timeout handling: Global 120-second receive timeout with virtual handler for override</item>
+/// <item>Timeout handling: Global receive timeout (N seconds) with virtual handler for override</item>
 /// </list>
 /// </remarks>
 public class MorganaActor : ReceiveActor
@@ -83,12 +83,12 @@ public class MorganaActor : ReceiveActor
         this.actorLogger = Context.GetLogger();
 
         // Global timeout for all MorganaActor instances
-        SetReceiveTimeout(TimeSpan.FromSeconds(180));
+        SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"])));
         Receive<ReceiveTimeout>(HandleReceiveTimeout);
     }
 
     /// <summary>
-    /// Handles receive timeout when no message is received within the configured timeout period (60 seconds).
+    /// Handles receive timeout when no message is received within the configured timeout period.
     /// Default implementation does nothing (commented warning). Override to implement custom timeout behavior.
     /// </summary>
     /// <param name="timeout">Timeout message from Akka.NET</param>
@@ -96,15 +96,6 @@ public class MorganaActor : ReceiveActor
     /// <para><strong>Purpose:</strong></para>
     /// <para>Receive timeout can be used to implement idle timeouts, cleanup, or periodic health checks.
     /// The default implementation is a no-op to avoid log spam from actors that are legitimately idle.</para>
-    /// <para><strong>Override Example:</strong></para>
-    /// <code>
-    /// protected override void HandleReceiveTimeout(ReceiveTimeout timeout)
-    /// {
-    ///     actorLogger.Info("Actor idle for 60 seconds, performing cleanup");
-    ///     // Implement cleanup logic
-    ///     Context.Stop(Self); // Optional: stop actor on idle timeout
-    /// }
-    /// </code>
     /// </remarks>
     protected virtual void HandleReceiveTimeout(ReceiveTimeout timeout)
     {
@@ -124,21 +115,6 @@ public class MorganaActor : ReceiveActor
     /// <list type="bullet">
     /// <item><term>ReceiveTimeout</term><description>Prevents dead letters from timeout messages in FSM states</description></item>
     /// </list>
-    /// <para><strong>Usage in FSM Actors:</strong></para>
-    /// <code>
-    /// // Example: ConversationSupervisorActor with multiple states
-    /// private void AwaitingGuardCheck()
-    /// {
-    ///     Receive&lt;GuardCheckContext&gt;(HandleGuardCheckResult);
-    ///     RegisterCommonHandlers(); // ✅ Re-register timeout handler
-    /// }
-    ///
-    /// private void AwaitingClassification()
-    /// {
-    ///     Receive&lt;ClassificationContext&gt;(HandleClassificationResult);
-    ///     RegisterCommonHandlers(); // ✅ Re-register timeout handler
-    /// }
-    /// </code>
     /// <para><strong>Design Note:</strong></para>
     /// <para>This method is protected so derived classes can call it in their behavior methods.
     /// If additional common handlers are needed in the future (e.g., PoisonPill, system messages),

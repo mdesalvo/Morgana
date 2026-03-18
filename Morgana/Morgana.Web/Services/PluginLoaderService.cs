@@ -103,7 +103,7 @@ public class PluginLoaderService
 
         // Build the final list of directories with "plugins" always first
         List<string> pluginDirectories = [ "plugins" ];
-        
+
         // Add other configured directories (skip if "plugins" is already in the list)
         if (configuredDirectories is { Length: > 0 })
         {
@@ -112,7 +112,7 @@ public class PluginLoaderService
                 // Normalize path for comparison (handle "./plugins", "plugins", etc.)
                 string normalizedDirectory = configuredDirectory.TrimStart('.', '/', '\\').TrimStart('/', '\\');
                 string normalizedPlugins = "plugins".TrimStart('.', '/', '\\').TrimStart('/', '\\');
-                
+
                 if (!normalizedDirectory.Equals(normalizedPlugins, StringComparison.OrdinalIgnoreCase))
                     pluginDirectories.Add(configuredDirectory);
             }
@@ -128,12 +128,12 @@ public class PluginLoaderService
             try
             {
                 // Resolve path relative to application base directory
-                string fullPath = Path.IsPathRooted(pluginDirectory) 
-                    ? pluginDirectory 
+                string fullPath = Path.IsPathRooted(pluginDirectory)
+                    ? pluginDirectory
                     : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, pluginDirectory);
-                
+
                 fullPath = Path.GetFullPath(fullPath);
-                
+
                 if (!Directory.Exists(fullPath))
                 {
                     logger.LogWarning($"⚠️  Plugin directory not found: {fullPath}");

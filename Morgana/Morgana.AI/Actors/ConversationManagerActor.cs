@@ -57,7 +57,7 @@ public class ConversationManagerActor : MorganaActor
         // Handle supervisor responses (direct Tell, not PipeTo):
         // - ConversationResponse: final response from supervisor → send to client via SignalR
         ReceiveAsync<Records.ConversationResponse>(HandleConversationResponseAsync);
-        
+
         // Handle streaming chunks from supervisor and forward to client via SignalR
         ReceiveAsync<Records.AgentStreamChunk>(HandleStreamChunkAsync);
     }

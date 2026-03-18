@@ -36,6 +36,7 @@ public static class Records
     /// <param name="AgentCompleted">Flag indicating if the agent completed its multi-turn interaction</param>
     /// <param name="QuickReplies">Optional list of quick reply buttons for guided user interactions</param>
     /// <param name="OriginalTimestamp">Optional timestamp of the message when created at UI level</param>
+    /// <param name="RichCard">Optional rich card for structured data visualization</param>
     public record ConversationResponse(
         string Response,
         string? Classification,
@@ -280,7 +281,7 @@ public static class Records
         /// Supports placeholders: {limit} for the actual limit value.
         /// </summary>
         /// <example>✋ Whoa there! You're casting spells too quickly. Please wait a moment before trying again.</example>
-        public string ErrorMessagePerMinute { get; set; } = 
+        public string ErrorMessagePerMinute { get; set; } =
             "✋ Whoa there! You're casting spells too quickly. Please wait a moment before trying again.";
 
         /// <summary>
@@ -288,7 +289,7 @@ public static class Records
         /// Supports placeholders: {limit} for the actual limit value.
         /// </summary>
         /// <example>⏰ You've reached your hourly spell quota. The magic cauldron needs time to recharge!</example>
-        public string ErrorMessagePerHour { get; set; } = 
+        public string ErrorMessagePerHour { get; set; } =
             "⏰ You've reached your hourly spell quota. The magic cauldron needs time to recharge!";
 
         /// <summary>
@@ -296,14 +297,14 @@ public static class Records
         /// Supports placeholders: {limit} for the actual limit value.
         /// </summary>
         /// <example>🌙 You've exhausted today's magical energy. Return tomorrow for more spells!</example>
-        public string ErrorMessagePerDay { get; set; } = 
+        public string ErrorMessagePerDay { get; set; } =
             "🌙 You've exhausted today's magical energy. Return tomorrow for more spells!";
 
         /// <summary>
         /// Default error message for unknown/generic rate limit violations.
         /// </summary>
         /// <example>⚠️ You're sending messages too quickly. Please slow down.</example>
-        public string ErrorMessageDefault { get; set; } = 
+        public string ErrorMessageDefault { get; set; } =
             "⚠️ You're sending messages too quickly. Please slow down.";
     }
 

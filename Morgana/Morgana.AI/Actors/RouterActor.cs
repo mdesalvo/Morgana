@@ -63,10 +63,10 @@ public class RouterActor : MorganaActor
         // - Returns error messages for missing/unrecognized intents
         ReceiveAsync<Records.AgentRequest>(RouteToAgentAsync);
         Receive<Records.AgentResponse>(HandleAgentResponseDirect);
-        
+
         // Forward streaming chunks from agents to supervisor
         Receive<Records.AgentStreamChunk>(HandleAgentStreamChunk);
-        
+
         // Handle agent failures during execution
         Receive<Records.FailureContext>(HandleAgentFailure);
 
@@ -123,7 +123,6 @@ public class RouterActor : MorganaActor
     /// Returns error messages for missing classification or unrecognized intents.
     /// Captures original sender before async operations to ensure correct response routing.
     /// Streaming chunks arrive via separate Tell messages and are forwarded to original sender.
-    /// Includes 120-second timeout for agent processing.
     /// </remarks>
     private async Task RouteToAgentAsync(Records.AgentRequest req)
     {
@@ -167,7 +166,7 @@ public class RouterActor : MorganaActor
     private void HandleAgentResponseDirect(Records.AgentResponse response)
     {
         IActorRef agentSender = Sender;
-        
+
         if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
         {
             actorLogger.Info($"Received response from agent {agentSender.Path}, " +
@@ -199,14 +198,14 @@ public class RouterActor : MorganaActor
     private void HandleAgentFailure(Records.FailureContext failure)
     {
         IActorRef agentSender = Sender;
-        
+
         actorLogger.Error(failure.Failure.Cause, $"Agent execution failed: {agentSender.Path}");
 
         // Check if this failure is from an agent we're routing
         if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
         {
             actorLogger.Info($"Forwarding failure to supervisor for agent {agentSender.Path}");
-            
+
             // Send error response wrapped as ActiveAgentResponse so supervisor can handle it
             originalSender.Tell(new Records.ActiveAgentResponse(
                 "An error occurred while processing your request. Please try again.",
@@ -270,7 +269,7 @@ public class RouterActor : MorganaActor
     {
         // Find the original sender for this agent's stream
         IActorRef agentSender = Sender;
-        
+
         if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
         {
             // Forward chunk to original sender (supervisor)

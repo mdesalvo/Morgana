@@ -92,10 +92,10 @@ public class SQLiteRateLimitService : IRateLimitService
                 if (violation != null)
                 {
                     await sqliteTransaction.RollbackAsync();
-                    
+
                     logger.LogWarning(
                         $"Rate limit DENIED for conversation {conversationId}: {violation.ViolatedLimit}");
-                    
+
                     return violation;
                 }
 
@@ -117,7 +117,7 @@ public class SQLiteRateLimitService : IRateLimitService
         catch (Exception ex)
         {
             logger.LogError(ex, $"Rate limit check failed for conversation {conversationId}");
-            
+
             // Fail open - allow request if rate limit service has errors
             // (prevents rate limiter from becoming a single point of failure)
             return new Records.RateLimitResult(IsAllowed: true);

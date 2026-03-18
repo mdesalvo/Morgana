@@ -140,16 +140,16 @@ public class ConversationSupervisorActor : MorganaActor
             actorLogger.Info("Presentation already shown, skipping");
             return;
         }
- 
+
         hasPresented = true;
         actorLogger.Info("Generating presentation message via IPresenterService");
- 
+
         List<Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
         Records.IntentCollection intentCollection = new Records.IntentCollection(allIntents);
         List<Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
- 
+
         Records.PresentationResult result = await presenterService.GenerateAsync(displayableIntents);
- 
+
         Self.Tell(new Records.PresentationContext(result.Message, displayableIntents)
         {
             LLMQuickReplies = result.QuickReplies
@@ -162,15 +162,15 @@ public class ConversationSupervisorActor : MorganaActor
     private async Task HandlePresentationGenerated(Records.PresentationContext ctx)
     {
         actorLogger.Info("Sending presentation to client via SignalR");
- 
+
         List<Records.QuickReply> quickReplies = ctx.LLMQuickReplies?
             .Select(qr => new Records.QuickReply(qr.Id, qr.Label, qr.Value))
             .ToList() ?? [];
- 
+
         try
         {
             await Task.Delay(750);
- 
+
             await signalRBridgeService.SendStructuredMessageAsync(
                 conversationId,
                 ctx.Message,
@@ -181,7 +181,7 @@ public class ConversationSupervisorActor : MorganaActor
                 false,
                 null,
                 null);
- 
+
             actorLogger.Info("Presentation sent successfully");
         }
         catch (Exception ex)
@@ -347,7 +347,7 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingAgentResponse");
 
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(180));
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"])));
 
         Receive<ReceiveTimeout>(_ =>
         {
@@ -370,7 +370,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         Receive<Records.AgentStreamChunk>(chunk =>
         {
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(180));
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"])));
             ctx.OriginalSender.Tell(chunk);
         });
 
@@ -490,7 +490,7 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingFollowUpResponse");
 
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(180));
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"])));
 
         Receive<ReceiveTimeout>(_ =>
         {
@@ -516,7 +516,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         Receive<Records.AgentStreamChunk>(chunk =>
         {
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(180));
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"])));
             originalSender.Tell(chunk);
         });
 
