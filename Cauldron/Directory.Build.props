@@ -37,9 +37,9 @@
   <!-- Package References -->
   <ItemGroup>
     <!-- ASP.NET SignalR -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.5" />
     <!-- ASP.NET Static Framework Assets -->
-    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.0.5" />
   </ItemGroup>
 
 </Project>
