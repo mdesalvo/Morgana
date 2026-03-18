@@ -347,7 +347,7 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingAgentResponse");
 
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(120));
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(180));
 
         Receive<ReceiveTimeout>(_ =>
         {
@@ -370,7 +370,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         Receive<Records.AgentStreamChunk>(chunk =>
         {
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(120));
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(180));
             ctx.OriginalSender.Tell(chunk);
         });
 
@@ -490,7 +490,7 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingFollowUpResponse");
 
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(120));
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(180));
 
         Receive<ReceiveTimeout>(_ =>
         {
@@ -516,7 +516,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         Receive<Records.AgentStreamChunk>(chunk =>
         {
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(120));
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(180));
             originalSender.Tell(chunk);
         });
 

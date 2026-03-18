@@ -83,7 +83,7 @@ public class MorganaActor : ReceiveActor
         this.actorLogger = Context.GetLogger();
 
         // Global timeout for all MorganaActor instances
-        SetReceiveTimeout(TimeSpan.FromSeconds(120));
+        SetReceiveTimeout(TimeSpan.FromSeconds(180));
         Receive<ReceiveTimeout>(HandleReceiveTimeout);
     }
 
