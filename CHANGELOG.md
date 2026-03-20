@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.19.0] - UNDER DEVELOPMENT
-### 🎯 Major Feature: Ollama and OpenAI LLMs
+### 🎯 Major Feature: Ollama and OpenAI support
 This release adds support for **Ollama** and **OpenAI** providers, alongside the existing **Anthropic** and **Azure OpenAI** implementations.
 ### 🎯 Major Feature: Morgana.AI Extension Points
 This release completes the **Morgana.AI extension points** model: `IGuardRailService`, `IClassifierService` and `IPresenterService` join the existing suite of pluggable interfaces (`ILLMService`, `IConversationPersistenceService`, `IRateLimitService`, `IAgentConfigurationService`, `IPromptResolverService`, `ISignalRBridgeService`), making every behavioural concern of the actor system independently overridable via DI — without touching a single line of framework code.
