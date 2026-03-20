@@ -20,6 +20,7 @@ This release completes the **Morgana.AI extension points** model: `IGuardRailSer
 
 ### 🔄 Changed
 - `GuardActor`, `ClassifierActor` and `ConversationSupervisorActor` have been refactored to delegate behavioural logic entirely to their respective extension point services — actors are now thin orchestration shells with no embedded LLM or business logic.
+- Added setting `Morgana:ActorSystem:EnableGuardrail` as general switch for guardrail checks (e.g: for Ollama development scenarios)
 - Added setting `Morgana:ActorSystem:TimeoutSeconds` to tweak default actors/agents timeout (e.g: for Ollama development scenarios)
 - Updated `Azure.AI.OpenAI` dependency to 2.9.0-beta.1
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.4
