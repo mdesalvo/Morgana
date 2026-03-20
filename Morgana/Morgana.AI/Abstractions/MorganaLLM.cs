@@ -206,7 +206,7 @@ public class AzureOpenAI : MorganaLLM
 
 /// <summary>
 /// Ollama implementation of ILLMService.<br/>
-/// Supports local models via Ollama interface (qwen3:8b, phi4-mini ...).
+/// Supports local models via Ollama interface (gpt-oss:20b, phi4-mini ...).
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
@@ -217,7 +217,7 @@ public class AzureOpenAI : MorganaLLM
 ///       "Provider": "ollama",
 ///       "Ollama": {
 ///         "Endpoint": "http://localhost:11434/",
-///         "Model": "your-ollama-model" //e.g: qwen3:8b, phi4-mini, ...
+///         "Model": "your-ollama-model" //e.g: gpt-oss:20b, phi4-mini, ...
 ///       }
 ///     }
 ///   }
@@ -225,7 +225,7 @@ public class AzureOpenAI : MorganaLLM
 /// </code>
 /// <para><strong>Important Notes:</strong></para>
 /// <para>- Morgana is an AI orchestrator which relies heavily on tool calling (context variables, quick replies, rich cards).
-/// For best result, please choose a model with solid function calling support (e.g: qwen3:8b, phi4-mini).</para>
+/// For best result, please choose a model with solid function calling support (e.g: gpt-oss:20b, phi4-mini).</para>
 /// <para>- Before starting Morgana, check with "ollama ps" that your model is already loaded into memory!</para>
 /// </remarks>
 public class Ollama : MorganaLLM
