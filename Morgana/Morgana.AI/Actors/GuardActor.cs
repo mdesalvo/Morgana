@@ -63,7 +63,10 @@ public class GuardActor : MorganaActor
 
         try
         {
-            Records.GuardRailResult result = await guardRailService.CheckAsync(req.ConversationId, req.Message);
+            bool enableGuardrail = configuration.GetValue("Morgana:ActorSystem:EnableGuardrail", true);
+            Records.GuardRailResult result =
+                enableGuardrail ? await guardRailService.CheckAsync(req.ConversationId, req.Message)
+                                : new Records.GuardRailResult(true, null);
 
             actorLogger.Info(
                 "Guard check complete for conversation {0}: compliant={1}",
