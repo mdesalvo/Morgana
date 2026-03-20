@@ -29,7 +29,7 @@ This release completes the **Morgana.AI extension points** model: `IGuardRailSer
 
 ### 🚀 Future Enablement
 - **Morgana.AI Extensibility** — Morgana.AI becomes a fully customizable conversational AI framework where the default implementations ship as sensible out-of-the-box baselines.
-- **Local AI development** — With Ollama support, Morgana agents can run entirely on local infrastructure during development, eliminating cloud API costs and enabling air-gapped scenarios.
+- **Local AI development** — With `Ollama` support, Morgana agents can run entirely on local infrastructure during development, eliminating cloud API costs and enabling air-gapped scenarios. When choosing the SML model most suitable for your development needs, remember to eventually relax `Morgana:ActorSystem:TimeoutSeconds` setting.
 
 
 ## [0.18.0] - 2026-03-11
