@@ -44,8 +44,8 @@
   <!-- Package References -->
   <ItemGroup>
     <!-- Actors -->
-    <PackageReference Include="Akka" Version="1.5.62" />
-    <PackageReference Include="Akka.DependencyInjection" Version="1.5.62" />
+    <PackageReference Include="Akka" Version="1.5.63" />
+    <PackageReference Include="Akka.DependencyInjection" Version="1.5.63" />
     <!-- Agents -->
     <PackageReference Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
     <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-rc4" />
