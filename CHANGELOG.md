@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 - Updated `Akka.NET` dependency to 1.5.63
+- Updated `OllamaSharp` dependency to 5.4.25
+- Updated `OpenTelemetry` dependency to v1.15.1
 
 ### 🐛 Fixed
 
