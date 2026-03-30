@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
+- Improved OpenTelemetry instrumentation: accurate span durations and correct timestamps
 - Updated `Akka.NET` dependency to 1.5.63
 - Updated `Microsoft.Extensions.AI` dependency to 10.4.1
 - Updated `ModelContextProtocol.Core` dependency to 1.2.0
