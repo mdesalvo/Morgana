@@ -207,8 +207,13 @@ public class MorganaAgent : MorganaActor
             }
             else
             {
+                Stopwatch responseStopwatch = Stopwatch.StartNew();
                 AgentResponse response = await aiAgent.RunAsync(userMessage, aiAgentSession);
+                responseStopwatch.Stop();
                 fullResponse.Append(response.Text);
+
+                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
+                agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, responseStopwatch.ElapsedMilliseconds);
             }
 
             string llmResponseText = fullResponse.ToString();

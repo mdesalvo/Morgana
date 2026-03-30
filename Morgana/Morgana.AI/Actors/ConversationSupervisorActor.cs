@@ -66,6 +66,12 @@ public class ConversationSupervisorActor : MorganaActor
     /// </summary>
     private bool hasPresented;
 
+    /// <summary>OTel span covering the guard-check duration (opened before Tell, closed on response).</summary>
+    private Activity? _guardSpan;
+
+    /// <summary>OTel span covering the classification duration (opened before Tell, closed on response).</summary>
+    private Activity? _classifierSpan;
+
     /// <summary>
     /// Initializes a new instance of the ConversationSupervisorActor.
     /// Creates child actors (guard, classifier, router) and enters Idle state.
@@ -120,6 +126,13 @@ public class ConversationSupervisorActor : MorganaActor
             // through all FSM states without further changes to individual state handlers.
             Records.ProcessingContext ctx = new Records.ProcessingContext(
                 msg, originalSender, TurnContext: msg.TurnContext);
+
+            // Open guard span before sending to GuardActor so it captures the full check duration
+            _guardSpan = MorganaTelemetry.Source.StartActivity(
+                MorganaTelemetry.GuardActivity,
+                ActivityKind.Internal,
+                msg.TurnContext);
+            _guardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
 
             Become(() => AwaitingGuardCheck(ctx));
 
@@ -201,15 +214,12 @@ public class ConversationSupervisorActor : MorganaActor
 
         ReceiveAsync<Records.GuardCheckResponse>(async response =>
         {
-            // Open guard span as child of the turn span
-            using Activity? guardSpan = MorganaTelemetry.Source.StartActivity(
-                MorganaTelemetry.GuardActivity,
-                ActivityKind.Internal,
-                ctx.TurnContext);
-            guardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
-            guardSpan?.SetTag(MorganaTelemetry.GuardCompliant, response.Compliant);
+            // Close the guard span opened before Tell — now captures full check duration
+            _guardSpan?.SetTag(MorganaTelemetry.GuardCompliant, response.Compliant);
             if (!response.Compliant && response.Violation != null)
-                guardSpan?.SetTag(MorganaTelemetry.GuardViolation, response.Violation);
+                _guardSpan?.SetTag(MorganaTelemetry.GuardViolation, response.Violation);
+            _guardSpan?.Dispose();
+            _guardSpan = null;
 
             if (!response.Compliant)
             {
@@ -245,6 +255,13 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 actorLogger.Info("No active agent, proceeding to classification for new request");
 
+                // Open classifier span before sending to ClassifierActor
+                _classifierSpan = MorganaTelemetry.Source.StartActivity(
+                    MorganaTelemetry.ClassifierActivity,
+                    ActivityKind.Internal,
+                    ctx.TurnContext);
+                _classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+
                 Become(() => AwaitingClassification(ctx));
 
                 classifier.Tell(ctx.OriginalMessage);
@@ -255,6 +272,10 @@ public class ConversationSupervisorActor : MorganaActor
         {
             actorLogger.Error(failure.Cause, "Guard check failed");
             actorLogger.Warning("Guard check failed, failing open (allowing message)");
+
+            _guardSpan?.SetStatus(ActivityStatusCode.Error, failure.Cause.Message);
+            _guardSpan?.Dispose();
+            _guardSpan = null;
 
             if (activeAgent != null)
             {
@@ -268,6 +289,13 @@ public class ConversationSupervisorActor : MorganaActor
             }
             else
             {
+                // Open classifier span before sending to ClassifierActor
+                _classifierSpan = MorganaTelemetry.Source.StartActivity(
+                    MorganaTelemetry.ClassifierActivity,
+                    ActivityKind.Internal,
+                    ctx.TurnContext);
+                _classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+
                 Become(() => AwaitingClassification(ctx));
 
                 classifier.Tell(ctx.OriginalMessage);
@@ -290,17 +318,21 @@ public class ConversationSupervisorActor : MorganaActor
         {
             actorLogger.Info($"Classification result: {classification.Intent}");
 
-            // Open classifier span as child of the turn span
-            using Activity? classifierSpan = MorganaTelemetry.Source.StartActivity(
-                MorganaTelemetry.ClassifierActivity,
-                ActivityKind.Internal,
-                ctx.TurnContext);
-            classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
-            classifierSpan?.SetTag(MorganaTelemetry.ClassificationIntent, classification.Intent);
+            // Close the classifier span opened before Tell — now captures full classification duration
+            _classifierSpan?.SetTag(MorganaTelemetry.ClassificationIntent, classification.Intent);
             if (classification.Metadata.TryGetValue("confidence", out string? confidence))
-                classifierSpan?.SetTag(MorganaTelemetry.ClassificationConfidence, confidence);
+                _classifierSpan?.SetTag(MorganaTelemetry.ClassificationConfidence, confidence);
+            _classifierSpan?.Dispose();
+            _classifierSpan = null;
 
             Records.ProcessingContext updatedCtx = ctx with { Classification = classification };
+
+            // Emit router span marking the routing decision (agent selection happens inside RouterActor)
+            using Activity? routerSpan = MorganaTelemetry.Source.StartActivity(
+                MorganaTelemetry.RouterActivity,
+                ActivityKind.Internal,
+                ctx.TurnContext);
+            routerSpan?.SetTag(MorganaTelemetry.RouterIntent, classification.Intent);
 
             Become(() => AwaitingAgentResponse(updatedCtx));
 
@@ -315,6 +347,11 @@ public class ConversationSupervisorActor : MorganaActor
         {
             actorLogger.Error(failure.Cause, "Classification failed");
 
+            // Close classifier span with error status
+            _classifierSpan?.SetStatus(ActivityStatusCode.Error, failure.Cause.Message);
+            _classifierSpan?.Dispose();
+            _classifierSpan = null;
+
             Records.ClassificationResult fallbackClassification = new Records.ClassificationResult(
                 "other",
                 new Dictionary<string, string>
@@ -325,6 +362,13 @@ public class ConversationSupervisorActor : MorganaActor
 
             actorLogger.Info("Falling back to 'other' intent");
             Records.ProcessingContext updatedCtx = ctx with { Classification = fallbackClassification };
+
+            // Emit router span marking the fallback routing decision
+            using Activity? routerSpan = MorganaTelemetry.Source.StartActivity(
+                MorganaTelemetry.RouterActivity,
+                ActivityKind.Internal,
+                ctx.TurnContext);
+            routerSpan?.SetTag(MorganaTelemetry.RouterIntent, fallbackClassification.Intent);
 
             Become(() => AwaitingAgentResponse(updatedCtx));
 
@@ -384,15 +428,6 @@ public class ConversationSupervisorActor : MorganaActor
                 int quickRepliesCount = response.QuickReplies?.Count ?? 0;
 
                 actorLogger.Info($"Received ActiveAgentResponse from {response.AgentRef.Path}, completed: {response.IsCompleted}, quickReplies: {quickRepliesCount}");
-
-                // Annotate the turn span with the outcome now that we have the full picture
-                Activity? turnSpan = MorganaTelemetry.Source.StartActivity(
-                    MorganaTelemetry.RouterActivity,
-                    ActivityKind.Internal,
-                    ctx.TurnContext);
-                turnSpan?.SetTag(MorganaTelemetry.RouterIntent, ctx.Classification?.Intent);
-                turnSpan?.SetTag(MorganaTelemetry.RouterAgentPath, response.AgentRef.Path.ToString());
-                turnSpan?.Dispose();
 
                 if (response.IsCompleted)
                 {

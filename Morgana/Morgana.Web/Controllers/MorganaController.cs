@@ -274,10 +274,7 @@ public class MorganaController : ControllerBase
 
             // Open a turn span. No parent needed: all turns of the same conversation share
             // the conversationId attribute, which is sufficient to correlate them in any OTel backend.
-            using Activity? turnActivity = MorganaTelemetry.Source.StartActivity(
-                MorganaTelemetry.TurnActivity,
-                ActivityKind.Internal);
-
+            using Activity? turnActivity = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.TurnActivity);
             turnActivity?.SetTag(MorganaTelemetry.ConversationId, request.ConversationId);
             turnActivity?.SetTag(MorganaTelemetry.TurnUserMessage,
                 request.Text.Length > 200 ? request.Text[..200] : request.Text);

@@ -40,12 +40,11 @@ public static class TelemetryExtensions
                 string serviceName = section.GetValue("ServiceName", "Morgana")!;
 
                 tracing.SetResourceBuilder(
-                    ResourceBuilder.CreateDefault()
-                        .AddService(serviceName))
-                        // Register the Morgana ActivitySource
-                        .AddSource(MorganaTelemetry.Source.Name)
-                        // Include inbound HTTP requests (MorganaController endpoints)
-                        .AddAspNetCoreInstrumentation();
+                    ResourceBuilder.CreateDefault().AddService(serviceName))
+                    // Register the Morgana ActivitySource
+                    .AddSource(MorganaTelemetry.Source.Name)
+                    // Include inbound HTTP requests (MorganaController endpoints)
+                    .AddAspNetCoreInstrumentation();
 
                 ExporterConfig[] exporters = section.GetSection("Exporters").Get<ExporterConfig[]>() ?? [];
 

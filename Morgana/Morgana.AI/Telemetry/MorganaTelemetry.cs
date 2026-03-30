@@ -15,16 +15,12 @@ namespace Morgana.AI.Telemetry;
 ///
 /// <para><strong>Trace Structure:</strong></para>
 /// <code>
-/// Trace: morgana.conversation  [conversationId]
-/// │
-/// ├── Activity: morgana.turn              ← one per user message
-/// │   ├── Activity: morgana.guard         ← content moderation
-/// │   ├── Activity: morgana.classifier    ← intent classification (new requests only)
-/// │   ├── Activity: morgana.router        ← agent selection (new requests only)
-/// │   └── Activity: morgana.agent         ← agent execution
-/// │       event: "first_chunk"            ← TTFT marker
-/// │
-/// └── Activity: morgana.conversation.end ← on TerminateConversation
+/// Activity: morgana.turn            ← one per user message (root span, created in controller)
+/// ├── Activity: morgana.guard       ← content moderation (spans full guard-check duration)
+/// ├── Activity: morgana.classifier  ← intent classification (new requests only, spans full LLM call)
+/// ├── Activity: morgana.router      ← agent selection marker (new requests only)
+/// └── Activity: morgana.agent       ← agent execution (includes streaming)
+///     event: "first_chunk"          ← TTFT marker
 /// </code>
 ///
 /// <para><strong>Context Propagation:</strong></para>
