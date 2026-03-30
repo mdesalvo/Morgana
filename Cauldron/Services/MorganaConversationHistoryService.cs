@@ -42,7 +42,7 @@ public class MorganaConversationHistoryService : IConversationHistoryService
     {
         try
         {
-            _logger.LogInformation($"Retrieving history for conversation {conversationId}");
+            _logger.LogInformation("Retrieving history for conversation {ConversationId}", conversationId);
 
             HttpResponseMessage response = await _httpClient.GetAsync(
                 $"/api/morgana/conversation/{conversationId}/history");
@@ -53,25 +53,25 @@ public class MorganaConversationHistoryService : IConversationHistoryService
                     .ReadFromJsonAsync<ConversationHistoryResponse>();
 
                 _logger.LogInformation(
-                    $"Retrieved {history?.Messages?.Length ?? 0} messages for conversation {conversationId}");
+                    "Retrieved {MessagesLength} messages for conversation {ConversationId}", history?.Messages?.Length ?? 0, conversationId);
 
                 return history;
             }
 
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                _logger.LogWarning($"Conversation {conversationId} not found (404)");
+                _logger.LogWarning("Conversation {ConversationId} not found (404)", conversationId);
                 return null;
             }
 
             string errorContent = await response.Content.ReadAsStringAsync();
             _logger.LogError(
-                $"Failed to retrieve history for {conversationId}: {response.StatusCode} - {errorContent}");
+                "Failed to retrieve history for {ConversationId}: {ResponseStatusCode} - {ErrorContent}", conversationId, response.StatusCode, errorContent);
             return null;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Exception retrieving history for conversation {conversationId}");
+            _logger.LogError(ex, "Exception retrieving history for conversation {ConversationId}", conversationId);
             return null;
         }
     }

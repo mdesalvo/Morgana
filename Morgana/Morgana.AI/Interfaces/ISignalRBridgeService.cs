@@ -8,6 +8,7 @@ namespace Morgana.AI.Interfaces;
 /// <para><strong>Purpose:</strong></para>
 /// <para>This service acts as a bridge between the Akka.NET actor system and SignalR, allowing actors to send
 /// messages to clients without direct knowledge of SignalR implementation details.</para>
+/// </remarks>
 public interface ISignalRBridgeService
 {
     /// <summary>

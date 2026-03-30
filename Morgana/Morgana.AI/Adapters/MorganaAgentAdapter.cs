@@ -132,7 +132,7 @@ public class MorganaAgentAdapter
         HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>()
             ?? throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
 
-        logger.LogInformation($"Creating agent for intent '{intentAttribute.Intent}'...");
+        logger.LogInformation("Creating agent for intent '{IntentAttributeIntent}'...", intentAttribute.Intent);
 
         Records.Prompt agentPrompt = promptResolverService.ResolveAsync(intentAttribute.Intent).GetAwaiter().GetResult();
 
@@ -298,12 +298,12 @@ public class MorganaAgentAdapter
         // These are fundamental capabilities every agent needs, regardless of custom tools
         MorganaTool baseTool = new MorganaTool(logger, toolContextFactory);
         RegisterToolsInAdapter(morganaToolAdapter, baseTool, baseTools);
-        logger.LogInformation($"Registered {baseTools.Length} base tools for intent '{intent}'");
+        logger.LogInformation("Registered {BaseToolsLength} base tools for intent '{Intent}'", baseTools.Length, intent);
 
         // If no intent-specific tools defined, agent has base tools only
         if (intentSpecificTools.Length == 0)
         {
-            logger.LogInformation($"No intent-specific tools defined for intent '{intent}' (agent has base tools only)");
+            logger.LogInformation("No intent-specific tools defined for intent '{Intent}' (agent has base tools only)", intent);
             return morganaToolAdapter;
         }
 
@@ -318,7 +318,7 @@ public class MorganaAgentAdapter
             return morganaToolAdapter;
         }
 
-        logger.LogInformation($"Found custom native tool: {toolType.Name} for intent '{intent}' via ToolRegistry");
+        logger.LogInformation("Found custom native tool: {ToolTypeName} for intent '{Intent}' via ToolRegistry", toolType.Name, intent);
 
         MorganaTool customToolInstance;
         try
@@ -327,7 +327,7 @@ public class MorganaAgentAdapter
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to instantiate custom tool {toolType.Name} for intent '{intent}'");
+            logger.LogError(ex, "Failed to instantiate custom tool {ToolTypeName} for intent '{Intent}'", toolType.Name, intent);
             throw new InvalidOperationException(
                 $"Could not create custom tool instance for intent '{intent}'. " +
                 $"Ensure {toolType.Name} has a constructor accepting " +
@@ -335,7 +335,7 @@ public class MorganaAgentAdapter
         }
 
         RegisterToolsInAdapter(morganaToolAdapter, customToolInstance, intentSpecificTools);
-        logger.LogInformation($"Registered {intentSpecificTools.Length} custom tools for intent '{intent}'");
+        logger.LogInformation("Registered {Length} custom tools for intent '{Intent}'", intentSpecificTools.Length, intent);
 
         return morganaToolAdapter;
     }
@@ -360,7 +360,7 @@ public class MorganaAgentAdapter
             MethodInfo? method = toolInstance.GetType().GetMethod(toolDefinition.Name);
             if (method == null)
             {
-                logger.LogWarning($"Tool '{toolDefinition.Name}' declared in agents.json but not found in {toolInstance.GetType().Name}");
+                logger.LogWarning("Tool '{ToolDefinitionName}' declared in agents.json but not found in {Name}", toolDefinition.Name, toolInstance.GetType().Name);
                 continue;
             }
 
@@ -405,11 +405,11 @@ public class MorganaAgentAdapter
 
         if (attributes.Length == 0)
         {
-            logger.LogDebug($"Agent {agentType.Name} does not use MCP servers");
+            logger.LogDebug("Agent {AgentTypeName} does not use MCP servers", agentType.Name);
             return;
         }
 
-        logger.LogInformation($"Agent {agentType.Name} declares {attributes.Length} MCP server(s)");
+        logger.LogInformation("Agent {AgentTypeName} declares {AttributesLength} MCP server(s)", agentType.Name, attributes.Length);
 
         foreach (UsesMCPServerAttribute attribute in attributes)
         {
@@ -419,7 +419,7 @@ public class MorganaAgentAdapter
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Failed to register MCP tools from server: {attribute.Command}");
+                logger.LogError(ex, "Failed to register MCP tools from server: {AttributeCommand}", attribute.Command);
             }
         }
     }
@@ -439,7 +439,7 @@ public class MorganaAgentAdapter
     /// </remarks>
     private void RegisterMCPToolsFromServer(UsesMCPServerAttribute serverAttribute, MorganaToolAdapter morganaToolAdapter)
     {
-        logger.LogInformation($"Registering MCP tools from server: {serverAttribute.Command}");
+        logger.LogInformation("Registering MCP tools from server: {ServerAttributeCommand}", serverAttribute.Command);
 
         MCPClient mcpClient = imcpClientRegistryService.GetOrCreateClientAsync(serverAttribute)
             .GetAwaiter()
@@ -451,11 +451,11 @@ public class MorganaAgentAdapter
 
         if (mcpTools.Count == 0)
         {
-            logger.LogWarning($"No tools discovered from MCP server: {serverAttribute.Command}");
+            logger.LogWarning("No tools discovered from MCP server: {ServerAttributeCommand}", serverAttribute.Command);
             return;
         }
 
-        logger.LogInformation($"Discovered {mcpTools.Count} tools from MCP server: {serverAttribute.Command}");
+        logger.LogInformation("Discovered {McpToolsCount} tools from MCP server: {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);
 
         MCPToolAdapter mcpToolAdapter = new MCPToolAdapter(mcpClient, logger);
         Dictionary<string, (Delegate toolDelegate, Records.ToolDefinition toolDefinition)> convertedTools =
@@ -467,15 +467,15 @@ public class MorganaAgentAdapter
             {
                 Records.ToolDefinition namedToolDefinition = kvp.Value.toolDefinition with { Name = kvp.Key };
                 morganaToolAdapter.AddTool(kvp.Key, kvp.Value.toolDelegate, namedToolDefinition);
-                logger.LogInformation($"Registered MCP tool: {kvp.Key}");
+                logger.LogInformation("Registered MCP tool: {KvpKey}", kvp.Key);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Failed to register MCP tool: {kvp.Key} from {serverAttribute.Command}");
+                logger.LogError(ex, "Failed to register MCP tool: {KvpKey} from {ServerAttributeCommand}", kvp.Key, serverAttribute.Command);
             }
         }
 
-        logger.LogInformation($"Successfully registered {convertedTools.Count} MCP tools from {serverAttribute.Command}");
+        logger.LogInformation("Successfully registered {ConvertedToolsCount} MCP tools from {ServerAttributeCommand}", convertedTools.Count, serverAttribute.Command);
     }
 
     private class ToolDefinitionNameComparer : IEqualityComparer<Records.ToolDefinition>

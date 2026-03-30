@@ -144,30 +144,29 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 
             if (resourceName != null)
             {
-                logger.LogInformation($"✅ Found agents.json in assembly: {assembly.GetName().Name}");
+                logger.LogInformation("✅ Found agents.json in assembly: {Name}", assembly.GetName().Name);
 
                 try
                 {
                     using Stream? stream = assembly.GetManifestResourceStream(resourceName);
                     if (stream == null)
                     {
-                        logger.LogWarning($"Could not open stream for {resourceName}");
+                        logger.LogWarning("Could not open stream for {ResourceName}", resourceName);
                         continue;
                     }
 
                     AgentConfiguration? config = JsonSerializer.Deserialize<AgentConfiguration>(
-                        stream,
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        stream, Records.DefaultJsonSerializerOptions);
 
                     if (config != null)
                     {
                         logger.LogInformation(
-                            $"✅ Loaded {config.Intents.Count} intents and {config.Agents.Count} agent prompts from agents.json");
+                            "✅ Loaded {IntentsCount} intents and {AgentsCount} agent prompts from agents.json", config.Intents.Count, config.Agents.Count);
 
                         // Log loaded intents for debugging
                         foreach (Records.IntentDefinition intent in config.Intents)
                         {
-                            logger.LogInformation($"   📋 Intent: {intent.Name} - {intent.Description}");
+                            logger.LogInformation("   📋 Intent: {IntentName} - {IntentDescription}", intent.Name, intent.Description);
                         }
 
                         return config;
@@ -175,7 +174,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, $"Failed to deserialize agents.json from {assembly.GetName().Name}");
+                    logger.LogError(ex, "Failed to deserialize agents.json from {Name}", assembly.GetName().Name);
                 }
             }
         }

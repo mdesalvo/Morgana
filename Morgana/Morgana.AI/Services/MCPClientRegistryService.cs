@@ -27,7 +27,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     public MCPClientRegistryService(ILogger logger)
     {
         this.logger = logger;
-        this.mcpClients = new ConcurrentDictionary<string, MCPClient>();
+        mcpClients = new ConcurrentDictionary<string, MCPClient>();
     }
 
     /// <summary>
@@ -47,28 +47,27 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// </summary>
     public async Task<MCPClient> GetOrCreateClientAsync(UsesMCPServerAttribute serverAttribute)
     {
-        if (disposed)
-            throw new ObjectDisposedException(nameof(MCPClientRegistryService));
+        ObjectDisposedException.ThrowIf(disposed, this);
 
         string key = PoolKey(serverAttribute);
 
         // Check if client already exists
         if (mcpClients.TryGetValue(key, out MCPClient? existingClient))
         {
-            logger.LogDebug($"Reusing existing MCP client for: {key}");
+            logger.LogDebug("Reusing existing MCP client for: {Key}", key);
             return existingClient;
         }
 
         // Create new client (MCPClient.ConnectAsync is static factory method)
         try
         {
-            logger.LogInformation($"Creating new MCP client for: {key}");
+            logger.LogInformation("Creating new MCP client for: {Key}", key);
             MCPClient client = await MCPClient.ConnectAsync(serverAttribute, logger);
 
             // TryAdd is atomic — if another thread won the race, dispose ours and use theirs
             if (mcpClients.TryAdd(key, client))
             {
-                logger.LogInformation($"Successfully connected to MCP server: {key}");
+                logger.LogInformation("Successfully connected to MCP server: {Key}", key);
                 return client;
             }
 
@@ -78,7 +77,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to connect to MCP server: {key}");
+            logger.LogError(ex, "Failed to connect to MCP server: {Key}", key);
             throw new InvalidOperationException($"Failed to connect to MCP server '{key}'", ex);
         }
     }
@@ -95,11 +94,11 @@ public class MCPClientRegistryService : IMCPClientRegistryService
             try
             {
                 await client.DisposeAsync();
-                logger.LogInformation($"Disconnected MCP client: {key}");
+                logger.LogInformation("Disconnected MCP client: {Key}", key);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Error disconnecting MCP client: {key}");
+                logger.LogError(ex, "Error disconnecting MCP client: {Key}", key);
             }
         }
     }
@@ -110,27 +109,25 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// </summary>
     public async Task DisconnectAllAsync()
     {
-        logger.LogInformation($"Disconnecting {mcpClients.Count} MCP clients...");
+        logger.LogInformation("Disconnecting {McpClientsCount} MCP clients...", mcpClients.Count);
 
         List<Task> disconnectTasks = [];
-        foreach (KeyValuePair<string, MCPClient> kvp in mcpClients)
-        {
-            disconnectTasks.Add(Task.Run(async () =>
+        disconnectTasks.AddRange(
+            mcpClients.Select(kvp => Task.Run(async () =>
             {
                 try
                 {
                     await kvp.Value.DisposeAsync();
-                    logger.LogInformation($"Disconnected MCP client: {kvp.Key}");
+                    logger.LogInformation("Disconnected MCP client: {KvpKey}", kvp.Key);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, $"Error disconnecting MCP client: {kvp.Key}");
+                    logger.LogError(ex, "Error disconnecting MCP client: {KvpKey}", kvp.Key);
                 }
-            }));
-        }
-
+            })));
         await Task.WhenAll(disconnectTasks);
         mcpClients.Clear();
+
         logger.LogInformation("All MCP clients disconnected");
     }
 
@@ -188,7 +185,7 @@ public class MCPClient : IAsyncDisposable
             case Records.MCPTransport.Http:
             {
                 label = attr.Command;
-                logger.LogInformation($"Connecting to HTTP MCP server: {label}");
+                logger.LogInformation("Connecting to HTTP MCP server: {Label}", label);
 
                 HttpClientTransportOptions options = new HttpClientTransportOptions
                 {
@@ -197,14 +194,14 @@ public class MCPClient : IAsyncDisposable
                 };
 
                 transport = new HttpClientTransport(options);
-                logger.LogDebug($"Created HTTP transport: {label}");
+                logger.LogDebug("Created HTTP transport: {Label}", label);
                 break;
             }
 
             case Records.MCPTransport.Stdio:
             {
                 label = $"stdio:{attr.Command}";
-                logger.LogInformation($"Connecting to stdio MCP server: {attr.Command}");
+                logger.LogInformation("Connecting to stdio MCP server: {AttrCommand}", attr.Command);
 
                 StdioClientTransportOptions options = new StdioClientTransportOptions
                 {
@@ -214,7 +211,7 @@ public class MCPClient : IAsyncDisposable
                 };
 
                 transport = new StdioClientTransport(options);
-                logger.LogDebug($"Created stdio transport: {attr.Command} {string.Join(" ", attr.Args)}");
+                logger.LogDebug("Created stdio transport: {AttrCommand} {Join}", attr.Command, string.Join(" ", attr.Args));
                 break;
             }
 
@@ -230,12 +227,12 @@ public class MCPClient : IAsyncDisposable
                 clientOptions: null,
                 cancellationToken: cancellationToken);
 
-            logger.LogInformation($"Connected to MCP server: {label}");
+            logger.LogInformation("Connected to MCP server: {Label}", label);
             return new MCPClient(mcpClient, label, logger);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to connect to MCP server: {label}");
+            logger.LogError(ex, "Failed to connect to MCP server: {Label}", label);
             throw;
         }
     }
@@ -247,17 +244,17 @@ public class MCPClient : IAsyncDisposable
     {
         try
         {
-            logger.LogDebug($"Discovering tools from: {serverLabel}");
+            logger.LogDebug("Discovering tools from: {ServerLabel}", serverLabel);
 
             IList<McpClientTool> mcpTools = await mcpClient.ListToolsAsync(cancellationToken: cancellationToken);
             List<Tool> tools = mcpTools.Select(t => t.ProtocolTool).ToList();
 
-            logger.LogInformation($"Discovered {tools.Count} tools from: {serverLabel}");
+            logger.LogInformation("Discovered {ToolsCount} tools from: {ServerLabel}", tools.Count, serverLabel);
             return tools;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to discover tools from: {serverLabel}");
+            logger.LogError(ex, "Failed to discover tools from: {ServerLabel}", serverLabel);
             throw;
         }
     }
@@ -272,19 +269,19 @@ public class MCPClient : IAsyncDisposable
     {
         try
         {
-            logger.LogDebug($"Calling tool '{toolName}' on: {serverLabel}");
+            logger.LogDebug("Calling tool '{ToolName}' on: {ServerLabel}", toolName, serverLabel);
 
             CallToolResult result = await mcpClient.CallToolAsync(
                 toolName,
                 arguments as IReadOnlyDictionary<string, object?>,
                 cancellationToken: cancellationToken);
 
-            logger.LogDebug($"Tool '{toolName}' executed successfully");
+            logger.LogDebug("Tool '{ToolName}' executed successfully", toolName);
             return result;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to call tool '{toolName}' on: {serverLabel}");
+            logger.LogError(ex, "Failed to call tool '{ToolName}' on: {ServerLabel}", toolName, serverLabel);
             throw;
         }
     }
@@ -296,12 +293,12 @@ public class MCPClient : IAsyncDisposable
     {
         try
         {
-            logger.LogInformation($"Disconnecting from: {serverLabel}");
+            logger.LogInformation("Disconnecting from: {ServerLabel}", serverLabel);
             await mcpClient.DisposeAsync();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Error disconnecting from: {serverLabel}");
+            logger.LogError(ex, "Error disconnecting from: {ServerLabel}", serverLabel);
         }
     }
 }

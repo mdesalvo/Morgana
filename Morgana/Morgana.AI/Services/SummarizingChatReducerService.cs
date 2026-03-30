@@ -99,7 +99,7 @@ public class SummarizingChatReducerService
             chatReducer.SummarizationPrompt = summaryPrompt;
 
         logger.LogInformation(
-            $"Created SummarizingChatReducer: threshold={threshold} messages, target={targetCount} messages");
+            "Created SummarizingChatReducer: threshold={Threshold} messages, target={TargetCount} messages", threshold, targetCount);
 
         return chatReducer;
     }

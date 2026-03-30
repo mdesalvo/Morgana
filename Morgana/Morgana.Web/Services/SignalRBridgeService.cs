@@ -139,7 +139,7 @@ public class SignalRBridgeService : ISignalRBridgeService
         catch (Exception ex)
         {
             // Log errors but don't propagate - continue streaming
-            logger.LogError(ex, $"Failed to send stream chunk to conversation {conversationId}");
+            logger.LogError(ex, "Failed to send stream chunk to conversation {ConversationId}", conversationId);
         }
     }
 }

@@ -64,7 +64,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
         this.agentIntent = agentIntent;
-        this.viewReducer = chatReducer;
+        viewReducer = chatReducer;
         this.logger = logger;
 
         string reducerInfo = chatReducer != null
@@ -72,7 +72,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
             : "without reducer";
 
         logger.LogInformation(
-            $"{nameof(MorganaChatHistoryProvider)} CREATED {reducerInfo} for agent '{agentIntent}'");
+            "{MorganaChatHistoryProviderName} CREATED {ReducerInfo} for agent '{AgentIntent}'", nameof(MorganaChatHistoryProvider), reducerInfo, agentIntent);
 
         sessionState = new ProviderSessionState<MorganaHistoryState>(
             stateInitializer: _ => new MorganaHistoryState(),

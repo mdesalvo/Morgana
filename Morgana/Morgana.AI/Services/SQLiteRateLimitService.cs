@@ -40,13 +40,13 @@ namespace Morgana.AI.Services;
 public class SQLiteRateLimitService : IRateLimitService
 {
     private readonly ILogger logger;
-    private readonly Records.RateLimitOptions options;
-    private readonly Records.ConversationPersistenceOptions persistenceOptions;
+    private readonly RateLimitOptions options;
+    private readonly ConversationPersistenceOptions persistenceOptions;
     private readonly IConversationPersistenceService persistenceService;
 
     public SQLiteRateLimitService(
-        IOptions<Records.RateLimitOptions> options,
-        IOptions<Records.ConversationPersistenceOptions> persistenceOptions,
+        IOptions<RateLimitOptions> options,
+        IOptions<ConversationPersistenceOptions> persistenceOptions,
         IConversationPersistenceService persistenceService,
         ILogger<SQLiteRateLimitService> logger)
     {
@@ -62,10 +62,10 @@ public class SQLiteRateLimitService : IRateLimitService
             $"{options.Value.MaxMessagesPerDay}/day");
     }
 
-    public async Task<Records.RateLimitResult> CheckAndRecordAsync(string conversationId)
+    public async Task<RateLimitResult> CheckAndRecordAsync(string conversationId)
     {
         if (!options.Enabled)
-            return new Records.RateLimitResult(IsAllowed: true);
+            return new RateLimitResult(IsAllowed: true);
 
         try
         {
@@ -86,7 +86,7 @@ public class SQLiteRateLimitService : IRateLimitService
                 await CleanupOldRequestsAsync(sqliteConnection, sqliteTransaction, utcNow);
 
                 // Step 2: Check time windows
-                Records.RateLimitResult? violation = await CheckTimeWindowsAsync(
+                RateLimitResult? violation = await CheckTimeWindowsAsync(
                     sqliteConnection, sqliteTransaction, utcNow);
 
                 if (violation != null)
@@ -94,7 +94,7 @@ public class SQLiteRateLimitService : IRateLimitService
                     await sqliteTransaction.RollbackAsync();
 
                     logger.LogWarning(
-                        $"Rate limit DENIED for conversation {conversationId}: {violation.ViolatedLimit}");
+                        "Rate limit DENIED for conversation {ConversationId}: {ViolationViolatedLimit}", conversationId, violation.ViolatedLimit);
 
                     return violation;
                 }
@@ -104,9 +104,9 @@ public class SQLiteRateLimitService : IRateLimitService
 
                 await sqliteTransaction.CommitAsync();
 
-                logger.LogDebug($"Rate limit ALLOWED for conversation {conversationId}");
+                logger.LogDebug("Rate limit ALLOWED for conversation {ConversationId}", conversationId);
 
-                return new Records.RateLimitResult(IsAllowed: true);
+                return new RateLimitResult(IsAllowed: true);
             }
             catch
             {
@@ -116,11 +116,11 @@ public class SQLiteRateLimitService : IRateLimitService
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Rate limit check failed for conversation {conversationId}");
+            logger.LogError(ex, "Rate limit check failed for conversation {ConversationId}", conversationId);
 
             // Fail open - allow request if rate limit service has errors
             // (prevents rate limiter from becoming a single point of failure)
-            return new Records.RateLimitResult(IsAllowed: true);
+            return new RateLimitResult(IsAllowed: true);
         }
     }
 
@@ -138,11 +138,11 @@ public class SQLiteRateLimitService : IRateLimitService
             int rowsDeleted = await sqliteCommand.ExecuteNonQueryAsync();
 
             logger.LogInformation(
-                $"Rate limit reset for conversation {conversationId} ({rowsDeleted} requests cleared)");
+                "Rate limit reset for conversation {ConversationId} ({RowsDeleted} requests cleared)", conversationId, rowsDeleted);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to reset rate limit for conversation {conversationId}");
+            logger.LogError(ex, "Failed to reset rate limit for conversation {ConversationId}", conversationId);
             throw;
         }
     }
@@ -173,7 +173,7 @@ public class SQLiteRateLimitService : IRateLimitService
     /// Checks all configured time windows for violations.
     /// Returns the first violated limit or null if all checks pass.
     /// </summary>
-    private async Task<Records.RateLimitResult?> CheckTimeWindowsAsync(
+    private async Task<RateLimitResult?> CheckTimeWindowsAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         DateTime utcNow)
@@ -186,7 +186,7 @@ public class SQLiteRateLimitService : IRateLimitService
 
             if (count >= options.MaxMessagesPerMinute)
             {
-                return new Records.RateLimitResult(
+                return new RateLimitResult(
                     IsAllowed: false,
                     ViolatedLimit: $"MaxMessagesPerMinute ({options.MaxMessagesPerMinute})",
                     RetryAfterSeconds: 60);
@@ -201,7 +201,7 @@ public class SQLiteRateLimitService : IRateLimitService
 
             if (count >= options.MaxMessagesPerHour)
             {
-                return new Records.RateLimitResult(
+                return new RateLimitResult(
                     IsAllowed: false,
                     ViolatedLimit: $"MaxMessagesPerHour ({options.MaxMessagesPerHour})",
                     RetryAfterSeconds: 3600);
@@ -216,7 +216,7 @@ public class SQLiteRateLimitService : IRateLimitService
 
             if (count >= options.MaxMessagesPerDay)
             {
-                return new Records.RateLimitResult(
+                return new RateLimitResult(
                     IsAllowed: false,
                     ViolatedLimit: $"MaxMessagesPerDay ({options.MaxMessagesPerDay})",
                     RetryAfterSeconds: 86400);

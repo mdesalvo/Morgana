@@ -176,8 +176,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
             ?? throw new FileNotFoundException("Resource morgana.json not found in Morgana.Agents assembly.");
 
         Records.PromptCollection? promptsCollection = JsonSerializer.Deserialize<Records.PromptCollection>(
-            stream,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            stream, Records.DefaultJsonSerializerOptions);
 
         return promptsCollection?.Prompts ?? [];
     }

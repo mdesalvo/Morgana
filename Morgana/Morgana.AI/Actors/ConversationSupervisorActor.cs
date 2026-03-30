@@ -347,7 +347,7 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingAgentResponse");
 
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
 
         Receive<ReceiveTimeout>(_ =>
         {
@@ -370,7 +370,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         Receive<Records.AgentStreamChunk>(chunk =>
         {
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
             ctx.OriginalSender.Tell(chunk);
         });
 
@@ -490,7 +490,7 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingFollowUpResponse");
 
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
 
         Receive<ReceiveTimeout>(_ =>
         {
@@ -516,7 +516,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         Receive<Records.AgentStreamChunk>(chunk =>
         {
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
             originalSender.Tell(chunk);
         });
 
@@ -599,7 +599,7 @@ public class ConversationSupervisorActor : MorganaActor
         {
             activeAgent = null;
             activeAgentIntent = null;
-            actorLogger.Info($"No active agent detected: fallback to Morgana");
+            actorLogger.Info("No active agent detected: fallback to Morgana");
             return;
         }
 

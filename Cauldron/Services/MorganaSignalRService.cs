@@ -133,19 +133,19 @@ public class MorganaSignalRService : IAsyncDisposable
         // Subscribe to connection state changes
         hubConnection.Closed += async (error) =>
         {
-            logger.LogWarning($"❌ SignalR disconnected: {error?.Message ?? "No error"}");
+            logger.LogWarning("❌ SignalR disconnected: {ErrorMessage}", error?.Message ?? "No error");
             OnConnectionStateChanged?.Invoke(false);
             await Task.CompletedTask;
         };
         hubConnection.Reconnecting += async (error) =>
         {
-            logger.LogInformation($"🔄 SignalR reconnecting: {error?.Message ?? "No error"}");
+            logger.LogInformation("🔄 SignalR reconnecting: {ErrorMessage}", error?.Message ?? "No error");
             OnConnectionStateChanged?.Invoke(false);
             await Task.CompletedTask;
         };
         hubConnection.Reconnected += async (connectionId) =>
         {
-            logger.LogInformation($"✅ SignalR reconnected: {connectionId}");
+            logger.LogInformation("✅ SignalR reconnected: {ConnectionId}", connectionId);
             OnConnectionStateChanged?.Invoke(true);
             await Task.CompletedTask;
         };
@@ -190,7 +190,7 @@ public class MorganaSignalRService : IAsyncDisposable
         if (hubConnection?.State == HubConnectionState.Connected)
         {
             await hubConnection.InvokeAsync("JoinConversation", conversationId);
-            logger.LogInformation($"✅ Joined SignalR group: {conversationId}");
+            logger.LogInformation("✅ Joined SignalR group: {ConversationId}", conversationId);
         }
         else
         {
@@ -208,7 +208,7 @@ public class MorganaSignalRService : IAsyncDisposable
         if (hubConnection?.State == HubConnectionState.Connected)
         {
             await hubConnection.InvokeAsync("LeaveConversation", conversationId);
-            logger.LogInformation($"👋 Left SignalR group: {conversationId}");
+            logger.LogInformation("👋 Left SignalR group: {ConversationId}", conversationId);
         }
     }
 

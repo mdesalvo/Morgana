@@ -21,6 +21,17 @@ namespace Morgana.AI;
 /// </remarks>
 public static class Records
 {
+    /// <summary>
+    /// Standard STJ deserialization options used by Morgana
+    /// </summary>
+    internal static readonly JsonSerializerOptions DefaultJsonSerializerOptions =
+        new JsonSerializerOptions
+        {
+            AllowOutOfOrderMetadataProperties = true,
+            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+            PropertyNameCaseInsensitive = true
+        };
+
     // ==========================================================================
     // CONVERSATION LIFECYCLE MESSAGES
     // ==========================================================================

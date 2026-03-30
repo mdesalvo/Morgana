@@ -103,11 +103,11 @@ public class MorganaAIContextProvider : AIContextProvider
 
         if (contextState.Variables.TryGetValue(variableName, out object? value))
         {
-            logger.LogInformation($"{nameof(MorganaAIContextProvider)} GET '{variableName}' = '{value}'");
+            logger.LogInformation("{MorganaAiContextProviderName} GET '{VariableName}' = '{Value}'", nameof(MorganaAIContextProvider), variableName, value);
             return value;
         }
 
-        logger.LogInformation($"{nameof(MorganaAIContextProvider)} MISS '{variableName}'");
+        logger.LogInformation("{MorganaAiContextProviderName} MISS '{VariableName}'", nameof(MorganaAIContextProvider), variableName);
         return null;
     }
 
@@ -125,7 +125,7 @@ public class MorganaAIContextProvider : AIContextProvider
         bool isShared = sharedVariableNames.Contains(variableName);
 
         logger.LogInformation(
-            $"{nameof(MorganaAIContextProvider)} SET {(isShared ? "SHARED" : "PRIVATE")} '{variableName}' = '{variableValue}'");
+            "{MorganaAiContextProviderName} SET {Private} '{VariableName}' = '{VariableValue}'", nameof(MorganaAIContextProvider), isShared ? "SHARED" : "PRIVATE", variableName, variableValue);
 
         if (isShared)
             OnSharedContextUpdate?.Invoke(variableName, variableValue);
@@ -142,7 +142,7 @@ public class MorganaAIContextProvider : AIContextProvider
         if (contextState.Variables.Remove(variableName))
         {
             sessionState.SaveState(session, contextState);
-            logger.LogInformation($"{nameof(MorganaAIContextProvider)} DROPPED '{variableName}'");
+            logger.LogInformation("{MorganaAiContextProviderName} DROPPED '{VariableName}'", nameof(MorganaAIContextProvider), variableName);
         }
     }
 
@@ -163,12 +163,12 @@ public class MorganaAIContextProvider : AIContextProvider
                 changed = true;
 
                 logger.LogInformation(
-                    $"{nameof(MorganaAIContextProvider)} MERGED shared context '{kvp.Key}' = '{kvp.Value}'");
+                    "{MorganaAiContextProviderName} MERGED shared context '{KvpKey}' = '{KvpValue}'", nameof(MorganaAIContextProvider), kvp.Key, kvp.Value);
             }
             else
             {
                 logger.LogInformation(
-                    $"{nameof(MorganaAIContextProvider)} IGNORED shared context '{kvp.Key}' (already set to '{existing}')");
+                    "{MorganaAiContextProviderName} IGNORED shared context '{KvpKey}' (already set to '{Existing}')", nameof(MorganaAIContextProvider), kvp.Key, existing);
             }
         }
 
@@ -194,14 +194,14 @@ public class MorganaAIContextProvider : AIContextProvider
                 propagatedCount++;
 
                 logger.LogInformation(
-                    $"{nameof(MorganaAIContextProvider)} PROPAGATED shared variable '{sharedVariableName}' = '{value}'");
+                    "{MorganaAiContextProviderName} PROPAGATED shared variable '{SharedVariableName}' = '{Value}'", nameof(MorganaAIContextProvider), sharedVariableName, value);
             }
         }
 
         if (propagatedCount > 0)
         {
             logger.LogInformation(
-                $"{nameof(MorganaAIContextProvider)} PROPAGATED {propagatedCount} shared variables to other agents");
+                "{MorganaAiContextProviderName} PROPAGATED {PropagatedCount} shared variables to other agents", nameof(MorganaAIContextProvider), propagatedCount);
         }
     }
 

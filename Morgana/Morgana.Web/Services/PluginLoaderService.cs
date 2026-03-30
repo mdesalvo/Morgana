@@ -107,18 +107,16 @@ public class PluginLoaderService
         // Add other configured directories (skip if "plugins" is already in the list)
         if (configuredDirectories is { Length: > 0 })
         {
-            foreach (string configuredDirectory in configuredDirectories)
-            {
-                // Normalize path for comparison (handle "./plugins", "plugins", etc.)
-                string normalizedDirectory = configuredDirectory.TrimStart('.', '/', '\\').TrimStart('/', '\\');
-                string normalizedPlugins = "plugins".TrimStart('.', '/', '\\').TrimStart('/', '\\');
-
-                if (!normalizedDirectory.Equals(normalizedPlugins, StringComparison.OrdinalIgnoreCase))
-                    pluginDirectories.Add(configuredDirectory);
-            }
+            pluginDirectories.AddRange(
+                from configuredDirectory
+                in configuredDirectories
+                let normalizedDirectory = configuredDirectory.TrimStart('.', '/', '\\').TrimStart('/', '\\')
+                let normalizedPlugins = "plugins".TrimStart('.', '/', '\\').TrimStart('/', '\\')
+                where !string.Equals(normalizedDirectory, normalizedPlugins, StringComparison.OrdinalIgnoreCase)
+                select configuredDirectory);
         }
 
-        logger.LogInformation($"Scanning {pluginDirectories.Count} plugin directories (priority order)...");
+        logger.LogInformation("Scanning {PluginDirectoriesCount} plugin directories (priority order)...", pluginDirectories.Count);
 
         int totalLoaded = 0;
         int totalAgents = 0;
@@ -136,17 +134,17 @@ public class PluginLoaderService
 
                 if (!Directory.Exists(fullPath))
                 {
-                    logger.LogWarning($"⚠️  Plugin directory not found: {fullPath}");
+                    logger.LogWarning("⚠️  Plugin directory not found: {FullPath}", fullPath);
                     continue;
                 }
 
-                logger.LogInformation($"📁 Scanning plugin directory: {fullPath}");
+                logger.LogInformation("📁 Scanning plugin directory: {FullPath}", fullPath);
 
                 string[] pluginAssemblies = Directory.GetFiles(fullPath, "*.dll", SearchOption.TopDirectoryOnly);
 
                 if (pluginAssemblies.Length == 0)
                 {
-                    logger.LogInformation($"📭 No .dll files found in {fullPath}");
+                    logger.LogInformation("📭 No .dll files found in {FullPath}", fullPath);
                     continue;
                 }
 
@@ -163,35 +161,35 @@ public class PluginLoaderService
 
                         if (detectedAgents > 0)
                         {
-                            logger.LogInformation($"✅ Loaded plugin assembly with {detectedAgents} Morgana agents: \"{Path.GetFileName(pluginAssembly)}\"");
+                            logger.LogInformation("✅ Loaded plugin assembly with {DetectedAgents} Morgana agents: \"{GetFileName}\"", detectedAgents, Path.GetFileName(pluginAssembly));
                             totalLoaded++;
                             totalAgents += detectedAgents;
                         }
                         else
                         {
-                            logger.LogDebug($"⚠️  Skipped assembly {Path.GetFileName(pluginAssembly)}: no MorganaAgent subclasses found");
+                            logger.LogDebug("⚠️  Skipped assembly {GetFileName}: no MorganaAgent subclasses found", Path.GetFileName(pluginAssembly));
                         }
                     }
                     catch (BadImageFormatException)
                     {
-                        logger.LogWarning($"⚠️  Skipped {Path.GetFileName(pluginAssembly)}: not a valid .NET assembly");
+                        logger.LogWarning("⚠️  Skipped {GetFileName}: not a valid .NET assembly", Path.GetFileName(pluginAssembly));
                     }
                     catch (FileLoadException ex)
                     {
-                        logger.LogError($"❌ Failed to load {Path.GetFileName(pluginAssembly)}: {ex.Message}");
+                        logger.LogError("❌ Failed to load {GetFileName}: {ExMessage}", Path.GetFileName(pluginAssembly), ex.Message);
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError(ex, $"❌ Unexpected error loading {Path.GetFileName(pluginAssembly)}");
+                        logger.LogError(ex, "❌ Unexpected error loading {GetFileName}", Path.GetFileName(pluginAssembly));
                     }
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"❌ Failed to scan directory: {pluginDirectory}");
+                logger.LogError(ex, "❌ Failed to scan directory: {PluginDirectory}", pluginDirectory);
             }
         }
 
-        logger.LogInformation($"Plugin loading completed: {totalLoaded} assemblies loaded, {totalAgents} total agents discovered");
+        logger.LogInformation("Plugin loading completed: {TotalLoaded} assemblies loaded, {TotalAgents} total agents discovered", totalLoaded, totalAgents);
     }
 }

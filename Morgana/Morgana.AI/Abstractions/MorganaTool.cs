@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Providers;
@@ -86,13 +85,13 @@ public class MorganaTool
         if (value != null)
         {
             toolLogger.LogInformation(
-                $"{nameof(MorganaTool)} ({GetType().Name}) HIT variable '{variableName}' from agent context. Value is: {value}");
+                "{MorganaToolName} ({Name}) HIT variable '{VariableName}' from agent context. Value is: {Value}", nameof(MorganaTool), GetType().Name, variableName, value);
 
             return Task.FromResult(value);
         }
 
         toolLogger.LogInformation(
-            $"{nameof(MorganaTool)} ({GetType().Name}) MISS variable '{variableName}' from agent context.");
+            "{MorganaToolName} ({Name}) MISS variable '{VariableName}' from agent context.", nameof(MorganaTool), GetType().Name, variableName);
 
         return Task.FromResult<object>(
             $"Information {variableName} not available in context: you need to engage SetContextVariable to set it.");
@@ -143,7 +142,7 @@ public class MorganaTool
         try
         {
             List<Records.QuickReply>? parsedQuickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickReplies);
-            if (parsedQuickReplies == null || !parsedQuickReplies.Any())
+            if (parsedQuickReplies == null || parsedQuickReplies.Count == 0)
             {
                 toolLogger.LogWarning("SetQuickReplies called with empty or invalid JSON");
                 return Task.FromResult<object>("Warning: No quick replies were set (empty or invalid data).");
@@ -152,7 +151,7 @@ public class MorganaTool
             ToolContext ctx = getToolContext();
             ctx.Provider.SetVariable(ctx.Session, "quick_replies", quickReplies);
 
-            toolLogger.LogInformation($"LLM set {parsedQuickReplies.Count} quick reply buttons via SetQuickReplies tool");
+            toolLogger.LogInformation("LLM set {Count} quick reply buttons via SetQuickReplies tool", parsedQuickReplies.Count);
 
             return Task.FromResult<object>(
                 $"Quick reply buttons set successfully. The user will see {parsedQuickReplies.Count} interactive options. " +
@@ -192,12 +191,7 @@ public class MorganaTool
         try
         {
             Records.RichCard? parsedRichCard = JsonSerializer.Deserialize<Records.RichCard>(
-                richCard, new JsonSerializerOptions
-                {
-                    AllowOutOfOrderMetadataProperties = true,
-                    Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-                    PropertyNameCaseInsensitive = true
-                });
+                richCard, Records.DefaultJsonSerializerOptions);
             if (parsedRichCard == null)
             {
                 toolLogger.LogWarning("SetRichCard called with invalid JSON structure");
@@ -207,7 +201,7 @@ public class MorganaTool
             int depth = CalculateMaxDepth(parsedRichCard.Components, 1);
             if (depth > 3)
             {
-                toolLogger.LogWarning($"SetRichCard called with excessive nesting depth: {depth} (max 3)");
+                toolLogger.LogWarning("SetRichCard called with excessive nesting depth: {Depth} (max 3)", depth);
                 return Task.FromResult<object>(
                     $"Error: Rich card exceeds maximum nesting depth of 3 (found: {depth}). " +
                     $"Please simplify the card structure.");
@@ -216,7 +210,7 @@ public class MorganaTool
             int totalComponents = CountComponents(parsedRichCard.Components);
             if (totalComponents > 50)
             {
-                toolLogger.LogWarning($"SetRichCard called with too many components: {totalComponents} (max 50)");
+                toolLogger.LogWarning("SetRichCard called with too many components: {TotalComponents} (max 50)", totalComponents);
                 return Task.FromResult<object>(
                     $"Error: Rich card has too many components: {totalComponents} (max 50). " +
                     $"Please create a more focused card.");

@@ -52,7 +52,7 @@ namespace Morgana.AI.Services;
 public class SQLiteConversationPersistenceService : IConversationPersistenceService
 {
     private readonly ILogger logger;
-    private readonly Records.ConversationPersistenceOptions options;
+    private readonly ConversationPersistenceOptions options;
     private readonly byte[] encryptionKey;
 
     /// <summary>
@@ -63,7 +63,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     /// <param name="logger">Logger instance for diagnostics</param>
     /// <exception cref="ArgumentException">Thrown if StoragePath or EncryptionKey are not configured</exception>
     public SQLiteConversationPersistenceService(
-        IOptions<Records.ConversationPersistenceOptions> options,
+        IOptions<ConversationPersistenceOptions> options,
         ILogger logger)
     {
         this.logger = logger;
@@ -84,7 +84,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
         if (encryptionKey.Length != 32)
             throw new ArgumentException("EncryptionKey must be a 256-bit (32-byte) key encoded as Base64");
 
-        logger.LogInformation($"{nameof(SQLiteConversationPersistenceService)} initialized with storage path: {this.options.StoragePath}");
+        logger.LogInformation("{SqLiteConversationPersistenceServiceName} initialized with storage path: {OptionsStoragePath}", nameof(SQLiteConversationPersistenceService), this.options.StoragePath);
     }
 
     /// <inheritdoc/>
@@ -158,7 +158,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 await sqliteCommand.ExecuteNonQueryAsync();
                 await sqliteTransaction.CommitAsync();
 
-                logger.LogInformation($"Saved conversation {agentIdentifier} to database ({encryptedAgentSessionJsonString.Length} bytes encrypted)");
+                logger.LogInformation("Saved conversation {AgentIdentifier} to database ({Length} bytes encrypted)", agentIdentifier, encryptedAgentSessionJsonString.Length);
             }
             catch
             {
@@ -168,7 +168,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to save conversation {agentIdentifier}");
+            logger.LogError(ex, "Failed to save conversation {AgentIdentifier}", agentIdentifier);
             throw;
         }
     }
@@ -197,7 +197,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             // Check if database file exists
             if (!File.Exists(sqliteDbPath))
             {
-                logger.LogInformation($"Conversation SQLite database for {agentIdentifier} not found, returning null");
+                logger.LogInformation("Conversation SQLite database for {AgentIdentifier} not found, returning null", agentIdentifier);
                 return null;
             }
 
@@ -213,7 +213,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
 
             if (!await sqliteDataReader.ReadAsync())
             {
-                logger.LogInformation($"Agent session {agentIdentifier} not found in SQLite database, returning null");
+                logger.LogInformation("Agent session {AgentIdentifier} not found in SQLite database, returning null", agentIdentifier);
                 return null;
             }
 
@@ -229,13 +229,13 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             // Deserialize session via MorganaAgent
             AgentSession agentSession = await agent.DeserializeSessionAsync(agentSessionJsonElement, jsonSerializerOptions);
 
-            logger.LogInformation($"Loaded conversation {agentIdentifier} from SQLite database ({agentSessionEncryptedJsonString.Length} bytes decrypted)");
+            logger.LogInformation("Loaded conversation {AgentIdentifier} from SQLite database ({Length} bytes decrypted)", agentIdentifier, agentSessionEncryptedJsonString.Length);
 
             return agentSession;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to load conversation {agentIdentifier}");
+            logger.LogError(ex, "Failed to load conversation {AgentIdentifier}", agentIdentifier);
             throw;
         }
     }
@@ -250,7 +250,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
 
             if (!File.Exists(sqliteDbPath))
             {
-                logger.LogInformation($"SQLite database for conversation {conversationId} not found");
+                logger.LogInformation("SQLite database for conversation {ConversationId} not found", conversationId);
                 return null;
             }
 
@@ -273,13 +273,13 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to get most recent agent for conversation {conversationId}");
+            logger.LogError(ex, "Failed to get most recent agent for conversation {ConversationId}", conversationId);
             return null;
         }
     }
 
     /// <inheritdoc/>
-    public async Task<Records.MorganaChatMessage[]> GetConversationHistoryAsync(
+    public async Task<MorganaChatMessage[]> GetConversationHistoryAsync(
         string conversationId,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
@@ -293,7 +293,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             // Early return if database doesn't exist
             if (!File.Exists(sqliteDbPath))
             {
-                logger.LogInformation($"SQLite database for conversation {conversationId} not found, returning empty history");
+                logger.LogInformation("SQLite database for conversation {ConversationId} not found, returning empty history", conversationId);
                 return [];
             }
 
@@ -324,17 +324,17 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 // MorganaChatHistoryProvider.StateKey = "MorganaChatHistoryProvider"
                 if (!agentSessionJsonElement.TryGetProperty("stateBag", out JsonElement stateBagElement))
                 {
-                    logger.LogWarning($"AgentSession for {agentName} missing 'stateBag' property, skipping");
+                    logger.LogWarning("AgentSession for {AgentName} missing 'stateBag' property, skipping", agentName);
                     continue;
                 }
                 if (!stateBagElement.TryGetProperty("MorganaChatHistoryProvider", out JsonElement chatHistoryProviderStateElement))
                 {
-                    logger.LogWarning($"AgentSession.stateBag for {agentName} missing 'MorganaChatHistoryProvider' property, skipping");
+                    logger.LogWarning("AgentSession.stateBag for {AgentName} missing 'MorganaChatHistoryProvider' property, skipping", agentName);
                     continue;
                 }
                 if (!chatHistoryProviderStateElement.TryGetProperty("messages", out JsonElement messagesElement))
                 {
-                    logger.LogWarning($"AgentSession.stateBag.MorganaChatHistoryProvider for {agentName} missing 'messages' property, skipping");
+                    logger.LogWarning("AgentSession.stateBag.MorganaChatHistoryProvider for {AgentName} missing 'messages' property, skipping", agentName);
                     continue;
                 }
 
@@ -345,8 +345,8 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                         $"Failed to deserialize Messages for agent {agentName} in conversation {conversationId}");
 
                 // Add all messages with agent metadata
-                foreach (ChatMessage message in chatMessages)
-                    allMessages.Add((agentName, agentCompleted, message));
+                allMessages.AddRange(
+                    chatMessages.Select(message => (agentName, agentCompleted, message)));
             }
 
             // Delegate filtering and processing to specialized method
@@ -360,7 +360,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to retrieve conversation history for {conversationId}");
+            logger.LogError(ex, "Failed to retrieve conversation history for {ConversationId}", conversationId);
             throw;
         }
     }
@@ -432,7 +432,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
         await versionCommand.ExecuteNonQueryAsync();
 
         logger.LogInformation(
-            $"Initialized database schema v2 for: {Path.GetFileName(connection.DataSource)}");
+            "Initialized database schema v2 for: {GetFileName}", Path.GetFileName(connection.DataSource));
     }
 
     /// <summary>
@@ -488,7 +488,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
     /// Processes raw messages from AgentSession into UI-ready MorganaChatMessage array.
     /// Handles quick reply extraction, message filtering, and chronological ordering.
     /// </summary>
-    private Records.MorganaChatMessage[] ProcessMessagesForHistory(
+    private MorganaChatMessage[] ProcessMessagesForHistory(
         string conversationId,
         List<(string agentName, bool agentCompleted, ChatMessage message)> allMessages,
         JsonSerializerOptions jsonSerializerOptions)
@@ -496,7 +496,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
         // =============================================================================
         // PASS 1A: Extract rich cards from SetRichCard function calls
         // =============================================================================
-        Dictionary<string, Records.RichCard> richCardsByCallId = allMessages
+        Dictionary<string, RichCard> richCardsByCallId = allMessages
             .Where(m => m.message.Role == ChatRole.Assistant)
             .SelectMany(m => m.message.Contents?
                 .OfType<FunctionCallContent>()
@@ -509,12 +509,12 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
             .Where(x => x.RichCard != null)
             .ToDictionary(x => x.CallId, x => x.RichCard!);
 
-        logger.LogDebug($"Extracted rich cards from {richCardsByCallId.Count} SetRichCard calls");
+        logger.LogDebug("Extracted rich cards from {Count} SetRichCard calls", richCardsByCallId.Count);
 
         // =============================================================================
         // PASS 1B: Extract quick replies from SetQuickReplies function calls
         // =============================================================================
-        Dictionary<string, List<Records.QuickReply>> quickRepliesByCallId = allMessages
+        Dictionary<string, List<QuickReply>> quickRepliesByCallId = allMessages
             .Where(m => m.message.Role == ChatRole.Assistant)
             .SelectMany(m => m.message.Contents?
                 .OfType<FunctionCallContent>()
@@ -527,12 +527,12 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
             .Where(x => x.QuickReplies != null)
             .ToDictionary(x => x.CallId, x => x.QuickReplies!);
 
-        logger.LogDebug($"Extracted quick replies from {quickRepliesByCallId.Count} SetQuickReplies calls");
+        logger.LogDebug("Extracted quick replies from {Count} SetQuickReplies calls", quickRepliesByCallId.Count);
 
         // =============================================================================
         // PASS 2: Filter and map messages with rich card and quick replies attachments
         // =============================================================================
-        List<Records.MorganaChatMessage> historyMessages = [];
+        List<MorganaChatMessage> historyMessages = [];
         string? pendingQuickRepliesCallId = null;
         string? pendingRichCardCallId = null;
         int msgIndex = 0;
@@ -587,7 +587,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
                 continue;
 
             // Attach rich card to assistant message following SetRichCard
-            Records.RichCard? richCard = null;
+            RichCard? richCard = null;
             if (pendingRichCardCallId != null
                  && chatMessage.Role == ChatRole.Assistant
                  && richCardsByCallId.TryGetValue(pendingRichCardCallId, out richCard))
@@ -596,7 +596,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
             }
 
             // Attach quick replies to assistant message following SetQuickReplies
-            List<Records.QuickReply>? quickReplies = null;
+            List<QuickReply>? quickReplies = null;
             if (pendingQuickRepliesCallId != null
                  && chatMessage.Role == ChatRole.Assistant
                  && quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
@@ -611,7 +611,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
         }
 
         logger.LogInformation(
-            $"Processed {historyMessages.Count} messages (filtered from {allMessages.Count} raw messages) for {conversationId}");
+            "Processed {HistoryMessagesCount} messages (filtered from {AllMessagesCount} raw messages) for {ConversationId}", historyMessages.Count, allMessages.Count, conversationId);
 
         return historyMessages.ToArray();
     }
@@ -620,7 +620,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
     /// Attempts to parse quick replies from SetQuickReplies function call arguments dictionary.
     /// Returns null if parsing fails (graceful degradation).
     /// </summary>
-    private List<Records.QuickReply>? TryParseQuickRepliesFromDictionary(
+    private List<QuickReply>? TryParseQuickRepliesFromDictionary(
         IDictionary<string, object?>? arguments,
         JsonSerializerOptions jsonSerializerOptions)
     {
@@ -637,7 +637,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
                 _ => JsonSerializer.Serialize(quickRepliesValue, jsonSerializerOptions)
             };
 
-            List<Records.QuickReply>? quickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(
+            List<QuickReply>? quickReplies = JsonSerializer.Deserialize<List<QuickReply>>(
                 quickRepliesString,
                 jsonSerializerOptions);
 
@@ -654,7 +654,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
     /// Attempts to parse rich cards from SetRichCard function call arguments dictionary.
     /// Returns null if parsing fails (graceful degradation).
     /// </summary>
-    private Records.RichCard? TryParseRichCardFromDictionary(
+    private RichCard? TryParseRichCardFromDictionary(
         IDictionary<string, object?>? arguments,
         JsonSerializerOptions jsonSerializerOptions)
     {
@@ -671,7 +671,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
                 _ => JsonSerializer.Serialize(richCardsValue, jsonSerializerOptions)
             };
 
-            return JsonSerializer.Deserialize<Records.RichCard>(
+            return JsonSerializer.Deserialize<RichCard>(
                 richCardString,
                 jsonSerializerOptions);
         }
@@ -701,21 +701,21 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
     /// <summary>
     /// Maps a Microsoft.Agents.AI.ChatMessage to MorganaChatMessage record
     /// </summary>
-    private Records.MorganaChatMessage MapToMorganaChatMessage(
+    private MorganaChatMessage MapToMorganaChatMessage(
         string conversationId,
         string agentName,
         bool agentCompleted,
         ChatMessage chatMessage,
         bool isLastHistoryMessage,
-        List<Records.QuickReply>? quickReplies = null,
-        Records.RichCard? richCard = null)
+        List<QuickReply>? quickReplies = null,
+        RichCard? richCard = null)
     {
         string messageText = ExtractTextFromMessage(chatMessage);
 
         // Determine message type from role
-        Records.MessageType messageType = chatMessage.Role == ChatRole.User
-            ? Records.MessageType.User
-            : Records.MessageType.Assistant;
+        MessageType messageType = chatMessage.Role == ChatRole.User
+            ? MessageType.User
+            : MessageType.Assistant;
 
         // Format agent name for UI
         string displayAgentName = chatMessage.Role == ChatRole.User
@@ -724,7 +724,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
                 ? "Morgana"
                 : $"Morgana ({char.ToUpper(agentName[0])}{agentName[1..]})";
 
-        return new Records.MorganaChatMessage
+        return new MorganaChatMessage
         {
             ConversationId = conversationId,
             Text = messageText,

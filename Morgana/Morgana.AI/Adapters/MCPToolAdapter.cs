@@ -68,11 +68,11 @@ public class MCPToolAdapter
 
                 result[mcpTool.Name] = (toolDelegate, definition);
 
-                logger.LogDebug($"Converted MCP tool: {mcpTool.Name} ({paramInfos.Count} parameters)");
+                logger.LogDebug("Converted MCP tool: {McpToolName} ({ParamInfosCount} parameters)", mcpTool.Name, paramInfos.Count);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Failed to convert MCP tool: {mcpTool.Name}");
+                logger.LogError(ex, "Failed to convert MCP tool: {McpToolName}", mcpTool.Name);
             }
         }
 
@@ -92,7 +92,7 @@ public class MCPToolAdapter
             {
                 try
                 {
-                    logger.LogDebug($"Executing MCP tool (0 params): {mcpTool.Name}");
+                    logger.LogDebug("Executing MCP tool (0 params): {McpToolName}", mcpTool.Name);
 
                     CallToolResult result = await mcpClient.CallToolAsync(mcpTool.Name, null);
 
@@ -100,7 +100,7 @@ public class MCPToolAdapter
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, $"Error executing MCP tool: {mcpTool.Name}");
+                    logger.LogError(ex, "Error executing MCP tool: {McpToolName}", mcpTool.Name);
                     return $"Error: {ex.Message}";
                 }
             });
@@ -112,7 +112,7 @@ public class MCPToolAdapter
         {
             try
             {
-                logger.LogDebug($"Executing MCP tool ({values.Length} params): {mcpTool.Name}");
+                logger.LogDebug("Executing MCP tool ({ValuesLength} params): {McpToolName}", values.Length, mcpTool.Name);
 
                 Dictionary<string, object> args = [];
                 for (int i = 0; i < parameters.Count; i++)
@@ -127,7 +127,7 @@ public class MCPToolAdapter
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Error executing MCP tool: {mcpTool.Name}");
+                logger.LogError(ex, "Error executing MCP tool: {McpToolName}", mcpTool.Name);
                 return $"Error: {ex.Message}";
             }
         };
@@ -304,7 +304,7 @@ public class MCPToolAdapter
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Error parsing InputSchema for tool: {mcpTool.Name}");
+            logger.LogError(ex, "Error parsing InputSchema for tool: {McpToolName}", mcpTool.Name);
         }
 
         return (toolParams, paramInfos);

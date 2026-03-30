@@ -136,7 +136,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
                 }
                 catch (ReflectionTypeLoadException ex)
                 {
-                    logger.LogWarning($"Could not load types from assembly {a.FullName}: {ex.Message}");
+                    logger.LogWarning("Could not load types from assembly {ArgFullName}: {ExMessage}", a.FullName, ex.Message);
                     return [];
                 }
             })

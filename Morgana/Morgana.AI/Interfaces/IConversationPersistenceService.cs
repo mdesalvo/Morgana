@@ -118,7 +118,7 @@ public interface IConversationPersistenceService
     /// <para>Fails fast on any deserialization error - no partial/incomplete history is returned.
     /// This ensures UI always displays complete, consistent conversation state.</para>
     /// </remarks>
-    Task<Records.MorganaChatMessage[]> GetConversationHistoryAsync(
+    Task<MorganaChatMessage[]> GetConversationHistoryAsync(
         string conversationId,
         JsonSerializerOptions? jsonSerializerOptions = null);
 

@@ -60,7 +60,7 @@ public class MorganaHub : Hub
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, conversationId);
 
-        logger.LogInformation($"Client {Context.ConnectionId} joined conversation {conversationId}");
+        logger.LogInformation("Client {ContextConnectionId} joined conversation {ConversationId}", Context.ConnectionId, conversationId);
     }
 
     /// <summary>
@@ -87,7 +87,7 @@ public class MorganaHub : Hub
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId);
 
-        logger.LogInformation($"Client {Context.ConnectionId} left conversation {conversationId}");
+        logger.LogInformation("Client {ContextConnectionId} left conversation {ConversationId}", Context.ConnectionId, conversationId);
     }
 
     /// <summary>
@@ -106,7 +106,7 @@ public class MorganaHub : Hub
     /// </remarks>
     public override async Task OnConnectedAsync()
     {
-        logger.LogInformation($"Client connected: {Context.ConnectionId}");
+        logger.LogInformation("Client connected: {ContextConnectionId}", Context.ConnectionId);
         await base.OnConnectedAsync();
     }
 
@@ -128,7 +128,7 @@ public class MorganaHub : Hub
     /// </remarks>
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        logger.LogInformation($"Client disconnected: {Context.ConnectionId}");
+        logger.LogInformation("Client disconnected: {ContextConnectionId}", Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
 }

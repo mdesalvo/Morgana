@@ -50,7 +50,7 @@ public class ProtectedLocalStorageService : IConversationStorageService
         try
         {
             await protectedLocalStore.SetAsync(StorageKey, conversationId);
-            logger.LogInformation($"Saved conversation ID to protected storage: {conversationId}");
+            logger.LogInformation("Saved conversation ID to protected storage: {ConversationId}", conversationId);
         }
         catch (Exception ex)
         {

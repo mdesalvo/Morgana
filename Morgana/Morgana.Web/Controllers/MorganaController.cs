@@ -84,14 +84,14 @@ public class MorganaController : ControllerBase
     {
         try
         {
-            logger.LogInformation($"Starting conversation {request.ConversationId}");
+            logger.LogInformation("Starting conversation {RequestConversationId}", request.ConversationId);
 
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", request.ConversationId);
 
             manager.Tell(new Records.CreateConversation(request.ConversationId, false));
 
-            logger.LogInformation($"Conversation creation queued: {request.ConversationId}");
+            logger.LogInformation("Conversation creation queued: {RequestConversationId}", request.ConversationId);
 
             return Accepted(new
             {
@@ -120,20 +120,20 @@ public class MorganaController : ControllerBase
     {
         try
         {
-            logger.LogInformation($"Ending conversation {conversationId}");
+            logger.LogInformation("Ending conversation {ConversationId}", conversationId);
 
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", conversationId);
 
             manager.Tell(new Records.TerminateConversation(conversationId));
 
-            logger.LogInformation($"Ended conversation {conversationId}");
+            logger.LogInformation("Ended conversation {ConversationId}", conversationId);
 
             return Ok(new { message = "Conversation ended" });
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to end conversation {conversationId}");
+            logger.LogError(ex, "Failed to end conversation {ConversationId}", conversationId);
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -152,7 +152,7 @@ public class MorganaController : ControllerBase
     {
         try
         {
-            logger.LogInformation($"Resuming conversation {conversationId}");
+            logger.LogInformation("Resuming conversation {ConversationId}", conversationId);
 
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", conversationId);
@@ -169,7 +169,7 @@ public class MorganaController : ControllerBase
             supervisor.Tell(new Records.RestoreActiveAgent(lastActiveAgent ?? "Morgana"));
 
             logger.LogInformation(
-                $"Conversation resume queued: {conversationId} with active agent: {lastActiveAgent}");
+                "Conversation resume queued: {ConversationId} with active agent: {LastActiveAgent}", conversationId, lastActiveAgent);
 
             return Accepted(new
             {
@@ -180,7 +180,7 @@ public class MorganaController : ControllerBase
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to resume conversation {conversationId}");
+            logger.LogError(ex, "Failed to resume conversation {ConversationId}", conversationId);
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -200,24 +200,24 @@ public class MorganaController : ControllerBase
     {
         try
         {
-            logger.LogInformation($"Retrieving conversation history for {conversationId}");
+            logger.LogInformation("Retrieving conversation history for {ConversationId}", conversationId);
 
             Records.MorganaChatMessage[] chatMessages = await conversationPersistenceService
                 .GetConversationHistoryAsync(conversationId);
 
             if (chatMessages.Length == 0)
             {
-                logger.LogWarning($"No history found for conversation {conversationId}");
+                logger.LogWarning("No history found for conversation {ConversationId}", conversationId);
                 return NotFound(new { error = $"Conversation {conversationId} not found or has no messages" });
             }
 
-            logger.LogInformation($"Retrieved {chatMessages.Length} messages for conversation {conversationId}");
+            logger.LogInformation("Retrieved {ChatMessagesLength} messages for conversation {ConversationId}", chatMessages.Length, conversationId);
 
             return Ok(new { messages = chatMessages });
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to retrieve conversation history for {conversationId}");
+            logger.LogError(ex, "Failed to retrieve conversation history for {ConversationId}", conversationId);
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -242,7 +242,7 @@ public class MorganaController : ControllerBase
             if (!rateLimitResult.IsAllowed)
             {
                 logger.LogWarning(
-                    $"Rate limit exceeded for conversation {request.ConversationId}: {rateLimitResult.ViolatedLimit}");
+                    "Rate limit exceeded for conversation {RequestConversationId}: {ViolatedLimit}", request.ConversationId, rateLimitResult.ViolatedLimit);
 
                 string rateLimitViolation = GetRateLimitErrorMessage(rateLimitResult);
                 await signalrContext.Clients
@@ -270,7 +270,7 @@ public class MorganaController : ControllerBase
             }
             #endregion
 
-            logger.LogInformation($"Sending message to conversation {request.ConversationId}");
+            logger.LogInformation("Sending message to conversation {RequestConversationId}", request.ConversationId);
 
             // Open a turn span. No parent needed: all turns of the same conversation share
             // the conversationId attribute, which is sufficient to correlate them in any OTel backend.
@@ -295,7 +295,7 @@ public class MorganaController : ControllerBase
                 turnContext           // propagate OTel context into actor pipeline
             ));
 
-            logger.LogInformation($"Message sent to conversation {request.ConversationId}");
+            logger.LogInformation("Message sent to conversation {RequestConversationId}", request.ConversationId);
 
             return Accepted(new
             {
@@ -306,7 +306,7 @@ public class MorganaController : ControllerBase
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Failed to send message to conversation {request.ConversationId}");
+            logger.LogError(ex, "Failed to send message to conversation {RequestConversationId}", request.ConversationId);
             return StatusCode(500, new { error = ex.Message });
         }
     }
