@@ -6,6 +6,7 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Telemetry;
+using Status = Akka.Actor.Status;
 
 namespace Morgana.AI.Actors;
 
@@ -66,6 +67,9 @@ public class ConversationSupervisorActor : MorganaActor
     /// </summary>
     private bool hasPresented;
 
+    /// <summary>OTel root span covering the full turn pipeline (opened on UserMessage, closed on return to Idle).</summary>
+    private Activity? _turnSpan;
+
     /// <summary>OTel span covering the guard-check duration (opened before Tell, closed on response).</summary>
     private Activity? _guardSpan;
 
@@ -122,16 +126,24 @@ public class ConversationSupervisorActor : MorganaActor
 
             actorLogger.Info("User message received, routing through guard check");
 
-            // Lift TurnContext from UserMessage into ProcessingContext so it flows
-            // through all FSM states without further changes to individual state handlers.
+            // Open the turn span in the supervisor so it lives for the full pipeline duration.
+            // Use an ActivityLink (not parent) to the HTTP span — the turn is async and outlives the request.
+            ActivityLink[] links = msg.TurnContext != default
+                ? [new ActivityLink(msg.TurnContext)]
+                : [];
+
+            _turnSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.TurnActivity, ActivityKind.Internal, parentContext: default, links: links);
+            _turnSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+            _turnSpan?.SetTag(MorganaTelemetry.TurnUserMessage, msg.Text.Length > 200 ? msg.Text[..200] : msg.Text);
+
+            // Use the turn span's context as parent for all child spans (guard, classifier, agent)
+            ActivityContext turnContext = _turnSpan?.Context ?? default;
+
             Records.ProcessingContext ctx = new Records.ProcessingContext(
-                msg, originalSender, TurnContext: msg.TurnContext);
+                msg, originalSender, TurnContext: turnContext);
 
             // Open guard span before sending to GuardActor so it captures the full check duration
-            _guardSpan = MorganaTelemetry.Source.StartActivity(
-                MorganaTelemetry.GuardActivity,
-                ActivityKind.Internal,
-                msg.TurnContext);
+            _guardSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.GuardActivity, ActivityKind.Internal, turnContext);
             _guardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
 
             Become(() => AwaitingGuardCheck(ctx));
@@ -218,6 +230,8 @@ public class ConversationSupervisorActor : MorganaActor
             _guardSpan?.SetTag(MorganaTelemetry.GuardCompliant, response.Compliant);
             if (!response.Compliant && response.Violation != null)
                 _guardSpan?.SetTag(MorganaTelemetry.GuardViolation, response.Violation);
+            if (_guardSpan is not null)
+                MorganaTelemetry.GuardDuration.Record((DateTime.UtcNow - _guardSpan.StartTimeUtc).TotalMilliseconds);
             _guardSpan?.Dispose();
             _guardSpan = null;
 
@@ -233,6 +247,8 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
                     guardAnswer, ctx.Classification?.Intent, null, currentAgentName, false));
 
+                MorganaTelemetry.GuardRejectionCounter.Add(1);
+                CloseTurnSpan(intent: ctx.Classification?.Intent, completed: false);
                 Become(Idle);
                 return;
             }
@@ -256,10 +272,7 @@ public class ConversationSupervisorActor : MorganaActor
                 actorLogger.Info("No active agent, proceeding to classification for new request");
 
                 // Open classifier span before sending to ClassifierActor
-                _classifierSpan = MorganaTelemetry.Source.StartActivity(
-                    MorganaTelemetry.ClassifierActivity,
-                    ActivityKind.Internal,
-                    ctx.TurnContext);
+                _classifierSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.ClassifierActivity, ActivityKind.Internal, ctx.TurnContext);
                 _classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
 
                 Become(() => AwaitingClassification(ctx));
@@ -274,6 +287,7 @@ public class ConversationSupervisorActor : MorganaActor
             actorLogger.Warning("Guard check failed, failing open (allowing message)");
 
             _guardSpan?.SetStatus(ActivityStatusCode.Error, failure.Cause.Message);
+            _guardSpan?.AddException(failure.Cause);
             _guardSpan?.Dispose();
             _guardSpan = null;
 
@@ -322,6 +336,8 @@ public class ConversationSupervisorActor : MorganaActor
             _classifierSpan?.SetTag(MorganaTelemetry.ClassificationIntent, classification.Intent);
             if (classification.Metadata.TryGetValue("confidence", out string? confidence))
                 _classifierSpan?.SetTag(MorganaTelemetry.ClassificationConfidence, confidence);
+            if (_classifierSpan is not null)
+                MorganaTelemetry.ClassifierDuration.Record((DateTime.UtcNow - _classifierSpan.StartTimeUtc).TotalMilliseconds);
             _classifierSpan?.Dispose();
             _classifierSpan = null;
 
@@ -349,6 +365,7 @@ public class ConversationSupervisorActor : MorganaActor
 
             // Close classifier span with error status
             _classifierSpan?.SetStatus(ActivityStatusCode.Error, failure.Cause.Message);
+            _classifierSpan?.AddException(failure.Cause);
             _classifierSpan?.Dispose();
             _classifierSpan = null;
 
@@ -409,6 +426,7 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.OriginalMessage.Timestamp,
                 null));
 
+            CloseTurnSpan(ActivityStatusCode.Error, "Timeout waiting for agent response", intent: ctx.Classification?.Intent, completed: false);
             Become(Idle);
         });
 
@@ -452,6 +470,7 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.OriginalMessage.Timestamp,
                     response.RichCard));
 
+                CloseTurnSpan(intent: ctx.Classification?.Intent, completed: response.IsCompleted);
                 Become(Idle);
             }
             catch (Exception ex)
@@ -471,6 +490,7 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.OriginalMessage.Timestamp,
                     null));
 
+                CloseTurnSpan(ActivityStatusCode.Error, ex.Message, intent: ctx.Classification?.Intent, completed: false, exception: ex);
                 Become(Idle);
             }
         });
@@ -493,6 +513,7 @@ public class ConversationSupervisorActor : MorganaActor
                     DateTime.UtcNow,
                     response.RichCard));
 
+                CloseTurnSpan(intent: ctx.Classification?.Intent, completed: true);
                 Become(Idle);
             }
             catch (Exception ex)
@@ -509,6 +530,7 @@ public class ConversationSupervisorActor : MorganaActor
                     DateTime.UtcNow,
                     null));
 
+                CloseTurnSpan(ActivityStatusCode.Error, ex.Message, intent: ctx.Classification?.Intent, completed: false, exception: ex);
                 Become(Idle);
             }
         });
@@ -533,6 +555,7 @@ public class ConversationSupervisorActor : MorganaActor
 
             Context.SetReceiveTimeout(null);
 
+            string? timedOutIntent = activeAgentIntent;
             activeAgent = null;
             activeAgentIntent = null;
 
@@ -546,6 +569,7 @@ public class ConversationSupervisorActor : MorganaActor
                 DateTime.UtcNow,
                 null));
 
+            CloseTurnSpan(ActivityStatusCode.Error, "Timeout waiting for follow-up response", intent: timedOutIntent, completed: false);
             Become(Idle);
         });
 
@@ -559,9 +583,10 @@ public class ConversationSupervisorActor : MorganaActor
         {
             Context.SetReceiveTimeout(null);
 
+            string? currentIntent = activeAgentIntent;
             try
             {
-                string agentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
+                string agentName = currentIntent != null ? GetAgentDisplayName(currentIntent) : "Morgana";
 
                 if (response.IsCompleted)
                 {
@@ -580,6 +605,7 @@ public class ConversationSupervisorActor : MorganaActor
                     DateTime.UtcNow,
                     response.RichCard));
 
+                CloseTurnSpan(intent: currentIntent, completed: response.IsCompleted);
                 Become(Idle);
             }
             catch (Exception ex)
@@ -599,6 +625,7 @@ public class ConversationSupervisorActor : MorganaActor
                     DateTime.UtcNow,
                     null));
 
+                CloseTurnSpan(ActivityStatusCode.Error, ex.Message, intent: currentIntent, completed: false, exception: ex);
                 Become(Idle);
             }
         });
@@ -609,6 +636,40 @@ public class ConversationSupervisorActor : MorganaActor
     #endregion
 
     #region Helper Methods
+
+    /// <summary>
+    /// Closes the turn span, records metrics, and transitions to Idle.
+    /// Called at every point where the FSM returns to Idle after processing a user message.
+    /// </summary>
+    private void CloseTurnSpan(
+        ActivityStatusCode status = ActivityStatusCode.Ok,
+        string? description = null,
+        string? intent = null,
+        bool? completed = null,
+        Exception? exception = null)
+    {
+        if (_turnSpan is not null)
+        {
+            if (status == ActivityStatusCode.Error)
+            {
+                _turnSpan.SetStatus(status, description);
+                if (exception is not null)
+                    _turnSpan.AddException(exception);
+            }
+
+            double durationMs = (_turnSpan.Duration != TimeSpan.Zero)
+                ? _turnSpan.Duration.TotalMilliseconds
+                : (DateTime.UtcNow - _turnSpan.StartTimeUtc).TotalMilliseconds;
+
+            MorganaTelemetry.TurnDuration.Record(durationMs);
+            MorganaTelemetry.TurnCounter.Add(1,
+                new KeyValuePair<string, object?>("intent", intent ?? "unknown"),
+                new KeyValuePair<string, object?>("completed", completed ?? false));
+
+            _turnSpan.Dispose();
+            _turnSpan = null;
+        }
+    }
 
     private string GetAgentDisplayName(string? intent)
     {

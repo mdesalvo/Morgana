@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 namespace Morgana.AI.Telemetry;
 
@@ -15,12 +16,13 @@ namespace Morgana.AI.Telemetry;
 ///
 /// <para><strong>Trace Structure:</strong></para>
 /// <code>
-/// Activity: morgana.turn            ← one per user message (root span, created in controller)
-/// ├── Activity: morgana.guard       ← content moderation (spans full guard-check duration)
-/// ├── Activity: morgana.classifier  ← intent classification (new requests only, spans full LLM call)
-/// ├── Activity: morgana.router      ← agent selection marker (new requests only)
-/// └── Activity: morgana.agent       ← agent execution (includes streaming)
-///     event: "first_chunk"          ← TTFT marker
+/// Activity: morgana.turn             ← one per user message (root span, lives in supervisor for full pipeline duration)
+///   link → HTTP span                 ← ActivityLink to the originating ASP.NET Core request span
+///   ├── Activity: morgana.guard      ← content moderation (spans full guard-check duration)
+///   ├── Activity: morgana.classifier ← intent classification (new requests only, spans full LLM call)
+///   ├── Activity: morgana.router     ← agent selection marker (new requests only)
+///   └── Activity: morgana.agent      ← agent execution (includes streaming)
+///       event: "first_chunk"         ← TTFT marker
 /// </code>
 ///
 /// <para><strong>Context Propagation:</strong></para>
@@ -40,6 +42,39 @@ public static class MorganaTelemetry
     /// The single <see cref="ActivitySource"/> for the entire Morgana framework.
     /// </summary>
     public static readonly ActivitySource Source = new ActivitySource("Morgana");
+
+    // ==============================================================================
+    // METER & METRICS
+    // ==============================================================================
+
+    /// <summary>
+    /// The single <see cref="Meter"/> for all Morgana metrics (counters, histograms).
+    /// </summary>
+    public static readonly Meter MorganaMeter = new Meter("Morgana");
+
+    /// <summary>Counts completed turns, tagged with intent and completion status.</summary>
+    public static readonly Counter<long> TurnCounter =
+        MorganaMeter.CreateCounter<long>("morgana.turn.count", description: "Number of completed conversation turns");
+
+    /// <summary>Counts messages rejected by the guard.</summary>
+    public static readonly Counter<long> GuardRejectionCounter =
+        MorganaMeter.CreateCounter<long>("morgana.guard.rejections", description: "Number of messages rejected by content moderation");
+
+    /// <summary>End-to-end turn duration in milliseconds (from UserMessage to response).</summary>
+    public static readonly Histogram<double> TurnDuration =
+        MorganaMeter.CreateHistogram<double>("morgana.turn.duration", "ms", "End-to-end turn duration");
+
+    /// <summary>Guard check duration in milliseconds.</summary>
+    public static readonly Histogram<double> GuardDuration =
+        MorganaMeter.CreateHistogram<double>("morgana.guard.duration", "ms", "Guard check duration");
+
+    /// <summary>Classifier LLM call duration in milliseconds.</summary>
+    public static readonly Histogram<double> ClassifierDuration =
+        MorganaMeter.CreateHistogram<double>("morgana.classifier.duration", "ms", "Intent classification duration");
+
+    /// <summary>Agent time-to-first-token in milliseconds.</summary>
+    public static readonly Histogram<double> AgentTtftHistogram =
+        MorganaMeter.CreateHistogram<double>("morgana.agent.ttft", "ms", "Agent time-to-first-token");
 
     // ==============================================================================
     // ACTIVITY NAMES

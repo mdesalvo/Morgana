@@ -11,6 +11,7 @@ using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.AI.Telemetry;
+using Status = Akka.Actor.Status;
 
 namespace Morgana.AI.Abstractions;
 
@@ -201,6 +202,7 @@ public class MorganaAgent : MorganaActor
                             firstChunkStopwatch.Stop();
                             agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
                             agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, ttft);
+                            MorganaTelemetry.AgentTtftHistogram.Record(ttft);
                         }
                     }
                 }
@@ -212,8 +214,10 @@ public class MorganaAgent : MorganaActor
                 responseStopwatch.Stop();
                 fullResponse.Append(response.Text);
 
+                long ttft = responseStopwatch.ElapsedMilliseconds;
                 agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
-                agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, responseStopwatch.ElapsedMilliseconds);
+                agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, ttft);
+                MorganaTelemetry.AgentTtftHistogram.Record(ttft);
             }
 
             string llmResponseText = fullResponse.ToString();
@@ -269,6 +273,7 @@ public class MorganaAgent : MorganaActor
         {
             agentLogger.LogError(ex, "Error in {Name}", GetType().Name);
             agentSpan?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            agentSpan?.AddException(ex);
             agentSpan?.Dispose();
 
             Self.Tell(new Records.FailureContext(new Status.Failure(ex), senderRef));

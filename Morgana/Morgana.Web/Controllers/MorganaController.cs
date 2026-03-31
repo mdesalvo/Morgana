@@ -8,7 +8,6 @@ using Morgana.AI;
 using Morgana.AI.Actors;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Telemetry;
 using Morgana.Web.Hubs;
 using Morgana.Web.Messages;
 
@@ -272,15 +271,10 @@ public class MorganaController : ControllerBase
 
             logger.LogInformation("Sending message to conversation {RequestConversationId}", request.ConversationId);
 
-            // Open a turn span. No parent needed: all turns of the same conversation share
-            // the conversationId attribute, which is sufficient to correlate them in any OTel backend.
-            using Activity? turnActivity = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.TurnActivity);
-            turnActivity?.SetTag(MorganaTelemetry.ConversationId, request.ConversationId);
-            turnActivity?.SetTag(MorganaTelemetry.TurnUserMessage,
-                request.Text.Length > 200 ? request.Text[..200] : request.Text);
-
-            // Capture context before entering actor system (Activity.Current may differ on actor threads)
-            ActivityContext turnContext = turnActivity?.Context ?? default;
+            // Capture the HTTP span context so the supervisor can link its turn span back to it.
+            // The turn span itself is created and managed by ConversationSupervisorActor,
+            // which keeps it open for the full pipeline duration (guard → classifier → agent).
+            ActivityContext httpContext = Activity.Current?.Context ?? default;
 
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", request.ConversationId);
@@ -289,7 +283,7 @@ public class MorganaController : ControllerBase
                 request.ConversationId,
                 request.Text,
                 DateTime.UtcNow,
-                turnContext           // propagate OTel context into actor pipeline
+                httpContext            // passed as ActivityLink to turn span in supervisor
             ));
 
             logger.LogInformation("Message sent to conversation {RequestConversationId}", request.ConversationId);

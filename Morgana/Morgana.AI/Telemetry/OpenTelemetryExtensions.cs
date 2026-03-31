@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -19,7 +20,7 @@ namespace Morgana.AI.Telemetry;
 public static class TelemetryExtensions
 {
     /// <summary>
-    /// Registers Morgana OpenTelemetry tracing with the ASP.NET Core DI container.
+    /// Registers Morgana OpenTelemetry tracing and metrics with the ASP.NET Core DI container.
     /// Respects the <c>Morgana:OpenTelemetry:Enabled</c> flag — when false, this is a no-op.
     /// </summary>
     /// <param name="services">The service collection to configure</param>
@@ -55,6 +56,23 @@ public static class TelemetryExtensions
                 // For Development environment, where console quickly shows to developers what's happening
                 if (exporters.Any(e => e.Name.Equals("console", StringComparison.OrdinalIgnoreCase) && e.Enabled))
                     tracing.AddConsoleExporter();
+            })
+            .WithMetrics(metrics =>
+            {
+                string serviceName = section.GetValue("ServiceName", "Morgana")!;
+
+                metrics
+                    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
+                    // Register the Morgana Meter
+                    .AddMeter(MorganaTelemetry.MorganaMeter.Name);
+
+                ExporterConfig[] exporters = section.GetSection("Exporters").Get<ExporterConfig[]>() ?? [];
+
+                if (exporters.FirstOrDefault(e => e.Name.Equals("otlp", StringComparison.OrdinalIgnoreCase)) is { Enabled: true } otlpConfig)
+                    metrics.AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpConfig.Endpoint ?? "http://localhost:4317"));
+
+                if (exporters.Any(e => e.Name.Equals("console", StringComparison.OrdinalIgnoreCase) && e.Enabled))
+                    metrics.AddConsoleExporter();
             });
 
         return services;
