@@ -305,10 +305,21 @@ public class MorganaController : ControllerBase
     /// <summary>
     /// Health check endpoint for monitoring the conversation service and actor system status.
     /// </summary>
-    /// <returns>200 OK with health status information.</returns>
+    /// <returns>503 KO with health failure information<br/>200 OK with health status information</returns>
     [HttpGet("health")]
     public IActionResult Health()
     {
+        bool actorSystemAlive = !actorSystem.WhenTerminated.IsCompleted;
+
+        if (!actorSystemAlive)
+            return StatusCode(503, new
+            {
+                status = "unhealthy",
+                reason = "Actor system terminated",
+                actorSystem = actorSystem.Name,
+                uptime = actorSystem.Uptime
+            });
+
         return Ok(new
         {
             status = "healthy",
