@@ -1,3 +1,4 @@
+using Cauldron.Handlers;
 using Cauldron.Messages;
 using Microsoft.AspNetCore.SignalR.Client;
 
@@ -21,6 +22,7 @@ namespace Cauldron.Services;
 public class MorganaSignalRService : IAsyncDisposable
 {
     private readonly IConfiguration configuration;
+    private readonly MorganaAuthHandler authHandler;
     private HubConnection? hubConnection;
     private readonly ILogger logger;
 
@@ -72,9 +74,10 @@ public class MorganaSignalRService : IAsyncDisposable
     /// </summary>
     public bool IsConnected => hubConnection?.State == HubConnectionState.Connected;
 
-    public MorganaSignalRService(IConfiguration configuration, ILogger logger)
+    public MorganaSignalRService(IConfiguration configuration, MorganaAuthHandler authHandler, ILogger logger)
     {
         this.configuration = configuration;
+        this.authHandler = authHandler;
         this.logger = logger;
     }
 
@@ -86,7 +89,7 @@ public class MorganaSignalRService : IAsyncDisposable
     /// <para><strong>Connection Configuration:</strong></para>
     /// <list type="bullet">
     /// <item>Automatic reconnection with delays: 0s, 2s, 10s, 30s</item>
-    /// <item>Hub endpoint from configuration: "{Morgana:BaseUrl}/morganaHub"</item>
+    /// <item>Hub endpoint from configuration: "{Cauldron:MorganaBaseUrl}/morganaHub"</item>
     /// <item>WebSocket preferred, Server-Sent Events fallback</item>
     /// </list>
     /// <para><strong>Event Subscription:</strong></para>
@@ -99,11 +102,14 @@ public class MorganaSignalRService : IAsyncDisposable
         if (hubConnection != null)
             return;
 
-        string apiBaseUrl = configuration["Morgana:BaseUrl"]!;
+        string apiBaseUrl = configuration["Cauldron:MorganaBaseUrl"]!;
 
-        // Build SignalR hub connection with automatic reconnect
+        // Build SignalR hub connection with automatic reconnect and Bearer token authentication
         hubConnection = new HubConnectionBuilder()
-            .WithUrl($"{apiBaseUrl}/morganaHub")
+            .WithUrl($"{apiBaseUrl}/morganaHub", options =>
+            {
+                options.AccessTokenProvider = () => Task.FromResult<string?>(authHandler.GenerateToken());
+            })
             .WithAutomaticReconnect(
             [
                 TimeSpan.Zero,           // Attempt 1: immediate

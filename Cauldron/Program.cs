@@ -1,3 +1,4 @@
+using Cauldron.Handlers;
 using Cauldron.Interfaces;
 using Cauldron.Services;
 
@@ -22,17 +23,22 @@ builder.Services.AddServerSideBlazor(); // Enable Blazor Server with SignalR for
 // 2. HTTP CLIENT CONFIGURATION
 // ============================================================================
 // Configure HttpClient for making REST API calls to the Morgana backend.
-// The base address is loaded from appsettings.json (Morgana:BaseUrl).
+// The base address is loaded from appsettings.json (Cauldron:MorganaBaseUrl).
 
-// Global HttpClient factory registration (for flexibility)
-builder.Services.AddHttpClient();
+// Authentication handler for Morgana API calls — self-issues JWT tokens
+// signed with the shared symmetric key (same key configured in Morgana.Web)
+builder.Services.AddTransient<MorganaAuthHandler>();
 
-// Scoped HttpClient with configured base address for Morgana API calls
-// Used by Index.razor to POST conversation start and messages
-builder.Services.AddScoped(sp => new HttpClient
+// Named HttpClient with configured base address and automatic Bearer token injection
+// Used by Index.razor and MorganaConversationHistoryService for Morgana API calls
+builder.Services.AddHttpClient("Morgana", client =>
 {
-    BaseAddress = new Uri(builder.Configuration["Morgana:BaseUrl"]!)  // e.g., "https://localhost:5001"
-});
+    client.BaseAddress = new Uri(builder.Configuration["Cauldron:MorganaBaseUrl"]!);
+}).AddHttpMessageHandler<MorganaAuthHandler>();
+
+// Default scoped HttpClient resolved from the named "Morgana" registration
+builder.Services.AddScoped(sp =>
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient("Morgana"));
 
 // ==============================================================================
 // 3. LOGGING INFRASTRUCTURE

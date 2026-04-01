@@ -331,6 +331,72 @@ public static class Records
         int? RetryAfterSeconds = null);
 
     // ==========================================================================
+    // AUTHENTICATION
+    // ==========================================================================
+
+    /// <summary>
+    /// Configuration options for the Morgana authentication service.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Configuration Example:</strong></para>
+    /// <code>
+    /// // appsettings.json
+    /// {
+    ///   "Morgana": {
+    ///     "Authentication": {
+    ///       "Enabled": true,
+    ///       "SymmetricKey": "your-256-bit-secret-key-here",
+    ///       "ValidIssuers": ["morgana", "cauldron"],
+    ///       "Audience": "morgana.ai"
+    ///     }
+    ///   }
+    /// }
+    /// </code>
+    /// </remarks>
+    public record AuthenticationOptions
+    {
+        /// <summary>
+        /// Master toggle for authentication.
+        /// Set to false to disable authentication (useful for development/testing).
+        /// </summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>
+        /// Shared symmetric key used to validate JWT token signatures (HMAC-SHA256).
+        /// Must be at least 256 bits (32 bytes) for security.
+        /// Should be overridden via User Secrets or environment variables in production.
+        /// </summary>
+        public string SymmetricKey { get; set; } = string.Empty;
+
+        /// <summary>
+        /// List of accepted token issuers. Only tokens with an <c>iss</c> claim
+        /// matching one of these values will be accepted.
+        /// </summary>
+        /// <example>["morgana", "cauldron"]</example>
+        public string[] ValidIssuers { get; set; } = ["morgana", "cauldron"];
+
+        /// <summary>
+        /// Expected audience claim (<c>aud</c>) in the token.
+        /// Tokens with a different audience will be rejected.
+        /// </summary>
+        /// <example>morgana-api</example>
+        public string Audience { get; set; } = "morgana.ai";
+    }
+
+    /// <summary>
+    /// Result of a token authentication operation.
+    /// </summary>
+    /// <param name="IsAuthenticated">Whether the token was successfully validated</param>
+    /// <param name="UserId">The caller's unique identifier (from the <c>sub</c> claim), null if not authenticated</param>
+    /// <param name="DisplayName">The caller's display name (from the <c>name</c> claim), null if not authenticated</param>
+    /// <param name="Error">Description of why authentication failed, null if authenticated</param>
+    public record AuthenticationResult(
+        bool IsAuthenticated,
+        string? UserId = null,
+        string? DisplayName = null,
+        string? Error = null);
+
+    // ==========================================================================
     // USER MESSAGE HANDLING
     // ==========================================================================
 
@@ -341,11 +407,13 @@ public static class Records
     /// <param name="Text">User's message text</param>
     /// <param name="Timestamp">Timestamp when the message was created</param>
     /// <param name="TurnContext">OpenTelemetry activity context for the current turn span.</param>
+    /// <param name="UserId">Authenticated caller identity, propagated from the HTTP layer for conversation ownership and audit.</param>
     public record UserMessage(
         string ConversationId,
         string Text,
         DateTime Timestamp,
-        ActivityContext TurnContext = default);
+        ActivityContext TurnContext = default,
+        string? UserId = null);
 
     // ==========================================================================
     // GUARD (CONTENT MODERATION) MESSAGES

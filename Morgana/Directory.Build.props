@@ -59,6 +59,7 @@
     <PackageReference Include="OllamaSharp" Version="5.4.25" />
     <!-- Services -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.5" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.0" />
     <!-- OpenTelemetry -->
     <PackageReference Include="OpenTelemetry" Version="1.15.1" />
     <PackageReference Include="OpenTelemetry.Api" Version="1.15.1" />

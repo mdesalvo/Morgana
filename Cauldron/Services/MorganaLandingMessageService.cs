@@ -7,7 +7,7 @@ public class MorganaLandingMessageService
 
     public MorganaLandingMessageService(IConfiguration configuration)
     {
-        landingMessages = configuration.GetSection("Morgana:LandingMessages").Get<string[]>()
+        landingMessages = configuration.GetSection("Cauldron:LandingMessages").Get<string[]>()
                             ?? ["\uD83D\uDD2E Warming up the magic... almost there! \uD83D\uDD2E"];
     }
 

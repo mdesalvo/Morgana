@@ -4,6 +4,7 @@
        <Title>Cauldron</Title>
        <PackageId>Cauldron</PackageId>
        <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+       <UserSecretsId>8f66e78c-06cc-4648-90a1-d05df3439409</UserSecretsId>
     </PropertyGroup>
 
 </Project>

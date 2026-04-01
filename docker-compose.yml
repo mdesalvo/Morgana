@@ -11,7 +11,7 @@ version: '3.8'
 
 services:
   # ============================================================================
-  # MORGANA - BACKEND (SignalR + API + Akka.NET + Microsoft.Agents.AI)
+  # MORGANA - BACKEND (SignalR + Akka.NET + Microsoft.Agents.AI)
   # ============================================================================
   morgana:
     build:
@@ -28,6 +28,12 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5001
 
+      # Authentication (JWT)
+      - Morgana__Authentication__SymmetricKey=${JWT_SYMMETRIC_KEY}
+
+      # Cauldron (Frontend URL)
+      - Morgana__CauldronBaseUrl=http://cauldron:5002
+
       # Conversation persistence (SQLite)
       - Morgana__ConversationPersistence__EncryptionKey=${ENCRYPTIONKEY}
       - Morgana__ConversationPersistence__StoragePath=/app/data
@@ -43,9 +49,6 @@ services:
       - Morgana__LLM__Ollama__Model=${OLLAMA_MODEL}
       - Morgana__LLM__OpenAI__ApiKey=${OPENAI_APIKEY}
       - Morgana__LLM__OpenAI__Model=${OPENAI_MODEL}
-
-      # CORS: Cauldron frontend URL
-      - Morgana__Cauldron__BaseUrl=http://cauldron:5002
     volumes:
       # Persistent volume for SQLite databases
       - morgana-data:/app/data
@@ -70,8 +73,11 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5002
 
-      # Morgana backend URL (internal network communication)
-      - Morgana__BaseUrl=http://morgana:5001
+      # Authentication (JWT) - same symmetric key as Morgana
+      - Cauldron__Authentication__SymmetricKey=${JWT_SYMMETRIC_KEY}
+
+      # Morgana (Backend URL)
+      - Cauldron__MorganaBaseUrl=http://morgana:5001
     depends_on:
       - morgana
     networks:

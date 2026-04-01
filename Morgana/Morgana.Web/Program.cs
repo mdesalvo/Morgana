@@ -62,7 +62,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
     {
-        policy.WithOrigins(builder.Configuration["Morgana:Cauldron:BaseUrl"]!) // Cauldron Blazor app URL
+        policy.WithOrigins(builder.Configuration["Morgana:CauldronBaseUrl"]!) // Cauldron Blazor app URL
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -189,7 +189,20 @@ builder.Services.Configure<Records.RateLimitOptions>(
 builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 
 // ==============================================================================
-// SECTION 7.3: Context Window Management
+// SECTION 7.3: Authentication
+// ==============================================================================
+// Validates bearer tokens on incoming requests using a shared symmetric key (HMAC-SHA256).
+// Fail-closed: unauthenticated requests are rejected with 401 when enabled.
+// Extension point: swap IAuthenticationService in DI for API keys, mTLS, OAuth with external IdP.
+//
+// Configuration: Morgana:Authentication in appsettings.json
+
+builder.Services.Configure<Records.AuthenticationOptions>(
+    builder.Configuration.GetSection("Morgana:Authentication"));
+builder.Services.AddSingleton<IAuthenticationService, JwtAuthenticationService>();
+
+// ==============================================================================
+// SECTION 7.4: Context Window Management
 // ==============================================================================
 // Service for reducing history messages sent to LLM (configurable summarization)
 

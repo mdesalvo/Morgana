@@ -972,10 +972,10 @@
                 chatMessages.Add(currentStreamingMessage);
 
                 // Start typewriter timer (fires every configurable N milliseconds by consuming configurable K characters)
-                int.TryParse(Configuration["Morgana:StreamingResponse:TypewriterTickMilliseconds"], out int typewriterTickMilliseconds);
+                int.TryParse(Configuration["Cauldron:StreamingResponse:TypewriterTickMilliseconds"], out int typewriterTickMilliseconds);
                 if (typewriterTickMilliseconds <= 0)
                     typewriterTickMilliseconds = 15;
-                int.TryParse(Configuration["Morgana:StreamingResponse:TypewriterTickChars"], out int typewriterTickChars);
+                int.TryParse(Configuration["Cauldron:StreamingResponse:TypewriterTickChars"], out int typewriterTickChars);
                 if (typewriterTickChars <= 0)
                     typewriterTickChars = 1;
                 if (typewriterTimer is not null)
@@ -1235,7 +1235,7 @@
     /// <returns>Formatted completion message</returns>
     private string GetCompletionMessage(string agentName)
     {
-        string template = Configuration["Morgana:AgentExitMessage"] ?? "{0} has completed its spell. I'm back to you!";
+        string template = Configuration["Cauldron:AgentExitMessage"] ?? "{0} has completed its spell. I'm back to you!";
         return string.Format(template, agentName);
     }
 

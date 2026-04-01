@@ -41,6 +41,8 @@ public class MorganaController : ControllerBase
     private readonly ILogger logger;
     private readonly IHubContext<MorganaHub> signalrContext;
     private readonly IConversationPersistenceService conversationPersistenceService;
+    private readonly IAuthenticationService authenticationService;
+    private readonly Records.AuthenticationOptions authenticationOptions;
     private readonly IRateLimitService rateLimitService;
     private readonly Records.RateLimitOptions rateLimitOptions;
 
@@ -52,6 +54,8 @@ public class MorganaController : ControllerBase
     /// <param name="logger">Logger instance for diagnostic information</param>
     /// <param name="signalrContext">SignalR hub context for real-time client communication</param>
     /// <param name="conversationPersistenceService">Service for recovering an existing conversation</param>
+    /// <param name="authenticationService">Service for authenticating incoming requests</param>
+    /// <param name="authenticationOptions">Options for configuration of the authentication service</param>
     /// <param name="rateLimitService">Service for rate limiting an existing conversation</param>
     /// <param name="rateLimitOptions">Options for configuration of the rate limiting service</param>
     public MorganaController(
@@ -59,6 +63,8 @@ public class MorganaController : ControllerBase
         ILogger logger,
         IHubContext<MorganaHub> signalrContext,
         IConversationPersistenceService conversationPersistenceService,
+        IAuthenticationService authenticationService,
+        IOptions<Records.AuthenticationOptions> authenticationOptions,
         IRateLimitService rateLimitService,
         IOptions<Records.RateLimitOptions> rateLimitOptions)
     {
@@ -66,6 +72,8 @@ public class MorganaController : ControllerBase
         this.logger = logger;
         this.signalrContext = signalrContext;
         this.conversationPersistenceService = conversationPersistenceService;
+        this.authenticationService = authenticationService;
+        this.authenticationOptions = authenticationOptions.Value;
         this.rateLimitService = rateLimitService;
         this.rateLimitOptions = rateLimitOptions.Value;
     }
@@ -83,6 +91,10 @@ public class MorganaController : ControllerBase
     {
         try
         {
+            (IActionResult? authFailure, _) = await AuthenticateRequestAsync();
+            if (authFailure is not null)
+                return authFailure;
+
             logger.LogInformation("Starting conversation {RequestConversationId}", request.ConversationId);
 
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
@@ -119,6 +131,10 @@ public class MorganaController : ControllerBase
     {
         try
         {
+            (IActionResult? authFailure, _) = await AuthenticateRequestAsync();
+            if (authFailure is not null)
+                return authFailure;
+
             logger.LogInformation("Ending conversation {ConversationId}", conversationId);
 
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
@@ -151,6 +167,10 @@ public class MorganaController : ControllerBase
     {
         try
         {
+            (IActionResult? authFailure, _) = await AuthenticateRequestAsync();
+            if (authFailure is not null)
+                return authFailure;
+
             logger.LogInformation("Resuming conversation {ConversationId}", conversationId);
 
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
@@ -199,6 +219,10 @@ public class MorganaController : ControllerBase
     {
         try
         {
+            (IActionResult? authFailure, _) = await AuthenticateRequestAsync();
+            if (authFailure is not null)
+                return authFailure;
+
             logger.LogInformation("Retrieving conversation history for {ConversationId}", conversationId);
 
             Records.MorganaChatMessage[] chatMessages = await conversationPersistenceService
@@ -236,6 +260,12 @@ public class MorganaController : ControllerBase
     {
         try
         {
+            #region Authentication
+            (IActionResult? authFailure, string? userId) = await AuthenticateRequestAsync();
+            if (authFailure is not null)
+                return authFailure;
+            #endregion
+
             #region Rate Limiting
             Records.RateLimitResult rateLimitResult = await rateLimitService.CheckAndRecordAsync(request.ConversationId);
             if (!rateLimitResult.IsAllowed)
@@ -283,7 +313,8 @@ public class MorganaController : ControllerBase
                 request.ConversationId,
                 request.Text,
                 DateTime.UtcNow,
-                httpContext            // passed as ActivityLink to turn span in supervisor
+                httpContext,           // passed as ActivityLink to turn span in supervisor
+                userId                 // authenticated caller identity
             ));
 
             logger.LogInformation("Message sent to conversation {RequestConversationId}", request.ConversationId);
@@ -329,6 +360,35 @@ public class MorganaController : ControllerBase
     }
 
     #region Utilities
+    /// <summary>
+    /// Validates the bearer token from the Authorization header when authentication is enabled.
+    /// Returns null if authentication is disabled or the token is valid; returns an IActionResult (401) on failure.
+    /// On success, outputs the authenticated UserId.
+    /// </summary>
+    private async Task<(IActionResult? Failure, string? UserId)> AuthenticateRequestAsync()
+    {
+        if (!authenticationOptions.Enabled)
+            return (null, null);
+
+        string? authorizationHeader = Request.Headers.Authorization.ToString();
+        if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogWarning("Authentication failed: missing or malformed Authorization header");
+            return (Unauthorized(new { error = "Missing or malformed Authorization header. Expected: Bearer <token>" }), null);
+        }
+
+        string token = authorizationHeader["Bearer ".Length..].Trim();
+        Records.AuthenticationResult authResult = await authenticationService.AuthenticateAsync(token);
+
+        if (!authResult.IsAuthenticated)
+        {
+            logger.LogWarning("Authentication failed: {Error}", authResult.Error);
+            return (Unauthorized(new { error = authResult.Error }), null);
+        }
+
+        return (null, authResult.UserId);
+    }
+
     /// <summary>
     /// Gets user-friendly error message for rate limit violations from configuration.
     /// Messages are customizable via appsettings.json (Morgana:RateLimiting section).
