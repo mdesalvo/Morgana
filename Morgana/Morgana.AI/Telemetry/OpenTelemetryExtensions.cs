@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -12,9 +13,8 @@ namespace Morgana.AI.Telemetry;
 /// <remarks>
 /// <para><strong>Exporters:</strong></para>
 /// <list type="bullet">
-/// <item><term>otlp</term><description>OTLP gRPC — compatible with Jaeger, Grafana Tempo, Azure Monitor, Datadog, Honeycomb</description></item>
-/// <item><term>console</term><description>Writes traces to stdout — useful for development</description></item>
-/// <item><term>none</term><description>No exporter — OTel SDK is registered but produces no output</description></item>
+/// <item><term>otlp</term><description>Sends traces and metrics via gRPC: compatible with Jaeger, Grafana Tempo, Azure Monitor, Datadog, ...</description></item>
+/// <item><term>console</term><description>Writes traces to stdout: useful for development</description></item>
 /// </list>
 /// </remarks>
 public static class TelemetryExtensions
@@ -32,48 +32,46 @@ public static class TelemetryExtensions
     {
         IConfigurationSection section = configuration.GetSection("Morgana:OpenTelemetry");
 
+        // OTel is globally flaggable
         if (!section.GetValue("Enabled", false))
             return services;
 
-        services.AddOpenTelemetry()
+        // OTel is also locally flaggable at exporter level
+        string serviceName = section.GetValue("ServiceName", "Morgana")!;
+        ExporterConfig[] exporters = section.GetSection("Exporters").Get<ExporterConfig[]>() ?? [];
+        ExporterConfig? otlpExporter = exporters.FirstOrDefault(e => e.Name.Equals("otlp", StringComparison.OrdinalIgnoreCase) && e.Enabled);
+        bool consoleEnabled = exporters.Any(e => e.Name.Equals("console", StringComparison.OrdinalIgnoreCase) && e.Enabled);
+        if (otlpExporter is null && !consoleEnabled)
+            return services;
+
+        // Tracing pipeline produces detailed journey logging, which is always meaningful 
+        OpenTelemetryBuilder otel = services
+            .AddOpenTelemetry()
             .WithTracing(tracing =>
             {
-                string serviceName = section.GetValue("ServiceName", "Morgana")!;
-
-                tracing.SetResourceBuilder(
-                    ResourceBuilder.CreateDefault().AddService(serviceName))
-                    // Register the Morgana ActivitySource
+                tracing
+                    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
                     .AddSource(MorganaTelemetry.Source.Name)
-                    // Include inbound HTTP requests (MorganaController endpoints)
                     .AddAspNetCoreInstrumentation();
 
-                ExporterConfig[] exporters = section.GetSection("Exporters").Get<ExporterConfig[]>() ?? [];
-
-                // For Production environment, where OTLP-enabled platforms consume Morgana activities (e.g: Jaeger, ...)
-                if (exporters.FirstOrDefault(e => e.Name.Equals("otlp", StringComparison.OrdinalIgnoreCase)) is { Enabled:true } otlpConfig)
-                    tracing.AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpConfig.Endpoint ?? "http://localhost:4317"));
-
-                // For Development environment, where console quickly shows to developers what's happening
-                if (exporters.Any(e => e.Name.Equals("console", StringComparison.OrdinalIgnoreCase) && e.Enabled))
+                if (otlpExporter is not null)
+                    tracing.AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpExporter.Endpoint ?? "http://localhost:4317"));
+                if (consoleEnabled)
                     tracing.AddConsoleExporter();
-            })
-            .WithMetrics(metrics =>
-            {
-                string serviceName = section.GetValue("ServiceName", "Morgana")!;
+            });
 
+        // Metrics pipeline produces aggregated data like counters and histograms, which is only meaningful
+        // when consumed by an OTLP-compatible backend — skip entirely when OTLP is not configured
+        if (otlpExporter is not null)
+        {
+            otel.WithMetrics(metrics =>
+            {
                 metrics
                     .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
-                    // Register the Morgana Meter
-                    .AddMeter(MorganaTelemetry.MorganaMeter.Name);
-
-                ExporterConfig[] exporters = section.GetSection("Exporters").Get<ExporterConfig[]>() ?? [];
-
-                if (exporters.FirstOrDefault(e => e.Name.Equals("otlp", StringComparison.OrdinalIgnoreCase)) is { Enabled: true } otlpConfig)
-                    metrics.AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpConfig.Endpoint ?? "http://localhost:4317"));
-
-                if (exporters.Any(e => e.Name.Equals("console", StringComparison.OrdinalIgnoreCase) && e.Enabled))
-                    metrics.AddConsoleExporter();
+                    .AddMeter(MorganaTelemetry.MorganaMeter.Name)
+                    .AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpExporter.Endpoint ?? "http://localhost:4317"));
             });
+        }
 
         return services;
     }
