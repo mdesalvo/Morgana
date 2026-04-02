@@ -202,14 +202,14 @@ builder.Services.Configure<Records.AuthenticationOptions>(
 builder.Services.AddSingleton<IAuthenticationService, JWTAuthenticationService>();
 
 // ==============================================================================
-// SECTION 7.4: Context Window Management
+// SECTION 8.1: Context Window Management
 // ==============================================================================
 // Service for reducing history messages sent to LLM (configurable summarization)
 
 builder.Services.AddSingleton<SummarizingChatReducerService>();
 
 // ==============================================================================
-// SECTION 8: Agent Adapter
+// SECTION 8.2: Agent Adapter
 // ==============================================================================
 // Adapter for integrating Morgana agents with Microsoft.Extensions.AI abstractions
 
