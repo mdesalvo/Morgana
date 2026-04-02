@@ -70,7 +70,7 @@ builder.Services.AddCors(options =>
 });
 
 // ==============================================================================
-// SECTION 3.5: OpenTelemetry
+// SECTION 4.1: OpenTelemetry
 // ==============================================================================
 // Distributed tracing for conversation-level observability.
 // Produces a trace per conversation with child spans for each turn, guard check,
@@ -92,7 +92,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddMorganaOpenTelemetry(builder.Configuration);
 
 // ==============================================================================
-// SECTION 4: Logging Infrastructure
+// SECTION 4.2: Logging Infrastructure
 // ==============================================================================
 // Singleton logger for framework-level logging
 // Actor loggers are created separately within each actor
