@@ -7,17 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.20.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: JWT Authentication between Cauldron and Morgana
-This release introduces **HMAC-SHA256 bearer token authentication** to secure all communication between Cauldron (frontend) and Morgana (backend). Cauldron self-issues signed JWT tokens injected automatically into every HTTP request and SignalR connection; Morgana validates them at the API boundary before processing. The shared symmetric key is configured via environment variable (`JWT_SYMMETRIC_KEY`) or User Secrets, and the feature can be toggled off for development via `Morgana:Authentication:Enabled`.
+This release introduces **JWT bearer token authentication** to secure all communications between Cauldron (frontend) and Morgana (backend).
+Cauldron self-issues signed JWT tokens injected automatically into every HTTP request and SignalR connection; Morgana validates them at the API boundary before processing.
+The shared symmetric key is configured via environment variable (`JWT_SYMMETRIC_KEY`) or User Secrets, and the feature can be toggled off for development via `Morgana:Authentication:Enabled`.
 
 ### ✨ Added
 - Introduced `IAuthenticationService` as an **extension point for request authentication**: `JwtAuthenticationService` ships as the default implementation (HMAC-SHA256 token validation) and can be replaced in DI with any alternative strategy (API keys, mTLS, OAuth with external IdP) without touching the controller layer
 
 ### 🔄 Changed
-- All `MorganaController` endpoints are now protected by bearer token verification (fail-closed when authentication is enabled)
-- Renamed configuration path `Morgana:Cauldron:BaseUrl` to `Morgana:CauldronBaseUrl`
-- Renamed configuration path `Morgana:BaseUrl` to `Cauldron:MorganaBaseUrl`
-- Cauldron settings moved under `Cauldron` root key (was `Morgana`)
-- Improved OpenTelemetry observability: accurate turn span, metrics, exception recording
+- All `MorganaController` endpoints are now protected by JWT bearer token verification (fail-closed when authentication is enabled)
+- Renamed configuration path `Morgana:Cauldron:BaseUrl` to `Morgana:CauldronURL`
+- Renamed configuration path `Morgana:BaseUrl` to `Cauldron:MorganaURL`
+- Cauldron settings moved under `Cauldron` root key for clearer semantic (was `Morgana`)
+- Improved OpenTelemetry observability: accurate turn span, metrics and exception recording
 - Improved health check endpoint with actor system liveness detection
 - Updated `Akka.NET` dependency to 1.5.64
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.5

@@ -32,7 +32,7 @@ services:
       - Morgana__Authentication__SymmetricKey=${JWT_SYMMETRIC_KEY}
 
       # Cauldron (Frontend URL)
-      - Morgana__CauldronBaseUrl=http://cauldron:5002
+      - Morgana__CauldronURL=http://cauldron:5002
 
       # Conversation persistence (SQLite)
       - Morgana__ConversationPersistence__EncryptionKey=${ENCRYPTIONKEY}
@@ -77,7 +77,7 @@ services:
       - Cauldron__Authentication__SymmetricKey=${JWT_SYMMETRIC_KEY}
 
       # Morgana (Backend URL)
-      - Cauldron__MorganaBaseUrl=http://morgana:5001
+      - Cauldron__MorganaURL=http://morgana:5001
     depends_on:
       - morgana
     networks:

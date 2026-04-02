@@ -35,10 +35,7 @@ RUN dotnet build "Cauldron.csproj" -c Release -o /app/build
 # STAGE 2: PUBLISH
 # ==============================================================================
 FROM build AS publish
-RUN dotnet publish "Cauldron.csproj" \
-    -c Release \
-    -o /app/publish \
-    /p:UseAppHost=false
+RUN dotnet publish "Cauldron.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # ==============================================================================
 # STAGE 3: RUNTIME (FINAL IMAGE)

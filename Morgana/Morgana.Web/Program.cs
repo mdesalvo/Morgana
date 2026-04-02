@@ -62,7 +62,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
     {
-        policy.WithOrigins(builder.Configuration["Morgana:CauldronBaseUrl"]!) // Cauldron Blazor app URL
+        policy.WithOrigins(builder.Configuration["Morgana:CauldronURL"]!) // Cauldron (Frontend)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();

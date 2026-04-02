@@ -23,7 +23,7 @@ builder.Services.AddServerSideBlazor(); // Enable Blazor Server with SignalR for
 // 2. HTTP CLIENT CONFIGURATION
 // ============================================================================
 // Configure HttpClient for making REST API calls to the Morgana backend.
-// The base address is loaded from appsettings.json (Cauldron:MorganaBaseUrl).
+// The base address is loaded from appsettings.json (Cauldron:MorganaURL).
 
 // Authentication handler for Morgana API calls — self-issues JWT tokens
 // signed with the shared symmetric key (same key configured in Morgana.Web)
@@ -33,7 +33,7 @@ builder.Services.AddTransient<MorganaAuthHandler>();
 // Used by Index.razor and MorganaConversationHistoryService for Morgana API calls
 builder.Services.AddHttpClient("Morgana", client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Cauldron:MorganaBaseUrl"]!);
+    client.BaseAddress = new Uri(builder.Configuration["Cauldron:MorganaURL"]!); // Morgana (Backend)
 }).AddHttpMessageHandler<MorganaAuthHandler>();
 
 // Default scoped HttpClient resolved from the named "Morgana" registration

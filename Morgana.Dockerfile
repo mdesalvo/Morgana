@@ -43,17 +43,11 @@ FROM build AS publish
 
 # Publish Morgana.Web (main application)
 WORKDIR "/src/Morgana.Web"
-RUN dotnet publish "Morgana.Web.csproj" \
-    -c Release \
-    -o /app/publish \
-    /p:UseAppHost=false
+RUN dotnet publish "Morgana.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # Publish Morgana.Examples to plugins/ directory
 WORKDIR "/src/Morgana.Examples"
-RUN dotnet publish "Morgana.Examples.csproj" \
-    -c Release \
-    -o /app/publish/plugins \
-    /p:UseAppHost=false
+RUN dotnet publish "Morgana.Examples.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false
 
 # ==============================================================================
 # STAGE 3: RUNTIME (FINAL IMAGE)
