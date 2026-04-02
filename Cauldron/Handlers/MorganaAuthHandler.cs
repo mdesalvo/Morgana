@@ -62,7 +62,7 @@ public class MorganaAuthHandler : DelegatingHandler
                 Subject = new ClaimsIdentity(
                 [
                     new Claim(JwtRegisteredClaimNames.Sub, "cauldron-app"),
-                    new Claim("name", "Cauldron (Morgana Frontend)")
+                    new Claim("name", "Cauldron")
                 ]),
                 Expires = DateTime.UtcNow.AddMinutes(5),
                 SigningCredentials = _credentials
