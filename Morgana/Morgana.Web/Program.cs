@@ -199,7 +199,7 @@ builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 
 builder.Services.Configure<Records.AuthenticationOptions>(
     builder.Configuration.GetSection("Morgana:Authentication"));
-builder.Services.AddSingleton<IAuthenticationService, JwtAuthenticationService>();
+builder.Services.AddSingleton<IAuthenticationService, JWTAuthenticationService>();
 
 // ==============================================================================
 // SECTION 7.4: Context Window Management

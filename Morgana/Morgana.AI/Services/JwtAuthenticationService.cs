@@ -28,31 +28,39 @@ namespace Morgana.AI.Services;
 /// <para>All validation is performed locally using <c>Microsoft.IdentityModel.JsonWebTokens</c>.
 /// No network calls, no IdP dependency.</para>
 /// </remarks>
-public class JwtAuthenticationService : IAuthenticationService
+public class JWTAuthenticationService : IAuthenticationService
 {
-    private readonly TokenValidationParameters _validationParameters;
-    private readonly JsonWebTokenHandler _tokenHandler = new();
-    private readonly ILogger<JwtAuthenticationService> _logger;
+    private readonly TokenValidationParameters validationParameters;
+    private readonly JsonWebTokenHandler jsonWebTokenHandler = new JsonWebTokenHandler();
+    private readonly ILogger logger;
 
-    public JwtAuthenticationService(
-        IOptions<Records.AuthenticationOptions> options,
-        ILogger<JwtAuthenticationService> logger)
+    /// <summary>
+    /// Initialises a new instance of <see cref="JWTAuthenticationService"/>.
+    /// Validates the shared symmetric key used for HMAC-SHA256 encryption.
+    /// </summary>
+    public JWTAuthenticationService(IOptions<Records.AuthenticationOptions> options, ILogger logger)
     {
-        _logger = logger;
+        this.logger = logger;
         Records.AuthenticationOptions config = options.Value;
 
+        #region SymmetricKey Validation
         if (string.IsNullOrWhiteSpace(config.SymmetricKey))
+        {
             throw new InvalidOperationException(
-                "Morgana authentication is enabled but no SymmetricKey is configured. " +
-                "Set 'Morgana:Authentication:SymmetricKey' in appsettings.json or User Secrets.");
+                        "Morgana authentication is enabled but no SymmetricKey is configured. " +
+                        "Set 'Morgana:Authentication:SymmetricKey' in appsettings.json or User Secrets.");
+        }
 
         byte[] keyBytes = Encoding.UTF8.GetBytes(config.SymmetricKey);
         if (keyBytes.Length < 32)
+        {
             throw new InvalidOperationException(
-                "Morgana authentication SymmetricKey must be at least 256 bits (32 bytes). " +
-                $"Current key is {keyBytes.Length * 8} bits.");
+                        "Morgana authentication SymmetricKey must be at least 256 bits (32 bytes). " +
+                        $"Current key is {keyBytes.Length * 8} bits.");
+        }
+        #endregion
 
-        _validationParameters = new TokenValidationParameters
+        validationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
@@ -64,7 +72,7 @@ public class JwtAuthenticationService : IAuthenticationService
             ClockSkew = TimeSpan.FromSeconds(30)
         };
 
-        _logger.LogInformation(
+        this.logger.LogInformation(
             "JWT authentication initialized — audience: {Audience}, valid issuers: [{Issuers}]",
             config.Audience, string.Join(", ", config.ValidIssuers));
     }
@@ -74,8 +82,9 @@ public class JwtAuthenticationService : IAuthenticationService
     {
         try
         {
-            TokenValidationResult result = await _tokenHandler.ValidateTokenAsync(token, _validationParameters);
+            TokenValidationResult result = await jsonWebTokenHandler.ValidateTokenAsync(token, validationParameters);
 
+            #region Validation
             if (!result.IsValid)
             {
                 string error = result.Exception switch
@@ -87,32 +96,25 @@ public class JwtAuthenticationService : IAuthenticationService
                     _ => "Token validation failed"
                 };
 
-                _logger.LogWarning("JWT rejected: {Error}", error);
+                logger.LogWarning("JWT rejected: {Error}", error);
                 return new Records.AuthenticationResult(IsAuthenticated: false, Error: error);
             }
 
-            string? userId = result.Claims.TryGetValue("sub", out object? subValue) ? subValue?.ToString() : null;
-            string? displayName = result.Claims.TryGetValue("name", out object? nameValue) ? nameValue?.ToString() : userId;
-
+            string? userId = result.Claims.TryGetValue(JwtRegisteredClaimNames.Sub, out object? subValue) ? subValue?.ToString() : null;
             if (string.IsNullOrEmpty(userId))
             {
-                _logger.LogWarning("JWT valid but missing 'sub' claim");
-                return new Records.AuthenticationResult(
-                    IsAuthenticated: false,
-                    Error: "Token is valid but missing required 'sub' claim");
+                logger.LogWarning("JWT valid but missing 'sub' claim");
+                return new Records.AuthenticationResult(IsAuthenticated: false, Error: "Token is valid but missing required 'sub' claim");
             }
+            #endregion
 
-            return new Records.AuthenticationResult(
-                IsAuthenticated: true,
-                UserId: userId,
-                DisplayName: displayName);
+            string? displayName = result.Claims.TryGetValue(JwtRegisteredClaimNames.Name, out object? nameValue) ? nameValue?.ToString() : userId;
+            return new Records.AuthenticationResult(IsAuthenticated: true, UserId: userId, DisplayName: displayName);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "JWT rejected: validation failed");
-            return new Records.AuthenticationResult(
-                IsAuthenticated: false,
-                Error: "Token validation failed");
+            logger.LogWarning(ex, "JWT rejected: validation failed");
+            return new Records.AuthenticationResult(IsAuthenticated: false, Error: "Token validation failed");
         }
     }
 }

@@ -119,7 +119,6 @@ public class MorganaController : ControllerBase
 
     /// <summary>
     /// Ends an existing conversation by stopping the ConversationManagerActor and its child actors.
-
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to end</param>
     /// <returns>
@@ -155,7 +154,6 @@ public class MorganaController : ControllerBase
 
     /// <summary>
     /// Resumes an existing conversation by restoring actor hierarchy and active agent state from persistent storage.
-
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to resume</param>
     /// <returns>

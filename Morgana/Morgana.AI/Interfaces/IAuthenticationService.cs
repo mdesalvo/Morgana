@@ -11,7 +11,7 @@ namespace Morgana.AI.Interfaces;
 /// to this service, which is agnostic of transport details.</para>
 ///
 /// <para><strong>Default Implementation:</strong></para>
-/// <para><see cref="Services.JwtAuthenticationService"/> validates JWT tokens signed with
+/// <para><see cref="Services.JWTAuthenticationService"/> validates JWT tokens signed with
 /// a shared symmetric key (HMAC-SHA256), checking issuer, audience, and expiry.
 /// Swap it in DI to adopt any alternative authentication backend (API keys, mTLS,
 /// OAuth with external IdP) without touching the controller or actor system.</para>
