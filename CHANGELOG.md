@@ -13,6 +13,7 @@ The shared symmetric key is configured via environment variable (`JWT_SYMMETRIC_
 
 ### ✨ Added
 - Introduced `IAuthenticationService` as an **extension point for request authentication**: `JwtAuthenticationService` ships as the default implementation (HMAC-SHA256 token validation) and can be replaced in DI with any alternative strategy (API keys, mTLS, OAuth with external IdP) without touching the controller layer
+- It is now available the handbook as a quick reference guide for approaching Morgana the first times
 
 ### 🔄 Changed
 - All `MorganaController` endpoints are now protected by JWT bearer token verification (fail-closed when authentication is enabled)
