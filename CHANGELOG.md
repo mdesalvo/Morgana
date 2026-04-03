@@ -22,10 +22,8 @@ The shared symmetric key is configured via environment variable (`JWT_SYMMETRIC_
 - Improved OpenTelemetry observability: accurate turn span, metrics and exception recording
 - Improved health check endpoint with actor system liveness detection
 - Updated `Akka.NET` dependency to 1.5.64
-- Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.5
-- Updated `Microsoft.Extensions.AI` dependency to 10.4.1
-- Updated `ModelContextProtocol.Core` dependency to 1.2.0
-- Updated `OllamaSharp` dependency to 5.4.25
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0
+- Updated `ModelContextProtocol.Core` dependency to 1.1.0
 - Updated `OpenTelemetry` dependency to v1.15.1
 
 ### 🐛 Fixed
