@@ -4,7 +4,7 @@
       <img src="https://github.com/mdesalvo/Morgana/blob/main/Cauldron/wwwroot/images/morgana-animated.gif" alt="Morgana Logo" width="160"/>
     </td>
     <td style="width:calc(100% - 160px);">
-      <h1>Morgana <a href="Morgana-Handbook.html" title="Morgana Handbook">📖</a></h1>
+      <h1>Morgana <a href="https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Morgana-Handbook.html" title="Morgana Handbook">📖</a></h1>
       <p><i>A magical witch assistant equipped with an enchanted grimoire powered by AI, yet shaped by you: your agents, your prompts, your tools...all woven into its spells.</i></p>
       <p>
         <img src="https://img.shields.io/badge/.NET-10.0-932BD4?logo=dotnet" alt=".NET 10"/>
