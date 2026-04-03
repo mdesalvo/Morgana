@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Morgana Handbook</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+    
+      :root {
+        --bg-dark: #0d0b1a;
+        --bg-card: #151228;
+        --purple-deep: #6b21a8;
+        --purple-mid: #9333ea;
+        --purple-light: #c084fc;
+        --purple-glow: #a855f7;
+        --magenta: #d946ef;
+        --text-primary: #e8e0f0;
+        --text-secondary: #a89ec4;
+        --text-muted: #6b6189;
+        --accent-green: #4ade80;
+        --border: #2d2654;
+      }
+    
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+      @page {
+        size: A4;
+        margin: 0;
+      }
+    
+      body {
+        font-family: 'Inter', sans-serif;
+        background: var(--bg-dark);
+        color: var(--text-primary);
+        line-height: 1.6;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    
+      .page {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0 auto;
+        padding: 18mm 20mm;
+        position: relative;
+        overflow: hidden;
+        page-break-after: always;
+        background: var(--bg-dark);
+      }
+      .page:last-child { page-break-after: auto; }
+    
+      /* Decorative glow orbs */
+      .page::before {
+        content: '';
+        position: absolute;
+        top: -80px; right: -80px;
+        width: 300px; height: 300px;
+        background: radial-gradient(circle, rgba(147,51,234,0.15) 0%, transparent 70%);
+        border-radius: 50%;
+        pointer-events: none;
+      }
+      .page::after {
+        content: '';
+        position: absolute;
+        bottom: -60px; left: -60px;
+        width: 250px; height: 250px;
+        background: radial-gradient(circle, rgba(217,70,239,0.1) 0%, transparent 70%);
+        border-radius: 50%;
+        pointer-events: none;
+      }
+    
+      h1, h2, h3 { font-family: 'Cinzel', serif; }
+    
+      /* ── COVER PAGE ── */
+      .cover {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-height: 297mm;
+        padding: 30mm 25mm;
+      }
+      .cover-avatar {
+        width: 180px; height: 180px;
+        border-radius: 50%;
+        border: 3px solid var(--purple-mid);
+        box-shadow: 0 0 40px rgba(147,51,234,0.4), 0 0 80px rgba(147,51,234,0.15);
+        object-fit: cover;
+        margin-bottom: 28px;
+      }
+      .cover h1 {
+        font-size: 48px;
+        font-weight: 700;
+        background: linear-gradient(135deg, var(--purple-light), var(--magenta));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: 6px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
+      .cover .tagline {
+        font-size: 15px;
+        font-style: italic;
+        color: var(--text-secondary);
+        max-width: 420px;
+        margin-bottom: 40px;
+        line-height: 1.7;
+      }
+      .cover .version-badge {
+        display: inline-block;
+        padding: 6px 20px;
+        border: 1px solid var(--purple-mid);
+        border-radius: 20px;
+        font-size: 13px;
+        color: var(--purple-light);
+        letter-spacing: 2px;
+        margin-bottom: 50px;
+      }
+      .cover .stack {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .cover .stack span {
+        font-size: 11px;
+        padding: 4px 12px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        color: var(--text-secondary);
+      }
+    
+      /* ── SECTION HEADERS ── */
+      h2 {
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--purple-light);
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        position: relative;
+      }
+      h2::after {
+        content: '';
+        position: absolute;
+        bottom: -1px; left: 0;
+        width: 60px; height: 2px;
+        background: linear-gradient(90deg, var(--purple-mid), transparent);
+      }
+    
+      h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--purple-glow);
+        margin: 18px 0 8px 0;
+      }
+    
+      p { font-size: 12.5px; margin-bottom: 10px; color: var(--text-primary); }
+      .muted { color: var(--text-secondary); }
+    
+      /* ── PILLAR CARDS ── */
+      .pillars {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin: 16px 0;
+      }
+      .pillar {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        position: relative;
+        overflow: hidden;
+      }
+      .pillar::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, var(--purple-mid), var(--magenta));
+      }
+      .pillar .icon { font-size: 22px; margin-bottom: 6px; }
+      .pillar h4 {
+        font-family: 'Cinzel', serif;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--purple-light);
+        margin-bottom: 6px;
+      }
+      .pillar p { font-size: 12px; color: var(--text-secondary); margin: 0; }
+    
+      /* ── FLOW DIAGRAM ── */
+      .flow-box {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin: 16px 0;
+        font-family: 'Inter', monospace;
+        font-size: 11.5px;
+        color: var(--text-secondary);
+        line-height: 2;
+        text-align: center;
+        letter-spacing: 0.5px;
+      }
+      .flow-box .arrow { color: var(--purple-mid); font-weight: 600; }
+      .flow-box .actor { color: var(--purple-light); font-weight: 500; }
+      .flow-box .external { color: var(--magenta); font-weight: 500; }
+    
+      /* ── CODE BLOCKS ── */
+      .code-block {
+        background: #0a0818;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+        line-height: 1.7;
+        color: var(--text-secondary);
+        margin: 10px 0;
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .code-block .keyword { color: var(--purple-light); }
+      .code-block .string { color: var(--accent-green); }
+      .code-block .comment { color: var(--text-muted); }
+      .code-block .attr { color: var(--magenta); }
+    
+      /* ── TABLES ── */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 11.5px;
+      }
+      thead th {
+        background: var(--bg-card);
+        color: var(--purple-light);
+        font-weight: 600;
+        text-align: left;
+        padding: 8px 12px;
+        border-bottom: 2px solid var(--purple-deep);
+        font-family: 'Cinzel', serif;
+        font-size: 11px;
+        letter-spacing: 1px;
+      }
+      tbody td {
+        padding: 7px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text-primary);
+      }
+      tbody tr:nth-child(even) { background: rgba(21,18,40,0.5); }
+    
+      /* ── LISTS ── */
+      ul { margin: 8px 0; padding-left: 18px; }
+      ul li {
+        font-size: 12px;
+        color: var(--text-primary);
+        margin-bottom: 5px;
+      }
+      ul li::marker { color: var(--purple-mid); }
+    
+      /* ── SCREENSHOTS ── */
+      .screenshots {
+        display: flex;
+        gap: 8px;
+        margin: 14px 0;
+        justify-content: center;
+      }
+      .screenshots img {
+        width: 32%;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      }
+    
+      /* ── INFO BOX ── */
+      .info-box {
+        background: linear-gradient(135deg, rgba(107,33,168,0.15), rgba(217,70,239,0.08));
+        border: 1px solid var(--purple-deep);
+        border-left: 3px solid var(--purple-mid);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin: 14px 0;
+        font-size: 12px;
+      }
+      .info-box strong { color: var(--purple-light); }
+    
+      /* ── SECURITY BADGE ROW ── */
+      .badge-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 12px 0;
+      }
+      .badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 11px;
+      }
+      .badge .dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: var(--accent-green);
+        display: inline-block;
+      }
+      .badge .dot.warn { background: #facc15; }
+    
+      /* ── FOOTER ── */
+      .page-footer {
+        position: absolute;
+        bottom: 12mm;
+        left: 20mm;
+        right: 20mm;
+        display: flex;
+        justify-content: space-between;
+        font-size: 9px;
+        color: var(--text-muted);
+        border-top: 1px solid var(--border);
+        padding-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 1 — COVER                                                         -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page cover">
+      <img src="Cauldron/wwwroot/assets/Morgana.jpg" class="cover-avatar" alt="Morgana"/>
+      <h1>Morgana</h1>
+      <p class="tagline">A magical witch assistant equipped with an enchanted grimoire powered by AI, yet shaped by you: your agents, your prompts, your tools&hellip; all woven into its spells.</p>
+      <div class="version-badge">HANDBOOK</div>
+      <div class="stack">
+        <span>.NET 10</span>
+        <span>Akka.NET</span>
+        <span>Microsoft.Agents.AI</span>
+        <span>Model Context Protocol</span>
+        <span>Docker</span>
+      </div>
+    </div>
+  
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 2 — ARCHITECTURE OVERVIEW                                         -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page">
+      <h2>Architecture Overview</h2>
+      <p>Morgana is a <strong>conversational AI framework</strong> built on a multi-agent, intent-driven architecture. It separates the frontend experience (<strong>Cauldron</strong>) from the backend intelligence (<strong>Morgana</strong>), communicating over SignalR (real-time streaming) and REST API, all secured by JWT authentication.</p>
+      <p>Morgana <strong>reimagines conversational AI</strong> through 4 foundational pillars that <strong>work in harmony</strong> to deliver an <strong>orchestration framework</strong> that is powerful yet remarkably simple to configure.</p>
+      
+      <div class="pillars">
+        <div class="pillar">
+          <div class="icon">&#x1F3AD;</div>
+          <h4>Actor System</h4>
+          <p>Fault-tolerant orchestration via Akka.NET. Each conversation is a hierarchy of specialized actors (Manager, Supervisor, Guard, Classifier, Router) communicating through async message passing.</p>
+        </div>
+        <div class="pillar">
+          <div class="icon">&#x1F916;</div>
+          <h4>Agent System</h4>
+          <p>Domain specialists that self-register through declarative attributes. Supports native tools (MorganaTool) and MCP server integration for runtime capability discovery.</p>
+        </div>
+        <div class="pillar">
+          <div class="icon">&#x1F4DD;</div>
+          <h4>Prompting System</h4>
+          <p>Prompts as versioned project artifacts with layered personality: a global Morgana character plus per-agent specializations. No hardcoded strings&mdash;iterate without redeployment.</p>
+        </div>
+        <div class="pillar">
+          <div class="icon">&#x1F4BE;</div>
+          <h4>Context System</h4>
+          <p>Isolated agent contexts with selective P2P synchronization. Encrypted SQLite persistence for conversation history that survives restarts, with multi-agent timeline reconciliation.</p>
+        </div>
+      </div>
+    
+      <h3>System Topology</h3>
+      <table>
+        <thead><tr><th>Component</th><th>Role</th><th>Technology</th><th>Default Port</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Morgana</strong></td><td>Backend &mdash; SignalR Hub, Actors, Agents</td><td>ASP.NET 10, Akka.NET, Microsoft.Agents.AI</td><td>5001</td></tr>
+          <tr><td><strong>Cauldron</strong></td><td>Frontend &mdash; Blazor Server UI</td><td>Blazor Server</td><td>5002</td></tr>
+          <tr><td><strong>LLM</strong></td><td>Language model provider</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>&mdash;</td></tr>
+          <tr><td><strong>MCP Server</strong></td><td>External tool provider (optional)</td><td>Model Context Protocol</td><td>&mdash;</td></tr>
+        </tbody>
+      </table>
+    
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>2</span>
+      </div>
+    </div>
+  
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 3 — EXTENSION POINTS & SECURITY                                   -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page">
+      <h2>Extension Points</h2>
+      <p>Every behavioural concern in Morgana is independently overridable via Dependency Injection. The default implementations ship as sensible baselines&mdash;replace any of them without touching a single line of framework code.</p>
+    
+      <table>
+        <thead><tr><th>Interface</th><th>Default Implementation</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>ILLMService</td><td>Anthropic / AzureOpenAI / Ollama / OpenAI</td><td>LLM provider abstraction</td></tr>
+          <tr><td>IAuthenticationService</td><td>JWTAuthenticationService</td><td>Request authentication (JWT HMAC-SHA256)</td></tr>
+          <tr><td>IGuardRailService</td><td>LLMGuardRailService</td><td>Content moderation &amp; policy enforcement</td></tr>
+          <tr><td>IClassifierService</td><td>LLMClassifierService</td><td>Intent classification</td></tr>
+          <tr><td>IPresenterService</td><td>LLMPresenterService</td><td>Welcome presentation &amp; first engagement</td></tr>
+          <tr><td>IRateLimitService</td><td>SQLiteRateLimitService</td><td>Per-conversation throttling</td></tr>
+          <tr><td>IConversationPersistenceService</td><td>SQLiteConversationPersistenceService</td><td>Encrypted conversation storage</td></tr>
+          <tr><td>IAgentConfigurationService</td><td>JsonAgentConfigurationService</td><td>Agent discovery</td></tr>
+          <tr><td>IPromptResolverService</td><td>EmbeddedResourcePromptResolverService</td><td>System &amp; Domain prompt loading</td></tr>
+          <tr><td>ISignalRBridgeService</td><td>SignalRBridgeService</td><td>Real-time frontend communication</td></tr>
+        </tbody>
+      </table>
+    
+      <div class="info-box">
+        <strong>Plugin Architecture:</strong> Build your agents as standalone .NET libraries referencing the <strong>Morgana.AI</strong> NuGet package. Drop the compiled DLL into the <code>plugins/</code> folder and Morgana discovers it at startup&mdash;zero configuration needed.
+      </div>
+    
+      <h2 style="margin-top: 26px;">Security Model</h2>
+      <p>Morgana implements a <strong>defence-in-depth</strong> strategy with security at every layer. The architecture is designed so that infrastructure-level concerns (TLS, vault, WAF) remain the deployer's responsibility, while the product guarantees application-level protection.</p>
+    
+      <div class="badge-row">
+        <div class="badge"><span class="dot"></span> JWT Authentication (HMAC-SHA256)</div>
+        <div class="badge"><span class="dot"></span> Content Moderation (Guard)</div>
+        <div class="badge"><span class="dot"></span> Rate Limiting</div>
+        <div class="badge"><span class="dot"></span> Conversation Encryption (AES-256)</div>
+        <div class="badge"><span class="dot"></span> Secrets Externalized</div>
+        <div class="badge"><span class="dot"></span> Fail-Closed Auth</div>
+      </div>
+    
+      <h3>Authentication Flow</h3>
+      <div class="flow-box">
+        <span class="actor">Cauldron</span>
+        <span style="font-size:10px;">(self-issues JWT signed with shared key)</span>
+        <span class="arrow">&rarr;</span><br/>
+        <span style="font-size:10px;">Bearer token in HTTP &amp; SignalR</span>
+        <span class="arrow">&rarr;</span><br/>
+        <span class="actor">Morgana</span>
+        <span style="font-size:10px;">(validates signature, issuer, audience)</span>
+      </div>
+    
+      <p class="muted" style="font-size:12px; margin-top:10px;">The <code>IAuthenticationService</code> extension point allows deployers to replace JWT with any strategy (API keys, mTLS, OAuth with external IdP) without modifying the application.</p>
+    
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>3</span>
+      </div>
+    </div>
+  
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 4 — CONFIGURATION & DOCKER                                        -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page">
+      <h2>Configuration Reference</h2>
+      <p>Both Morgana and Cauldron follow the standard ASP.NET configuration hierarchy: <code>appsettings.json</code> &rarr; environment variables &rarr; User Secrets. In Docker, environment variables in <code>docker-compose.yml</code> override everything.</p>
+    
+      <h3>Morgana (Backend)</h3>
+      <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Morgana:LLM:Provider</td><td>LLM backend: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code></td></tr>
+          <tr><td>Morgana:LLM:{Provider}:*</td><td>Provider-specific settings (ApiKey, Model, Endpoint, ...)</td></tr>
+          <tr><td>Morgana:Authentication:Enabled</td><td>Master toggle for JWT validation (default: <code>true</code>)</td></tr>
+          <tr><td>Morgana:Authentication:SymmetricKey</td><td>HMAC-SHA256 signing key (256-bit, base64)</td></tr>
+          <tr><td>Morgana:ConversationPersistence:EncryptionKey</td><td>AES-256 key for SQLite encryption (base64)</td></tr>
+          <tr><td>Morgana:ConversationPersistence:StoragePath</td><td>Directory for SQLite database files</td></tr>
+          <tr><td>Morgana:CauldronBaseUrl</td><td>Cauldron frontend URL (used for CORS)</td></tr>
+          <tr><td>Morgana:ActorSystem:TimeoutSeconds</td><td>Actor/agent timeout (default: 180)</td></tr>
+          <tr><td>Morgana:ActorSystem:EnableGuardrail</td><td>Toggle content moderation guard</td></tr>
+          <tr><td>Morgana:RateLimiting:*</td><td>Per-minute, per-hour, per-day message limits</td></tr>
+          <tr><td>Morgana:OpenTelemetry:*</td><td>Tracing: exporters, service name, endpoints</td></tr>
+        </tbody>
+      </table>
+    
+      <h3>Cauldron (Frontend)</h3>
+      <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Cauldron:MorganaBaseUrl</td><td>Morgana backend URL</td></tr>
+          <tr><td>Cauldron:Authentication:SymmetricKey</td><td>Same HMAC-SHA256 key configured in Morgana</td></tr>
+          <tr><td>Cauldron:StreamingResponse:*</td><td>Typewriter effect speed (tick ms, chars per tick)</td></tr>
+          <tr><td>Cauldron:LandingMessages</td><td>Array of random loading messages</td></tr>
+        </tbody>
+      </table>
+    
+      <h2 style="margin-top: 24px;">Docker Deployment</h2>
+      <p>Morgana ships with a ready-to-use <code>docker-compose.yml</code> defining both services on a dedicated bridge network with persistent SQLite volume.</p>
+    
+      <div class="code-block"><span class="comment"># Quick Start (production images from Docker Hub)</span>
+    cp production.env.template .env
+    nano .env                          <span class="comment"># fill in secrets</span>
+    docker compose up
+    
+    <span class="comment"># Development (build from source)</span>
+    cp development.env.template .env
+    nano .env
+    dotnet build ./Morgana && dotnet build ./Cauldron
+    docker compose --env-file .env --env-file .env.versions build
+    docker compose --env-file .env --env-file .env.versions up</div>
+    
+      <h3>Required Secrets (.env)</h3>
+      <table>
+        <thead><tr><th>Variable</th><th>Purpose</th><th>Generation</th></tr></thead>
+        <tbody>
+          <tr><td>ENCRYPTIONKEY</td><td>AES-256 encryption for SQLite</td><td><code>openssl rand -base64 32</code></td></tr>
+          <tr><td>JWT_SYMMETRIC_KEY</td><td>JWT signing key (Cauldron &harr; Morgana)</td><td><code>openssl rand -base64 32</code></td></tr>
+          <tr><td>LLM_PROVIDER</td><td>Active LLM backend</td><td>One of: anthropic, azureopenai, ollama, openai</td></tr>
+          <tr><td>{PROVIDER}_APIKEY</td><td>LLM provider API key</td><td>From your provider dashboard (if cloud-based)</td></tr>
+        </tbody>
+      </table>
+    
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>4</span>
+      </div>
+    </div>
+  
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 5 — OBSERVABILITY & AGENTS DEVELOPMENT                            -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page">
+      <h2>Observability (OpenTelemetry)</h2>
+      <p>Morgana provides end-to-end distributed tracing across the entire conversation pipeline. Traces are structured to be meaningful both to <strong>IT operators</strong> (latencies, TTFT, errors) and <strong>non-technical stakeholders</strong> (intent, agent name, response preview).</p>
+    
+      <h3>Span Architecture</h3>
+      <table>
+        <thead><tr><th>Span</th><th>Key Attributes</th></tr></thead>
+        <tbody>
+          <tr><td>morgana.turn</td><td>conversation.id, turn.user_message</td></tr>
+          <tr><td>morgana.guard</td><td>guard.compliant, guard.violation</td></tr>
+          <tr><td>morgana.classifier</td><td>classification.intent, classification.confidence</td></tr>
+          <tr><td>morgana.router</td><td>router.intent, router.agent_path</td></tr>
+          <tr><td>morgana.agent</td><td>agent.name, agent.ttft_ms, agent.response_preview</td></tr>
+        </tbody>
+      </table>
+    
+      <h3>Exporter Configuration</h3>
+      <div class="code-block"><span class="string">"OpenTelemetry"</span>: {
+      <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
+      <span class="string">"ServiceName"</span>: <span class="string">"Morgana"</span>,
+      <span class="string">"Exporters"</span>: [
+        { <span class="string">"Name"</span>: <span class="string">"console"</span>, <span class="string">"Enabled"</span>: <span class="keyword">true</span> },
+        { <span class="string">"Name"</span>: <span class="string">"otlp"</span>, <span class="string">"Enabled"</span>: <span class="keyword">true</span>, <span class="string">"Endpoint"</span>: <span class="string">"http://localhost:4317"</span> }
+      ]
+    }</div>
+      <p class="muted" style="font-size:11px;">Compatible with Jaeger, Grafana Tempo, Azure Monitor, Datadog, and any OTLP-compliant backend.</p>
+    
+      <h2 style="margin-top: 26px;">Building Your Agents</h2>
+      <p><strong>Morgana.AI</strong> is also distributed as a <strong>NuGet package</strong>. You build agents as standalone .NET libraries&mdash;no need to fork or modify the Morgana codebase.</p>
+    
+      <h3>Agent Development Workflow</h3>
+      <ul>
+        <li><strong>1. Reference</strong> the <code>Morgana.AI</code> NuGet package in your project</li>
+        <li><strong>2. Model</strong> your agents by inheriting <code>MorganaAgent</code> and decorating with <code>[HandlesIntent("...")]</code></li>
+        <li><strong>3. Define tools</strong> by inheriting <code>MorganaTool</code> with <code>[ProvidesToolForIntent("...")]</code>, or point to an MCP server with <code>[UsesMCPServer("...")]</code></li>
+        <li><strong>4. Write prompts</strong> in an <code>agents.json</code> file compiled as embedded resource</li>
+        <li><strong>5. Build</strong> the DLL and <strong>drop it</strong> into Morgana's <code>plugins/</code> directory</li>
+      </ul>
+    
+      <div class="code-block"><span class="attr">[HandlesIntent("billing")]</span>
+    <span class="keyword">public class</span> BillingAgent : MorganaAgent { ... }
+    
+    <span class="attr">[ProvidesToolForIntent("billing")]</span>
+    <span class="keyword">public class</span> BillingTool : MorganaTool
+    {
+        <span class="keyword">public async</span> Task&lt;string&gt; GetInvoices(string userId, int count) { ... }
+    }
+    
+    <span class="comment">// Or acquire tools dynamically from an MCP server:</span>
+    <span class="attr">[HandlesIntent("monkeys")]</span>
+    <span class="attr">[UsesMCPServer("https://func-monkeymcp.azurewebsites.net/")]</span>
+    <span class="keyword">public class</span> MonkeyAgent : MorganaAgent { ... }</div>
+    
+      <div class="info-box">
+        <strong>Fail-fast validation:</strong> At startup Morgana validates bidirectional consistency between declared intents and classifier configuration. Mismatches are caught immediately, not in production.
+      </div>
+    
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>5</span>
+      </div>
+    </div>
+  
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 6 — SCREENSHOTS & QUICK REFERENCE                                 -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page">
+      <h2>Cauldron &mdash; The Frontend Experience</h2>
+      <p>Cauldron is a Blazor Server application providing a rich, real-time chat interface with streaming responses, quick replies, rich cards, and animated feedback. It communicates with Morgana over authenticated SignalR and REST. It can be depicted as the <b>official Morgana's home</b>.</p>
+    
+      <div class="screenshots">
+        <img src="Cauldron/wwwroot/assets/Morgana-Presentation.jpg" alt="Presentation"/>
+        <img src="Cauldron/wwwroot/assets/Morgana-Chatting.jpg" alt="Chatting"/>
+        <img src="Cauldron/wwwroot/assets/Morgana-RichCards.jpg" alt="Rich Cards"/>
+      </div>
+    
+      <h2 style="margin-top: 24px;">Deployment Responsibility Model</h2>
+      <p>Morgana draws a clear line between <strong>product responsibilities</strong> and <strong>deployer responsibilities</strong>, making it ready for enterprise deployment without prescribing infrastructure choices.</p>
+    
+      <table>
+        <thead><tr><th>Concern</th><th>Owner</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Application authentication</td><td><strong>Product</strong></td><td>JWT HMAC-SHA256 &mdash; replaceable via IAuthenticationService</td></tr>
+          <tr><td>Content moderation</td><td><strong>Product</strong></td><td>LLM-based guard &mdash; replaceable via IGuardRailService</td></tr>
+          <tr><td>Rate limiting</td><td><strong>Product</strong></td><td>SQLite-backed &mdash; replaceable via IRateLimitService</td></tr>
+          <tr><td>Conversation persistence</td><td><strong>Product</strong></td><td>SQLite-backed &mdash; replaceable via IConversationPersistenceService</td></tr>
+          <tr><td>Secrets externalization</td><td><strong>Product</strong></td><td>Environment variables / User Secrets</td></tr>
+          <tr><td>TLS termination</td><td><strong>Deployer</strong></td><td>Reverse proxy (nginx, Traefik, ALB, App Gateway...)</td></tr>
+          <tr><td>Secrets vault</td><td><strong>Deployer</strong></td><td>Azure Key Vault, HashiCorp Vault, AWS Secrets Manager...</td></tr>
+          <tr><td>Network policies &amp; WAF</td><td><strong>Deployer</strong></td><td>Cloud/on-prem infrastructure</td></tr>
+          <tr><td>Key rotation</td><td><strong>Deployer</strong></td><td>Operational procedure for JWT_SYMMETRIC_KEY</td></tr>
+        </tbody>
+      </table>
+    
+      <h2 style="margin-top: 22px;">Quick Reference</h2>
+      <table>
+        <thead><tr><th>Resource</th><th>Location</th></tr></thead>
+        <tbody>
+          <tr><td>Source code</td><td>github.com/mdesalvo/Morgana</td></tr>
+          <tr><td>NuGet package</td><td>nuget.org/packages/Morgana.AI</td></tr>
+          <tr><td>Docker Hub (Morgana)</td><td>hub.docker.com/r/mdesalvo/morgana</td></tr>
+          <tr><td>Docker Hub (Cauldron)</td><td>hub.docker.com/r/mdesalvo/cauldron</td></tr>
+          <tr><td>Changelog</td><td>CHANGELOG.md in repository root</td></tr>
+        </tbody>
+      </table>
+    
+      <div class="info-box" style="margin-top: 18px; text-align: center;">
+        <strong>The Morgana Difference:</strong> Adding a new domain agent requires only configuration and attribute decoration&mdash;no changes to the core framework, no manual registration, no brittle coupling. It's conversational AI designed for domain-driven evolution.
+      </div>
+    
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>6</span>
+      </div>
+    </div>
+  
+  </body>
+</html>
