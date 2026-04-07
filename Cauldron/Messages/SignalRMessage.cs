@@ -7,14 +7,14 @@
 /// </para>
 /// <para>
 /// CONTRACT VERSION: 1.0<br/>
-/// SYNC WITH: Morgana.SignalR
+/// SYNC WITH: Morgana.Web
 /// </para>
 /// <para>
 /// BREAKING CHANGES: Any modification to required fields or removal of fields is a breaking change.
 /// SAFE CHANGES: Adding optional fields with default values.
 /// </para>
 /// <para>
-/// ⚠️ IMPORTANT: This DTO is duplicated in Morgana (Morgana.SignalR.Messages.SignalRMessage).
+/// ⚠️ IMPORTANT: This DTO is duplicated in Morgana (Morgana.Web.Messages.SignalRMessage).
 /// When making changes, update both versions and ensure backward compatibility.
 /// Test serialization/deserialization compatibility with integration tests.
 /// </para>
