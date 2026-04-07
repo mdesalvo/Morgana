@@ -22,6 +22,7 @@ This release completes the **Cauldron extension points** model: `IChatStateServi
   and can be replaced in DI with any alternative rendering strategy without touching the component layer
 - Introduced `ILandingMessageService` as an **extension point for landing message selection**: `LandingMessageService` ships as the default implementation (random selection from configuration-driven message pool) and can be  
   replaced in DI with any alternative strategy (static templates, tenant-specific content, CMS-driven messages, A/B variants) without touching the component layer
+- Improved **accessibility (a11y)**: added `aria-live` regions for real-time message announcements (polite for chat messages, assertive for error banners), `role="status"` on connection indicator and typing indicator, `aria-label` on send button, new conversation button, message input, message rows, and typing indicator, `aria-hidden="true"` on decorative SVGs and emoji icons
 - It is now available the **Morgana Handbook** as a quick technical intro to Morgana's conversational AI framework
 
 ### 🔄 Changed

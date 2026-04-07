@@ -32,15 +32,18 @@
 
             <div class="header-info">
                 <h1 style="color: @ChatStateService.GetAvatarBorderColor(ChatStateService.CurrentAgentName);">@ChatStateService.CurrentAgentName</h1>
-                <span class="status @(ChatStateService.IsConnected ? "online" : "offline")" style="color: @(ChatStateService.IsConnected ? "#10b981" : "#ef4444");">
+                <span class="status @(ChatStateService.IsConnected ? "online" : "offline")"
+                      role="status"
+                      style="color: @(ChatStateService.IsConnected ? "#10b981" : "#ef4444");">
                     @(ChatStateService.IsConnected ? "Online" : "Offline")
                 </span>
             </div>
 
             <button class="new-conversation-btn @(IsNewConversationButtonVisible ? "visible" : "hidden")"
                     @onclick="ShowConfirmModal"
+                    aria-label="Start a new conversation"
                     title="Start a new conversation with Morgana">
-                <span class="btn-icon">✨</span>
+                <span class="btn-icon" aria-hidden="true">✨</span>
                 <span class="btn-text">New Conversation</span>
             </button>
 
@@ -48,11 +51,11 @@
     </div>
 
     <!-- Messages Area -->
-    <div class="messages-container">
+    <div class="messages-container" aria-live="polite" aria-relevant="additions">
 
         @if (ChatStateService.TemporaryMessages.Any())
         {
-            <div class="temporary-messages-container">
+            <div class="temporary-messages-container" aria-live="assertive" aria-relevant="additions">
                 @foreach (SignalRMessage temporaryMessage in ChatStateService.TemporaryMessages)
                 {
                     <FadingMessage Message="@temporaryMessage"
@@ -95,7 +98,8 @@
             <!-- Message list -->
             @foreach (ChatMessage chatMessage in ChatStateService.ChatMessages)
             {
-                <div class="message @chatMessage.Role">
+                <div class="message @chatMessage.Role"
+                     aria-label="@(chatMessage.Role == "user" ? "You" : chatMessage.AgentName)">
                     @if (chatMessage.Role == "assistant")
                     {
                         <!-- Agent avatar with dynamic border color -->
@@ -108,10 +112,12 @@
                         @if (chatMessage.IsTyping)
                         {
                             <!-- Typing indicator (sparkles stars) -->
-                            <div class="typing-indicator @(ChatStateService.IsSpecializedAgent(chatMessage.AgentName) ? "specialized" : "base")">
-                                <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
-                                <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
-                                <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
+                            <div class="typing-indicator @(ChatStateService.IsSpecializedAgent(chatMessage.AgentName) ? "specialized" : "base")"
+                                 role="status"
+                                 aria-label="@(chatMessage.AgentName) is typing">
+                                <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
+                                <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
+                                <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
                             </div>
                         }
                         else
@@ -151,6 +157,7 @@
             @bind="inputText"
             @bind:event="oninput"
             @onkeyup="HandleKeyPressAsync"
+            aria-label="Message input"
             placeholder="Consult @(ChatStateService.CurrentAgentName)..."
             rows="1"
             disabled="@IsTextareaDisabled"

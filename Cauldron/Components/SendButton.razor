@@ -5,8 +5,9 @@
 <button
     @onclick="OnClick"
     disabled="@IsDisabled"
+    aria-label="@(IsSending ? "Sending message" : "Send message")"
     class="send-button @(IsSending ? "sending" : "") @(IsSpecializedAgent ? "agent" : "morgana")">
-    <span class="cauldron-wrapper">
+    <span class="cauldron-wrapper" aria-hidden="true">
         <span class="cauldron-icon">
             <svg viewBox="115 500 160 250" xmlns="http://www.w3.org/2000/svg" class="cauldron-svg" preserveAspectRatio="xMidYMid meet">
                 <g class="bubbles" transform="translate(-0.20804, 7.0001)">
