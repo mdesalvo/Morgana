@@ -19,19 +19,19 @@ namespace Cauldron.Services;
 /// <item>Network Error → Returns null (connection failure)</item>
 /// </list>
 /// </remarks>
-public class MorganaConversationHistoryService : IConversationHistoryService
+public class ConversationHistoryService : IConversationHistoryService
 {
     private readonly HttpClient _httpClient;
-    private readonly ILogger<MorganaConversationHistoryService> _logger;
+    private readonly ILogger _logger;
 
     /// <summary>
     /// Initializes a new instance of the ConversationHistoryService.
     /// </summary>
     /// <param name="httpClient">HTTP client for API calls (injected by DI)</param>
     /// <param name="logger">Logger instance for diagnostics</param>
-    public MorganaConversationHistoryService(
+    public ConversationHistoryService(
         HttpClient httpClient,
-        ILogger<MorganaConversationHistoryService> logger)
+        ILogger logger)
     {
         _httpClient = httpClient;
         _logger = logger;

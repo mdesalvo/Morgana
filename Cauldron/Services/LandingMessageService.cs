@@ -1,17 +1,22 @@
-﻿namespace Cauldron.Services;
+﻿using Cauldron.Interfaces;
 
-public class MorganaLandingMessageService
+namespace Cauldron.Services;
+
+public class LandingMessageService : ILandingMessageService
 {
     private readonly string[] landingMessages;
     private readonly Random random = new Random();
 
-    public MorganaLandingMessageService(IConfiguration configuration)
+    public LandingMessageService(IConfiguration configuration)
     {
         landingMessages = configuration.GetSection("Cauldron:LandingMessages").Get<string[]>()
                             ?? ["\uD83D\uDD2E Warming up the magic... almost there! \uD83D\uDD2E"];
     }
 
-    public string GetRandomLandingMessage()
+    /// <summary>
+    /// Gets a random landing message from the pool of configured ones.
+    /// </summary>
+    public string GetLandingMessage()
     {
         lock (random)
         {

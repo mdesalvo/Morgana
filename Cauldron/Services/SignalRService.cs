@@ -19,7 +19,7 @@ namespace Cauldron.Services;
 /// <item>Graceful handling of network interruptions</item>
 /// </list>
 /// </remarks>
-public class MorganaSignalRService : IAsyncDisposable
+public class SignalRService : IAsyncDisposable
 {
     private readonly IConfiguration configuration;
     private readonly MorganaAuthHandler authHandler;
@@ -74,7 +74,7 @@ public class MorganaSignalRService : IAsyncDisposable
     /// </summary>
     public bool IsConnected => hubConnection?.State == HubConnectionState.Connected;
 
-    public MorganaSignalRService(IConfiguration configuration, MorganaAuthHandler authHandler, ILogger logger)
+    public SignalRService(IConfiguration configuration, MorganaAuthHandler authHandler, ILogger logger)
     {
         this.configuration = configuration;
         this.authHandler = authHandler;

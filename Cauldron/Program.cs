@@ -30,7 +30,7 @@ builder.Services.AddServerSideBlazor(); // Enable Blazor Server with SignalR for
 builder.Services.AddTransient<MorganaAuthHandler>();
 
 // Named HttpClient with configured base address and automatic Bearer token injection
-// Used by Index.razor and MorganaConversationHistoryService for Morgana API calls
+// Used by Index.razor and ConversationHistoryService for Morgana API calls
 builder.Services.AddHttpClient("Morgana", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["Cauldron:MorganaURL"]!); // Morgana (Backend)
@@ -52,18 +52,23 @@ builder.Services.AddSingleton<ILogger>(sp =>
 // Register Cauldron-specific services for SignalR client and message handling.
 
 // SignalR client service for real-time communication with Morgana backend
-// Manages WebSocket connection, automatic reconnection, and message routing
-builder.Services.AddScoped<MorganaSignalRService>();
+// Manages WebSocket connection, automatic reconnection and message routing
+builder.Services.AddScoped<SignalRService>();
 
 // Dynamic configuration-based landing message service
 // Selects a random welcome message during the "magic sparkle" loading
-builder.Services.AddSingleton<MorganaLandingMessageService>();
+builder.Services.AddSingleton<ILandingMessageService, LandingMessageService>();
 
-// Conversation persistence service using ProtectedLocalStorage
+// Conversation persistence & history services using ProtectedLocalStorage
 // Stores conversation ID in browser localStorage with automatic AES-256 encryption
 // Enables seamless conversation resume across browser sessions
 builder.Services.AddScoped<IConversationStorageService, ProtectedLocalStorageService>();
-builder.Services.AddScoped<IConversationHistoryService, MorganaConversationHistoryService>();
+builder.Services.AddScoped<IConversationHistoryService, ConversationHistoryService>();
+
+// Chat state, conversation lifecycle and streaming services
+builder.Services.AddScoped<IChatStateService, ChatStateService>();
+builder.Services.AddScoped<IConversationLifecycleService, ConversationLifecycleService>();
+builder.Services.AddScoped<IStreamingService, StreamingService>();
 
 // ============================================================================
 // 5. APPLICATION PIPELINE

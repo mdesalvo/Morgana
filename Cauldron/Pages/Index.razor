@@ -1,12 +1,11 @@
 @page "/"
 @using Cauldron.Services
-@inject MorganaSignalRService SignalRService
-@inject MorganaLandingMessageService LandingMessageService
-@inject IConversationStorageService StorageService
-@inject IConversationHistoryService HistoryService
+@inject IChatStateService ChatStateService
+@inject IConversationLifecycleService ConversationLifecycleService
+@inject IStreamingService StreamingService
+@inject SignalRService SignalRService
+@inject ILandingMessageService LandingMessageService
 @inject NavigationManager NavigationManager
-@inject HttpClient Http
-@inject IConfiguration Configuration
 @implements IAsyncDisposable
 
 <PageTitle>Morgana - Magical AI Assistant</PageTitle>
@@ -16,7 +15,7 @@
     <div class="chat-header">
         <div class="header-content">
 
-            <div class="header-avatar-wrapper @(isSending ? "sending" : "") @GetAgentClass(currentAgentName)">
+            <div class="header-avatar-wrapper @(ChatStateService.IsSending ? "sending" : "") @ChatStateService.GetAgentClass(ChatStateService.CurrentAgentName)">
                 <div class="magic-glow"></div>
                 <div class="magic-ring"></div>
                 <span class="sparkle s1"></span>
@@ -28,13 +27,13 @@
                 <img src="images/morgana-animated.gif"
                      alt="Morgana"
                      class="header-avatar"
-                     style="border: 3px solid @GetAvatarBorderColor(currentAgentName);" />
+                     style="border: 3px solid @ChatStateService.GetAvatarBorderColor(ChatStateService.CurrentAgentName);" />
             </div>
 
             <div class="header-info">
-                <h1 style="color: @GetAvatarBorderColor(currentAgentName);">@currentAgentName</h1>
-                <span class="status @(isConnected ? "online" : "offline")" style="color: @(isConnected ? "#10b981" : "#ef4444");">
-                    @(isConnected ? "Online" : "Offline")
+                <h1 style="color: @ChatStateService.GetAvatarBorderColor(ChatStateService.CurrentAgentName);">@ChatStateService.CurrentAgentName</h1>
+                <span class="status @(ChatStateService.IsConnected ? "online" : "offline")" style="color: @(ChatStateService.IsConnected ? "#10b981" : "#ef4444");">
+                    @(ChatStateService.IsConnected ? "Online" : "Offline")
                 </span>
             </div>
 
@@ -51,10 +50,10 @@
     <!-- Messages Area -->
     <div class="messages-container">
 
-        @if (temporaryMessages.Any())
+        @if (ChatStateService.TemporaryMessages.Any())
         {
             <div class="temporary-messages-container">
-                @foreach (SignalRMessage temporaryMessage in temporaryMessages)
+                @foreach (SignalRMessage temporaryMessage in ChatStateService.TemporaryMessages)
                 {
                     <FadingMessage Message="@temporaryMessage"
                                    DurationSeconds="@(temporaryMessage.FadingMessageDurationSeconds ?? 10)"
@@ -63,7 +62,7 @@
             </div>
         }
 
-        @if (chatMessages.Count == 0)
+        @if (ChatStateService.ChatMessages.Count == 0)
         {
             <!-- Loading state with magical animation -->
             <!-- Loader visible until first message arrives from backend (presentation or conversation history) -->
@@ -94,7 +93,7 @@
         else
         {
             <!-- Message list -->
-            @foreach (ChatMessage chatMessage in chatMessages)
+            @foreach (ChatMessage chatMessage in ChatStateService.ChatMessages)
             {
                 <div class="message @chatMessage.Role">
                     @if (chatMessage.Role == "assistant")
@@ -103,13 +102,13 @@
                         <img src="images/morgana-avatar.png"
                              alt="@chatMessage.AgentName"
                              class="message-avatar"
-                             style="border: 2px solid @GetAvatarBorderColor(chatMessage.AgentName);"/>
+                             style="border: 2px solid @ChatStateService.GetAvatarBorderColor(chatMessage.AgentName);"/>
                     }
                     <div class="message-bubble @(chatMessage.IsStreaming ? "streaming" : "")">
                         @if (chatMessage.IsTyping)
                         {
                             <!-- Typing indicator (sparkles stars) -->
-                            <div class="typing-indicator @(IsSpecializedAgent(chatMessage.AgentName) ? "specialized" : "base")">
+                            <div class="typing-indicator @(ChatStateService.IsSpecializedAgent(chatMessage.AgentName) ? "specialized" : "base")">
                                 <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
                                 <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
                                 <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
@@ -121,7 +120,7 @@
                             <div class="message-text @(chatMessage.Type == MessageType.Presentation ? "completion-text" : "")">
                                 @chatMessage.Text
                             </div>
-                            
+
                             @* Rich card (if present) *@
                             @if (chatMessage.RichCard != null)
                             {
@@ -152,13 +151,13 @@
             @bind="inputText"
             @bind:event="oninput"
             @onkeyup="HandleKeyPressAsync"
-            placeholder="Consult @(currentAgentName)..."
+            placeholder="Consult @(ChatStateService.CurrentAgentName)..."
             rows="1"
             disabled="@IsTextareaDisabled"
-            class="message-input @(IsSpecializedAgent(currentAgentName) ? "agent" : "morgana")"></textarea>
-        <SendButton 
-            AgentName="@currentAgentName"
-            IsSending="@isSending"
+            class="message-input @(ChatStateService.IsSpecializedAgent(ChatStateService.CurrentAgentName) ? "agent" : "morgana")"></textarea>
+        <SendButton
+            AgentName="@ChatStateService.CurrentAgentName"
+            IsSending="@ChatStateService.IsSending"
             IsDisabled="@IsSendButtonDisabled"
             OnClick="SendMessageAsync" />
     </div>
@@ -175,20 +174,8 @@
 
 @code {
     // =========================================================================
-    // STATE VARIABLES
+    // LOCAL UI STATE (not shared across components)
     // =========================================================================
-
-    /// <summary>
-    /// List of all chat messages in the current conversation.
-    /// Includes user messages, agent responses, typing indicators, and presentation messages.
-    /// </summary>
-    private List<ChatMessage> chatMessages = [];
-
-    /// <summary>
-    /// List of active temporary system warnings (rate limit errors, etc.).
-    /// Rendered as auto-dismissing banners via FadingMessage component.
-    /// </summary>
-    private List<SignalRMessage> temporaryMessages = [];
 
     /// <summary>
     /// Current text input from the user (two-way bound to textarea).
@@ -196,141 +183,67 @@
     private string inputText = string.Empty;
 
     /// <summary>
-    /// Unique identifier for the current conversation.
-    /// Generated on conversation start and used for message routing.
+    /// Landing message (waiting for Morgana presentation).
     /// </summary>
-    private string conversationId = string.Empty;
-
-    /// <summary>
-    /// SignalR connection state indicator.
-    /// True when connected and ready to receive messages.
-    /// </summary>
-    private bool isConnected;
-
-    /// <summary>
-    /// Message send operation in progress indicator.
-    /// True during HTTP POST to prevent duplicate sends.
-    /// </summary>
-    private bool isSending;
-
-    /// <summary>
-    /// Initialization complete indicator.
-    /// True after SignalR connection and conversation start succeed.
-    /// </summary>
-    private bool isInitialized;
+    private string landingMessage = string.Empty;
 
     /// <summary>
     /// Controls visibility of the new conversation confirmation modal.
     /// </summary>
     private bool showConfirmModal;
 
-    /// <summary>
-    /// Name of the currently active agent.
-    /// Updates dynamically when agents take control: "Morgana", "Morgana (Billing)", etc.
-    /// Displayed in header and used for avatar border color.
-    /// </summary>
-    private string currentAgentName = "Morgana";
-
-    /// <summary>
-    /// Landing message (waiting for Morgana presentation).
-    /// </summary>
-    private string landingMessage = string.Empty;
-
-    /// <summary>
-    /// Flag to track if storage has been checked (prevents multiple checks on re-renders).
-    /// </summary>
-    private bool hasCheckedStorage;
-
     // =========================================================================
-    // STREAMING STATE VARIABLES
-    // =========================================================================
-
-    /// <summary>
-    /// Buffer containing chunks received from backend that haven't been displayed yet.
-    /// Used by the typewriter effect to progressively render text.
-    /// </summary>
-    private string streamingBuffer = string.Empty;
-
-    /// <summary>
-    /// Timer for typewriter effect animation.
-    /// Fires every 50ms to display next character from streaming buffer.
-    /// </summary>
-    private Timer? typewriterTimer;
-
-    /// <summary>
-    /// Reference to the message currently being streamed.
-    /// Null when no streaming is in progress.
-    /// </summary>
-    private ChatMessage? currentStreamingMessage;
-
-    // =========================================================================
-    // LIFECYCLE METHODS
+    // LIFECYCLE
     // =========================================================================
 
     /// <summary>
     /// Blazor lifecycle method called when component is initialized.
     /// Sets up SignalR connection and subscribes to events.
-    /// Note: ProtectedLocalStorage check moved to OnAfterRenderAsync for JavaScript interop availability.
     /// </summary>
     /// <returns>Task representing the async initialization</returns>
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            Console.WriteLine("🔵 OnInitializedAsync: Starting...");
-
             // Initialize landing message
-            landingMessage = LandingMessageService.GetRandomLandingMessage();
+            landingMessage = LandingMessageService.GetLandingMessage();
 
-            // Start SignalR connection
+            // Subscribe to streaming state changes for UI re-render
+            StreamingService.OnStateChanged += () => InvokeAsync(StateHasChanged);
+
+            // Start SignalRService connection
             await SignalRService.StartAsync();
-            isConnected = SignalRService.IsConnected;
-            Console.WriteLine($"🔵 SignalR connected: {isConnected}");
+            ChatStateService.IsConnected = SignalRService.IsConnected;
 
-            // Subscribe to message received events
+            // Subscribe to events (message received, streaming chunks for progressive rendering, connection state changes)
             SignalRService.OnMessageReceived += HandleMessageReceivedAsync;
-
-            // Subscribe to streaming chunks for progressive rendering
             SignalRService.OnStreamChunkReceived += HandleStreamChunkReceivedAsync;
-
-            // Subscribe to connection state changes
             SignalRService.OnConnectionStateChanged += (connected) =>
             {
-                isConnected = connected;
-                Console.WriteLine($"🔵 Connection state changed: {connected}");
+                ChatStateService.IsConnected = connected;
                 InvokeAsync(StateHasChanged);
             };
 
-            Console.WriteLine("🔵 Initialization complete. Checking storage for existing conversation...");
-
-            if (!hasCheckedStorage)
+            if (!ChatStateService.HasCheckedStorage)
             {
-                hasCheckedStorage = true;
+                ChatStateService.HasCheckedStorage = true;
 
                 try
                 {
                     // Check ProtectedLocalStorage for saved conversation ID
-                    string? savedConversationId = await StorageService.GetConversationIdAsync();
+                    string? savedConversationId = await ConversationLifecycleService.GetSavedConversationIdAsync();
 
                     if (!string.IsNullOrEmpty(savedConversationId))
-                    {
-                        Console.WriteLine($"🔵 Found saved conversation ID: {savedConversationId}");
-                        await ResumeConversationAsync(savedConversationId);
-                    }
+                        await ConversationLifecycleService.ResumeConversationAsync(savedConversationId);
                     else
-                    {
-                        Console.WriteLine("🔵 No saved conversation found, starting new");
-                        await StartConversationAsync();
-                    }
+                        await ConversationLifecycleService.StartConversationAsync();
 
-                    isInitialized = true;
-                    ClearErrorMessages();  // Clear any previous errors on successful init
-                    Console.WriteLine($"🔵 Initialized with conversationId: {conversationId}");
+                    ChatStateService.IsInitialized = true;
+                    ChatStateService.ClearErrorMessages();
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"❌ Storage check error: {ex.Message}");
-                    AddErrorMessage($"Initialization error: {ex.Message}", "initialization_failed", 20);
+                    ChatStateService.AddErrorBanner($"Initialization error: {ex.Message}", "initialization_failed", 20);
                 }
                 finally
                 {
@@ -340,281 +253,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Initialization error: {ex.Message}");
-            AddErrorMessage($"Critical initialization error: {ex.Message}", "critical_initialization_failed", 30);
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    // =========================================================================
-    // CONVERSATION MANAGEMENT
-    // =========================================================================
-
-    /// <summary>
-    /// Resumes an existing conversation from ProtectedLocalStorage.
-    /// If resume fails (404), automatically falls back to starting a new conversation.
-    /// </summary>
-    /// <param name="savedConversationId">The conversation ID retrieved from storage</param>
-    /// <returns>Task representing the async resume operation</returns>
-    /// <remarks>
-    /// <para><strong>Resume Flow:</strong></para>
-    /// <list type="number">
-    /// <item>POST to /api/morgana/conversation/{id}/resume</item>
-    /// <item>Backend restores actor hierarchy and loads AgentThread from SQLite</item>
-    /// <item>Join SignalR group for this conversation</item>
-    /// <item>Backend may send welcome-back message via SignalR (optional)</item>
-    /// </list>
-    /// <para><strong>Fallback Scenarios:</strong></para>
-    /// <list type="bullet">
-    /// <item><term>404 Not Found</term><description>Conversation expired/deleted → Clear storage and start new</description></item>
-    /// <item><term>500 Server Error</term><description>Backend error → Clear storage and start new</description></item>
-    /// <item><term>Network Error</term><description>Connection failure → Clear storage and start new</description></item>
-    /// </list>
-    /// </remarks>
-    private async Task ResumeConversationAsync(string savedConversationId)
-    {
-        try
-        {
-            Console.WriteLine($"🟡 ResumeConversation: Attempting to resume {savedConversationId}");
-
-            // Call Morgana to resume the conversation
-            HttpResponseMessage response = await Http.PostAsync(
-                $"/api/morgana/conversation/{savedConversationId}/resume", null);
-
-            Console.WriteLine($"🟡 Resume response status: {response.StatusCode}");
-
-            if (response.IsSuccessStatusCode)
-            {
-                // Successfully resumed
-                ConversationResumeResponse? result = await response.Content
-                    .ReadFromJsonAsync<ConversationResumeResponse>();
-
-                conversationId = result?.ConversationId ?? savedConversationId;
-                if (string.IsNullOrEmpty(result?.ActiveAgent)
-                     || string.Equals(result.ActiveAgent, "Morgana", StringComparison.OrdinalIgnoreCase))
-                {
-                    currentAgentName = "Morgana";
-                }
-                else
-                {
-                    currentAgentName = $"Morgana ({char.ToUpper(result.ActiveAgent[0]) + result.ActiveAgent[1..]})";
-                }
-                Console.WriteLine($"🟡 Conversation resumed: {conversationId}, Active agent: {result?.ActiveAgent}");
-
-                // Join SignalR group
-                await SignalRService.JoinConversation(conversationId);
-
-                Console.WriteLine($"🟡 Loading conversation history for {conversationId}...");
-
-                try
-                {
-                    ConversationHistoryResponse? history = await HistoryService.GetHistoryAsync(conversationId);
-
-                    if (history?.Messages is { Length: > 0 })
-                    {
-                        Console.WriteLine($"🟡 Retrieved {history.Messages.Length} messages from history");
-
-                        for (int i = 0; i < history.Messages.Length; i++)
-                        {
-                            #region Transient Hints
-                            if (string.Equals(history.Messages[i].Role, "user", StringComparison.OrdinalIgnoreCase))
-                            {
-                                // Detect if this user message can be classified as "agent's turn boundary":
-                                // it is preceded by "Agent X" message and followed by "Agent Y" message
-                                bool isPrecededByAssistantMessage = i > 0 && string.Equals(history.Messages[i-1].Role, "assistant", StringComparison.OrdinalIgnoreCase);
-                                bool isFollowedByAssistantMessage = i + 1 < history.Messages.Length && string.Equals(history.Messages[i+1].Role, "assistant", StringComparison.OrdinalIgnoreCase);
-                                bool isTurnBoundaryMessage = isPrecededByAssistantMessage 
-                                                              && isFollowedByAssistantMessage
-                                                              && !string.Equals(history.Messages[i-1].AgentName, history.Messages[i+1].AgentName, StringComparison.OrdinalIgnoreCase);
-                                if (isTurnBoundaryMessage)
-                                {
-                                    // Emit a transient "Agent X has completed" message, which is
-                                    // ephemeral and does not participate in the DB conversation
-                                    chatMessages.Add(new ChatMessage
-                                    {
-                                        ConversationId = history.Messages[i].ConversationId,
-                                        Text = GetCompletionMessage(history.Messages[i-1].AgentName),
-                                        Role = "assistant",
-                                        Timestamp = history.Messages[i].Timestamp.AddMilliseconds(-5),
-                                        AgentName = "Morgana",
-                                        AgentCompleted = true,
-                                        Type = MessageType.Presentation
-                                    });
-                                }
-                            }
-                            #endregion
-
-                            chatMessages.Add(history.Messages[i]);
-                        }
-                        #region Transient Hints
-                        // Detect if the last history message can be classified as "agent's turn boundary":
-                        // it is an "Agent X" message, but Cauldron is back listening in "Morgana" mode
-                        ChatMessage lastHistoryMessage = history.Messages.Last();
-                        if (IsSpecializedAgent(lastHistoryMessage.AgentName) && !IsSpecializedAgent(currentAgentName))
-                        {
-                            // Emit a transient "Agent X has completed" message, which is
-                            // ephemeral and does not participate in the DB conversation
-                            chatMessages.Add(new ChatMessage
-                            {
-                                ConversationId = lastHistoryMessage.ConversationId,
-                                Text = GetCompletionMessage(lastHistoryMessage.AgentName),
-                                Role = "assistant",
-                                Timestamp = lastHistoryMessage.Timestamp.AddMilliseconds(-5),
-                                AgentName = "Morgana",
-                                AgentCompleted = true,
-                                Type = MessageType.Presentation
-                            });
-                        }
-                        #endregion
-
-                        await InvokeAsync(StateHasChanged);
-                        
-                        Console.WriteLine($"🟡 Conversation history loaded successfully");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"⚠️ No history found for conversation {conversationId}");
-
-                        // Clear existing storage
-                        await StorageService.ClearConversationIdAsync();
-                
-                        // Fallback to new conversation
-                        await StartConversationAsync();
-                    }
-                }
-                catch (Exception historyEx)
-                {
-                    Console.WriteLine($"⚠️ Failed to load history: {historyEx.Message}");
-
-                    // Clear corrupted/expired storage
-                    await StorageService.ClearConversationIdAsync();
-                
-                    // Fallback to new conversation
-                    await StartConversationAsync();
-                }
-            }
-            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                // Conversation not found in backend (expired or deleted)
-                Console.WriteLine($"⚠️ Conversation {savedConversationId} not found, starting fresh");
-                
-                // Clear corrupted/expired storage
-                await StorageService.ClearConversationIdAsync();
-                
-                // Fallback to new conversation
-                await StartConversationAsync();
-            }
-            else
-            {
-                // Other error (500, etc.)
-                string errorContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"❌ Resume error {response.StatusCode}: {errorContent}");
-                
-                // Clear corrupted/expired storage
-                await StorageService.ClearConversationIdAsync();
-
-                // Fallback to new conversation
-                await StartConversationAsync();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ ResumeConversation exception: {ex.Message}");
-            
-            // Clear corrupted/expired storage
-            await StorageService.ClearConversationIdAsync();
-
-            // Fallback to new conversation
-            await StartConversationAsync();
-        }
-    }
-
-    /// <summary>
-    /// Starts a new conversation with Morgana backend.
-    /// Sends POST request to /api/morgana/conversation/start, joins SignalR group, saves to storage, and displays presentation message.
-    /// </summary>
-    /// <returns>Task representing the async conversation start operation</returns>
-    /// <remarks>
-    /// <para><strong>Flow:</strong></para>
-    /// <list type="number">
-    /// <item>Generate new conversation ID (GUID)</item>
-    /// <item>POST to /api/morgana/conversation/start</item>
-    /// <item>Extract conversationId from response</item>
-    /// <item>Join SignalR conversation group</item>
-    /// <item>Save conversationId to ProtectedLocalStorage</item>
-    /// <item>Wait for presentation message via SignalR</item>
-    /// <item>Display presentation with quick replies</item>
-    /// </list>
-    /// </remarks>
-    private async Task StartConversationAsync()
-    {
-        try
-        {
-            Console.WriteLine("🟢 StartConversation: Calling Morgana...");
-
-            // Generate new conversation ID
-            HttpResponseMessage response = await Http.PostAsJsonAsync("/api/morgana/conversation/start", new
-            {
-                conversationId = Guid.NewGuid().ToString("N")
-            });
-
-            Console.WriteLine($"🟢 Morgana Response Status: {response.StatusCode}");
-
-            if (response.IsSuccessStatusCode)
-            {
-                // Parse response to get conversation ID
-                ConversationStartResponse? result = await response.Content.ReadFromJsonAsync<ConversationStartResponse>();
-                conversationId = result?.ConversationId ?? string.Empty;
-
-                Console.WriteLine($"🟢 Conversation started: {conversationId}");
-
-                // Join SignalR group for this conversation
-                await SignalRService.JoinConversation(conversationId);
-
-                // Save conversation ID to ProtectedLocalStorage
-                await StorageService.SaveConversationIdAsync(conversationId);
-                Console.WriteLine($"🟢 Conversation ID saved to protected storage");
-
-                Console.WriteLine($"🟢 Waiting for presentation message...");
-                // Presentation message will arrive via SignalR OnMessageReceived event
-            }
-            else
-            {
-                string errorContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"❌ Morgana error: {errorContent}");
-                AddErrorMessage($"Failed to start conversation: {response.StatusCode}", "conversation_start_http_error", 12);
-                await InvokeAsync(StateHasChanged);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ StartConversation exception: {ex.Message}");
-            AddErrorMessage($"Connection error: {ex.Message}", "conversation_start_exception", 20);
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    /// <summary>
-    /// Clears the saved conversation ID and refreshes the page to start a new conversation.
-    /// Triggered by the "+ New Conversation" button.
-    /// </summary>
-    /// <returns>Task representing the async new conversation operation</returns>
-    private async Task ClearConversationAsync()
-    {
-        try
-        {
-            Console.WriteLine($"🆕 {nameof(ClearConversationAsync)}: Clearing storage and refreshing...");
-            
-            // Clear saved conversation ID from ProtectedLocalStorage
-            await StorageService.ClearConversationIdAsync();
-            
-            // Force page reload to trigger OnInitializedAsync with fresh state
-            NavigationManager.NavigateTo("/", forceLoad: true);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ {nameof(ClearConversationAsync)} exception: {ex.Message}");
-            AddErrorMessage($"Error starting new conversation: {ex.Message}", "new_conversation_failed", 12);
+            ChatStateService.AddErrorBanner($"Critical initialization error: {ex.Message}", "critical_initialization_failed", 30);
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -628,123 +267,26 @@
     /// Adds user message and typing indicator to UI, then waits for agent response via SignalR.
     /// </summary>
     /// <returns>Task representing the async send operation</returns>
-    /// <remarks>
-    /// <para><strong>Flow:</strong></para>
-    /// <list type="number">
-    /// <item>Validate input text</item>
-    /// <item>Add user message to messages list</item>
-    /// <item>Add typing indicator to messages list</item>
-    /// <item>Update UI</item>
-    /// <item>POST to /api/morgana/conversation/{conversationId}/message</item>
-    /// <item>Wait for response via SignalR (async)</item>
-    /// <item>HandleMessageReceived removes typing indicator and adds agent response</item>
-    /// </list>
-    /// <para><strong>Error Handling:</strong></para>
-    /// <para>On HTTP error or exception, typing indicator is removed and error message displayed.</para>
-    /// </remarks>
     private async Task SendMessageAsync()
     {
         // Validate input
-        if (string.IsNullOrWhiteSpace(inputText) || isSending || !isConnected)
+        if (string.IsNullOrWhiteSpace(inputText) || ChatStateService.IsSending || !ChatStateService.IsConnected)
             return;
 
         string messageText = inputText.Trim();
         inputText = string.Empty;
-        isSending = true;
+        ChatStateService.IsSending = true;
 
         // Add user message to UI
-        chatMessages.Add(new ChatMessage
-        {
-            ConversationId = conversationId,
-            Text = messageText,
-            Role = "user",
-            Timestamp = DateTime.UtcNow
-        });
+        ChatStateService.AddUserMessage(messageText);
 
         // Add typing indicator
-        chatMessages.Add(new ChatMessage
-        {
-            ConversationId = conversationId,
-            Role = "assistant",
-            IsTyping = true,
-            AgentName = currentAgentName,
-            Timestamp = DateTime.UtcNow
-        });
-
+        ChatStateService.AddTypingIndicator();
         StateHasChanged();
 
-        try
-        {
-            // Send message to backend
-            HttpResponseMessage response = await Http.PostAsJsonAsync($"/api/morgana/conversation/{conversationId}/message", new
-            {
-                conversationId = conversationId,
-                text = messageText
-            });
-
-            Console.WriteLine($"🟡 Message sent, response status: {response.StatusCode}");
-
-            if (!response.IsSuccessStatusCode)
-            {
-                Console.WriteLine($"❌ SendMessage failed: {response.StatusCode}");
-    
-                // Remove typing indicator
-                ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
-                if (typingMessage != null)
-                {
-                    chatMessages.Remove(typingMessage);
-
-                    // Add temporary error banner (visible immediately, auto-dismiss after 10s)
-                    AddErrorMessage($"Message not sent: {response.StatusCode}. Please try again.", "send_message_http_error");
-
-                    // Add permanent error to chat history for debugging
-                    chatMessages.Add(new ChatMessage
-                    {
-                        ConversationId = conversationId,
-                        Text = "Sorry, an error occurred. Please try again.",
-                        Role = "assistant",
-                        Timestamp = DateTime.UtcNow,
-                        IsError = true,
-                        AgentName = currentAgentName,
-                        Type = MessageType.Error
-                    });
-
-                    await InvokeAsync(StateHasChanged);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ SendMessage exception: {ex.Message}");
-
-            // Remove typing indicator
-            ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
-            if (typingMessage != null)
-            {
-                chatMessages.Remove(typingMessage);
-
-                // Add temporary error banner (visible immediately, auto-dismiss after 10s)
-                AddErrorMessage($"Connection error: {ex.Message}. Please try again.", "send_message_exception");
-
-                // Add permanent error to chat history for debugging
-                chatMessages.Add(new ChatMessage
-                {
-                    ConversationId = conversationId,
-                    Text = $"Connection error: {ex.Message}",
-                    Role = "assistant",
-                    Timestamp = DateTime.UtcNow,
-                    IsError = true,
-                    AgentName = currentAgentName,
-                    Type = MessageType.Error
-                });
-
-                await InvokeAsync(StateHasChanged);
-            }
-            
-            // Reset sending state on error
-            isSending = false;
-            StateHasChanged();
-        }
+        // Send message to backend
+        if (!await ConversationLifecycleService.SendMessageAsync(messageText))
+            await InvokeAsync(StateHasChanged);
     }
 
     /// <summary>
@@ -753,178 +295,63 @@
     /// </summary>
     /// <param name="signalrMessage">Strongly-typed SignalR message DTO containing all message data</param>
     /// <returns>Task representing the async message handling</returns>
-    /// <remarks>
-    /// <para><strong>Agent Lifecycle:</strong></para>
-    /// <list type="bullet">
-    /// <item><term>Agent Active</term><description>message.AgentCompleted = false, header shows agent name</description></item>
-    /// <item><term>Agent Completed</term><description>message.AgentCompleted = true, header returns to "Morgana"</description></item>
-    /// </list>
-    /// </remarks>
-    /// <remarks>
-    /// <para><strong>Two Message Paths:</strong></para>
-    /// <list type="number">
-    /// <item><term>Streaming Path</term><description>Finalizes active streaming message (95%+ of cases)</description></item>
-    /// <item><term>Non-Streaming Path</term><description>Adds complete message directly (presentation, history restore)</description></item>
-    /// </list>
-    /// </remarks>
-    private async Task HandleMessageReceivedAsync(SignalRMessage signalrMessage)
+    private async Task HandleMessageReceivedAsync(SignalRMessage message)
     {
         try
         {
-            Console.WriteLine($"🟣 Message received for conversation: {signalrMessage.ConversationId}");
-            Console.WriteLine($"🟣 Agent: {signalrMessage.AgentName}, Completed: {signalrMessage.AgentCompleted}");
-            Console.WriteLine($"🟣 QuickReplies count: {signalrMessage.QuickReplies?.Count ?? 0}");
-
-            #region Temporary Messages
-            if (string.Equals(signalrMessage.MessageType, "system_warning", StringComparison.OrdinalIgnoreCase)
-                 || string.Equals(signalrMessage.MessageType, "error", StringComparison.OrdinalIgnoreCase))
+            // Temporary messages (system warnings, errors) - display as banners
+            if (string.Equals(message.MessageType, "system_warning", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(message.MessageType, "error", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine($"⚠️ Temporary message received: {signalrMessage.MessageType}-{signalrMessage.ErrorReason}");
-
-                temporaryMessages.Add(signalrMessage);
+                ChatStateService.TemporaryMessages.Add(message);
                 await InvokeAsync(StateHasChanged);
-
                 return;
             }
-            #endregion
 
             // Verify message is for this conversation
-            if (conversationId != signalrMessage.ConversationId)
-            {
-                Console.WriteLine("⚠️ Message for different conversation, ignoring");
+            if (ChatStateService.ConversationId != message.ConversationId)
                 return;
-            }
 
-            // =====================================================================
             // PATH 1: Finalize active streaming
-            // =====================================================================
-            if (currentStreamingMessage != null)
+            if (StreamingService.IsStreaming)
             {
-                Console.WriteLine("🎬 Streaming complete - finalizing message");
-
-                // DON'T flush buffer immediately - let typewriter finish naturally
-                // The timer will continue draining the buffer at typewriter speed
-
-                // Attach metadata to streaming message (text already being drained by typewriter)
-                currentStreamingMessage.QuickReplies = signalrMessage.QuickReplies;
-                currentStreamingMessage.RichCard = signalrMessage.RichCard;
-                currentStreamingMessage.AgentName = signalrMessage.AgentName ?? "Morgana";
-                currentStreamingMessage.IsStreaming = false;
-
-                // DON'T stop streaming timer yet - let it finish draining buffer
-                // Timer will auto-stop when buffer is empty (check TypewriterTick)
-
-                // Update header and add completion message if needed (shared logic)
-                UpdateHeaderForAgent(signalrMessage);
-                AddCompletionMessageIfNeeded(signalrMessage);
-
-                // Reset sending state - message received via SignalR
-                isSending = false;
-
-                // Always re-render when message finalized (may have quick replies, cards, etc)
+                StreamingService.FinalizeStreaming(message);
+                ChatStateService.UpdateAgentFromMessage(message);
+                ChatStateService.AddCompletionMessageIfNeeded(message);
+                ChatStateService.IsSending = false;
                 await InvokeAsync(StateHasChanged);
                 return;
             }
 
-            // =====================================================================
-            // PATH 2: Handle non-streaming message (presentation, history restore)
-            // =====================================================================
-            Console.WriteLine("📨 Non-streaming message - adding directly");
-
-            // Remove typing indicator if present
-            ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
-            if (typingMessage != null)
-                chatMessages.Remove(typingMessage);
-
-            // Update header (shared logic)
-            UpdateHeaderForAgent(signalrMessage);
+            // PATH 2: Non-streaming message (presentation, history restore)
+            ChatStateService.RemoveTypingIndicator();
+            ChatStateService.UpdateAgentFromMessage(message);
 
             // Add main agent message
-            chatMessages.Add(new ChatMessage
+            ChatStateService.ChatMessages.Add(new ChatMessage
             {
-                ConversationId = signalrMessage.ConversationId,
-                Text = signalrMessage.Text,
+                ConversationId = message.ConversationId,
+                Text = message.Text,
                 Role = "assistant",
-                Timestamp = signalrMessage.Timestamp,
-                QuickReplies = signalrMessage.QuickReplies,
-                AgentName = signalrMessage.AgentName ?? "Morgana",
+                Timestamp = message.Timestamp,
+                QuickReplies = message.QuickReplies,
+                AgentName = message.AgentName ?? "Morgana",
                 AgentCompleted = false,
-                RichCard = signalrMessage.RichCard
+                RichCard = message.RichCard
             });
 
             // Add completion message if needed (shared logic)
-            AddCompletionMessageIfNeeded(signalrMessage);
+            ChatStateService.AddCompletionMessageIfNeeded(message);
 
             // Reset sending state - message received via SignalR
-            isSending = false;
+            ChatStateService.IsSending = false;
 
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error in HandleMessageReceived: {ex.Message}");
+            Console.WriteLine($"Error in HandleMessageReceived: {ex.Message}");
         }
-    }
-
-    /// <summary>
-    /// Updates the header agent name based on the message's agent information.
-    /// Shared logic used by both streaming and non-streaming message paths.
-    /// </summary>
-    /// <param name="signalrMessage">Message containing agent name and completion status</param>
-    /// <returns>True if agent name was actually changed, false otherwise</returns>
-    private bool UpdateHeaderForAgent(SignalRMessage signalrMessage)
-    {
-        string newAgentName;
-        
-        // If agent completed OR AgentName not set → reset to "Morgana"
-        if (signalrMessage.AgentCompleted || string.IsNullOrEmpty(signalrMessage.AgentName))
-        {
-            newAgentName = "Morgana";
-        }
-        else
-        {
-            newAgentName = signalrMessage.AgentName;
-        }
-        
-        // Update only if actually changed
-        if (currentAgentName != newAgentName)
-        {
-            currentAgentName = newAgentName;
-            Console.WriteLine($"🎨 Header updated: {currentAgentName} → Color: {GetAvatarBorderColor(currentAgentName)}");
-            return true; // Changed
-        }
-        
-        Console.WriteLine($"🎨 Header unchanged: {currentAgentName} (skipping re-render)");
-        return false; // No change
-    }
-
-    /// <summary>
-    /// Adds a completion message from Morgana when a specialized agent finishes.
-    /// Shared logic used by both streaming and non-streaming message paths.
-    /// </summary>
-    /// <param name="signalrMessage">Message containing agent completion information</param>
-    private void AddCompletionMessageIfNeeded(SignalRMessage signalrMessage)
-    {
-        if (signalrMessage.AgentCompleted && IsSpecializedAgent(signalrMessage.AgentName))
-        {
-            chatMessages.Add(new ChatMessage
-            {
-                ConversationId = signalrMessage.ConversationId,
-                Text = GetCompletionMessage(signalrMessage.AgentName),
-                Role = "assistant",
-                Timestamp = signalrMessage.Timestamp.AddMilliseconds(5),
-                AgentName = "Morgana",
-                AgentCompleted = true,
-                Type = MessageType.Presentation
-            });
-        }
-    }
-
-    private void HandleMessageDismissed(SignalRMessage message)
-    {
-        Console.WriteLine($"🗑️ Dismissing temporary message: {message.MessageType}");
-        temporaryMessages.Remove(message);
-        StateHasChanged();
     }
 
     // =========================================================================
@@ -937,109 +364,16 @@
     /// </summary>
     /// <param name="chunkText">Partial response text to append</param>
     /// <returns>Task representing the async chunk handling</returns>
-    /// <remarks>
-    /// <para><strong>Streaming Flow:</strong></para>
-    /// <list type="number">
-    /// <item>First chunk: Remove typing indicator, create streaming message, start typewriter timer</item>
-    /// <item>Subsequent chunks: Append to streaming buffer</item>
-    /// <item>Typewriter timer: Progressively displays buffered text</item>
-    /// <item>Final message: HandleMessageReceivedAsync stops streaming and adds complete message</item>
-    /// </list>
-    /// </remarks>
     private async Task HandleStreamChunkReceivedAsync(string chunkText)
     {
         try
         {
-            // First chunk - initialize streaming
-            if (currentStreamingMessage == null)
-            {
-                // Remove typing indicator
-                ChatMessage? typingMessage = chatMessages.LastOrDefault(m => m.IsTyping);
-                if (typingMessage != null)
-                    chatMessages.Remove(typingMessage);
-
-                // Create new streaming message
-                currentStreamingMessage = new ChatMessage
-                {
-                    ConversationId = conversationId,
-                    Text = string.Empty,
-                    Role = "assistant",
-                    Timestamp = DateTime.UtcNow,
-                    AgentName = currentAgentName,
-                    IsStreaming = true
-                };
-
-                chatMessages.Add(currentStreamingMessage);
-
-                // Start typewriter timer (fires every configurable N milliseconds by consuming configurable K characters)
-                int.TryParse(Configuration["Cauldron:StreamingResponse:TypewriterTickMilliseconds"], out int typewriterTickMilliseconds);
-                if (typewriterTickMilliseconds <= 0)
-                    typewriterTickMilliseconds = 15;
-                int.TryParse(Configuration["Cauldron:StreamingResponse:TypewriterTickChars"], out int typewriterTickChars);
-                if (typewriterTickChars <= 0)
-                    typewriterTickChars = 1;
-                if (typewriterTimer is not null)
-                    await typewriterTimer.DisposeAsync();
-                typewriterTimer = new Timer(TypewriterTick, typewriterTickChars, 0, typewriterTickMilliseconds);
-
-                await InvokeAsync(StateHasChanged);
-            }
-
-            // Append chunk to buffer
-            streamingBuffer += chunkText;
+            await StreamingService.HandleChunkAsync(chunkText);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Error in HandleStreamChunkReceived: {ex.Message}");
+            Console.WriteLine($"Error in HandleStreamChunkReceived: {ex.Message}");
         }
-    }
-
-    /// <summary>
-    /// Timer callback for typewriter effect.
-    /// Consumes K characters from the streaming buffer every configurable N milliseconds.
-    /// Auto-stops when buffer is empty and streaming is complete.
-    /// </summary>
-    /// <param name="timerParameters">Timer input parameters (int: the number of characters to be consumed)</param>
-    private void TypewriterTick(object? timerParameters)
-    {
-        if (currentStreamingMessage == null)
-            return;
-
-        // If buffer is empty
-        if (string.IsNullOrEmpty(streamingBuffer))
-        {
-            // If streaming is complete (IsStreaming = false), cleanup and stop
-            if (!currentStreamingMessage.IsStreaming)
-            {
-                Console.WriteLine("✅ Typewriter finished - buffer empty and streaming complete");
-                StopStreaming();
-            }
-            // Otherwise, just wait for more chunks
-            return;
-        }
-
-        // Extract next N characters from buffer
-        int charsToTake = Math.Min((int)timerParameters!, streamingBuffer.Length);
-        string nextChars = streamingBuffer[..charsToTake];
-        streamingBuffer = streamingBuffer[charsToTake..];
-
-        // Append to streaming message
-        currentStreamingMessage.Text += nextChars;
-
-        // Update UI
-        InvokeAsync(StateHasChanged);
-    }
-
-    /// <summary>
-    /// Stops streaming mode and cleans up resources.
-    /// Called when final complete message arrives via HandleMessageReceivedAsync.
-    /// </summary>
-    private void StopStreaming()
-    {
-        typewriterTimer?.Dispose();
-        typewriterTimer = null;
-        streamingBuffer = string.Empty;
-        currentStreamingMessage = null;
     }
 
     // =========================================================================
@@ -1055,9 +389,7 @@
     {
         // Send message on Enter (without Shift)
         if (e is { Key: "Enter", ShiftKey: false })
-        {
             await SendMessageAsync();
-        }
     }
 
     /// <summary>
@@ -1072,8 +404,6 @@
         // Prevent multiple selections
         if (message.SelectedQuickReplyId != null)
             return;
-
-        Console.WriteLine($"🟡 Quick reply selected: {reply.Label}");
 
         // Mark as selected and update UI
         message.SelectedQuickReplyId = reply.Id;
@@ -1112,59 +442,42 @@
     {
         showConfirmModal = false;
         StateHasChanged();
-        await ClearConversationAsync();
+
+        await ConversationLifecycleService.ClearConversationAsync();
+        NavigationManager.NavigateTo("/", forceLoad: true);
+    }
+
+    private void HandleMessageDismissed(SignalRMessage message)
+    {
+        ChatStateService.DismissTemporaryMessage(message);
+        StateHasChanged();
     }
 
     // =========================================================================
-    // UI STATE HELPERS
+    // UI STATE QUERIES
     // =========================================================================
 
-    /// <summary>
-    /// Checks if there are any unselected quick replies in the tail of message list.
-    /// </summary>
-    /// <returns>True if any message has ending quick replies that haven't been selected yet</returns>
-    private bool HasActiveQuickReplies() =>
-        chatMessages.Any(m => m is { QuickReplies: not null, SelectedQuickReplyId: null, IsLastHistoryMessage: true });
-
-    /// <summary>
-    /// Checks if there are any rich cards in the tail of message list.
-    /// </summary>
-    /// <returns>True if any message has ending rich card</returns>
-    private bool HasActiveRichCard() =>
-        chatMessages.Any(m => m is { RichCard: not null, IsLastHistoryMessage: true });
-
-    /// <summary>
-    /// Gets a value indicating whether the send button should be disabled.
-    /// Disabled when: not connected, sending in progress, empty input, not initialized, has active quick replies, or typing indicator present.
-    /// </summary>
     private bool IsSendButtonDisabled =>
-        !isConnected ||
-        isSending ||
+        !ChatStateService.IsConnected ||
+        ChatStateService.IsSending ||
         string.IsNullOrWhiteSpace(inputText) ||
-        !isInitialized ||
-        HasActiveQuickReplies() ||
-        chatMessages.Any(m => m.IsTyping);
+        !ChatStateService.IsInitialized ||
+        ChatStateService.HasActiveQuickReplies() ||
+        ChatStateService.HasTypingIndicator();
 
-    /// <summary>
-    /// Gets a value indicating whether the new conversation button should be visible.
-    /// </summary>
     private bool IsNewConversationButtonVisible =>
-        isConnected
-         && isInitialized
-         && hasCheckedStorage
-         && !string.IsNullOrWhiteSpace(conversationId)
-         && chatMessages.Count > 0;
+        ChatStateService.IsConnected
+        && ChatStateService.IsInitialized
+        && ChatStateService.HasCheckedStorage
+        && !string.IsNullOrWhiteSpace(ChatStateService.ConversationId)
+        && ChatStateService.ChatMessages.Count > 0;
 
-    /// <summary>
-    /// Gets a value indicating whether the textarea should be disabled.
-    /// Disabled when: not connected, sending in progress, not initialized, has active quick replies, or typing indicator present.
-    /// </summary>
     private bool IsTextareaDisabled =>
-        !isConnected ||
-        isSending ||
-        !isInitialized ||
-        HasActiveQuickReplies() ||
-        chatMessages.Any(m => m.IsTyping);
+        !ChatStateService.IsConnected ||
+        ChatStateService.IsSending ||
+        !ChatStateService.IsInitialized ||
+        ChatStateService.HasActiveQuickReplies() ||
+        ChatStateService.HasTypingIndicator();
 
     // =========================================================================
     // CLEANUP
@@ -1180,91 +493,9 @@
         // Unsubscribe from events
         SignalRService.OnMessageReceived -= HandleMessageReceivedAsync;
         SignalRService.OnStreamChunkReceived -= HandleStreamChunkReceivedAsync;
+        StreamingService.OnStateChanged -= () => InvokeAsync(StateHasChanged);
 
-        // Clean up streaming resources
-        if (typewriterTimer is not null)
-            await typewriterTimer.DisposeAsync();
-        
-        // Stop SignalR connection
+        await StreamingService.DisposeAsync();
         await SignalRService.StopAsync();
-    }
-
-    // =========================================================================
-    // HELPER METHODS
-    // =========================================================================
-
-    /// <summary>
-    /// Determines if an agent name represents a specialized agent (not base Morgana).
-    /// Specialized agents have names with parentheses, e.g., "Morgana (Billing)".
-    /// </summary>
-    /// <param name="agentName">Agent name to check</param>
-    /// <returns>True if specialized agent, false if base Morgana</returns>
-    private bool IsSpecializedAgent(string? agentName)
-    {
-        return agentName != null && agentName.Contains("(") && agentName.Contains(")");
-    }
-
-    /// <summary>
-    /// Returns the CSS class string for the agent type: "agent" for specialized, "morgana" for base.
-    /// Used to apply the correct color theme to the header-avatar-wrapper.
-    /// </summary>
-    /// <param name="agentName">Name of the current agent</param>
-    /// <returns>"agent" or "morgana"</returns>
-    private string GetAgentClass(string? agentName) =>
-        IsSpecializedAgent(agentName) ? "agent" : "morgana";
-
-    /// <summary>
-    /// Gets the CSS color variable for the avatar border based on agent type.
-    /// </summary>
-    /// <param name="agentName">Name of the current agent</param>
-    /// <returns>
-    /// "var(--secondary-color)" (pink) for specialized agents,
-    /// "var(--primary-color)" (purple) for base Morgana
-    /// </returns>
-    private string GetAvatarBorderColor(string? agentName)
-    {
-        // Pink for specialized agents, purple for base Morgana
-        return IsSpecializedAgent(agentName ?? "Morgana") ? "var(--secondary-color)" : "var(--primary-color)";
-    }
-
-    /// <summary>
-    /// Gets the completion message to display when an agent finishes its task.
-    /// Uses configured template from appsettings or default message.
-    /// </summary>
-    /// <param name="agentName">Name of the agent that completed</param>
-    /// <returns>Formatted completion message</returns>
-    private string GetCompletionMessage(string agentName)
-    {
-        string template = Configuration["Cauldron:AgentExitMessage"] ?? "{0} has completed its spell. I'm back to you!";
-        return string.Format(template, agentName);
-    }
-
-    /// <summary>
-    /// Adds a temporary error message displayed as FadingMessage banner.
-    /// Auto-dismisses after configurable N seconds with fade-out animation.
-    /// </summary>
-    /// <param name="text">Error message text</param>
-    /// <param name="errorReason">Specific error reason for debugging/icon selection</param>
-    /// <param name="fadingMessageDurationSeconds">Optional duration of the fading message that will be displayed</param>
-    private void AddErrorMessage(string text, string errorReason, int? fadingMessageDurationSeconds=10)
-    {
-        temporaryMessages.Add(new SignalRMessage
-        {
-            ConversationId = conversationId,
-            Text = text,
-            Timestamp = DateTime.UtcNow,
-            MessageType = "error",
-            ErrorReason = errorReason,
-            FadingMessageDurationSeconds = fadingMessageDurationSeconds
-        });
-    }
-
-    /// <summary>
-    /// Removes all error-type temporary messages.
-    /// Called on successful operations to clear previous errors.
-    /// </summary>
-    private void ClearErrorMessages()
-    {
-        temporaryMessages.RemoveAll(m => string.Equals(m.MessageType, "error", StringComparison.OrdinalIgnoreCase));
     }
 }

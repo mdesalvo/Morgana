@@ -457,6 +457,15 @@ public static class Records
     public record GuardRailResult(
         bool Compliant,
         string? Violation);
+    
+    /// <summary>
+    /// Sent by an agent back to the supervisor when the LLM provider rejects the request
+    /// due to a content filter (e.g. Azure OpenAI content_filter).
+    /// The supervisor treats this identically to a guard rejection.
+    /// </summary>
+    /// <param name="OriginalSender">Actor reference to reply to (typically ConversationSupervisorActor)</param>
+    public record ContentFilterRejection(
+        IActorRef OriginalSender);
 
     // ==========================================================================
     // CLASSIFICATION MESSAGES

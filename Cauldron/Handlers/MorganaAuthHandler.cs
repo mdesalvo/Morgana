@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
+using Cauldron.Services;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
@@ -50,7 +51,7 @@ public class MorganaAuthHandler : DelegatingHandler
 
     /// <summary>
     /// Generates a short-lived JWT token for Morgana API authentication.
-    /// This method is also used by <see cref="Services.MorganaSignalRService"/> for SignalR hub authentication.
+    /// This method is also used by <see cref="SignalRService"/> for SignalR hub authentication.
     /// </summary>
     public string GenerateToken()
     {

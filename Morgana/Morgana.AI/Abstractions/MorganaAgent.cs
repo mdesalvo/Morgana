@@ -269,6 +269,16 @@ public class MorganaAgent : MorganaActor
             senderRef.Tell(new Records.AgentResponse(llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim(), isCompleted, quickReplies, richCard));
 #endif
         }
+        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
+                                     && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+        {
+            agentLogger.LogWarning(ex, "Content filter rejection in {Name} for conversation {ConversationId}", GetType().Name, conversationId);
+            agentSpan?.SetStatus(ActivityStatusCode.Error, "content_filter");
+            agentSpan?.AddException(ex);
+            agentSpan?.Dispose();
+
+            senderRef.Tell(new Records.ContentFilterRejection(senderRef));
+        }
         catch (Exception ex)
         {
             agentLogger.LogError(ex, "Error in {Name}", GetType().Name);

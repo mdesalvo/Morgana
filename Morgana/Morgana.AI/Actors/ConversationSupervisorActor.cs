@@ -535,6 +535,8 @@ public class ConversationSupervisorActor : MorganaActor
             }
         });
 
+        ReceiveAsync<Records.ContentFilterRejection>(HandleContentFilterRejectionAsync);
+
         RegisterCommonHandlers();
     }
 
@@ -630,6 +632,8 @@ public class ConversationSupervisorActor : MorganaActor
             }
         });
 
+        ReceiveAsync<Records.ContentFilterRejection>(HandleContentFilterRejectionAsync);
+
         RegisterCommonHandlers();
     }
 
@@ -671,6 +675,36 @@ public class ConversationSupervisorActor : MorganaActor
         }
     }
 
+    /// <summary>
+    /// Handles a content filter rejection from an agent as if it were a guard rejection.
+    /// Uses the same GuardAnswer template and increments the guard rejection counter.
+    /// </summary>
+    private async Task HandleContentFilterRejectionAsync(Records.ContentFilterRejection rejection)
+    {
+        Context.SetReceiveTimeout(null);
+
+        actorLogger.Warning("Content filter rejection received from agent, treating as guard rejection");
+
+        Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
+        string guardAnswer = guardPrompt.GetAdditionalProperty<string>("GuardAnswer")
+            .Replace("((violation))", "Content policy violation");
+
+        string currentAgentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
+        rejection.OriginalSender.Tell(new Records.ConversationResponse(
+            guardAnswer,
+            activeAgentIntent,
+            null,
+            currentAgentName,
+            false,
+            null,
+            DateTime.UtcNow,
+            null));
+
+        MorganaTelemetry.GuardRejectionCounter.Add(1);
+        CloseTurnSpan(intent: activeAgentIntent, completed: false);
+        Become(Idle);
+    }
+
     private string GetAgentDisplayName(string? intent)
     {
         if (string.IsNullOrEmpty(intent) || string.Equals(intent, "other", StringComparison.OrdinalIgnoreCase))
@@ -684,7 +718,15 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Error(failure.Failure.Cause, "Unexpected failure in ConversationSupervisorActor");
         failure.OriginalSender.Tell(
-            new Records.ConversationResponse("An internal error occurred.", null, null, "Morgana", false));
+            new Records.ConversationResponse(
+                "An internal error occurred.",
+                null,
+                null,
+                "Morgana",
+                false,
+                null,
+                DateTime.UtcNow,
+                null));
     }
 
     private void HandleRestoreActiveAgent(Records.RestoreActiveAgent msg)

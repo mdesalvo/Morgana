@@ -10,13 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This release introduces **JWT bearer token authentication** to secure all communications between Cauldron (frontend) and Morgana (backend).
 Cauldron self-issues signed JWT tokens injected automatically into every HTTP request and SignalR connection; Morgana validates them at the API boundary before processing.
 The shared symmetric key is configured via environment variable (`JWT_SYMMETRIC_KEY`) or User Secrets, and the feature can be toggled off for development via `Morgana:Authentication:Enabled`.
+### 🎯 Major Feature: Cauldron Extension Points
+This release completes the **Cauldron extension points** model: `IChatStateService`, `IConversationLifecycleService`, `IStreamingService` and `ILandingMessageService` join the existing suite of pluggable interfaces (`IConversationStorageService`, `IConversationHistoryService`), making every behavioural concern of Cauldron independently overridable via DI without touching a single line of code.
 
-### ✨ Added
-- Introduced `IAuthenticationService` as an **extension point for request authentication**: `JwtAuthenticationService` ships as the default implementation (HMAC-SHA256 token validation) and can be replaced in DI with any alternative strategy (API keys, mTLS, OAuth with external IdP) without touching the controller layer
-- It is now available the handbook as a quick reference guide for approaching Morgana the first times
+### ✨ Added                                                                                                                                                                                                                       ─
+- Introduced `IChatStateService` as an **extension point for chat UI state management**: `ChatStateService` ships as the default implementation (message list, temporary messages, agent tracking, sending state, UI queries) and  
+  can be replaced in DI with any alternative strategy without touching the component layer
+- Introduced `IConversationLifecycleService` as an **extension point for conversation lifecycle operations**: `ConversationLifecycleService` ships as the default implementation (REST-based start/resume/clear, history loading
+  with agent-boundary hints, fallback-to-new-conversation) and can be replaced in DI with any alternative backend without touching the component layer
+- Introduced `IStreamingService` as an **extension point for streaming state management**: `StreamingService` ships as the default implementation (chunk buffering, configurable typewriter timer, auto-cleanup on buffer drain)
+  and can be replaced in DI with any alternative rendering strategy without touching the component layer
+- Introduced `ILandingMessageService` as an **extension point for landing message selection**: `LandingMessageService` ships as the default implementation (random selection from configuration-driven message pool) and can be  
+  replaced in DI with any alternative strategy (static templates, tenant-specific content, CMS-driven messages, A/B variants) without touching the component layer
+- It is now available the **Morgana Handbook** as a quick technical intro to Morgana's conversational AI framework
 
 ### 🔄 Changed
 - All `MorganaController` endpoints are now protected by JWT bearer token verification (fail-closed when authentication is enabled)
+- `Index.razor` reduced from ~1270 lines to ~500 lines, now acts as a thin UI orchestrator that delegates logic to backend services
 - Renamed configuration path `Morgana:Cauldron:BaseUrl` to `Morgana:CauldronURL`
 - Renamed configuration path `Morgana:BaseUrl` to `Cauldron:MorganaURL`
 - Cauldron settings moved under `Cauldron` root key for clearer semantic (was `Morgana`)
@@ -28,10 +38,12 @@ The shared symmetric key is configured via environment variable (`JWT_SYMMETRIC_
 - Updated `OpenTelemetry` dependency to v1.15.1
 
 ### 🐛 Fixed
+- `Index.razor@isSending` not being reset on HTTP error response in `SendMessageAsync`, which permanently blocked user input after a failed send
 
 ### 🚀 Future Enablement
 - **Secure multi-tenant deployment** — With JWT authentication in place, Morgana is ready for scenarios where multiple Cauldron instances (or third-party frontends) connect to a shared Morgana backend, each identified by their token claims.
 - **Audit and conversation ownership** — `UserId` propagation into the actor system lays the groundwork for per-user conversation history, access control and compliance audit trails.
+- **Custom frontend experiences** — With all Cauldron services behind interfaces (`IChatStateService`, `IConversationLifecycleService`, `IStreamingService`, `ILandingMessageService`), alternative implementations can be swapped via DI to customize chat behavior, streaming rendering, or conversation management without modifying any Razor component.
 
 
 ## [0.19.0] - 2026-03-20

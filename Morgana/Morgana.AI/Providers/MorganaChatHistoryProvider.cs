@@ -103,23 +103,19 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         MorganaHistoryState historyState = sessionState.GetOrInitializeState(context.Session);
         List<ChatMessage> fullMessageHistory = historyState.Messages;
 
-        string sessionId = context.Session?.ToString() ?? "?";
-
         if (viewReducer != null)
         {
             List<ChatMessage> reducedView = (await viewReducer.ReduceAsync(fullMessageHistory, cancellationToken)).ToList();
 
             logger.LogInformation(
                 $"{nameof(MorganaChatHistoryProvider)} PROVIDING reduced view " +
-                $"({fullMessageHistory.Count} → {reducedView.Count} messages) for LLM context " +
-                $"in agent '{agentIntent}' session '{sessionId}'");
+                $"({fullMessageHistory.Count} → {reducedView.Count} messages) for LLM context in agent '{agentIntent}'");
 
             return reducedView;
         }
 
         logger.LogInformation(
-            $"{nameof(MorganaChatHistoryProvider)} PROVIDING all {fullMessageHistory.Count} messages (no reducer) " +
-            $"for agent '{agentIntent}' session '{sessionId}'");
+            $"{nameof(MorganaChatHistoryProvider)} PROVIDING all {fullMessageHistory.Count} messages (no reducer) for agent '{agentIntent}'");
 
         return fullMessageHistory;
     }
