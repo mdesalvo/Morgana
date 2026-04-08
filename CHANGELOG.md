@@ -13,7 +13,7 @@ The shared symmetric key is configured via environment variable (`JWT_SYMMETRIC_
 ### 🎯 Major Feature: Cauldron Extension Points
 This release completes the **Cauldron extension points** model: `IChatStateService`, `IConversationLifecycleService`, `IStreamingService` and `ILandingMessageService` join the existing suite of pluggable interfaces (`IConversationStorageService`, `IConversationHistoryService`), making every behavioural concern of Cauldron independently overridable via DI without touching a single line of code.
 
-### ✨ Added                                                                                                                                                                                                                     ─
+### ✨ Added
 - Introduced `IChatStateService` as an **extension point for chat UI state management**: `ChatStateService` ships as the default implementation (message list, temporary messages, agent tracking, sending state, UI queries) and  
   can be replaced in DI with any alternative strategy without touching the component layer
 - Introduced `IConversationLifecycleService` as an **extension point for conversation lifecycle operations**: `ConversationLifecycleService` ships as the default implementation (REST-based start/resume/clear, history loading
