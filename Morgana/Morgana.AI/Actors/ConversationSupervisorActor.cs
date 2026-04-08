@@ -535,7 +535,7 @@ public class ConversationSupervisorActor : MorganaActor
             }
         });
 
-        ReceiveAsync<Records.ContentFilterRejection>(HandleContentFilterRejectionAsync);
+        ReceiveAsync<Records.ContentFilterRejection>(_ => HandleContentFilterRejectionAsync(ctx.OriginalSender));
 
         RegisterCommonHandlers();
     }
@@ -632,7 +632,7 @@ public class ConversationSupervisorActor : MorganaActor
             }
         });
 
-        ReceiveAsync<Records.ContentFilterRejection>(HandleContentFilterRejectionAsync);
+        ReceiveAsync<Records.ContentFilterRejection>(_ => HandleContentFilterRejectionAsync(originalSender));
 
         RegisterCommonHandlers();
     }
@@ -679,7 +679,7 @@ public class ConversationSupervisorActor : MorganaActor
     /// Handles a content filter rejection from an agent as if it were a guard rejection.
     /// Uses the same GuardAnswer template and increments the guard rejection counter.
     /// </summary>
-    private async Task HandleContentFilterRejectionAsync(Records.ContentFilterRejection rejection)
+    private async Task HandleContentFilterRejectionAsync(IActorRef originalSender)
     {
         Context.SetReceiveTimeout(null);
 
@@ -690,7 +690,7 @@ public class ConversationSupervisorActor : MorganaActor
             .Replace("((violation))", "Content policy violation");
 
         string currentAgentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
-        rejection.OriginalSender.Tell(new Records.ConversationResponse(
+        originalSender.Tell(new Records.ConversationResponse(
             guardAnswer,
             activeAgentIntent,
             null,

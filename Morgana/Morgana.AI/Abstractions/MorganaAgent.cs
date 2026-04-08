@@ -277,7 +277,7 @@ public class MorganaAgent : MorganaActor
             agentSpan?.AddException(ex);
             agentSpan?.Dispose();
 
-            senderRef.Tell(new Records.ContentFilterRejection(senderRef));
+            senderRef.Tell(new Records.ContentFilterRejection());
         }
         catch (Exception ex)
         {
