@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.20.1] - 2026-04-08
 ### 🐛 Fixed
-- Fixed dead-letter loop where content filter rejections caused the supervisor to reply to itself instead of the user, leaving the turn unanswered.
+- Dead-letter loop where content filter rejections caused the supervisor to reply to itself instead of the user, leaving the turn unanswered
 
 
 ## [0.20.0] - 2026-04-08
