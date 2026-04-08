@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.20.0] - UNDER DEVELOPMENT
+## [0.20.0] - 2026-04-08
 ### 🎯 Major Feature: JWT Authentication between Cauldron and Morgana
 This release introduces **JWT bearer token authentication** to secure all communications between Cauldron (frontend) and Morgana (backend).
 Cauldron self-issues signed JWT tokens injected automatically into every HTTP request and SignalR connection; Morgana validates them at the API boundary before processing.
