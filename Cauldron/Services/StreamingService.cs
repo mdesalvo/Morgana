@@ -76,7 +76,7 @@ public class StreamingService : IStreamingService
     /// Finalizes the current streaming session with the complete message metadata.
     /// The typewriter timer continues draining the buffer naturally before cleanup.
     /// </summary>
-    public void FinalizeStreaming(SignalRMessage completeMessage)
+    public void FinalizeStreaming(ChannelMessage completeMessage)
     {
         if (_currentStreamingMessage == null)
             return;

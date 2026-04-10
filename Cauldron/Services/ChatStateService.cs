@@ -27,7 +27,7 @@ public class ChatStateService : IChatStateService
     /// <summary>
     /// Active temporary system warnings (rate limit errors, etc.).
     /// </summary>
-    public List<SignalRMessage> TemporaryMessages { get; } = [];
+    public List<ChannelMessage> TemporaryMessages { get; } = [];
 
     /// <summary>
     /// Unique identifier for the current conversation.
@@ -113,7 +113,7 @@ public class ChatStateService : IChatStateService
     public void AddChatError(string text, string errorReason, int? fadingDurationSeconds = 10)
     {
         // Temporary banner
-        TemporaryMessages.Add(new SignalRMessage
+        TemporaryMessages.Add(new ChannelMessage
         {
             ConversationId = ConversationId,
             Text = text,
@@ -141,7 +141,7 @@ public class ChatStateService : IChatStateService
     /// </summary>
     public void AddErrorBanner(string text, string errorReason, int? fadingDurationSeconds = 10)
     {
-        TemporaryMessages.Add(new SignalRMessage
+        TemporaryMessages.Add(new ChannelMessage
         {
             ConversationId = ConversationId,
             Text = text,
@@ -164,7 +164,7 @@ public class ChatStateService : IChatStateService
     /// <summary>
     /// Dismisses a specific temporary message.
     /// </summary>
-    public void DismissTemporaryMessage(SignalRMessage message)
+    public void DismissTemporaryMessage(ChannelMessage message)
     {
         TemporaryMessages.Remove(message);
     }
@@ -207,7 +207,7 @@ public class ChatStateService : IChatStateService
     /// Updates the current agent name based on a received SignalR message.
     /// </summary>
     /// <returns>True if agent name was actually changed.</returns>
-    public bool UpdateAgentFromMessage(SignalRMessage message)
+    public bool UpdateAgentFromMessage(ChannelMessage message)
     {
         string newAgentName = message.AgentCompleted || string.IsNullOrEmpty(message.AgentName)
             ? "Morgana"
@@ -224,7 +224,7 @@ public class ChatStateService : IChatStateService
     /// <summary>
     /// Adds a completion presentation message if the agent just finished.
     /// </summary>
-    public void AddCompletionMessageIfNeeded(SignalRMessage message)
+    public void AddCompletionMessageIfNeeded(ChannelMessage message)
     {
         if (message.AgentCompleted && IsSpecializedAgent(message.AgentName))
         {

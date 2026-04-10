@@ -40,7 +40,7 @@ namespace Morgana.AI.Actors;
 /// </remarks>
 public class ConversationSupervisorActor : MorganaActor
 {
-    private readonly ISignalRBridgeService signalRBridgeService;
+    private readonly IChannelService channelService;
     private readonly IAgentConfigurationService agentConfigService;
     private readonly IPresenterService presenterService;
 
@@ -84,12 +84,12 @@ public class ConversationSupervisorActor : MorganaActor
         string conversationId,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
-        ISignalRBridgeService signalRBridgeService,
+        IChannelService channelService,
         IAgentConfigurationService agentConfigService,
         IPresenterService presenterService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
-        this.signalRBridgeService = signalRBridgeService;
+        this.channelService = channelService;
         this.agentConfigService = agentConfigService;
         this.presenterService = presenterService;
 
@@ -186,7 +186,7 @@ public class ConversationSupervisorActor : MorganaActor
     /// </summary>
     private async Task HandlePresentationGenerated(Records.PresentationContext ctx)
     {
-        actorLogger.Info("Sending presentation to client via SignalR");
+        actorLogger.Info("Sending presentation to client via channel");
 
         List<Records.QuickReply> quickReplies = ctx.LLMQuickReplies?
             .Select(qr => new Records.QuickReply(qr.Id, qr.Label, qr.Value))
@@ -196,22 +196,21 @@ public class ConversationSupervisorActor : MorganaActor
         {
             await Task.Delay(750);
 
-            await signalRBridgeService.SendStructuredMessageAsync(
-                conversationId,
-                ctx.Message,
-                "presentation",
-                quickReplies,
-                null,
-                "Morgana",
-                false,
-                null,
-                null);
+            await channelService.SendMessageAsync(new Records.ChannelMessage
+            {
+                ConversationId = conversationId,
+                Text = ctx.Message,
+                MessageType = "presentation",
+                QuickReplies = quickReplies,
+                AgentName = "Morgana",
+                AgentCompleted = false
+            });
 
             actorLogger.Info("Presentation sent successfully");
         }
         catch (Exception ex)
         {
-            actorLogger.Error(ex, "Failed to send presentation via SignalR");
+            actorLogger.Error(ex, "Failed to send presentation via channel");
         }
     }
 
@@ -265,7 +264,8 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.OriginalMessage.ConversationId,
                     ctx.OriginalMessage.Text,
                     null,
-                    ctx.TurnContext));        // propagate context to agent
+                    ctx.TurnContext,          // propagate context to agent
+                    channelService.Capabilities));
             }
             else
             {
@@ -299,7 +299,8 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.OriginalMessage.ConversationId,
                     ctx.OriginalMessage.Text,
                     null,
-                    ctx.TurnContext));
+                    ctx.TurnContext,
+                    channelService.Capabilities));
             }
             else
             {
@@ -356,7 +357,8 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.OriginalMessage.ConversationId,
                 ctx.OriginalMessage.Text,
                 classification,
-                ctx.TurnContext));           // propagate context to router → agent
+                ctx.TurnContext,              // propagate context to router → agent
+                channelService.Capabilities));
         });
 
         Receive<Status.Failure>(failure =>
@@ -393,7 +395,8 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.OriginalMessage.ConversationId,
                 ctx.OriginalMessage.Text,
                 fallbackClassification,
-                ctx.TurnContext));
+                ctx.TurnContext,
+                channelService.Capabilities));
         });
 
         RegisterCommonHandlers();

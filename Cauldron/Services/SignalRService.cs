@@ -28,15 +28,15 @@ public class SignalRService : IAsyncDisposable
 
     /// <summary>
     /// Event raised when a message is received from the backend via SignalR.
-    /// Subscribers receive a strongly-typed SignalRMessage DTO.
+    /// Subscribers receive a strongly-typed ChannelMessage DTO.
     /// </summary>
     /// <remarks>
     /// <para><strong>Simplified Signature:</strong></para>
     /// <para>Previously: 6+ individual parameters (conversationId, text, timestamp, ...)</para>
-    /// <para>Now: Single SignalRMessage DTO with all fields</para>
+    /// <para>Now: Single ChannelMessage DTO with all fields</para>
     /// <para>This improves type safety, maintainability, and extensibility.</para>
     /// </remarks>
-    public event Func<SignalRMessage, Task>? OnMessageReceived;
+    public event Func<ChannelMessage, Task>? OnMessageReceived;
 
     /// <summary>
     /// Event raised when a streaming chunk is received from the backend via SignalR.
@@ -93,7 +93,7 @@ public class SignalRService : IAsyncDisposable
     /// <item>WebSocket preferred, Server-Sent Events fallback</item>
     /// </list>
     /// <para><strong>Event Subscription:</strong></para>
-    /// <para>Subscribes to "ReceiveMessage" event with strongly-typed SignalRMessage DTO.
+    /// <para>Subscribes to "ReceiveMessage" event with strongly-typed ChannelMessage DTO.
     /// The DTO is automatically deserialized from JSON by SignalR client.</para>
     /// </remarks>
     public async Task StartAsync()
@@ -120,7 +120,7 @@ public class SignalRService : IAsyncDisposable
             .Build();
 
         // Subscribe to ReceiveMessage
-        hubConnection.On<SignalRMessage>("ReceiveMessage", async (message) =>
+        hubConnection.On<ChannelMessage>("ReceiveMessage", async (message) =>
         {
             logger.LogInformation(
                 $"📩 SignalR message received: {message.AgentName} -> " +

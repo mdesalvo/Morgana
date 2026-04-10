@@ -182,7 +182,22 @@ public class MorganaAgent : MorganaActor
 
             StringBuilder fullResponse = new StringBuilder();
             ChatMessage userMessage = new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow };
-            if (configuration.GetValue("Morgana:StreamingResponse:Enabled", true))
+
+            // Streaming is gated on two independent signals:
+            //   1. Global config flag (Morgana:StreamingResponse:Enabled)
+            //   2. Channel capability — we don't even attach to the LLM streaming endpoint
+            //      when the outbound channel can't deliver chunks to the user. When Capabilities
+            //      is null (legacy/test paths) we assume the channel supports streaming.
+            bool streamingConfigEnabled = configuration.GetValue("Morgana:StreamingResponse:Enabled", true);
+            bool channelSupportsStreaming = req.Capabilities?.SupportsStreaming ?? true;
+            bool useStreaming = streamingConfigEnabled && channelSupportsStreaming;
+
+            if (!channelSupportsStreaming)
+                agentLogger.LogInformation(
+                    "Agent '{AgentIntent}' bypassing LLM streaming: outbound channel does not advertise SupportsStreaming",
+                    AgentIntent);
+
+            if (useStreaming)
             {
                 Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
                 bool firstChunkEmitted = false;

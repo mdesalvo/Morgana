@@ -56,7 +56,7 @@
         @if (ChatStateService.TemporaryMessages.Any())
         {
             <div class="temporary-messages-container" aria-live="assertive" aria-relevant="additions">
-                @foreach (SignalRMessage temporaryMessage in ChatStateService.TemporaryMessages)
+                @foreach (ChannelMessage temporaryMessage in ChatStateService.TemporaryMessages)
                 {
                     <FadingMessage Message="@temporaryMessage"
                                    DurationSeconds="@(temporaryMessage.FadingMessageDurationSeconds ?? 10)"
@@ -302,7 +302,7 @@
     /// </summary>
     /// <param name="signalrMessage">Strongly-typed SignalR message DTO containing all message data</param>
     /// <returns>Task representing the async message handling</returns>
-    private async Task HandleMessageReceivedAsync(SignalRMessage message)
+    private async Task HandleMessageReceivedAsync(ChannelMessage message)
     {
         try
         {
@@ -454,7 +454,7 @@
         NavigationManager.NavigateTo("/", forceLoad: true);
     }
 
-    private void HandleMessageDismissed(SignalRMessage message)
+    private void HandleMessageDismissed(ChannelMessage message)
     {
         ChatStateService.DismissTemporaryMessage(message);
         StateHasChanged();

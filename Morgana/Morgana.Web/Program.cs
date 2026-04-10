@@ -47,10 +47,11 @@ builder.Services.AddEndpointsApiExplorer();
 // ==============================================================================
 // Real-time communication infrastructure for bi-directional client-server messaging
 // - MorganaHub: SignalR hub for conversation group management
-// - ISignalRBridgeService: Actor-to-SignalR bridge for sending messages to clients
+// - IChannelService: outbound channel used by actors to deliver messages to the end user
+//                    (first implementation: SignalRChannelService, backing the Cauldron web UI)
 
 builder.Services.AddSignalR();
-builder.Services.AddSingleton<ISignalRBridgeService, SignalRBridgeService>();
+builder.Services.AddSingleton<IChannelService, SignalRChannelService>();
 
 // ==============================================================================
 // SECTION 3: CORS Configuration

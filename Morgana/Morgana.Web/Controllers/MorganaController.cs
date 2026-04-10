@@ -2,14 +2,11 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Akka.Actor;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using Morgana.AI;
 using Morgana.AI.Actors;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
-using Morgana.Web.Hubs;
-using Morgana.Web.Messages;
 
 namespace Morgana.Web.Controllers;
 
@@ -39,7 +36,7 @@ public class MorganaController : ControllerBase
 {
     private readonly ActorSystem actorSystem;
     private readonly ILogger logger;
-    private readonly IHubContext<MorganaHub> signalrContext;
+    private readonly IChannelService channelService;
     private readonly IConversationPersistenceService conversationPersistenceService;
     private readonly IAuthenticationService authenticationService;
     private readonly Records.AuthenticationOptions authenticationOptions;
@@ -52,7 +49,7 @@ public class MorganaController : ControllerBase
     /// </summary>
     /// <param name="actorSystem">Akka.NET actor system for conversation management</param>
     /// <param name="logger">Logger instance for diagnostic information</param>
-    /// <param name="signalrContext">SignalR hub context for real-time client communication</param>
+    /// <param name="channelService">Outbound channel used to deliver system-level messages (e.g. rate-limit warnings) to the user</param>
     /// <param name="conversationPersistenceService">Service for recovering an existing conversation</param>
     /// <param name="authenticationService">Service for authenticating incoming requests</param>
     /// <param name="authenticationOptions">Options for configuration of the authentication service</param>
@@ -61,7 +58,7 @@ public class MorganaController : ControllerBase
     public MorganaController(
         ActorSystem actorSystem,
         ILogger logger,
-        IHubContext<MorganaHub> signalrContext,
+        IChannelService channelService,
         IConversationPersistenceService conversationPersistenceService,
         IAuthenticationService authenticationService,
         IOptions<Records.AuthenticationOptions> authenticationOptions,
@@ -70,7 +67,7 @@ public class MorganaController : ControllerBase
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
-        this.signalrContext = signalrContext;
+        this.channelService = channelService;
         this.conversationPersistenceService = conversationPersistenceService;
         this.authenticationService = authenticationService;
         this.authenticationOptions = authenticationOptions.Value;
@@ -272,19 +269,15 @@ public class MorganaController : ControllerBase
                     "Rate limit exceeded for conversation {RequestConversationId}: {ViolatedLimit}", request.ConversationId, rateLimitResult.ViolatedLimit);
 
                 string rateLimitViolation = GetRateLimitErrorMessage(rateLimitResult);
-                await signalrContext.Clients
-                    .Group(request.ConversationId)
-                    .SendAsync("ReceiveMessage", new SignalRMessage
-                    {
-                        ConversationId = request.ConversationId,
-                        Text = rateLimitViolation,
-                        Timestamp = DateTime.UtcNow,
-                        MessageType = "system_warning",
-                        ErrorReason = "rate_limit_exceeded",
-                        AgentName = "Morgana",
-                        AgentCompleted = false,
-                        QuickReplies = null
-                    });
+                await channelService.SendMessageAsync(new Records.ChannelMessage
+                {
+                    ConversationId = request.ConversationId,
+                    Text = rateLimitViolation,
+                    MessageType = "system_warning",
+                    ErrorReason = "rate_limit_exceeded",
+                    AgentName = "Morgana",
+                    AgentCompleted = false
+                });
 
                 Response.Headers.Append("Retry-After", rateLimitResult.RetryAfterSeconds?.ToString() ?? "60");
                 return StatusCode(429, new

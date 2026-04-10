@@ -18,7 +18,14 @@ namespace Morgana.AI.Actors;
 /// </remarks>
 public class ConversationManagerActor : MorganaActor
 {
-    private readonly ISignalRBridgeService signalRBridgeService;
+    /// <summary>
+    /// Outbound channel used to deliver messages from the actor system to the end user.
+    /// Abstracts the transport + client pair (e.g. SignalR + Cauldron web UI) so the actor
+    /// does not depend on any specific delivery mechanism. Also exposes
+    /// <see cref="Records.ChannelCapabilities"/> so producers can degrade features
+    /// (rich cards, streaming, quick replies) when the target channel does not support them.
+    /// </summary>
+    private readonly IChannelService channelService;
 
     /// <summary>
     /// Reference to the active conversation supervisor actor.
@@ -30,18 +37,18 @@ public class ConversationManagerActor : MorganaActor
     /// Initializes a new instance of the ConversationManagerActor.
     /// </summary>
     /// <param name="conversationId">Unique identifier for this conversation</param>
-    /// <param name="signalRBridgeService">Service for sending messages to clients via SignalR</param>
+    /// <param name="channelService">Channel service used to deliver outbound messages to the end user</param>
     /// <param name="llmService">LLM service for AI completions</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     public ConversationManagerActor(
         string conversationId,
-        ISignalRBridgeService signalRBridgeService,
+        IChannelService channelService,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
-        this.signalRBridgeService = signalRBridgeService;
+        this.channelService = channelService;
 
         // Handle incoming user messages from SignalR:
         // - Ensures supervisor exists (creates if missing)
@@ -140,16 +147,27 @@ public class ConversationManagerActor : MorganaActor
     }
 
     /// <summary>
-    /// Handles streaming chunks from the supervisor and forwards them to the client via SignalR.
+    /// Handles streaming chunks from the supervisor and forwards them to the client via the active channel.
     /// Enables real-time progressive response rendering in the UI.
     /// </summary>
     /// <param name="chunk">Streaming chunk containing partial response text</param>
+    /// <remarks>
+    /// Chunks are suppressed entirely when the active channel does not advertise
+    /// <see cref="Records.ChannelCapabilities.SupportsStreaming"/>. The final complete message
+    /// still reaches the client via <see cref="HandleConversationResponseAsync"/>, so no content
+    /// is lost — only the progressive rendering effect is skipped.
+    /// </remarks>
     private async Task HandleStreamChunkAsync(Records.AgentStreamChunk chunk)
     {
-        // Forward chunk to client via SignalR for progressive rendering
+        // Skip streaming entirely on channels that don't support it.
+        // The final response is delivered as a single structured message by HandleConversationResponseAsync.
+        if (!channelService.Capabilities.SupportsStreaming)
+            return;
+
+        // Forward chunk to client via the active channel for progressive rendering
         try
         {
-            await signalRBridgeService.SendStreamChunkAsync(conversationId, chunk.Text);
+            await channelService.SendStreamChunkAsync(conversationId, chunk.Text);
         }
         catch (Exception ex)
         {
@@ -172,41 +190,42 @@ public class ConversationManagerActor : MorganaActor
             $"#quickReplies: {response.QuickReplies?.Count ?? 0}" +
             $"#richCard: {response.RichCard != null}");
 
-        // Send response to client via SignalR
+        // Send response to client via the active channel
         try
         {
-            await signalRBridgeService.SendStructuredMessageAsync(
-                conversationId,
-                response.Response,
-                "assistant",
-                response.QuickReplies,
-                null,
-                response.AgentName,
-                response.AgentCompleted,
-                response.OriginalTimestamp,
-                response.RichCard);
+            await channelService.SendMessageAsync(new Records.ChannelMessage
+            {
+                ConversationId = conversationId,
+                Text = response.Response,
+                MessageType = "assistant",
+                QuickReplies = response.QuickReplies,
+                AgentName = response.AgentName ?? "Morgana",
+                AgentCompleted = response.AgentCompleted,
+                Timestamp = response.OriginalTimestamp ?? DateTime.UtcNow,
+                RichCard = response.RichCard
+            });
 
             actorLogger.Info(
-                $"Response sent successfully to client via SignalR " +
+                $"Response sent successfully to client via channel " +
                 $"(#quickReplies: {response.QuickReplies?.Count ?? 0}," +
                 $"hasRichCard: {response.RichCard != null})");
         }
         catch (Exception ex)
         {
-            actorLogger.Error(ex, "Failed to send SignalR message to client");
+            actorLogger.Error(ex, "Failed to send channel message to client");
 
             // Attempt to send error notification to client
             try
             {
-                await signalRBridgeService.SendStructuredMessageAsync(
-                    conversationId,
-                    "An error occurred while sending the response.",
-                    "assistant",
-                    null,
-                    $"delivery_error: {ex.Message}",
-                    "Morgana",
-                    false,
-                    null);
+                await channelService.SendMessageAsync(new Records.ChannelMessage
+                {
+                    ConversationId = conversationId,
+                    Text = "An error occurred while sending the response.",
+                    MessageType = "assistant",
+                    ErrorReason = $"delivery_error: {ex.Message}",
+                    AgentName = "Morgana",
+                    AgentCompleted = false
+                });
             }
             catch (Exception fallbackEx)
             {

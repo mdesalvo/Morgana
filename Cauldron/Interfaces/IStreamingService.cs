@@ -27,5 +27,5 @@ public interface IStreamingService : IAsyncDisposable
     /// Finalizes the current streaming session with the complete message metadata.
     /// The typewriter timer continues draining the buffer naturally before cleanup.
     /// </summary>
-    void FinalizeStreaming(SignalRMessage completeMessage);
+    void FinalizeStreaming(ChannelMessage completeMessage);
 }

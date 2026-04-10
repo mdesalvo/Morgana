@@ -20,10 +20,10 @@
 
 @code {
     /// <summary>
-    /// The SignalR message to display in the banner.
+    /// The channel message to display in the banner.
     /// </summary>
     [Parameter]
-    public SignalRMessage Message { get; set; } = null!;
+    public ChannelMessage Message { get; set; } = null!;
 
     /// <summary>
     /// Callback invoked when the message is auto-dismissed after duration expires.
@@ -31,7 +31,7 @@
     /// Passes the dismissed message as parameter.
     /// </summary>
     [Parameter]
-    public EventCallback<SignalRMessage> OnDismissed { get; set; }
+    public EventCallback<ChannelMessage> OnDismissed { get; set; }
 
     /// <summary>
     /// Total duration in seconds before auto-dismiss.

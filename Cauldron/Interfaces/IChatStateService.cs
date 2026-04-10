@@ -16,7 +16,7 @@ public interface IChatStateService
     /// <summary>
     /// Active temporary system warnings (rate limit errors, etc.).
     /// </summary>
-    List<SignalRMessage> TemporaryMessages { get; }
+    List<ChannelMessage> TemporaryMessages { get; }
 
     /// <summary>
     /// Unique identifier for the current conversation.
@@ -82,7 +82,7 @@ public interface IChatStateService
     /// <summary>
     /// Dismisses a specific temporary message.
     /// </summary>
-    void DismissTemporaryMessage(SignalRMessage message);
+    void DismissTemporaryMessage(ChannelMessage message);
 
     /// <summary>
     /// Gets the completion message when an agent finishes its task.
@@ -93,12 +93,12 @@ public interface IChatStateService
     /// Updates the current agent name based on a received SignalR message.
     /// </summary>
     /// <returns>True if agent name was actually changed.</returns>
-    bool UpdateAgentFromMessage(SignalRMessage message);
+    bool UpdateAgentFromMessage(ChannelMessage message);
 
     /// <summary>
     /// Adds a completion presentation message if the agent just finished.
     /// </summary>
-    void AddCompletionMessageIfNeeded(SignalRMessage message);
+    void AddCompletionMessageIfNeeded(ChannelMessage message);
 
     /// <summary>
     /// Checks if an agent name represents a specialized agent (not base Morgana).
