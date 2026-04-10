@@ -11,7 +11,7 @@
     <PackageId>Morgana.Examples</PackageId>
     <OutputType>Library</OutputType>
     <EnableDynamicLoading>true</EnableDynamicLoading>
-    <Version>0.20.1</Version>
+    <Version>0.21.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
     <Authors>Marco De Salvo</Authors>

@@ -9,7 +9,7 @@
     <LangVersion>latest</LangVersion>
 
     <!-- Version Information -->
-    <Version>0.20.1</Version>
+    <Version>0.21.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
 
@@ -52,11 +52,11 @@
     <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.0.0" />
     <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.0.0-rc6" />
     <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.4.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.0" />
-    <PackageReference Include="ModelContextProtocol.Core" Version="1.1.0" />
-    <PackageReference Include="OllamaSharp" Version="5.4.24" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.4.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.1" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="1.2.0" />
+    <PackageReference Include="OllamaSharp" Version="5.4.25" />
     <!-- Services -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.5" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.0" />

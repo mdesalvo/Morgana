@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.21.0] - UNDER DEVELOPMENT
+### ✨ Added
+
+### 🔄 Changed
+- Updated `Microsoft.Extensions.AI` dependency to 12.4.1
+- Updated `ModelContextProtocol.Core` dependency to 1.2.0
+- Updated `OllamaSharp` dependency to 5.4.25
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+
+
 ## [0.20.1] - 2026-04-08
 ### 🐛 Fixed
 - Dead-letter loop where content filter rejections caused the supervisor to reply to itself instead of the user, leaving the turn unanswered
