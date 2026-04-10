@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
+- Updated `Akka.NET` dependency to 1.5.65
+- Updated `Microsoft.Agents.AI` dependency to 1.1.0
 - Updated `Microsoft.Extensions.AI` dependency to 12.4.1
 - Updated `ModelContextProtocol.Core` dependency to 1.2.0
 - Updated `OllamaSharp` dependency to 5.4.25
