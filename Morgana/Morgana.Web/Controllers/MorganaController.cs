@@ -168,6 +168,17 @@ public class MorganaController : ControllerBase
 
             logger.LogInformation("Resuming conversation {ConversationId}", conversationId);
 
+            // Honest resume semantics: if nothing was ever persisted for this conversationId
+            // (stale client storage, wiped deployment, unknown id) report 404 instead of
+            // queueing a restore on a non-existent conversation. Callers like Cauldron
+            // already handle 404 by falling back to StartConversation cleanly, which avoids
+            // materialising a phantom DB and, further upstream, an unnecessary second convId.
+            if (!conversationPersistenceService.ConversationExists(conversationId))
+            {
+                logger.LogWarning("Resume requested for unknown conversation {ConversationId}; returning 404", conversationId);
+                return NotFound(new { error = "Conversation not found", conversationId });
+            }
+
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", conversationId);
 

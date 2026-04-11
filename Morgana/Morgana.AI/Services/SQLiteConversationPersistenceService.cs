@@ -484,6 +484,12 @@ WHERE id = 1;
         return $"Data Source={sqliteDbPath}";
     }
 
+    /// <inheritdoc />
+    public bool ConversationExists(string conversationId)
+    {
+        return File.Exists(GetDatabasePath(conversationId));
+    }
+
     /// <summary>
     /// Constructs the full file path for a conversation database.
     /// Format: morgana-{conversationId}.db

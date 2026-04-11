@@ -168,4 +168,18 @@ public interface IConversationPersistenceService
     /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
     /// <returns>The persisted <see cref="Records.ChannelCapabilities"/>, or null if absent.</returns>
     Task<Records.ChannelCapabilities?> LoadChannelCapabilitiesAsync(string conversationId);
+
+    /// <summary>
+    /// Reports whether the given conversation is known to the underlying store. Used by the
+    /// restore path to distinguish a genuine existing conversation (possibly on an older
+    /// schema) from a stale client-side identifier pointing to a conversation that was never
+    /// materialised — so the caller can reject the restore instead of fabricating empty state
+    /// on its behalf. Implementations decide what "exists" means in their backend: the SQLite
+    /// implementation checks for the per-conversation database file, a SQL Server or
+    /// PostgreSQL implementation would probe a conversations table, a blob-store
+    /// implementation would probe the corresponding object.
+    /// </summary>
+    /// <param name="conversationId">Conversation identifier.</param>
+    /// <returns><c>true</c> if the conversation is present in the store, <c>false</c> otherwise.</returns>
+    bool ConversationExists(string conversationId);
 }
