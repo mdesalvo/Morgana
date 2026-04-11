@@ -38,11 +38,40 @@ namespace Morgana.AI.Abstractions;
 /// </remarks>
 public class MorganaAgent : MorganaActor
 {
+    /// <summary>
+    /// Underlying Microsoft.Agents.AI agent driving LLM interactions for this actor.
+    /// Created once in the subclass constructor and reused across turns.
+    /// </summary>
     protected AIAgent aiAgent;
+
+    /// <summary>
+    /// Active <see cref="AgentSession"/> for the current conversation.
+    /// Loaded from persistence on the first turn, then mutated in place across turns.
+    /// Null before the first <see cref="ExecuteAgentAsync"/> call.
+    /// </summary>
     protected AgentSession? aiAgentSession;
+
+    /// <summary>
+    /// Provider holding per-session variables and the shared-context broadcast callback.
+    /// Tools and inter-agent messages read and write through this provider.
+    /// </summary>
     protected MorganaAIContextProvider aiContextProvider;
+
+    /// <summary>
+    /// Provider exposing the chat history of the current <see cref="aiAgentSession"/>.
+    /// Consulted by tools that need conversation context (e.g. summarization, citations).
+    /// </summary>
     protected MorganaChatHistoryProvider aiChatHistoryProvider;
+
+    /// <summary>
+    /// Persistence service used to load, save, and resume serialized <see cref="AgentSession"/>s
+    /// across actor restarts and conversation resumes.
+    /// </summary>
     protected readonly IConversationPersistenceService persistenceService;
+
+    /// <summary>
+    /// Logger scoped to this agent instance, used for turn-level diagnostics and tool tracing.
+    /// </summary>
     protected readonly ILogger agentLogger;
 
     /// <summary>
@@ -58,9 +87,17 @@ public class MorganaAgent : MorganaActor
     /// </summary>
     public AgentSession? CurrentSession => aiAgentSession;
 
+    /// <summary>
+    /// Intent name handled by this agent, resolved from the mandatory
+    /// <see cref="HandlesIntentAttribute"/> on the concrete subclass.
+    /// </summary>
     protected string AgentIntent => GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent
                                      ?? throw new InvalidOperationException($"Agent {GetType().Name} must be decorated with [HandlesIntent] attribute");
 
+    /// <summary>
+    /// Stable identifier for this agent within a conversation, formatted as
+    /// <c>{AgentIntent}-{conversationId}</c>. Used as the persistence key for <see cref="AgentSession"/>.
+    /// </summary>
     protected string AgentIdentifier => $"{AgentIntent}-{conversationId}";
 
     public MorganaAgent(

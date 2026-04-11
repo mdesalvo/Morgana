@@ -34,8 +34,22 @@ namespace Morgana.AI.Abstractions;
 /// </remarks>
 public class MorganaLLM : ILLMService
 {
+    /// <summary>
+    /// Application configuration used by derived classes to read provider-specific settings
+    /// (API keys, endpoints, model names, deployment IDs).
+    /// </summary>
     protected readonly IConfiguration configuration;
+
+    /// <summary>
+    /// Service for resolving prompt templates by name. Used to load the Morgana framework
+    /// prompt at construction and exposed to callers via <see cref="GetPromptResolverService"/>.
+    /// </summary>
     protected readonly IPromptResolverService promptResolverService;
+
+    /// <summary>
+    /// Morgana framework prompt loaded at construction time. Provides user-facing error message
+    /// templates used when LLM calls fail or return unusable content.
+    /// </summary>
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
