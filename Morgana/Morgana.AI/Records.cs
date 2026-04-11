@@ -63,9 +63,13 @@ public static class Records
     /// </summary>
     /// <param name="ConversationId">Unique identifier for the new conversation</param>
     /// <param name="IsRestore">Flag indicating that the conversation is being created or restored</param>
+    /// <param name="Capabilities">Channel capabilities declared by the originating client at start.
+    /// Null on restore (the manager will load the persisted set) and tolerated as null on legacy
+    /// fresh starts (callers fall back to the channel's full capability set).</param>
     public record CreateConversation(
         string ConversationId,
-        bool IsRestore);
+        bool IsRestore,
+        ChannelCapabilities? Capabilities = null);
 
     /// <summary>
     /// Request to terminate a conversation and stop all associated actors.
@@ -597,9 +601,14 @@ public static class Records
     /// HTTP request model for starting a new conversation via REST API.
     /// </summary>
     /// <param name="ConversationId">Unique identifier for the conversation to create</param>
+    /// <param name="Capabilities">Capability set advertised by the originating channel/client.
+    /// From the channel-abstraction handshake onward every client is expected to declare its
+    /// capabilities here; legacy clients that omit the field are tolerated and fall back to
+    /// the channel's hard-coded full capability set.</param>
     /// <param name="InitialContext">Optional initial context information (reserved for future use)</param>
     public record StartConversationRequest(
         string ConversationId,
+        ChannelCapabilities? Capabilities = null,
         Dictionary<string, object>? InitialContext = null);
 
     /// <summary>
@@ -669,7 +678,21 @@ public static class Records
         bool SupportsQuickReplies,
         bool SupportsStreaming,
         bool SupportsMarkdown,
-        int? MaxMessageLength = null);
+        int? MaxMessageLength = null)
+    {
+        /// <summary>
+        /// Shared singleton representing the full legacy capability set (all features enabled,
+        /// no length cap). Use this anywhere a "rich" channel needs to be described instead of
+        /// allocating a new instance, both for the reference channel's static budget and for
+        /// fallback paths (e.g. legacy conversations restored without a persisted handshake).
+        /// </summary>
+        public static readonly ChannelCapabilities Default = new ChannelCapabilities(
+            SupportsRichCards: true,
+            SupportsQuickReplies: true,
+            SupportsStreaming: true,
+            SupportsMarkdown: true,
+            MaxMessageLength: null);
+    }
 
     /// <summary>
     /// Transport-agnostic envelope for a structured outbound message delivered to the end user

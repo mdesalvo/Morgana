@@ -39,13 +39,10 @@ public class SignalRChannelService : IChannelService
 
     /// <summary>
     /// Capabilities advertised by the SignalR + Cauldron channel: full feature set.
+    /// Reuses the shared <see cref="ChannelCapabilities.Default"/> singleton — no per-instance
+    /// allocation, and any future channel that also wants the full set can do the same.
     /// </summary>
-    public ChannelCapabilities Capabilities { get; } = new ChannelCapabilities(
-        SupportsRichCards: true,
-        SupportsQuickReplies: true,
-        SupportsStreaming: true,
-        SupportsMarkdown: true,
-        MaxMessageLength: null);
+    public ChannelCapabilities Capabilities => ChannelCapabilities.Default;
 
     /// <summary>
     /// Initializes a new instance of the SignalRChannelService.

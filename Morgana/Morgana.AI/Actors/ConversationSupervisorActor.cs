@@ -41,6 +41,7 @@ namespace Morgana.AI.Actors;
 public class ConversationSupervisorActor : MorganaActor
 {
     private readonly IChannelService channelService;
+    private readonly IChannelCapabilityStore channelCapabilityStore;
     private readonly IAgentConfigurationService agentConfigService;
     private readonly IPresenterService presenterService;
 
@@ -85,11 +86,13 @@ public class ConversationSupervisorActor : MorganaActor
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         IChannelService channelService,
+        IChannelCapabilityStore channelCapabilityStore,
         IAgentConfigurationService agentConfigService,
         IPresenterService presenterService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         this.channelService = channelService;
+        this.channelCapabilityStore = channelCapabilityStore;
         this.agentConfigService = agentConfigService;
         this.presenterService = presenterService;
 
@@ -265,7 +268,7 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.OriginalMessage.Text,
                     null,
                     ctx.TurnContext,          // propagate context to agent
-                    channelService.Capabilities));
+                    GetEffectiveCapabilities()));
             }
             else
             {
@@ -300,7 +303,7 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.OriginalMessage.Text,
                     null,
                     ctx.TurnContext,
-                    channelService.Capabilities));
+                    GetEffectiveCapabilities()));
             }
             else
             {
@@ -358,7 +361,7 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.OriginalMessage.Text,
                 classification,
                 ctx.TurnContext,              // propagate context to router → agent
-                channelService.Capabilities));
+                GetEffectiveCapabilities()));
         });
 
         Receive<Status.Failure>(failure =>
@@ -396,7 +399,7 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.OriginalMessage.Text,
                 fallbackClassification,
                 ctx.TurnContext,
-                channelService.Capabilities));
+                GetEffectiveCapabilities()));
         });
 
         RegisterCommonHandlers();
@@ -707,6 +710,16 @@ public class ConversationSupervisorActor : MorganaActor
         CloseTurnSpan(intent: activeAgentIntent, completed: false);
         Become(Idle);
     }
+
+    /// <summary>
+    /// Resolves the capability budget to stamp on outgoing <see cref="Records.AgentRequest"/>s.
+    /// Looks up the per-conversation entry registered by <c>ConversationManagerActor</c>; falls
+    /// back to the wrapped channel's hard-coded capabilities when no entry exists (legacy path).
+    /// </summary>
+    private Records.ChannelCapabilities GetEffectiveCapabilities() =>
+        channelCapabilityStore.TryGetChannelCapabilities(conversationId, out Records.ChannelCapabilities caps)
+            ? caps
+            : channelService.Capabilities;
 
     private string GetAgentDisplayName(string? intent)
     {

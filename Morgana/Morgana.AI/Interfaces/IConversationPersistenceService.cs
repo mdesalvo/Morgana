@@ -137,7 +137,35 @@ public interface IConversationPersistenceService
     /// </list>
     /// <para><strong>Schema Version Management:</strong></para>
     /// <para>This method checks PRAGMA user_version and creates/migrates schema as needed.
-    /// Current version: 2 (adds rate_limit_log table).</para>
+    /// Current version: 3 (adds channel_capabilities table on top of v2's rate_limit_log).</para>
     /// </remarks>
     Task EnsureDatabaseInitializedAsync(string conversationId);
+
+    /// <summary>
+    /// Persists the channel capabilities declared by the client at conversation start.
+    /// Stored as a single row in the <c>channel_capabilities</c> table (id = 1) of the
+    /// per-conversation database. If no row exists this method writes one; otherwise it
+    /// replaces the existing row (clients are not expected to handshake more than once,
+    /// but the upsert keeps the operation idempotent).
+    /// </summary>
+    /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
+    /// <param name="capabilities">Capability set advertised by the originating channel.</param>
+    /// <remarks>
+    /// <para><strong>First-writer pattern:</strong></para>
+    /// <para>This method may be the very first persistence call for a brand-new conversation
+    /// (the capability handshake happens before any agent has executed). The implementation
+    /// MUST therefore call <see cref="EnsureDatabaseInitializedAsync(string)"/> internally so
+    /// that the database file and schema exist before the INSERT.</para>
+    /// </remarks>
+    Task SaveChannelCapabilitiesAsync(string conversationId, Records.ChannelCapabilities capabilities);
+
+    /// <summary>
+    /// Loads the channel capabilities previously persisted for a conversation. Returns
+    /// <c>null</c> when the conversation database does not exist or contains no capability
+    /// row (e.g. legacy conversations created before the capability handshake was introduced),
+    /// in which case callers should fall back to the channel's hard-coded full capabilities.
+    /// </summary>
+    /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
+    /// <returns>The persisted <see cref="Records.ChannelCapabilities"/>, or null if absent.</returns>
+    Task<Records.ChannelCapabilities?> LoadChannelCapabilitiesAsync(string conversationId);
 }

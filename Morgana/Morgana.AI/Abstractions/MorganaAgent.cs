@@ -230,9 +230,7 @@ public class MorganaAgent : MorganaActor
             bool useStreaming = streamingConfigEnabled && channelSupportsStreaming;
 
             if (!channelSupportsStreaming)
-                agentLogger.LogInformation(
-                    "Agent '{AgentIntent}' bypassing LLM streaming: outbound channel does not advertise SupportsStreaming",
-                    AgentIntent);
+                agentLogger.LogInformation("Agent '{AgentIntent}' bypassing LLM streaming: channel does not advertise SupportsStreaming", AgentIntent);
 
             if (useStreaming)
             {

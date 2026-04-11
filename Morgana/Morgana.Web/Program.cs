@@ -63,10 +63,12 @@ builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<SignalRChannelService>();
-builder.Services.AddSingleton<IChannelService>(sp =>
+builder.Services.AddSingleton<AdaptingChannelService>(sp =>
     new AdaptingChannelService(
         sp.GetRequiredService<SignalRChannelService>(),
         sp.GetRequiredService<MorganaChannelAdapter>()));
+builder.Services.AddSingleton<IChannelService>(sp => sp.GetRequiredService<AdaptingChannelService>());
+builder.Services.AddSingleton<IChannelCapabilityStore>(sp => sp.GetRequiredService<AdaptingChannelService>());
 
 // ==============================================================================
 // SECTION 3: CORS Configuration

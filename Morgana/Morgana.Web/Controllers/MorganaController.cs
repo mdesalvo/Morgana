@@ -97,7 +97,7 @@ public class MorganaController : ControllerBase
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", request.ConversationId);
 
-            manager.Tell(new Records.CreateConversation(request.ConversationId, false));
+            manager.Tell(new Records.CreateConversation(request.ConversationId, false, request.Capabilities));
 
             logger.LogInformation("Conversation creation queued: {RequestConversationId}", request.ConversationId);
 

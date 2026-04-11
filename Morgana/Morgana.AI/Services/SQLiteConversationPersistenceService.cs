@@ -365,6 +365,111 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         }
     }
 
+    /// <inheritdoc/>
+    public async Task SaveChannelCapabilitiesAsync(string conversationId, ChannelCapabilities capabilities)
+    {
+        try
+        {
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
+
+            // First-writer pattern: capability handshake may precede any agent execution,
+            // so we must guarantee the schema exists before the upsert.
+            await EnsureDatabaseInitializedAsync(sqliteConnection);
+
+            await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+            sqliteCommand.CommandText =
+"""
+INSERT INTO channel_capabilities
+    (id, supports_rich_cards, supports_quick_replies, supports_streaming, supports_markdown, max_message_length)
+VALUES
+    (1, @supports_rich_cards, @supports_quick_replies, @supports_streaming, @supports_markdown, @max_message_length)
+ON CONFLICT(id) DO UPDATE SET
+    supports_rich_cards    = excluded.supports_rich_cards,
+    supports_quick_replies = excluded.supports_quick_replies,
+    supports_streaming     = excluded.supports_streaming,
+    supports_markdown      = excluded.supports_markdown,
+    max_message_length     = excluded.max_message_length;
+""";
+            sqliteCommand.Parameters.AddWithValue("@supports_rich_cards", capabilities.SupportsRichCards ? 1 : 0);
+            sqliteCommand.Parameters.AddWithValue("@supports_quick_replies", capabilities.SupportsQuickReplies ? 1 : 0);
+            sqliteCommand.Parameters.AddWithValue("@supports_streaming", capabilities.SupportsStreaming ? 1 : 0);
+            sqliteCommand.Parameters.AddWithValue("@supports_markdown", capabilities.SupportsMarkdown ? 1 : 0);
+            sqliteCommand.Parameters.AddWithValue("@max_message_length",
+                capabilities.MaxMessageLength.HasValue ? capabilities.MaxMessageLength.Value : DBNull.Value);
+
+            await sqliteCommand.ExecuteNonQueryAsync();
+
+            logger.LogInformation(
+                "Saved channel capabilities for conversation {ConversationId}: rc={Rc}, qr={Qr}, str={Str}, md={Md}, max={Max}",
+                conversationId,
+                capabilities.SupportsRichCards,
+                capabilities.SupportsQuickReplies,
+                capabilities.SupportsStreaming,
+                capabilities.SupportsMarkdown,
+                capabilities.MaxMessageLength);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to save channel capabilities for conversation {ConversationId}", conversationId);
+            throw;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<ChannelCapabilities?> LoadChannelCapabilitiesAsync(string conversationId)
+    {
+        try
+        {
+            string sqliteDbPath = GetDatabasePath(conversationId);
+            if (!File.Exists(sqliteDbPath))
+            {
+                logger.LogInformation("SQLite database for conversation {ConversationId} not found, no persisted capabilities", conversationId);
+                return null;
+            }
+
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
+
+            await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+            sqliteCommand.CommandText =
+"""
+SELECT supports_rich_cards, supports_quick_replies, supports_streaming, supports_markdown, max_message_length
+FROM channel_capabilities
+WHERE id = 1;
+""";
+
+            await using SqliteDataReader reader = await sqliteCommand.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                logger.LogInformation("No channel_capabilities row found for conversation {ConversationId}", conversationId);
+                return null;
+            }
+
+            ChannelCapabilities capabilities = new ChannelCapabilities(
+                SupportsRichCards: (long)reader["supports_rich_cards"] == 1,
+                SupportsQuickReplies: (long)reader["supports_quick_replies"] == 1,
+                SupportsStreaming: (long)reader["supports_streaming"] == 1,
+                SupportsMarkdown: (long)reader["supports_markdown"] == 1,
+                MaxMessageLength: reader["max_message_length"] is DBNull ? null : (int?)(long)reader["max_message_length"]);
+
+            logger.LogInformation("Loaded persisted channel capabilities for conversation {ConversationId}", conversationId);
+            return capabilities;
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 1) // SQLITE_ERROR (e.g. table missing on legacy DB)
+        {
+            logger.LogInformation("channel_capabilities table missing for conversation {ConversationId} (legacy DB), returning null", conversationId);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to load channel capabilities for conversation {ConversationId}", conversationId);
+            throw;
+        }
+    }
+
     #region Utilities
 
     /// <summary>
@@ -404,7 +509,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         checkCommand.CommandText = "PRAGMA user_version;";
         long currentVersion = (long)(await checkCommand.ExecuteScalarAsync() ?? 0L);
 
-        if (currentVersion >= 2)
+        if (currentVersion >= 3)
             return; // Already initialized
 
         // Create schema
@@ -423,16 +528,25 @@ CREATE TABLE IF NOT EXISTS morgana (
 CREATE TABLE IF NOT EXISTS rate_limit_log (
     request_timestamp TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS channel_capabilities (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    supports_rich_cards    INTEGER NOT NULL,
+    supports_quick_replies INTEGER NOT NULL,
+    supports_streaming     INTEGER NOT NULL,
+    supports_markdown      INTEGER NOT NULL,
+    max_message_length     INTEGER NULL
+);
 """;
         await schemaCommand.ExecuteNonQueryAsync();
 
-        // Mark database as initialized (version 2)
+        // Mark database as initialized (version 3)
         await using SqliteCommand versionCommand = connection.CreateCommand();
-        versionCommand.CommandText = "PRAGMA user_version = 2;";
+        versionCommand.CommandText = "PRAGMA user_version = 3;";
         await versionCommand.ExecuteNonQueryAsync();
 
         logger.LogInformation(
-            "Initialized database schema v2 for: {GetFileName}", Path.GetFileName(connection.DataSource));
+            "Initialized database schema v3 for: {GetFileName}", Path.GetFileName(connection.DataSource));
     }
 
     /// <summary>
