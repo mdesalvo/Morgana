@@ -51,7 +51,11 @@ builder.Services.AddEndpointsApiExplorer();
 //                    (first implementation: SignalRChannelService, backing the Cauldron web UI)
 
 builder.Services.AddSignalR();
-builder.Services.AddSingleton<IChannelService, SignalRChannelService>();
+builder.Services.AddSingleton<SignalRChannelService>();
+builder.Services.AddSingleton<IChannelService>(sp =>
+    new AdaptingChannelService(
+        sp.GetRequiredService<SignalRChannelService>(),
+        sp.GetRequiredService<MorganaChannelAdapter>()));
 
 // ==============================================================================
 // SECTION 3: CORS Configuration
@@ -142,6 +146,7 @@ builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryS
 builder.Services.AddSingleton<IGuardRailService, LLMGuardRailService>();
 builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
 builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
+builder.Services.AddSingleton<MorganaChannelAdapter>();
 builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
