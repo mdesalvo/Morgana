@@ -1,4 +1,4 @@
-namespace Cauldron.Messages;
+namespace Cauldron.Messages.Contracts;
 
 /// <summary>
 /// Represents a quick reply button for user interaction in chat messages.

@@ -1,5 +1,6 @@
 using Cauldron.Interfaces;
 using Cauldron.Messages;
+using Cauldron.Messages.Contracts;
 
 namespace Cauldron.Services;
 

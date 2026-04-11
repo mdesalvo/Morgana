@@ -1,3 +1,5 @@
+using Cauldron.Messages.Contracts;
+
 namespace Cauldron.Messages;
 
 /// <summary>

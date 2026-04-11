@@ -1,10 +1,10 @@
 using System.Text.Json.Serialization;
 
-namespace Cauldron.Messages;
+namespace Cauldron.Messages.Contracts;
 
 /// <summary>
 /// Rich card container for structured visual presentation.
-/// Mirrors Morgana.Framework.Records.RichCard structure.
+/// Mirrors Morgana.AI.Records.RichCard structure.
 /// </summary>
 public class RichCard
 {

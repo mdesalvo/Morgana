@@ -1,4 +1,5 @@
 using Cauldron.Messages;
+using Cauldron.Messages.Contracts;
 
 namespace Cauldron.Interfaces;
 

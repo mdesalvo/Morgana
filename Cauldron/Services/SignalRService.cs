@@ -1,5 +1,6 @@
 using Cauldron.Handlers;
 using Cauldron.Messages;
+using Cauldron.Messages.Contracts;
 using Microsoft.AspNetCore.SignalR.Client;
 
 namespace Cauldron.Services;

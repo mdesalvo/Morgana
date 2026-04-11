@@ -1,4 +1,4 @@
-namespace Cauldron.Messages;
+namespace Cauldron.Messages.Contracts;
 
 /// <summary>
 /// <para>
