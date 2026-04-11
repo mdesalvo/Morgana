@@ -43,12 +43,21 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 // ==============================================================================
-// SECTION 2: SignalR Configuration
+// SECTION 2: SignalR + Channel Wiring
 // ==============================================================================
 // Real-time communication infrastructure for bi-directional client-server messaging
+// and the producer-side degradation gate applied to every outbound message.
+//
 // - MorganaHub: SignalR hub for conversation group management
-// - IChannelService: outbound channel used by actors to deliver messages to the end user
-//                    (first implementation: SignalRChannelService, backing the Cauldron web UI)
+// - SignalRChannelService: concrete channel, first IChannelService implementation,
+//                          backing the Cauldron web UI with full expressive capabilities
+// - IChannelService: resolved as AdaptingChannelService, a decorator that routes every
+//                    outbound ChannelMessage through MorganaChannelAdapter before handing
+//                    it to the wrapped concrete channel. Producers keep calling
+//                    channelService.SendMessageAsync(...) unchanged; degradation (rich
+//                    cards → prose, quick replies → inline list, markdown strip, length
+//                    truncation) is applied uniformly and automatically inherited by any
+//                    future channel implementation.
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<SignalRChannelService>();
@@ -146,7 +155,6 @@ builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryS
 builder.Services.AddSingleton<IGuardRailService, LLMGuardRailService>();
 builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
 builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
-builder.Services.AddSingleton<MorganaChannelAdapter>();
 builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
@@ -215,11 +223,16 @@ builder.Services.AddSingleton<IAuthenticationService, JWTAuthenticationService>(
 builder.Services.AddSingleton<SummarizingChatReducerService>();
 
 // ==============================================================================
-// SECTION 8.2: Agent Adapter
+// SECTION 8.2: Adapters
 // ==============================================================================
-// Adapter for integrating Morgana agents with Microsoft.Extensions.AI abstractions
+// - MorganaAgentAdapter: integrates Morgana agents with Microsoft.Extensions.AI abstractions.
+// - MorganaChannelAdapter: transcodes rich outbound messages into a form that fits the
+//                          target channel's capabilities (LLM-guided rewrite with a Markdig-based
+//                          template fallback). Invoked implicitly by the AdaptingChannelService
+//                          decorator registered in Section 2 — producers never call it directly.
 
 builder.Services.AddSingleton<MorganaAgentAdapter>();
+builder.Services.AddSingleton<MorganaChannelAdapter>();
 
 // ==============================================================================
 // SECTION 9: Akka.NET Actor System
