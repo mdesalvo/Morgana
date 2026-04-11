@@ -43,21 +43,23 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 // ==============================================================================
-// SECTION 2: SignalR + Channel Wiring
+// SECTION 2: Outbound Channel
 // ==============================================================================
-// Real-time communication infrastructure for bi-directional client-server messaging
-// and the producer-side degradation gate applied to every outbound message.
+// Wires the outbound channel through which actors deliver messages to the end user.
+// IChannelService is the abstraction; concrete implementations carry the transport.
 //
-// - MorganaHub: SignalR hub for conversation group management
-// - SignalRChannelService: concrete channel, first IChannelService implementation,
-//                          backing the Cauldron web UI with full expressive capabilities
 // - IChannelService: resolved as AdaptingChannelService, a decorator that routes every
 //                    outbound ChannelMessage through MorganaChannelAdapter before handing
 //                    it to the wrapped concrete channel. Producers keep calling
 //                    channelService.SendMessageAsync(...) unchanged; degradation (rich
 //                    cards → prose, quick replies → inline list, markdown strip, length
-//                    truncation) is applied uniformly and automatically inherited by any
+//                    truncation) is applied uniformly and inherited for free by any
 //                    future channel implementation.
+// - SignalRChannelService: currently the only concrete IChannelService implementation,
+//                          backing the Cauldron web UI with full expressive capabilities.
+//                          AddSignalR() is its transport-level dependency; when additional
+//                          channels are introduced, their own transport-level dependencies
+//                          (e.g. HTTP client factories, message bus clients) belong here.
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<SignalRChannelService>();
