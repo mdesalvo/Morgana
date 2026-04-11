@@ -75,19 +75,28 @@ public class StreamingService : IStreamingService
 
     /// <summary>
     /// Finalizes the current streaming session with the complete message metadata.
-    /// The typewriter timer continues draining the buffer naturally before cleanup.
     /// </summary>
+    /// <remarks>
+    /// The server is the source of truth for the final text: Morgana's channel adapter may
+    /// rewrite the message before delivery (e.g. transcoding a rich card into prose for a
+    /// channel that does not advertise <c>SupportsRichCards</c>), in which case the streamed
+    /// chunks represent the original unadapted narrative and must be replaced. We therefore
+    /// overwrite <c>Text</c> with <paramref name="completeMessage"/>.Text and drop any chunks
+    /// still queued in the typewriter buffer; the next tick observes an empty buffer plus
+    /// <c>IsStreaming == false</c> and tears the session down.
+    /// </remarks>
     public void FinalizeStreaming(ChannelMessage completeMessage)
     {
         if (_currentStreamingMessage == null)
             return;
 
+        _currentStreamingMessage.Text = completeMessage.Text;
+        _streamingBuffer = string.Empty;
+
         _currentStreamingMessage.QuickReplies = completeMessage.QuickReplies;
         _currentStreamingMessage.RichCard = completeMessage.RichCard;
         _currentStreamingMessage.AgentName = completeMessage.AgentName;
         _currentStreamingMessage.IsStreaming = false;
-
-        // Timer continues draining buffer - will auto-stop when empty
     }
 
     /// <summary>
