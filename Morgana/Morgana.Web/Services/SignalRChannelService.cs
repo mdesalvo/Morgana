@@ -23,13 +23,24 @@ namespace Morgana.Web.Services;
 /// </remarks>
 public class SignalRChannelService : IChannelService
 {
+    /// <summary>
+    /// SignalR hub context used to push messages to connected clients. Messages are routed
+    /// to groups named after the conversation id, so every client that joined that group
+    /// (via <c>MorganaHub.JoinConversation</c>) receives the payload through the
+    /// "ReceiveMessage" / "ReceiveStreamChunk" events.
+    /// </summary>
     private readonly IHubContext<MorganaHub> hubContext;
+
+    /// <summary>
+    /// Logger for diagnostic output. Emits informational entries on successful sends and
+    /// error entries when the underlying SignalR dispatch fails.
+    /// </summary>
     private readonly ILogger logger;
 
     /// <summary>
     /// Capabilities advertised by the SignalR + Cauldron channel: full feature set.
     /// </summary>
-    public ChannelCapabilities Capabilities { get; } = new(
+    public ChannelCapabilities Capabilities { get; } = new ChannelCapabilities(
         SupportsRichCards: true,
         SupportsQuickReplies: true,
         SupportsStreaming: true,
