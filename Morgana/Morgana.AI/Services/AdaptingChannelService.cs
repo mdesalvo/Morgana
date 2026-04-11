@@ -39,11 +39,11 @@ public class AdaptingChannelService : IChannelService
     /// The concrete channel being decorated (e.g. <c>SignalRChannelService</c>). All calls
     /// are ultimately delegated to this instance after (optional) adaptation.
     /// </summary>
-    private readonly IChannelService inner;
+    private readonly IChannelService channelService;
 
     /// <summary>
     /// Adapter responsible for transcoding a rich message into a form that fits the
-    /// capabilities of <see cref="inner"/>. Invoked once per <see cref="SendMessageAsync"/>
+    /// capabilities of <see cref="channelService"/>. Invoked once per <see cref="SendMessageAsync"/>
     /// call; short-circuits without I/O when the message already fits.
     /// </summary>
     private readonly MorganaChannelAdapter channelAdapter;
@@ -51,26 +51,26 @@ public class AdaptingChannelService : IChannelService
     /// <summary>
     /// Initialises a new instance of <see cref="AdaptingChannelService"/>.
     /// </summary>
-    /// <param name="inner">The concrete channel service being decorated.</param>
+    /// <param name="channelService">The concrete channel service being decorated.</param>
     /// <param name="channelAdapter">The adapter used to degrade outbound messages to the
-    /// capabilities advertised by <paramref name="inner"/>.</param>
-    public AdaptingChannelService(IChannelService inner, MorganaChannelAdapter channelAdapter)
+    /// capabilities advertised by <paramref name="channelService"/>.</param>
+    public AdaptingChannelService(IChannelService channelService, MorganaChannelAdapter channelAdapter)
     {
-        this.inner = inner;
+        this.channelService = channelService;
         this.channelAdapter = channelAdapter;
     }
 
     /// <inheritdoc/>
-    public Records.ChannelCapabilities Capabilities => inner.Capabilities;
+    public Records.ChannelCapabilities Capabilities => channelService.Capabilities;
 
     /// <inheritdoc/>
     public async Task SendMessageAsync(Records.ChannelMessage message)
     {
-        Records.ChannelMessage adapted = await channelAdapter.AdaptAsync(message, inner.Capabilities);
-        await inner.SendMessageAsync(adapted);
+        Records.ChannelMessage adapted = await channelAdapter.AdaptAsync(message, channelService.Capabilities);
+        await channelService.SendMessageAsync(adapted);
     }
 
     /// <inheritdoc/>
     public Task SendStreamChunkAsync(string conversationId, string chunkText) =>
-        inner.SendStreamChunkAsync(conversationId, chunkText);
+        channelService.SendStreamChunkAsync(conversationId, chunkText);
 }

@@ -18,7 +18,7 @@ namespace Morgana.AI.Interfaces;
 /// contract and degrade gracefully when a feature is not supported (e.g. rendering a rich card
 /// as plain text, or coalescing streamed chunks into a single final message).</para>
 ///
-/// <para><strong>First implementation:</strong></para>
+/// <para><strong>Built-In implementation:</strong></para>
 /// <para><c>SignalRChannelService</c> (in Morgana.Web) is the reference channel backing the
 /// Cauldron web UI and advertises full capabilities (rich cards, quick replies, streaming, markdown).</para>
 /// </remarks>
@@ -48,7 +48,5 @@ public interface IChannelService
     /// <param name="conversationId">Unique identifier of the conversation (channel group/routing key)</param>
     /// <param name="chunkText">Partial response text to append to the current message</param>
     /// <returns>Task representing the async send operation</returns>
-    Task SendStreamChunkAsync(
-        string conversationId,
-        string chunkText);
+    Task SendStreamChunkAsync(string conversationId, string chunkText);
 }
