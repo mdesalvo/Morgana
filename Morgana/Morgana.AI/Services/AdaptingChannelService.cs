@@ -30,8 +30,7 @@ namespace Morgana.AI.Services;
 ///
 /// <para><strong>Reliability:</strong></para>
 /// <para><see cref="MorganaChannelAdapter.AdaptAsync"/> never throws — worst case it returns
-/// a template-based plain rendering — so the decorator adds no new failure modes on the
-/// send path.</para>
+/// a template-based plain rendering — so the decorator adds no new failure modes on the send path.</para>
 /// </remarks>
 public class AdaptingChannelService : IChannelService
 {
