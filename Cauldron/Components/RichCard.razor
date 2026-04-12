@@ -25,4 +25,15 @@
     /// </summary>
     [Parameter]
     public Cauldron.Messages.Contracts.RichCard? Card { get; set; }
+
+    private bool _sanitized;
+
+    protected override void OnParametersSet()
+    {
+        if (Card != null && !_sanitized)
+        {
+            MarkdownRendererService.SanitizeRichCard(Card);
+            _sanitized = true;
+        }
+    }
 }

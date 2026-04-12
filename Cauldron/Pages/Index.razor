@@ -1,6 +1,6 @@
 @page "/"
 @using Cauldron.Services
-@using Markdig
+@using Cauldron.Services
 @inject IChatStateService ChatStateService
 @inject IConversationLifecycleService ConversationLifecycleService
 @inject IStreamingService StreamingService
@@ -125,7 +125,7 @@
                         {
                             @* Message content (text) *@
                             <div class="message-text @(chatMessage.Type == MessageType.Presentation ? "completion-text" : "")">
-                                @((MarkupString)Markdown.ToHtml(chatMessage.Text ?? string.Empty))
+                                @MarkdownRendererService.ToHtml(chatMessage.Text)
                             </div>
 
                             @* Rich card (if present) *@
