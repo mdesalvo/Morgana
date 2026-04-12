@@ -42,6 +42,8 @@
     <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.0.5" />
     <!-- JWT Authentication -->
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.0" />
+    <!-- Markdown Parser -->
+    <PackageReference Include="Markdig" Version="1.1.2" />
   </ItemGroup>
 
 </Project>
