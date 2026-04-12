@@ -715,11 +715,29 @@ public class ConversationSupervisorActor : MorganaActor
     /// Resolves the capability budget to stamp on outgoing <see cref="Records.AgentRequest"/>s.
     /// Looks up the per-conversation entry registered by <c>ConversationManagerActor</c>; falls
     /// back to the wrapped channel's hard-coded capabilities when no entry exists (legacy path).
+    /// When the declared capabilities will trigger downstream adaptation (the channel lacks at
+    /// least one rich feature Morgana may produce), streaming is suppressed: streamed chunks
+    /// bypass the adapter, so the user would see raw content that then gets visibly rewritten
+    /// once the final adapted message lands — a jarring UX glitch.
     /// </summary>
-    private Records.ChannelCapabilities GetEffectiveCapabilities() =>
-        channelCapabilityStore.TryGetChannelCapabilities(conversationId, out Records.ChannelCapabilities caps)
-            ? caps
-            : channelService.Capabilities;
+    private Records.ChannelCapabilities GetEffectiveCapabilities()
+    {
+        Records.ChannelCapabilities channelCapabilities =
+            channelCapabilityStore.TryGetChannelCapabilities(conversationId, out Records.ChannelCapabilities registeredChannelCapabilities)
+                ? registeredChannelCapabilities
+                : channelService.Capabilities;
+
+        bool willNeedAdaptation = !channelCapabilities.SupportsRichCards
+                                   || !channelCapabilities.SupportsQuickReplies
+                                   || !channelCapabilities.SupportsMarkdown;
+
+        // Artificial suppression of streaming in case it is advertised by the channel
+        // but we lack at least one of the features that would make it fully functional
+        if (willNeedAdaptation && channelCapabilities.SupportsStreaming)
+            return channelCapabilities with { SupportsStreaming = false };
+
+        return channelCapabilities;
+    }
 
     private string GetAgentDisplayName(string? intent)
     {
