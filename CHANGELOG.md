@@ -6,12 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.21.0] - UNDER DEVELOPMENT
-### 🎯 Major Feature: Multi-channel Morgana
-This release turns Morgana into a true **multi-channel conversational AI framework**.
+### 🎯 Major Feature: Channel-Aware Adaptive Messaging
+This release turns Morgana into a true **multi-channel** conversational AI framework with **channel-driven capability negotiation**.
 The outbound path is no longer hard-wired to SignalR+Cauldron: every channel now declares its own **capability budget** (rich cards, quick replies, streaming, markdown, max message length), Morgana adapts its outbound expressivity to that budget automatically.
 
 ### ✨ Added
-- Added **Markdown rendering** to Cauldron: assistant messages are now parsed through Markdig and rendered as styled HTML, with a dedicated `markdown.css` stylesheet that integrates with the existing dark theme and CSS variables
+- Added **Markdown rendering** to Cauldron: assistant messages are now parsed through **Markdig** and rendered as styled HTML, with a dedicated `markdown.css` stylesheet that integrates with the existing dark theme and CSS variables
 - Introduced `IChannelService` as the **outbound channel abstraction** with a generic `ChannelMessage` DTO, so producers (supervisor, manager, presenter, controllers) target a transport-agnostic contract instead of `IHubContext<MorganaHub>` directly; `SignalRChannelService` ships as the first full-capability implementation, and the Cauldron client-side contracts are grouped under a dedicated `Cauldron.Messages.Contracts` namespace
 - Introduced `MorganaChannelAdapter` as the **producer-side degradation gate**: every outbound `ChannelMessage` is measured against the channel's advertised `ChannelCapabilities` and, when it exceeds the budget, rewritten by an LLM-guided pass that transcodes rich cards into prose, inlines quick replies, strips markdown and honours length limits — with a Markdig-based template fallback if the LLM call fails, so degradation is never silent
 - Introduced `AdaptingChannelService` as a **transparent decorator** around every `IChannelService` implementation: wraps every `SendMessageAsync` through the adapter without touching any producer, making degradation the default behaviour on the whole outbound path
