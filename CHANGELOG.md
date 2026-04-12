@@ -7,14 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.21.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Multi-channel Morgana
-This release turns Morgana into a true **multi-channel conversational backend**. The outbound path is no longer hard-wired to the rich SignalR+Cauldron pair: every channel now declares its own **capability budget** (rich cards, quick replies, streaming, markdown, max message length), Morgana adapts each outbound message to that budget automatically, and a new persistence-backed handshake makes the budget a per-conversation contract instead of a hard-coded default — so a "poor" channel implementation (IVR, SMS, Twilio, WhatsApp, a plain HTTP client, …) can plug in without touching any producer code.
+This release turns Morgana into a true **multi-channel conversational AI framework**.
+The outbound path is no longer hard-wired to SignalR+Cauldron: every channel now declares its own **capability budget** (rich cards, quick replies, streaming, markdown, max message length), Morgana adapts its outbound expressivity to that budget automatically.
 
 ### ✨ Added
 - Introduced `IChannelService` as the **outbound channel abstraction** with a generic `ChannelMessage` DTO, so producers (supervisor, manager, presenter, controllers) target a transport-agnostic contract instead of `IHubContext<MorganaHub>` directly; `SignalRChannelService` ships as the first full-capability implementation, and the Cauldron client-side contracts are grouped under a dedicated `Cauldron.Messages.Contracts` namespace
-- Introduced `MorganaChannelAdapter` as the **producer-side degradation gate**: every outbound `ChannelMessage` is measured against the channel's advertised `ChannelCapabilities` and, when it exceeds the budget, rewritten by an LLM-guided pass (new `ChannelAdapter` prompt) that transcodes rich cards into prose, inlines quick replies, strips markdown and honours length limits — with a Markdig-based template fallback if the LLM call fails, so degradation is never silent
+- Introduced `MorganaChannelAdapter` as the **producer-side degradation gate**: every outbound `ChannelMessage` is measured against the channel's advertised `ChannelCapabilities` and, when it exceeds the budget, rewritten by an LLM-guided pass that transcodes rich cards into prose, inlines quick replies, strips markdown and honours length limits — with a Markdig-based template fallback if the LLM call fails, so degradation is never silent
 - Introduced `AdaptingChannelService` as a **transparent decorator** around every `IChannelService` implementation: wraps every `SendMessageAsync` through the adapter without touching any producer, making degradation the default behaviour on the whole outbound path
 - Introduced **per-conversation `ChannelCapabilities` with a persistence-backed handshake**: clients declare their capability budget at `POST /conversation/start`, Morgana persists it in a new `channel_capabilities` table (SQLite schema v3) via a first-writer pattern, and `ConversationManagerActor` publishes the effective budget into a new `IChannelCapabilityStore` in-process registry so `AdaptingChannelService` can degrade per conversation and `ConversationSupervisorActor` can stamp the budget on every agent turn. The handshake is honoured on both fresh start and restore (legacy conversations are migrated eagerly on first touch)
-- Introduced `ChannelCapabilities.Default` as a **shared singleton** used by rich channels and legacy fallback paths, so the full-capability set lives in exactly one place and costs zero per-instance allocations
 
 ### 🔄 Changed
 - Updated `Akka.NET` dependency to 1.5.65
@@ -26,7 +26,7 @@ This release turns Morgana into a true **multi-channel conversational backend**.
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
-- **Second channel implementation (IVR, SMS, Twilio, WhatsApp, plain HTTP client, …)** — With the `IChannelService` abstraction, the `AdaptingChannelService` decorator and the persistence-backed capability handshake all in place, a new outbound channel can plug in declaring its own capability budget at conversation start and get automatic degradation of any rich message without any change to producers, actors or prompts
+- **Custom channel implementations (IVR, SMS, Twilio, WhatsApp, plain HTTP client, …)** — With the `IChannelService` abstraction, the `AdaptingChannelService` decorator and the persistence-backed capability handshake all in place, a new outbound channel can plug in declaring its own capability budget at conversation start and get automatic degradation of any rich message without any change to producers, actors or prompts
 
 
 ## [0.20.1] - 2026-04-08
