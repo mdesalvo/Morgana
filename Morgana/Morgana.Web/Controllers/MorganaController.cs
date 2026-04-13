@@ -97,7 +97,8 @@ public class MorganaController : ControllerBase
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", request.ConversationId);
 
-            manager.Tell(new Records.CreateConversation(request.ConversationId, false, request.Capabilities));
+            manager.Tell(new Records.CreateConversation(
+                request.ConversationId, false, request.ChannelMetadata));
 
             logger.LogInformation("Conversation creation queued: {RequestConversationId}", request.ConversationId);
 
@@ -182,7 +183,8 @@ public class MorganaController : ControllerBase
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", conversationId);
 
-            manager.Tell(new Records.CreateConversation(conversationId, true));
+            manager.Tell(new Records.CreateConversation(
+                conversationId, true));
 
             // Get most recent active agent from database
             string? lastActiveAgent = await conversationPersistenceService

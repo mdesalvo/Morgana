@@ -68,7 +68,7 @@ builder.Services.AddSingleton<AdaptingChannelService>(sp =>
         sp.GetRequiredService<SignalRChannelService>(),
         sp.GetRequiredService<MorganaChannelAdapter>()));
 builder.Services.AddSingleton<IChannelService>(sp => sp.GetRequiredService<AdaptingChannelService>());
-builder.Services.AddSingleton<IChannelCapabilityStore>(sp => sp.GetRequiredService<AdaptingChannelService>());
+builder.Services.AddSingleton<IChannelMetadataStore>(sp => sp.GetRequiredService<AdaptingChannelService>());
 
 // ==============================================================================
 // SECTION 3: CORS Configuration

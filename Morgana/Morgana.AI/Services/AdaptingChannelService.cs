@@ -13,12 +13,12 @@ namespace Morgana.AI.Services;
 /// to emit a payload that the target channel cannot carry.
 /// </summary>
 /// <remarks>
-/// <para><strong>Per-conversation capabilities:</strong></para>
-/// <para>This service also implements <see cref="IChannelCapabilityStore"/>: each conversation's
-/// capability budget is registered by <c>ConversationManagerActor</c> at start (or restore) and
-/// looked up here on every send. When no entry exists for a conversation (legacy DBs or pre-handshake
-/// edge cases) the decorator falls back to the wrapped channel's hard-coded capabilities, which
-/// for the SignalR/Cauldron channel means full features.</para>
+/// <para><strong>Per-conversation metadata:</strong></para>
+/// <para>This service also implements <see cref="IChannelMetadataStore"/>: each conversation's
+/// channel metadata (name + capability budget) is registered by <c>ConversationManagerActor</c>
+/// at start (or restore) and looked up here on every send. When no entry exists for a conversation
+/// (legacy DBs or pre-handshake edge cases) the decorator falls back to the wrapped channel's
+/// hard-coded metadata, which for the SignalR/Cauldron channel means full features.</para>
 ///
 /// <para><strong>Why a decorator:</strong></para>
 /// <para>Producers keep calling <see cref="IChannelService.SendMessageAsync"/> exactly as
@@ -34,7 +34,7 @@ namespace Morgana.AI.Services;
 /// <para><see cref="MorganaChannelAdapter.AdaptAsync"/> never throws — worst case it returns
 /// a template-based plain rendering — so the decorator adds no new failure modes on the send path.</para>
 /// </remarks>
-public class AdaptingChannelService : IChannelService, IChannelCapabilityStore
+public class AdaptingChannelService : IChannelService, IChannelMetadataStore
 {
     /// <summary>
     /// The concrete channel being decorated (e.g. <c>SignalRChannelService</c>). All calls
@@ -50,10 +50,10 @@ public class AdaptingChannelService : IChannelService, IChannelCapabilityStore
     private readonly MorganaChannelAdapter channelAdapter;
 
     /// <summary>
-    /// In-memory registry of per-conversation capability budgets, populated at conversation
-    /// start by <c>ConversationManagerActor</c> via <see cref="IChannelCapabilityStore.RegisterChannelCapabilities"/>.
+    /// In-memory registry of per-conversation channel metadata, populated at conversation
+    /// start by <c>ConversationManagerActor</c> via <see cref="IChannelMetadataStore.RegisterChannelMetadata"/>.
     /// </summary>
-    private readonly ConcurrentDictionary<string, Records.ChannelCapabilities> capabilitiesByConversation = new();
+    private readonly ConcurrentDictionary<string, Records.ChannelMetadata> metadataByConversation = new();
 
     /// <summary>
     /// Initialises a new instance of <see cref="AdaptingChannelService"/>.
@@ -69,19 +69,19 @@ public class AdaptingChannelService : IChannelService, IChannelCapabilityStore
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Returns the wrapped channel's static capability set. Per-conversation budgets are
-    /// served via <see cref="IChannelCapabilityStore.TryGetChannelCapabilities"/> instead — consumers needing
-    /// the per-turn budget should look up the store keyed by conversation id.
+    /// Returns the wrapped channel's static metadata. Per-conversation metadata is served
+    /// via <see cref="IChannelMetadataStore.TryGetChannelMetadata"/> instead — consumers
+    /// needing the per-turn entry should look up the store keyed by conversation id.
     /// </remarks>
-    public Records.ChannelCapabilities Capabilities => channelService.Capabilities;
+    public Records.ChannelMetadata Metadata => channelService.Metadata;
 
     /// <inheritdoc/>
     public async Task SendMessageAsync(Records.ChannelMessage message)
     {
         Records.ChannelCapabilities effectiveCapabilities =
-            capabilitiesByConversation.TryGetValue(message.ConversationId, out Records.ChannelCapabilities? registered)
-                ? registered
-                : channelService.Capabilities;
+            metadataByConversation.TryGetValue(message.ConversationId, out Records.ChannelMetadata? registered)
+                ? registered.Capabilities
+                : channelService.Metadata.Capabilities;
 
         Records.ChannelMessage adapted = await channelAdapter.AdaptAsync(message, effectiveCapabilities);
         await channelService.SendMessageAsync(adapted);
@@ -92,23 +92,23 @@ public class AdaptingChannelService : IChannelService, IChannelCapabilityStore
         channelService.SendStreamChunkAsync(conversationId, chunkText);
 
     /// <inheritdoc/>
-    public void RegisterChannelCapabilities(string conversationId, Records.ChannelCapabilities capabilities) =>
-        capabilitiesByConversation[conversationId] = capabilities;
+    public void RegisterChannelMetadata(string conversationId, Records.ChannelMetadata metadata) =>
+        metadataByConversation[conversationId] = metadata;
 
     /// <inheritdoc/>
-    public void UnregisterChannelCapabilities(string conversationId) =>
-        capabilitiesByConversation.TryRemove(conversationId, out _);
+    public void UnregisterChannelMetadata(string conversationId) =>
+        metadataByConversation.TryRemove(conversationId, out _);
 
     /// <inheritdoc/>
-    public bool TryGetChannelCapabilities(string conversationId, out Records.ChannelCapabilities capabilities)
+    public bool TryGetChannelMetadata(string conversationId, out Records.ChannelMetadata metadata)
     {
-        if (capabilitiesByConversation.TryGetValue(conversationId, out Records.ChannelCapabilities? value))
+        if (metadataByConversation.TryGetValue(conversationId, out Records.ChannelMetadata? value))
         {
-            capabilities = value;
+            metadata = value;
             return true;
         }
 
-        capabilities = channelService.Capabilities;
+        metadata = channelService.Metadata;
         return false;
     }
 }

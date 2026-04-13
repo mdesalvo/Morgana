@@ -41,7 +41,7 @@ namespace Morgana.AI.Actors;
 public class ConversationSupervisorActor : MorganaActor
 {
     private readonly IChannelService channelService;
-    private readonly IChannelCapabilityStore channelCapabilityStore;
+    private readonly IChannelMetadataStore channelMetadataStore;
     private readonly IAgentConfigurationService agentConfigService;
     private readonly IPresenterService presenterService;
 
@@ -86,13 +86,13 @@ public class ConversationSupervisorActor : MorganaActor
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         IChannelService channelService,
-        IChannelCapabilityStore channelCapabilityStore,
+        IChannelMetadataStore channelMetadataStore,
         IAgentConfigurationService agentConfigService,
         IPresenterService presenterService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         this.channelService = channelService;
-        this.channelCapabilityStore = channelCapabilityStore;
+        this.channelMetadataStore = channelMetadataStore;
         this.agentConfigService = agentConfigService;
         this.presenterService = presenterService;
 
@@ -713,19 +713,19 @@ public class ConversationSupervisorActor : MorganaActor
 
     /// <summary>
     /// Resolves the capability budget to stamp on outgoing <see cref="Records.AgentRequest"/>s.
-    /// Looks up the per-conversation entry registered by <c>ConversationManagerActor</c>; falls
-    /// back to the wrapped channel's hard-coded capabilities when no entry exists (legacy path).
-    /// When the declared capabilities will trigger downstream adaptation (the channel lacks at
-    /// least one rich feature Morgana may produce), streaming is suppressed: streamed chunks
-    /// bypass the adapter, so the user would see raw content that then gets visibly rewritten
-    /// once the final adapted message lands — a jarring UX glitch.
+    /// Looks up the per-conversation metadata registered by <c>ConversationManagerActor</c> and
+    /// extracts its capabilities; falls back to the wrapped channel's own metadata when no
+    /// entry exists (legacy path). When the declared capabilities will trigger downstream
+    /// adaptation (the channel lacks at least one rich feature Morgana may produce), streaming
+    /// is suppressed: streamed chunks bypass the adapter, so the user would see raw content
+    /// that then gets visibly rewritten once the final adapted message lands — a jarring UX glitch.
     /// </summary>
     private Records.ChannelCapabilities GetEffectiveCapabilities()
     {
         Records.ChannelCapabilities channelCapabilities =
-            channelCapabilityStore.TryGetChannelCapabilities(conversationId, out Records.ChannelCapabilities registeredChannelCapabilities)
-                ? registeredChannelCapabilities
-                : channelService.Capabilities;
+            channelMetadataStore.TryGetChannelMetadata(conversationId, out Records.ChannelMetadata registeredChannelMetadata)
+                ? registeredChannelMetadata.Capabilities
+                : channelService.Metadata.Capabilities;
 
         bool willNeedAdaptation = !channelCapabilities.SupportsRichCards
                                    || !channelCapabilities.SupportsQuickReplies

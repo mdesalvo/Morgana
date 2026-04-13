@@ -38,11 +38,11 @@ public class SignalRChannelService : IChannelService
     private readonly ILogger logger;
 
     /// <summary>
-    /// Capabilities advertised by the SignalR + Cauldron channel: full feature set.
-    /// Reuses the shared <see cref="ChannelCapabilities.Default"/> singleton — no per-instance
-    /// allocation, and any future channel that also wants the full set can do the same.
+    /// Channel metadata advertised by the SignalR + Cauldron channel: identifies itself as
+    /// <c>"cauldron"</c> and reuses the shared <see cref="ChannelCapabilities.Default"/>
+    /// singleton for the full feature set.
     /// </summary>
-    public ChannelCapabilities Capabilities => ChannelCapabilities.Default;
+    public ChannelMetadata Metadata { get; } = new ChannelMetadata("cauldron", ChannelCapabilities.Default);
 
     /// <summary>
     /// Initializes a new instance of the SignalRChannelService.

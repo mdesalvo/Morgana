@@ -366,7 +366,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     }
 
     /// <inheritdoc/>
-    public async Task SaveChannelCapabilitiesAsync(string conversationId, ChannelCapabilities capabilities)
+    public async Task SaveChannelMetadataAsync(string conversationId, ChannelMetadata metadata)
     {
         try
         {
@@ -374,24 +374,28 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
 
-            // First-writer pattern: capability handshake may precede any agent execution,
+            // First-writer pattern: channel handshake may precede any agent execution,
             // so we must guarantee the schema exists before the upsert.
             await EnsureDatabaseInitializedAsync(sqliteConnection);
+
+            ChannelCapabilities capabilities = metadata.Capabilities;
 
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText =
 """
-INSERT INTO channel_capabilities
-    (id, supports_rich_cards, supports_quick_replies, supports_streaming, supports_markdown, max_message_length)
+INSERT INTO channel_metadata
+    (id, channel_name, supports_rich_cards, supports_quick_replies, supports_streaming, supports_markdown, max_message_length)
 VALUES
-    (1, @supports_rich_cards, @supports_quick_replies, @supports_streaming, @supports_markdown, @max_message_length)
+    (1, @channel_name, @supports_rich_cards, @supports_quick_replies, @supports_streaming, @supports_markdown, @max_message_length)
 ON CONFLICT(id) DO UPDATE SET
+    channel_name           = excluded.channel_name,
     supports_rich_cards    = excluded.supports_rich_cards,
     supports_quick_replies = excluded.supports_quick_replies,
     supports_streaming     = excluded.supports_streaming,
     supports_markdown      = excluded.supports_markdown,
     max_message_length     = excluded.max_message_length;
 """;
+            sqliteCommand.Parameters.AddWithValue("@channel_name", metadata.ChannelName);
             sqliteCommand.Parameters.AddWithValue("@supports_rich_cards", capabilities.SupportsRichCards ? 1 : 0);
             sqliteCommand.Parameters.AddWithValue("@supports_quick_replies", capabilities.SupportsQuickReplies ? 1 : 0);
             sqliteCommand.Parameters.AddWithValue("@supports_streaming", capabilities.SupportsStreaming ? 1 : 0);
@@ -402,8 +406,9 @@ ON CONFLICT(id) DO UPDATE SET
             await sqliteCommand.ExecuteNonQueryAsync();
 
             logger.LogInformation(
-                "Saved channel capabilities for conversation {ConversationId}: rc={Rc}, qr={Qr}, str={Str}, md={Md}, max={Max}",
+                "Saved channel metadata for conversation {ConversationId}: channel={Channel}, rc={Rc}, qr={Qr}, str={Str}, md={Md}, max={Max}",
                 conversationId,
+                metadata.ChannelName,
                 capabilities.SupportsRichCards,
                 capabilities.SupportsQuickReplies,
                 capabilities.SupportsStreaming,
@@ -412,20 +417,20 @@ ON CONFLICT(id) DO UPDATE SET
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to save channel capabilities for conversation {ConversationId}", conversationId);
+            logger.LogError(ex, "Failed to save channel metadata for conversation {ConversationId}", conversationId);
             throw;
         }
     }
 
     /// <inheritdoc/>
-    public async Task<ChannelCapabilities?> LoadChannelCapabilitiesAsync(string conversationId)
+    public async Task<ChannelMetadata?> LoadChannelMetadataAsync(string conversationId)
     {
         try
         {
             string sqliteDbPath = GetDatabasePath(conversationId);
             if (!File.Exists(sqliteDbPath))
             {
-                logger.LogInformation("SQLite database for conversation {ConversationId} not found, no persisted capabilities", conversationId);
+                logger.LogInformation("SQLite database for conversation {ConversationId} not found, no persisted channel metadata", conversationId);
                 return null;
             }
 
@@ -436,15 +441,15 @@ ON CONFLICT(id) DO UPDATE SET
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText =
 """
-SELECT supports_rich_cards, supports_quick_replies, supports_streaming, supports_markdown, max_message_length
-FROM channel_capabilities
+SELECT channel_name, supports_rich_cards, supports_quick_replies, supports_streaming, supports_markdown, max_message_length
+FROM channel_metadata
 WHERE id = 1;
 """;
 
             await using SqliteDataReader reader = await sqliteCommand.ExecuteReaderAsync();
             if (!await reader.ReadAsync())
             {
-                logger.LogInformation("No channel_capabilities row found for conversation {ConversationId}", conversationId);
+                logger.LogInformation("No channel_metadata row found for conversation {ConversationId}", conversationId);
                 return null;
             }
 
@@ -455,17 +460,21 @@ WHERE id = 1;
                 SupportsMarkdown: (long)reader["supports_markdown"] == 1,
                 MaxMessageLength: reader["max_message_length"] is DBNull ? null : (int?)(long)reader["max_message_length"]);
 
-            logger.LogInformation("Loaded persisted channel capabilities for conversation {ConversationId}", conversationId);
-            return capabilities;
+            ChannelMetadata metadata = new ChannelMetadata(
+                ChannelName: (string)reader["channel_name"],
+                Capabilities: capabilities);
+
+            logger.LogInformation("Loaded persisted channel metadata for conversation {ConversationId}", conversationId);
+            return metadata;
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode == 1) // SQLITE_ERROR (e.g. table missing on legacy DB)
         {
-            logger.LogInformation("channel_capabilities table missing for conversation {ConversationId} (legacy DB), returning null", conversationId);
+            logger.LogInformation("channel_metadata table missing for conversation {ConversationId} (legacy DB), returning null", conversationId);
             return null;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to load channel capabilities for conversation {ConversationId}", conversationId);
+            logger.LogError(ex, "Failed to load channel metadata for conversation {ConversationId}", conversationId);
             throw;
         }
     }
@@ -535,8 +544,9 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
     request_timestamp TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS channel_capabilities (
+CREATE TABLE IF NOT EXISTS channel_metadata (
     id INTEGER PRIMARY KEY CHECK (id = 1),
+    channel_name           TEXT NOT NULL,
     supports_rich_cards    INTEGER NOT NULL,
     supports_quick_replies INTEGER NOT NULL,
     supports_streaming     INTEGER NOT NULL,

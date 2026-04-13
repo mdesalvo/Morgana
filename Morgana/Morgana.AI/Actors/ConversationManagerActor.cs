@@ -28,15 +28,16 @@ public class ConversationManagerActor : MorganaActor
     private readonly IChannelService channelService;
 
     /// <summary>
-    /// In-process registry where this actor publishes the per-conversation capability budget,
+    /// In-process registry where this actor publishes the per-conversation channel metadata,
     /// so the <c>AdaptingChannelService</c> decorator can degrade outbound messages on every
-    /// send and <c>ConversationSupervisorActor</c> can stamp the budget on per-turn agent requests.
+    /// send and <c>ConversationSupervisorActor</c> can stamp the capabilities on per-turn
+    /// agent requests.
     /// </summary>
-    private readonly IChannelCapabilityStore channelCapabilityStore;
+    private readonly IChannelMetadataStore channelMetadataStore;
 
     /// <summary>
-    /// Persistence service used to save the channel capabilities at conversation start
-    /// (handshake) and to load them on restore.
+    /// Persistence service used to save the channel metadata at conversation start
+    /// (handshake) and to load it on restore.
     /// </summary>
     private readonly IConversationPersistenceService conversationPersistenceService;
 
@@ -51,22 +52,22 @@ public class ConversationManagerActor : MorganaActor
     /// </summary>
     /// <param name="conversationId">Unique identifier for this conversation</param>
     /// <param name="channelService">Channel service used to deliver outbound messages to the end user</param>
-    /// <param name="channelCapabilityStore">Registry where this actor publishes the per-conversation capability budget</param>
-    /// <param name="conversationPersistenceService">Persistence service used to save/load the capability handshake</param>
+    /// <param name="channelMetadataStore">Registry where this actor publishes the per-conversation channel metadata</param>
+    /// <param name="conversationPersistenceService">Persistence service used to save/load the channel handshake</param>
     /// <param name="llmService">LLM service for AI completions</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     public ConversationManagerActor(
         string conversationId,
         IChannelService channelService,
-        IChannelCapabilityStore channelCapabilityStore,
+        IChannelMetadataStore channelMetadataStore,
         IConversationPersistenceService conversationPersistenceService,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         this.channelService = channelService;
-        this.channelCapabilityStore = channelCapabilityStore;
+        this.channelMetadataStore = channelMetadataStore;
         this.conversationPersistenceService = conversationPersistenceService;
 
         // Handle incoming user messages from SignalR:
@@ -99,19 +100,19 @@ public class ConversationManagerActor : MorganaActor
 
         if (supervisor is null)
         {
-            // Resolve and publish the per-conversation capability budget BEFORE creating the
+            // Resolve and publish the per-conversation channel metadata BEFORE creating the
             // supervisor, so any outbound message produced by the supervisor (including the
             // presentation on a fresh start) is already covered by the registered entry.
-            Records.ChannelCapabilities effectiveCapabilities = await ResolveCapabilitiesAsync(msg);
-            channelCapabilityStore.RegisterChannelCapabilities(msg.ConversationId, effectiveCapabilities);
+            Records.ChannelMetadata effectiveMetadata = await ResolveChannelMetadataAsync(msg);
+            channelMetadataStore.RegisterChannelMetadata(msg.ConversationId, effectiveMetadata);
             actorLogger.Info(
-                "Channel capabilities registered for {0}: rc={1}, qr={2}, str={3}, md={4}, max={5}",
-                msg.ConversationId,
-                effectiveCapabilities.SupportsRichCards,
-                effectiveCapabilities.SupportsQuickReplies,
-                effectiveCapabilities.SupportsStreaming,
-                effectiveCapabilities.SupportsMarkdown,
-                effectiveCapabilities.MaxMessageLength);
+                $"Channel metadata registered for {msg.ConversationId}: " +
+                $"channel={effectiveMetadata.ChannelName}, " +
+                $"rc={effectiveMetadata.Capabilities.SupportsRichCards}, " +
+                $"qr={effectiveMetadata.Capabilities.SupportsQuickReplies}, " +
+                $"str={effectiveMetadata.Capabilities.SupportsStreaming}, " +
+                $"md={effectiveMetadata.Capabilities.SupportsMarkdown}, " +
+                $"max={effectiveMetadata.Capabilities.MaxMessageLength}");
 
             supervisor = await Context.System.GetOrCreateActorAsync<ConversationSupervisorActor>(
                 "supervisor", msg.ConversationId);
@@ -131,64 +132,57 @@ public class ConversationManagerActor : MorganaActor
     }
 
     /// <summary>
-    /// Determines the effective channel capability budget for the conversation:
+    /// Determines the effective channel metadata for the conversation:
     /// <list type="bullet">
-    /// <item>Fresh start with caps in the request → persist them and use them.</item>
-    /// <item>Restore → load the persisted set; fall back to the channel's full capabilities
+    /// <item>Fresh start with metadata in the request → persist it and use it.</item>
+    /// <item>Restore → load the persisted metadata; fall back to the channel's own metadata
     /// when no persisted entry exists (legacy conversation predating the handshake).</item>
-    /// <item>Fresh start without caps (legacy client) → use the channel's full capabilities,
-    /// nothing is persisted (we cannot invent a budget on the client's behalf).</item>
+    /// <item>Fresh start without metadata (legacy client) → use the channel's own metadata,
+    /// nothing is persisted (we cannot invent a channel identity on the client's behalf).</item>
     /// </list>
     /// </summary>
-    private async Task<Records.ChannelCapabilities> ResolveCapabilitiesAsync(Records.CreateConversation msg)
+    private async Task<Records.ChannelMetadata> ResolveChannelMetadataAsync(Records.CreateConversation msg)
     {
         if (!msg.IsRestore)
         {
-            if (msg.Capabilities is not null)
+            if (msg.ChannelMetadata is not null)
             {
+                // Normalise ChannelName to lowercase at the ingress point so the name space stays case-insensitive end-to-end
+                Records.ChannelMetadata channelMetadata = msg.ChannelMetadata with
+                {
+                    ChannelName = msg.ChannelMetadata.ChannelName.ToLowerInvariant()
+                };
+
                 try
                 {
-                    await conversationPersistenceService.SaveChannelCapabilitiesAsync(msg.ConversationId, msg.Capabilities);
+                    await conversationPersistenceService.SaveChannelMetadataAsync(msg.ConversationId, channelMetadata);
                 }
                 catch (Exception ex)
                 {
-                    actorLogger.Error(ex, "Failed to persist channel capabilities for {0}; in-memory entry will still be registered", msg.ConversationId);
+                    actorLogger.Error(ex, "Failed to persist channel metadata for {0}; in-memory entry will still be registered", msg.ConversationId);
                 }
-                return msg.Capabilities;
+
+                return channelMetadata;
             }
 
-            actorLogger.Warning("Fresh conversation {0} started without channel capabilities; falling back to channel defaults", msg.ConversationId);
-            return channelService.Capabilities;
+            actorLogger.Warning("Fresh conversation {0} started without channel metadata; falling back to channel defaults", msg.ConversationId);
+            return channelService.Metadata;
         }
 
         // Restore path
         try
         {
-            Records.ChannelCapabilities? persisted = await conversationPersistenceService.LoadChannelCapabilitiesAsync(msg.ConversationId);
+            Records.ChannelMetadata? persisted = await conversationPersistenceService.LoadChannelMetadataAsync(msg.ConversationId);
             if (persisted is not null)
                 return persisted;
         }
         catch (Exception ex)
         {
-            actorLogger.Error(ex, "Failed to load persisted channel capabilities for {0}; falling back to channel defaults", msg.ConversationId);
+            actorLogger.Error(ex, "Failed to load persisted channel metadata for {0}; falling back to channel defaults", msg.ConversationId);
         }
 
-        actorLogger.Info("No persisted channel capabilities for {0} (legacy DB?); falling back to channel defaults", msg.ConversationId);
-
-        // One-shot migration: persist the fallback now so this legacy conversation is
-        // upgraded to schema v3 eagerly, instead of paying EnsureDatabaseInitializedAsync
-        // on the first agent-session save (which would block the first user turn).
-        Records.ChannelCapabilities fallback = channelService.Capabilities;
-        try
-        {
-            await conversationPersistenceService.SaveChannelCapabilitiesAsync(msg.ConversationId, fallback);
-            actorLogger.Info("Legacy conversation {0} migrated to schema v3 with default channel capabilities", msg.ConversationId);
-        }
-        catch (Exception ex)
-        {
-            actorLogger.Error(ex, "Failed to persist fallback channel capabilities for legacy conversation {0}; in-memory entry will still be registered", msg.ConversationId);
-        }
-        return fallback;
+        actorLogger.Info("No persisted channel metadata for {0} (legacy DB?); falling back to channel defaults", msg.ConversationId);
+        return channelService.Metadata;
     }
 
     /// <summary>
@@ -209,7 +203,7 @@ public class ConversationManagerActor : MorganaActor
             actorLogger.Info("Supervisor stopped for conversation {0}", msg.ConversationId);
         }
 
-        channelCapabilityStore.UnregisterChannelCapabilities(msg.ConversationId);
+        channelMetadataStore.UnregisterChannelMetadata(msg.ConversationId);
 
         return Task.CompletedTask;
     }
@@ -257,7 +251,7 @@ public class ConversationManagerActor : MorganaActor
     {
         // Skip streaming entirely on channels that don't support it.
         // The final response is delivered as a single structured message by HandleConversationResponseAsync.
-        if (!channelService.Capabilities.SupportsStreaming)
+        if (!channelService.Metadata.Capabilities.SupportsStreaming)
             return;
 
         // Forward chunk to client via the active channel for progressive rendering
@@ -346,7 +340,7 @@ public class ConversationManagerActor : MorganaActor
     {
         // Defensive cleanup: in case the actor stops without an explicit TerminateConversation
         // (supervision failure, system shutdown, ...), make sure the registry doesn't leak the entry.
-        channelCapabilityStore.UnregisterChannelCapabilities(conversationId);
+        channelMetadataStore.UnregisterChannelMetadata(conversationId);
 
         actorLogger.Info($"ConversationManagerActor stopped for {conversationId}");
         base.PostStop();

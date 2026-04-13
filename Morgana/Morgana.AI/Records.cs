@@ -63,13 +63,14 @@ public static class Records
     /// </summary>
     /// <param name="ConversationId">Unique identifier for the new conversation</param>
     /// <param name="IsRestore">Flag indicating that the conversation is being created or restored</param>
-    /// <param name="Capabilities">Channel capabilities declared by the originating client at start.
-    /// Null on restore (the manager will load the persisted set) and tolerated as null on legacy
-    /// fresh starts (callers fall back to the channel's full capability set).</param>
+    /// <param name="ChannelMetadata">Channel metadata declared by the originating client at start
+    /// (channel name + capability budget). Null on restore (the manager will load the persisted
+    /// entry) and tolerated as null on legacy fresh starts (callers fall back to the channel's
+    /// own self-advertised metadata).</param>
     public record CreateConversation(
         string ConversationId,
         bool IsRestore,
-        ChannelCapabilities? Capabilities = null);
+        ChannelMetadata? ChannelMetadata = null);
 
     /// <summary>
     /// Request to terminate a conversation and stop all associated actors.
@@ -601,14 +602,15 @@ public static class Records
     /// HTTP request model for starting a new conversation via REST API.
     /// </summary>
     /// <param name="ConversationId">Unique identifier for the conversation to create</param>
-    /// <param name="Capabilities">Capability set advertised by the originating channel/client.
-    /// From the channel-abstraction handshake onward every client is expected to declare its
-    /// capabilities here; legacy clients that omit the field are tolerated and fall back to
-    /// the channel's hard-coded full capability set.</param>
+    /// <param name="ChannelMetadata">Metadata advertised by the originating channel/client at
+    /// the handshake: channel name (e.g. <c>cauldron</c>, <c>twilio-sms</c>, …) plus the expressive
+    /// capability budget. From the channel-abstraction handshake onward every client is expected
+    /// to declare this here; legacy clients that omit the field are tolerated and fall back to
+    /// the channel's own self-advertised metadata.</param>
     /// <param name="InitialContext">Optional initial context information (reserved for future use)</param>
     public record StartConversationRequest(
         string ConversationId,
-        ChannelCapabilities? Capabilities = null,
+        ChannelMetadata? ChannelMetadata = null,
         Dictionary<string, object>? InitialContext = null);
 
     /// <summary>
@@ -693,6 +695,28 @@ public static class Records
             SupportsMarkdown: true,
             MaxMessageLength: null);
     }
+
+    /// <summary>
+    /// Wraps a <see cref="ChannelCapabilities"/> budget with the identity of the channel that
+    /// declared it, so Morgana can track "who" a conversation belongs to (Cauldron web UI, a
+    /// Twilio SMS bridge, an IVR gateway, …) in addition to "what" the channel can render.
+    /// </summary>
+    /// <remarks>
+    /// <para>The <see cref="ChannelName"/> is free-form and chosen by the client — it is the
+    /// label the channel uses to announce itself at the conversation-start handshake and is
+    /// preserved across restarts via the conversation persistence layer. It is intended for
+    /// observability, routing and per-channel policy (e.g. tailoring prompts by channel) and
+    /// is explicitly NOT a trust boundary.</para>
+    /// <para><see cref="Capabilities"/> carries the expressive budget the adapter consults on
+    /// every outbound send; identity and budget are separated so the latter can evolve
+    /// independently (new features, new limits) without reshaping the identity contract.</para>
+    /// </remarks>
+    /// <param name="ChannelName">Free-form label declared by the channel (e.g. <c>cauldron</c>,
+    /// <c>twilio-sms</c>). Persisted alongside the budget and preserved across restarts.</param>
+    /// <param name="Capabilities">Expressive capability budget advertised by the channel.</param>
+    public record ChannelMetadata(
+        string ChannelName,
+        ChannelCapabilities Capabilities);
 
     /// <summary>
     /// Transport-agnostic envelope for a structured outbound message delivered to the end user
