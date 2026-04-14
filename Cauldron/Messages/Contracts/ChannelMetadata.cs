@@ -19,20 +19,27 @@ namespace Cauldron.Messages.Contracts;
 /// </summary>
 public sealed class ChannelMetadata
 {
-    /// <summary>Stable identifier of the originating channel (e.g. <c>"cauldron"</c>, <c>"twilio-sms"</c>).</summary>
-    public string ChannelName { get; set; } = string.Empty;
+    /// <summary>Stable identifier of the originating channel. Required.</summary>
+    public required string ChannelName { get; set; }
 
-    /// <summary>Capability budget advertised by the originating channel.</summary>
-    public ChannelCapabilities Capabilities { get; set; } = new ChannelCapabilities();
+    /// <summary>Capability budget advertised by the originating channel. Required.</summary>
+    public required ChannelCapabilities Capabilities { get; set; }
 
     /// <summary>
     /// Shared singleton describing Cauldron's metadata: channel name <c>"cauldron"</c> plus
     /// the full capability set. Reused by the conversation lifecycle service at the start
     /// handshake to avoid allocating a fresh instance per call.
     /// </summary>
-    public static readonly ChannelMetadata Default = new ChannelMetadata
+    public static readonly ChannelMetadata Cauldron = new ChannelMetadata
     {
         ChannelName = "cauldron",
-        Capabilities = ChannelCapabilities.Default
+        Capabilities = new ChannelCapabilities
+        {
+            SupportsRichCards = true,
+            SupportsQuickReplies = true,
+            SupportsStreaming = true,
+            SupportsMarkdown = true,
+            MaxMessageLength = null
+        }
     };
 }

@@ -46,10 +46,11 @@ public class ConversationLifecycleService : IConversationLifecycleService
             HttpResponseMessage response = await _http.PostAsJsonAsync("/api/morgana/conversation/start", new
             {
                 conversationId = Guid.NewGuid().ToString("N"),
-                // Cauldron is the rich reference channel: announces itself by name and declares
-                // full capabilities at handshake so Morgana persists the metadata and stops
+
+                // Cauldron is the reference channel: announces itself by name and declares
+                // full capabilities at handshake, so Morgana persists the metadata and stops
                 // relying on hard-coded defaults.
-                channelMetadata = ChannelMetadata.Default
+                channelMetadata = ChannelMetadata.Cauldron
             });
 
             if (response.IsSuccessStatusCode)

@@ -17,31 +17,18 @@ namespace Cauldron.Messages.Contracts;
 /// </summary>
 public sealed class ChannelCapabilities
 {
-    /// <summary>True if Cauldron can render <see cref="RichCard"/> payloads.</summary>
-    public bool SupportsRichCards { get; set; }
+    /// <summary>True if Cauldron can render <see cref="RichCard"/> payloads. Required.</summary>
+    public required bool SupportsRichCards { get; set; }
 
-    /// <summary>True if Cauldron can render <see cref="QuickReply"/> buttons.</summary>
-    public bool SupportsQuickReplies { get; set; }
+    /// <summary>True if Cauldron can render <see cref="QuickReply"/> buttons. Required.</summary>
+    public required bool SupportsQuickReplies { get; set; }
 
-    /// <summary>True if Cauldron can consume the SignalR <c>ReceiveStreamChunk</c> event.</summary>
-    public bool SupportsStreaming { get; set; }
+    /// <summary>True if Cauldron can consume the SignalR <c>ReceiveStreamChunk</c> event. Required.</summary>
+    public required bool SupportsStreaming { get; set; }
 
-    /// <summary>True if Cauldron renders Markdown formatting in message text.</summary>
-    public bool SupportsMarkdown { get; set; }
+    /// <summary>True if Cauldron renders Markdown formatting in message text. Required.</summary>
+    public required bool SupportsMarkdown { get; set; }
 
     /// <summary>Optional hard limit on message text length in characters; null means no limit.</summary>
     public int? MaxMessageLength { get; set; }
-
-    /// <summary>
-    /// Shared singleton describing Cauldron's full capability set. Reused by the conversation
-    /// lifecycle service at the start handshake to avoid allocating a fresh instance per call.
-    /// </summary>
-    public static readonly ChannelCapabilities Default = new ChannelCapabilities
-    {
-        SupportsRichCards = true,
-        SupportsQuickReplies = true,
-        SupportsStreaming = true,
-        SupportsMarkdown = true,
-        MaxMessageLength = null
-    };
 }
