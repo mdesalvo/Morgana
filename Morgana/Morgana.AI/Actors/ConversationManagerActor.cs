@@ -134,55 +134,55 @@ public class ConversationManagerActor : MorganaActor
     /// <summary>
     /// Determines the effective channel metadata for the conversation:
     /// <list type="bullet">
-    /// <item>Fresh start with metadata in the request → persist it and use it.</item>
-    /// <item>Restore → load the persisted metadata; fall back to the channel's own metadata
-    /// when no persisted entry exists (legacy conversation predating the handshake).</item>
-    /// <item>Fresh start without metadata (legacy client) → use the channel's own metadata,
-    /// nothing is persisted (we cannot invent a channel identity on the client's behalf).</item>
+    /// <item>Fresh start → the controller gate guarantees metadata is present; persist it
+    /// (lowercased channel name) and return it.</item>
+    /// <item>Restore → the <c>ConversationExists</c> gate guarantees the DB exists; load and
+    /// return the persisted metadata. No fallback: a restore that reaches here without a
+    /// persisted row is a conversation that predates the channel handshake (or whose row was
+    /// lost) and we refuse to invent an identity on its behalf.</item>
     /// </list>
     /// </summary>
     private async Task<Records.ChannelMetadata> ResolveChannelMetadataAsync(Records.CreateConversation msg)
     {
         if (!msg.IsRestore)
         {
-            if (msg.ChannelMetadata is not null)
+            // Fresh start: the controller has already gated the request and guarantees
+            // ChannelMetadata is present (Morgana refuses handshakes from channels that do
+            // not announce themselves). A null here would be an internal bug, not a client
+            // mistake — fail loudly so the regression surfaces immediately.
+            if (msg.ChannelMetadata is null)
+                throw new InvalidOperationException(
+                    $"Fresh conversation {msg.ConversationId} reached the manager without channel metadata; " +
+                    "the start-conversation gate in MorganaController should have rejected this.");
+
+            // Normalise ChannelName to lowercase at the ingress point so the name space stays case-insensitive end-to-end
+            Records.ChannelMetadata channelMetadata = msg.ChannelMetadata with
             {
-                // Normalise ChannelName to lowercase at the ingress point so the name space stays case-insensitive end-to-end
-                Records.ChannelMetadata channelMetadata = msg.ChannelMetadata with
-                {
-                    ChannelName = msg.ChannelMetadata.ChannelName.ToLowerInvariant()
-                };
+                ChannelName = msg.ChannelMetadata.ChannelName.ToLowerInvariant()
+            };
 
-                try
-                {
-                    await conversationPersistenceService.SaveChannelMetadataAsync(msg.ConversationId, channelMetadata);
-                }
-                catch (Exception ex)
-                {
-                    actorLogger.Error(ex, "Failed to persist channel metadata for {0}; in-memory entry will still be registered", msg.ConversationId);
-                }
-
-                return channelMetadata;
+            try
+            {
+                await conversationPersistenceService.SaveChannelMetadataAsync(msg.ConversationId, channelMetadata);
+            }
+            catch (Exception ex)
+            {
+                actorLogger.Error(ex, "Failed to persist channel metadata for {0}; in-memory entry will still be registered", msg.ConversationId);
             }
 
-            actorLogger.Warning("Fresh conversation {0} started without channel metadata; falling back to channel defaults", msg.ConversationId);
-            return channelService.Metadata;
+            return channelMetadata;
         }
 
-        // Restore path
-        try
-        {
-            Records.ChannelMetadata? persisted = await conversationPersistenceService.LoadChannelMetadataAsync(msg.ConversationId);
-            if (persisted is not null)
-                return persisted;
-        }
-        catch (Exception ex)
-        {
-            actorLogger.Error(ex, "Failed to load persisted channel metadata for {0}; falling back to channel defaults", msg.ConversationId);
-        }
+        // Restore path: metadata must have been announced and persisted in a previous
+        // lifetime of the conversation. No fallback to the transport's self-advertised
+        // identity — that would reintroduce the transport≡channel coupling we just removed.
+        Records.ChannelMetadata? restoredChannelMetadata = await conversationPersistenceService.LoadChannelMetadataAsync(msg.ConversationId);
+        if (restoredChannelMetadata is null)
+            throw new InvalidOperationException(
+                $"Restore requested for conversation {msg.ConversationId} but no channel metadata is persisted; " +
+                "Morgana refuses to invent a channel identity for a conversation whose origin is unknown.");
 
-        actorLogger.Info("No persisted channel metadata for {0} (legacy DB?); falling back to channel defaults", msg.ConversationId);
-        return channelService.Metadata;
+        return restoredChannelMetadata;
     }
 
     /// <summary>
@@ -251,7 +251,12 @@ public class ConversationManagerActor : MorganaActor
     {
         // Skip streaming entirely on channels that don't support it.
         // The final response is delivered as a single structured message by HandleConversationResponseAsync.
-        if (!channelService.Metadata.Capabilities.SupportsStreaming)
+        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out Records.ChannelMetadata? registeredMetadata))
+            throw new InvalidOperationException(
+                $"No channel metadata registered for conversation {conversationId}; " +
+                "the start-conversation gate should have ensured registration before any stream chunk.");
+
+        if (!registeredMetadata.Capabilities.SupportsStreaming)
             return;
 
         // Forward chunk to client via the active channel for progressive rendering

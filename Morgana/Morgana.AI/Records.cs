@@ -64,9 +64,9 @@ public static class Records
     /// <param name="ConversationId">Unique identifier for the new conversation</param>
     /// <param name="IsRestore">Flag indicating that the conversation is being created or restored</param>
     /// <param name="ChannelMetadata">Channel metadata declared by the originating client at start
-    /// (channel name + capability budget). Null on restore (the manager will load the persisted
-    /// entry) and tolerated as null on legacy fresh starts (callers fall back to the channel's
-    /// own self-advertised metadata).</param>
+    /// (channel name + capability budget). Required on fresh starts — Morgana refuses to
+    /// create a conversation for a channel that does not announce itself. Null on restore,
+    /// where the manager loads the persisted entry instead.</param>
     public record CreateConversation(
         string ConversationId,
         bool IsRestore,
@@ -604,13 +604,12 @@ public static class Records
     /// <param name="ConversationId">Unique identifier for the conversation to create</param>
     /// <param name="ChannelMetadata">Metadata advertised by the originating channel/client at
     /// the handshake: channel name (e.g. <c>cauldron</c>, <c>twilio-sms</c>, …) plus the expressive
-    /// capability budget. From the channel-abstraction handshake onward every client is expected
-    /// to declare this here; legacy clients that omit the field are tolerated and fall back to
-    /// the channel's own self-advertised metadata.</param>
+    /// capability budget. Required: Morgana rejects start requests from channels that do not
+    /// announce both their name and their capability budget.</param>
     /// <param name="InitialContext">Optional initial context information (reserved for future use)</param>
     public record StartConversationRequest(
         string ConversationId,
-        ChannelMetadata? ChannelMetadata = null,
+        ChannelMetadata? ChannelMetadata,
         Dictionary<string, object>? InitialContext = null);
 
     /// <summary>

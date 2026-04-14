@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
@@ -25,7 +27,7 @@ public interface IChannelMetadataStore
     /// <summary>
     /// Registers (or replaces) the channel metadata for a conversation.
     /// </summary>
-    void RegisterChannelMetadata(string conversationId, Records.ChannelMetadata metadata);
+    void RegisterChannelMetadata(string conversationId, Records.ChannelMetadata channelMetadata);
 
     /// <summary>
     /// Removes the metadata entry for a conversation. No-op if no entry exists.
@@ -35,6 +37,8 @@ public interface IChannelMetadataStore
     /// <summary>
     /// Looks up the channel metadata for a conversation.
     /// </summary>
-    /// <returns>True when an entry exists; false otherwise (callers should fall back to the channel's hard-coded default metadata).</returns>
-    bool TryGetChannelMetadata(string conversationId, out Records.ChannelMetadata metadata);
+    /// <returns>True when an entry exists; false otherwise. A false result indicates that the
+    /// controller gate or the manager registration step was bypassed and callers must treat
+    /// this as an invariant violation — there is no transport-level default to fallback to.</returns>
+    bool TryGetChannelMetadata(string conversationId, [NotNullWhen(true)] out Records.ChannelMetadata? channelMetadata);
 }

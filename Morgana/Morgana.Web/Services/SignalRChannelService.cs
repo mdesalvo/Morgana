@@ -38,13 +38,6 @@ public class SignalRChannelService : IChannelService
     private readonly ILogger logger;
 
     /// <summary>
-    /// Channel metadata advertised by the SignalR + Cauldron channel: identifies itself as
-    /// <c>"cauldron"</c> and reuses the shared <see cref="ChannelCapabilities.Default"/>
-    /// singleton for the full feature set.
-    /// </summary>
-    public ChannelMetadata Metadata { get; } = new ChannelMetadata("cauldron", ChannelCapabilities.Default);
-
-    /// <summary>
     /// Initializes a new instance of the SignalRChannelService.
     /// </summary>
     /// <param name="hubContext">SignalR hub context for sending messages to clients</param>
@@ -61,17 +54,17 @@ public class SignalRChannelService : IChannelService
     /// The DTO is forwarded as-is and serialized by SignalR's JSON pipeline; the wire
     /// format stays compatible with Cauldron's client-side <c>SignalRMessage</c> schema.
     /// </summary>
-    /// <param name="message">The fully-formed channel message to deliver.</param>
+    /// <param name="channelMessage">The fully-formed channel message to deliver.</param>
     /// <returns>Task representing the async send operation</returns>
-    public async Task SendMessageAsync(ChannelMessage message)
+    public async Task SendMessageAsync(ChannelMessage channelMessage)
     {
         logger.LogInformation(
-            $"Sending structured message to conversation {message.ConversationId}: " +
-            $"type={message.MessageType}, agent={message.AgentName}, completed={message.AgentCompleted}, " +
-            $"#quickReplies={message.QuickReplies?.Count ?? 0}, hasRichCard={message.RichCard != null}");
+            $"Sending structured message to conversation {channelMessage.ConversationId}: " +
+            $"type={channelMessage.MessageType}, agent={channelMessage.AgentName}, completed={channelMessage.AgentCompleted}, " +
+            $"#quickReplies={channelMessage.QuickReplies?.Count ?? 0}, hasRichCard={channelMessage.RichCard != null}");
 
-        await hubContext.Clients.Group(message.ConversationId)
-            .SendAsync("ReceiveMessage", message);
+        await hubContext.Clients.Group(channelMessage.ConversationId)
+            .SendAsync("ReceiveMessage", channelMessage);
     }
 
     /// <summary>

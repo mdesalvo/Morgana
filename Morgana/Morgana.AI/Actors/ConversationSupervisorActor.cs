@@ -714,18 +714,21 @@ public class ConversationSupervisorActor : MorganaActor
     /// <summary>
     /// Resolves the capability budget to stamp on outgoing <see cref="Records.AgentRequest"/>s.
     /// Looks up the per-conversation metadata registered by <c>ConversationManagerActor</c> and
-    /// extracts its capabilities; falls back to the wrapped channel's own metadata when no
-    /// entry exists (legacy path). When the declared capabilities will trigger downstream
+    /// extracts its capabilities. A missing entry is an invariant violation — the controller
+    /// gate plus the manager's registration step guarantee metadata is in place before any
+    /// turn reaches the supervisor. When the declared capabilities will trigger downstream
     /// adaptation (the channel lacks at least one rich feature Morgana may produce), streaming
     /// is suppressed: streamed chunks bypass the adapter, so the user would see raw content
     /// that then gets visibly rewritten once the final adapted message lands — a jarring UX glitch.
     /// </summary>
     private Records.ChannelCapabilities GetEffectiveCapabilities()
     {
-        Records.ChannelCapabilities channelCapabilities =
-            channelMetadataStore.TryGetChannelMetadata(conversationId, out Records.ChannelMetadata registeredChannelMetadata)
-                ? registeredChannelMetadata.Capabilities
-                : channelService.Metadata.Capabilities;
+        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out Records.ChannelMetadata? registeredChannelMetadata))
+            throw new InvalidOperationException(
+                $"No channel metadata registered for conversation {conversationId}; " +
+                "the start-conversation gate and ConversationManagerActor should have ensured registration before any turn.");
+
+        Records.ChannelCapabilities channelCapabilities = registeredChannelMetadata.Capabilities;
 
         bool willNeedAdaptation = !channelCapabilities.SupportsRichCards
                                    || !channelCapabilities.SupportsQuickReplies

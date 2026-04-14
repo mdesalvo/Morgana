@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;
 
@@ -68,23 +69,20 @@ public class AdaptingChannelService : IChannelService, IChannelMetadataStore
     }
 
     /// <inheritdoc/>
-    /// <remarks>
-    /// Returns the wrapped channel's static metadata. Per-conversation metadata is served
-    /// via <see cref="IChannelMetadataStore.TryGetChannelMetadata"/> instead — consumers
-    /// needing the per-turn entry should look up the store keyed by conversation id.
-    /// </remarks>
-    public Records.ChannelMetadata Metadata => channelService.Metadata;
-
-    /// <inheritdoc/>
-    public async Task SendMessageAsync(Records.ChannelMessage message)
+    public async Task SendMessageAsync(Records.ChannelMessage channelMessage)
     {
-        Records.ChannelCapabilities effectiveCapabilities =
-            metadataByConversation.TryGetValue(message.ConversationId, out Records.ChannelMetadata? registered)
-                ? registered.Capabilities
-                : channelService.Metadata.Capabilities;
+        // The start-conversation gate in MorganaController refuses handshakes without channel
+        // metadata, and ConversationManagerActor registers the per-conversation entry before
+        // any outbound send happens. Reaching this send path without a registered entry is
+        // therefore an internal invariant violation — fail loud instead of silently falling
+        // back to the transport's own metadata.
+        if (!metadataByConversation.TryGetValue(channelMessage.ConversationId, out Records.ChannelMetadata? registeredChannelMetadata))
+            throw new InvalidOperationException(
+                $"No channel metadata registered for conversation {channelMessage.ConversationId}; " +
+                "the start-conversation gate should have ensured registration before any send.");
 
-        Records.ChannelMessage adapted = await channelAdapter.AdaptAsync(message, effectiveCapabilities);
-        await channelService.SendMessageAsync(adapted);
+        Records.ChannelMessage adaptedChannelMessage = await channelAdapter.AdaptAsync(channelMessage, registeredChannelMetadata.Capabilities);
+        await channelService.SendMessageAsync(adaptedChannelMessage);
     }
 
     /// <inheritdoc/>
@@ -92,23 +90,14 @@ public class AdaptingChannelService : IChannelService, IChannelMetadataStore
         channelService.SendStreamChunkAsync(conversationId, chunkText);
 
     /// <inheritdoc/>
-    public void RegisterChannelMetadata(string conversationId, Records.ChannelMetadata metadata) =>
-        metadataByConversation[conversationId] = metadata;
+    public void RegisterChannelMetadata(string conversationId, Records.ChannelMetadata channelMetadata) =>
+        metadataByConversation[conversationId] = channelMetadata;
 
     /// <inheritdoc/>
     public void UnregisterChannelMetadata(string conversationId) =>
         metadataByConversation.TryRemove(conversationId, out _);
 
     /// <inheritdoc/>
-    public bool TryGetChannelMetadata(string conversationId, out Records.ChannelMetadata metadata)
-    {
-        if (metadataByConversation.TryGetValue(conversationId, out Records.ChannelMetadata? value))
-        {
-            metadata = value;
-            return true;
-        }
-
-        metadata = channelService.Metadata;
-        return false;
-    }
+    public bool TryGetChannelMetadata(string conversationId, [NotNullWhen(true)] out Records.ChannelMetadata? channelMetadata) =>
+        metadataByConversation.TryGetValue(conversationId, out channelMetadata);
 }

@@ -94,6 +94,24 @@ public class MorganaController : ControllerBase
 
             logger.LogInformation("Starting conversation {RequestConversationId}", request.ConversationId);
 
+            // Morgana refuses to host a conversation for a channel that does not announce
+            // both its identity and its capability budget. The handshake is the only place
+            // where we learn who the peer is and what it can render, so a missing field here
+            // is never tolerated.
+            if (request.ChannelMetadata is null
+                || string.IsNullOrWhiteSpace(request.ChannelMetadata.ChannelName)
+                || request.ChannelMetadata.Capabilities is null)
+            {
+                logger.LogWarning(
+                    "Start requested for conversation {ConversationId} without channel metadata; returning 400",
+                    request.ConversationId);
+                return BadRequest(new
+                {
+                    error = "Channel metadata is required: clients must announce both channelName and capabilities at conversation start.",
+                    conversationId = request.ConversationId
+                });
+            }
+
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", request.ConversationId);
 
