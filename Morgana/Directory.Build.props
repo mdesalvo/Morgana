@@ -44,8 +44,8 @@
   <!-- Package References -->
   <ItemGroup>
     <!-- Actors -->
-    <PackageReference Include="Akka" Version="1.5.65" />
-    <PackageReference Include="Akka.DependencyInjection" Version="1.5.65" />
+    <PackageReference Include="Akka" Version="1.5.*" />
+    <PackageReference Include="Akka.DependencyInjection" Version="1.5.*" />
     <!-- Agents -->
     <PackageReference Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
     <PackageReference Include="Microsoft.Agents.AI" Version="1.1.0" />
@@ -58,16 +58,16 @@
     <PackageReference Include="ModelContextProtocol.Core" Version="1.2.0" />
     <PackageReference Include="OllamaSharp" Version="5.4.25" />
     <!-- Services -->
-    <PackageReference Include="Markdig" Version="1.1.2" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.5" />
-    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.0" />
+    <PackageReference Include="Markdig" Version="1.*" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.*" />
     <!-- OpenTelemetry -->
-    <PackageReference Include="OpenTelemetry" Version="1.15.1" />
-    <PackageReference Include="OpenTelemetry.Api" Version="1.15.1" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.1" />
-    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.15.1" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.1" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.1" />
+    <PackageReference Include="OpenTelemetry" Version="1.15.*" />
+    <PackageReference Include="OpenTelemetry.Api" Version="1.15.*" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.*" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.15.*" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.*" />
   </ItemGroup>
 
 </Project>
