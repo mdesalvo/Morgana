@@ -1,7 +1,7 @@
 <table style="border:none;" width="100%">
   <tr>
     <td width="160">
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Cauldron/wwwroot/images/morgana-animated2.gif" alt="Morgana Logo" width="160"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Cauldron/wwwroot/images/morgana-avatar.png" alt="Morgana Logo" width="160"/>
     </td>
     <td style="width:calc(100% - 160px);">
       <h1>Morgana <a href="https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Morgana-Handbook.html" title="Morgana Handbook">📜</a></h1>
