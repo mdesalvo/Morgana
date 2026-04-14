@@ -1,9 +1,9 @@
 <table style="border:none;" width="100%">
   <tr>
-    <td width="160">
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Cauldron/wwwroot/images/morgana-avatar.png" alt="Morgana Logo" width="160"/>
+    <td width="256">
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Cauldron/wwwroot/assets/Morgana.jpg" alt="Morgana Logo" width="256"/>
     </td>
-    <td style="width:calc(100% - 160px);">
+    <td style="width:calc(100% - 256px);">
       <h1>Morgana <a href="https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Morgana-Handbook.html" title="Morgana Handbook">📜</a></h1>
       <p><i>A magical witch assistant equipped with an enchanted grimoire powered by AI, yet shaped by you: your agents, your prompts, your tools...all woven into its spells.</i></p>
       <p>
