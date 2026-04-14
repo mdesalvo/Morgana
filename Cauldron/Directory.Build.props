@@ -37,9 +37,9 @@
   <!-- Package References -->
   <ItemGroup>
     <!-- ASP.NET SignalR -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.5" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.*" />
     <!-- ASP.NET Static Framework Assets -->
-    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.0.5" />
+    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.*" />
     <!-- JWT Authentication -->
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.0" />
     <!-- Markdown Parser -->
