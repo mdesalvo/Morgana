@@ -338,6 +338,21 @@ public class MorganaAgent : MorganaActor
 
             Self.Tell(new Records.FailureContext(new Status.Failure(ex), senderRef));
         }
+        finally
+        {
+            // Safety net: ephemeral UI variables (rich card, quick replies) must NEVER leak
+            // to the next turn. The happy path drops them above after reading, but if the LLM
+            // populated them via SetRichCard/SetQuickReplies tool calls and then the stream
+            // or the save threw, the happy-path drop is skipped and the stale values would be
+            // picked up by GetRichCardFromContext/GetQuickRepliesFromContext on the next turn.
+            // DropVariable is idempotent (no-op when the key is absent), so this is safe even
+            // after a successful path.
+            if (aiAgentSession is not null)
+            {
+                aiContextProvider.DropVariable(aiAgentSession, "rich_card");
+                aiContextProvider.DropVariable(aiAgentSession, "quick_replies");
+            }
+        }
     }
 
     private async Task HandleAgentFailureAsync(Records.FailureContext failure)

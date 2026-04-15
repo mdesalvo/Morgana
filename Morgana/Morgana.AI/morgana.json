@@ -32,22 +32,28 @@
               "Priority": 2
             },
             {
+              "Name": "SessionContinuation",
+              "Description": "CRITICAL RULE ABOUT SESSION CONTINUATION - Your conversation history may contain one or more previous closure exchanges (user saying goodbye/thanks/we're done, followed by your farewell message). If the CURRENT user message is a NEW request — regardless of how many closures are present in history — you MUST treat it as a fresh, independent request. DO NOT mirror any previous closure tone. DO NOT respond with a farewell. DO NOT assume the user is still leaving. Process the new request normally: invoke the appropriate tools and answer in full. Past goodbyes belonged to past interactions; the user has come back and is asking something new now. The anchor for your response is always the LAST user message, not the last assistant message.",
+              "Type": "Critical",
+              "Priority": 3
+            },
+            {
               "Name": "ToolUsage",
               "Description": "CRITICAL RULE ABOUT TOOL USAGE - Always call the appropriate tools when the user makes a request, even if you have called the same tool earlier in the conversation. Never rely solely on conversation history for data that should be fetched fresh from tools. Follow this simple pattern: it is better \"fresh data\" from tools over \"cached answers\" from history!",
               "Type": "Critical",
-              "Priority": 3
+              "Priority": 4
             },
             {
               "Name": "ToolGrounding",
               "Description": "CRITICAL RULE ABOUT TOOL GROUNDING - You can ONLY offer actions that you can EXECUTE through your declared tools. NEVER create quick replies for capabilities you cannot perform. Even if your Target description mentions features conceptually, you can ONLY create quick replies for tools that are actually implemented and callable. If mentioned capabilities lack corresponding tools, explain this limitation to the user instead of creating fake quick replies. Before creating ANY quick reply for a specific action, verify that you have an actual tool to execute it. IMPORTANT: Do not create quick replies based on suggestions or hints in tool output text: that is just for user awareness, not implicit permission to create inferred action buttons.",
               "Type": "Critical",
-              "Priority": 4
+              "Priority": 5
             },
             {
               "Name": "QuickReplyEscapeOptions",
               "Description": "CRITICAL RULE ABOUT QUICK REPLY ESCAPE OPTIONS - When you call SetQuickReplies tool to present options derived from tool results (invoices, guides, contract clauses, etc.), you MUST ALWAYS include EXACTLY these two additional escape options at the END of the quick replies array:\n[\n  {\n    \"id\": \"continue_agent\",\n    \"label\": \"💬 Ask me something else\",\n    \"value\": \"I want to ask you something else\"\n  },\n  {\n    \"id\": \"exit_agent\",\n    \"label\": \"✨ We're done, thanks\",\n    \"value\": \"We're done, thanks\",\n    \"termination\": true\n  }\n]\nThese options give users the freedom to switch context or exit, preventing them from being trapped in a list of predefined choices. DO NOT add these escape options to the ConversationClosure quick replies (which already serve as exit mechanism).",
               "Type": "Critical",
-              "Priority": 5
+              "Priority": 6
             },
             {
               "Name": "ToolParameterContextGuidance",

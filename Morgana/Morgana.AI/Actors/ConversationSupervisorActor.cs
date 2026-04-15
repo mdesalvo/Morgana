@@ -769,15 +769,6 @@ public class ConversationSupervisorActor : MorganaActor
     private void HandleRestoreActiveAgent(Records.RestoreActiveAgent msg)
     {
         actorLogger.Info($"Restoring active agent: {msg.AgentIntent}");
-
-        if (string.Equals(msg.AgentIntent, "Morgana", StringComparison.OrdinalIgnoreCase))
-        {
-            activeAgent = null;
-            activeAgentIntent = null;
-            actorLogger.Info("No active agent detected: fallback to Morgana");
-            return;
-        }
-
         router.Tell(new Records.RestoreAgentRequest(msg.AgentIntent));
     }
 

@@ -24,6 +24,11 @@ The outbound path is no longer hard-wired to `SignalR+Cauldron`: channels now de
 - Updated `OllamaSharp` dependency to 5.4.25
 
 ### 🐛 Fixed
+- Race condition on conversation resume where `MorganaController` created the `ConversationSupervisorActor` directly in parallel to `ConversationManagerActor.HandleCreateConversationAsync`, causing an `InvalidActorNameException` ("Actor name supervisor-... is not unique"), killing the manager and leaving the conversation without registered channel metadata. Resume now routes both `CreateConversation` and `RestoreActiveAgent` through the manager's mailbox, guaranteeing serial ordering and a single `ActorOf("supervisor-...")` call per conversation
+- Hard-coded `"Morgana"` sentinel was sent as `RestoreActiveAgent.AgentIntent` when no persisted active agent existed; the controller now simply skips the restore message entirely in that case, and the supervisor's corresponding sentinel branch has been removed
+- Ephemeral UI variables (`rich_card`, `quick_replies`) could leak across turns when the LLM populated them via `SetRichCard`/`SetQuickReplies` and the streaming phase or the persistence save threw before reaching the happy-path `DropVariable` calls. `MorganaAgent.ExecuteAgentAsync` now drops both variables in a `finally` block (idempotent), so stale cards/replies can never be replayed on the next turn
+- Reinforced `SetRichCard` prompting with mandatory JSON well-formedness rules both in the `RichCardUsage` global policy and in the tool parameter description, to reduce the rare cases where LLMs emit malformed JSON (missing braces, trailing commas) and the card is silently dropped
+- Added a new `SessionContinuation` critical global policy telling the agent to treat any current user message as a fresh, independent request when its history contains previous closure exchanges, instead of mirroring past farewells and producing another closure
 
 ### 🚀 Future Enablement
 - **Custom channels (IVR, SMS, Twilio, WhatsApp, plain HTTP client, …)** — With the `IChannelService` abstraction, the `AdaptingChannelService` decorator and the persistence-backed capability handshake all in place, a new outbound channel can plug in declaring its own capability budget at conversation start and get automatic degradation of any rich message without any change to producers, actors or prompts

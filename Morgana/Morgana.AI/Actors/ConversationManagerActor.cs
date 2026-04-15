@@ -78,8 +78,10 @@ public class ConversationManagerActor : MorganaActor
         // Handle conversation lifecycle requests:
         // - CreateConversation: creates supervisor actor, triggers automatic presentation generation
         // - TerminateConversation: stops supervisor actor and clears reference
+        // - RestoreActiveAgent: forwards the restore request to the supervisor (used on resume)
         ReceiveAsync<Records.CreateConversation>(HandleCreateConversationAsync);
         ReceiveAsync<Records.TerminateConversation>(HandleTerminateConversationAsync);
+        Receive<Records.RestoreActiveAgent>(HandleRestoreActiveAgent);
 
         // Handle supervisor responses (direct Tell, not PipeTo):
         // - ConversationResponse: final response from supervisor → send to client via SignalR
@@ -183,6 +185,28 @@ public class ConversationManagerActor : MorganaActor
                 "Morgana refuses to invent a channel identity for a conversation whose origin is unknown.");
 
         return restoredChannelMetadata;
+    }
+
+    /// <summary>
+    /// Forwards a <see cref="Records.RestoreActiveAgent"/> request to the supervisor.
+    /// Routing through the manager (instead of having the controller create the supervisor
+    /// directly) guarantees ordering: the preceding <see cref="Records.CreateConversation"/>
+    /// is drained from this mailbox first, so the supervisor and the channel metadata are
+    /// always registered before the restore request reaches it — no race between two parallel
+    /// <c>ActorOf("supervisor-...")</c> calls.
+    /// </summary>
+    private void HandleRestoreActiveAgent(Records.RestoreActiveAgent msg)
+    {
+        if (supervisor is null)
+        {
+            actorLogger.Warning(
+                "RestoreActiveAgent received but supervisor is not yet created for {0}; dropping request",
+                conversationId);
+            return;
+        }
+
+        actorLogger.Info("Forwarding RestoreActiveAgent(intent={0}) to supervisor", msg.AgentIntent);
+        supervisor.Tell(msg);
     }
 
     /// <summary>

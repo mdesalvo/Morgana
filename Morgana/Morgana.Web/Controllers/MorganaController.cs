@@ -198,9 +198,11 @@ public class MorganaController : ControllerBase
                 return NotFound(new { error = "Conversation not found", conversationId });
             }
 
+            // Resume the manager owning this conversation
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", conversationId);
 
+            // Send it the message to restore this conversation
             manager.Tell(new Records.CreateConversation(
                 conversationId, true));
 
@@ -208,10 +210,9 @@ public class MorganaController : ControllerBase
             string? lastActiveAgent = await conversationPersistenceService
                 .GetMostRecentActiveAgentAsync(conversationId);
 
-            // Tell supervisor to restore active agent
-            IActorRef supervisor = await actorSystem.GetOrCreateActorAsync<ConversationSupervisorActor>(
-                "supervisor", conversationId);
-            supervisor.Tell(new Records.RestoreActiveAgent(lastActiveAgent ?? "Morgana"));
+            // Tell manager to restore active agent, if found
+            if (!string.IsNullOrWhiteSpace(lastActiveAgent))
+                manager.Tell(new Records.RestoreActiveAgent(lastActiveAgent));
 
             logger.LogInformation(
                 "Conversation resume queued: {ConversationId} with active agent: {LastActiveAgent}", conversationId, lastActiveAgent);
