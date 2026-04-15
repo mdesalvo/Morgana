@@ -19,7 +19,7 @@ The outbound path is no longer hard-wired to `SignalR+Cauldron`: channels now de
 
 ### 🔄 Changed
 - Updated `Microsoft.Agents.AI` dependency to 1.1.0
-- Updated `Microsoft.Extensions.AI` dependency to 12.5.0
+- Updated `Microsoft.Extensions.AI` dependency to 10.5.0
 - Updated `ModelContextProtocol.Core` dependency to 1.2.0
 - Updated `OllamaSharp` dependency to 5.4.25
 
