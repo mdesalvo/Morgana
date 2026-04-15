@@ -20,15 +20,21 @@ namespace Morgana.AI.Services;
 /// SummarizingChatReducer instances that automatically manage conversation history length.</para>
 /// <para><strong>Summarization Strategy:</strong></para>
 /// <para>Uses Microsoft's SummarizingChatReducer which automatically summarizes older messages
-/// when conversation exceeds a threshold, preserving context while reducing message count and token usage.</para>
+/// once the conversation grows beyond a hysteresis buffer above the target count,
+/// preserving context while reducing message count and token usage.</para>
+/// <para><strong>Parameter Semantics (per MEAI <c>SummarizingChatReducer</c>):</strong></para>
+/// <list type="bullet">
+/// <item><term>SummarizationTargetCount</term><description>How many recent messages to keep verbatim after a reduction.</description></item>
+/// <item><term>SummarizationThreshold</term><description>Hysteresis buffer <em>above</em> the target. Reduction triggers when message count &gt; <c>TargetCount + Threshold</c> (NOT when it simply exceeds Threshold). E.g. target=8, threshold=12 → first reduction at 21 messages.</description></item>
+/// </list>
 /// <para><strong>Configuration Example:</strong></para>
 /// <code>
 /// {
 ///   "Morgana": {
 ///     "HistoryReducer": {
 ///       "Enabled": true,
-///       "SummarizationTargetCount": 8
-///       "SummarizationThreshold": 20
+///       "SummarizationTargetCount": 8,
+///       "SummarizationThreshold": 12
 ///     }
 ///   }
 /// }
@@ -65,19 +71,17 @@ public class SummarizingChatReducerService
     /// <returns>Configured SummarizingChatReducer or null if disabled</returns>
     /// <remarks>
     /// <para><strong>When Reducer is Triggered:</strong></para>
-    /// <para>When conversation message count exceeds SummarizationThreshold (e.g., 20 messages),
-    /// the reducer automatically:</para>
+    /// <para>When non-system message count &gt; <c>TargetCount + Threshold</c> (e.g. 8+12=20, so first
+    /// trigger at 21 messages), the reducer automatically:</para>
     /// <list type="number">
-    /// <item>Takes older messages (count - target, e.g., messages 1-12)</item>
-    /// <item>Summarizes them using the provided chatClient into 1-2 summary messages</item>
-    /// <item>Returns [Summary] + recent messages (e.g., messages 13-20)</item>
+    /// <item>Picks an anchor near <c>count - target</c>, preferring a user-role boundary</item>
+    /// <item>Summarizes all messages before the anchor into a single summary (stored as
+    /// <c>__summary__</c> in the anchor message's <c>AdditionalProperties</c>)</item>
+    /// <item>Returns [optional system msg] + [summary as assistant msg] + recent messages from the anchor onward</item>
     /// </list>
-    /// <para><strong>Performance Characteristics:</strong></para>
-    /// <list type="bullet">
-    /// <item>First 20 messages: No overhead, full context preserved</item>
-    /// <item>Message 21+: One-time summarization cost, then reduced context for all subsequent messages</item>
-    /// <item>Message 34+: Re-summarization (summarizes messages 1-26 fresh, no incremental summary)</item>
-    /// </list>
+    /// <para><strong>Note:</strong> <c>SummarizationThreshold</c> is a hysteresis buffer above
+    /// <c>SummarizationTargetCount</c>, NOT an absolute trigger count. See the class-level
+    /// remarks for details.</para>
     /// </remarks>
     public IChatReducer? CreateReducer(IChatClient chatClient)
     {
@@ -99,7 +103,8 @@ public class SummarizingChatReducerService
             chatReducer.SummarizationPrompt = summaryPrompt;
 
         logger.LogInformation(
-            "Created SummarizingChatReducer: threshold={Threshold} messages, target={TargetCount} messages", threshold, targetCount);
+            "Created SummarizingChatReducer: target={TargetCount}, threshold(buffer)={Threshold} → reduction triggers when message count > {Trigger}",
+            targetCount, threshold, targetCount + threshold);
 
         return chatReducer;
     }
