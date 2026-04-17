@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />
+    <File Path="CLAUDE.md" />
   </Folder>
   <Project Path="Morgana.AI\Morgana.AI.csproj" />
   <Project Path="Morgana.Web\Morgana.Web.csproj" />
