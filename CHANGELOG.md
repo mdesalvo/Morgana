@@ -18,10 +18,6 @@ The outbound path is no longer hard-wired to `SignalR+Cauldron`: channels now de
 - Introduced **per-conversation `ChannelCapabilities` with a persistence-backed handshake**: clients declare their capability budget at `POST /conversation/start`, Morgana persists it in a new `channel_capabilities` table (SQLite schema v3) via a first-writer pattern, and `ConversationManagerActor` publishes the effective budget into a new `IChannelCapabilityStore` in-process registry so `AdaptingChannelService` can degrade per conversation and `ConversationSupervisorActor` can stamp the budget on every agent turn. The handshake is honoured on both fresh start and restore (legacy conversations are migrated eagerly on first touch)
 
 ### 🔄 Changed
-- Updated `Microsoft.Agents.AI` dependency to 1.1.0
-- Updated `Microsoft.Extensions.AI` dependency to 10.5.0
-- Updated `ModelContextProtocol.Core` dependency to 1.2.0
-- Updated `OllamaSharp` dependency to 5.4.25
 
 ### 🐛 Fixed
 - Race condition on conversation resume where `MorganaController` created the `ConversationSupervisorActor` directly in parallel to `ConversationManagerActor.HandleCreateConversationAsync`, causing an `InvalidActorNameException` ("Actor name supervisor-... is not unique"), killing the manager and leaving the conversation without registered channel metadata
