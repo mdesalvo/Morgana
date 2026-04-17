@@ -10,55 +10,55 @@ Cauldron lives at `Cauldron/` in the repo root, separate from the `Morgana/` wor
 
 ```
 Cauldron/
-  Pages/Index.razor              # Main chat page (single-page app)
-  Components/                    # Reusable Blazor components
-    RichCard.razor               # Rich card container (dispatches to sub-renderers)
-    RichCardTextBlock.razor      # text_block component
-    RichCardKeyValue.razor       # key_value component
-    RichCardDivider.razor        # divider component
-    RichCardList.razor           # list component
-    RichCardSection.razor        # section component
-    RichCardGrid.razor           # grid component
-    RichCardBadge.razor          # badge component
-    RichCardImage.razor          # image component
-    RichCardComponent.razor      # Polymorphic dispatcher (type discriminator → sub-renderer)
-    QuickReplyButton.razor       # Quick reply button row
-    FadingMessage.razor          # Temporary system warning banners (auto-dismiss)
-    SendButton.razor             # Animated send button with agent-specific styling
-    ConfirmModal.razor           # Modal dialog for "New Conversation" confirmation
+  Pages/Index.razor                   # Main chat page (single-page app)
+  Components/                         # Reusable Blazor components
+    RichCard.razor                    # Rich card container (dispatches to sub-renderers)
+    RichCardTextBlock.razor           # text_block component
+    RichCardKeyValue.razor            # key_value component
+    RichCardDivider.razor             # divider component
+    RichCardList.razor                # list component
+    RichCardSection.razor             # section component
+    RichCardGrid.razor                # grid component
+    RichCardBadge.razor               # badge component
+    RichCardImage.razor               # image component
+    RichCardComponent.razor           # Polymorphic dispatcher (type discriminator → sub-renderer)
+    QuickReplyButton.razor            # Quick reply button row
+    FadingMessage.razor               # Temporary system warning banners (auto-dismiss)
+    SendButton.razor                  # Animated send button with agent-specific styling
+    ConfirmModal.razor                # Modal dialog for "New Conversation" confirmation
   Handlers/
-    MorganaAuthHandler.cs        # DelegatingHandler: self-issues JWT tokens for Morgana API auth
+    MorganaAuthHandler.cs             # DelegatingHandler: self-issues JWT tokens for Morgana API auth
   Interfaces/
-    IChatStateService.cs         # Chat UI state management contract
+    IChatStateService.cs              # Chat UI state management contract
     IConversationLifecycleService.cs  # Start/resume/clear conversation contract
     IConversationStorageService.cs    # Browser localStorage persistence contract
     IConversationHistoryService.cs    # History fetch contract
     ILandingMessageService.cs         # Welcome message contract
     IStreamingService.cs              # Streaming lifecycle contract
   Services/
-    SignalRService.cs            # SignalR client: connection, events, auto-reconnect
+    SignalRService.cs                 # SignalR client: connection, events, auto-reconnect
     ConversationLifecycleService.cs   # Orchestrates REST API + SignalR + storage
-    ChatStateService.cs          # In-memory UI state (messages, agent, sending, etc.)
-    StreamingService.cs          # Chunk buffering, typewriter timer, finalization
+    ChatStateService.cs               # In-memory UI state (messages, agent, sending, etc.)
+    StreamingService.cs               # Chunk buffering, typewriter timer, finalization
     ProtectedLocalStorageService.cs   # IConversationStorageService → ProtectedLocalStorage
     ConversationHistoryService.cs     # GET api/morgana/conversation/{id}/history
-    LandingMessageService.cs     # Random welcome message during sparkle loader
-    MarkdownRendererService.cs   # Markdig-based HTML rendering for message text
+    LandingMessageService.cs          # Random welcome message during sparkle loader
+    MarkdownRendererService.cs        # Markdig-based HTML rendering for message text
   Messages/
-    ChatMessage.cs               # UI-side message model (text, role, agent, quickReplies, richCard, streaming state)
-    Contracts/                   # DTOs mirroring Morgana's wire format
-      ChannelMessage.cs          # SignalR "ReceiveMessage" payload
-      ChannelMetadata.cs         # Handshake metadata (with Cauldron singleton)
-      ChannelCapabilities.cs     # Feature flags (richCards, quickReplies, streaming, markdown, maxLength)
-      QuickReply.cs              # Quick reply button definition (id, label, value)
-      RichCard.cs                # Rich card with polymorphic CardComponent array
+    ChatMessage.cs                    # UI-side message model (text, role, agent, quickReplies, richCard, streaming state)
+    Contracts/                        # DTOs mirroring Morgana's wire format
+      ChannelMessage.cs               # SignalR "ReceiveMessage" payload
+      ChannelMetadata.cs              # Handshake metadata (with Cauldron singleton)
+      ChannelCapabilities.cs          # Feature flags (richCards, quickReplies, streaming, markdown, maxLength)
+      QuickReply.cs                   # Quick reply button definition (id, label, value)
+      RichCard.cs                     # Rich card with polymorphic CardComponent array
     ConversationStartResponse.cs
     ConversationResumeResponse.cs
     ConversationHistoryResponse.cs
-  Program.cs                     # DI wiring and app pipeline
-  Shared/MainLayout.razor        # Layout wrapper
-  wwwroot/css/                   # Component-specific CSS (site.css, rich-card.css, quick-reply.css, etc.)
-  wwwroot/images/                # Morgana avatar images
+  Program.cs                          # DI wiring and app pipeline
+  Shared/MainLayout.razor             # Layout wrapper
+  wwwroot/css/                        # Component-specific CSS (site.css, rich-card.css, quick-reply.css, etc.)
+  wwwroot/images/                     # Morgana avatar images
 ```
 
 ## Architecture
