@@ -36,14 +36,12 @@
 
   <!-- Package References -->
   <ItemGroup>
-    <!-- ASP.NET SignalR -->
+    <!-- ASP.NET -->
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.*" />
-    <!-- ASP.NET Static Framework Assets -->
     <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.*" />
-    <!-- JWT Authentication -->
-    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.*" />
-    <!-- Markdown Parser -->
+    <!-- Services -->
     <PackageReference Include="Markdig" Version="1.*" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.*" />
   </ItemGroup>
 
 </Project>
