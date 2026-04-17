@@ -247,16 +247,18 @@ public class ChatStateService : IChatStateService
     // =========================================================================
 
     /// <summary>
-    /// True if any message has unselected quick replies from a history restore.
+    /// True if any message has unselected quick replies that are still actionable
+    /// (live messages with IsLastHistoryMessage == null, or the last message of a resumed history).
     /// </summary>
     public bool HasActiveQuickReplies() =>
-        ChatMessages.Any(m => m is { QuickReplies: not null, SelectedQuickReplyId: null, IsLastHistoryMessage: true });
+        ChatMessages.Any(m => m is { QuickReplies: { Count: > 0 }, SelectedQuickReplyId: null, IsLastHistoryMessage: not false });
 
     /// <summary>
-    /// True if any message has a rich card from a history restore.
+    /// True if any message has a rich card that is still the latest context
+    /// (live messages with IsLastHistoryMessage == null, or the last message of a resumed history).
     /// </summary>
     public bool HasActiveRichCard() =>
-        ChatMessages.Any(m => m is { RichCard: not null, IsLastHistoryMessage: true });
+        ChatMessages.Any(m => m is { RichCard: not null, IsLastHistoryMessage: not false });
 
     /// <summary>
     /// True if any message is currently showing a typing indicator.
