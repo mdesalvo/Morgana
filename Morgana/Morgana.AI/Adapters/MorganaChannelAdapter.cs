@@ -168,8 +168,7 @@ public class MorganaChannelAdapter
         catch (Exception ex)
         {
             logger.LogError(ex,
-                "MorganaChannelAdapter: LLM rewrite failed for {ConversationId} — using template fallback",
-                channelMessage.ConversationId);
+                "MorganaChannelAdapter: LLM rewrite failed for {ConversationId} — using template fallback", channelMessage.ConversationId);
         }
 
         // ── Template fallback ─────────────────────────────────────────────────────
@@ -215,17 +214,21 @@ public class MorganaChannelAdapter
 
     /// <summary>
     /// Enforces <see cref="Records.ChannelCapabilities.MaxMessageLength"/> on <paramref name="text"/>.
-    /// Used by both the LLM rewrite path (post-processing safety net: the prompt asks the model
-    /// to respect the limit but we cannot trust it) and the template fallback path.
-    /// Returns the original text unchanged when no limit is declared or the limit is non-positive.
-    /// When truncation is needed, leaves room for a trailing ellipsis marker.
+    /// If the text overflows, markdown is stripped first (cheaper, often enough to fit); any
+    /// residual overflow is then truncated with an ellipsis, guaranteeing the cut lands on
+    /// plain prose and never leaves dangling markdown syntax (<c>**text…</c>, <c>[label…</c>).
+    /// Returns <paramref name="text"/> unchanged when no limit is declared or it already fits.
     /// </summary>
     private static string EnforceLengthBudget(string text, Records.ChannelCapabilities channelCapabilities)
     {
         if (channelCapabilities.MaxMessageLength is not { } max || max <= 0 || text.Length <= max)
             return text;
 
-        return text[..Math.Max(0, max - 1)] + "…";
+        string plain = StripMarkdown(text);
+        if (plain.Length <= max)
+            return plain;
+
+        return plain[..Math.Max(0, max - 1)] + "…";
     }
 
     // ── Template fallback ─────────────────────────────────────────────────────────
