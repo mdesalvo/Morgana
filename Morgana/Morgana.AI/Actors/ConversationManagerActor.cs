@@ -157,10 +157,15 @@ public class ConversationManagerActor : MorganaActor
                     $"Fresh conversation {msg.ConversationId} reached the manager without channel metadata; " +
                     "the start-conversation gate in MorganaController should have rejected this.");
 
-            // Normalise ChannelName to lowercase at the ingress point so the name space stays case-insensitive end-to-end
+            // Normalise the declaration at the ingress so every downstream consumer sees
+            // consistent data: ChannelName is lowercased so the name space stays
+            // case-insensitive end-to-end, and Capabilities are reconciled against the
+            // AdaptiveMessaging policy (see NormaliseCapabilities) before being persisted
+            // and registered.
             Records.ChannelMetadata channelMetadata = msg.ChannelMetadata with
             {
-                ChannelName = msg.ChannelMetadata.ChannelName.ToLowerInvariant()
+                ChannelName = msg.ChannelMetadata.ChannelName.ToLowerInvariant(),
+                Capabilities = NormaliseCapabilities(msg.ChannelMetadata.Capabilities)
             };
 
             try
@@ -188,6 +193,35 @@ public class ConversationManagerActor : MorganaActor
     }
 
     /// <summary>
+    /// Normalises incoming <see cref="Records.ChannelCapabilities"/> so clearly incoherent
+    /// declarations are reconciled at the ingress, not carried all the way to the adapter.
+    /// A channel whose hard per-message cap falls below
+    /// <c>Morgana:AdaptiveMessaging:RichFeaturesMinLength</c> is treated as primitive:
+    /// rich cards and quick replies cannot fit inside such a small budget alongside the
+    /// textual body, so the flags are cleared regardless of what the client announced.
+    /// Streaming is intentionally not touched here — it is a property of the transport
+    /// (connection-oriented vs store-and-forward), orthogonal to the length cap. A channel
+    /// that advertises streaming with a small cap is trusted until the client corrects it.
+    /// Setting the threshold to <c>null</c> or a non-positive value disables the heuristic
+    /// and restores full trust of the declaration.
+    /// </summary>
+    private Records.ChannelCapabilities NormaliseCapabilities(Records.ChannelCapabilities declaredCapabilities)
+    {
+        if (declaredCapabilities.MaxMessageLength is not { } max)
+            return declaredCapabilities;
+
+        int threshold = configuration.GetValue<int>("Morgana:AdaptiveMessaging:RichFeaturesMinLength", 0);
+        if (threshold <= 0 || max >= threshold)
+            return declaredCapabilities;
+
+        return declaredCapabilities with
+        {
+            SupportsRichCards = false,
+            SupportsQuickReplies = false
+        };
+    }
+
+    /// <summary>
     /// Forwards a <see cref="Records.RestoreActiveAgent"/> request to the supervisor.
     /// Routing through the manager (instead of having the controller create the supervisor
     /// directly) guarantees ordering: the preceding <see cref="Records.CreateConversation"/>
@@ -199,9 +233,7 @@ public class ConversationManagerActor : MorganaActor
     {
         if (supervisor is null)
         {
-            actorLogger.Warning(
-                "RestoreActiveAgent received but supervisor is not yet created for {0}; dropping request",
-                conversationId);
+            actorLogger.Warning("RestoreActiveAgent received but supervisor is not yet created for {0}; dropping request", conversationId);
             return;
         }
 

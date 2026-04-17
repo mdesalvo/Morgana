@@ -263,7 +263,8 @@ At application startup, three registries perform comprehensive validation:
 | `Morgana:LLM:{Provider}` | Provider-specific settings (ApiKey, Model, Endpoint, DeploymentName) |
 | `Morgana:ActorSystem:TimeoutSeconds` | Actor/agent receive timeout (default 180s) |
 | `Morgana:ActorSystem:EnableGuardrail` | Toggle guard rail (useful for local dev) |
-| `Morgana:StreamingResponse:Enabled` | Toggle streaming responses |
+| `Morgana:AdaptiveMessaging:StreamingResponse:Enabled` | Toggle streaming responses |
+| `Morgana:AdaptiveMessaging:RichFeaturesMinLength` | Ingress heuristic: if the client's `MaxMessageLength` is below this threshold, `SupportsRichCards` and `SupportsQuickReplies` are forced to `false` at the handshake (SMS/IVR profile). Null/0 disables the heuristic. Streaming is unaffected |
 | `Morgana:ConversationPersistence` | StoragePath, EncryptionKey (AES-256, base64, must be 32 bytes) |
 | `Morgana:RateLimiting` | Enabled, MaxMessagesPerMinute/Hour/Day, custom ErrorMessage templates with `{limit}` placeholder |
 | `Morgana:Authentication` | Enabled, SymmetricKey (min 256-bit), ValidIssuers, Audience |

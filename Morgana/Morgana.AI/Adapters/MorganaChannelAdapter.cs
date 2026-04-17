@@ -130,17 +130,24 @@ public class MorganaChannelAdapter
 
             if (channelAdapterResponse != null && !string.IsNullOrWhiteSpace(channelAdapterResponse.Text))
             {
+                // The LLM prompt instructs it to respect maxMessageLength, but we cannot trust it:
+                // a rewrite that overshoots the hard limit would fail downstream on length-capped
+                // channels (SMS, IVR, …). Apply the budget enforcement locally so the adapter
+                // contract holds regardless of how disciplined the model was.
+                string enforcedText = EnforceLengthBudget(channelAdapterResponse.Text, channelCapabilities);
+
                 logger.LogInformation(
                     "MorganaChannelAdapter: LLM rewrite succeeded for {ConversationId} " +
-                    "(rewrittenLength={Length}, rewrittenQuickReplies={QuickReplyCount})",
+                    "(rewrittenLength={Length}, enforcedLength={EnforcedLength}, rewrittenQuickReplies={QuickReplyCount})",
                     channelMessage.ConversationId,
                     channelAdapterResponse.Text.Length,
+                    enforcedText.Length,
                     channelAdapterResponse.QuickReplies?.Count ?? 0);
 
                 return new Records.ChannelMessage
                 {
                     ConversationId = channelMessage.ConversationId,
-                    Text = channelAdapterResponse.Text,
+                    Text = enforcedText,
                     Timestamp = channelMessage.Timestamp,
                     MessageType = channelMessage.MessageType,
                     QuickReplies = channelCapabilities.SupportsQuickReplies
@@ -206,6 +213,21 @@ public class MorganaChannelAdapter
         return false;
     }
 
+    /// <summary>
+    /// Enforces <see cref="Records.ChannelCapabilities.MaxMessageLength"/> on <paramref name="text"/>.
+    /// Used by both the LLM rewrite path (post-processing safety net: the prompt asks the model
+    /// to respect the limit but we cannot trust it) and the template fallback path.
+    /// Returns the original text unchanged when no limit is declared or the limit is non-positive.
+    /// When truncation is needed, leaves room for a trailing ellipsis marker.
+    /// </summary>
+    private static string EnforceLengthBudget(string text, Records.ChannelCapabilities channelCapabilities)
+    {
+        if (channelCapabilities.MaxMessageLength is not { } max || max <= 0 || text.Length <= max)
+            return text;
+
+        return text[..Math.Max(0, max - 1)] + "…";
+    }
+
     // ── Template fallback ─────────────────────────────────────────────────────────
 
     private static Records.ChannelMessage BuildTemplateFallback(
@@ -234,8 +256,7 @@ public class MorganaChannelAdapter
         if (!channelCapabilities.SupportsMarkdown)
             text = StripMarkdown(text);
 
-        if (channelCapabilities.MaxMessageLength is { } max && text.Length > max)
-            text = text.Length <= max ? text : text[..Math.Max(0, max - 1)] + "…";
+        text = EnforceLengthBudget(text, channelCapabilities);
 
         return new Records.ChannelMessage
         {

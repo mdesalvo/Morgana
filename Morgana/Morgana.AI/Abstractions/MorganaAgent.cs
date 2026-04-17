@@ -221,11 +221,11 @@ public class MorganaAgent : MorganaActor
             ChatMessage userMessage = new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow };
 
             // Streaming is gated on two independent signals:
-            //   1. Global config flag (Morgana:StreamingResponse:Enabled)
+            //   1. Global config flag (Morgana:AdaptiveMessaging:StreamingResponse:Enabled)
             //   2. Channel capability — we don't even attach to the LLM streaming endpoint
             //      when the outbound channel can't deliver chunks to the user. When Capabilities
             //      is null (legacy/test paths) we assume the channel supports streaming.
-            bool streamingConfigEnabled = configuration.GetValue("Morgana:StreamingResponse:Enabled", true);
+            bool streamingConfigEnabled = configuration.GetValue("Morgana:AdaptiveMessaging:StreamingResponse:Enabled", true);
             bool channelSupportsStreaming = req.Capabilities?.SupportsStreaming ?? true;
             bool useStreaming = streamingConfigEnabled && channelSupportsStreaming;
 
