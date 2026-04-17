@@ -30,7 +30,7 @@ The outbound path is no longer hard-wired to `SignalR+Cauldron`: channels now de
 - Cauldron circuit crashed with `InvalidOperationException: Collection was modified; enumeration operation may not execute` when SignalR `ReceiveMessage` / `ReceiveStreamChunk` callbacks mutated `ChatStateService.ChatMessages` on the SignalR dispatch thread while Blazor's `BuildRenderTree` enumerated the same list on the circuit thread
 
 ### 🚀 Future Enablement
-- **Custom channels (IVR, SMS, Twilio, WhatsApp, plain HTTP client, …)** — With the `IChannelService` abstraction, the `AdaptingChannelService` decorator and the persistence-backed capability handshake all in place, a new outbound channel can plug in declaring its own capability budget at conversation start and get automatic degradation of any rich message without any change to producers, actors or prompts
+- **Custom channels (IVR, SMS, RCS, Twilio, WhatsApp, plain HTTP client, …)** — With the `IChannelService` abstraction, the `AdaptingChannelService` decorator and the persistence-backed capability handshake all in place, a new outbound channel can plug in declaring its own capability budget at conversation start and get automatic degradation of any rich message without any change to producers, actors or prompts
 
 
 ## [0.20.1] - 2026-04-08
