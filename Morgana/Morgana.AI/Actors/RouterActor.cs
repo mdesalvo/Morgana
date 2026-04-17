@@ -38,6 +38,16 @@ public class RouterActor : MorganaActor
     private readonly IAgentRegistryService agentResolverService;
 
     /// <summary>
+    /// Reference to the <see cref="ConversationSupervisorActor"/>, captured from the first
+    /// <see cref="Records.AgentRequest"/> (which the supervisor always originates).
+    /// Used as the fallback destination for late stream chunks whose <c>streamingContexts</c>
+    /// entry has already been cleaned up — routing them to <c>Context.Parent</c> would
+    /// hit <c>/user</c> (the router is created flat under the guardian, not as a child
+    /// of the supervisor) and land in dead letters.
+    /// </summary>
+    private IActorRef? supervisorRef;
+
+    /// <summary>
     /// Initializes a new instance of the RouterActor.
     /// Does NOT pre-create agents - they are created on-demand when first needed.
     /// </summary>
@@ -127,6 +137,11 @@ public class RouterActor : MorganaActor
     private async Task RouteToAgentAsync(Records.AgentRequest req)
     {
         IActorRef originalSender = Sender;
+
+        // The supervisor is always the originator of AgentRequest — cache it on first contact
+        // so late stream chunks (see HandleAgentStreamChunk fallback) can still be routed to it.
+        supervisorRef ??= originalSender;
+
         Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
 
         // Validate classification exists
@@ -276,11 +291,19 @@ public class RouterActor : MorganaActor
             // No logging to avoid spamming logs with partial text
             originalSender.Tell(chunk);
         }
+        else if (supervisorRef is not null)
+        {
+            // Fallback: streamingContexts has already been cleaned up (e.g. late chunk after
+            // AgentResponse). Forward to the cached supervisor ref — Context.Parent would
+            // resolve to /user (router is flat under the guardian) and land in dead letters.
+            actorLogger.Warning($"Late streaming chunk from {agentSender.Path}, forwarding to supervisor");
+            supervisorRef.Tell(chunk);
+        }
         else
         {
-            // Fallback: forward to parent (supervisor) - should not happen in normal flow
-            actorLogger.Warning($"Streaming chunk received from unknown agent {agentSender.Path}, forwarding to parent");
-            Context.Parent.Tell(chunk);
+            // No AgentRequest has been routed yet, so we have no supervisor ref to fall back to.
+            // Dropping is correct: the message has no legitimate destination at this point.
+            actorLogger.Warning($"Streaming chunk from {agentSender.Path} before any AgentRequest; dropping");
         }
     }
 

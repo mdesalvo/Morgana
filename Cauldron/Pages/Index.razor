@@ -303,61 +303,70 @@
     /// <returns>Task representing the async message handling</returns>
     private async Task HandleMessageReceivedAsync(ChannelMessage message)
     {
-        try
+        // Marshal the entire handler onto the circuit's SynchronizationContext so that
+        // mutations on ChatMessages/TemporaryMessages cannot interleave with BuildRenderTree
+        // (which enumerates the same lists on the circuit thread). Running the mutations on
+        // the SignalR dispatch thread caused "Collection was modified; enumeration operation
+        // may not execute" during concurrent renders, tearing down the circuit.
+        await InvokeAsync(async () =>
         {
-            // Temporary messages (system warnings, errors) - display as banners
-            if (string.Equals(message.MessageType, "system_warning", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(message.MessageType, "error", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                ChatStateService.TemporaryMessages.Add(message);
-                await InvokeAsync(StateHasChanged);
-                return;
-            }
+                // Temporary messages (system warnings, errors) - display as banners
+                if (string.Equals(message.MessageType, "system_warning", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(message.MessageType, "error", StringComparison.OrdinalIgnoreCase))
+                {
+                    ChatStateService.TemporaryMessages.Add(message);
+                    StateHasChanged();
+                    return;
+                }
 
-            // Verify message is for this conversation
-            if (ChatStateService.ConversationId != message.ConversationId)
-                return;
+                // Verify message is for this conversation
+                if (ChatStateService.ConversationId != message.ConversationId)
+                    return;
 
-            // PATH 1: Finalize active streaming
-            if (StreamingService.IsStreaming)
-            {
-                StreamingService.FinalizeStreaming(message);
+                // PATH 1: Finalize active streaming
+                if (StreamingService.IsStreaming)
+                {
+                    StreamingService.FinalizeStreaming(message);
+                    ChatStateService.UpdateAgentFromMessage(message);
+                    ChatStateService.AddCompletionMessageIfNeeded(message);
+                    ChatStateService.IsSending = false;
+                    StateHasChanged();
+                    return;
+                }
+
+                // PATH 2: Non-streaming message (presentation, history restore)
+                ChatStateService.RemoveTypingIndicator();
                 ChatStateService.UpdateAgentFromMessage(message);
+
+                // Add main agent message
+                ChatStateService.ChatMessages.Add(new ChatMessage
+                {
+                    ConversationId = message.ConversationId,
+                    Text = message.Text,
+                    Role = "assistant",
+                    Timestamp = message.Timestamp,
+                    QuickReplies = message.QuickReplies,
+                    AgentName = message.AgentName ?? "Morgana",
+                    AgentCompleted = false,
+                    RichCard = message.RichCard
+                });
+
+                // Add completion message if needed (shared logic)
                 ChatStateService.AddCompletionMessageIfNeeded(message);
+
+                // Reset sending state - message received via SignalR
                 ChatStateService.IsSending = false;
-                await InvokeAsync(StateHasChanged);
-                return;
+
+                StateHasChanged();
             }
-
-            // PATH 2: Non-streaming message (presentation, history restore)
-            ChatStateService.RemoveTypingIndicator();
-            ChatStateService.UpdateAgentFromMessage(message);
-
-            // Add main agent message
-            ChatStateService.ChatMessages.Add(new ChatMessage
+            catch (Exception ex)
             {
-                ConversationId = message.ConversationId,
-                Text = message.Text,
-                Role = "assistant",
-                Timestamp = message.Timestamp,
-                QuickReplies = message.QuickReplies,
-                AgentName = message.AgentName ?? "Morgana",
-                AgentCompleted = false,
-                RichCard = message.RichCard
-            });
-
-            // Add completion message if needed (shared logic)
-            ChatStateService.AddCompletionMessageIfNeeded(message);
-
-            // Reset sending state - message received via SignalR
-            ChatStateService.IsSending = false;
-
-            await InvokeAsync(StateHasChanged);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error in HandleMessageReceived: {ex.Message}");
-        }
+                Console.WriteLine($"Error in HandleMessageReceived: {ex.Message}");
+            }
+            await Task.CompletedTask;
+        });
     }
 
     // =========================================================================
@@ -372,14 +381,20 @@
     /// <returns>Task representing the async chunk handling</returns>
     private async Task HandleStreamChunkReceivedAsync(string chunkText)
     {
-        try
+        // Marshal onto the circuit thread: the first chunk causes StreamingService.HandleChunkAsync
+        // to mutate ChatStateService.ChatMessages (Add of the streaming placeholder and a
+        // RemoveTypingIndicator), which must not interleave with the renderer's enumeration.
+        await InvokeAsync(async () =>
         {
-            await StreamingService.HandleChunkAsync(chunkText);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error in HandleStreamChunkReceived: {ex.Message}");
-        }
+            try
+            {
+                await StreamingService.HandleChunkAsync(chunkText);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in HandleStreamChunkReceived: {ex.Message}");
+            }
+        });
     }
 
     // =========================================================================
