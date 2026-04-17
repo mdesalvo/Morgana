@@ -656,7 +656,16 @@ public static class Records
         [property: JsonPropertyName("id")] string Id,
         [property: JsonPropertyName("label")] string Label,
         [property: JsonPropertyName("value")] string Value,
-        [property: JsonPropertyName("termination")] bool? Termination=false);
+        [property: JsonPropertyName("termination")] bool? Termination=false)
+    {
+        private const int ButtonPadding = 4;
+
+        /// <summary>
+        /// Estimated rendering footprint of this quick reply button in visual characters.
+        /// Only the visible label contributes — Id/Value are wire-only and never surface to the user.
+        /// </summary>
+        public int EstimateCost() => Label.Length + ButtonPadding;
+    }
 
     // ==========================================================================
     // CHANNEL ABSTRACTION
@@ -884,7 +893,22 @@ public static class Records
         [property: JsonPropertyName("title")] string Title,
         [property: JsonPropertyName("subtitle")] string? Subtitle,
         [property: JsonPropertyName("components")] List<CardComponent> Components
-    );
+    )
+    {
+        private const int TitleOverhead = 4;
+        private const int SubtitleOverhead = 2;
+
+        /// <summary>
+        /// Estimated rendering footprint in visual characters. Used by the channel adapter
+        /// to decide whether the card fits inside a channel's <c>MaxMessageLength</c> budget.
+        /// Conservative: prefer overestimating (trigger a downgrade) over letting an
+        /// oversized payload slip through.
+        /// </summary>
+        public int EstimateCost() =>
+            Title.Length + TitleOverhead
+            + (Subtitle?.Length + SubtitleOverhead ?? 0)
+            + Components.Sum(component => component.EstimateCost());
+    }
 
     /// <summary>
     /// Base class for all card components.
@@ -919,7 +943,15 @@ public static class Records
     [JsonDerivedType(typeof(GridComponent), "grid")]
     [JsonDerivedType(typeof(BadgeComponent), "badge")]
     [JsonDerivedType(typeof(ImageComponent), "image")]
-    public abstract record CardComponent;
+    public abstract record CardComponent
+    {
+        /// <summary>
+        /// Estimated rendering footprint of this component in visual characters.
+        /// Conservative by design: overestimating triggers a channel downgrade, while
+        /// underestimating risks overflow past the channel's length budget.
+        /// </summary>
+        public abstract int EstimateCost();
+    }
 
     /// <summary>
     /// Free-form text block component for narrative content within cards.
@@ -929,7 +961,13 @@ public static class Records
     public record TextBlockComponent(
         [property: JsonPropertyName("content")] string Content,
         [property: JsonPropertyName("style")] TextStyle Style = TextStyle.Normal
-    ) : CardComponent;
+    ) : CardComponent
+    {
+        private const int Overhead = 2;
+
+        /// <inheritdoc />
+        public override int EstimateCost() => Content.Length + Overhead;
+    }
 
     /// <summary>
     /// Key-value pair component for structured label-value data.
@@ -941,13 +979,25 @@ public static class Records
         [property: JsonPropertyName("key")] string Key,
         [property: JsonPropertyName("value")] string Value,
         [property: JsonPropertyName("emphasize")] bool Emphasize = false
-    ) : CardComponent;
+    ) : CardComponent
+    {
+        private const int Overhead = 4;
+
+        /// <inheritdoc />
+        public override int EstimateCost() => Key.Length + Value.Length + Overhead;
+    }
 
     /// <summary>
     /// Visual divider/separator component.
     /// Renders as horizontal line to separate logical sections.
     /// </summary>
-    public record DividerComponent : CardComponent;
+    public record DividerComponent : CardComponent
+    {
+        private const int Overhead = 4;
+
+        /// <inheritdoc />
+        public override int EstimateCost() => Overhead;
+    }
 
     /// <summary>
     /// List component for displaying multiple related items.
@@ -957,7 +1007,13 @@ public static class Records
     public record ListComponent(
         [property: JsonPropertyName("items")] List<string> Items,
         [property: JsonPropertyName("style")] ListStyle Style = ListStyle.Bullet
-    ) : CardComponent;
+    ) : CardComponent
+    {
+        private const int ItemOverhead = 3;
+
+        /// <inheritdoc />
+        public override int EstimateCost() => Items.Sum(item => item.Length + ItemOverhead);
+    }
 
     /// <summary>
     /// Section component for logical grouping with nesting support.
@@ -970,7 +1026,17 @@ public static class Records
         [property: JsonPropertyName("title")] string Title,
         [property: JsonPropertyName("subtitle")] string? Subtitle,
         [property: JsonPropertyName("components")] List<CardComponent> Components
-    ) : CardComponent;
+    ) : CardComponent
+    {
+        private const int TitleOverhead = 4;
+        private const int SubtitleOverhead = 2;
+
+        /// <inheritdoc />
+        public override int EstimateCost() =>
+            Title.Length + TitleOverhead
+            + (Subtitle?.Length + SubtitleOverhead ?? 0)
+            + Components.Sum(component => component.EstimateCost());
+    }
 
     /// <summary>
     /// Grid component for side-by-side data presentation.
@@ -980,7 +1046,14 @@ public static class Records
     public record GridComponent(
         [property: JsonPropertyName("columns")] int Columns,
         [property: JsonPropertyName("items")] List<GridItem> Items
-    ) : CardComponent;
+    ) : CardComponent
+    {
+        private const int ItemOverhead = 4;
+
+        /// <inheritdoc />
+        public override int EstimateCost() =>
+            Items.Sum(item => item.Key.Length + item.Value.Length + ItemOverhead);
+    }
 
     /// <summary>
     /// Individual grid cell containing a key-value pair.
@@ -1000,7 +1073,13 @@ public static class Records
     public record BadgeComponent(
         [property: JsonPropertyName("text")] string Text,
         [property: JsonPropertyName("variant")] BadgeVariant Variant = BadgeVariant.Neutral
-    ) : CardComponent;
+    ) : CardComponent
+    {
+        private const int Overhead = 2;
+
+        /// <inheritdoc />
+        public override int EstimateCost() => Text.Length + Overhead;
+    }
 
     /// <summary>
     /// Image component for displaying visual content from URLs.
@@ -1015,7 +1094,17 @@ public static class Records
         [property: JsonPropertyName("alt")] string? Alt = null,
         [property: JsonPropertyName("caption")] string? Caption = null,
         [property: JsonPropertyName("size")] ImageSize Size = ImageSize.Medium
-    ) : CardComponent;
+    ) : CardComponent
+    {
+        private const int PlaceholderOverhead = 10;
+        private const int CaptionOverhead = 2;
+
+        /// <inheritdoc />
+        public override int EstimateCost() =>
+            PlaceholderOverhead
+            + (Alt?.Length ?? 0)
+            + (Caption?.Length + CaptionOverhead ?? 0);
+    }
 
     // Enums for component styling
 

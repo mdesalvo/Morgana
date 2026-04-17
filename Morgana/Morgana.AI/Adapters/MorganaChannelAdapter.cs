@@ -188,11 +188,24 @@ public class MorganaChannelAdapter
         if (!channelCapabilities.SupportsMarkdown && ContainsMarkdown(channelMessage.Text))
             return false;
 
-        if (channelCapabilities.MaxMessageLength is { } max && channelMessage.Text.Length > max)
+        if (channelCapabilities.MaxMessageLength is { } max && EstimateVisualCost(channelMessage) > max)
             return false;
 
         return true;
     }
+
+    /// <summary>
+    /// Sums the visual cost of the whole outbound message (text + rich card + quick replies)
+    /// so that <see cref="Records.ChannelCapabilities.MaxMessageLength"/> governs the entire
+    /// rendered payload, not only the free-form text field. Keeping the three contributions
+    /// in a single budget keeps the check symmetric and prevents silent asymmetries
+    /// (a 3 KB card slipping past a 500-char cap because only Text was measured).
+    /// Per-component weighing is delegated to the records themselves (<c>EstimateCost</c>).
+    /// </summary>
+    private static int EstimateVisualCost(Records.ChannelMessage channelMessage) =>
+        channelMessage.Text.Length
+      + (channelMessage.RichCard?.EstimateCost() ?? 0)
+      + (channelMessage.QuickReplies?.Sum(quickReply => quickReply.EstimateCost()) ?? 0);
 
     /// <summary>
     /// Detects whether <paramref name="text"/> carries any markdown structure by delegating
