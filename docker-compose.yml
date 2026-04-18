@@ -28,8 +28,9 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5001
 
-      # Authentication (JWT)
-      - Morgana__Authentication__SymmetricKey=${JWT_SYMMETRIC_KEY}
+      # Authentication (JWT) - per-issuer keys
+      - Morgana__Authentication__Issuers__0__Name=cauldron
+      - Morgana__Authentication__Issuers__0__SymmetricKey=${JWT_SYMMETRIC_KEY}
 
       # Conversation persistence (SQLite)
       - Morgana__ConversationPersistence__EncryptionKey=${ENCRYPTIONKEY}

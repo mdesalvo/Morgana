@@ -343,15 +343,22 @@ public static class Records
     /// Configuration options for the Morgana authentication service.
     /// </summary>
     /// <remarks>
+    /// <para><strong>Per-Issuer Trust Model:</strong></para>
+    /// <para>Each accepted channel is declared as its own <see cref="IssuerOptions"/> entry
+    /// with its own signing key. A token is validated against the key of the issuer
+    /// declared in its <c>iss</c> claim — so compromise of one channel's key does not
+    /// impact the others. Tokens whose <c>iss</c> is not declared here are fail-closed.</para>
+    ///
     /// <para><strong>Configuration Example:</strong></para>
     /// <code>
     /// // appsettings.json
     /// {
     ///   "Morgana": {
     ///     "Authentication": {
-    ///       "SymmetricKey": "your-256-bit-secret-key-here",
-    ///       "ValidIssuers": ["cauldron"],
-    ///       "Audience": "morgana.ai"
+    ///       "Audience": "morgana.ai",
+    ///       "Issuers": [
+    ///         { "Name": "cauldron", "SymmetricKey": "your-256-bit-secret-key-here" }
+    ///       ]
     ///     }
     ///   }
     /// }
@@ -360,18 +367,11 @@ public static class Records
     public record AuthenticationOptions
     {
         /// <summary>
-        /// Shared symmetric key used to validate JWT token signatures (HMAC-SHA256).
-        /// Must be at least 256 bits (32 bytes) for security.
-        /// Should be overridden via User Secrets or environment variables in production.
+        /// Declared issuers Morgana will accept tokens from. Each entry carries its own
+        /// signing key, so the blast radius of a leaked key is limited to a single channel.
+        /// A token whose <c>iss</c> claim is not in this list is rejected.
         /// </summary>
-        public string SymmetricKey { get; set; } = string.Empty;
-
-        /// <summary>
-        /// List of accepted token issuers. Only tokens with an <c>iss</c> claim
-        /// matching one of these values will be accepted.
-        /// </summary>
-        /// <example>["cauldron"]</example>
-        public string[] ValidIssuers { get; set; } = ["cauldron"];
+        public List<IssuerOptions> Issuers { get; set; } = [];
 
         /// <summary>
         /// Expected audience claim (<c>aud</c>) in the token.
@@ -379,6 +379,27 @@ public static class Records
         /// </summary>
         /// <example>morgana-api</example>
         public string Audience { get; set; } = "morgana.ai";
+    }
+
+    /// <summary>
+    /// Per-issuer authentication entry. Binds an issuer name (the value Morgana
+    /// expects in the JWT <c>iss</c> claim) to the signing key used to validate
+    /// tokens emitted under that name.
+    /// </summary>
+    public record IssuerOptions
+    {
+        /// <summary>
+        /// Issuer name as it appears in the JWT <c>iss</c> claim
+        /// (lowercase channel identifier, e.g. <c>"cauldron"</c>).
+        /// </summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Shared symmetric key used to validate this issuer's tokens (HMAC-SHA256).
+        /// Must be at least 256 bits (32 bytes). Override via User Secrets or
+        /// environment variables in production.
+        /// </summary>
+        public string SymmetricKey { get; set; } = string.Empty;
     }
 
     /// <summary>

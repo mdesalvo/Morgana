@@ -232,10 +232,10 @@ History retrieval (`GetConversationHistoryAsync`): loads all agent rows → decr
 
 ## Authentication
 
-JWT-based between Cauldron and Morgana:
-- **Cauldron side**: `MorganaAuthHandler` self-issues tokens (issuer `cauldron`, subject `cauldron-app`, audience `morgana.ai`, 5-min expiry, HMAC-SHA256)
-- **Morgana side**: `JWTAuthenticationService` validates signature, issuer (whitelist), audience, lifetime (30s clock skew). Extracts `sub`→UserId, `name`→DisplayName
-- **Shared key**: configured in both `Cauldron:Authentication:SymmetricKey` and `Morgana:Authentication:SymmetricKey`
+JWT-based, per-issuer trust model:
+- **Channel side** (e.g. Cauldron's `MorganaAuthHandler`): self-issues tokens (own `iss`, `sub`, audience `morgana.ai`, short expiry, HMAC-SHA256)
+- **Morgana side**: `JWTAuthenticationService` peeks the `iss` claim, looks up the matching entry in `Morgana:Authentication:Issuers`, validates signature with that issuer's key, plus audience and lifetime (30s clock skew). Unknown issuers are rejected. Extracts `sub`→UserId, `name`→DisplayName
+- **Shared key per channel**: each channel's secret matches the `SymmetricKey` of its own `Issuers[]` entry on Morgana — leaking one channel's key does not compromise the others
 
 ## Observability
 
@@ -267,7 +267,7 @@ At application startup, three registries perform comprehensive validation:
 | `Morgana:AdaptiveMessaging:RichFeaturesMinLength` | Ingress heuristic: if the client's `MaxMessageLength` is below this threshold, `SupportsRichCards` and `SupportsQuickReplies` are forced to `false` at the handshake (SMS/IVR profile). Null/0 disables the heuristic. Streaming is unaffected |
 | `Morgana:ConversationPersistence` | StoragePath, EncryptionKey (AES-256, base64, must be 32 bytes) |
 | `Morgana:RateLimiting` | Enabled, MaxMessagesPerMinute/Hour/Day, custom ErrorMessage templates with `{limit}` placeholder |
-| `Morgana:Authentication` | SymmetricKey (min 256-bit), ValidIssuers, Audience |
+| `Morgana:Authentication` | Audience, Issuers[] (per-issuer Name + SymmetricKey min 256-bit) |
 | `Morgana:HistoryReducer` | Enabled, SummarizationThreshold (default 20), SummarizationTargetCount (default 8), SummarizationPrompt |
 | `Morgana:OpenTelemetry` | Enabled, ServiceName, Exporters array (name, enabled, endpoint) |
 | `Morgana:Plugins:Directories` | Plugin scan directories (default: `["plugins"]`) |

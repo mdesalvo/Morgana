@@ -12,9 +12,11 @@ namespace Morgana.AI.Interfaces;
 ///
 /// <para><strong>Default Implementation:</strong></para>
 /// <para><see cref="Services.JWTAuthenticationService"/> validates JWT tokens signed with
-/// a shared symmetric key (HMAC-SHA256), checking issuer, audience, and expiry.
-/// Swap it in DI to adopt any alternative authentication backend (API keys, mTLS,
-/// OAuth with external IdP) without touching the controller or actor system.</para>
+/// a per-issuer symmetric key (HMAC-SHA256), checking issuer, audience, and expiry.
+/// Each declared issuer carries its own key, so a leaked key only compromises that
+/// channel. Swap the implementation in DI to adopt any alternative authentication
+/// backend (API keys, mTLS, OAuth with external IdP) without touching the controller
+/// or actor system.</para>
 ///
 /// <para><strong>Fail-Closed Contract:</strong></para>
 /// <para>Unlike guard rails and classifiers (which fail open), authentication must
@@ -27,9 +29,10 @@ namespace Morgana.AI.Interfaces;
 /// {
 ///   "Morgana": {
 ///     "Authentication": {
-///       "SymmetricKey": "your-256-bit-secret-key-here",
-///       "ValidIssuers": ["cauldron"],
-///       "Audience": "morgana.ai"
+///       "Audience": "morgana.ai",
+///       "Issuers": [
+///         { "Name": "cauldron", "SymmetricKey": "your-256-bit-secret-key-here" }
+///       ]
 ///     }
 ///   }
 /// }
