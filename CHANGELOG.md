@@ -20,6 +20,7 @@ On the inbound side, Morgana no longer treats Cauldron as its only caller: the s
 
 ### 🔄 Changed
 - **BREAKING**: The `Morgana:CauldronURL` setting has been removed from `appsettings.json`, `docker-compose.yml` and all references; the CORS policy (renamed from `AllowBlazor` to `Channel`) now uses `SetIsOriginAllowed(_ => true)` in place of a single-origin whitelist. JWT authentication is the sole trust boundary at the channel edge — any origin may reach Morgana, but only signed tokens from declared issuers are accepted
+- **BREAKING**: The `Morgana:Authentication:Enabled` toggle has been removed. Authentication is now unconditionally enforced: every request must carry a valid bearer token, there is no config flag to bypass it. Migration: delete the `Enabled` key from your `Morgana:Authentication` section; any deployment that relied on `Enabled: false` for development must now mint valid JWTs (or swap `IAuthenticationService` for a dev-only stub in DI)
 - **BREAKING**: JWT authentication now uses **per-issuer signing keys**. `Morgana:Authentication:SymmetricKey` and `Morgana:Authentication:ValidIssuers[]` have been replaced by `Morgana:Authentication:Issuers[]`, an array of `{ Name, SymmetricKey }` entries. `JWTAuthenticationService` peeks the `iss` claim, looks up the matching entry and validates the signature with that issuer's own key; unknown issuers are rejected outright. Migration: replace the flat `{ SymmetricKey, ValidIssuers: ["cauldron"] }` pair with `{ Issuers: [{ "Name": "cauldron", "SymmetricKey": "..." }] }`
 
 ### 🐛 Fixed
