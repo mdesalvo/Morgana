@@ -32,6 +32,7 @@ On the inbound side, Morgana no longer treats Cauldron as its only caller: the s
 - Cauldron's textarea and send button could not disable when live SignalR messages carried active quick replies (e.g. the closure message with "I still need you" / "We're done, thanks"), letting the user bypass the quick reply gate with free-text input
 - `RouterActor.HandleAgentStreamChunk` fallback branch for orphan stream chunks used `Context.Parent.Tell(chunk)`, which resolved to the `/user` guardian (the router is created flat under the guardian, not as a child of the supervisor) and silently dropped the chunk to dead letters
 - Cauldron circuit crashed with `InvalidOperationException: Collection was modified; enumeration operation may not execute` when SignalR `ReceiveMessage` / `ReceiveStreamChunk` callbacks mutated `ChatStateService.ChatMessages` on the SignalR dispatch thread while Blazor's `BuildRenderTree` enumerated the same list on the circuit thread
+- History resume could reconcile quick replies from the previous assistant turn onto a later rich card, while dropping the intermediate assistant text entirely
 
 ### 🚀 Future Enablement
 - **Custom channels (IVR, SMS, RCS, Twilio, WhatsApp, plain HTTP client, …)** — With the `IChannelService` abstraction, the `AdaptingChannelService` decorator and the persistence-backed capability handshake all in place, a new outbound channel can plug in declaring its own capability budget at conversation start and get automatic degradation of any rich message without any change to producers, actors or prompts

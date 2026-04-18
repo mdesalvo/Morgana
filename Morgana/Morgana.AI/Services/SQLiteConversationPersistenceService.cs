@@ -668,24 +668,33 @@ CREATE TABLE IF NOT EXISTS channel_metadata (
         int msgIndex = 0;
         bool isLastHistoryMessage = false;
 
-        // Before collecting messages from history, ensure to strip out eventual
-        // summarization messages which may have been automatically emitted and
-        // inserted by the history provider (they have specific metadata).
-        List<(string agentName, bool agentCompleted, ChatMessage message)> filteredMessages =
-            [.. allMessages.Where(m => m.message.AdditionalProperties?.ContainsKey("__summary__") != true)];
+        // NOTE: the MEAI SummarizingChatReducer annotates the anchor message with
+        // `AdditionalProperties["__summary__"]` when it reduces the view for the LLM.
+        // That anchor is a real, user-visible turn — it must NOT be filtered out here,
+        // otherwise quick replies/rich cards attached to it leak into the next turn.
 
-        foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in filteredMessages)
+        foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in allMessages)
         {
             bool chatMessageHasToolCalls = false;
 
             // Determine if the current message is the last one
             msgIndex++;
-            if (msgIndex == filteredMessages.Count)
+            if (msgIndex == allMessages.Count)
                 isLastHistoryMessage = true;
 
             // Skip tool messages
             if (chatMessage.Role == ChatRole.Tool)
                 continue;
+
+            // A user turn closes any pending assistant attachment that was never
+            // consumed (e.g. because the anchor reply arrived with empty text).
+            // Without this, a stale pending CallId would bleed into the next
+            // assistant response and attach the previous turn's widgets to it.
+            if (chatMessage.Role == ChatRole.User)
+            {
+                pendingRichCardCallId = null;
+                pendingQuickRepliesCallId = null;
+            }
 
             // Check for SetRichCard function call
             FunctionCallContent? setRichCardCall = chatMessage.Contents?
