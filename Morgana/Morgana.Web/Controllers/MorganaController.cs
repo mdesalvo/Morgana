@@ -39,7 +39,6 @@ public class MorganaController : ControllerBase
     private readonly IChannelService channelService;
     private readonly IConversationPersistenceService conversationPersistenceService;
     private readonly IAuthenticationService authenticationService;
-    private readonly Records.AuthenticationOptions authenticationOptions;
     private readonly IRateLimitService rateLimitService;
     private readonly Records.RateLimitOptions rateLimitOptions;
 
@@ -52,7 +51,6 @@ public class MorganaController : ControllerBase
     /// <param name="channelService">Outbound channel used to deliver system-level messages (e.g. rate-limit warnings) to the user</param>
     /// <param name="conversationPersistenceService">Service for recovering an existing conversation</param>
     /// <param name="authenticationService">Service for authenticating incoming requests</param>
-    /// <param name="authenticationOptions">Options for configuration of the authentication service</param>
     /// <param name="rateLimitService">Service for rate limiting an existing conversation</param>
     /// <param name="rateLimitOptions">Options for configuration of the rate limiting service</param>
     public MorganaController(
@@ -61,7 +59,6 @@ public class MorganaController : ControllerBase
         IChannelService channelService,
         IConversationPersistenceService conversationPersistenceService,
         IAuthenticationService authenticationService,
-        IOptions<Records.AuthenticationOptions> authenticationOptions,
         IRateLimitService rateLimitService,
         IOptions<Records.RateLimitOptions> rateLimitOptions)
     {
@@ -70,7 +67,6 @@ public class MorganaController : ControllerBase
         this.channelService = channelService;
         this.conversationPersistenceService = conversationPersistenceService;
         this.authenticationService = authenticationService;
-        this.authenticationOptions = authenticationOptions.Value;
         this.rateLimitService = rateLimitService;
         this.rateLimitOptions = rateLimitOptions.Value;
     }
@@ -103,8 +99,7 @@ public class MorganaController : ControllerBase
                 || request.ChannelMetadata.Capabilities is null)
             {
                 logger.LogWarning(
-                    "Start requested for conversation {ConversationId} without channel metadata; returning 400",
-                    request.ConversationId);
+                    "Start requested for conversation {ConversationId} without channel metadata; returning 400", request.ConversationId);
                 return BadRequest(new
                 {
                     error = "Channel metadata is required: clients must announce both channelName and capabilities at conversation start.",
@@ -385,14 +380,11 @@ public class MorganaController : ControllerBase
     #region Utilities
     /// <summary>
     /// Validates the bearer token from the Authorization header when authentication is enabled.
-    /// Returns null if authentication is disabled or the token is valid; returns an IActionResult (401) on failure.
+    /// Returns null if the token is valid; returns an IActionResult (401) on failure.
     /// On success, outputs the authenticated UserId.
     /// </summary>
     private async Task<(IActionResult? Failure, string? UserId)> AuthenticateRequestAsync()
     {
-        if (!authenticationOptions.Enabled)
-            return (null, null);
-
         string? authorizationHeader = Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {

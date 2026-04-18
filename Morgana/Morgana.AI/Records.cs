@@ -349,7 +349,6 @@ public static class Records
     /// {
     ///   "Morgana": {
     ///     "Authentication": {
-    ///       "Enabled": true,
     ///       "SymmetricKey": "your-256-bit-secret-key-here",
     ///       "ValidIssuers": ["cauldron"],
     ///       "Audience": "morgana.ai"
@@ -360,12 +359,6 @@ public static class Records
     /// </remarks>
     public record AuthenticationOptions
     {
-        /// <summary>
-        /// Master toggle for authentication.
-        /// Set to false to disable authentication (useful for development/testing).
-        /// </summary>
-        public bool Enabled { get; set; } = true;
-
         /// <summary>
         /// Shared symmetric key used to validate JWT token signatures (HMAC-SHA256).
         /// Must be at least 256 bits (32 bytes) for security.

@@ -84,7 +84,7 @@ ConversationManagerActor          ← entry point, lifecycle, channel metadata p
 | `conversation/{id}/history` | GET | Returns `MorganaChatMessage[]` via persistence service | 200/404 |
 | `health` | GET | Actor system liveness check | 200/503 |
 
-All endpoints authenticate via `AuthenticateRequestAsync` (Bearer JWT validation when `Morgana:Authentication:Enabled`).
+All endpoints authenticate via `AuthenticateRequestAsync` (Bearer JWT validation, fail-closed).
 
 ### Turn Pipeline (FSM states in ConversationSupervisorActor)
 
@@ -267,7 +267,7 @@ At application startup, three registries perform comprehensive validation:
 | `Morgana:AdaptiveMessaging:RichFeaturesMinLength` | Ingress heuristic: if the client's `MaxMessageLength` is below this threshold, `SupportsRichCards` and `SupportsQuickReplies` are forced to `false` at the handshake (SMS/IVR profile). Null/0 disables the heuristic. Streaming is unaffected |
 | `Morgana:ConversationPersistence` | StoragePath, EncryptionKey (AES-256, base64, must be 32 bytes) |
 | `Morgana:RateLimiting` | Enabled, MaxMessagesPerMinute/Hour/Day, custom ErrorMessage templates with `{limit}` placeholder |
-| `Morgana:Authentication` | Enabled, SymmetricKey (min 256-bit), ValidIssuers, Audience |
+| `Morgana:Authentication` | SymmetricKey (min 256-bit), ValidIssuers, Audience |
 | `Morgana:HistoryReducer` | Enabled, SummarizationThreshold (default 20), SummarizationTargetCount (default 8), SummarizationPrompt |
 | `Morgana:OpenTelemetry` | Enabled, ServiceName, Exporters array (name, enabled, endpoint) |
 | `Morgana:Plugins:Directories` | Plugin scan directories (default: `["plugins"]`) |
