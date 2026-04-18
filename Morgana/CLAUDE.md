@@ -271,7 +271,6 @@ At application startup, three registries perform comprehensive validation:
 | `Morgana:HistoryReducer` | Enabled, SummarizationThreshold (default 20), SummarizationTargetCount (default 8), SummarizationPrompt |
 | `Morgana:OpenTelemetry` | Enabled, ServiceName, Exporters array (name, enabled, endpoint) |
 | `Morgana:Plugins:Directories` | Plugin scan directories (default: `["plugins"]`) |
-| `Morgana:CauldronURL` | CORS origin for Cauldron |
 
 ## Build and Run
 

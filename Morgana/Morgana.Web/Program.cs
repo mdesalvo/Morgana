@@ -73,14 +73,17 @@ builder.Services.AddSingleton<IChannelMetadataStore>(sp => sp.GetRequiredService
 // ==============================================================================
 // SECTION 3: CORS Configuration
 // ==============================================================================
-// Cross-Origin Resource Sharing for Blazor client application (Cauldron)
-// Allows the Blazor frontend (Cauldron) to communicate with the Morgana backend
+// Open CORS policy consistent with Morgana's channel-agnostic posture: the backend
+// does not know its clients in advance, so the origin allowlist has been replaced
+// with per-request JWT validation as the real trust boundary. CORS here is the
+// browser politeness layer; the bearer token is the security layer. In hardened
+// deployments a reverse proxy / API gateway handles origin filtering upstream.
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowBlazor", policy =>
+    options.AddPolicy("Channel", policy =>
     {
-        policy.WithOrigins(builder.Configuration["Morgana:CauldronURL"]!) // Cauldron (Frontend)
+        policy.SetIsOriginAllowed(_ => true)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -274,7 +277,7 @@ builder.Services.AddHostedService<AkkaHostedService>();
 
 WebApplication app = builder.Build();
 
-app.UseCors("AllowBlazor");             // Enable CORS for Blazor client
+app.UseCors("Channel");                 // Open CORS; trust gate is JWT, not origin
 app.UseHttpsRedirection();              // Redirect HTTP to HTTPS
 app.UseStaticFiles();                   // Serve static files (if any)
 app.UseRouting();                       // Enable endpoint routing
