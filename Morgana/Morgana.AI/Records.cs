@@ -349,6 +349,14 @@ public static class Records
     /// declared in its <c>iss</c> claim — so compromise of one channel's key does not
     /// impact the others. Tokens whose <c>iss</c> is not declared here are fail-closed.</para>
     ///
+    /// <para><strong>Onboarding a New Channel:</strong></para>
+    /// <para>Any channel beyond the reference one (Cauldron) must be registered as an
+    /// <see cref="IssuerOptions"/> entry on the destination Morgana instance. Its
+    /// <see cref="IssuerOptions.Name"/> must equal the <c>iss</c> claim the channel mints,
+    /// and its <see cref="IssuerOptions.SymmetricKey"/> must match the secret the channel
+    /// uses to sign tokens. A channel not declared here — or using a different key — is
+    /// rejected at the very first request.</para>
+    ///
     /// <para><strong>Configuration Example:</strong></para>
     /// <code>
     /// // appsettings.json
