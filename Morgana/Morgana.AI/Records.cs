@@ -351,7 +351,7 @@ public static class Records
     ///     "Authentication": {
     ///       "Enabled": true,
     ///       "SymmetricKey": "your-256-bit-secret-key-here",
-    ///       "ValidIssuers": ["morgana", "cauldron"],
+    ///       "ValidIssuers": ["cauldron"],
     ///       "Audience": "morgana.ai"
     ///     }
     ///   }
@@ -377,8 +377,8 @@ public static class Records
         /// List of accepted token issuers. Only tokens with an <c>iss</c> claim
         /// matching one of these values will be accepted.
         /// </summary>
-        /// <example>["morgana", "cauldron"]</example>
-        public string[] ValidIssuers { get; set; } = ["morgana", "cauldron"];
+        /// <example>["cauldron"]</example>
+        public string[] ValidIssuers { get; set; } = ["cauldron"];
 
         /// <summary>
         /// Expected audience claim (<c>aud</c>) in the token.

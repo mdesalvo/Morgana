@@ -29,8 +29,8 @@ namespace Morgana.AI.Interfaces;
 ///     "Authentication": {
 ///       "Enabled": true,
 ///       "SymmetricKey": "your-256-bit-secret-key-here",
-///       "ValidIssuers": ["morgana", "cauldron"],
-///       "Audience": "morganaa.ai"
+///       "ValidIssuers": ["cauldron"],
+///       "Audience": "morgana.ai"
 ///     }
 ///   }
 /// }
