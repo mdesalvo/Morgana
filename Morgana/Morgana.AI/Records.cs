@@ -1238,14 +1238,14 @@ public static class Records
         ClassificationResult? Classification = null,
         ActivityContext TurnContext = default);
 
-    // --- RouterActor Contexts ---
+    // --- MorganaAgent Contexts ---
 
     /// <summary>
-    /// Context wrapper for failure via PipeTo in RouterActor.
-    /// Captures Akka.NET failure state and original sender for proper routing.
+    /// Wraps an unhandled agent exception so the agent can route its error-handling
+    /// through its own mailbox (Self.Tell) and still remember who to reply to.
     /// </summary>
-    /// <param name="Failure">Akka.NET failure status</param>
-    /// <param name="OriginalSender">Actor reference to reply to (typically ConversationSupervisorActor)</param>
+    /// <param name="Failure">Akka.NET failure status carrying the original exception</param>
+    /// <param name="OriginalSender">The actor that sent the AgentRequest (typically RouterActor)</param>
     public record FailureContext(
         Status.Failure Failure,
         IActorRef OriginalSender);

@@ -751,21 +751,6 @@ public class ConversationSupervisorActor : MorganaActor
         return $"Morgana ({capitalizedIntent})";
     }
 
-    private void HandleUnexpectedFailure(Records.FailureContext failure)
-    {
-        actorLogger.Error(failure.Failure.Cause, "Unexpected failure in ConversationSupervisorActor");
-        failure.OriginalSender.Tell(
-            new Records.ConversationResponse(
-                "An internal error occurred.",
-                null,
-                null,
-                "Morgana",
-                false,
-                null,
-                DateTime.UtcNow,
-                null));
-    }
-
     private void HandleRestoreActiveAgent(Records.RestoreActiveAgent msg)
     {
         actorLogger.Info($"Restoring active agent: {msg.AgentIntent}");
@@ -795,7 +780,6 @@ public class ConversationSupervisorActor : MorganaActor
 
         Receive<Records.RestoreActiveAgent>(HandleRestoreActiveAgent);
         Receive<Records.RestoreAgentResponse>(HandleRestoreAgentResponse);
-        Receive<Records.FailureContext>(HandleUnexpectedFailure);
     }
 
     #endregion
