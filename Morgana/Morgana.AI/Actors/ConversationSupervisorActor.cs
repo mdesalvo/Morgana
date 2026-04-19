@@ -69,13 +69,13 @@ public class ConversationSupervisorActor : MorganaActor
     private bool hasPresented;
 
     /// <summary>OTel root span covering the full turn pipeline (opened on UserMessage, closed on return to Idle).</summary>
-    private Activity? _turnSpan;
+    private Activity? turnSpan;
 
     /// <summary>OTel span covering the guard-check duration (opened before Tell, closed on response).</summary>
-    private Activity? _guardSpan;
+    private Activity? guardSpan;
 
     /// <summary>OTel span covering the classification duration (opened before Tell, closed on response).</summary>
-    private Activity? _classifierSpan;
+    private Activity? classifierSpan;
 
     /// <summary>
     /// Initializes a new instance of the ConversationSupervisorActor.
@@ -122,39 +122,55 @@ public class ConversationSupervisorActor : MorganaActor
 
         ReceiveAsync<Records.GeneratePresentationMessage>(HandlePresentationRequestAsync);
         ReceiveAsync<Records.PresentationContext>(HandlePresentationGenerated);
-
-        Receive<Records.UserMessage>(msg =>
-        {
-            IActorRef originalSender = Sender;
-
-            actorLogger.Info("User message received, routing through guard check");
-
-            // Open the turn span in the supervisor so it lives for the full pipeline duration.
-            // Use an ActivityLink (not parent) to the HTTP span — the turn is async and outlives the request.
-            ActivityLink[] links = msg.TurnContext != default
-                ? [new ActivityLink(msg.TurnContext)]
-                : [];
-
-            _turnSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.TurnActivity, ActivityKind.Internal, parentContext: default, links: links);
-            _turnSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
-            _turnSpan?.SetTag(MorganaTelemetry.TurnUserMessage, msg.Text.Length > 200 ? msg.Text[..200] : msg.Text);
-
-            // Use the turn span's context as parent for all child spans (guard, classifier, agent)
-            ActivityContext turnContext = _turnSpan?.Context ?? default;
-
-            Records.ProcessingContext ctx = new Records.ProcessingContext(
-                msg, originalSender, TurnContext: turnContext);
-
-            // Open guard span before sending to GuardActor so it captures the full check duration
-            _guardSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.GuardActivity, ActivityKind.Internal, turnContext);
-            _guardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
-
-            Become(() => AwaitingGuardCheck(ctx));
-
-            guard.Tell(new Records.GuardCheckRequest(msg.ConversationId, msg.Text));
-        });
+        Receive<Records.UserMessage>(HandleUserMessage);
 
         RegisterCommonHandlers();
+    }
+
+    /// <summary>
+    /// Handles an incoming user message by opening the turn span, building the
+    /// <see cref="Records.ProcessingContext"/> for the pipeline, and dispatching to
+    /// <see cref="GuardActor"/>. Applies to both new requests and follow-ups: every
+    /// user message goes through the guard check first.
+    /// </summary>
+    /// <param name="msg">Incoming user message carrying text, conversation id and optional OTel context.</param>
+    /// <remarks>
+    /// <para>
+    /// The turn span is linked (via <see cref="ActivityLink"/>, not parented) to the HTTP span
+    /// propagated in <see cref="Records.UserMessage.TurnContext"/>, because the turn is asynchronous
+    /// and outlives the HTTP request that originated it. Child spans (guard, classifier, agent)
+    /// use the turn span context as parent.
+    /// </para>
+    /// <para>
+    /// The guard span is opened here — before the Tell to <see cref="GuardActor"/> — so its
+    /// duration captures the full round-trip, including inter-actor dispatch latency.
+    /// </para>
+    /// </remarks>
+    private void HandleUserMessage(Records.UserMessage msg)
+    {
+        IActorRef originalSender = Sender;
+
+        actorLogger.Info("User message received, routing through guard check");
+
+        ActivityLink[] links = msg.TurnContext != default
+            ? [new ActivityLink(msg.TurnContext)]
+            : [];
+
+        turnSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.TurnActivity, ActivityKind.Internal, parentContext: default, links: links);
+        turnSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+        turnSpan?.SetTag(MorganaTelemetry.TurnUserMessage, msg.Text.Length > 200 ? msg.Text[..200] : msg.Text);
+
+        ActivityContext turnContext = turnSpan?.Context ?? default;
+
+        Records.ProcessingContext ctx = new Records.ProcessingContext(
+            msg, originalSender, TurnContext: turnContext);
+
+        guardSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.GuardActivity, ActivityKind.Internal, turnContext);
+        guardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+
+        Become(() => AwaitingGuardCheck(ctx));
+
+        guard.Tell(new Records.GuardCheckRequest(msg.ConversationId, msg.Text));
     }
 
     /// <summary>
@@ -177,7 +193,6 @@ public class ConversationSupervisorActor : MorganaActor
         List<Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
 
         Records.PresentationResult result = await presenterService.GenerateAsync(displayableIntents);
-
         Self.Tell(new Records.PresentationContext(result.Message, displayableIntents)
         {
             LLMQuickReplies = result.QuickReplies
@@ -185,7 +200,8 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
-    /// Handles the generated presentation and sends it to the client via SignalR.
+    /// Handles the generated presentation and dispatches it to the client through
+    /// <see cref="IChannelService"/>. The supervisor stays channel-agnostic.
     /// </summary>
     private async Task HandlePresentationGenerated(Records.PresentationContext ctx)
     {
@@ -197,8 +213,6 @@ public class ConversationSupervisorActor : MorganaActor
 
         try
         {
-            await Task.Delay(750);
-
             await channelService.SendMessageAsync(new Records.ChannelMessage
             {
                 ConversationId = conversationId,
@@ -226,16 +240,20 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingGuardCheck");
 
-        ReceiveAsync<Records.GuardCheckResponse>(async response =>
-        {
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(
+            Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+
+        ReceiveAsync<Records.GuardCheckResponse>(async response => {
+            Context.SetReceiveTimeout(null);
+
             // Close the guard span opened before Tell — now captures full check duration
-            _guardSpan?.SetTag(MorganaTelemetry.GuardCompliant, response.Compliant);
+            guardSpan?.SetTag(MorganaTelemetry.GuardCompliant, response.Compliant);
             if (!response.Compliant && response.Violation != null)
-                _guardSpan?.SetTag(MorganaTelemetry.GuardViolation, response.Violation);
-            if (_guardSpan is not null)
-                MorganaTelemetry.GuardDuration.Record((DateTime.UtcNow - _guardSpan.StartTimeUtc).TotalMilliseconds);
-            _guardSpan?.Dispose();
-            _guardSpan = null;
+                guardSpan?.SetTag(MorganaTelemetry.GuardViolation, response.Violation);
+            if (guardSpan is not null)
+                MorganaTelemetry.GuardDuration.Record((DateTime.UtcNow - guardSpan.StartTimeUtc).TotalMilliseconds);
+            guardSpan?.Dispose();
+            guardSpan = null;
 
             if (!response.Compliant)
             {
@@ -247,7 +265,14 @@ public class ConversationSupervisorActor : MorganaActor
 
                 string currentAgentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
-                    guardAnswer, ctx.Classification?.Intent, null, currentAgentName, false));
+                    guardAnswer,
+                    ctx.Classification?.Intent,
+                    null,
+                    currentAgentName,
+                    false,
+                    null,
+                    null,
+                    null));
 
                 MorganaTelemetry.GuardRejectionCounter.Add(1);
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: false);
@@ -275,24 +300,38 @@ public class ConversationSupervisorActor : MorganaActor
                 actorLogger.Info("No active agent, proceeding to classification for new request");
 
                 // Open classifier span before sending to ClassifierActor
-                _classifierSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.ClassifierActivity, ActivityKind.Internal, ctx.TurnContext);
-                _classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+                classifierSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.ClassifierActivity, ActivityKind.Internal, ctx.TurnContext);
+                classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
 
                 Become(() => AwaitingClassification(ctx));
 
                 classifier.Tell(ctx.OriginalMessage);
             }
         });
+        Receive<Status.Failure>(failure => FailOpen(failure.Cause.Message, failure.Cause));
+        Receive<ReceiveTimeout>(_ => FailOpen("receive timeout", null));
 
-        Receive<Status.Failure>(failure =>
+        RegisterCommonHandlers();
+        return;
+
+        #region Locals
+        // Shared fail-open path for both an explicit Status.Failure from GuardActor and
+        // a ReceiveTimeout (guard service hung past the configured budget).
+        void FailOpen(string description, Exception? cause)
         {
-            actorLogger.Error(failure.Cause, "Guard check failed");
+            Context.SetReceiveTimeout(null);
+
+            if (cause != null)
+                actorLogger.Error(cause, "Guard check failed: {0}", description);
+            else
+                actorLogger.Error("Guard check failed: {0}", description);
             actorLogger.Warning("Guard check failed, failing open (allowing message)");
 
-            _guardSpan?.SetStatus(ActivityStatusCode.Error, failure.Cause.Message);
-            _guardSpan?.AddException(failure.Cause);
-            _guardSpan?.Dispose();
-            _guardSpan = null;
+            guardSpan?.SetStatus(ActivityStatusCode.Error, description);
+            if (cause != null)
+                guardSpan?.AddException(cause);
+            guardSpan?.Dispose();
+            guardSpan = null;
 
             if (activeAgent != null)
             {
@@ -301,26 +340,24 @@ public class ConversationSupervisorActor : MorganaActor
                 activeAgent.Tell(new Records.AgentRequest(
                     ctx.OriginalMessage.ConversationId,
                     ctx.OriginalMessage.Text,
-                    null,
+                    ctx.Classification,
                     ctx.TurnContext,
                     GetEffectiveCapabilities()));
             }
             else
             {
-                // Open classifier span before sending to ClassifierActor
-                _classifierSpan = MorganaTelemetry.Source.StartActivity(
+                classifierSpan = MorganaTelemetry.Source.StartActivity(
                     MorganaTelemetry.ClassifierActivity,
                     ActivityKind.Internal,
                     ctx.TurnContext);
-                _classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+                classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
 
                 Become(() => AwaitingClassification(ctx));
 
                 classifier.Tell(ctx.OriginalMessage);
             }
-        });
-
-        RegisterCommonHandlers();
+        }
+        #endregion
     }
 
     /// <summary>
@@ -332,18 +369,22 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("→ State: AwaitingClassification");
 
-        Receive<Records.ClassificationResult>(classification =>
-        {
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(
+            Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+
+        Receive<Records.ClassificationResult>(classification => {
+            Context.SetReceiveTimeout(null);
+
             actorLogger.Info($"Classification result: {classification.Intent}");
 
             // Close the classifier span opened before Tell — now captures full classification duration
-            _classifierSpan?.SetTag(MorganaTelemetry.ClassificationIntent, classification.Intent);
+            classifierSpan?.SetTag(MorganaTelemetry.ClassificationIntent, classification.Intent);
             if (classification.Metadata.TryGetValue("confidence", out string? confidence))
-                _classifierSpan?.SetTag(MorganaTelemetry.ClassificationConfidence, confidence);
-            if (_classifierSpan is not null)
-                MorganaTelemetry.ClassifierDuration.Record((DateTime.UtcNow - _classifierSpan.StartTimeUtc).TotalMilliseconds);
-            _classifierSpan?.Dispose();
-            _classifierSpan = null;
+                classifierSpan?.SetTag(MorganaTelemetry.ClassificationConfidence, confidence);
+            if (classifierSpan is not null)
+                MorganaTelemetry.ClassifierDuration.Record((DateTime.UtcNow - classifierSpan.StartTimeUtc).TotalMilliseconds);
+            classifierSpan?.Dispose();
+            classifierSpan = null;
 
             Records.ProcessingContext updatedCtx = ctx with { Classification = classification };
 
@@ -363,29 +404,41 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.TurnContext,              // propagate context to router → agent
                 GetEffectiveCapabilities()));
         });
+        Receive<Status.Failure>(failure => FallbackToOther(failure.Cause.Message, failure.Cause));
+        Receive<ReceiveTimeout>(_ => FallbackToOther("receive timeout", null));
 
-        Receive<Status.Failure>(failure =>
+        RegisterCommonHandlers();
+        return;
+        
+        #region Locals
+        // Shared fallback-to-"other" path for both an explicit Status.Failure from ClassifierActor
+        // and a ReceiveTimeout (classifier service hung past the configured budget).
+        void FallbackToOther(string description, Exception? cause)
         {
-            actorLogger.Error(failure.Cause, "Classification failed");
+            Context.SetReceiveTimeout(null);
 
-            // Close classifier span with error status
-            _classifierSpan?.SetStatus(ActivityStatusCode.Error, failure.Cause.Message);
-            _classifierSpan?.AddException(failure.Cause);
-            _classifierSpan?.Dispose();
-            _classifierSpan = null;
+            if (cause != null)
+                actorLogger.Error(cause, "Classification failed: {0}", description);
+            else
+                actorLogger.Error("Classification failed: {0}", description);
+
+            classifierSpan?.SetStatus(ActivityStatusCode.Error, description);
+            if (cause != null)
+                classifierSpan?.AddException(cause);
+            classifierSpan?.Dispose();
+            classifierSpan = null;
 
             Records.ClassificationResult fallbackClassification = new Records.ClassificationResult(
                 "other",
                 new Dictionary<string, string>
                 {
                     ["confidence"] = "0.00",
-                    ["error"] = $"classification_failed: {failure.Cause.Message}"
+                    ["error"] = $"classification_failed: {description}"
                 });
 
             actorLogger.Info("Falling back to 'other' intent");
             Records.ProcessingContext updatedCtx = ctx with { Classification = fallbackClassification };
 
-            // Emit router span marking the fallback routing decision
             using Activity? routerSpan = MorganaTelemetry.Source.StartActivity(
                 MorganaTelemetry.RouterActivity,
                 ActivityKind.Internal,
@@ -400,9 +453,8 @@ public class ConversationSupervisorActor : MorganaActor
                 fallbackClassification,
                 ctx.TurnContext,
                 GetEffectiveCapabilities()));
-        });
-
-        RegisterCommonHandlers();
+        }
+        #endregion
     }
 
     /// <summary>
@@ -658,26 +710,26 @@ public class ConversationSupervisorActor : MorganaActor
         bool? completed = null,
         Exception? exception = null)
     {
-        if (_turnSpan is not null)
+        if (turnSpan is not null)
         {
             if (status == ActivityStatusCode.Error)
             {
-                _turnSpan.SetStatus(status, description);
+                turnSpan.SetStatus(status, description);
                 if (exception is not null)
-                    _turnSpan.AddException(exception);
+                    turnSpan.AddException(exception);
             }
 
-            double durationMs = (_turnSpan.Duration != TimeSpan.Zero)
-                ? _turnSpan.Duration.TotalMilliseconds
-                : (DateTime.UtcNow - _turnSpan.StartTimeUtc).TotalMilliseconds;
+            double durationMs = (turnSpan.Duration != TimeSpan.Zero)
+                ? turnSpan.Duration.TotalMilliseconds
+                : (DateTime.UtcNow - turnSpan.StartTimeUtc).TotalMilliseconds;
 
             MorganaTelemetry.TurnDuration.Record(durationMs);
             MorganaTelemetry.TurnCounter.Add(1,
                 new KeyValuePair<string, object?>("intent", intent ?? "unknown"),
                 new KeyValuePair<string, object?>("completed", completed ?? false));
 
-            _turnSpan.Dispose();
-            _turnSpan = null;
+            turnSpan.Dispose();
+            turnSpan = null;
         }
     }
 
