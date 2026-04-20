@@ -37,6 +37,7 @@ public class MorganaController : ControllerBase
     private readonly ActorSystem actorSystem;
     private readonly ILogger logger;
     private readonly IChannelService channelService;
+    private readonly IChannelServiceFactory channelServiceFactory;
     private readonly IConversationPersistenceService conversationPersistenceService;
     private readonly IAuthenticationService authenticationService;
     private readonly IRateLimitService rateLimitService;
@@ -49,6 +50,7 @@ public class MorganaController : ControllerBase
     /// <param name="actorSystem">Akka.NET actor system for conversation management</param>
     /// <param name="logger">Logger instance for diagnostic information</param>
     /// <param name="channelService">Outbound channel used to deliver system-level messages (e.g. rate-limit warnings) to the user</param>
+    /// <param name="channelServiceFactory">Factory consulted at the start-conversation gate to reject handshakes whose declared deliveryMode has no concrete transport registered</param>
     /// <param name="conversationPersistenceService">Service for recovering an existing conversation</param>
     /// <param name="authenticationService">Service for authenticating incoming requests</param>
     /// <param name="rateLimitService">Service for rate limiting an existing conversation</param>
@@ -57,6 +59,7 @@ public class MorganaController : ControllerBase
         ActorSystem actorSystem,
         ILogger logger,
         IChannelService channelService,
+        IChannelServiceFactory channelServiceFactory,
         IConversationPersistenceService conversationPersistenceService,
         IAuthenticationService authenticationService,
         IRateLimitService rateLimitService,
@@ -65,6 +68,7 @@ public class MorganaController : ControllerBase
         this.actorSystem = actorSystem;
         this.logger = logger;
         this.channelService = channelService;
+        this.channelServiceFactory = channelServiceFactory;
         this.conversationPersistenceService = conversationPersistenceService;
         this.authenticationService = authenticationService;
         this.rateLimitService = rateLimitService;
@@ -91,22 +95,24 @@ public class MorganaController : ControllerBase
             logger.LogInformation("Starting conversation {RequestConversationId}", request.ConversationId);
 
             // Morgana refuses to host a conversation for a channel that does not announce
-            // its identity, its capability budget AND its delivery mode. The handshake is the
-            // only place where we learn who the peer is, what it can render and which transport
-            // will carry outbound messages, so a missing field here is never tolerated — we
-            // reject explicitly rather than silently defaulting. The set of valid deliveryMode
-            // values is owned by the channel service factory and enforced at dispatch; the gate
-            // only guarantees presence.
+            // its identity, its capability budget AND a delivery mode that matches a concrete
+            // transport registered in DI. The handshake is the only place where we learn who
+            // the peer is, what it can render and which transport will carry outbound messages,
+            // so any missing or unknown field here is rejected explicitly rather than silently
+            // defaulted. The finite set of valid deliveryMode values is owned by
+            // IChannelServiceFactory; consulting it at the gate lets us fail at the earliest
+            // honest point instead of surfacing the mismatch on the first outbound send.
             if (request.ChannelMetadata is null
                 || string.IsNullOrWhiteSpace(request.ChannelMetadata.ChannelName)
                 || request.ChannelMetadata.Capabilities is null
-                || string.IsNullOrWhiteSpace(request.ChannelMetadata.DeliveryMode))
+                || string.IsNullOrWhiteSpace(request.ChannelMetadata.DeliveryMode)
+                || !channelServiceFactory.IsRegistered(request.ChannelMetadata.DeliveryMode))
             {
                 logger.LogWarning(
-                    "Start requested for conversation {ConversationId} with incomplete channel metadata; returning 400", request.ConversationId);
+                    "Start requested for conversation {ConversationId} with incomplete or unknown channel metadata; returning 400", request.ConversationId);
                 return BadRequest(new
                 {
-                    error = "Channel metadata is required: clients must announce channelName, capabilities and deliveryMode at conversation start.",
+                    error = "Channel metadata is required: clients must announce channelName, capabilities and a deliveryMode served by a registered transport.",
                     conversationId = request.ConversationId
                 });
             }

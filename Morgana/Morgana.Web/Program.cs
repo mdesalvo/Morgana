@@ -46,26 +46,35 @@ builder.Services.AddEndpointsApiExplorer();
 // SECTION 2: Outbound Channel
 // ==============================================================================
 // Wires the outbound channel through which actors deliver messages to the end user.
-// IChannelService is the abstraction; concrete implementations carry the transport.
+// IChannelService is the abstraction; concrete implementations carry the transport; an
+// IChannelServiceFactory picks the right transport per-conversation based on the deliveryMode
+// declared at the handshake.
 //
-// - IChannelService: resolved as AdaptingChannelService, a decorator that routes every
-//                    outbound ChannelMessage through MorganaChannelAdapter before handing
-//                    it to the wrapped concrete channel. Producers keep calling
-//                    channelService.SendMessageAsync(...) unchanged; degradation (rich
-//                    cards → prose, quick replies → inline list, markdown strip, length
-//                    truncation) is applied uniformly and inherited for free by any
-//                    future channel implementation.
-// - SignalRChannelService: currently the only concrete IChannelService implementation,
-//                          backing the Cauldron web UI with full expressive capabilities.
-//                          AddSignalR() is its transport-level dependency; when additional
-//                          channels are introduced, their own transport-level dependencies
-//                          (e.g. HTTP client factories, message bus clients) belong here.
+// - IChannelService: resolved as AdaptingChannelService — the top-level service every producer
+//                    binds to. Responsible for (1) degrading the outbound payload to the
+//                    capabilities advertised by the originating channel via MorganaChannelAdapter,
+//                    and (2) dispatching the adapted payload to the concrete transport selected
+//                    by IChannelServiceFactory using the conversation's deliveryMode. Producers
+//                    keep calling channelService.SendMessageAsync(...) unchanged.
+// - IChannelServiceFactory: populated from ChannelServiceRegistration entries registered here,
+//                           one per concrete transport. Resolves the right IChannelService for
+//                           a given deliveryMode and exposes IsRegistered for the
+//                           start-conversation gate to reject unknown keys with a 400.
+// - SignalRChannelService: concrete transport backing the Cauldron web UI with full expressive
+//                          capabilities, registered under deliveryMode "signalr". AddSignalR()
+//                          is its transport-level dependency. When additional channels are
+//                          introduced, their concrete IChannelService is registered below
+//                          alongside its own ChannelServiceRegistration entry — no other file
+//                          in the framework needs to move.
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<SignalRChannelService>();
+builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
+    new ChannelServiceRegistration("signalr", sp.GetRequiredService<SignalRChannelService>()));
+builder.Services.AddSingleton<IChannelServiceFactory, ChannelServiceFactory>();
 builder.Services.AddSingleton<AdaptingChannelService>(sp =>
     new AdaptingChannelService(
-        sp.GetRequiredService<SignalRChannelService>(),
+        sp.GetRequiredService<IChannelServiceFactory>(),
         sp.GetRequiredService<MorganaChannelAdapter>()));
 builder.Services.AddSingleton<IChannelService>(sp => sp.GetRequiredService<AdaptingChannelService>());
 builder.Services.AddSingleton<IChannelMetadataStore>(sp => sp.GetRequiredService<AdaptingChannelService>());
