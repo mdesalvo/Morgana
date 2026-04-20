@@ -40,7 +40,7 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.*" />
     <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.*" />
     <!-- Services -->
-    <PackageReference Include="Markdig" Version="1.*" />
+    <PackageReference Include="Markdig" Version="1.1.*" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.*" />
   </ItemGroup>
 

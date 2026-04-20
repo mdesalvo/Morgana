@@ -58,7 +58,7 @@
     <PackageReference Include="ModelContextProtocol.Core" Version="1.2.0" />
     <PackageReference Include="OllamaSharp" Version="5.4.25" />
     <!-- Services -->
-    <PackageReference Include="Markdig" Version="1.*" />
+    <PackageReference Include="Markdig" Version="1.1.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.*" />
     <PackageReference Include="OpenTelemetry" Version="1.15.*" />
