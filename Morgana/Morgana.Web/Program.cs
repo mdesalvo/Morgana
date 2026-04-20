@@ -73,9 +73,7 @@ builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
     new ChannelServiceRegistration("signalr", sp.GetRequiredService<SignalRChannelService>()));
 builder.Services.AddSingleton<IChannelServiceFactory, ChannelServiceFactory>();
 builder.Services.AddSingleton<AdaptingChannelService>(sp =>
-    new AdaptingChannelService(
-        sp.GetRequiredService<IChannelServiceFactory>(),
-        sp.GetRequiredService<MorganaChannelAdapter>()));
+    new AdaptingChannelService(sp.GetRequiredService<IChannelServiceFactory>(), sp.GetRequiredService<MorganaChannelAdapter>()));
 builder.Services.AddSingleton<IChannelService>(sp => sp.GetRequiredService<AdaptingChannelService>());
 builder.Services.AddSingleton<IChannelMetadataStore>(sp => sp.GetRequiredService<AdaptingChannelService>());
 
