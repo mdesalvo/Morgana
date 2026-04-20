@@ -378,17 +378,16 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             // so we must guarantee the schema exists before the upsert.
             await EnsureDatabaseInitializedAsync(sqliteConnection);
 
-            ChannelCapabilities capabilities = metadata.Capabilities;
-
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText =
 """
 INSERT INTO channel_metadata
-    (id, channel_name, supports_rich_cards, supports_quick_replies, supports_streaming, supports_markdown, max_message_length)
+    (id, channel_name, delivery_mode, supports_rich_cards, supports_quick_replies, supports_streaming, supports_markdown, max_message_length)
 VALUES
-    (1, @channel_name, @supports_rich_cards, @supports_quick_replies, @supports_streaming, @supports_markdown, @max_message_length)
+    (1, @channel_name, @delivery_mode, @supports_rich_cards, @supports_quick_replies, @supports_streaming, @supports_markdown, @max_message_length)
 ON CONFLICT(id) DO UPDATE SET
     channel_name           = excluded.channel_name,
+    delivery_mode          = excluded.delivery_mode,
     supports_rich_cards    = excluded.supports_rich_cards,
     supports_quick_replies = excluded.supports_quick_replies,
     supports_streaming     = excluded.supports_streaming,
@@ -396,24 +395,26 @@ ON CONFLICT(id) DO UPDATE SET
     max_message_length     = excluded.max_message_length;
 """;
             sqliteCommand.Parameters.AddWithValue("@channel_name", metadata.ChannelName);
-            sqliteCommand.Parameters.AddWithValue("@supports_rich_cards", capabilities.SupportsRichCards ? 1 : 0);
-            sqliteCommand.Parameters.AddWithValue("@supports_quick_replies", capabilities.SupportsQuickReplies ? 1 : 0);
-            sqliteCommand.Parameters.AddWithValue("@supports_streaming", capabilities.SupportsStreaming ? 1 : 0);
-            sqliteCommand.Parameters.AddWithValue("@supports_markdown", capabilities.SupportsMarkdown ? 1 : 0);
+            sqliteCommand.Parameters.AddWithValue("@delivery_mode", metadata.DeliveryMode);
+            sqliteCommand.Parameters.AddWithValue("@supports_rich_cards", metadata.Capabilities.SupportsRichCards ? 1 : 0);
+            sqliteCommand.Parameters.AddWithValue("@supports_quick_replies", metadata.Capabilities.SupportsQuickReplies ? 1 : 0);
+            sqliteCommand.Parameters.AddWithValue("@supports_streaming", metadata.Capabilities.SupportsStreaming ? 1 : 0);
+            sqliteCommand.Parameters.AddWithValue("@supports_markdown", metadata.Capabilities.SupportsMarkdown ? 1 : 0);
             sqliteCommand.Parameters.AddWithValue("@max_message_length",
-                capabilities.MaxMessageLength.HasValue ? capabilities.MaxMessageLength.Value : DBNull.Value);
+                metadata.Capabilities.MaxMessageLength.HasValue ? metadata.Capabilities.MaxMessageLength.Value : DBNull.Value);
 
             await sqliteCommand.ExecuteNonQueryAsync();
 
             logger.LogInformation(
-                "Saved channel metadata for conversation {ConversationId}: channel={Channel}, rc={Rc}, qr={Qr}, str={Str}, md={Md}, max={Max}",
+                "Saved channel metadata for conversation {ConversationId}: channel={Channel}, delivery={Delivery}, rc={Rc}, qr={Qr}, str={Str}, md={Md}, max={Max}",
                 conversationId,
                 metadata.ChannelName,
-                capabilities.SupportsRichCards,
-                capabilities.SupportsQuickReplies,
-                capabilities.SupportsStreaming,
-                capabilities.SupportsMarkdown,
-                capabilities.MaxMessageLength);
+                metadata.DeliveryMode,
+                metadata.Capabilities.SupportsRichCards,
+                metadata.Capabilities.SupportsQuickReplies,
+                metadata.Capabilities.SupportsStreaming,
+                metadata.Capabilities.SupportsMarkdown,
+                metadata.Capabilities.MaxMessageLength);
         }
         catch (Exception ex)
         {
@@ -441,7 +442,7 @@ ON CONFLICT(id) DO UPDATE SET
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText =
 """
-SELECT channel_name, supports_rich_cards, supports_quick_replies, supports_streaming, supports_markdown, max_message_length
+SELECT channel_name, delivery_mode, supports_rich_cards, supports_quick_replies, supports_streaming, supports_markdown, max_message_length
 FROM channel_metadata
 WHERE id = 1;
 """;
@@ -460,9 +461,12 @@ WHERE id = 1;
                 SupportsMarkdown: (long)reader["supports_markdown"] == 1,
                 MaxMessageLength: reader["max_message_length"] is DBNull ? null : (int?)(long)reader["max_message_length"]);
 
-            ChannelMetadata metadata = new ChannelMetadata(
-                ChannelName: (string)reader["channel_name"],
-                Capabilities: capabilities);
+            ChannelMetadata metadata = new ChannelMetadata
+            {
+                ChannelName = (string)reader["channel_name"],
+                Capabilities = capabilities,
+                DeliveryMode = (string)reader["delivery_mode"]
+            };
 
             logger.LogInformation("Loaded persisted channel metadata for conversation {ConversationId}", conversationId);
             return metadata;
@@ -547,6 +551,7 @@ CREATE TABLE IF NOT EXISTS rate_limit_log (
 CREATE TABLE IF NOT EXISTS channel_metadata (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     channel_name           TEXT NOT NULL,
+    delivery_mode          TEXT NOT NULL,
     supports_rich_cards    INTEGER NOT NULL,
     supports_quick_replies INTEGER NOT NULL,
     supports_streaming     INTEGER NOT NULL,

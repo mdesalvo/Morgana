@@ -91,18 +91,22 @@ public class MorganaController : ControllerBase
             logger.LogInformation("Starting conversation {RequestConversationId}", request.ConversationId);
 
             // Morgana refuses to host a conversation for a channel that does not announce
-            // both its identity and its capability budget. The handshake is the only place
-            // where we learn who the peer is and what it can render, so a missing field here
-            // is never tolerated.
+            // its identity, its capability budget AND its delivery mode. The handshake is the
+            // only place where we learn who the peer is, what it can render and which transport
+            // will carry outbound messages, so a missing field here is never tolerated — we
+            // reject explicitly rather than silently defaulting. The set of valid deliveryMode
+            // values is owned by the channel service factory and enforced at dispatch; the gate
+            // only guarantees presence.
             if (request.ChannelMetadata is null
                 || string.IsNullOrWhiteSpace(request.ChannelMetadata.ChannelName)
-                || request.ChannelMetadata.Capabilities is null)
+                || request.ChannelMetadata.Capabilities is null
+                || string.IsNullOrWhiteSpace(request.ChannelMetadata.DeliveryMode))
             {
                 logger.LogWarning(
-                    "Start requested for conversation {ConversationId} without channel metadata; returning 400", request.ConversationId);
+                    "Start requested for conversation {ConversationId} with incomplete channel metadata; returning 400", request.ConversationId);
                 return BadRequest(new
                 {
-                    error = "Channel metadata is required: clients must announce both channelName and capabilities at conversation start.",
+                    error = "Channel metadata is required: clients must announce channelName, capabilities and deliveryMode at conversation start.",
                     conversationId = request.ConversationId
                 });
             }

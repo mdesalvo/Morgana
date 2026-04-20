@@ -25,14 +25,21 @@ public sealed class ChannelMetadata
     /// <summary>Capability budget advertised by the originating channel. Required.</summary>
     public required ChannelCapabilities Capabilities { get; set; }
 
+    /// <summary>Transport dispatch key declared by the channel (e.g. <c>"signalr"</c>,
+    /// <c>"webhook"</c>). Required — Morgana's start-conversation gate rejects handshakes
+    /// whose value is missing or whitespace-only, and its channel service factory rejects
+    /// keys it does not recognise at dispatch.</summary>
+    public required string DeliveryMode { get; set; }
+
     /// <summary>
-    /// Shared singleton describing Cauldron's metadata: channel name <c>"cauldron"</c> plus
-    /// the full capability set. Reused by the conversation lifecycle service at the start
-    /// handshake to avoid allocating a fresh instance per call.
+    /// Shared singleton describing Cauldron's metadata: channel name <c>"cauldron"</c>,
+    /// delivery mode <c>"signalr"</c> and the full capability set. Reused by the conversation
+    /// lifecycle service at the start handshake to avoid allocating a fresh instance per call.
     /// </summary>
     public static readonly ChannelMetadata Cauldron = new ChannelMetadata
     {
         ChannelName = "cauldron",
+        DeliveryMode = "signalr",
         Capabilities = new ChannelCapabilities
         {
             SupportsRichCards = true,

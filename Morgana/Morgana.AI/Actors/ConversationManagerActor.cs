@@ -158,14 +158,15 @@ public class ConversationManagerActor : MorganaActor
                     "the start-conversation gate in MorganaController should have rejected this.");
 
             // Normalise the declaration at the ingress so every downstream consumer sees
-            // consistent data: ChannelName is lowercased so the name space stays
-            // case-insensitive end-to-end, and Capabilities are reconciled against the
-            // AdaptiveMessaging policy (see NormaliseCapabilities) before being persisted
-            // and registered.
+            // consistent data: ChannelName and DeliveryMode are trimmed and lowercased so their
+            // name spaces stay case-insensitive end-to-end, and Capabilities are reconciled
+            // against the AdaptiveMessaging policy (see NormaliseCapabilities) before being
+            // persisted and registered.
             Records.ChannelMetadata channelMetadata = msg.ChannelMetadata with
             {
-                ChannelName = msg.ChannelMetadata.ChannelName.ToLowerInvariant(),
-                Capabilities = NormaliseCapabilities(msg.ChannelMetadata.Capabilities)
+                ChannelName = msg.ChannelMetadata.ChannelName.Trim().ToLowerInvariant(),
+                Capabilities = NormaliseCapabilities(msg.ChannelMetadata.Capabilities),
+                DeliveryMode = msg.ChannelMetadata.DeliveryMode.Trim().ToLowerInvariant()
             };
 
             try
