@@ -727,29 +727,24 @@ public static class Records
     }
 
     /// <summary>
-    /// Wraps a <see cref="ChannelCapabilities"/> budget with the identity of the channel that
-    /// declared it, so Morgana can track "who" a conversation belongs to (Cauldron web UI, a
-    /// Twilio SMS bridge, an IVR gateway, …) in addition to "what" the channel can render.
+    /// Identity + addressing coordinates declared by a channel at the conversation-start
+    /// handshake: who the channel is (<see cref="ChannelName"/>) and how Morgana should route
+    /// outbound traffic to it (<see cref="DeliveryMode"/>). Non-capability string fields live
+    /// here so they can grow (e.g. callback URLs, routing keys) without perturbing the
+    /// capability budget.
     /// </summary>
     /// <remarks>
-    /// <para>The <see cref="ChannelName"/> is free-form and chosen by the client — it is the
-    /// label the channel uses to announce itself at the conversation-start handshake and is
-    /// preserved across restarts via the conversation persistence layer. It is intended for
-    /// observability, routing and per-channel policy (e.g. tailoring prompts by channel) and
-    /// is explicitly NOT a trust boundary.</para>
-    /// <para><see cref="Capabilities"/> carries the expressive budget the adapter consults on
-    /// every outbound send; identity and budget are separated so the latter can evolve
-    /// independently (new features, new limits) without reshaping the identity contract.</para>
+    /// <para>Coordinates are "where/how to reach the channel", capabilities are "what the
+    /// channel can render" — the two concerns evolve on different axes, which is why they sit
+    /// in distinct records and are composed by <see cref="ChannelMetadata"/>.</para>
     /// </remarks>
-    public record ChannelMetadata
+    public record ChannelCoordinates
     {
         /// <summary>Free-form label declared by the channel (e.g. <c>cauldron</c>,
         /// <c>twilio-sms</c>). Persisted alongside the budget and preserved across restarts.
-        /// Normalised (trimmed + lowercased) at ingress so the name space stays case-insensitive end-to-end.</summary>
+        /// Normalised (trimmed + lowercased) at ingress so the name space stays case-insensitive end-to-end.
+        /// Intended for observability, routing and per-channel policy; explicitly NOT a trust boundary.</summary>
         public required string ChannelName { get; init; }
-
-        /// <summary>Expressive capability budget advertised by the channel.</summary>
-        public required ChannelCapabilities Capabilities { get; init; }
 
         /// <summary>Transport dispatch key declared by the channel at the handshake (e.g.
         /// <c>signalr</c>, <c>webhook</c>). Stored free-form as a string and normalised
@@ -758,6 +753,27 @@ public static class Records
         /// without reshaping this contract. The start-conversation gate rejects missing or
         /// whitespace-only values; an unregistered key is rejected at dispatch.</summary>
         public required string DeliveryMode { get; init; }
+    }
+
+    /// <summary>
+    /// Wraps a <see cref="ChannelCapabilities"/> budget with the <see cref="ChannelCoordinates"/>
+    /// of the channel that declared it, so Morgana can track "who the channel is and how to reach
+    /// it" (Cauldron web UI, a Twilio SMS bridge, an IVR gateway, …) in addition to "what the
+    /// channel can render".
+    /// </summary>
+    /// <remarks>
+    /// <para>Identity/addressing and expressive budget are kept in two distinct sub-records so
+    /// each can evolve independently: new addressing fields (callback URLs, routing keys) land
+    /// on <see cref="ChannelCoordinates"/>, new rendering features land on
+    /// <see cref="ChannelCapabilities"/>.</para>
+    /// </remarks>
+    public record ChannelMetadata
+    {
+        /// <summary>Identity + addressing coordinates of the channel (name, delivery mode, …).</summary>
+        public required ChannelCoordinates Coordinates { get; init; }
+
+        /// <summary>Expressive capability budget advertised by the channel.</summary>
+        public required ChannelCapabilities Capabilities { get; init; }
     }
 
     /// <summary>

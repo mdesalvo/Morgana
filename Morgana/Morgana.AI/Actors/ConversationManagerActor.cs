@@ -109,7 +109,8 @@ public class ConversationManagerActor : MorganaActor
             channelMetadataStore.RegisterChannelMetadata(msg.ConversationId, effectiveMetadata);
             actorLogger.Info(
                 $"Channel metadata registered for {msg.ConversationId}: " +
-                $"channel={effectiveMetadata.ChannelName}, " +
+                $"channel={effectiveMetadata.Coordinates.ChannelName}, " +
+                $"delivery={effectiveMetadata.Coordinates.DeliveryMode}, " +
                 $"rc={effectiveMetadata.Capabilities.SupportsRichCards}, " +
                 $"qr={effectiveMetadata.Capabilities.SupportsQuickReplies}, " +
                 $"str={effectiveMetadata.Capabilities.SupportsStreaming}, " +
@@ -164,9 +165,12 @@ public class ConversationManagerActor : MorganaActor
             // persisted and registered.
             Records.ChannelMetadata channelMetadata = msg.ChannelMetadata with
             {
-                ChannelName = msg.ChannelMetadata.ChannelName.Trim().ToLowerInvariant(),
-                Capabilities = NormaliseCapabilities(msg.ChannelMetadata.Capabilities),
-                DeliveryMode = msg.ChannelMetadata.DeliveryMode.Trim().ToLowerInvariant()
+                Coordinates = msg.ChannelMetadata.Coordinates with
+                {
+                    ChannelName = msg.ChannelMetadata.Coordinates.ChannelName.Trim().ToLowerInvariant(),
+                    DeliveryMode = msg.ChannelMetadata.Coordinates.DeliveryMode.Trim().ToLowerInvariant()
+                },
+                Capabilities = NormaliseCapabilities(msg.ChannelMetadata.Capabilities)
             };
 
             try

@@ -394,8 +394,8 @@ ON CONFLICT(id) DO UPDATE SET
     supports_markdown      = excluded.supports_markdown,
     max_message_length     = excluded.max_message_length;
 """;
-            sqliteCommand.Parameters.AddWithValue("@channel_name", metadata.ChannelName);
-            sqliteCommand.Parameters.AddWithValue("@delivery_mode", metadata.DeliveryMode);
+            sqliteCommand.Parameters.AddWithValue("@channel_name", metadata.Coordinates.ChannelName);
+            sqliteCommand.Parameters.AddWithValue("@delivery_mode", metadata.Coordinates.DeliveryMode);
             sqliteCommand.Parameters.AddWithValue("@supports_rich_cards", metadata.Capabilities.SupportsRichCards ? 1 : 0);
             sqliteCommand.Parameters.AddWithValue("@supports_quick_replies", metadata.Capabilities.SupportsQuickReplies ? 1 : 0);
             sqliteCommand.Parameters.AddWithValue("@supports_streaming", metadata.Capabilities.SupportsStreaming ? 1 : 0);
@@ -408,8 +408,8 @@ ON CONFLICT(id) DO UPDATE SET
             logger.LogInformation(
                 "Saved channel metadata for conversation {ConversationId}: channel={Channel}, delivery={Delivery}, rc={Rc}, qr={Qr}, str={Str}, md={Md}, max={Max}",
                 conversationId,
-                metadata.ChannelName,
-                metadata.DeliveryMode,
+                metadata.Coordinates.ChannelName,
+                metadata.Coordinates.DeliveryMode,
                 metadata.Capabilities.SupportsRichCards,
                 metadata.Capabilities.SupportsQuickReplies,
                 metadata.Capabilities.SupportsStreaming,
@@ -463,9 +463,12 @@ WHERE id = 1;
 
             ChannelMetadata metadata = new ChannelMetadata
             {
-                ChannelName = (string)reader["channel_name"],
-                Capabilities = capabilities,
-                DeliveryMode = (string)reader["delivery_mode"]
+                Coordinates = new ChannelCoordinates
+                {
+                    ChannelName = (string)reader["channel_name"],
+                    DeliveryMode = (string)reader["delivery_mode"]
+                },
+                Capabilities = capabilities
             };
 
             logger.LogInformation("Loaded persisted channel metadata for conversation {ConversationId}", conversationId);

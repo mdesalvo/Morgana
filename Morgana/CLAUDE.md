@@ -190,7 +190,7 @@ SignalRChannelService (concrete transport)
     → registered as IChannelService + IChannelMetadataStore
 ```
 
-**Channel handshake**: at conversation start, the client must announce `ChannelMetadata` (channelName + `ChannelCapabilities`). The controller gate rejects requests without it. `ConversationManagerActor` normalizes the name to lowercase, persists it via `SaveChannelMetadataAsync`, and registers it in the in-memory `IChannelMetadataStore`.
+**Channel handshake**: at conversation start, the client must announce `ChannelMetadata`, composed of `ChannelCoordinates` (channelName + deliveryMode — identity and addressing) + `ChannelCapabilities` (feature budget). The controller gate rejects any request whose `coordinates.channelName` or `coordinates.deliveryMode` is missing or whose `deliveryMode` is not served by a registered `IChannelService`. `ConversationManagerActor` normalizes both coordinate strings (trim + lowercase), persists the record via `SaveChannelMetadataAsync`, and registers it in the in-memory `IChannelMetadataStore`.
 
 **Capability-based adaptation** (`MorganaChannelAdapter.AdaptAsync`):
 1. Short-circuits if message fits the budget (hot path for Cauldron)
@@ -199,7 +199,7 @@ SignalRChannelService (concrete transport)
 
 **Streaming suppression**: suppressed upstream when the channel doesn't support it (`SupportsStreaming = false`) or when adaptation would be needed.
 
-**Cauldron's self-declaration**: `ChannelMetadata.Cauldron` singleton — channelName `"cauldron"`, all capabilities true, no max length.
+**Cauldron's self-declaration**: `ChannelMetadata.Cauldron` singleton — coordinates `{ channelName: "cauldron", deliveryMode: "signalr" }`, all capabilities true, no max length.
 
 ## Prompt Architecture
 

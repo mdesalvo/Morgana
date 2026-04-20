@@ -48,7 +48,8 @@ Cauldron/
     ChatMessage.cs                    # UI-side message model (text, role, agent, quickReplies, richCard, streaming state)
     Contracts/                        # DTOs mirroring Morgana's wire format
       ChannelMessage.cs               # SignalR "ReceiveMessage" payload
-      ChannelMetadata.cs              # Handshake metadata (with Cauldron singleton)
+      ChannelMetadata.cs              # Handshake metadata (coordinates + capabilities, with Cauldron singleton)
+      ChannelCoordinates.cs           # Identity + addressing (channelName, deliveryMode)
       ChannelCapabilities.cs          # Feature flags (richCards, quickReplies, streaming, markdown, maxLength)
       QuickReply.cs                   # Quick reply button definition (id, label, value)
       RichCard.cs                     # Rich card with polymorphic CardComponent array
@@ -143,6 +144,7 @@ Used by both the named `HttpClient` (automatic via handler pipeline) and `Signal
 DTOs in `Messages/Contracts/` are **duplicated** from Morgana's `Records.cs` — there is no shared contracts project. When modifying these types, both sides must be updated in lockstep:
 - `ChannelMessage` ↔ `Records.ChannelMessage`
 - `ChannelMetadata` ↔ `Records.ChannelMetadata`
+- `ChannelCoordinates` ↔ `Records.ChannelCoordinates`
 - `ChannelCapabilities` ↔ `Records.ChannelCapabilities`
 - `QuickReply` ↔ `Records.QuickReply`
 - `RichCard` / `CardComponent` ↔ `Records.RichCard` / `Records.CardComponent` (with JSON polymorphic `type` discriminator)
@@ -151,7 +153,7 @@ DTOs in `Messages/Contracts/` are **duplicated** from Morgana's `Records.cs` —
 
 At conversation start, Cauldron announces itself via `ChannelMetadata.Cauldron` singleton:
 ```csharp
-ChannelName = "cauldron"
+Coordinates = { ChannelName = "cauldron", DeliveryMode = "signalr" }
 Capabilities = { SupportsRichCards: true, SupportsQuickReplies: true,
                  SupportsStreaming: true, SupportsMarkdown: true,
                  MaxMessageLength: null }

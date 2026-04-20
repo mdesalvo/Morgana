@@ -9,10 +9,10 @@ namespace Morgana.AI.Interfaces;
 /// <para>Morgana serves multiple channel profiles (SignalR for rich UIs, HTTP webhook for
 /// plain-text clients, …). Each profile maps to a concrete <see cref="IChannelService"/>.
 /// Instead of hard-coding the mapping in a switch or tying dispatch to the free-form
-/// <see cref="Records.ChannelMetadata.ChannelName"/> (client-controlled, potentially infinite),
+/// <see cref="Records.ChannelCoordinates.ChannelName"/> (client-controlled, potentially infinite),
 /// the factory receives every transport at DI registration keyed on its <c>deliveryMode</c>
 /// and resolves the right one per-conversation via
-/// <see cref="Records.ChannelMetadata.DeliveryMode"/>.</para>
+/// <see cref="Records.ChannelCoordinates.DeliveryMode"/>.</para>
 ///
 /// <para><strong>Finite-by-registration:</strong></para>
 /// <para>The set of valid <c>deliveryMode</c> keys is defined by what's registered in DI — not

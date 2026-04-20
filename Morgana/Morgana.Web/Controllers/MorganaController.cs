@@ -103,16 +103,17 @@ public class MorganaController : ControllerBase
             // IChannelServiceFactory; consulting it at the gate lets us fail at the earliest
             // honest point instead of surfacing the mismatch on the first outbound send.
             if (request.ChannelMetadata is null
-                || string.IsNullOrWhiteSpace(request.ChannelMetadata.ChannelName)
+                || request.ChannelMetadata.Coordinates is null
+                || string.IsNullOrWhiteSpace(request.ChannelMetadata.Coordinates.ChannelName)
+                || string.IsNullOrWhiteSpace(request.ChannelMetadata.Coordinates.DeliveryMode)
                 || request.ChannelMetadata.Capabilities is null
-                || string.IsNullOrWhiteSpace(request.ChannelMetadata.DeliveryMode)
-                || !channelServiceFactory.IsRegistered(request.ChannelMetadata.DeliveryMode))
+                || !channelServiceFactory.IsRegistered(request.ChannelMetadata.Coordinates.DeliveryMode))
             {
                 logger.LogWarning(
                     "Start requested for conversation {ConversationId} with incomplete or unknown channel metadata; returning 400", request.ConversationId);
                 return BadRequest(new
                 {
-                    error = "Channel metadata is required: clients must announce channelName, capabilities and a deliveryMode served by a registered transport.",
+                    error = "Channel metadata is required: clients must announce coordinates (channelName + deliveryMode served by a registered transport) and capabilities.",
                     conversationId = request.ConversationId
                 });
             }

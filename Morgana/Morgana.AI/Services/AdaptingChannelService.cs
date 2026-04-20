@@ -81,7 +81,7 @@ public class AdaptingChannelService : IChannelService, IChannelMetadataStore
         Records.ChannelMetadata registeredChannelMetadata = GetRegisteredMetadataOrThrow(channelMessage.ConversationId);
 
         Records.ChannelMessage adaptedChannelMessage = await channelAdapter.AdaptAsync(channelMessage, registeredChannelMetadata.Capabilities);
-        IChannelService concreteChannelService = channelServiceFactory.Resolve(registeredChannelMetadata.DeliveryMode);
+        IChannelService concreteChannelService = channelServiceFactory.Resolve(registeredChannelMetadata.Coordinates.DeliveryMode);
         await concreteChannelService.SendMessageAsync(adaptedChannelMessage);
     }
 
@@ -89,7 +89,7 @@ public class AdaptingChannelService : IChannelService, IChannelMetadataStore
     public Task SendStreamChunkAsync(string conversationId, string chunkText)
     {
         Records.ChannelMetadata registeredChannelMetadata = GetRegisteredMetadataOrThrow(conversationId);
-        IChannelService concreteChannelService = channelServiceFactory.Resolve(registeredChannelMetadata.DeliveryMode);
+        IChannelService concreteChannelService = channelServiceFactory.Resolve(registeredChannelMetadata.Coordinates.DeliveryMode);
         return concreteChannelService.SendStreamChunkAsync(conversationId, chunkText);
     }
 
