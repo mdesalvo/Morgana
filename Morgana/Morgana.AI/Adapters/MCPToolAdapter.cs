@@ -44,8 +44,7 @@ public class MCPToolAdapter
     /// </summary>
     /// <param name="mcpTools">List of MCP tools from server</param>
     /// <returns>Dictionary mapping tool names to (delegate, definition) tuples</returns>
-    public Dictionary<string, (Delegate toolDelegate, Records.ToolDefinition toolDefinition)> ConvertTools(
-        List<Tool> mcpTools)
+    public Dictionary<string, (Delegate toolDelegate, Records.ToolDefinition toolDefinition)> ConvertTools(List<Tool> mcpTools)
     {
         Dictionary<string, (Delegate, Records.ToolDefinition)> result = [];
 
