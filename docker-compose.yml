@@ -16,7 +16,7 @@ services:
   morgana:
     build:
       context: .
-      dockerfile: Morgana.Dockerfile
+      dockerfile: Morgana/Morgana.Dockerfile
       args:
         VERSION: ${MORGANA_VERSION}
     image: morgana:${MORGANA_VERSION}
@@ -59,7 +59,7 @@ services:
   cauldron:
     build:
       context: .
-      dockerfile: Cauldron.Dockerfile
+      dockerfile: Channels/Cauldron/Cauldron.Dockerfile
       args:
         VERSION: ${CAULDRON_VERSION}
     image: cauldron:${CAULDRON_VERSION}

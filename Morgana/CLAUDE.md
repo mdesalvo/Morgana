@@ -279,7 +279,7 @@ At application startup, three registries perform comprehensive validation:
 - **Target**: .NET 10, C# latest (uses C# 14 features like `extension` blocks)
 - **Build**: `dotnet build` from solution root
 - **Run**: start both `Morgana.Web` (backend, default https://localhost:5001) and `Cauldron` (frontend, default https://localhost:5002)
-- **Docker**: `docker-compose up` using `Morgana.Dockerfile` + `Cauldron.Dockerfile`
+- **Docker**: `docker-compose up` using `Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`
 
 ## Conventions
 

@@ -186,7 +186,7 @@ Morgana persists this and uses it to decide whether to adapt (degrade) outbound 
 - **Target**: .NET 10, Blazor Server
 - **Build**: `dotnet build` from `Channels/Cauldron/` directory
 - **Run**: `dotnet run` — default https://localhost:5002 (requires Morgana backend running)
-- **Docker**: `Cauldron.Dockerfile`
+- **Docker**: `Channels/Cauldron/Cauldron.Dockerfile`
 
 ## Conventions
 
