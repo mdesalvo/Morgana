@@ -753,6 +753,14 @@ public static class Records
         /// without reshaping this contract. The start-conversation gate rejects missing or
         /// whitespace-only values; an unregistered key is rejected at dispatch.</summary>
         public required string DeliveryMode { get; init; }
+
+        /// <summary>Absolute URL where Morgana POSTs outbound <see cref="ChannelMessage"/>s for
+        /// push-style transports (e.g. <c>deliveryMode=webhook</c>). Null for pull/duplex
+        /// transports (e.g. <c>signalr</c>) that do not need a callback target. The
+        /// start-conversation gate enforces the presence and well-formedness of this field per
+        /// <see cref="DeliveryMode"/>: unknown to the record itself, the requirement is owned by
+        /// the transport-specific validation at the ingress.</summary>
+        public string? CallbackUrl { get; init; }
     }
 
     /// <summary>

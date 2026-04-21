@@ -118,6 +118,26 @@ public class MorganaController : ControllerBase
                 });
             }
 
+            // Webhook-specific addressing gate: the push-style transport cannot route outbound
+            // traffic without a reachable callback URL, so a handshake declaring deliveryMode=webhook
+            // without a well-formed absolute URL is rejected here — the same shape as the generic
+            // gate above, just narrower. Other transports (signalr, future pull/duplex modes) leave
+            // CallbackUrl null; no requirement applies to them.
+            string normalisedDeliveryMode = request.ChannelMetadata.Coordinates.DeliveryMode.Trim().ToLowerInvariant();
+            if (normalisedDeliveryMode == "webhook"
+                 && (string.IsNullOrWhiteSpace(request.ChannelMetadata.Coordinates.CallbackUrl)
+                     || !Uri.TryCreate(request.ChannelMetadata.Coordinates.CallbackUrl, UriKind.Absolute, out _)))
+            {
+                logger.LogWarning(
+                    "Start requested for conversation {ConversationId} with deliveryMode=webhook but missing or invalid callbackUrl; returning 400",
+                    request.ConversationId);
+                return BadRequest(new
+                {
+                    error = "deliveryMode=webhook requires a well-formed absolute callbackUrl in channel coordinates.",
+                    conversationId = request.ConversationId
+                });
+            }
+
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", request.ConversationId);
 

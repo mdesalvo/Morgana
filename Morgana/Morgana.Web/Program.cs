@@ -62,15 +62,31 @@ builder.Services.AddEndpointsApiExplorer();
 //                           start-conversation gate to reject unknown keys with a 400.
 // - SignalRChannelService: concrete transport backing the Cauldron web UI with full expressive
 //                          capabilities, registered under deliveryMode "signalr". AddSignalR()
-//                          is its transport-level dependency. When additional channels are
-//                          introduced, their concrete IChannelService is registered below
-//                          alongside its own ChannelServiceRegistration entry — no other file
-//                          in the framework needs to move.
+//                          is its transport-level dependency.
+// - WebhookChannelService: concrete transport for push-style clients (Rune CLI, third-party
+//                          integrators), registered under deliveryMode "webhook". POSTs the
+//                          outbound ChannelMessage as JSON to the absolute callbackUrl declared
+//                          by the channel on its ChannelCoordinates at the handshake — the
+//                          coordinate is validated by the start-conversation gate and persisted
+//                          by ConversationManagerActor, so the service just looks it up per send.
+//                          Uses IHttpClientFactory via the named client "Morgana.Webhook" to
+//                          preserve handler rotation despite being a singleton. Morgana does
+//                          NOT sign the outbound POST (asymmetric trust model, same shape as
+//                          GitHub/Stripe/Twilio webhook conventions).
+//
+// When additional channels are introduced, their concrete IChannelService is registered below
+// alongside its own ChannelServiceRegistration entry — no other file in the framework needs to move.
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<SignalRChannelService>();
 builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
     new ChannelServiceRegistration("signalr", sp.GetRequiredService<SignalRChannelService>()));
+
+builder.Services.AddHttpClient(WebhookChannelService.HttpClientName);
+builder.Services.AddSingleton<WebhookChannelService>();
+builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
+    new ChannelServiceRegistration("webhook", sp.GetRequiredService<WebhookChannelService>()));
+
 builder.Services.AddSingleton<IChannelServiceFactory, ChannelServiceFactory>();
 builder.Services.AddSingleton<AdaptingChannelService>(sp =>
     new AdaptingChannelService(sp.GetRequiredService<IChannelServiceFactory>(), sp.GetRequiredService<MorganaChannelAdapter>()));
