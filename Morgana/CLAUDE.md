@@ -14,7 +14,8 @@ Morgana/
     Morgana.AI/            # Core framework library (NuGet package)
     Morgana.Web/           # ASP.NET Core host (controllers, SignalR hub, DI wiring)
     Directory.Build.props  # Shared build settings, version, NuGet dependencies
-  Cauldron/                # Blazor Server frontend (reference channel)
+  Channels/                # Reference channels (clients that talk to Morgana)
+    Cauldron/              # Blazor Server frontend — rich reference channel (SignalR)
   Morgana.Examples/        # Example plugin with BillingAgent, ContractAgent, MonkeyAgent
   CHANGELOG.md
 ```
@@ -48,7 +49,7 @@ Morgana/
 
 ### Cauldron (frontend)
 
-Blazor Server app at `Cauldron/` (separate solution, has its own `CLAUDE.md`). Reference channel for Morgana: rich chat UI with streaming, quick replies, rich cards, typing indicators, conversation resume via `ProtectedLocalStorage`. Communicates via REST + SignalR. Self-issues JWT tokens for authentication. Duplicates wire-format DTOs in `Messages/Contracts/` (no shared contracts project — sync changes in lockstep).
+Blazor Server app at `Channels/Cauldron/` (separate solution, has its own `CLAUDE.md`). Reference channel for Morgana: rich chat UI with streaming, quick replies, rich cards, typing indicators, conversation resume via `ProtectedLocalStorage`. Communicates via REST + SignalR. Self-issues JWT tokens for authentication. Duplicates wire-format DTOs in `Messages/Contracts/` (no shared contracts project — sync changes in lockstep).
 
 ### Morgana.Examples (plugin)
 
@@ -277,7 +278,7 @@ At application startup, three registries perform comprehensive validation:
 
 - **Target**: .NET 10, C# latest (uses C# 14 features like `extension` blocks)
 - **Build**: `dotnet build` from solution root
-- **Run**: start both `Morgana.Web` (backend, default https://localhost:7042) and `Cauldron` (frontend, default https://localhost:7172)
+- **Run**: start both `Morgana.Web` (backend, default https://localhost:5001) and `Cauldron` (frontend, default https://localhost:5002)
 - **Docker**: `docker-compose up` using `Morgana.Dockerfile` + `Cauldron.Dockerfile`
 
 ## Conventions

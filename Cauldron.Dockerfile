@@ -18,14 +18,14 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy project file and dependencies (for optimal layer caching)
-COPY ["Cauldron/Cauldron.csproj", "Cauldron/"]
-COPY ["Cauldron/Directory.Build.props", "Directory.Build.props"]
+COPY ["Channels/Cauldron/Cauldron.csproj", "Cauldron/"]
+COPY ["Channels/Cauldron/Directory.Build.props", "Directory.Build.props"]
 
 # Restore NuGet dependencies (cached layer if .csproj doesn't change)
 RUN dotnet restore "Cauldron/Cauldron.csproj"
 
 # Copy all source code
-COPY Cauldron/ Cauldron/
+COPY Channels/Cauldron/ Cauldron/
 
 # Build application in Release mode
 WORKDIR "/src/Cauldron"

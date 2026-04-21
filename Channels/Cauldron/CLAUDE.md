@@ -4,7 +4,7 @@
 
 Cauldron is a **Blazor Server** web application that serves as the reference channel for Morgana. It provides a rich chat UI with real-time streaming, quick reply buttons, rich cards, typing indicators, and conversation persistence across browser sessions. Communicates with the Morgana backend via REST API (conversation lifecycle, message sending) and SignalR (real-time message delivery, streaming chunks).
 
-Cauldron lives at `Cauldron/` in the repo root, separate from the `Morgana/` working directory.
+Cauldron lives at `Channels/Cauldron/` in the repo root, alongside other reference channels, separate from the `Morgana/` working directory.
 
 ## Project Structure
 
@@ -184,8 +184,8 @@ Morgana persists this and uses it to decide whether to adapt (degrade) outbound 
 ## Build and Run
 
 - **Target**: .NET 10, Blazor Server
-- **Build**: `dotnet build` from `Cauldron/` directory
-- **Run**: `dotnet run` — default https://localhost:7172 (requires Morgana backend running)
+- **Build**: `dotnet build` from `Channels/Cauldron/` directory
+- **Run**: `dotnet run` — default https://localhost:5002 (requires Morgana backend running)
 - **Docker**: `Cauldron.Dockerfile`
 
 ## Conventions

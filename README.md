@@ -1,7 +1,7 @@
 <table style="border:none;" width="100%">
   <tr>
     <td width="256">
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Cauldron/wwwroot/assets/Morgana.jpg" alt="Morgana Logo" width="256"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana.jpg" alt="Morgana Logo" width="256"/>
     </td>
     <td style="width:calc(100% - 256px);">
       <h1>Morgana <a href="https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Morgana-Handbook.html" title="Morgana Handbook">📜</a></h1>
@@ -30,19 +30,19 @@ Morgana will kindly assist you with her magical AI potions just the way you **ne
 <table style="border:none;">
   <tr>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Cauldron/wwwroot/assets/Morgana-SparkleLoader.jpg?raw=true" alt="Morgana Sparkle Loader"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-SparkleLoader.jpg?raw=true" alt="Morgana Sparkle Loader"/>
     </td>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Cauldron/wwwroot/assets/Morgana-Presentation.jpg?raw=true" alt="Morgana Presentation"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-Presentation.jpg?raw=true" alt="Morgana Presentation"/>
     </td>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Cauldron/wwwroot/assets/Morgana-Chatting.jpg?raw=true" alt="Morgana Chatting"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-Chatting.jpg?raw=true" alt="Morgana Chatting"/>
     </td>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Cauldron/wwwroot/assets/Morgana-Agent.jpg?raw=true" alt="Morgana Agent"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-Agent.jpg?raw=true" alt="Morgana Agent"/>
     </td>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Cauldron/wwwroot/assets/Morgana-RichCards.jpg?raw=true" alt="Morgana Rich Cards"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-RichCards.jpg?raw=true" alt="Morgana Rich Cards"/>
     </td>
   </tr>
 </table>
