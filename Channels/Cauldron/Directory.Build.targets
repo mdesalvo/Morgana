@@ -1,15 +1,17 @@
 <Project>
 
   <Target Name="GenerateDockerVersionFile" BeforeTargets="Build">
-    
+
     <PropertyGroup>
-      <!-- Repository root is ONE level up from this Directory.Build.targets -->
-      <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</RepoRoot>
+      <!-- Repository root is TWO levels up from this file
+           (Channels/Cauldron/ → Channels/ → repo root) -->
+      <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))</RepoRoot>
       <EnvVersionsFile>$(RepoRoot)\.env.versions</EnvVersionsFile>
-      
+
       <!-- Paths to Directory.Build.props files -->
       <MorganaPropsFile>$(RepoRoot)\Morgana\Directory.Build.props</MorganaPropsFile>
-      <CauldronPropsFile>$(RepoRoot)\Cauldron\Directory.Build.props</CauldronPropsFile>
+      <CauldronPropsFile>$(RepoRoot)\Channels\Cauldron\Directory.Build.props</CauldronPropsFile>
+      <RunePropsFile>$(RepoRoot)\Channels\Rune\Directory.Build.props</RunePropsFile>
     </PropertyGroup>
 
     <Message Text="════════════════════════════════════════════════════════════" Importance="high" />
@@ -17,13 +19,13 @@
     <Message Text="════════════════════════════════════════════════════════════" Importance="high" />
 
     <!-- Read Morgana version -->
-    <XmlPeek 
-      XmlInputPath="$(MorganaPropsFile)" 
+    <XmlPeek
+      XmlInputPath="$(MorganaPropsFile)"
       Query="/Project/PropertyGroup/Version/text()"
       Condition="Exists('$(MorganaPropsFile)')">
       <Output TaskParameter="Result" ItemName="MorganaVersionResult" />
     </XmlPeek>
-    
+
     <PropertyGroup>
       <MorganaVersion>@(MorganaVersionResult)</MorganaVersion>
     </PropertyGroup>
@@ -32,19 +34,34 @@
     <Warning Text="[Morgana Docker] Could not find $(MorganaPropsFile)" Condition="'$(MorganaVersion)' == ''" />
 
     <!-- Read Cauldron version -->
-    <XmlPeek 
-      XmlInputPath="$(CauldronPropsFile)" 
+    <XmlPeek
+      XmlInputPath="$(CauldronPropsFile)"
       Query="/Project/PropertyGroup/Version/text()"
       Condition="Exists('$(CauldronPropsFile)')">
       <Output TaskParameter="Result" ItemName="CauldronVersionResult" />
     </XmlPeek>
-    
+
     <PropertyGroup>
       <CauldronVersion>@(CauldronVersionResult)</CauldronVersion>
     </PropertyGroup>
 
     <Message Text="[Morgana Docker] ✓ Cauldron version: $(CauldronVersion)" Importance="high" Condition="'$(CauldronVersion)' != ''" />
     <Warning Text="[Morgana Docker] Could not find $(CauldronPropsFile)" Condition="'$(CauldronVersion)' == ''" />
+
+    <!-- Read Rune version -->
+    <XmlPeek
+      XmlInputPath="$(RunePropsFile)"
+      Query="/Project/PropertyGroup/Version/text()"
+      Condition="Exists('$(RunePropsFile)')">
+      <Output TaskParameter="Result" ItemName="RuneVersionResult" />
+    </XmlPeek>
+
+    <PropertyGroup>
+      <RuneVersion>@(RuneVersionResult)</RuneVersion>
+    </PropertyGroup>
+
+    <Message Text="[Morgana Docker] ✓ Rune version:     $(RuneVersion)" Importance="high" Condition="'$(RuneVersion)' != ''" />
+    <Warning Text="[Morgana Docker] Could not find $(RunePropsFile)" Condition="'$(RuneVersion)' == ''" />
 
     <!-- Generate .env.versions content -->
     <PropertyGroup>
@@ -54,6 +71,7 @@
 
 MORGANA_VERSION=$(MorganaVersion)
 CAULDRON_VERSION=$(CauldronVersion)
+RUNE_VERSION=$(RuneVersion)
 ]]>
       </EnvVersionsContent>
     </PropertyGroup>
@@ -63,11 +81,11 @@ CAULDRON_VERSION=$(CauldronVersion)
       File="$(EnvVersionsFile)"
       Lines="$(EnvVersionsContent)"
       Overwrite="true"
-      Condition="'$(MorganaVersion)' != '' AND '$(CauldronVersion)' != ''" />
+      Condition="'$(MorganaVersion)' != '' AND '$(CauldronVersion)' != '' AND '$(RuneVersion)' != ''" />
 
-    <Message Text="[Morgana Docker] ✅ Generated: $(EnvVersionsFile)" Importance="high" Condition="'$(MorganaVersion)' != '' AND '$(CauldronVersion)' != ''" />
+    <Message Text="[Morgana Docker] ✅ Generated: $(EnvVersionsFile)" Importance="high" Condition="'$(MorganaVersion)' != '' AND '$(CauldronVersion)' != '' AND '$(RuneVersion)' != ''" />
     <Message Text="════════════════════════════════════════════════════════════" Importance="high" />
-    
+
   </Target>
 
 </Project>

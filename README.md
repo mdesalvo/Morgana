@@ -15,6 +15,7 @@
       <a href="https://www.nuget.org/packages/Morgana.AI"><img src="https://img.shields.io/nuget/dt/Morgana.AI?style=flat&color=9f7aea&logo=nuget&label=Morgana.AI"/></a> 
       <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/pulls/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana&color=9f7aea" alt="Morgana (Docker Pulls)"></a>
       <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/pulls/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron&color=9f7aea" alt="Cauldron (Docker Pulls)"></a>
+      <a href="https://hub.docker.com/r/mdesalvo/rune"><img src="https://img.shields.io/docker/pulls/mdesalvo/rune?logo=docker&logoColor=white&label=Rune&color=9f7aea" alt="Rune (Docker Pulls)"></a>
     </td>
   </tr>
 </table>
@@ -77,8 +78,9 @@ This architecture ensures that failures are isolated, system state remains consi
 
 ```mermaid
 graph LR
-  %% Frontend
-  U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron"}
+  %% Channels (reference clients, out-of-the-box)
+  U@{shape: circle, label: "👤 User"} -- HTML --> CLD@{shape: rounded, label: "🌐 Cauldron"}
+  U -- TTY --> RUN@{shape: rounded, label: "📟 Rune"}
 
   %% Backend boundary
   subgraph Morgana["Morgana"]
@@ -91,8 +93,9 @@ graph LR
     MA@{shape: rounded, label: "Agent"}
   end
 
-  %% FE → BE
-  CLD --> CM
+  %% Channel → BE
+  CLD -- SignalR --> CM
+  RUN -- Webhook --> CM
   CM -- 1. Creates conversation and activates actor --> SV
 
   %% Internal BE flow
@@ -142,8 +145,9 @@ The framework provides adapters (`MorganaAgentAdapter`, `MorganaToolAdapter`) th
 
 ```mermaid
 graph LR
-  %% Frontend
-  U@{shape: circle, label: "👤 User"} --> CLD@{shape: rounded, label: "🌐 Cauldron"}
+  %% Channels (reference clients, out-of-the-box)
+  U@{shape: circle, label: "👤 User"} -- HTML --> CLD@{shape: rounded, label: "🌐 Cauldron"}
+  U -- TTY --> RUN@{shape: rounded, label: "📟 Rune"}
 
   %% Backend boundary
   subgraph Morgana["Morgana"]
@@ -154,8 +158,9 @@ graph LR
     MA@{shape: rounded, label: "Agent"}
   end
 
-  %% FE → BE
-  CLD --> CM
+  %% Channel → BE
+  CLD -- SignalR --> CM
+  RUN -- Webhook --> CM
   CM -- 1. Continues conversation and engages actor --> SV
 
   %% Internal BE flow
@@ -226,10 +231,15 @@ cp production.env.template .env
 # ✏️ Configure your secrets
 nano .env  # or use your favorite editor
 
-# 🐳 Start the containers
+# 🐳 Start the containers (Morgana + Cauldron)
 docker compose up
 
 # ✅ Open your browser at http://localhost:5002
+
+# 💬 (Optional) Chat with Morgana via Rune's TUI in a separate terminal
+#    Rune owns the terminal (Spectre.Console Live UI), so it must be launched
+#    interactively with `run --service-ports`, not via `up`
+docker compose run --rm --service-ports rune
 
 # 🛑 Stop the containers
 docker compose down
@@ -252,10 +262,15 @@ dotnet build ./Cauldron
 # 🐳 Build Docker images
 docker compose --env-file .env --env-file .env.versions build
 
-# 🚀 Start the containers
+# 🚀 Start the containers (Morgana + Cauldron)
 docker compose --env-file .env --env-file .env.versions up
 
 # ✅ Open your browser at http://localhost:5002
+
+# 💬 (Optional) Chat with Morgana via Rune's TUI in a separate terminal
+#    Rune owns the terminal (Spectre.Console Live UI), so it must be launched
+#    interactively with `run --service-ports`, not via `up`
+docker compose --env-file .env --env-file .env.versions run --rm --service-ports rune
 
 # 🛑 Stop the containers
 docker compose --env-file .env --env-file .env.versions down

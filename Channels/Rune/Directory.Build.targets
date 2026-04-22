@@ -3,8 +3,9 @@
   <Target Name="GenerateDockerVersionFile" BeforeTargets="Build">
 
     <PropertyGroup>
-      <!-- Repository root is ONE level up from this Directory.Build.targets -->
-      <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</RepoRoot>
+      <!-- Repository root is TWO levels up from this file
+           (Channels/Rune/ → Channels/ → repo root) -->
+      <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))</RepoRoot>
       <EnvVersionsFile>$(RepoRoot)\.env.versions</EnvVersionsFile>
 
       <!-- Paths to Directory.Build.props files -->

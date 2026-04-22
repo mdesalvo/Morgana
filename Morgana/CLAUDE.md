@@ -16,6 +16,7 @@ Morgana/
     Directory.Build.props  # Shared build settings, version, NuGet dependencies
   Channels/                # Reference channels (clients that talk to Morgana)
     Cauldron/              # Blazor Server frontend — rich reference channel (SignalR)
+    Rune/                  # Spectre.Console CLI — poor-but-honest reference channel (webhook)
   Morgana.Examples/        # Example plugin with BillingAgent, ContractAgent, MonkeyAgent
   CHANGELOG.md
 ```
@@ -47,9 +48,13 @@ Morgana/
 | `Services/SignalRChannelService.cs` | `IChannelService` implementation — pushes `ChannelMessage` and stream chunks over SignalR |
 | `appsettings.json` | All configuration sections (see Key Configuration below) |
 
-### Cauldron (frontend)
+### Cauldron (rich reference channel)
 
-Blazor Server app at `Channels/Cauldron/` (separate solution, has its own `CLAUDE.md`). Reference channel for Morgana: rich chat UI with streaming, quick replies, rich cards, typing indicators, conversation resume via `ProtectedLocalStorage`. Communicates via REST + SignalR. Self-issues JWT tokens for authentication. Duplicates wire-format DTOs in `Messages/Contracts/` (no shared contracts project — sync changes in lockstep).
+Blazor Server app at `Channels/Cauldron/` (separate solution, has its own `CLAUDE.md`). Reference channel for Morgana: rich chat UI with streaming, quick replies, rich cards, typing indicators, conversation resume via `ProtectedLocalStorage`. Communicates via REST + SignalR (`deliveryMode=signalr`). Self-issues JWT tokens for authentication (`iss=cauldron`). Duplicates wire-format DTOs in `Messages/Contracts/` (no shared contracts project — sync changes in lockstep).
+
+### Rune (poor-but-honest reference channel)
+
+Spectre.Console CLI at `Channels/Rune/` (separate solution, has its own `CLAUDE.md`). Second reference channel, complementary to Cauldron: Kestrel-hosted console app that exercises the webhook delivery path (`deliveryMode=webhook`) and the "poor but honest" capability profile (all rich features off, `MaxMessageLength=200`) — the contract surface `MorganaChannelAdapter` is supposed to degrade toward. Self-issues JWT tokens for authentication (`iss=rune`). Like Cauldron, duplicates wire-format DTOs in `Messages/Contracts/`.
 
 ### Morgana.Examples (plugin)
 
@@ -279,7 +284,7 @@ At application startup, three registries perform comprehensive validation:
 - **Target**: .NET 10, C# latest (uses C# 14 features like `extension` blocks)
 - **Build**: `dotnet build` from solution root
 - **Run**: start both `Morgana.Web` (backend, default https://localhost:5001) and `Cauldron` (frontend, default https://localhost:5002)
-- **Docker**: `docker-compose up` using `Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`
+- **Docker**: `docker compose up` starts Morgana + Cauldron (`Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`); Rune is a TUI and must be launched interactively in a separate terminal via `docker compose run --rm --service-ports rune` (using `Channels/Rune/Rune.Dockerfile`), because Spectre.Console needs to own stdin/stdout
 
 ## Conventions
 

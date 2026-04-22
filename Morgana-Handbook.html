@@ -355,7 +355,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page">
       <h2>Architecture Overview</h2>
-      <p>Morgana is a <strong>conversational AI framework</strong> built on a multi-agent, intent-driven architecture. It separates the frontend experience (<strong>Cauldron</strong>) from the backend intelligence (<strong>Morgana</strong>), communicating over SignalR (real-time streaming) and REST API, all secured by JWT authentication.</p>
+      <p>Morgana is a <strong>conversational AI framework</strong> built on a multi-agent, intent-driven architecture. It is <strong>multi-channel by design</strong>: the backend intelligence (<strong>Morgana</strong>) is decoupled from the channels users actually reach it through, and ships with <strong>two reference channels out-of-the-box</strong> &mdash; <strong>Cauldron</strong> (HTML / Blazor Server, rich UI over SignalR) and <strong>Rune</strong> (TTY / Spectre.Console, poor-but-honest CLI over webhook). Every channel advertises its <strong>capability budget</strong> at conversation start, Morgana adapts its outbound expressivity accordingly, and each channel authenticates with its own JWT issuer.</p>
       <p>Morgana <strong>reimagines conversational AI</strong> through 4 foundational pillars that <strong>work in harmony</strong> to deliver an <strong>orchestration framework</strong> that is powerful yet remarkably simple to configure.</p>
       
       <div class="pillars">
@@ -386,7 +386,8 @@
         <thead><tr><th>Component</th><th>Role</th><th>Technology</th><th>Default Port</th></tr></thead>
         <tbody>
           <tr><td><strong>Morgana</strong></td><td>Backend &mdash; SignalR Hub, Actors, Agents</td><td>ASP.NET 10, Akka.NET, Microsoft.Agents.AI</td><td>5001</td></tr>
-          <tr><td><strong>Cauldron</strong></td><td>Frontend &mdash; Blazor Server UI</td><td>Blazor Server</td><td>5002</td></tr>
+          <tr><td><strong>Cauldron</strong></td><td>Reference channel &mdash; HTML rich UI (SignalR delivery, full capability budget)</td><td>Blazor Server</td><td>5002</td></tr>
+          <tr><td><strong>Rune</strong></td><td>Reference channel &mdash; TTY CLI (webhook delivery, poor-but-honest capability budget)</td><td>Spectre.Console on Kestrel</td><td>5003</td></tr>
           <tr><td><strong>LLM</strong></td><td>Language model provider</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>&mdash;</td></tr>
           <tr><td><strong>MCP Server</strong></td><td>External tool provider (optional)</td><td>Model Context Protocol</td><td>&mdash;</td></tr>
         </tbody>
@@ -439,16 +440,16 @@
     
       <h3>Authentication Flow</h3>
       <div class="flow-box">
-        <span class="actor">Cauldron</span>
-        <span style="font-size:10px;">(self-issues JWT signed with shared key)</span>
+        <span class="actor">Channel</span>
+        <span style="font-size:10px;">(Cauldron <code>iss=cauldron</code> &middot; Rune <code>iss=rune</code> &mdash; each self-issues JWTs signed with its own shared key)</span>
         <span class="arrow">&rarr;</span><br/>
-        <span style="font-size:10px;">Bearer token in HTTP &amp; SignalR</span>
+        <span style="font-size:10px;">Bearer token in HTTP &amp; SignalR / Webhook</span>
         <span class="arrow">&rarr;</span><br/>
         <span class="actor">Morgana</span>
-        <span style="font-size:10px;">(validates signature, issuer, audience)</span>
+        <span style="font-size:10px;">(peeks <code>iss</code>, looks up the matching <code>Issuers[]</code> entry, validates signature + audience + lifetime; unknown issuers rejected outright)</span>
       </div>
-    
-      <p class="muted" style="font-size:12px; margin-top:10px;">The <code>IAuthenticationService</code> extension point allows deployers to replace JWT with any strategy (API keys, mTLS, OAuth with external IdP) without modifying the application.</p>
+
+      <p class="muted" style="font-size:12px; margin-top:10px;">Morgana uses a <strong>per-issuer trust model</strong>: each channel onboards with its own <code>{ Name, SymmetricKey }</code> entry in <code>Morgana:Authentication:Issuers[]</code>, so leaking one channel's key does not compromise the others. The <code>IAuthenticationService</code> extension point also allows deployers to replace JWT with any strategy (API keys, mTLS, OAuth with external IdP) without modifying the application.</p>
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
@@ -461,58 +462,71 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page">
       <h2>Configuration Reference</h2>
-      <p>Both Morgana and Cauldron follow the standard ASP.NET configuration hierarchy: <code>appsettings.json</code> &rarr; environment variables &rarr; User Secrets. In Docker, environment variables in <code>docker-compose.yml</code> override everything.</p>
-    
+      <p>Morgana and its reference channels all follow the standard ASP.NET configuration hierarchy: <code>appsettings.json</code> &rarr; environment variables &rarr; User Secrets. In Docker, environment variables in <code>docker-compose.yml</code> override everything.</p>
+
       <h3>Morgana (Backend)</h3>
       <table>
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td>Morgana:LLM:Provider</td><td>LLM backend: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code></td></tr>
           <tr><td>Morgana:LLM:{Provider}:*</td><td>Provider-specific settings (ApiKey, Model, Endpoint, ...)</td></tr>
-          <tr><td>Morgana:Authentication:Enabled</td><td>Master toggle for JWT validation (default: <code>true</code>)</td></tr>
-          <tr><td>Morgana:Authentication:SymmetricKey</td><td>HMAC-SHA256 signing key (256-bit, base64)</td></tr>
+          <tr><td>Morgana:Authentication:Audience</td><td>Expected JWT audience (default: <code>morgana.ai</code>)</td></tr>
+          <tr><td>Morgana:Authentication:Issuers[]</td><td>Per-channel trust list: array of <code>{ Name, SymmetricKey }</code> entries (e.g. <code>cauldron</code>, <code>rune</code>)</td></tr>
           <tr><td>Morgana:ConversationPersistence:EncryptionKey</td><td>AES-256 key for SQLite encryption (base64)</td></tr>
           <tr><td>Morgana:ConversationPersistence:StoragePath</td><td>Directory for SQLite database files</td></tr>
-          <tr><td>Morgana:CauldronBaseUrl</td><td>Cauldron frontend URL (used for CORS)</td></tr>
           <tr><td>Morgana:ActorSystem:TimeoutSeconds</td><td>Actor/agent timeout (default: 180)</td></tr>
           <tr><td>Morgana:ActorSystem:EnableGuardrail</td><td>Toggle content moderation guard</td></tr>
+          <tr><td>Morgana:AdaptiveMessaging:*</td><td>Streaming toggle, rich-features threshold for ingress heuristic</td></tr>
           <tr><td>Morgana:RateLimiting:*</td><td>Per-minute, per-hour, per-day message limits</td></tr>
           <tr><td>Morgana:OpenTelemetry:*</td><td>Tracing: exporters, service name, endpoints</td></tr>
         </tbody>
       </table>
-    
-      <h3>Cauldron (Frontend)</h3>
+
+      <h3>Cauldron (HTML channel)</h3>
       <table>
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>Cauldron:MorganaBaseUrl</td><td>Morgana backend URL</td></tr>
-          <tr><td>Cauldron:Authentication:SymmetricKey</td><td>Same HMAC-SHA256 key configured in Morgana</td></tr>
+          <tr><td>Cauldron:MorganaURL</td><td>Morgana backend URL</td></tr>
+          <tr><td>Cauldron:Authentication:SymmetricKey</td><td>HMAC-SHA256 key matching the <code>cauldron</code> entry in Morgana's <code>Issuers[]</code></td></tr>
           <tr><td>Cauldron:StreamingResponse:*</td><td>Typewriter effect speed (tick ms, chars per tick)</td></tr>
           <tr><td>Cauldron:LandingMessages</td><td>Array of random loading messages</td></tr>
         </tbody>
       </table>
+
+      <h3>Rune (TTY channel)</h3>
+      <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Rune:MorganaURL</td><td>Morgana backend URL</td></tr>
+          <tr><td>Rune:CallbackURL</td><td>Absolute URL Morgana posts inbound messages to (webhook listener)</td></tr>
+          <tr><td>Rune:Authentication:SymmetricKey</td><td>HMAC-SHA256 key matching the <code>rune</code> entry in Morgana's <code>Issuers[]</code></td></tr>
+          <tr><td>Rune:Authentication:Issuer</td><td>Token issuer (default: <code>rune</code>)</td></tr>
+          <tr><td>Rune:Authentication:Audience</td><td>Token audience (default: <code>morgana.ai</code>)</td></tr>
+        </tbody>
+      </table>
     
       <h2 style="margin-top: 24px;">Docker Deployment</h2>
-      <p>Morgana ships with a ready-to-use <code>docker-compose.yml</code> defining both services on a dedicated bridge network with persistent SQLite volume.</p>
-    
+      <p>Morgana ships with a ready-to-use <code>docker-compose.yml</code> defining Morgana, Cauldron and Rune on a dedicated bridge network with persistent SQLite volume. <code>docker compose up</code> starts Morgana + Cauldron; Rune is a TUI that needs its own terminal, so it is launched interactively on demand in a separate shell.</p>
+
       <div class="code-block"><span class="comment"># Quick Start (production images from Docker Hub)</span>
     cp production.env.template .env
     nano .env                          <span class="comment"># fill in secrets</span>
-    docker compose up
-    
+    docker compose up                  <span class="comment"># Morgana + Cauldron (HTML on :5002)</span>
+    docker compose run --rm --service-ports rune   <span class="comment"># Rune TUI (TTY on :5003)</span>
+
     <span class="comment"># Development (build from source)</span>
     cp development.env.template .env
     nano .env
-    dotnet build ./Morgana && dotnet build ./Cauldron
+    dotnet build ./Morgana && dotnet build ./Channels/Cauldron && dotnet build ./Channels/Rune
     docker compose --env-file .env --env-file .env.versions build
     docker compose --env-file .env --env-file .env.versions up</div>
-    
+
       <h3>Required Secrets (.env)</h3>
       <table>
         <thead><tr><th>Variable</th><th>Purpose</th><th>Generation</th></tr></thead>
         <tbody>
           <tr><td>ENCRYPTIONKEY</td><td>AES-256 encryption for SQLite</td><td><code>openssl rand -base64 32</code></td></tr>
-          <tr><td>JWT_SYMMETRIC_KEY</td><td>JWT signing key (Cauldron &harr; Morgana)</td><td><code>openssl rand -base64 32</code></td></tr>
+          <tr><td>JWT_SYMMETRIC_KEY</td><td>JWT signing key shared between each channel and its <code>Issuers[]</code> entry on Morgana</td><td><code>openssl rand -base64 32</code></td></tr>
           <tr><td>LLM_PROVIDER</td><td>Active LLM backend</td><td>One of: anthropic, azureopenai, ollama, openai</td></tr>
           <tr><td>{PROVIDER}_APIKEY</td><td>LLM provider API key</td><td>From your provider dashboard (if cloud-based)</td></tr>
         </tbody>
@@ -594,14 +608,21 @@
     <!-- PAGE 6 — SCREENSHOTS & QUICK REFERENCE                                 -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page">
-      <h2>Cauldron &mdash; The Frontend Experience</h2>
-      <p>Cauldron is a Blazor Server application providing a rich, real-time chat interface with streaming responses, quick replies, rich cards, and animated feedback. It communicates with Morgana over authenticated SignalR and REST. It can be depicted as the <b>official Morgana's home</b>.</p>
-    
+      <h2>Reference Channels</h2>
+      <p>Morgana ships with <strong>two reference channels out-of-the-box</strong>, chosen to exercise opposite ends of the channel capability spectrum so the framework's multi-channel design is demonstrable without any extra work.</p>
+
+      <h3 style="margin-top:14px;">Cauldron &mdash; HTML / Blazor Server</h3>
+      <p>Cauldron is a Blazor Server application providing a rich, real-time chat interface with streaming responses, quick replies, rich cards, and animated feedback. It communicates with Morgana over authenticated SignalR and REST (<code>deliveryMode=signalr</code>), with all capability flags on. It can be depicted as the <b>official Morgana's home</b>.</p>
+
       <div class="screenshots">
         <img src="Channels/Cauldron/wwwroot/assets/Morgana-Presentation.jpg" alt="Presentation"/>
         <img src="Channels/Cauldron/wwwroot/assets/Morgana-Chatting.jpg" alt="Chatting"/>
         <img src="Channels/Cauldron/wwwroot/assets/Morgana-RichCards.jpg" alt="Rich Cards"/>
       </div>
+
+      <h3 style="margin-top:18px;">Rune &mdash; TTY / Spectre.Console</h3>
+      <p>Rune is a minimal command-line channel: a Kestrel-hosted console app with a Spectre.Console Live UI (sticky header, streaming-free rendering), exercising the <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) and the <strong>&ldquo;poor but honest&rdquo; capability profile</strong> (all rich features off, <code>MaxMessageLength=200</code>). It is the contract surface <code>MorganaChannelAdapter</code> is supposed to degrade toward &mdash; a working proof that the channel abstraction holds, not just a demo.</p>
+      <p class="muted" style="font-size:12px;">Rune is launched interactively (<code>docker compose run --rm --service-ports rune</code>, or <code>dotnet run</code> from <code>Channels/Rune/</code>) because the Spectre.Console Live UI needs to own the terminal.</p>
     
       <h2 style="margin-top: 24px;">Deployment Responsibility Model</h2>
       <p>Morgana draws a clear line between <strong>product responsibilities</strong> and <strong>deployer responsibilities</strong>, making it ready for enterprise deployment without prescribing infrastructure choices.</p>
@@ -629,6 +650,7 @@
           <tr><td>NuGet package</td><td>nuget.org/packages/Morgana.AI</td></tr>
           <tr><td>Docker Hub (Morgana)</td><td>hub.docker.com/r/mdesalvo/morgana</td></tr>
           <tr><td>Docker Hub (Cauldron)</td><td>hub.docker.com/r/mdesalvo/cauldron</td></tr>
+          <tr><td>Docker Hub (Rune)</td><td>hub.docker.com/r/mdesalvo/rune</td></tr>
           <tr><td>Changelog</td><td>CHANGELOG.md in repository root</td></tr>
         </tbody>
       </table>

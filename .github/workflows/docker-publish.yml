@@ -62,3 +62,15 @@ jobs:
             ${{ env.DOCKER_USERNAME }}/cauldron:latest
           cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/cauldron:latest
           cache-to: type=inline
+
+      - name: Build and push Rune
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Channels/Rune/Rune.Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_USERNAME }}/rune:${{ steps.version.outputs.VERSION }}
+            ${{ env.DOCKER_USERNAME }}/rune:latest
+          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/rune:latest
+          cache-to: type=inline

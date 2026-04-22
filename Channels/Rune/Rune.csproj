@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+       <Title>Rune</Title>
+       <PackageId>Rune</PackageId>
+       <UserSecretsId>c5f2e91a-4b6d-4c7e-9a1f-8e3d5b2c7a49</UserSecretsId>
+    </PropertyGroup>
+
+</Project>

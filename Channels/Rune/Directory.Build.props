@@ -1,0 +1,46 @@
+<Project>
+
+  <PropertyGroup>
+
+    <!-- Common Build Settings -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Version Information -->
+    <Version>0.21.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+
+    <!-- Package Metadata -->
+    <Authors>Marco De Salvo</Authors>
+    <Company>Marco De Salvo</Company>
+    <Product>Morgana</Product>
+    <Copyright>Marco De Salvo</Copyright>
+
+    <!-- Repository Information -->
+    <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mdesalvo/Morgana.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseUrl>https://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
+
+    <!-- Common Description -->
+    <Description>
+    Rune is a minimal command-line reference channel that talks with the Morgana conversational AI framework.
+    Built on cutting-edge .NET 10 and leveraging the Spectre.Console terminal UI library, Rune is the second reference channel
+    alongside Cauldron, exercising the webhook delivery mode and the "poor but honest" capability profile.
+    </Description>
+
+  </PropertyGroup>
+
+  <!-- Package References -->
+  <ItemGroup>
+    <!-- ASP.NET -->
+    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.*" />
+    <!-- Services -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.*" />
+    <PackageReference Include="Spectre.Console" Version="0.55.*" />
+  </ItemGroup>
+
+</Project>

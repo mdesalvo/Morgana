@@ -1,11 +1,12 @@
 version: '3.8'
 
 # ==============================================================================
-# MORGANA + CAULDRON - DOCKER COMPOSE
+# MORGANA + CAULDRON + RUNE - DOCKER COMPOSE
 # ==============================================================================
 # Architecture:
 # - morgana: Backend SignalR + API (port 5001)
-# - cauldron: Frontend Blazor Server (port 5002)
+# - cauldron: Rich reference channel, Blazor Server (port 5002)
+# - rune:    Poor-but-honest reference channel, CLI over webhook (port 5003)
 # - Dedicated bridge network for internal communication
 # - Persistent volume for SQLite databases
 
@@ -31,6 +32,8 @@ services:
       # Authentication (JWT) - per-issuer keys
       - Morgana__Authentication__Issuers__0__Name=cauldron
       - Morgana__Authentication__Issuers__0__SymmetricKey=${JWT_SYMMETRIC_KEY}
+      - Morgana__Authentication__Issuers__1__Name=rune
+      - Morgana__Authentication__Issuers__1__SymmetricKey=${JWT_SYMMETRIC_KEY}
 
       # Conversation persistence (SQLite)
       - Morgana__ConversationPersistence__EncryptionKey=${ENCRYPTIONKEY}
@@ -76,6 +79,39 @@ services:
 
       # Morgana (Backend URL)
       - Cauldron__MorganaURL=http://morgana:5001
+    depends_on:
+      - morgana
+    networks:
+      - morgana-network
+
+  # ============================================================================
+  # RUNE - FRONTEND (CLI over webhook, Spectre.Console TUI)
+  # ============================================================================
+  # Interactive usage (TUI owns the terminal):
+  #   docker compose --env-file .env --env-file .env.versions run --rm --service-ports rune
+  rune:
+    build:
+      context: .
+      dockerfile: Channels/Rune/Rune.Dockerfile
+      args:
+        VERSION: ${RUNE_VERSION}
+    image: rune:${RUNE_VERSION}
+    container_name: rune
+    ports:
+      - "5003:5003"
+    stdin_open: true
+    tty: true
+    environment:
+      # ASP.NET Core
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5003
+
+      # Authentication (JWT) - same symmetric key as Morgana
+      - Rune__Authentication__SymmetricKey=${JWT_SYMMETRIC_KEY}
+
+      # Morgana (Backend URL + webhook callback)
+      - Rune__MorganaURL=http://morgana:5001
+      - Rune__CallbackURL=http://rune:5003/morgana-hook
     depends_on:
       - morgana
     networks:

@@ -61,6 +61,7 @@
 # DOCKER FILES (not required inside the images)
 # ==============================================================================
 **/Dockerfile
+**/*.Dockerfile
 **/docker-compose.yml
 **/.dockerignore
 
