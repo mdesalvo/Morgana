@@ -20,7 +20,21 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // under iss=rune (the matching entry must live in Morgana's Authentication:Issuers).
 
 // ==============================================================================
-// 1. LOGGING - KEEP THE TUI CLEAN
+// 1. TTY GATE - FAIL CLOSED ON NON-INTERACTIVE TERMINALS
+// ==============================================================================
+// Spectre.Console's Live UI requires a real PTY: ANSI escape support and a blocking
+// Console.ReadKey. Non-interactive hosts (IDE run windows, CI, redirected or piped
+// output, headless processes) capture stdout but don't expose one, so Spectre
+// silently refuses to render and the user sees an empty screen. Detect this at
+// startup and exit with an actionable message instead of a blank terminal.
+if (!AnsiConsole.Profile.Capabilities.Interactive)
+{
+    Console.WriteLine("Rune requires an interactive TTY but the current output stream is not one. Launch it from a real terminal emulator (bash, zsh, pwsh, ...); if you are running it from an IDE, enable the equivalent of 'emulate terminal' on the run configuration.");
+    return;
+}
+
+// ==============================================================================
+// 2. LOGGING - KEEP THE TUI CLEAN
 // ==============================================================================
 // Spectre.Console renders over the terminal via Live, so any stray log line from
 // Kestrel/ASP.NET Core corrupts the layout. Drop all providers; errors still
@@ -28,7 +42,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 
 // ==============================================================================
-// 2. OUTBOUND TO MORGANA - JWT + HTTP CLIENT
+// 3. OUTBOUND TO MORGANA - JWT + HTTP CLIENT
 // ==============================================================================
 // MorganaAuthHandler self-issues short-lived JWTs with iss=rune on each request.
 // The named HttpClient "Morgana" targets the Morgana base URL from configuration
@@ -40,7 +54,7 @@ builder.Services.AddHttpClient("Morgana", client =>
 }).AddHttpMessageHandler<MorganaAuthHandler>();
 
 // ==============================================================================
-// 3. DOMAIN SERVICES
+// 4. DOMAIN SERVICES
 // ==============================================================================
 // MorganaClient     : wraps start/send/end conversation lifecycle.
 // WebhookReceiver   : thin dispatcher invoked by the /morgana-hook endpoint.
@@ -53,7 +67,7 @@ builder.Services.AddSingleton<ConsoleUi>();
 WebApplication app = builder.Build();
 
 // ==============================================================================
-// 4. INBOUND WEBHOOK ENDPOINT
+// 5. INBOUND WEBHOOK ENDPOINT
 // ==============================================================================
 // Morgana POSTs a serialized ChannelMessage here on every outbound turn (no JWT
 // today — trust model is asymmetric by design, matching the WebhookChannelService
@@ -68,7 +82,7 @@ app.MapPost("/morgana-hook", async (HttpContext httpContext, WebhookReceiver rec
 });
 
 // ==============================================================================
-// 5. LIFECYCLE
+// 6. LIFECYCLE
 // ==============================================================================
 // Start Kestrel asynchronously (the UI must be on the main thread), wire the
 // webhook → UI callback, open a conversation with Morgana, hand over to the
