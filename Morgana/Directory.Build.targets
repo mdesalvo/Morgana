@@ -9,7 +9,7 @@
       
       <!-- Paths to Directory.Build.props files -->
       <MorganaPropsFile>$(RepoRoot)\Morgana\Directory.Build.props</MorganaPropsFile>
-      <CauldronPropsFile>$(RepoRoot)\Cauldron\Directory.Build.props</CauldronPropsFile>
+      <CauldronPropsFile>$(RepoRoot)\Channels\Cauldron\Directory.Build.props</CauldronPropsFile>
     </PropertyGroup>
 
     <Message Text="════════════════════════════════════════════════════════════" Importance="high" />
