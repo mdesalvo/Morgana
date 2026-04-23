@@ -88,6 +88,7 @@ public sealed class ConsoleUi
                     ? "Morgana"
                     : message.AgentName;
 
+                TrimHistoryToViewport();
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
 
@@ -127,6 +128,7 @@ public sealed class ConsoleUi
                     }
 
                     history.Add(new DisplayedMessage("You", toSend, UserColor));
+                    TrimHistoryToViewport();
                     ctx.UpdateTarget(BuildLayout());
                     ctx.Refresh();
 
@@ -137,6 +139,7 @@ public sealed class ConsoleUi
                     catch (Exception ex)
                     {
                         history.Add(new DisplayedMessage("system", $"send failed: {ex.Message}", "red"));
+                        TrimHistoryToViewport();
                         ctx.UpdateTarget(BuildLayout());
                         ctx.Refresh();
                     }
@@ -218,6 +221,49 @@ public sealed class ConsoleUi
     /// </summary>
     private static bool IsSpecializedAgent(string? agentName) =>
         agentName is not null && agentName.Contains('(') && agentName.Contains(')');
+
+    /// <summary>
+    /// Drops the oldest entries from <see cref="history"/> until the list fits inside
+    /// the current body viewport. Called before every <see cref="BuildLayout"/> on the
+    /// same thread that appends new entries — the list is not shared across threads
+    /// beyond that discipline. Recomputes the terminal dimensions on each call so the
+    /// trim follows live resizes without extra plumbing.
+    /// </summary>
+    /// <remarks>
+    /// Budget accounting:
+    /// <list type="bullet">
+    /// <item>Header panel occupies 3 rows (fixed via <c>SplitRows(header.Size(3))</c>).</item>
+    /// <item>Input line is the last <see cref="Rows"/> child — reserve 1 row for it.</item>
+    /// <item>Each history entry is rendered as <c>"Who: text"</c> and wraps at the
+    /// terminal width; row cost is <c>ceil(rendered / width)</c>, floored to 1.</item>
+    /// </list>
+    /// Walking the list from the tail backwards we keep the most recent entries that
+    /// still fit within the body budget and discard the rest. The trim is destructive:
+    /// discarded messages are unrecoverable — Rune's UI is a fixed-viewport renderer
+    /// without scrollback, and this method makes that choice explicit in <c>history</c>
+    /// rather than leaving it to Spectre's <c>VerticalOverflowCropping.Top</c>.
+    /// </remarks>
+    private void TrimHistoryToViewport()
+    {
+        int bodyRows = Math.Max(1, Console.WindowHeight - 3 /* header */ - 1 /* input */);
+        int termWidth = Math.Max(20, Console.WindowWidth);
+
+        int totalRows = 0;
+        int firstKept = history.Count;
+        for (int i = history.Count - 1; i >= 0; i--)
+        {
+            DisplayedMessage message = history[i];
+            int rendered = message.Who.Length + 2 /* ": " */ + message.Text.Length;
+            int rows = Math.Max(1, (rendered + termWidth - 1) / termWidth);
+            if (totalRows + rows > bodyRows)
+                break;
+            totalRows += rows;
+            firstKept = i;
+        }
+
+        if (firstKept > 0)
+            history.RemoveRange(0, firstKept);
+    }
 
     private record DisplayedMessage(string Who, string Text, string Color);
 }
