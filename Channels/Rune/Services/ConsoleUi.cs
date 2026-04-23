@@ -19,13 +19,20 @@ public sealed class ConsoleUi
     private const string MorganaColor = "magenta1";
     private const string MorganaAgentColor = "hotpink";
     private const string UserColor = "skyblue1";
+    private const string DefaultAgentExitMessage = "{0} has completed its spell. I'm back to you!";
 
     private readonly List<DisplayedMessage> history = [];
     private readonly Channel<ChannelMessage> incoming = Channel.CreateUnbounded<ChannelMessage>();
+    private readonly string agentExitTemplate;
     private string currentInput = string.Empty;
     private string currentSpeaker = "Morgana";
     private string conversationId = string.Empty;
     private volatile bool exitRequested;
+
+    public ConsoleUi(IConfiguration configuration)
+    {
+        agentExitTemplate = configuration["Rune:AgentExitMessage"] ?? DefaultAgentExitMessage;
+    }
 
     /// <summary>Called by <see cref="WebhookReceiver"/> when Morgana delivers a message.</summary>
     public void EnqueueIncoming(ChannelMessage message) => incoming.Writer.TryWrite(message);
@@ -61,8 +68,26 @@ public sealed class ConsoleUi
         {
             await foreach (ChannelMessage message in incoming.Reader.ReadAllAsync(cancellationToken))
             {
-                currentSpeaker = string.IsNullOrWhiteSpace(message.AgentName) ? "Morgana" : message.AgentName;
-                history.Add(new DisplayedMessage(currentSpeaker, message.Text, SpeakerColor(currentSpeaker)));
+                // The message itself is attributed to whoever authored it (a specialised
+                // agent keeps its own colour on its last line, including the farewell
+                // that carries AgentCompleted=true). After appending it, if that agent
+                // just signalled completion, follow up with a base-Morgana courtesy line
+                // — same pattern Cauldron's ChatStateService.AddCompletionMessageIfNeeded
+                // uses — and revert the sticky header speaker to Morgana so the next
+                // user turn doesn't render under the outgoing agent's colour.
+                string messageSpeaker = string.IsNullOrWhiteSpace(message.AgentName) ? "Morgana" : message.AgentName;
+                history.Add(new DisplayedMessage(messageSpeaker, message.Text, SpeakerColor(messageSpeaker)));
+
+                if (message.AgentCompleted && IsSpecializedAgent(message.AgentName))
+                {
+                    string completion = string.Format(agentExitTemplate, message.AgentName);
+                    history.Add(new DisplayedMessage("Morgana", completion, MorganaColor));
+                }
+
+                currentSpeaker = message.AgentCompleted || string.IsNullOrWhiteSpace(message.AgentName)
+                    ? "Morgana"
+                    : message.AgentName;
+
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
 
@@ -185,6 +210,14 @@ public sealed class ConsoleUi
         if (agentName.Equals("Morgana", StringComparison.OrdinalIgnoreCase)) return MorganaColor;
         return MorganaAgentColor;
     }
+
+    /// <summary>
+    /// Mirrors Cauldron's ChatStateService.IsSpecializedAgent: a specialised agent
+    /// announces itself as <c>Morgana (Something)</c>, so the presence of parentheses
+    /// is the discriminator between base Morgana and a domain agent.
+    /// </summary>
+    private static bool IsSpecializedAgent(string? agentName) =>
+        agentName is not null && agentName.Contains('(') && agentName.Contains(')');
 
     private record DisplayedMessage(string Who, string Text, string Color);
 }

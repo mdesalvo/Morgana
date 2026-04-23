@@ -149,6 +149,7 @@ No resume in v1. Every Rune process start begins a fresh conversation. Keep this
 | `Rune:Authentication:SymmetricKey` | Shared HMAC key matching Morgana's `Issuers[].SymmetricKey` for `Name=rune` |
 | `Rune:Authentication:Issuer` | Token issuer (default `rune`) |
 | `Rune:Authentication:Audience` | Token audience (default `morgana.ai`) |
+| `Rune:AgentExitMessage` | Template for the courtesy line appended when a specialised agent completes (default `"{0} has completed its spell. I'm back to you!"`; `{0}` is the agent's display name). Mirrors Cauldron's `Cauldron:AgentExitMessage`. |
 
 ## Build and Run
 
