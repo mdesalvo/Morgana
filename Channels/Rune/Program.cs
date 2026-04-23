@@ -1,3 +1,4 @@
+using System.Text;
 using Rune.Handlers;
 using Rune.Messages.Contracts;
 using Rune.Services;
@@ -18,6 +19,19 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // terminal UI; user input is captured from stdin and sent back to Morgana via
 // the REST conversation endpoints, authenticated with a self-issued JWT signed
 // under iss=rune (the matching entry must live in Morgana's Authentication:Issuers).
+
+// ==============================================================================
+// 0. CONSOLE ENCODING - UTF-8 I/O
+// ==============================================================================
+// On Windows the default OutputEncoding is the OEM/ANSI code page (CP437/CP850/CP1252),
+// none of which covers the BMP glyphs Rune renders: the header arrow (→ U+2192),
+// the input prompt chevron (› U+203A), the conversation-id ellipsis (… U+2026), and
+// the courtesy dashes. Under those code pages the console falls back to the "symbol
+// for delete" glyph (␦), which looks like a tofu box to the user. Forcing both streams
+// to UTF-8 up front is idempotent on Linux/macOS (already UTF-8) and makes Spectre's
+// Unicode output render correctly on Windows without asking the user to chcp 65001.
+Console.OutputEncoding = Encoding.UTF8;
+Console.InputEncoding = Encoding.UTF8;
 
 // ==============================================================================
 // 1. TTY GATE - FAIL CLOSED ON NON-INTERACTIVE TERMINALS
