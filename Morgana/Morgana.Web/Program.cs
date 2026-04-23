@@ -77,6 +77,8 @@ builder.Services.AddEndpointsApiExplorer();
 // When additional channels are introduced, their concrete IChannelService is registered below
 // alongside its own ChannelServiceRegistration entry — no other file in the framework needs to move.
 
+builder.Services.AddSingleton<IChannelMetadataStore, ChannelMetadataStore>();
+
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<SignalRChannelService>();
 builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
@@ -89,9 +91,11 @@ builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
 
 builder.Services.AddSingleton<IChannelServiceFactory, ChannelServiceFactory>();
 builder.Services.AddSingleton<AdaptingChannelService>(sp =>
-    new AdaptingChannelService(sp.GetRequiredService<IChannelServiceFactory>(), sp.GetRequiredService<MorganaChannelAdapter>()));
+    new AdaptingChannelService(
+        sp.GetRequiredService<IChannelServiceFactory>(),
+        sp.GetRequiredService<IChannelMetadataStore>(),
+        sp.GetRequiredService<MorganaChannelAdapter>()));
 builder.Services.AddSingleton<IChannelService>(sp => sp.GetRequiredService<AdaptingChannelService>());
-builder.Services.AddSingleton<IChannelMetadataStore>(sp => sp.GetRequiredService<AdaptingChannelService>());
 
 // ==============================================================================
 // SECTION 3: CORS Configuration

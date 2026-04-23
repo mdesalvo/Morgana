@@ -126,7 +126,8 @@ Tools with `Shared: true` parameters trigger broadcast via `RouterActor.Broadcas
 | `SQLiteRateLimitService` | `IRateLimitService` | Sliding window algorithm (per-minute/hour/day) in same SQLite DB. Fails open on error. Delegates DB init to persistence service |
 | `JWTAuthenticationService` | `IAuthenticationService` | Validates JWT tokens: HMAC-SHA256, issuer whitelist, audience, lifetime (30s clock skew). Extracts `sub`→UserId, `name`→DisplayName |
 | `SummarizingChatReducerService` | *(factory, not an interface)* | Creates `SummarizingChatReducer` from `Morgana:HistoryReducer` config. Threshold (default 20) triggers summarization of older messages down to target count (default 8) |
-| `AdaptingChannelService` | `IChannelService` + `IChannelMetadataStore` | Decorator: intercepts every `SendMessageAsync`, routes through `MorganaChannelAdapter` for capability-based degradation. Also serves as in-memory `ConcurrentDictionary<string, ChannelMetadata>` registry |
+| `AdaptingChannelService` | `IChannelService` | Decorator: intercepts every `SendMessageAsync`, routes through `MorganaChannelAdapter` for capability-based degradation, then dispatches to the concrete transport via `IChannelServiceFactory` |
+| `ChannelMetadataStore` | `IChannelMetadataStore` | In-memory `ConcurrentDictionary<string, ChannelMetadata>` registry. Leaf singleton (no channel-service dependency) so concrete transports like `WebhookChannelService` can read per-conversation coordinates without closing a DI cycle through the decorator |
 
 ### Providers (Morgana.AI/Providers)
 
@@ -191,9 +192,14 @@ Every agent gets **base tools** from `morgana.json` (`GetContextVariable`, `SetC
 `IChannelService` is the outbound channel abstraction (2 methods: `SendMessageAsync`, `SendStreamChunkAsync`). The DI pipeline:
 
 ```
-SignalRChannelService (concrete transport)
-  → AdaptingChannelService (decorator: adapts + stores metadata)
-    → registered as IChannelService + IChannelMetadataStore
+SignalRChannelService, WebhookChannelService, … (concrete transports, one per deliveryMode)
+  ← IChannelServiceFactory (per-conversation dispatch, populated by ChannelServiceRegistration entries)
+      ← AdaptingChannelService (decorator: adapts via MorganaChannelAdapter, then dispatches)
+          → registered as IChannelService
+
+ChannelMetadataStore (leaf singleton, no channel-service dependency)
+  → registered as IChannelMetadataStore, read by the decorator AND by concrete transports
+    that need per-conversation addressing (e.g. WebhookChannelService → callbackUrl)
 ```
 
 **Channel handshake**: at conversation start, the client must announce `ChannelMetadata`, composed of `ChannelCoordinates` (channelName + deliveryMode — identity and addressing) + `ChannelCapabilities` (feature budget). The controller gate rejects any request whose `coordinates.channelName` or `coordinates.deliveryMode` is missing or whose `deliveryMode` is not served by a registered `IChannelService`. `ConversationManagerActor` normalizes both coordinate strings (trim + lowercase), persists the record via `SaveChannelMetadataAsync`, and registers it in the in-memory `IChannelMetadataStore`.
