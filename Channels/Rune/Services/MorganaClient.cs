@@ -51,7 +51,7 @@ public sealed class MorganaClient
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(
             $"/api/morgana/conversation/{conversationId}/message",
-            new SendMessageRequest { Text = text },
+            new SendMessageRequest { ConversationId = conversationId, Text = text },
             cancellationToken);
         response.EnsureSuccessStatusCode();
     }
@@ -84,6 +84,7 @@ public sealed class MorganaClient
 
     private sealed class SendMessageRequest
     {
+        public required string ConversationId { get; set; }
         public required string Text { get; set; }
     }
 }
