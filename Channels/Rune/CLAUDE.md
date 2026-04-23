@@ -29,7 +29,7 @@ Channels/Rune/
     ChannelMessage.cs                 # Inbound webhook payload
     ChannelMetadata.cs                # Handshake metadata (with Rune.Build(callbackUrl) factory)
     ChannelCoordinates.cs             # Identity + addressing (channelName, deliveryMode, callbackUrl)
-    ChannelCapabilities.cs            # Feature flags (all false for Rune, MaxMessageLength=200)
+    ChannelCapabilities.cs            # Feature flags (all false for Rune; MaxMessageLength from Rune:MaxMessageLength, default 200)
     StartConversationRequest.cs       # conversation/start body (conversationId + channelMetadata)
     SendMessageRequest.cs             # conversation/{id}/message body (conversationId + text)
     QuickReply.cs                     # Kept for binary compat (stripped by adapter)
@@ -38,6 +38,7 @@ Channels/Rune/
     MorganaClient.cs                  # REST wrapper: start / send / end conversation
     WebhookReceiver.cs                # Thin dispatcher, OnMessage delegate wired in Program.cs
     ConsoleUi.cs                      # Spectre.Console Live(Layout) — sticky header + REPL body
+    LandingMessageService.cs          # Random startup line from Rune:LandingMessages pool
 ```
 
 ## Architecture
@@ -73,15 +74,15 @@ Rune   ──REST──────→ Morgana.Web (MorganaController)  # outbou
 
 ## Channel Handshake
 
-At conversation start, Rune announces itself via `ChannelMetadata.Build(callbackUrl)`:
+At conversation start, Rune announces itself via `ChannelMetadata.Build(callbackUrl, maxMessageLength)`:
 ```csharp
 Coordinates  = { ChannelName = "rune", DeliveryMode = "webhook", CallbackUrl = "<from Rune:CallbackURL>" }
 Capabilities = { SupportsRichCards: false, SupportsQuickReplies: false,
                  SupportsStreaming: false, SupportsMarkdown: false,
-                 MaxMessageLength: 200 }
+                 MaxMessageLength: <from Rune:MaxMessageLength, default 200> }
 ```
 
-Morgana's controller gate additionally requires `callbackUrl` to be an absolute URI when `deliveryMode=webhook` — enforced at handshake, fail-closed. The `MaxMessageLength=200` below `Morgana:AdaptiveMessaging:RichFeaturesMinLength` also forces rich / quick-replies off on the server side even if a future version of Rune were to claim them.
+Morgana's controller gate additionally requires `callbackUrl` to be an absolute URI when `deliveryMode=webhook` — enforced at handshake, fail-closed. A `MaxMessageLength` below `Morgana:AdaptiveMessaging:RichFeaturesMinLength` also forces rich / quick-replies off on the server side even if a future version of Rune were to claim them — which is why the default (200) stays aggressive.
 
 ## Authentication
 
@@ -150,6 +151,9 @@ No resume in v1. Every Rune process start begins a fresh conversation. Keep this
 | `Rune:Authentication:Issuer` | Token issuer (default `rune`) |
 | `Rune:Authentication:Audience` | Token audience (default `morgana.ai`) |
 | `Rune:AgentExitMessage` | Template for the courtesy line appended when a specialised agent completes (default `"{0} has completed its spell. I'm back to you!"`; `{0}` is the agent's display name). Mirrors Cauldron's `Cauldron:AgentExitMessage`. |
+| `Rune:LandingMessages` | String array of whimsical "warming up" lines printed to stdout during the startup window between `builder.Build()` and `ui.RunAsync`. Picked uniformly at random per process; overwritten by `AnsiConsole.Clear()` just before the Live UI takes over. Mirrors Cauldron's `Cauldron:LandingMessages` (same pool, same intent). |
+| `Rune:MaxMessageLength` | Hard cap (in characters) Rune advertises to Morgana's channel adapter at the handshake. Default `200` — aggressive on purpose so the downgrade path is exercised on every turn. Raise it (e.g. `500`) for a less ruthless rewrite without losing Rune's "poor but honest" profile; values below `Morgana:AdaptiveMessaging:RichFeaturesMinLength` keep rich cards / quick replies forced off server-side. |
+| `Rune:StartupTimeoutSeconds` | How long (in seconds) to keep the landing line visible while waiting for Morgana's first webhook delivery before entering the Live UI anyway. Default `30`. Raise on slow LLM providers with cold starts (Ollama on CPU, Azure OpenAI in a distant region); lower for faster "something's wrong" feedback during development. Non-positive values fall back to the default. |
 
 ## Build and Run
 

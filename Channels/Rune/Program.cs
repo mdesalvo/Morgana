@@ -77,8 +77,22 @@ builder.Services.AddHttpClient("Morgana", client =>
 builder.Services.AddSingleton<MorganaClient>();
 builder.Services.AddSingleton<WebhookReceiver>();
 builder.Services.AddSingleton<ConsoleUi>();
+builder.Services.AddSingleton<LandingMessageService>();
 
 WebApplication app = builder.Build();
+
+// ==============================================================================
+// 4b. LANDING MESSAGE - FILL THE STARTUP SILENCE
+// ==============================================================================
+// Between app.StartAsync (Kestrel bind), morganaClient.StartConversationAsync
+// (TLS + JWT + Morgana-side actor creation) and the arrival of the first webhook
+// from Morgana, the terminal stays empty for ~0.5–2s. Print a random themed line
+// on stdout now so the user sees something alive while the boring plumbing runs.
+// The line is overwritten cleanly by AnsiConsole.Clear() just before ui.RunAsync,
+// so it disappears the moment the Live UI takes over — same feel as Cauldron's
+// magic-sparkle splash.
+LandingMessageService landingMessageService = app.Services.GetRequiredService<LandingMessageService>();
+AnsiConsole.MarkupLine($"[italic grey70]{Markup.Escape(landingMessageService.GetLandingMessage())}[/]");
 
 // ==============================================================================
 // 5. INBOUND WEBHOOK ENDPOINT
@@ -107,7 +121,20 @@ MorganaClient morganaClient = app.Services.GetRequiredService<MorganaClient>();
 WebhookReceiver webhook = app.Services.GetRequiredService<WebhookReceiver>();
 ConsoleUi ui = app.Services.GetRequiredService<ConsoleUi>();
 
-webhook.OnMessage = ui.EnqueueIncoming;
+// Two-step wiring of the webhook callback: the first inbound ChannelMessage fires
+// a TaskCompletionSource so we can gate the UI handover on "Morgana has actually
+// started talking", then every message (including the first) is queued into the
+// ConsoleUi incoming channel. Without this gate we'd clear the landing and enter
+// the Live Layout the moment StartConversationAsync returns (202 Accepted, fast),
+// leaving the user staring at an empty panel for ~1–2s while Morgana's presentation
+// message is still in flight over the webhook — exactly the "schermata nera" the
+// landing was meant to avoid.
+TaskCompletionSource firstMessageReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+webhook.OnMessage = message =>
+{
+    firstMessageReady.TrySetResult();
+    ui.EnqueueIncoming(message);
+};
 
 string conversationId;
 try
@@ -120,6 +147,34 @@ catch (Exception ex)
     await app.StopAsync();
     return;
 }
+
+// Wait for the first webhook delivery, bounded to a sensible timeout. If Morgana
+// doesn't send anything within the budget (backend down, stuck actor, firewall
+// blocking the callback URL), we still enter the UI — an empty Layout is a better
+// end-state than a terminal stuck forever on the landing line. The message that
+// triggered the TCS is already in the ConsoleUi queue and gets drained on the
+// first DrainIncomingLoop iteration, so the presentation lands instantly.
+//
+// Rune:StartupTimeoutSeconds governs the budget (default 30s). Raising it helps on
+// slow LLM providers with cold starts; lowering it makes the "Morgana isn't
+// answering" state visible sooner. Non-positive values fall back to the default to
+// avoid a zero-timeout that would swallow the wait altogether.
+int startupTimeoutSeconds = app.Configuration.GetValue<int?>("Rune:StartupTimeoutSeconds") ?? 30;
+if (startupTimeoutSeconds <= 0)
+    startupTimeoutSeconds = 30;
+try
+{
+    await firstMessageReady.Task.WaitAsync(TimeSpan.FromSeconds(startupTimeoutSeconds));
+}
+catch (TimeoutException)
+{
+    // Morgana didn't deliver a presentation in time — proceed to the UI anyway.
+}
+
+// The landing line (and any transient startup noise) gets wiped out here so the
+// Live Layout takes over a clean terminal — Live would otherwise start painting
+// beneath the landing line, leaving it orphaned in the scrollback.
+AnsiConsole.Clear();
 
 try
 {

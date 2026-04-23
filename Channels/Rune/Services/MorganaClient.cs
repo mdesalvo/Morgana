@@ -12,14 +12,23 @@ namespace Rune.Services;
 /// </summary>
 public sealed class MorganaClient
 {
+    private const int DefaultMaxMessageLength = 200;
+
     private readonly IHttpClientFactory httpClientFactory;
     private readonly string callbackUrl;
+    private readonly int? maxMessageLength;
 
     public MorganaClient(IHttpClientFactory httpClientFactory, IConfiguration configuration)
     {
         this.httpClientFactory = httpClientFactory;
         callbackUrl = configuration["Rune:CallbackURL"]
             ?? throw new InvalidOperationException("Rune:CallbackURL is required for webhook-based delivery.");
+
+        // Rune:MaxMessageLength governs the hard cap Rune announces to Morgana at the
+        // handshake. Default (200) stays aggressive so the downgrade path is exercised on
+        // every turn — the "poor but honest" profile Rune was built for — but can be raised
+        // (or set to null to mean "no cap") without recompiling.
+        maxMessageLength = configuration.GetValue<int?>("Rune:MaxMessageLength") ?? DefaultMaxMessageLength;
     }
 
     /// <summary>
@@ -33,7 +42,7 @@ public sealed class MorganaClient
         StartConversationRequest body = new()
         {
             ConversationId = Guid.NewGuid().ToString("N"),
-            ChannelMetadata = ChannelMetadata.Build(callbackUrl)
+            ChannelMetadata = ChannelMetadata.Build(callbackUrl, maxMessageLength)
         };
 
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(
