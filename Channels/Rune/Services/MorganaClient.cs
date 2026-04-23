@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using Rune.Messages;
 using Rune.Messages.Contracts;
 
 namespace Rune.Services;
@@ -69,22 +70,5 @@ public sealed class MorganaClient
         {
             // Best-effort on shutdown — if Morgana is already gone or unreachable, we don't care.
         }
-    }
-
-    private sealed class StartConversationRequest
-    {
-        public required string ConversationId { get; set; }
-        public required ChannelMetadata ChannelMetadata { get; set; }
-    }
-
-    private sealed class StartConversationResponse
-    {
-        public string ConversationId { get; set; } = string.Empty;
-    }
-
-    private sealed class SendMessageRequest
-    {
-        public required string ConversationId { get; set; }
-        public required string Text { get; set; }
     }
 }

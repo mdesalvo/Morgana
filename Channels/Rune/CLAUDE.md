@@ -23,11 +23,15 @@ Channels/Rune/
   Rune.Dockerfile                     # Multi-stage container build (root context)
   Handlers/
     MorganaAuthHandler.cs             # DelegatingHandler: self-issues JWT for outbound calls
-  Messages/Contracts/                 # DTOs mirroring Morgana's wire format
+  Messages/                           # Response DTOs that mirror anonymous controller shapes
+    StartConversationResponse.cs      # Echo of conversation id from MorganaController.StartConversation
+  Messages/Contracts/                 # DTOs duplicated in lockstep from Morgana.AI.Records
     ChannelMessage.cs                 # Inbound webhook payload
     ChannelMetadata.cs                # Handshake metadata (with Rune.Build(callbackUrl) factory)
     ChannelCoordinates.cs             # Identity + addressing (channelName, deliveryMode, callbackUrl)
     ChannelCapabilities.cs            # Feature flags (all false for Rune, MaxMessageLength=200)
+    StartConversationRequest.cs       # conversation/start body (conversationId + channelMetadata)
+    SendMessageRequest.cs             # conversation/{id}/message body (conversationId + text)
     QuickReply.cs                     # Kept for binary compat (stripped by adapter)
     RichCard.cs                       # Kept for binary compat (stripped by adapter)
   Services/
@@ -104,6 +108,10 @@ DTOs in `Messages/Contracts/` are **duplicated** from Morgana's `Records.cs` —
 - `ChannelCapabilities` ↔ `Records.ChannelCapabilities`
 - `QuickReply` ↔ `Records.QuickReply` (kept for binary compat even though Rune doesn't render them)
 - `RichCard` / `CardComponent` ↔ `Records.RichCard` / `Records.CardComponent` (kept for binary compat even though Rune doesn't render them)
+- `StartConversationRequest` ↔ `Records.StartConversationRequest`
+- `SendMessageRequest` ↔ `Records.SendMessageRequest`
+
+`StartConversationResponse` lives under `Messages/` (not `Messages/Contracts/`) because it mirrors an anonymous response shape in `MorganaController.StartConversation`, not a declared record — same split Cauldron uses for its own response DTOs.
 
 ## Terminal UI (ConsoleUi)
 
