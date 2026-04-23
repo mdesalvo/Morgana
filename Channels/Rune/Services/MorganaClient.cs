@@ -31,6 +31,7 @@ public sealed class MorganaClient
 
         StartConversationRequest body = new()
         {
+            ConversationId = Guid.NewGuid().ToString("N"),
             ChannelMetadata = ChannelMetadata.Build(callbackUrl)
         };
 
@@ -72,6 +73,7 @@ public sealed class MorganaClient
 
     private sealed class StartConversationRequest
     {
+        public required string ConversationId { get; set; }
         public required ChannelMetadata ChannelMetadata { get; set; }
     }
 
