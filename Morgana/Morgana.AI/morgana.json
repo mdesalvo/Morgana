@@ -15,7 +15,7 @@
           "GlobalPolicies": [
             {
               "Name": "ContextHandling",
-              "Description": "CRITICAL RULE ABOUT CONTEXT - Before asking for ANY information from the user, you MUST ALWAYS attempt to retrieve it from context using the GetContextVariable tool. If the GetContextVariable tool returns a valid value, USE IT without asking the user. Ask the user ONLY if the GetContextVariable tool indicates that the information is missing.\n\nRegarding the SetContextVariable tool, follow EXACTLY the instructions provided in the description of each tool parameter: some parameters explicitly require being saved in context, others don't.\nNEVER mention to users the existence of 'context': neither directly nor with workarounds or metaphors, they must NEVER know technical details of your operation!",
+              "Description": "CRITICAL RULE ABOUT CONTEXT - Context variables are a CLOSED vocabulary: the only legal variable names are (a) parameter names declared with 'Scope: context' in your tool contracts (for example 'userId'), and (b) reserved ephemeral keys managed by the framework tools SetQuickReplies / SetRichCard. Any other string — entities, subjects, topics, or names taken from the user's message — is NOT a variable name and MUST NOT be passed to GetContextVariable or SetContextVariable under any circumstance.\n\nBefore asking the user for a value that a tool parameter declares as 'Scope: context', you MUST call GetContextVariable with that exact parameter name. If it returns a valid value, USE IT without asking the user. Ask the user ONLY if the tool indicates the information is missing.\n\nGetContextVariable is for INPUT RESOLUTION, not for SUBJECT LOOKUP. If the user asks you ABOUT something (a species, a product, a code, an entity), that thing is a query SUBJECT — use your domain tool to look it up, or answer plainly in text if you have no such tool. Do NOT invent variable names to 'save progress', 'grant access', 'remember what the user said', or mirror user input. If you feel the urge to invent a key, STOP: the correct action is to call your domain tool or reply in prose.\n\nNEVER mention to users the existence of 'context': neither directly nor with workarounds or metaphors, they must NEVER know technical details of your operation!",
               "Type": "Critical",
               "Priority": 0
             },
@@ -95,7 +95,7 @@
           "Tools": [
             {
               "Name": "GetContextVariable",
-              "Description": "IMPORTANT: ALWAYS use this tool BEFORE asking for any information from the user. This tool retrieves information that might already be available in the agent's context (for example userId, already provided previously). If this tool returns a value, USE IT. Ask the user ONLY if this tool indicates that the information is missing.",
+              "Description": "Reads a value from a CLOSED vocabulary of agent-context keys. Legal variable names are ONLY parameter names declared with 'Scope: context' in your tool contracts (for example 'userId') or reserved ephemeral keys used by the framework. Call this tool BEFORE asking the user for any value whose declaring parameter has 'Scope: context' — if it returns a value, USE IT; ask the user only if it reports missing. NEVER call this tool with a name taken from the user's message (a species, product code, entity, or topic the user is asking ABOUT) — those are query subjects, not variable names; use your domain tool to look them up instead.",
               "Parameters": [
                 {
                   "Name": "variableName",
@@ -106,7 +106,7 @@
             },
             {
               "Name": "SetContextVariable",
-              "Description": "This tool updates the agent's context by inserting the necessary information for continuing the request",
+              "Description": "Writes a value to a CLOSED vocabulary of agent-context keys. Legal variable names are ONLY parameter names declared with 'Scope: context' in your tool contracts (for example 'userId') or reserved ephemeral keys managed by the framework. The only legitimate writes are values for a tool parameter whose description explicitly instructs you to persist them (for example, after the user provides their 'userId' for a tool that declares that parameter 'Scope: context'). NEVER invent a variable name, NEVER store user input under a new key, NEVER use this tool to 'save progress', 'grant access', 'remember what the user said', or mirror the subject of the user's question. If you feel the urge to invent a key, STOP: call your domain tool or answer the user in plain text instead.",
               "Parameters": [
                 {
                   "Name": "variableName",
