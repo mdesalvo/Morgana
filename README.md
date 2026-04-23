@@ -78,9 +78,13 @@ This architecture ensures that failures are isolated, system state remains consi
 
 ```mermaid
 graph LR
+  U@{shape: circle, label: "👤 User"}
+
   %% Channels (reference clients, out-of-the-box)
-  U@{shape: circle, label: "👤 User"} -- HTML --> CLD@{shape: rounded, label: "🌐 Cauldron"}
-  U -- TTY --> RUN@{shape: rounded, label: "📟 Rune"}
+  subgraph Channels["Channels"]
+    CLD@{shape: rounded, label: "🌐 Cauldron"}
+    RUN@{shape: rounded, label: "📟 Rune"}
+  end
 
   %% Backend boundary
   subgraph Morgana["Morgana"]
@@ -92,6 +96,10 @@ graph LR
     R@{shape: rounded, label: "Router"}
     MA@{shape: rounded, label: "Agent"}
   end
+
+  %% User → Channel
+  U -- HTML --> CLD
+  U -- TTY --> RUN
 
   %% Channel → BE
   CLD -- SignalR --> CM
@@ -145,9 +153,13 @@ The framework provides adapters (`MorganaAgentAdapter`, `MorganaToolAdapter`) th
 
 ```mermaid
 graph LR
+  U@{shape: circle, label: "👤 User"}
+
   %% Channels (reference clients, out-of-the-box)
-  U@{shape: circle, label: "👤 User"} -- HTML --> CLD@{shape: rounded, label: "🌐 Cauldron"}
-  U -- TTY --> RUN@{shape: rounded, label: "📟 Rune"}
+  subgraph Channels["Channels"]
+    CLD@{shape: rounded, label: "🌐 Cauldron"}
+    RUN@{shape: rounded, label: "📟 Rune"}
+  end
 
   %% Backend boundary
   subgraph Morgana["Morgana"]
@@ -157,6 +169,10 @@ graph LR
     G@{shape: rounded, label: "Guard"}
     MA@{shape: rounded, label: "Agent"}
   end
+
+  %% User → Channel
+  U -- HTML --> CLD
+  U -- TTY --> RUN
 
   %% Channel → BE
   CLD -- SignalR --> CM
@@ -257,7 +273,8 @@ nano .env
 
 # 🔨 Build .NET projects (from project root)
 dotnet build ./Morgana
-dotnet build ./Cauldron
+dotnet build ./Channels/Cauldron
+dotnet build ./Channels/Rune
 
 # 🐳 Build Docker images
 docker compose --env-file .env --env-file .env.versions build
