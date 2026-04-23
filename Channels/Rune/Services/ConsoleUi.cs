@@ -14,6 +14,15 @@ namespace Rune.Services;
 /// messages are drained from a channel and trigger a refresh; user keystrokes are
 /// captured via <see cref="Console.ReadKey(bool)"/> on a pool thread.
 /// </summary>
+/// <remarks>
+/// Input is gated across Morgana's turn: once the user commits a line (Enter), the
+/// bottom line flips to a <c>"{speaker} is thinking…"</c> hint and all subsequent
+/// keystrokes — except <see cref="ConsoleKey.Escape"/>, which always exits — are
+/// silently swallowed until the next webhook delivery lands and flips the gate back.
+/// The initial state is also gated so nothing can be typed while waiting for the
+/// presentation message, matching Cauldron's typing-indicator semantics. Send
+/// failures release the gate so the user can retry.
+/// </remarks>
 public sealed class ConsoleUi
 {
     private const string MorganaColor = "magenta1";
@@ -28,6 +37,8 @@ public sealed class ConsoleUi
     private string currentSpeaker = "Morgana";
     private string conversationId = string.Empty;
     private volatile bool exitRequested;
+    // Starts true: Rune always waits for Morgana's presentation before the first user turn.
+    private volatile bool awaitingResponse = true;
 
     public ConsoleUi(IConfiguration configuration)
     {
@@ -88,6 +99,7 @@ public sealed class ConsoleUi
                     ? "Morgana"
                     : message.AgentName;
 
+                awaitingResponse = false;
                 TrimHistoryToViewport();
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
@@ -113,6 +125,13 @@ public sealed class ConsoleUi
             }
 
             ConsoleKeyInfo key = Console.ReadKey(intercept: true);
+
+            // Swallow every keystroke that isn't an explicit exit while we're waiting for
+            // Morgana to speak. Esc is always honoured so the user can bail out even
+            // mid-turn; everything else (printable characters, Enter, Backspace) is a no-op.
+            if (awaitingResponse && key.Key != ConsoleKey.Escape)
+                continue;
+
             switch (key.Key)
             {
                 case ConsoleKey.Enter when currentInput.Length > 0:
@@ -128,6 +147,7 @@ public sealed class ConsoleUi
                     }
 
                     history.Add(new DisplayedMessage("You", toSend, UserColor));
+                    awaitingResponse = true;
                     TrimHistoryToViewport();
                     ctx.UpdateTarget(BuildLayout());
                     ctx.Refresh();
@@ -139,6 +159,7 @@ public sealed class ConsoleUi
                     catch (Exception ex)
                     {
                         history.Add(new DisplayedMessage("system", $"send failed: {ex.Message}", "red"));
+                        awaitingResponse = false;
                         TrimHistoryToViewport();
                         ctx.UpdateTarget(BuildLayout());
                         ctx.Refresh();
@@ -203,7 +224,9 @@ public sealed class ConsoleUi
         foreach (DisplayedMessage message in history)
             rows.Add(new Markup($"[bold {message.Color}]{Markup.Escape(message.Who)}:[/] {Markup.Escape(message.Text)}"));
 
-        rows.Add(new Markup($"[{UserColor}]›[/] {Markup.Escape(currentInput)}[blink {UserColor}]_[/]"));
+        rows.Add(awaitingResponse
+            ? new Markup($"[grey54 italic]{Markup.Escape(currentSpeaker)} is thinking…[/]")
+            : new Markup($"[{UserColor}]›[/] {Markup.Escape(currentInput)}[blink {UserColor}]_[/]"));
         return new Rows(rows);
     }
 
