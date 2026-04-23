@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This release turns Morgana into a true **multi-channel** conversational AI framework with **channel-driven capability negotiation**.
 The outbound path is no longer hard-wired to `SignalR+Cauldron`: channels now declare their **capability budget** (rich cards, quick replies, streaming, markdown, max message length), Morgana adapts its outbound expressivity to that budget automatically.
 On the inbound side, Morgana no longer treats Cauldron as its only caller: the single-origin CORS whitelist is gone and JWT authentication moves to a **per-issuer trust model**, so each channel onboards with its own issuer name and signing key, cryptographically isolated from the others.
+### 🎯 Major Feature: Rune — the CLI Reference Channel
+This release introduces **Rune**, a second reference channel that brings Morgana **out of the browser and into the terminal** — a colorful, interactive CLI that runs wherever a shell does, from developer laptops to CI pipelines to SSH jump boxes. Same Morgana, same agents, same spells — a **new doorway** to embed her in automation workflows, pair her with operational tooling, or hand her to users who never leave the command line. Rune is the living proof that Morgana is truly channel-agnostic, opening the imagination to wherever she could live next — IVR, SMS, chat apps, embedded devices, the things you haven't thought of yet.
 
 ### ✨ Added
 - Added **Markdown rendering** to Cauldron: assistant messages are now parsed through **Markdig** and rendered as styled HTML, with a dedicated `markdown.css` stylesheet that integrates with the existing dark theme and CSS variables
@@ -42,6 +44,7 @@ On the inbound side, Morgana no longer treats Cauldron as its only caller: the s
 
 ### 🚀 Future Enablement
 - **Custom channels (IVR, SMS, RCS, Twilio, WhatsApp, plain HTTP client, …)** — With the `IChannelService` abstraction, the `AdaptingChannelService` decorator and the persistence-backed capability handshake all in place, a new outbound channel can plug in declaring its own capability budget at conversation start and get automatic degradation of any rich message without any change to producers, actors or prompts
+- **TTY-native domain AI** — Pair Rune with your own Morgana plugins (your intents, your agents, your prompts, your tools) and your **domain AI becomes a first-class command-line experience**: no frontend work, no browser, no HTML. A developer-tooling companion, an ops runbook agent, a headless CI assistant, a business-domain expert in the terminal — whatever your `agents.json` describes, now shipped straight to the shell
 
 
 ## [0.20.1] - 2026-04-08
