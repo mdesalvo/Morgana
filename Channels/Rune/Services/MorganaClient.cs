@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using Rune.Messages;
 using Rune.Messages.Contracts;
 
@@ -12,12 +11,20 @@ namespace Rune.Services;
 /// </summary>
 public sealed class MorganaClient
 {
+    /// <summary>Fallback cap advertised at the handshake when <c>Rune:MaxMessageLength</c> is absent.</summary>
     private const int DefaultMaxMessageLength = 200;
 
+    /// <summary>Produces the named <c>Morgana</c> <see cref="HttpClient"/> with the JWT handler already wired in.</summary>
     private readonly IHttpClientFactory httpClientFactory;
+
+    /// <summary>Absolute URL Morgana POSTs inbound messages to; re-announced on every handshake.</summary>
     private readonly string callbackUrl;
+
+    /// <summary>Hard cap Rune advertises to Morgana's channel adapter; <c>null</c> means "no cap".</summary>
     private readonly int? maxMessageLength;
 
+    /// <summary>Captures the callback URL (required) and the advertised message length cap.</summary>
+    /// <exception cref="InvalidOperationException">Thrown when <c>Rune:CallbackURL</c> is missing.</exception>
     public MorganaClient(IHttpClientFactory httpClientFactory, IConfiguration configuration)
     {
         this.httpClientFactory = httpClientFactory;
@@ -39,6 +46,9 @@ public sealed class MorganaClient
     {
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
 
+        // We mint a candidate id ("N" = 32-char hex, no dashes — matches Morgana's
+        // conversation id shape), but the server is source of truth: whatever it returns
+        // on the response is what Rune will use from this point on.
         StartConversationRequest body = new()
         {
             ConversationId = Guid.NewGuid().ToString("N"),
@@ -49,6 +59,8 @@ public sealed class MorganaClient
             "/api/morgana/conversation/start", body, cancellationToken);
         response.EnsureSuccessStatusCode();
 
+        // Fail-closed: a 2xx with an empty/missing id means the contract is broken —
+        // refuse to run rather than leak an undefined conversation into the webhook loop.
         StartConversationResponse? parsed = await response.Content.ReadFromJsonAsync<StartConversationResponse>(cancellationToken);
         if (parsed is null || string.IsNullOrWhiteSpace(parsed.ConversationId))
             throw new InvalidOperationException("Morgana did not return a conversation id.");

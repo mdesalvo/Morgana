@@ -14,31 +14,31 @@ A second rich channel would be a fast-path twin of Cauldron, validating nothing 
 
 ```
 Channels/Rune/
-  Program.cs                          # Entry point: Kestrel + DI + lifecycle
-  Rune.csproj                         # .NET 10 Web SDK, deps: Spectre.Console, JsonWebTokens
-  Rune.slnx                           # Solution (sibling to Cauldron.slnx)
-  Directory.Build.props               # Shared build/version metadata (0.21.0 aligned)
-  appsettings.json                    # Morgana URL, callback URL, auth config
-  Properties/launchSettings.json      # Dev profile: https://localhost:5003
-  Rune.Dockerfile                     # Multi-stage container build (root context)
+  Program.cs                         # Entry point: Kestrel + DI + lifecycle
+  Rune.csproj                        # .NET 10 Web SDK, deps: Spectre.Console, JsonWebTokens
+  Rune.slnx                          # Solution (sibling to Cauldron.slnx)
+  Directory.Build.props              # Shared build/version metadata (0.21.0 aligned)
+  appsettings.json                   # Morgana URL, callback URL, auth config
+  Properties/launchSettings.json     # Dev profile: https://localhost:5003
+  Rune.Dockerfile                    # Multi-stage container build (root context)
   Handlers/
-    MorganaAuthHandler.cs             # DelegatingHandler: self-issues JWT for outbound calls
-  Messages/                           # Response DTOs that mirror anonymous controller shapes
-    StartConversationResponse.cs      # Echo of conversation id from MorganaController.StartConversation
-  Messages/Contracts/                 # DTOs duplicated in lockstep from Morgana.AI.Records
-    ChannelMessage.cs                 # Inbound webhook payload
-    ChannelMetadata.cs                # Handshake metadata (with Rune.Build(callbackUrl) factory)
-    ChannelCoordinates.cs             # Identity + addressing (channelName, deliveryMode, callbackUrl)
-    ChannelCapabilities.cs            # Feature flags (all false for Rune; MaxMessageLength from Rune:MaxMessageLength, default 200)
-    StartConversationRequest.cs       # conversation/start body (conversationId + channelMetadata)
-    SendMessageRequest.cs             # conversation/{id}/message body (conversationId + text)
-    QuickReply.cs                     # Kept for binary compat (stripped by adapter)
-    RichCard.cs                       # Kept for binary compat (stripped by adapter)
+    MorganaAuthHandler.cs            # DelegatingHandler: self-issues JWT for outbound calls
+  Messages/                          # Response DTOs that mirror anonymous controller shapes
+    StartConversationResponse.cs     # Echo of conversation id from MorganaController.StartConversation
+  Messages/Contracts/                # DTOs duplicated in lockstep from Morgana.AI.Records
+    ChannelMessage.cs                # Inbound webhook payload
+    ChannelMetadata.cs               # Handshake metadata (with Rune.Build(callbackUrl) factory)
+    ChannelCoordinates.cs            # Identity + addressing (channelName, deliveryMode, callbackUrl)
+    ChannelCapabilities.cs           # Feature flags (all false for Rune; MaxMessageLength from Rune:MaxMessageLength, default 200)
+    StartConversationRequest.cs      # conversation/start body (conversationId + channelMetadata)
+    SendMessageRequest.cs            # conversation/{id}/message body (conversationId + text)
+    QuickReply.cs                    # Kept for binary compat (stripped by adapter)
+    RichCard.cs                      # Kept for binary compat (stripped by adapter)
   Services/
-    MorganaClient.cs                  # REST wrapper: start / send / end conversation
-    WebhookReceiver.cs                # Thin dispatcher, OnMessage delegate wired in Program.cs
-    ConsoleUi.cs                      # Spectre.Console Live(Layout) — sticky header + REPL body
-    LandingMessageService.cs          # Random startup line from Rune:LandingMessages pool
+    MorganaClient.cs                 # REST wrapper: start / send / end conversation
+    WebhookReceiver.cs               # Thin dispatcher, OnMessage delegate wired in Program.cs
+    ConsoleUi.cs                     # Spectre.Console Live(Layout) — sticky header + REPL body
+    LandingMessageService.cs         # Random startup line from Rune:LandingMessages pool
 ```
 
 ## Architecture
@@ -46,8 +46,8 @@ Channels/Rune/
 ### Communication with Morgana
 
 ```
-Rune   ──REST──────→ Morgana.Web (MorganaController)  # outbound: start/send/end
-       ←─webhook POST── Morgana.Web (WebhookChannelService) # inbound: ChannelMessage on /morgana-hook
+Rune   ──REST──────→ Morgana.Web (MorganaController)        # outbound: start/send/end
+       ←─webhook POST── Morgana.Web (WebhookChannelService) # inbound:  ChannelMessage on /morgana-hook
 ```
 
 - **Outbound REST** (via `HttpClient` named "Morgana", base address `Rune:MorganaURL`): conversation start/send/end, authenticated by a self-issued JWT injected through `MorganaAuthHandler`.

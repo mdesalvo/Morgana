@@ -22,11 +22,22 @@ namespace Rune.Handlers;
 /// </remarks>
 public class MorganaAuthHandler : DelegatingHandler
 {
+    /// <summary>HMAC-SHA256 signing credentials derived from the configured symmetric key.</summary>
     private readonly SigningCredentials credentials;
+
+    /// <summary>JWT <c>iss</c> claim; must match an entry in Morgana's <c>Authentication:Issuers[]</c>.</summary>
     private readonly string issuer;
+
+    /// <summary>JWT <c>aud</c> claim expected by Morgana's token validation.</summary>
     private readonly string audience;
+
+    /// <summary>Reusable token writer; <see cref="JsonWebTokenHandler"/> is thread-safe.</summary>
     private readonly JsonWebTokenHandler tokenHandler = new();
 
+    /// <summary>
+    /// Reads the signing key, issuer and audience from the <c>Rune:Authentication</c> configuration section.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when <c>Rune:Authentication:SymmetricKey</c> is missing.</exception>
     public MorganaAuthHandler(IConfiguration configuration)
     {
         IConfigurationSection authSection = configuration.GetSection("Rune:Authentication");
@@ -37,6 +48,7 @@ public class MorganaAuthHandler : DelegatingHandler
         credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(symmetricKey)), SecurityAlgorithms.HmacSha256);
     }
 
+    /// <summary>Attaches a freshly-issued Bearer token to the outgoing request before forwarding it down the pipeline.</summary>
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -44,6 +56,7 @@ public class MorganaAuthHandler : DelegatingHandler
         return base.SendAsync(request, cancellationToken);
     }
 
+    /// <summary>Generates a new HMAC-SHA256 signed JWT valid for 5 minutes.</summary>
     public string GenerateToken()
     {
         SecurityTokenDescriptor descriptor =

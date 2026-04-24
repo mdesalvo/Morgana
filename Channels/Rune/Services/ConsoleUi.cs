@@ -25,21 +25,43 @@ namespace Rune.Services;
 /// </remarks>
 public sealed class ConsoleUi
 {
+    /// <summary>Color for base Morgana turns.</summary>
     private const string MorganaColor = "magenta1";
+
+    /// <summary>Color for specialised agent turns (<c>Morgana (Something)</c>).</summary>
     private const string MorganaAgentColor = "hotpink";
+
+    /// <summary>Color for the user's own input and committed lines.</summary>
     private const string UserColor = "skyblue1";
+
+    /// <summary>Fallback for <c>Rune:AgentExitMessage</c> when the setting is absent.</summary>
     private const string DefaultAgentExitMessage = "{0} has completed its spell. I'm back to you!";
 
+    /// <summary>Chat history rendered in the scrolling body; trimmed to viewport on each update.</summary>
     private readonly List<DisplayedMessage> history = [];
+
+    /// <summary>Thread-safe queue of messages posted by <see cref="WebhookReceiver"/> awaiting render.</summary>
     private readonly Channel<ChannelMessage> incoming = Channel.CreateUnbounded<ChannelMessage>();
+
+    /// <summary>Format string for the courtesy line appended when a specialised agent completes.</summary>
     private readonly string agentExitTemplate;
+
+    /// <summary>Buffer holding keystrokes not yet committed with <see cref="ConsoleKey.Enter"/>.</summary>
     private string currentInput = string.Empty;
+
+    /// <summary>Name shown in the sticky header; swaps to the agent's name mid-turn and back to <c>Morgana</c> on completion.</summary>
     private string currentSpeaker = "Morgana";
+
+    /// <summary>Current conversation id, displayed (truncated) in the header.</summary>
     private string conversationId = string.Empty;
+
+    /// <summary>Set once the user types <c>/quit</c> or presses <see cref="ConsoleKey.Escape"/>.</summary>
     private volatile bool exitRequested;
-    // Starts true: Rune always waits for Morgana's presentation before the first user turn.
+
+    /// <summary>When true, keystrokes (except Esc) are swallowed and the input line shows a thinking hint. Starts true: Rune always waits for Morgana's presentation before the first user turn.</summary>
     private volatile bool awaitingResponse = true;
 
+    /// <summary>Reads the <c>Rune:AgentExitMessage</c> template, falling back to <see cref="DefaultAgentExitMessage"/>.</summary>
     public ConsoleUi(IConfiguration configuration)
     {
         agentExitTemplate = configuration["Rune:AgentExitMessage"] ?? DefaultAgentExitMessage;
@@ -61,7 +83,8 @@ public sealed class ConsoleUi
 
         Layout layout = BuildLayout();
 
-        await AnsiConsole.Live(layout)
+        await AnsiConsole
+            .Live(layout)
             .AutoClear(false)
             .Overflow(VerticalOverflow.Ellipsis)
             .Cropping(VerticalOverflowCropping.Top)
@@ -73,37 +96,41 @@ public sealed class ConsoleUi
             });
     }
 
+    /// <summary>Consumes the <see cref="incoming"/> channel, appends each message to the history (plus a courtesy line on agent completion) and refreshes the live view.</summary>
     private async Task DrainIncomingLoop(LiveDisplayContext ctx, CancellationToken cancellationToken)
     {
         try
         {
             await foreach (ChannelMessage message in incoming.Reader.ReadAllAsync(cancellationToken))
             {
-                // The message itself is attributed to whoever authored it (a specialised
-                // agent keeps its own colour on its last line, including the farewell
-                // that carries AgentCompleted=true). After appending it, if that agent
-                // just signalled completion, follow up with a base-Morgana courtesy line
-                // — same pattern Cauldron's ChatStateService.AddCompletionMessageIfNeeded
-                // uses — and revert the sticky header speaker to Morgana so the next
-                // user turn doesn't render under the outgoing agent's colour.
+                // Attribute the row to whoever authored it: a specialised agent keeps its
+                // own colour even on the farewell line that carries AgentCompleted=true.
                 string messageSpeaker = string.IsNullOrWhiteSpace(message.AgentName) ? "Morgana" : message.AgentName;
                 history.Add(new DisplayedMessage(messageSpeaker, message.Text, SpeakerColor(messageSpeaker)));
 
+                // On agent completion append a base-Morgana courtesy line — same pattern
+                // as Cauldron's ChatStateService.AddCompletionMessageIfNeeded.
                 if (message.AgentCompleted && IsSpecializedAgent(message.AgentName))
                 {
                     string completion = string.Format(agentExitTemplate, message.AgentName);
                     history.Add(new DisplayedMessage("Morgana", completion, MorganaColor));
                 }
 
+                // Revert the sticky header to Morgana on completion so the next user
+                // turn doesn't render under the outgoing agent's colour.
                 currentSpeaker = message.AgentCompleted || string.IsNullOrWhiteSpace(message.AgentName)
                     ? "Morgana"
                     : message.AgentName;
 
+                // Release the input gate: ReadKeysLoop was swallowing keystrokes until
+                // this first webhook delivery landed.
                 awaitingResponse = false;
                 TrimHistoryToViewport();
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
 
+                // Honour an exit requested mid-turn only after painting the last frame,
+                // so the user sees Morgana's final reply before the UI tears down.
                 if (exitRequested)
                     return;
             }
@@ -114,10 +141,13 @@ public sealed class ConsoleUi
         }
     }
 
+    /// <summary>Polls <see cref="Console.KeyAvailable"/> every 25 ms and dispatches keys: Enter commits (or exits on <c>/quit</c>), Backspace edits, Esc exits, printable chars append to the buffer.</summary>
     private async Task ReadKeysLoop(LiveDisplayContext ctx, Func<string, Task> onSend, CancellationToken cancellationToken)
     {
         while (!exitRequested && !cancellationToken.IsCancellationRequested)
         {
+            // Polled rather than blocking: Spectre.Console's Live rendering cannot share
+            // stdin with a first-class prompt, so we spin on KeyAvailable.
             if (!Console.KeyAvailable)
             {
                 await Task.Delay(25, cancellationToken);
@@ -136,9 +166,12 @@ public sealed class ConsoleUi
             {
                 case ConsoleKey.Enter when currentInput.Length > 0:
                 {
+                    // Snapshot-and-clear before awaiting: any late keystroke during onSend
+                    // must land on a fresh buffer, not reappend to the line we just sent.
                     string toSend = currentInput;
                     currentInput = string.Empty;
 
+                    // /quit is a client-only command: never round-trip it to Morgana.
                     if (toSend.Equals("/quit", StringComparison.OrdinalIgnoreCase))
                     {
                         exitRequested = true;
@@ -146,6 +179,8 @@ public sealed class ConsoleUi
                         return;
                     }
 
+                    // Optimistic echo: show "You: …" and flip to the thinking hint before
+                    // awaiting onSend so the UI feels responsive even on slow backends.
                     history.Add(new DisplayedMessage("You", toSend, UserColor));
                     awaitingResponse = true;
                     TrimHistoryToViewport();
@@ -158,6 +193,9 @@ public sealed class ConsoleUi
                     }
                     catch (Exception ex)
                     {
+                        // Surface the failure in-UI (logging is silenced) and release the
+                        // gate so the user can retry without waiting for a webhook that
+                        // will never arrive.
                         history.Add(new DisplayedMessage("system", $"send failed: {ex.Message}", "red"));
                         awaitingResponse = false;
                         TrimHistoryToViewport();
@@ -172,10 +210,15 @@ public sealed class ConsoleUi
                     ctx.Refresh();
                     break;
                 case ConsoleKey.Escape:
+                    // Unconditional exit — completes the channel so DrainIncomingLoop
+                    // unblocks out of its await foreach and RunAsync can return.
                     exitRequested = true;
                     incoming.Writer.TryComplete();
                     return;
                 default:
+                    // Skip control chars (arrows, F-keys, …); only printable glyphs feed
+                    // the buffer. Layout must refresh on every keystroke or the cursor
+                    // lags behind what the user just typed.
                     if (!char.IsControl(key.KeyChar))
                     {
                         currentInput += key.KeyChar;
@@ -187,6 +230,7 @@ public sealed class ConsoleUi
         }
     }
 
+    /// <summary>Builds the two-row Spectre layout (fixed 3-row header + flex body).</summary>
     private Layout BuildLayout()
     {
         Layout root = new Layout("root")
@@ -199,11 +243,20 @@ public sealed class ConsoleUi
         return root;
     }
 
+    /// <summary>Renders the sticky header panel with the current speaker (colored by role) and a truncated conversation id.</summary>
     private IRenderable BuildHeader()
     {
+        // Speaker colour tracks currentSpeaker, which DrainIncomingLoop flips to the agent
+        // mid-turn and back to Morgana on completion — the header always mirrors "who holds
+        // the mic right now".
         string speakerColor = SpeakerColor(currentSpeaker);
+
+        // Conversation ids are 32-char hex; truncate so the header stays readable on narrow
+        // terminals without forcing the panel to wrap.
         string shortId = conversationId.Length > 12 ? conversationId[..12] + "…" : conversationId;
 
+        // Markup uses [/] to close the tag — always run user-controlled strings through
+        // Markup.Escape so a speaker name containing '[' can't break the layout.
         Markup content = new(
             $"[bold {speakerColor}]{Markup.Escape(currentSpeaker)}[/]   " +
             $"[grey54]conv[/] [grey85]{Markup.Escape(shortId)}[/]");
@@ -212,34 +265,48 @@ public sealed class ConsoleUi
         {
             Border = BoxBorder.Rounded,
             BorderStyle = new Style(Color.Grey50),
+            // Panel title is static ("Rune → Morgana") — it identifies the channel, not
+            // the current speaker; that's what the body Markup above is for.
             Header = new PanelHeader($"[bold {MorganaColor}]Rune[/] [grey54]→[/] [bold]Morgana[/]"),
             Padding = new Padding(1, 0, 1, 0),
             Expand = true
         };
     }
 
+    /// <summary>Renders the chat history followed by either a thinking hint (gated) or the input line with a blinking cursor.</summary>
     private IRenderable BuildBody()
     {
+        // Pre-size for history + the single trailing input/hint row — saves a realloc on
+        // every keystroke-driven repaint.
         List<IRenderable> rows = new(capacity: history.Count + 1);
+
+        // Render history in order; each row is bold-colored "Who:" followed by the text.
+        // TrimHistoryToViewport has already dropped anything that wouldn't fit.
         foreach (DisplayedMessage message in history)
             rows.Add(new Markup($"[bold {message.Color}]{Markup.Escape(message.Who)}:[/] {Markup.Escape(message.Text)}"));
 
+        // The last row is mutually exclusive: thinking hint while gated, prompt line
+        // otherwise. The blink tag on the underscore is what draws the cursor — Spectre
+        // has no first-class input widget we can borrow here.
         rows.Add(awaitingResponse
             ? new Markup($"[grey54 italic]{Markup.Escape(currentSpeaker)} is thinking…[/]")
             : new Markup($"[{UserColor}]›[/] {Markup.Escape(currentInput)}[blink {UserColor}]_[/]"));
         return new Rows(rows);
     }
 
+    /// <summary>Maps a speaker name to its palette color: <c>You</c> → skyblue1, <c>Morgana</c> → magenta1, everything else → hotpink.</summary>
     private static string SpeakerColor(string agentName)
     {
-        if (agentName.Equals("You", StringComparison.OrdinalIgnoreCase)) return UserColor;
-        if (agentName.Equals("Morgana", StringComparison.OrdinalIgnoreCase)) return MorganaColor;
+        if (agentName.Equals("You", StringComparison.OrdinalIgnoreCase))
+            return UserColor;
+        if (agentName.Equals("Morgana", StringComparison.OrdinalIgnoreCase))
+            return MorganaColor;
         return MorganaAgentColor;
     }
 
     /// <summary>
     /// Mirrors Cauldron's ChatStateService.IsSpecializedAgent: a specialised agent
-    /// announces itself as <c>Morgana (Something)</c>, so the presence of parentheses
+    /// announces itself as <c>Morgana (Intent)</c>, so the presence of parentheses
     /// is the discriminator between base Morgana and a domain agent.
     /// </summary>
     private static bool IsSpecializedAgent(string? agentName) =>
@@ -288,5 +355,6 @@ public sealed class ConsoleUi
             history.RemoveRange(0, firstKept);
     }
 
+    /// <summary>A single history row: speaker name, rendered text, and the Spectre color token used for the name.</summary>
     private record DisplayedMessage(string Who, string Text, string Color);
 }
