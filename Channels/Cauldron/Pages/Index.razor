@@ -299,7 +299,7 @@
     /// Handles incoming messages from SignalR with strongly-typed DTO.
     /// Removes typing indicator, updates agent state, and adds message to UI.
     /// </summary>
-    /// <param name="signalrMessage">Strongly-typed SignalR message DTO containing all message data</param>
+    /// <param name="message">Strongly-typed channel message DTO containing all message data</param>
     /// <returns>Task representing the async message handling</returns>
     private async Task HandleMessageReceivedAsync(ChannelMessage message)
     {

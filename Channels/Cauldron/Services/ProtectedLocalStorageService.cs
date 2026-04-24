@@ -30,7 +30,7 @@ public class ProtectedLocalStorageService : IConversationStorageService
 
             if (result.Success)
             {
-                logger.LogInformation($"Retrieved conversation ID from protected storage");
+                logger.LogInformation("Retrieved conversation ID from protected storage");
                 return result.Value;
             }
 
