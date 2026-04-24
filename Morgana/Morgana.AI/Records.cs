@@ -491,7 +491,7 @@ public static class Records
     /// The supervisor treats this identically to a guard rejection and routes the reply
     /// to the user-facing sender captured in its current processing state.
     /// </summary>
-    public record ContentFilterRejection();
+    public record ContentFilterRejection;
 
     // ==========================================================================
     // CLASSIFICATION MESSAGES

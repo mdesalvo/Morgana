@@ -163,7 +163,7 @@ public class ConversationManagerActor : MorganaActor
             // name spaces stay case-insensitive end-to-end, and Capabilities are reconciled
             // against the AdaptiveMessaging policy (see NormaliseCapabilities) before being
             // persisted and registered.
-            Records.ChannelMetadata channelMetadata = msg.ChannelMetadata with
+            Records.ChannelMetadata channelMetadata = new Records.ChannelMetadata
             {
                 Coordinates = msg.ChannelMetadata.Coordinates with
                 {
