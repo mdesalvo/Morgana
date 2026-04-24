@@ -100,6 +100,17 @@ public class MorganaAgent : MorganaActor
     /// </summary>
     protected string AgentIdentifier => $"{AgentIntent}-{conversationId}";
 
+    /// <summary>
+    /// Initializes the agent actor and wires message handlers for
+    /// <see cref="Records.AgentRequest"/>, <see cref="Records.ReceiveContextUpdate"/> and
+    /// <see cref="Records.FailureContext"/>.
+    /// </summary>
+    /// <param name="conversationId">Conversation this agent is scoped to.</param>
+    /// <param name="llmService">LLM service used by the underlying <see cref="AIAgent"/>.</param>
+    /// <param name="promptResolverService">Resolver for framework + domain prompts.</param>
+    /// <param name="persistenceService">Persistence service used to load/save <see cref="AgentSession"/>.</param>
+    /// <param name="agentLogger">Logger for the concrete agent subclass.</param>
+    /// <param name="configuration">Application configuration (streaming flags, etc.).</param>
     public MorganaAgent(
         string conversationId,
         ILLMService llmService,
@@ -138,6 +149,12 @@ public class MorganaAgent : MorganaActor
         return aiAgentSession;
     }
 
+    /// <summary>
+    /// Callback invoked by <see cref="MorganaAIContextProvider"/> when a shared context variable
+    /// is set. Forwards the update to the RouterActor, which re-broadcasts it to sibling agents.
+    /// </summary>
+    /// <param name="key">Name of the shared variable.</param>
+    /// <param name="value">Value to propagate.</param>
     protected void OnSharedContextUpdate(string key, object value)
     {
         agentLogger.LogInformation("Agent {AgentIntent} broadcasting shared context variable: {Key}", AgentIntent, key);
@@ -366,6 +383,13 @@ public class MorganaAgent : MorganaActor
         failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
     }
 
+    /// <summary>
+    /// Reads and deserializes the <c>quick_replies</c> context variable, if the agent set one
+    /// on the current turn via the <c>SetQuickReplies</c> base tool. Drops the variable if the
+    /// stored JSON is malformed.
+    /// </summary>
+    /// <param name="session">Active agent session.</param>
+    /// <returns>The deserialized quick replies, or <c>null</c> if absent or invalid.</returns>
     protected List<Records.QuickReply>? GetQuickRepliesFromContext(AgentSession session)
     {
         #region Utilities
@@ -399,6 +423,13 @@ public class MorganaAgent : MorganaActor
         };
     }
 
+    /// <summary>
+    /// Reads and deserializes the <c>rich_card</c> context variable, if the agent set one
+    /// on the current turn via the <c>SetRichCard</c> base tool. Drops the variable if the
+    /// stored JSON is malformed.
+    /// </summary>
+    /// <param name="session">Active agent session.</param>
+    /// <returns>The deserialized rich card, or <c>null</c> if absent or invalid.</returns>
     protected Records.RichCard? GetRichCardFromContext(AgentSession session)
     {
         #region Utilities

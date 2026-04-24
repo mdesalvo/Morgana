@@ -300,6 +300,12 @@ public class MorganaTool
         /// <summary>The active session for the current turn.</summary>
         public AgentSession Session { get; }
 
+        /// <summary>
+        /// Initializes a new <see cref="ToolContext"/> pairing the agent's context provider
+        /// with the session for the in-flight turn.
+        /// </summary>
+        /// <param name="provider">The singleton context provider for the agent.</param>
+        /// <param name="session">The active agent session for the current turn.</param>
         public ToolContext(MorganaAIContextProvider provider, AgentSession session)
         {
             Provider = provider;

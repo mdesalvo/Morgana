@@ -14,7 +14,16 @@ namespace Morgana.AI.Adapters;
 /// </summary>
 public class MCPToolAdapter
 {
+    /// <summary>
+    /// Connected client for the target MCP server. All tool invocations produced by this
+    /// adapter are forwarded through it.
+    /// </summary>
     private readonly MCPClient mcpClient;
+
+    /// <summary>
+    /// Logger used for adapter diagnostics: tool conversion, parameter extraction,
+    /// and DynamicMethod IL generation.
+    /// </summary>
     private readonly ILogger logger;
 
     /// <summary>
@@ -31,6 +40,11 @@ public class MCPToolAdapter
         Type ClrType,
         string JsonType);
 
+    /// <summary>
+    /// Initializes the adapter with the MCP client used to forward tool invocations.
+    /// </summary>
+    /// <param name="mcpClient">Connected client for the target MCP server.</param>
+    /// <param name="logger">Logger for adapter diagnostics.</param>
     public MCPToolAdapter(MCPClient mcpClient, ILogger logger)
     {
         this.mcpClient = mcpClient;

@@ -24,6 +24,10 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     private readonly ConcurrentDictionary<string, MCPClient> mcpClients;
     private bool disposed;
 
+    /// <summary>
+    /// Initializes the registry with an empty client pool.
+    /// </summary>
+    /// <param name="logger">Logger for pool diagnostics.</param>
     public MCPClientRegistryService(ILogger logger)
     {
         this.logger = logger;
@@ -133,6 +137,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
 
     // IDisposable / IAsyncDisposable
 
+    /// <summary>
+    /// Synchronously disconnects all pooled MCP clients. Idempotent.
+    /// </summary>
     public void Dispose()
     {
         if (!disposed)
@@ -142,6 +149,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         }
     }
 
+    /// <summary>
+    /// Asynchronously disconnects all pooled MCP clients. Idempotent.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         if (!disposed)

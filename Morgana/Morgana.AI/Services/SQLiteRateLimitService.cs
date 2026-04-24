@@ -44,6 +44,14 @@ public class SQLiteRateLimitService : IRateLimitService
     private readonly ConversationPersistenceOptions persistenceOptions;
     private readonly IConversationPersistenceService persistenceService;
 
+    /// <summary>
+    /// Initializes the rate limit service with the configured limits and the persistence
+    /// service used to ensure the SQLite database exists before logging requests.
+    /// </summary>
+    /// <param name="options">Rate limit configuration (per-minute/hour/day caps).</param>
+    /// <param name="persistenceOptions">Persistence options (storage path).</param>
+    /// <param name="persistenceService">Persistence service that owns database lifecycle.</param>
+    /// <param name="logger">Logger for rate limit decisions.</param>
     public SQLiteRateLimitService(
         IOptions<RateLimitOptions> options,
         IOptions<ConversationPersistenceOptions> persistenceOptions,
@@ -62,6 +70,15 @@ public class SQLiteRateLimitService : IRateLimitService
             $"{options.Value.MaxMessagesPerDay}/day");
     }
 
+    /// <summary>
+    /// Evaluates the per-minute/hour/day sliding windows for the given conversation and,
+    /// if all limits are respected, records the current request. Fails open on error.
+    /// </summary>
+    /// <param name="conversationId">Conversation whose rate limit database is queried.</param>
+    /// <returns>
+    /// A <see cref="RateLimitResult"/> with <c>IsAllowed = true</c> when the request is admitted,
+    /// or <c>false</c> with <c>ViolatedLimit</c> populated when a window is exceeded.
+    /// </returns>
     public async Task<RateLimitResult> CheckAndRecordAsync(string conversationId)
     {
         if (!options.Enabled)
@@ -124,6 +141,11 @@ public class SQLiteRateLimitService : IRateLimitService
         }
     }
 
+    /// <summary>
+    /// Clears all recorded request timestamps for the given conversation, effectively
+    /// resetting its rate limit windows.
+    /// </summary>
+    /// <param name="conversationId">Conversation whose rate limit log is cleared.</param>
     public async Task ResetAsync(string conversationId)
     {
         try

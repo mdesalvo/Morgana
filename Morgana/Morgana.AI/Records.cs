@@ -1172,9 +1172,13 @@ public static class Records
     [JsonConverter(typeof(JsonStringEnumConverter<TextStyle>))]
     public enum TextStyle
     {
+        /// <summary>Default body text.</summary>
         [JsonPropertyName("normal")] Normal,
+        /// <summary>Bold emphasis.</summary>
         [JsonPropertyName("bold")] Bold,
+        /// <summary>De-emphasized / secondary text.</summary>
         [JsonPropertyName("muted")] Muted,
+        /// <summary>Reduced font size, typically for captions or footnotes.</summary>
         [JsonPropertyName("small")] Small
     }
 
@@ -1184,8 +1188,11 @@ public static class Records
     [JsonConverter(typeof(JsonStringEnumConverter<ListStyle>))]
     public enum ListStyle
     {
+        /// <summary>Unordered list with bullet markers.</summary>
         [JsonPropertyName("bullet")] Bullet,
+        /// <summary>Ordered list with numeric markers.</summary>
         [JsonPropertyName("numbered")] Numbered,
+        /// <summary>List with no markers.</summary>
         [JsonPropertyName("plain")] Plain
     }
 
@@ -1195,10 +1202,15 @@ public static class Records
     [JsonConverter(typeof(JsonStringEnumConverter<BadgeVariant>))]
     public enum BadgeVariant
     {
+        /// <summary>Positive outcome (green).</summary>
         [JsonPropertyName("success")] Success,
+        /// <summary>Cautionary state (amber).</summary>
         [JsonPropertyName("warning")] Warning,
+        /// <summary>Failure or blocking condition (red).</summary>
         [JsonPropertyName("error")] Error,
+        /// <summary>Informational note (blue).</summary>
         [JsonPropertyName("info")] Info,
+        /// <summary>Unstyled / default badge.</summary>
         [JsonPropertyName("neutral")] Neutral
     }
 
@@ -1219,9 +1231,13 @@ public static class Records
     [JsonConverter(typeof(JsonStringEnumConverter<ImageSize>))]
     public enum ImageSize
     {
+        /// <summary>200px max-width — thumbnails, icons, avatars.</summary>
         [JsonPropertyName("small")] Small,
+        /// <summary>400px max-width — default for most images.</summary>
         [JsonPropertyName("medium")] Medium,
+        /// <summary>600px max-width — detailed images or diagrams.</summary>
         [JsonPropertyName("large")] Large,
+        /// <summary>100% container width — banners and wide images.</summary>
         [JsonPropertyName("full")] Full
     }
 
@@ -1404,6 +1420,7 @@ public static class Records
     /// <param name="SubType">Prompt subtype (e.g., "AGENT", "ACTOR", "PRESENTATION")</param>
     /// <param name="Target">Core prompt text defining role and capabilities</param>
     /// <param name="Instructions">Behavioral rules and guidelines</param>
+    /// <param name="Formatting">Output formatting rules (markdown, length limits, etc.)</param>
     /// <param name="Personality">Optional tone and character traits</param>
     /// <param name="Language">Language code (e.g., "en-US", "it-IT")</param>
     /// <param name="Version">Prompt version for tracking changes</param>
