@@ -1,6 +1,11 @@
 <Project>
 
-  <Target Name="GenerateDockerVersionFile" BeforeTargets="Build">
+  <!--
+    Skipped inside Docker builds: each Dockerfile only stages its own subtree, so
+    the sibling Directory.Build.props files this target reads aren't on disk.
+    Each Dockerfile passes /p:InsideDockerBuild=true to dotnet build/publish.
+  -->
+  <Target Name="GenerateDockerVersionFile" BeforeTargets="Build" Condition="'$(InsideDockerBuild)' != 'true'">
 
     <PropertyGroup>
       <!-- Repository root is TWO levels up from this file

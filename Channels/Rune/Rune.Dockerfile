@@ -30,15 +30,17 @@ RUN dotnet restore "Rune/Rune.csproj"
 # Copy all source code
 COPY Channels/Rune/ Rune/
 
-# Build application in Release mode
+# Build application in Release mode — InsideDockerBuild skips
+# Directory.Build.targets' host-side .env.versions generation, which can't see
+# sibling projects here.
 WORKDIR "/src/Rune"
-RUN dotnet build "Rune.csproj" -c Release -o /app/build
+RUN dotnet build "Rune.csproj" -c Release -o /app/build /p:InsideDockerBuild=true
 
 # ==============================================================================
 # STAGE 2: PUBLISH
 # ==============================================================================
 FROM build AS publish
-RUN dotnet publish "Rune.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "Rune.csproj" -c Release -o /app/publish /p:UseAppHost=false /p:InsideDockerBuild=true
 
 # ==============================================================================
 # STAGE 3: RUNTIME (FINAL IMAGE)

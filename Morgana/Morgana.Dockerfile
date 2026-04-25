@@ -32,9 +32,10 @@ COPY Morgana/Morgana.Web/ Morgana.Web/
 COPY Morgana/Morgana.AI/ Morgana.AI/
 COPY Morgana.Examples/ Morgana.Examples/
 
-# Build main project
+# Build main project — InsideDockerBuild skips Directory.Build.targets'
+# host-side .env.versions generation, which can't see sibling projects here.
 WORKDIR "/src/Morgana.Web"
-RUN dotnet build "Morgana.Web.csproj" -c Release -o /app/build
+RUN dotnet build "Morgana.Web.csproj" -c Release -o /app/build /p:InsideDockerBuild=true
 
 # ==============================================================================
 # STAGE 2: PUBLISH
@@ -43,11 +44,11 @@ FROM build AS publish
 
 # Publish Morgana.Web (main application)
 WORKDIR "/src/Morgana.Web"
-RUN dotnet publish "Morgana.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "Morgana.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false /p:InsideDockerBuild=true
 
 # Publish Morgana.Examples to plugins/ directory
 WORKDIR "/src/Morgana.Examples"
-RUN dotnet publish "Morgana.Examples.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false
+RUN dotnet publish "Morgana.Examples.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false /p:InsideDockerBuild=true
 
 # ==============================================================================
 # STAGE 3: RUNTIME (FINAL IMAGE)
