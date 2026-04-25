@@ -148,13 +148,29 @@ public sealed class ConsoleUi
         {
             // Polled rather than blocking: Spectre.Console's Live rendering cannot share
             // stdin with a first-class prompt, so we spin on KeyAvailable.
-            if (!Console.KeyAvailable)
+            //
+            // The try/catch is the safety net for "PTY died without a signal": if the
+            // host terminal closes and SIGHUP doesn't reach us (or arrives late), the
+            // next stdin op throws IOException / InvalidOperationException — treat it
+            // as an exit so the process can terminate and docker's --rm reclaims the
+            // container instead of leaving it attached to morgana-network.
+            ConsoleKeyInfo key;
+            try
             {
-                await Task.Delay(25, cancellationToken);
-                continue;
-            }
+                if (!Console.KeyAvailable)
+                {
+                    await Task.Delay(25, cancellationToken);
+                    continue;
+                }
 
-            ConsoleKeyInfo key = Console.ReadKey(intercept: true);
+                key = Console.ReadKey(intercept: true);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException)
+            {
+                exitRequested = true;
+                incoming.Writer.TryComplete();
+                return;
+            }
 
             // Swallow every keystroke that isn't an explicit exit while we're waiting for
             // Morgana to speak. Esc is always honoured so the user can bail out even

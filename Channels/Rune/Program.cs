@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text;
 using Rune.Handlers;
 using Rune.Messages.Contracts;
@@ -80,6 +81,26 @@ builder.Services.AddSingleton<ConsoleUi>();
 builder.Services.AddSingleton<LandingMessageService>();
 
 WebApplication app = builder.Build();
+
+// ==============================================================================
+// 5b. SIGHUP HANDLER - GRACEFUL EXIT WHEN THE PARENT TTY DIES
+// ==============================================================================
+// .NET's WebApplication host already wires SIGTERM/SIGINT to ApplicationStopping
+// on every platform. On POSIX, closing the host terminal window also sends SIGHUP
+// to the foreground process group, but SIGHUP is *not* handled by default:
+// without this registration, the docker CLI dies, the Rune container keeps
+// running, --rm never fires, and `compose down` then complains that
+// morgana-network is still in use. Hooking SIGHUP to StopApplication makes the
+// brutal-close case clean. Skipped on Windows because SIGHUP has no mapping
+// there — the equivalent (CTRL_CLOSE_EVENT on the console X button) is already
+// delivered as SIGTERM, which the host handles natively.
+PosixSignalRegistration? sighupRegistration = OperatingSystem.IsWindows()
+    ? null
+    : PosixSignalRegistration.Create(PosixSignal.SIGHUP, ctx =>
+    {
+        ctx.Cancel = true;
+        app.Lifetime.StopApplication();
+    });
 
 // ==============================================================================
 // 6. LANDING MESSAGE - FILL THE STARTUP SILENCE
@@ -178,12 +199,19 @@ AnsiConsole.Clear();
 
 try
 {
+    // Pass the host lifetime token so SIGTERM / SIGINT / SIGHUP (registered above)
+    // tear the UI loop down cleanly instead of leaving it polling stdin in a dead
+    // container. The finally block then ends the conversation and stops Kestrel,
+    // letting the .NET process exit so docker's --rm reclaims the container and
+    // releases morgana-network.
     await ui.RunAsync(
         conversationId,
-        text => morganaClient.SendMessageAsync(conversationId, text));
+        text => morganaClient.SendMessageAsync(conversationId, text),
+        app.Lifetime.ApplicationStopping);
 }
 finally
 {
+    sighupRegistration?.Dispose();
     await morganaClient.EndConversationAsync(conversationId);
     await app.StopAsync();
 }
