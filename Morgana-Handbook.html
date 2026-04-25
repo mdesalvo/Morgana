@@ -512,7 +512,7 @@
     cp production.env.template .env
     nano .env                          <span class="comment"># fill in secrets</span>
     docker compose up                  <span class="comment"># Morgana + Cauldron (HTML on :5002)</span>
-    docker compose run --rm --service-ports rune   <span class="comment"># Rune TUI (TTY on :5003)</span>
+    docker compose run --rm --service-ports --use-aliases rune   <span class="comment"># Rune TUI (TTY on :5003) — `--use-aliases` registers `rune` as a network alias so Morgana's webhook callback resolves</span>
 
     <span class="comment"># Development (build from source)</span>
     cp development.env.template .env
@@ -622,7 +622,7 @@
 
       <h3 style="margin-top:18px;">Rune &mdash; TTY / Spectre.Console</h3>
       <p>Rune is a minimal command-line channel: a Kestrel-hosted console app with a Spectre.Console Live UI (sticky header, streaming-free rendering), exercising the <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) and the <strong>&ldquo;poor but honest&rdquo; capability profile</strong> (all rich features off, <code>MaxMessageLength=200</code>). It is the contract surface <code>MorganaChannelAdapter</code> is supposed to degrade toward &mdash; a working proof that the channel abstraction holds, not just a demo.</p>
-      <p class="muted" style="font-size:12px;">Rune is launched interactively (<code>docker compose run --rm --service-ports rune</code>, or <code>dotnet run</code> from <code>Channels/Rune/</code>) because the Spectre.Console Live UI needs to own the terminal.</p>
+      <p class="muted" style="font-size:12px;">Rune is launched interactively (<code>docker compose run --rm --service-ports --use-aliases rune</code>, or <code>dotnet run</code> from <code>Channels/Rune/</code>) because the Spectre.Console Live UI needs to own the terminal. <code>--use-aliases</code> is mandatory: <code>compose run</code> skips network aliases by default, so without it Morgana's webhook callback to <code>http://rune:5003</code> fails DNS resolution.</p>
     
       <h2 style="margin-top: 24px;">Deployment Responsibility Model</h2>
       <p>Morgana draws a clear line between <strong>product responsibilities</strong> and <strong>deployer responsibilities</strong>, making it ready for enterprise deployment without prescribing infrastructure choices.</p>
