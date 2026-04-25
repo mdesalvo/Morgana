@@ -160,11 +160,11 @@ No resume in v1. Every Rune process start begins a fresh conversation. Keep this
 - **Target**: .NET 10, console app hosted on Kestrel (via `Microsoft.NET.Sdk.Web`)
 - **Build**: `dotnet build` from `Channels/Rune/` directory
 - **Run**: `dotnet run` — default `https://localhost:5003` for the webhook listener (requires Morgana backend running and the `rune` issuer onboarded)
-- **Docker**: `Channels/Rune/Rune.Dockerfile` (context is the repo root, mirroring the Morgana / Cauldron pattern). Rune is **not** launched by `docker compose up` — the Spectre.Console Live UI needs to own the terminal, so it must be started interactively in a separate terminal after Morgana is up:
+- **Docker**: `Channels/Rune/Rune.Dockerfile` (context is the repo root, mirroring the Morgana / Cauldron pattern). Rune is **not** launched by `docker compose up` — the service is profile-gated (`profiles: ["tui"]` in `docker-compose.yml`) so `up` skips it; the Spectre.Console Live UI needs to own the terminal, so it must be started interactively in a separate terminal after Morgana is up:
   ```bash
   docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
   ```
-  The `run --service-ports` invocation allocates the TTY Spectre requires *and* publishes `5003:5003` so Morgana's webhook callback can reach Rune's listener. `--use-aliases` is mandatory: unlike `compose up`, `compose run` does not register the service name as a network alias, so without it Morgana's callback to `http://rune:5003/morgana-hook` fails DNS resolution. The compose file sets `stdin_open: true` + `tty: true` on the `rune` service to keep this flow explicit.
+  `compose run <service>` auto-activates the service's profiles so no `--profile tui` flag is needed. The `run --service-ports` invocation allocates the TTY Spectre requires *and* publishes `5003:5003` so Morgana's webhook callback can reach Rune's listener. `--use-aliases` is mandatory: unlike `compose up`, `compose run` does not register the service name as a network alias, so without it Morgana's callback to `http://rune:5003/morgana-hook` fails DNS resolution. The compose file sets `stdin_open: true` + `tty: true` on the `rune` service to keep this flow explicit.
 
 ## Conventions
 

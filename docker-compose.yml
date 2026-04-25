@@ -87,12 +87,18 @@ services:
   # ============================================================================
   # RUNE - FRONTEND (CLI over webhook, Spectre.Console TUI)
   # ============================================================================
+  # Profile-gated: `compose up` does NOT start Rune (Spectre.Console needs to own
+  # the terminal — running it as a daemon also blocks port 5003 for the
+  # interactive TUI). `compose run <service>` auto-activates the service's
+  # profiles, so the documented invocation below works without `--profile tui`.
+  #
   # Interactive usage (TUI owns the terminal):
   #   docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
   # `--use-aliases` is required: `compose run` does not register the service name
   # as a network alias by default, so without it Morgana's webhook callback to
   # http://rune:5003/morgana-hook fails DNS resolution.
   rune:
+    profiles: ["tui"]
     build:
       context: .
       dockerfile: Channels/Rune/Rune.Dockerfile
