@@ -254,8 +254,9 @@ docker compose up
 
 # 💬 (Optional) Chat with Morgana via Rune's TUI in a separate terminal
 #    Rune owns the terminal (Spectre.Console Live UI), so it must be launched
-#    interactively with `run --service-ports`, not via `up`
-docker compose run --rm --service-ports rune
+#    interactively with `run --service-ports`, not via `up`. `--use-aliases`
+#    registers `rune` as a network alias so Morgana's webhook callback resolves.
+docker compose run --rm --service-ports --use-aliases rune
 
 # 🛑 Stop the containers
 docker compose down
@@ -286,8 +287,9 @@ docker compose --env-file .env --env-file .env.versions up
 
 # 💬 (Optional) Chat with Morgana via Rune's TUI in a separate terminal
 #    Rune owns the terminal (Spectre.Console Live UI), so it must be launched
-#    interactively with `run --service-ports`, not via `up`
-docker compose --env-file .env --env-file .env.versions run --rm --service-ports rune
+#    interactively with `run --service-ports`, not via `up`. `--use-aliases`
+#    registers `rune` as a network alias so Morgana's webhook callback resolves.
+docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
 
 # 🛑 Stop the containers
 docker compose --env-file .env --env-file .env.versions down

@@ -290,7 +290,7 @@ At application startup, three registries perform comprehensive validation:
 - **Target**: .NET 10, C# latest (uses C# 14 features like `extension` blocks)
 - **Build**: `dotnet build` from solution root
 - **Run**: start both `Morgana.Web` (backend, default https://localhost:5001) and `Cauldron` (frontend, default https://localhost:5002)
-- **Docker**: `docker compose up` starts Morgana + Cauldron (`Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`); Rune is a TUI and must be launched interactively in a separate terminal via `docker compose run --rm --service-ports rune` (using `Channels/Rune/Rune.Dockerfile`), because Spectre.Console needs to own stdin/stdout
+- **Docker**: `docker compose up` starts Morgana + Cauldron (`Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`); Rune is a TUI and must be launched interactively in a separate terminal via `docker compose run --rm --service-ports --use-aliases rune` (using `Channels/Rune/Rune.Dockerfile`), because Spectre.Console needs to own stdin/stdout. `--use-aliases` is mandatory: `compose run` skips network aliases by default, so without it Morgana's webhook callback to `http://rune:5003` fails DNS resolution
 
 ## Conventions
 
