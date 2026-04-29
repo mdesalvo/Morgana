@@ -1567,4 +1567,74 @@ public static class Records
         /// </summary>
         Stdio
     }
+
+    // ==========================================================================
+    // LLM CATALOG & RESOLUTION
+    // ==========================================================================
+
+    /// <summary>
+    /// Semantic capability tier an agent declares as the minimum compute it needs to do its job.
+    /// Decoupled from any specific provider/model — the resolver matches a declared profile
+    /// against the operator's <see cref="LLMCatalogEntry"/> set at startup, picking the cheapest
+    /// entry whose profile is greater than or equal to the requested one.
+    /// </summary>
+    /// <remarks>
+    /// Plugin authors declare via <see cref="Attributes.NeedsLLMProfileAttribute"/>; framework
+    /// system actors declare via <c>Morgana:LLMSystemProfiles</c> in configuration.
+    /// </remarks>
+    public enum LLMProfile
+    {
+        /// <summary>Haiku-class workloads: QnA, lookup, formatting, simple classification.</summary>
+        Basic = 0,
+
+        /// <summary>Sonnet-class workloads: articulated tool calling, ordinary multi-step reasoning.</summary>
+        Medium = 1,
+
+        /// <summary>Opus-class workloads: heavy reasoning, complex synthesis, deep diagnostics.</summary>
+        High = 2
+    }
+
+    /// <summary>
+    /// Operational cost band attached to a catalog entry. Used as tie-breaker by the resolver
+    /// when multiple entries share the same <see cref="LLMProfile"/> — lowest band wins.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Free"/> is semantically distinct from <see cref="Low"/>: it marks self-hosted
+    /// or otherwise zero-per-token deployments and lets cost-attribution dashboards distinguish
+    /// them from cheap-but-paid options.
+    /// </remarks>
+    public enum LLMCostBand
+    {
+        /// <summary>Self-hosted, no per-token cost (e.g. Ollama).</summary>
+        Free = 0,
+
+        /// <summary>Low-tier hosted (e.g. Haiku-class commercial models).</summary>
+        Low = 1,
+
+        /// <summary>Mid-tier hosted (e.g. Sonnet-class commercial models).</summary>
+        Medium = 2,
+
+        /// <summary>Top-tier hosted (e.g. Opus-class commercial models).</summary>
+        High = 3
+    }
+
+    /// <summary>
+    /// One nominal entry in the operator-curated LLM catalog. Each entry binds a unique name
+    /// to a concrete (Provider, Model) pair plus its <see cref="LLMProfile"/> capability bucket
+    /// and its <see cref="LLMCostBand"/>.
+    /// </summary>
+    /// <param name="Name">Unique identifier of this catalog entry. Used in OpenTelemetry tags
+    /// (<c>llm.catalog_name</c>) and resolution logs.</param>
+    /// <param name="Provider">Provider key matching a section under <c>Morgana:LLM</c>
+    /// (<c>Anthropic</c>, <c>AzureOpenAI</c>, <c>OpenAI</c>, <c>Ollama</c>).</param>
+    /// <param name="Model">Provider-specific model identifier. Native model id for Anthropic /
+    /// OpenAI / Ollama; deployment name for AzureOpenAI.</param>
+    /// <param name="Profile">Capability tier this entry can satisfy.</param>
+    /// <param name="Cost">Cost band used for tie-breaking among equal-profile entries.</param>
+    public record LLMCatalogEntry(
+        string Name,
+        string Provider,
+        string Model,
+        LLMProfile Profile,
+        LLMCostBand Cost);
 }
