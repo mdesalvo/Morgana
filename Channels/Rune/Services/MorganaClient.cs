@@ -12,7 +12,7 @@ namespace Rune.Services;
 public sealed class MorganaClient
 {
     /// <summary>Fallback cap advertised at the handshake when <c>Rune:MaxMessageLength</c> is absent.</summary>
-    private const int DefaultMaxMessageLength = 200;
+    private const int DefaultMaxMessageLength = 500;
 
     /// <summary>Produces the named <c>Morgana</c> <see cref="HttpClient"/> with the JWT handler already wired in.</summary>
     private readonly IHttpClientFactory httpClientFactory;
@@ -32,7 +32,7 @@ public sealed class MorganaClient
             ?? throw new InvalidOperationException("Rune:CallbackURL is required for webhook-based delivery.");
 
         // Rune:MaxMessageLength governs the hard cap Rune announces to Morgana at the
-        // handshake. Default (200) stays aggressive so the downgrade path is exercised on
+        // handshake. Default (500) stays aggressive so the downgrade path is exercised on
         // every turn — the "poor but honest" profile Rune was built for — but can be raised
         // (or set to null to mean "no cap") without recompiling.
         maxMessageLength = configuration.GetValue<int?>("Rune:MaxMessageLength") ?? DefaultMaxMessageLength;

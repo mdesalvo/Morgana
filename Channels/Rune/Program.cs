@@ -11,7 +11,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // RUNE - POOR-BUT-HONEST WEBHOOK CHANNEL FOR MORGANA
 // ==============================================================================
 // Rune is a minimal CLI reference channel talking to Morgana over the webhook
-// delivery mode. It declares a tight capability budget (200-char hard limit, no
+// delivery mode. It declares a tight capability budget (500-char hard limit, no
 // rich cards, no quick replies, no streaming, no markdown) so Morgana's channel
 // adapter rewrite path is exercised on every turn.
 //
