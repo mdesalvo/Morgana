@@ -228,10 +228,6 @@ This architecture delivers 3 critical benefits—all configurable through declar
 - **resilient conversations** that survive system restarts
 
 ---
-
-**The Morgana Difference**: These pillars work together to create an orchestration framework where adding a new domain agent requires only configuration and attribute decoration. No changes to the AI framework, no manual registrations, no brittle coupling. It's **conversational AI designed for domain-driven evolution**. And it's **100% modern .NET**! 
-
----
 ## 🚀 Quick Start (Docker Hub)
 
 To use latest images from [Docker Hub](https://hub.docker.com/u/mdesalvo) (showcase for what Morgana **looks like** and **how it works**):
