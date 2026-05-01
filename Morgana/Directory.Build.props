@@ -60,7 +60,7 @@
     <!-- Services -->
     <PackageReference Include="Markdig" Version="1.1.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
-    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.17.*" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.18.*" />
     <PackageReference Include="OpenTelemetry" Version="1.15.*" />
     <PackageReference Include="OpenTelemetry.Api" Version="1.15.*" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.*" />

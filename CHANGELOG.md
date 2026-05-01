@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 - Updated `Microsoft.Agents.AI` dependency to 1.3.0
+- Update `Microsoft.IdentityModel.JsonWebTokens` to 8.18.0
 
 ### 🐛 Fixed
 - Make Rune exit cleanly when its host terminal is killed brutally, so the container terminates and docker's --rm releases morgana-network instead of leaving the network attached and tripping `compose down` with "Resource is still in use"
