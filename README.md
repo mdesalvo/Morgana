@@ -55,7 +55,7 @@ Morgana **reimagines conversational AI** through 4 foundational pillars that **w
 </p>
 
 ### 🎭 Morgana Actor System
-*Resilient orchestration through Akka.NET message-driven architecture*
+*Resilient multi-channel orchestration through Akka.NET message-driven architecture*
 
 Morgana leverages the **actor model** to create a fault-tolerant, scalable orchestration layer. Each conversation is managed by a hierarchy of **specialized actors that collaborate** through asynchronous message passing:
 
