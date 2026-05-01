@@ -3,6 +3,8 @@
     <td>
       <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-Banner.jpg" alt="Morgana Logo"/>
     </td>
+  </tr>
+  <tr>
     <td>
       <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/pulls/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana&color=9f7aea" alt="Morgana (Docker Pulls)"></a>
       <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/pulls/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron&color=9f7aea" alt="Cauldron (Docker Pulls)"></a>
