@@ -1,18 +1,9 @@
-<table style="border:none;" width="100%">
+<table style="border:none;">
   <tr>
-    <td width="256">
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana.jpg" alt="Morgana Logo" width="256"/>
+    <td width="688">
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-Banner.jpg" alt="Morgana Logo"/>
     </td>
-    <td style="width:calc(100% - 256px);">
-      <h1>Morgana <a href="https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Morgana-Handbook.html" title="Morgana Handbook">📜</a></h1>
-      <p><i>A magical witch assistant equipped with an enchanted grimoire powered by AI, yet shaped by you: your agents, your prompts, your tools...woven into its spells.</i></p>
-      <p>
-        <img src="https://img.shields.io/badge/.NET-10.0-932BD4?logo=dotnet" alt=".NET 10"/>
-        <img src="https://img.shields.io/badge/Akka.NET-932BD4?logo=nuget" alt="Akka.NET"/>
-        <img src="https://img.shields.io/badge/Microsoft.Agents.AI-932BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
-        <img src="https://img.shields.io/badge/ModelContextProtocol-932BD4?logo=nuget" alt="ModelContextProtocol"/>
-      </p>
-      <a href="https://www.nuget.org/packages/Morgana.AI"><img src="https://img.shields.io/nuget/dt/Morgana.AI?style=flat&color=9f7aea&logo=nuget&label=Morgana.AI"/></a> 
+    <td style="width:calc(100% - 688px);">
       <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/pulls/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana&color=9f7aea" alt="Morgana (Docker Pulls)"></a>
       <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/pulls/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron&color=9f7aea" alt="Cauldron (Docker Pulls)"></a>
       <a href="https://hub.docker.com/r/mdesalvo/rune"><img src="https://img.shields.io/docker/pulls/mdesalvo/rune?logo=docker&logoColor=white&label=Rune&color=9f7aea" alt="Rune (Docker Pulls)"></a>
