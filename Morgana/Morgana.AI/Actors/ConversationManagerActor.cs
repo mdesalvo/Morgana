@@ -89,6 +89,11 @@ public class ConversationManagerActor : MorganaActor
 
         // Handle streaming chunks from supervisor and forward to client via SignalR
         ReceiveAsync<Records.AgentStreamChunk>(HandleStreamChunkAsync);
+
+        // Handle termination of watched actors (supervisor).
+        // Without this handler Akka throws DeathPactException when the supervisor stops,
+        // because the default Unhandled path re-throws Terminated as a fatal exception.
+        Receive<Terminated>(msg => actorLogger.Info("Watched actor terminated: {0}", msg.ActorRef.Path));
     }
 
     /// <summary>
