@@ -45,7 +45,7 @@ Morgana will kindly assist you with her magical AI potions just the way you **ne
 
 Traditional chatbot systems struggle with complexity. They either become monolithic and unmaintainable, or lack the contextual awareness needed for sophisticated interactions.
 
-Morgana **reimagines conversational AI** through 4 foundational pillars that **work in harmony** to deliver an **orchestration framework** that is powerful yet remarkably simple to configure.
+Morgana **reimagines conversational AI** through 4 foundational pillars that **work in harmony** to deliver an **orchestration framework** that is powerful yet **remarkably simple to configure**.
 
 <p align="center">
   <a href="#-morgana-actor-system">🎭 Actor System</a> |
