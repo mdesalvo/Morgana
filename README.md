@@ -182,7 +182,7 @@ graph LR
 ```
 
 ### 📝 Morgana Prompting System
-*First-class artifacts with layered personality architecture*
+*First-class artifacts with layered personality architecture and structured behavioral policies*
 
 Prompts are not hardcoded strings in Morgana—they are **versioned, maintainable project artifacts** managed through the `IPromptResolverService`. This separation of concerns enables prompt engineering teams to iterate independently from application logic, supporting A/B testing, localization, and behavioral evolution without redeployment.
 
