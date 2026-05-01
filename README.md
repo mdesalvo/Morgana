@@ -1,4 +1,5 @@
 <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-Banner.jpg" alt="Morgana Logo" width="100%" /> 
+<a href="https://www.nuget.org/packages/Morgana.AI"><img src="https://img.shields.io/nuget/dt/Morgana.AI?style=flat&color=9f7aea&logo=nuget&label=Morgana.AI"/></a>&nbsp;&nbsp;
 <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/pulls/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana&color=9f7aea" alt="Morgana (Docker Pulls)"></a>&nbsp;
 <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/pulls/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron&color=9f7aea" alt="Cauldron (Docker Pulls)"></a>&nbsp;
 <a href="https://hub.docker.com/r/mdesalvo/rune"><img src="https://img.shields.io/docker/pulls/mdesalvo/rune?logo=docker&logoColor=white&label=Rune&color=9f7aea" alt="Rune (Docker Pulls)"></a>
