@@ -29,6 +29,17 @@ public class MCPToolAdapter
     /// <summary>
     /// Static cache for executor delegates referenced by DynamicMethod IL.
     /// </summary>
+    /// <remarks>
+    /// DynamicMethod cannot close over local variables the way a lambda can — it has no
+    /// implicit closure object. The only way for IL code to reach a managed object at
+    /// invocation time is to load it from a statically reachable location. This dictionary
+    /// is that anchor: the IL embeds the lookup key as a string literal and calls
+    /// <see cref="GetObjectArrayExecutorFromCache"/> to retrieve the executor at call time.
+    ///
+    /// Keys are deterministic (<c>"{serverLabel}:{toolName}"</c>) so the same compiled wiring
+    /// is reused across all conversations that invoke the same tool on the same server.
+    /// The cache is bounded: one entry per unique tool per MCP server for the process lifetime.
+    /// </remarks>
     private static readonly Dictionary<string, object> executorCache = [];
 
     /// <summary>
@@ -73,8 +84,7 @@ public class MCPToolAdapter
                 Records.ToolDefinition definition = new Records.ToolDefinition(
                     Name: mcpTool.Name,
                     Description: mcpTool.Description ?? "No description available",
-                    Parameters: toolParams
-                );
+                    Parameters: toolParams);
 
                 // Create delegate using parameter type information
                 Delegate toolDelegate = CreateMCPToolDelegate(mcpTool, paramInfos);
@@ -98,7 +108,9 @@ public class MCPToolAdapter
     /// </summary>
     private Delegate CreateMCPToolDelegate(Tool mcpTool, List<MCPParameterInfo> parameters)
     {
-        // For 0 parameters, use simple lambda (no need for complex IL)
+        // 0-parameter tools: a plain lambda is sufficient.
+        // AIFunctionFactory only needs to reflect named parameters when there are parameters to
+        // inspect; with an empty signature there is nothing to name, so no DynamicMethod is needed.
         if (parameters.Count == 0)
         {
             return new Func<Task<object>>(async () =>
@@ -146,17 +158,20 @@ public class MCPToolAdapter
         };
 
         // Wrap executor in DynamicMethod with proper parameter names and types
-        return CreateTypedDelegateWithNamedParameters(executor, parameters);
+        return CreateTypedDelegateWithNamedParameters(executor, parameters, mcpTool.Name);
     }
 
     /// <summary>
-    /// Converts a parameter value to the appropriate format for MCP server.
-    /// Handles type conversions and ensures proper JSON serialization.
+    /// Coerces a runtime parameter value to the CLR type expected by the MCP server.
     /// </summary>
+    /// <remarks>
+    /// Values arriving from the LLM via <c>AIFunction</c> may be boxed strings even when
+    /// the declared type is numeric or boolean, because the LLM produces JSON text that the
+    /// framework deserialises loosely. Explicit coercion here ensures the MCP server receives
+    /// the typed value it declared in its JSON Schema rather than an unexpected string.
+    /// </remarks>
     private object ConvertValueForMCP(object value, MCPParameterInfo paramInfo)
     {
-        // Most types serialize correctly as-is
-        // Special handling for specific cases if needed
         return paramInfo.JsonType.ToLowerInvariant() switch
         {
             "boolean" => value is bool b ? b : bool.Parse(value?.ToString() ?? "false"),
@@ -167,11 +182,24 @@ public class MCPToolAdapter
     }
 
     /// <summary>
-    /// Wraps an object array executor using DynamicMethod to create a method with named, typed parameters.
-    /// This is necessary because AIFunctionFactory requires parameter names and proper types.
-    /// Supports mixed types: string, int, double, bool.
+    /// Wraps an object array executor in a <see cref="DynamicMethod"/> whose signature has
+    /// the correct parameter names and CLR types required by <c>AIFunctionFactory</c>.
     /// </summary>
-    private Delegate CreateTypedDelegateWithNamedParameters(Func<object[], Task<object>> executor, List<MCPParameterInfo> parameters)
+    /// <remarks>
+    /// <c>AIFunctionFactory.Create</c> uses reflection to read parameter names from
+    /// <c>MethodInfo.GetParameters()</c>. A plain <c>Func&lt;object[], Task&lt;object&gt;&gt;</c>
+    /// exposes only a single anonymous <c>object[]</c> parameter, so the factory would not
+    /// see the individual MCP parameter names.
+    ///
+    /// Expression.Lambda was evaluated as an alternative but encountered closure-capture issues
+    /// at runtime with the way AIFunctionFactory inspects the compiled delegate; DynamicMethod
+    /// with explicit <c>DefineParameter</c> calls is the reliable path.
+    ///
+    /// The executor itself cannot be embedded in the IL as a literal — IL only supports
+    /// string/integer/type constants. It is stored in <see cref="executorCache"/> under a
+    /// deterministic key and retrieved by the generated IL at each invocation.
+    /// </remarks>
+    private Delegate CreateTypedDelegateWithNamedParameters(Func<object[], Task<object>> executor, List<MCPParameterInfo> parameters, string toolName)
     {
         // Build delegate type: Func<T1, T2, ..., Task<object>> where T1, T2 are actual CLR types
         Type[] paramTypes = parameters.Select(p => p.ClrType).ToArray();
@@ -191,11 +219,13 @@ public class MCPToolAdapter
         for (int i = 0; i < parameters.Count; i++)
             dynamicMethod.DefineParameter(i + 1, ParameterAttributes.None, parameters[i].Name);
 
-        // Store executor in cache
-        string fieldKey = Guid.NewGuid().ToString();
+        // Deterministic key: server URI + tool name uniquely identify the wiring object.
+        // Prevents unbounded cache growth — one entry per tool per server, regardless of
+        // how many conversations invoke the same tool.
+        string fieldKey = $"{mcpClient.ServerLabel}:{toolName}";
         lock (executorCache)
         {
-            executorCache[fieldKey] = executor;
+            executorCache.TryAdd(fieldKey, executor);
         }
 
         // Generate IL: the remote MCP tool is handled as an equivalent
@@ -237,7 +267,10 @@ public class MCPToolAdapter
     }
 
     /// <summary>
-    /// Helper method called by DynamicMethod IL to retrieve object array executor from cache.
+    /// Retrieves an executor from <see cref="executorCache"/> by key.
+    /// Called exclusively from the IL emitted by <see cref="CreateTypedDelegateWithNamedParameters"/>,
+    /// not from any C# call site — the method must remain non-private and statically reachable
+    /// so the IL <c>call</c> opcode can resolve it.
     /// </summary>
     private static Func<object[], Task<object>> GetObjectArrayExecutorFromCache(string key)
     {
