@@ -93,7 +93,12 @@ public class ConversationManagerActor : MorganaActor
         // Handle termination of watched actors (supervisor).
         // Without this handler Akka throws DeathPactException when the supervisor stops,
         // because the default Unhandled path re-throws Terminated as a fatal exception.
-        Receive<Terminated>(msg => actorLogger.Info("Watched actor terminated: {0}", msg.ActorRef.Path));
+        // Clear the supervisor reference so the next UserMessage doesn't forward to dead letters.
+        Receive<Terminated>(msg =>
+        {
+            actorLogger.Warning("Watched actor terminated: {0}; clearing supervisor reference", msg.ActorRef.Path);
+            supervisor = null;
+        });
     }
 
     /// <summary>
