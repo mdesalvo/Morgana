@@ -16,8 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 - Make Rune exit cleanly when its host terminal is killed brutally, so the container terminates and docker releases `morgana-network` instead of leaving it attached and tripping `compose down` with "_Resource is still in use_"
-- Handle `Terminated` message in `ConversationManagerActor` to prevent `DeathPactException`
-- Address unbounded linear growth of `MCPToolAdapter.executorCache` size
+- Handle `Terminated` message in `ConversationManagerActor` to prevent `DeathPactException
+- Prevent unbounded linear growth of `MCPToolAdapter.executorCache`
+- Dispose open OTel spans in `ConversationSupervisorActor.PostStop`
 
 ### 🚀 Future Enablement
 

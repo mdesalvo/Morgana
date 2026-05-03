@@ -834,5 +834,33 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Records.RestoreAgentResponse>(HandleRestoreAgentResponse);
     }
 
+    /// <summary>
+    /// Disposes any OTel spans that are still open when the actor stops.
+    /// Without this, a conversation terminated mid-turn (e.g. via the /end endpoint or a
+    /// supervision failure) leaks <see cref="Activity"/> objects for the lifetime of the process.
+    /// Child spans (guard, classifier) are disposed before the parent turn span.
+    /// </summary>
+    protected override void PostStop()
+    {
+        if (guardSpan is not null)
+        {
+            guardSpan.SetStatus(ActivityStatusCode.Error, "actor stopped mid-turn");
+            guardSpan.Dispose();
+            guardSpan = null;
+        }
+
+        if (classifierSpan is not null)
+        {
+            classifierSpan.SetStatus(ActivityStatusCode.Error, "actor stopped mid-turn");
+            classifierSpan.Dispose();
+            classifierSpan = null;
+        }
+
+        CloseTurnSpan(ActivityStatusCode.Error, "actor stopped mid-turn", intent: activeAgentIntent, completed: false);
+
+        actorLogger.Info($"ConversationSupervisorActor stopped for {conversationId}");
+        base.PostStop();
+    }
+
     #endregion
 }
