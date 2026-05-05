@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
-- Raised Rune's `MaxMessageLength` budget capability to 500
+- Bumped Rune's `MaxMessageLength` budget capability to 500
 - Updated `Microsoft.Agents.AI` dependency to 1.4.0
 - Updated `Microsoft.IdentityModel.JsonWebTokens` to 8.18.0
 
