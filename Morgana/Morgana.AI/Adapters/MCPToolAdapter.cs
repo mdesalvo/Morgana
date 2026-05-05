@@ -292,7 +292,8 @@ public class MCPToolAdapter
         List<Records.ToolParameter> toolParams = [];
         List<MCPParameterInfo> paramInfos = [];
 
-        // InputSchema is JsonElement (struct), check if it has properties
+        // JsonElement is a struct — it cannot be null. ValueKind is the correct way to
+        // detect an absent or empty schema before attempting property enumeration.
         if (mcpTool.InputSchema.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
             return (toolParams, paramInfos);
 

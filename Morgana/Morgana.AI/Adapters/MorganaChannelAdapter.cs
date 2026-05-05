@@ -263,6 +263,8 @@ public class MorganaChannelAdapter
         {
             if (sb.Length > 0)
                 sb.AppendLine().AppendLine();
+            // Inline quick replies as plain prose for channels that have no button widget.
+            // The "Options: A / B / C" format keeps them scannable without any markdown.
             sb.Append("Options: ");
             sb.Append(string.Join(" / ", channelMessage.QuickReplies.Select(r => r.Label)));
         }

@@ -139,6 +139,10 @@ public class MorganaToolAdapter
         string requestGuidance = globalPolicies.FirstOrDefault(p =>
             string.Equals(p.Name, "ToolParameterRequestGuidance", StringComparison.OrdinalIgnoreCase))?.Description ?? "";
 
+        // Build a name→description map enriched with scope guidance.
+        // AIFunctionFactory.Create reads AdditionalProperties to override the per-parameter
+        // description it would otherwise infer from the delegate's ParameterInfo, so the LLM
+        // sees the full guidance text rather than the raw delegate parameter name.
         Dictionary<string, object?> additionalProperties = [];
         foreach (Records.ToolParameter parameter in definition.Parameters)
         {

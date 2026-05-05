@@ -198,6 +198,9 @@ public class MorganaAgentAdapter
     {
         StringBuilder sb = new StringBuilder();
 
+        // Critical before Operational (Type), then ascending Priority within each type.
+        // The LLM reads the system prompt top-to-bottom, so P0 Critical constraints must
+        // appear before P0 Operational guidance — the order is load-bearing for compliance.
         foreach (Records.GlobalPolicy policy in policies.OrderBy(p => p.Type)
                                                         .ThenBy(p => p.Priority))
         {
@@ -364,6 +367,10 @@ public class MorganaAgentAdapter
                 continue;
             }
 
+            // Build a strongly-typed delegate whose exact Func<…> type is computed from
+            // the method's own ParameterInfo at runtime: tool signatures are declared in
+            // JSON configuration and bound to implementations via reflection, so the
+            // concrete delegate type is unknowable at compile time.
             Delegate toolImplementation = Delegate.CreateDelegate(
                 System.Linq.Expressions.Expression.GetDelegateType(
                     method.GetParameters().Select(p => p.ParameterType)
