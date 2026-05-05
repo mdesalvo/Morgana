@@ -11,13 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 - Raised Rune's `MaxMessageLength` budget capability to 500
-- Updated `Microsoft.Agents.AI` dependency to 1.3.0
+- Updated `Microsoft.Agents.AI` dependency to 1.4.0
 - Updated `Microsoft.IdentityModel.JsonWebTokens` to 8.18.0
 
 ### 🐛 Fixed
 - Make Rune exit cleanly when its host terminal is killed brutally, so the container terminates and docker releases `morgana-network` instead of leaving it attached and tripping `compose down` with "_Resource is still in use_"
 - Handle `Terminated` message in `ConversationManagerActor` to prevent `DeathPactException
-- Prevent unbounded linear growth of `MCPToolAdapter.executorCache`
+- Unbounded growth of MCP executor cache
 - Dispose open OTel spans in `ConversationSupervisorActor.PostStop`
 
 ### 🚀 Future Enablement
