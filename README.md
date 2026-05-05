@@ -3,7 +3,7 @@
 </a>
 
 <p>
-  <img src="https://img.shields.io/badge/.NET-10-932BD4?logo=dotnet" alt=".NET 10"/>
+  <img src="https://img.shields.io/badge/.NET-10-932BD4" alt=".NET 10"/>
   <img src="https://img.shields.io/badge/Akka.NET-932BD4?logo=nuget" alt="Akka.NET"/>
   <img src="https://img.shields.io/badge/Microsoft.Agents.AI-932BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
   <img src="https://img.shields.io/badge/Microsoft.Extensions.AI-932BD4?logo=nuget" alt="Microsoft.Extensions.AI"/>
