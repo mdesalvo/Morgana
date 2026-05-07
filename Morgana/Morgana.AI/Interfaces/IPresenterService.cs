@@ -33,9 +33,14 @@ public interface IPresenterService
     /// Filtered list of intents to present to the user (already excludes <c>"other"</c>
     /// and intents without a <c>Label</c>). Implementations use these to build quick reply buttons.
     /// </param>
+    /// <param name="conversationId">
+    /// Identifier of the conversation. The implementation is free to use it for channel-aware
+    /// behaviour (e.g. resolving channel metadata to drive a per-channel cache); callers stay
+    /// agnostic of any such mechanism.
+    /// </param>
     /// <returns>
     /// A <see cref="Records.PresentationResult"/> containing the welcome message and the
     /// quick reply buttons to render in the UI. Never null; never throws.
     /// </returns>
-    Task<Records.PresentationResult> GenerateAsync(IReadOnlyList<Records.IntentDefinition> displayableIntents);
+    Task<Records.PresentationResult> GenerateAsync(IReadOnlyList<Records.IntentDefinition> displayableIntents, string conversationId);
 }

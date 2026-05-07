@@ -192,7 +192,7 @@ public class ConversationSupervisorActor : MorganaActor
         Records.IntentCollection intentCollection = new Records.IntentCollection(allIntents);
         List<Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
 
-        Records.PresentationResult result = await presenterService.GenerateAsync(displayableIntents);
+        Records.PresentationResult result = await presenterService.GenerateAsync(displayableIntents, conversationId);
         Self.Tell(new Records.PresentationContext(result.Message, displayableIntents)
         {
             LLMQuickReplies = result.QuickReplies
