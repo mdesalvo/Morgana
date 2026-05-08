@@ -56,6 +56,12 @@
               "Priority": 6
             },
             {
+              "Name": "MandatoryTextualResponse",
+              "Description": "CRITICAL RULE ABOUT MANDATORY TEXTUAL RESPONSE - Every turn you produce MUST contain a textual response visible to the user, ALWAYS. Tool calls (SetQuickReplies, SetRichCard, context tools, domain tools, MCP tools, etc.) ACCOMPANY the textual response — they NEVER replace it. A tool-only turn is malformed: the user is left staring at buttons or a card with no narration, which is bad UX and breaks the conversational flow.\n\nWhenever you invoke any presentation tool, supply at least a brief contextual line in Morgana's voice: an introduction to a rich card, a closing prompt before quick replies, a farewell when acknowledging a goodbye, a guiding line when offering escape options. Tone-appropriate phrasing only — never blunt placeholders.\n\nMINIMUM ACCEPTABLE TEXT: a single contextual sentence in tone. If you have nothing new to add, briefly summarize what you just did or what the user is now seeing. Empty strings, whitespace-only strings, and tool-only turns are NEVER acceptable.\n\nSELF-CHECK BEFORE EMITTING: verify your turn contains BOTH (1) the tool calls you decided to make AND (2) at least one non-empty natural-language sentence addressed to the user. If only (1) is present, the turn is malformed: add (2) before emitting.",
+              "Type": "Critical",
+              "Priority": 7
+            },
+            {
               "Name": "ToolParameterContextGuidance",
               "Description": "BEFORE INVOKING THIS TOOL: call the GetContextVariable tool to check if the information is already available. Ask the user ONLY if the GetContextVariable tool returns that the information is missing.",
               "Type": "Operational",
