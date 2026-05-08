@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Handle `Terminated` message in `ConversationManagerActor` to prevent `DeathPactException
 - Solved memory leak of unbounded growth of MCP executor cache
 - Solved memory leak of undisposed OTel spans in `ConversationSupervisorActor.PostStop`
+- Make `AnthropicLLM` work again by addressing `no-prefill in trailing message` limitations characterizing Claude 4.6+ models
 
 ### 🚀 Future Enablement
 

@@ -192,14 +192,15 @@ builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
 builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
+    ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
     string llmProvider = builder.Configuration["Morgana:LLM:Provider"]!;
 
     return llmProvider.ToLowerInvariant() switch
     {
-        "anthropic"   => new Morgana.AI.Abstractions.Anthropic(config, promptResolver),
-        "azureopenai" => new Morgana.AI.Abstractions.AzureOpenAI(config, promptResolver),
-        "ollama"      => new Morgana.AI.Abstractions.Ollama(config, promptResolver),
-        "openai"      => new Morgana.AI.Abstractions.OpenAI(config, promptResolver),
+        "anthropic"   => new Morgana.AI.Abstractions.LLMs.Anthropic(config, promptResolver, loggerFactory),
+        "azureopenai" => new Morgana.AI.Abstractions.LLMs.AzureOpenAI(config, promptResolver),
+        "ollama"      => new Morgana.AI.Abstractions.LLMs.Ollama(config, promptResolver),
+        "openai"      => new Morgana.AI.Abstractions.LLMs.OpenAI(config, promptResolver),
         _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'Anthropic', 'AzureOpenAI', 'Ollama', 'OpenAI'")
     };
 });
