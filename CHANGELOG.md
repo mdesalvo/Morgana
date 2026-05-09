@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Solve memory leak due to unbounded growth of MCP executor cache
 - Solve memory leak due to undisposed OTel spans in `ConversationSupervisorActor.PostStop`
 - Make `Anthropic` resilient against `no-prefill in trailing message` limitations of Claude 4.6+ models
+- Reinforce `ToolParameterContextGuidance` with explicit no-shortcut clause
+- Filter intermediate tool-use assistant messages from rendered history
 
 ### 🚀 Future Enablement
 
