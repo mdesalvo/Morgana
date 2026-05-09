@@ -10,7 +10,7 @@ namespace Morgana.AI.Abstractions.LLMs;
 
 /// <summary>
 /// Anthropic implementation of ILLMService.<br/>
-/// Supports Claude models (claude-opus-4-5, claude-sonnet-4-5, ...)
+/// Supports Claude models (claude-opus-4-6, claude-sonnet-4-6, ...)
 /// </summary>
 /// <remarks>
 /// <para><strong>Configuration (appsettings.json):</strong></para>
@@ -21,7 +21,7 @@ namespace Morgana.AI.Abstractions.LLMs;
 ///       "Provider": "anthropic",
 ///       "Anthropic": {
 ///         "ApiKey": "sk-ant-...",
-///         "Model": "claude-sonnet-4-5"
+///         "Model": "claude-sonnet-4-6"
 ///       }
 ///     }
 ///   }
