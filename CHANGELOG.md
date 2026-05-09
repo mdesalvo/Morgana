@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 - Save LLM costs by caching the initial Morgana presentation once per-channel
-- Greatly reduced `Anthropic` costs by caching static system prompts (especially for agents)
+- Greatly reduced `Anthropic` costs by caching system prompts (especially for agents)
 - Adopt `Microsoft.Extensions.AI.OpenTelemetryChatClient` for automatic `gen_ai.*` chat-client telemetry across every LLM provider
 - Bumped Rune's `MaxMessageLength` budget capability to 500
 - Updated `Microsoft.Agents.AI` dependency to 1.4.0
