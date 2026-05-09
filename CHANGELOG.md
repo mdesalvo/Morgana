@@ -11,10 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 - Save LLM costs by caching Morgana presentation message once per-channel
-- Dramatically reduce `Anthropic` costs by exploiting system prompt caching
-- Replace cross-agent in-memory broadcast with conversation-scoped `shared_context` table
-- Adopt `OpenTelemetryChatClient` for automatic `gen_ai.*` telemetry across every LLM provider
-- Reinforce `ToolParameterContextGuidance` with explicit no-shortcut clause
+- Dramatically reduce `Anthropic` costs by exploiting **system prompt caching**
+- Replace router-mediated in-memory context broadcast with conversation-scoped `shared_context` table
+- Use `OpenTelemetryChatClient` to get automatic `gen_ai.*` telemetry across LLM providers
 - Bump Rune's `MaxMessageLength` advertised budget capability to 500
 - Updated `Microsoft.Agents.AI` dependency to 1.4.0
 - Updated `Microsoft.IdentityModel.JsonWebTokens` to 8.18.0
