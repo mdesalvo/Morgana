@@ -48,6 +48,20 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     public override IReadOnlyList<string> StateKeys => [ nameof(MorganaChatHistoryProvider) ];
 
     /// <summary>
+    /// Key written into <see cref="ChatMessage.AdditionalProperties"/> by <c>MorganaAgent</c>
+    /// at end-of-turn to mark the LAST assistant message of that turn as the user-facing one.
+    /// Read by <c>SQLiteConversationPersistenceService.GetConversationHistoryAsync</c> to filter
+    /// out intermediate tool-calling assistant messages when rendering history on resume.
+    /// </summary>
+    /// <remarks>
+    /// Provider-agnostic: the marker reflects Morgana's notion of "user-facing turn boundary",
+    /// not anything LLM-specific. The presence/absence of the flag is decided by the framework,
+    /// so the history reconciliation algorithm does not need to know about tool-use protocol
+    /// details across providers.
+    /// </remarks>
+    public const string UserFacingMarkerKey = "morgana:user_facing";
+
+    /// <summary>
     /// Initializes a new singleton instance of <see cref="MorganaChatHistoryProvider"/>.
     /// </summary>
     /// <param name="agentIntent">Agent intent label (e.g. "billing") used in log output.</param>

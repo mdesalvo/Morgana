@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Providers;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Services;
@@ -344,7 +345,11 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                     jsonSerializerOptions) ?? throw new InvalidOperationException(
                         $"Failed to deserialize Messages for agent {agentName} in conversation {conversationId}");
 
-                // Add all messages with agent metadata
+                // Add all messages with agent metadata.
+                // Filtering of intermediate (non-user-facing) assistant messages happens later in
+                // ProcessMessagesForHistory, AFTER the SetRichCard / SetQuickReplies extraction
+                // passes, so widgets attached to intermediate messages survive the filter and get
+                // bound to the surviving final assistant message of the turn.
                 allMessages.AddRange(
                     chatMessages.Select(message => (agentName, agentCompleted, message)));
             }
@@ -682,6 +687,17 @@ CREATE TABLE IF NOT EXISTS channel_metadata (
         int msgIndex = 0;
         bool isLastHistoryMessage = false;
 
+        // Set of agents whose persisted history carries at least one user_facing marker. Within
+        // those agents we filter out intermediate (non-user-facing) assistant messages so the
+        // tool-use scratchpad doesn't appear in the rendered transcript on resume. Agents whose
+        // sessions have no marker (e.g. persisted before this feature shipped) follow the legacy
+        // path: every assistant message is rendered, just like before.
+        HashSet<string> markedAgents = allMessages
+            .Where(m => m.message.Role == ChatRole.Assistant
+                     && m.message.AdditionalProperties?.ContainsKey(MorganaChatHistoryProvider.UserFacingMarkerKey) == true)
+            .Select(m => m.agentName)
+            .ToHashSet();
+
         // NOTE: the MEAI SummarizingChatReducer annotates the anchor message with
         // `AdditionalProperties["__summary__"]` when it reduces the view for the LLM.
         // That anchor is a real, user-visible turn — it must NOT be filtered out here,
@@ -732,6 +748,17 @@ CREATE TABLE IF NOT EXISTS channel_metadata (
 
             // Skip message if it contains any tool calls
             if (chatMessageHasToolCalls)
+                continue;
+
+            // Skip intermediate assistant messages (non-user-facing) for agents that carry the
+            // user_facing marker on at least one message. The widgets already extracted in
+            // Pass 1A/1B above (and the SetRichCard/SetQuickReplies pending CallIds tracked just
+            // a few lines above) are unaffected — the SetRichCard message itself was skipped via
+            // the chatMessageHasToolCalls path, so its CallId is already in flight to be attached
+            // to the surviving final assistant of the turn.
+            if (chatMessage.Role == ChatRole.Assistant
+             && markedAgents.Contains(agentName)
+             && chatMessage.AdditionalProperties?.ContainsKey(MorganaChatHistoryProvider.UserFacingMarkerKey) != true)
                 continue;
 
             // Process messages with text content

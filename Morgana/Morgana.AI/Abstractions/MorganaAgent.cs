@@ -327,6 +327,21 @@ public class MorganaAgent : MorganaActor
             agentSpan?.SetTag(MorganaTelemetry.AgentResponsePreview, responsePreview);
             agentSpan?.Dispose();
 
+            // Tag the LAST assistant message of this turn as user-facing.
+            // The Anthropic / OpenAI / etc. tool-use protocol persists one assistant message per
+            // tool-calling round (text + tool_call → tool_result → text + tool_call → ... → final
+            // text). Only the last is the answer the user actually saw; the earlier ones are
+            // scratchpad. The marker lets GetConversationHistoryAsync filter them out on resume
+            // without having to learn provider-specific message shapes.
+            ChatMessage? finalAssistantMessage = aiChatHistoryProvider
+                .GetMessages(aiAgentSession)
+                .LastOrDefault(m => m.Role == ChatRole.Assistant);
+            if (finalAssistantMessage is not null)
+            {
+                finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+                finalAssistantMessage.AdditionalProperties[MorganaChatHistoryProvider.UserFacingMarkerKey] = true;
+            }
+
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
             agentLogger.LogInformation("Saved conversation state for {AgentIdentifier}", AgentIdentifier);
 
