@@ -11,17 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 - Save LLM costs by caching the initial Morgana presentation once per-channel
-- Greatly reduced `Anthropic` costs by caching system prompts (especially for agents)
+- Reduce `Anthropic` costs by hinting SDK for system prompt caching (especially for agents)
 - Adopt `Microsoft.Extensions.AI.OpenTelemetryChatClient` for automatic `gen_ai.*` chat-client telemetry across every LLM provider
-- Bumped Rune's `MaxMessageLength` budget capability to 500
+- Bump Rune's `MaxMessageLength` budget capability to 500
 - Updated `Microsoft.Agents.AI` dependency to 1.4.0
 - Updated `Microsoft.IdentityModel.JsonWebTokens` to 8.18.0
 
 ### 🐛 Fixed
 - Make Rune exit cleanly when its host terminal is killed brutally, so the container terminates and docker releases `morgana-network` instead of leaving it attached and tripping `compose down` with "_Resource is still in use_"
 - Handle `Terminated` message in `ConversationManagerActor` to prevent `DeathPactException
-- Solved memory leak due to unbounded growth of MCP executor cache
-- Solved memory leak due to undisposed OTel spans in `ConversationSupervisorActor.PostStop`
+- Solve memory leak due to unbounded growth of MCP executor cache
+- Solve memory leak due to undisposed OTel spans in `ConversationSupervisorActor.PostStop`
 - Make `Anthropic` resilient against `no-prefill in trailing message` limitations of Claude 4.6+ models
 
 ### 🚀 Future Enablement
