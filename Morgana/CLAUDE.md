@@ -31,7 +31,7 @@ Morgana/
 | `Attributes/` | `[HandlesIntent]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]` |
 | `Extensions/` | `ActorSystemExtensions` — C# 14 `extension(ActorSystem)` syntax for `GetOrCreateActorAsync<T>` and `GetOrCreateAgentAsync(Type)` |
 | `Interfaces/` | All service contracts (see Service layer below) |
-| `Providers/` | `MorganaAIContextProvider` (per-agent context variables with shared-variable broadcast), `MorganaChatHistoryProvider` (chat history with optional summarizing reducer) |
+| `Providers/` | `MorganaAIContextProvider` (per-agent context variables, with cross-agent shared variables persisted in the conversation-scoped `shared_context` registry), `MorganaChatHistoryProvider` (chat history with optional summarizing reducer) |
 | `Services/` | Default implementations of all interfaces |
 | `Telemetry/` | `MorganaTelemetry` (ActivitySource, metrics), `OpenTelemetryExtensions` |
 | `Records.cs` | All immutable record types (DTOs) for actor messages, configuration, rich cards, channel capabilities |
@@ -73,7 +73,7 @@ ConversationManagerActor          ← entry point, lifecycle, channel metadata p
   └── ConversationSupervisorActor ← FSM orchestrator (5 states)
         ├── GuardActor            ← content moderation (IGuardRailService)
         ├── ClassifierActor       ← intent classification (IClassifierService)
-        └── RouterActor           ← intent→agent routing + context broadcast
+        └── RouterActor           ← intent→agent routing
               ├── BillingAgent
               ├── ContractAgent
               └── MonkeyAgent
@@ -106,7 +106,7 @@ When an agent signals `IsCompleted = false` (detected via `#INT#` token, trailin
 
 ### Inter-agent shared context
 
-Tools with `Shared: true` parameters trigger broadcast via `RouterActor.BroadcastContextUpdate` → all sibling agents receive `ReceiveContextUpdate` and merge values into their `MorganaAIContextProvider` (first-write-wins strategy). Example: `userId` set by BillingAgent is available to ContractAgent without re-asking.
+Tools with `Shared: true` parameters route their values into a conversation-scoped `shared_context` registry persisted alongside the agent sessions in the per-conversation SQLite DB. Writes go through `IConversationPersistenceService.UpsertSharedVariableAsync` (first-write-wins enforced via `INSERT OR IGNORE`); every agent calls `LoadSharedVariablesAsync` at the start of each turn and merges the result into its own `MorganaAIContextProvider` (first-write-wins again on the local merge: existing local values are not overwritten). Example: `userId` set by BillingAgent is available to ContractAgent without re-asking, even if Contract is activated for the first time after Billing's actor has been decommissioned.
 
 ## Service Layer
 

@@ -99,7 +99,9 @@ public class MorganaTool
 
     /// <summary>
     /// Stores a variable in the agent's conversation context.
-    /// If the variable is declared as shared in configuration, it is automatically broadcast to sibling agents.
+    /// If the variable is declared as shared in configuration, it is automatically persisted in
+    /// the conversation-scoped <c>shared_context</c> registry so other agents of the same
+    /// conversation can hydrate it on their next turn.
     /// </summary>
     /// <param name="variableName">Name of the variable to set (e.g. "userId", "invoiceId").</param>
     /// <param name="variableValue">Value to store.</param>

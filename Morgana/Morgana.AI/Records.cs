@@ -593,30 +593,6 @@ public static class Records
         string Text);
 
     // ==========================================================================
-    // AGENT COMMUNICATION MESSAGES
-    // ==========================================================================
-
-    /// <summary>
-    /// Message sent by an agent to RouterActor to broadcast shared context variables to all other agents.
-    /// Enables cross-agent coordination by sharing information like userId across agents.
-    /// </summary>
-    /// <param name="SourceAgentIntent">Intent name of the agent broadcasting the update (e.g., "billing")</param>
-    /// <param name="UpdatedValues">Dictionary of variable names and values to broadcast</param>
-    public record BroadcastContextUpdate(
-        string SourceAgentIntent,
-        Dictionary<string, object> UpdatedValues);
-
-    /// <summary>
-    /// Message sent by RouterActor to agents to notify them of shared context updates from other agents.
-    /// Agents merge these updates into their local context using first-write-wins strategy.
-    /// </summary>
-    /// <param name="SourceAgentIntent">Intent name of the agent that originated the update</param>
-    /// <param name="UpdatedValues">Dictionary of variable names and values to merge</param>
-    public record ReceiveContextUpdate(
-        string SourceAgentIntent,
-        Dictionary<string, object> UpdatedValues);
-
-    // ==========================================================================
     // HTTP REQUEST/RESPONSE MODELS
     // ==========================================================================
 
@@ -1535,8 +1511,9 @@ public static class Records
     /// Parameter scope: "context" (retrieve via GetContextVariable) or "request" (use directly from user input)
     /// </param>
     /// <param name="Shared">
-    /// Whether this context variable should be broadcast to other agents.
-    /// Only applies when Scope="context". Default: false.
+    /// Whether this context variable should be persisted in the conversation-scoped
+    /// <c>shared_context</c> registry so other agents of the same conversation can hydrate it
+    /// at the start of their next turn. Only applies when Scope="context". Default: false.
     /// </param>
     public record ToolParameter(
         string Name,

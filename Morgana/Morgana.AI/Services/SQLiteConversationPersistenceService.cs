@@ -496,6 +496,117 @@ WHERE id = 1;
         }
     }
 
+    /// <inheritdoc/>
+    public async Task UpsertSharedVariableAsync(string conversationId, string variableName, object variableValue, string sourceAgentIntent)
+    {
+        try
+        {
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
+
+            // First-writer pattern: a shared variable can be written before the agent has saved
+            // its first session, so the schema must be guaranteed before the upsert.
+            await EnsureDatabaseInitializedAsync(sqliteConnection);
+
+            // Serialize the value as JSON, then encrypt for at-rest parity with agent_session.
+            // Shared variables are typically short strings (e.g. userId), so the overhead is
+            // negligible and the encryption keeps the on-disk shape coherent across the schema.
+            string serialized = JsonSerializer.Serialize(variableValue);
+            byte[] encrypted = Encrypt(serialized);
+
+            // INSERT OR IGNORE enforces first-write-wins at the storage layer. The first agent
+            // to claim a variable name owns it for the lifetime of the conversation; subsequent
+            // upserts (from this agent or any other) silently no-op. This mirrors the first-wins
+            // rule that MorganaAIContextProvider.MergeSharedContext applies on the read side at
+            // hydration time.
+            await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+            sqliteCommand.CommandText =
+                """
+                INSERT OR IGNORE INTO shared_context
+                    (variable_name, variable_value, source_agent_intent, last_update)
+                VALUES (@variable_name, @variable_value, @source_agent_intent, @last_update);
+                """;
+            sqliteCommand.Parameters.AddWithValue("@variable_name", variableName);
+            sqliteCommand.Parameters.AddWithValue("@variable_value", encrypted);
+            sqliteCommand.Parameters.AddWithValue("@source_agent_intent", sourceAgentIntent);
+            sqliteCommand.Parameters.AddWithValue("@last_update", DateTime.UtcNow.ToString("O"));
+
+            int rowsAffected = await sqliteCommand.ExecuteNonQueryAsync();
+
+            logger.LogInformation(
+                rowsAffected > 0
+                    ? "Shared variable '{VariableName}' persisted by '{Source}' for conversation {ConversationId} (first writer)"
+                    : "Shared variable '{VariableName}' from '{Source}' for conversation {ConversationId} ignored (already claimed by an earlier writer)",
+                variableName, sourceAgentIntent, conversationId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to upsert shared variable '{VariableName}' for conversation {ConversationId}", variableName, conversationId);
+            throw;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<Dictionary<string, object>> LoadSharedVariablesAsync(string conversationId)
+    {
+        try
+        {
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            string sqliteDbPath = GetDatabasePath(conversationId);
+
+            // No DB → no shared variables. The conversation may simply have not started yet,
+            // or the channel handshake may be the only thing that has run so far.
+            if (!File.Exists(sqliteDbPath))
+                return [];
+
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
+
+            await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+            sqliteCommand.CommandText = "SELECT variable_name, variable_value FROM shared_context;";
+
+            Dictionary<string, object> sharedVariables = new();
+            await using SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync();
+            while (await sqliteDataReader.ReadAsync())
+            {
+                string variableName = (string)sqliteDataReader["variable_name"];
+                byte[] encrypted = (byte[])sqliteDataReader["variable_value"];
+
+                string decrypted = Decrypt(encrypted);
+                JsonElement element = JsonSerializer.Deserialize<JsonElement>(decrypted);
+
+                // Convert back to a "natural" .NET value so callers (and the LLM via
+                // GetContextVariable) see the same shape that was originally written. Without
+                // this unwrap, primitives would round-trip as JsonElement and the framework's
+                // tool-result serialiser would re-encode them with extra JSON wrapping.
+                object? value = element.ValueKind switch
+                {
+                    JsonValueKind.String => element.GetString(),
+                    JsonValueKind.Number => element.TryGetInt64(out long l) ? (object)l : element.GetDouble(),
+                    JsonValueKind.True   => true,
+                    JsonValueKind.False  => false,
+                    JsonValueKind.Null   => null,
+                    _                    => element, // arrays/objects: keep as JsonElement
+                };
+                if (value is not null)
+                    sharedVariables[variableName] = value;
+            }
+
+            return sharedVariables;
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 1) // SQLITE_ERROR (table missing on legacy DB)
+        {
+            logger.LogInformation("shared_context table missing for conversation {ConversationId} (legacy DB), returning empty registry", conversationId);
+            return [];
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to load shared variables for conversation {ConversationId}", conversationId);
+            throw;
+        }
+    }
+
     #region Utilities
 
     /// <summary>
@@ -541,10 +652,12 @@ WHERE id = 1;
         checkCommand.CommandText = "PRAGMA user_version;";
         long currentVersion = (long)(await checkCommand.ExecuteScalarAsync() ?? 0L);
 
-        if (currentVersion >= 3)
+        if (currentVersion >= 4)
             return; // Already initialized
 
-        // Create schema
+        // Create schema. CREATE TABLE IF NOT EXISTS makes this safe to run on databases that
+        // are already at v3 — the existing tables are left intact and only shared_context (the
+        // v4 addition) is created.
         await using SqliteCommand schemaCommand = connection.CreateCommand();
         schemaCommand.CommandText =
 """
@@ -572,16 +685,23 @@ CREATE TABLE IF NOT EXISTS channel_metadata (
     supports_markdown      INTEGER NOT NULL,
     max_message_length     INTEGER NULL
 );
+
+CREATE TABLE IF NOT EXISTS shared_context (
+    variable_name        TEXT PRIMARY KEY NOT NULL,
+    variable_value       BLOB NOT NULL,
+    source_agent_intent  TEXT NOT NULL,
+    last_update          TEXT NOT NULL
+);
 """;
         await schemaCommand.ExecuteNonQueryAsync();
 
-        // Mark database as initialized (version 3)
+        // Mark database as initialized (version 4)
         await using SqliteCommand versionCommand = connection.CreateCommand();
-        versionCommand.CommandText = "PRAGMA user_version = 3;";
+        versionCommand.CommandText = "PRAGMA user_version = 4;";
         await versionCommand.ExecuteNonQueryAsync();
 
         logger.LogInformation(
-            "Initialized database schema v3 for: {GetFileName}", Path.GetFileName(connection.DataSource));
+            "Initialized database schema v4 for: {GetFileName}", Path.GetFileName(connection.DataSource));
     }
 
     /// <summary>
@@ -746,19 +866,29 @@ CREATE TABLE IF NOT EXISTS channel_metadata (
                 chatMessageHasToolCalls = true;
             }
 
-            // Skip message if it contains any tool calls
-            if (chatMessageHasToolCalls)
+            // Decide whether this assistant message is the user-facing one for its turn. The
+            // marker is set by MorganaAgent at end-of-turn on the last assistant message that
+            // actually carries text — see MorganaAgent.ExecuteAgentAsync.
+            bool isUserFacing = chatMessage.Role == ChatRole.Assistant
+                             && chatMessage.AdditionalProperties?.ContainsKey(MorganaChatHistoryProvider.UserFacingMarkerKey) == true;
+
+            // Tool-call messages are normally skipped because their widgets get attached to a
+            // separate, text-bearing assistant message later in the turn. The user-facing
+            // assistant is the one exception: for layouts where the same message carries BOTH
+            // text and a SetRichCard / SetQuickReplies call (typical of Haiku-class models that
+            // close the turn without emitting a follow-up empty assistant), this message owns
+            // the visible text AND the widgets. Falling through to text rendering keeps them
+            // bound together in a single bubble.
+            if (chatMessageHasToolCalls && !isUserFacing)
                 continue;
 
-            // Skip intermediate assistant messages (non-user-facing) for agents that carry the
-            // user_facing marker on at least one message. The widgets already extracted in
-            // Pass 1A/1B above (and the SetRichCard/SetQuickReplies pending CallIds tracked just
-            // a few lines above) are unaffected — the SetRichCard message itself was skipped via
-            // the chatMessageHasToolCalls path, so its CallId is already in flight to be attached
-            // to the surviving final assistant of the turn.
+            // Skip intermediate assistant messages (no marker) for agents whose session contains
+            // at least one user_facing marker. Widgets that those messages may have introduced
+            // are already in pendingRichCardCallId / pendingQuickRepliesCallId from a few lines
+            // above, ready to be attached to the surviving final assistant.
             if (chatMessage.Role == ChatRole.Assistant
              && markedAgents.Contains(agentName)
-             && chatMessage.AdditionalProperties?.ContainsKey(MorganaChatHistoryProvider.UserFacingMarkerKey) != true)
+             && !isUserFacing)
                 continue;
 
             // Process messages with text content

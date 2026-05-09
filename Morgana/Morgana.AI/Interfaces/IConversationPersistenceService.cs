@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Agents.AI;
+using Morgana.AI.Providers;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Interfaces;
@@ -168,6 +169,51 @@ public interface IConversationPersistenceService
     /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
     /// <returns>The persisted <see cref="Records.ChannelMetadata"/>, or null if absent.</returns>
     Task<Records.ChannelMetadata?> LoadChannelMetadataAsync(string conversationId);
+
+    /// <summary>
+    /// Persists a shared context variable into the conversation-scoped <c>shared_context</c>
+    /// registry. When an agent calls <see cref="MorganaAIContextProvider"/>.<c>SetVariable</c>
+    /// for a variable declared as shared in its tool contracts, the value is written here so
+    /// that any agent in the conversation — whether currently alive, dormant,
+    /// dead-and-rehydrated, or never yet activated — can pick it up at the start of its next
+    /// turn via <see cref="LoadSharedVariablesAsync(string)"/>.
+    /// </summary>
+    /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
+    /// <param name="variableName">Shared variable name (e.g. <c>userId</c>).</param>
+    /// <param name="variableValue">Variable value to persist (typically a string).</param>
+    /// <param name="sourceAgentIntent">Intent of the agent that originated the write (audit/debug only).</param>
+    /// <remarks>
+    /// <para><strong>First-write-wins:</strong> implementations MUST honour first-write semantics
+    /// at the storage level — once a variable name has a value in this registry, subsequent
+    /// upserts with a different value MUST be ignored, mirroring the merge rule that
+    /// <see cref="MorganaAIContextProvider.MergeSharedContext"/> applies on the read side. The
+    /// SQLite implementation uses <c>INSERT OR IGNORE</c> on a primary-key column to achieve this.</para>
+    /// <para><strong>First-writer pattern:</strong> this method may be invoked early in a fresh
+    /// conversation (before the agent has saved its first session). Implementations MUST call
+    /// <see cref="EnsureDatabaseInitializedAsync(string)"/> internally to guarantee the schema
+    /// exists.</para>
+    /// </remarks>
+    Task UpsertSharedVariableAsync(string conversationId, string variableName, object variableValue, string sourceAgentIntent);
+
+    /// <summary>
+    /// Loads all shared context variables that have been written to the conversation-scoped
+    /// <c>shared_context</c> registry up to this point. Called by every agent at the start of
+    /// each turn (after the agent's session is loaded/created) so that variables produced by
+    /// any sibling agent — including ones that no longer exist as live actors — are available
+    /// to the current agent's tools.
+    /// </summary>
+    /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
+    /// <returns>
+    /// Dictionary of variable name → value. Empty dictionary when the conversation has no
+    /// shared variables yet (or when the database does not yet exist).
+    /// </returns>
+    /// <remarks>
+    /// The caller is expected to feed the returned dictionary into
+    /// <see cref="MorganaAIContextProvider.MergeSharedContext"/>, which itself enforces
+    /// first-write-wins on the agent-local side: variables already in the agent's own session
+    /// are not overwritten by the registry.
+    /// </remarks>
+    Task<Dictionary<string, object>> LoadSharedVariablesAsync(string conversationId);
 
     /// <summary>
     /// Reports whether the given conversation is known to the underlying store. Used by the

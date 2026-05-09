@@ -116,8 +116,10 @@ public class MorganaAgentAdapter
     /// May return <c>null</c> at construction time; guaranteed non-null during actual tool execution.
     /// </param>
     /// <param name="sharedContextCallback">
-    /// Optional callback invoked when the agent writes a shared context variable.
-    /// Wire to <see cref="MorganaAgent.OnSharedContextUpdate"/> to broadcast updates via the RouterActor.
+    /// Optional callback invoked when the agent writes a shared context variable. Wire to
+    /// <see cref="MorganaAgent.OnSharedContextUpdate"/>, which persists the value into the
+    /// conversation-scoped <c>shared_context</c> registry so other agents pick it up at the
+    /// start of their next turn.
     /// </param>
     /// <returns>
     /// A tuple of (AIAgent, MorganaAIContextProvider, MorganaChatHistoryProvider) —
@@ -242,13 +244,14 @@ public class MorganaAgentAdapter
 
     /// <summary>
     /// Creates and configures a MorganaAIContextProvider for an agent with shared variable detection.
-    /// Analyzes tool definitions to identify variables that should be broadcast across agents.
+    /// Analyzes tool definitions to identify variables that participate in the conversation-scoped
+    /// shared_context registry.
     /// </summary>
     /// <param name="agentName">Name of the agent for logging purposes (e.g., "billing")</param>
     /// <param name="tools">Tool definitions to scan for shared variable declarations</param>
     /// <param name="sharedContextCallback">
-    /// Optional callback invoked when a shared variable is set.
-    /// Wired to agent's OnSharedContextUpdate for broadcasting to RouterActor.
+    /// Optional callback invoked when a shared variable is set. Wired to agent's
+    /// OnSharedContextUpdate which persists the value via IConversationPersistenceService.
     /// </param>
     /// <returns>Configured MorganaAIContextProvider instance for the agent</returns>
     private MorganaAIContextProvider CreateAIContextProvider(

@@ -8,7 +8,8 @@ namespace Morgana.AI.Providers;
 
 /// <summary>
 /// Manages per-session conversation context variables for a Morgana agent.
-/// Supports cross-agent variable sharing via the RouterActor broadcast mechanism.
+/// Cross-agent variable sharing is delegated to the conversation-scoped <c>shared_context</c>
+/// registry on the persistence layer (see <see cref="OnSharedContextUpdate"/>).
 /// </summary>
 /// <remarks>
 /// <para>One instance is created per agent intent and shared across all sessions of that agent.
@@ -18,7 +19,9 @@ namespace Morgana.AI.Providers;
 /// <para><strong>Key behaviours:</strong></para>
 /// <list type="bullet">
 /// <item><term>Variable storage</term><description>Per-session dictionary persisted inside AgentSession.</description></item>
-/// <item><term>Shared variables</term><description>Variables declared as shared are broadcast to sibling agents via <see cref="OnSharedContextUpdate"/>.</description></item>
+/// <item><term>Shared variables</term><description>Variables declared as shared raise the <see cref="OnSharedContextUpdate"/>
+///     callback, which MorganaAgent wires to a write into the conversation-scoped <c>shared_context</c>
+///     registry on the persistence layer.</description></item>
 /// <item><term>Merge strategy</term><description>First-write-wins: incoming shared values are ignored if the variable is already set locally.</description></item>
 /// </list>
 ///
@@ -28,12 +31,13 @@ namespace Morgana.AI.Providers;
 ///   └── MorganaAIContextProvider (singleton, attached to AIAgent)
 ///         ├── ProviderSessionState&lt;MorganaContextState&gt; → AgentSession (per-session)
 ///         ├── SharedVariableNames (derived from tool definitions at startup)
-///         └── OnSharedContextUpdate → RouterActor broadcast
+///         └── OnSharedContextUpdate → IConversationPersistenceService.UpsertSharedVariableAsync
+///                                      (writes into per-conversation shared_context table)
 ///
 /// MorganaTool
 ///   ├── GetContextVariable → MorganaAIContextProvider.GetVariable(session, name)
 ///   └── SetContextVariable → MorganaAIContextProvider.SetVariable(session, name, value)
-///                                └── triggers broadcast if variable is shared
+///                                └── if Shared → fires OnSharedContextUpdate → DB write
 /// </code>
 /// </remarks>
 public class MorganaAIContextProvider : AIContextProvider
@@ -42,8 +46,9 @@ public class MorganaAIContextProvider : AIContextProvider
     private readonly ILogger logger;
 
     /// <summary>
-    /// Names of variables subject to automatic cross-agent broadcasting.
-    /// Derived from tool definitions (Scope="context", Shared=true) at construction time.
+    /// Names of variables subject to cross-agent persistence in the conversation-scoped
+    /// <c>shared_context</c> registry. Derived from tool definitions (Scope="context",
+    /// Shared=true) at construction time.
     /// </summary>
     private readonly ImmutableHashSet<string> sharedVariableNames;
 
@@ -53,8 +58,9 @@ public class MorganaAIContextProvider : AIContextProvider
     private readonly ProviderSessionState<MorganaContextState> sessionState;
 
     /// <summary>
-    /// Invoked when a shared variable is written.
-    /// Wired by MorganaAgent to broadcast the update to the RouterActor.
+    /// Invoked when a shared variable is written. Wired by MorganaAgent to persist the value
+    /// into the conversation-scoped <c>shared_context</c> registry, where every agent of the
+    /// conversation can hydrate it at the start of its next turn.
     /// </summary>
     public Action<string, object>? OnSharedContextUpdate { get; set; }
 
@@ -68,8 +74,9 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </summary>
     /// <param name="logger">Logger for context operation diagnostics.</param>
     /// <param name="sharedVariableNames">
-    /// Names of variables that should be broadcast to other agents when set.
-    /// Typically extracted from tool definitions where Scope="context" and Shared=true.
+    /// Names of variables that should be persisted into the conversation-scoped
+    /// <c>shared_context</c> registry when set. Typically extracted from tool definitions where
+    /// Scope="context" and Shared=true.
     /// </param>
     /// <param name="jsonSerializerOptions">
     /// JSON serialization options for state persistence.
@@ -114,7 +121,8 @@ public class MorganaAIContextProvider : AIContextProvider
     /// <summary>
     /// Writes a variable to the session's conversation context.
     /// If the variable is declared as shared, <see cref="OnSharedContextUpdate"/> is invoked
-    /// to broadcast the new value to sibling agents via the RouterActor.
+    /// to persist the value into the conversation-scoped <c>shared_context</c> registry where
+    /// other agents can hydrate it on their next turn.
     /// </summary>
     public void SetVariable(AgentSession session, string variableName, object variableValue)
     {
@@ -174,35 +182,6 @@ public class MorganaAIContextProvider : AIContextProvider
 
         if (changed)
             sessionState.SaveState(session, contextState);
-    }
-
-    /// <summary>
-    /// Re-broadcasts all shared variables for a session via <see cref="OnSharedContextUpdate"/>.
-    /// Called after a session is loaded so that sibling agents receive any shared values
-    /// that were established during a previous conversation turn.
-    /// </summary>
-    public void PropagateSharedVariables(AgentSession session)
-    {
-        MorganaContextState contextState = sessionState.GetOrInitializeState(session);
-        int propagatedCount = 0;
-
-        foreach (string sharedVariableName in sharedVariableNames)
-        {
-            if (contextState.Variables.TryGetValue(sharedVariableName, out object? value))
-            {
-                OnSharedContextUpdate?.Invoke(sharedVariableName, value);
-                propagatedCount++;
-
-                logger.LogInformation(
-                    "{MorganaAiContextProviderName} PROPAGATED shared variable '{SharedVariableName}' = '{Value}'", nameof(MorganaAIContextProvider), sharedVariableName, value);
-            }
-        }
-
-        if (propagatedCount > 0)
-        {
-            logger.LogInformation(
-                "{MorganaAiContextProviderName} PROPAGATED {PropagatedCount} shared variables to other agents", nameof(MorganaAIContextProvider), propagatedCount);
-        }
     }
 
     // =========================================================================

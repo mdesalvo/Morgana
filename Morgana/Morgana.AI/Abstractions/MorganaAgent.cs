@@ -52,8 +52,9 @@ public class MorganaAgent : MorganaActor
     protected AgentSession? aiAgentSession;
 
     /// <summary>
-    /// Provider holding per-session variables and the shared-context broadcast callback.
-    /// Tools and inter-agent messages read and write through this provider.
+    /// Provider holding per-session variables and the shared-context write callback that
+    /// persists shared variables into the conversation-scoped registry. Tools read and write
+    /// through this provider.
     /// </summary>
     protected MorganaAIContextProvider aiContextProvider;
 
@@ -73,12 +74,6 @@ public class MorganaAgent : MorganaActor
     /// Logger scoped to this agent instance, used for turn-level diagnostics and tool tracing.
     /// </summary>
     protected readonly ILogger agentLogger;
-
-    /// <summary>
-    /// Shared context variables received before this agent's first session was established.
-    /// Drained and applied at the start of the first <see cref="ExecuteAgentAsync"/> turn.
-    /// </summary>
-    private readonly List<Dictionary<string, object>> pendingContextMerges = [];
 
     /// <summary>
     /// The active <see cref="AgentSession"/> for the current turn.
@@ -102,8 +97,7 @@ public class MorganaAgent : MorganaActor
 
     /// <summary>
     /// Initializes the agent actor and wires message handlers for
-    /// <see cref="Records.AgentRequest"/>, <see cref="Records.ReceiveContextUpdate"/> and
-    /// <see cref="Records.FailureContext"/>.
+    /// <see cref="Records.AgentRequest"/> and <see cref="Records.FailureContext"/>.
     /// </summary>
     /// <param name="conversationId">Conversation this agent is scoped to.</param>
     /// <param name="llmService">LLM service used by the underlying <see cref="AIAgent"/>.</param>
@@ -123,14 +117,14 @@ public class MorganaAgent : MorganaActor
         this.agentLogger = agentLogger;
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
-        Receive<Records.ReceiveContextUpdate>(HandleContextUpdate);
         ReceiveAsync<Records.FailureContext>(HandleAgentFailureAsync);
     }
 
     /// <summary>
     /// Restores a serialized <see cref="AgentSession"/>, including conversation history and context state.
     /// After loading, reconnects the <see cref="MorganaAIContextProvider.OnSharedContextUpdate"/> callback
-    /// and re-broadcasts shared variables to sibling agents.
+    /// so subsequent shared-variable writes from this session land in the conversation-scoped
+    /// <c>shared_context</c> registry.
     /// </summary>
     public virtual async Task<AgentSession> DeserializeSessionAsync(
         JsonElement serializedState,
@@ -138,11 +132,8 @@ public class MorganaAgent : MorganaActor
     {
         aiAgentSession = await aiAgent.DeserializeSessionAsync(serializedState, jsonSerializerOptions);
 
-        // Reconnect the broadcast callback — delegates are not serialized.
+        // Reconnect the shared-write callback — delegates are not serialized.
         aiContextProvider.OnSharedContextUpdate = OnSharedContextUpdate;
-
-        // Re-broadcast shared variables so sibling agents are up to date.
-        aiContextProvider.PropagateSharedVariables(aiAgentSession);
 
         agentLogger.LogInformation("Deserialized AgentSession for conversation {ConversationId}", conversationId);
 
@@ -151,36 +142,30 @@ public class MorganaAgent : MorganaActor
 
     /// <summary>
     /// Callback invoked by <see cref="MorganaAIContextProvider"/> when a shared context variable
-    /// is set. Forwards the update to the RouterActor, which re-broadcasts it to sibling agents.
+    /// is set. Persists the variable to the conversation-scoped <c>shared_context</c> registry so
+    /// that any agent in the conversation — alive, dormant, dead-and-rehydrated, or never yet
+    /// activated — can pick it up at the start of its next turn via
+    /// <see cref="IConversationPersistenceService.LoadSharedVariablesAsync"/>.
     /// </summary>
+    /// <remarks>
+    /// <para>The persistence-based model writes once and lets each interested agent read on
+    /// demand at the start of its next turn. Agents that never become active in a conversation
+    /// pay zero cost; a write reaches an agent only if and when that agent actually runs.</para>
+    /// <para>The persistence layer enforces first-write-wins via <c>INSERT OR IGNORE</c>, mirroring
+    /// the rule that <see cref="MorganaAIContextProvider.MergeSharedContext"/> applies on the
+    /// read side. The call is awaited synchronously inside the actor: SQLite writes are
+    /// sub-millisecond on local storage and the actor processes one message at a time anyway.</para>
+    /// </remarks>
     /// <param name="key">Name of the shared variable.</param>
-    /// <param name="value">Value to propagate.</param>
+    /// <param name="value">Value to persist.</param>
     protected void OnSharedContextUpdate(string key, object value)
     {
-        agentLogger.LogInformation("Agent {AgentIntent} broadcasting shared context variable: {Key}", AgentIntent, key);
+        agentLogger.LogInformation("Agent {AgentIntent} writing shared context variable: {Key}", AgentIntent, key);
 
-        Context.System
-            .ActorSelection($"/user/router-{conversationId}")
-            .Tell(new Records.BroadcastContextUpdate(AgentIntent, new Dictionary<string, object> { [key] = value }));
-    }
-
-    private void HandleContextUpdate(Records.ReceiveContextUpdate msg)
-    {
-        agentLogger.LogInformation(
-            "Agent '{AgentIntent}' received shared context from '{MsgSourceAgentIntent}': {Join}", AgentIntent, msg.SourceAgentIntent, string.Join(", ", msg.UpdatedValues.Keys));
-
-        if (aiAgentSession is null)
-        {
-            // No session yet — queue the merge for the next turn.
-            pendingContextMerges.Add(msg.UpdatedValues);
-
-            agentLogger.LogInformation(
-                $"Agent '{AgentIntent}' queued pending context merge ({pendingContextMerges.Count} total) " +
-                $"from '{msg.SourceAgentIntent}': {string.Join(", ", msg.UpdatedValues.Keys)}");
-            return;
-        }
-
-        aiContextProvider.MergeSharedContext(aiAgentSession, msg.UpdatedValues);
+        // Block the actor briefly to honour first-write-wins ordering: the next inbound message
+        // (e.g. another tool call from the same turn) must observe the previous shared write.
+        persistenceService.UpsertSharedVariableAsync(conversationId, key, value, AgentIntent)
+            .GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -222,16 +207,23 @@ public class MorganaAgent : MorganaActor
             }
             agentSpan?.SetTag(MorganaTelemetry.AgentIdentifier, AgentIdentifier);
 
-            // Apply any shared context merges that arrived before the session existed.
-            if (pendingContextMerges.Count > 0)
+            // Hydrate the agent's local context from the conversation-scoped shared_context
+            // registry. Shared variables produced by any other agent of this conversation —
+            // whether currently alive, dormant, dead-and-rehydrated, or never yet activated —
+            // are stored centrally in the per-conversation DB and pulled here at turn start.
+            // First-write-wins is enforced at two levels:
+            //   1. Storage layer: UpsertSharedVariableAsync uses INSERT OR IGNORE, so once a
+            //      variable name has a value it cannot be replaced by a later writer.
+            //   2. Local merge: MergeSharedContext skips variables already present in this
+            //      agent's own session, so an agent that has set its own value never sees it
+            //      overwritten by a registry entry.
+            Dictionary<string, object> sharedFromRegistry = await persistenceService.LoadSharedVariablesAsync(conversationId);
+            if (sharedFromRegistry.Count > 0)
             {
                 agentLogger.LogInformation(
-                    "Agent '{AgentIntent}' applying {Count} pending context merge(s)", AgentIntent, pendingContextMerges.Count);
-
-                foreach (Dictionary<string, object> pending in pendingContextMerges)
-                    aiContextProvider.MergeSharedContext(aiAgentSession, pending);
-
-                pendingContextMerges.Clear();
+                    "Agent '{AgentIntent}' hydrating {Count} shared variable(s) from registry: {Keys}",
+                    AgentIntent, sharedFromRegistry.Count, string.Join(", ", sharedFromRegistry.Keys));
+                aiContextProvider.MergeSharedContext(aiAgentSession, sharedFromRegistry);
             }
 
             StringBuilder fullResponse = new StringBuilder();
@@ -327,15 +319,19 @@ public class MorganaAgent : MorganaActor
             agentSpan?.SetTag(MorganaTelemetry.AgentResponsePreview, responsePreview);
             agentSpan?.Dispose();
 
-            // Tag the LAST assistant message of this turn as user-facing.
-            // The Anthropic / OpenAI / etc. tool-use protocol persists one assistant message per
-            // tool-calling round (text + tool_call → tool_result → text + tool_call → ... → final
-            // text). Only the last is the answer the user actually saw; the earlier ones are
-            // scratchpad. The marker lets GetConversationHistoryAsync filter them out on resume
-            // without having to learn provider-specific message shapes.
+            // Tag this turn's user-facing assistant message — the LAST assistant message that
+            // actually carries text content. The Anthropic / OpenAI / etc. tool-use protocol
+            // persists one assistant message per tool-calling round (text + tool_call →
+            // tool_result → text + tool_call → ... → final). The visible answer can land on the
+            // very last assistant or, for some models (e.g. Haiku 4.5 after a closing tool_result),
+            // on a slightly earlier one with the trailing assistant left empty. Picking the last
+            // assistant *with text* covers both layouts: an empty trailing assistant is skipped,
+            // and the marker sits on the message whose text is what the user actually saw live.
             ChatMessage? finalAssistantMessage = aiChatHistoryProvider
                 .GetMessages(aiAgentSession)
-                .LastOrDefault(m => m.Role == ChatRole.Assistant);
+                .Where(m => m.Role == ChatRole.Assistant
+                         && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)))
+                .LastOrDefault();
             if (finalAssistantMessage is not null)
             {
                 finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();

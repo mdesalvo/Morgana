@@ -10,13 +10,11 @@ namespace Morgana.AI.Actors;
 /// <summary>
 /// Intent-to-agent routing actor that directs requests to specialized agents based on intent classification.
 /// Maintains a registry of intent-to-agent mappings with lazy agent creation.
-/// Also manages cross-agent context broadcasting for shared state updates.
 /// </summary>
 /// <remarks>
 /// This actor uses on-demand agent creation instead of upfront creation to avoid conflicts
 /// during conversation resume when agents may already exist.
 /// It routes requests using Ask pattern with PipeTo for non-blocking communication.
-/// Supports broadcasting context updates from one agent to all other registered agents.
 /// </remarks>
 public class RouterActor : MorganaActor
 {
@@ -76,12 +74,6 @@ public class RouterActor : MorganaActor
 
         // Forward streaming chunks from agents to supervisor
         Receive<Records.AgentStreamChunk>(HandleAgentStreamChunk);
-
-        // Broadcast context updates from one agent to all other registered agents:
-        // - Used for sharing context variables across agents (e.g., userId from BillingAgent → ContractAgent)
-        // - Excludes source agent from broadcast to avoid self-notification
-        // - Creates agents on-demand if they don't exist yet
-        ReceiveAsync<Records.BroadcastContextUpdate>(HandleBroadcastContextUpdate);
 
         // Handle agent restoration requests from supervisor
         ReceiveAsync<Records.RestoreAgentRequest>(HandleRestoreAgentRequestAsync);
@@ -200,42 +192,6 @@ public class RouterActor : MorganaActor
         {
             actorLogger.Warning($"Received response from unknown agent {agentSender.Path}");
         }
-    }
-
-    /// <summary>
-    /// Handles context update broadcasts from one agent to all other registered agents.
-    /// Creates agents on-demand if they don't exist yet.
-    /// Used for sharing context variables across agents (e.g., userId shared between billing and contract agents).
-    /// </summary>
-    /// <param name="msg">Broadcast message containing source intent and updated context values</param>
-    /// <remarks>
-    /// Excludes the source agent from the broadcast to avoid self-notification.
-    /// Logs the number of agents that received the update.
-    /// </remarks>
-    private async Task HandleBroadcastContextUpdate(Records.BroadcastContextUpdate msg)
-    {
-        actorLogger.Info($"Broadcasting context update from '{msg.SourceAgentIntent}': {string.Join(", ", msg.UpdatedValues.Keys)}");
-
-        int broadcastCount = 0;
-
-        // Get all registered intents and create/get agents for each
-        foreach (string intent in agentResolverService.GetAllIntents())
-        {
-            // Skip source agent
-            if (string.Equals(intent, msg.SourceAgentIntent, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            // Get or create agent for this intent
-            IActorRef? agent = await GetOrCreateAgentForIntent(intent);
-
-            if (agent != null)
-            {
-                agent.Tell(new Records.ReceiveContextUpdate(msg.SourceAgentIntent, msg.UpdatedValues));
-                broadcastCount++;
-            }
-        }
-
-        actorLogger.Info($"Context update broadcast complete: {broadcastCount} agent(s) notified");
     }
 
     /// <summary>
