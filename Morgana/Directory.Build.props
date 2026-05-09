@@ -47,6 +47,7 @@
     <PackageReference Include="Akka" Version="1.5.*" />
     <PackageReference Include="Akka.DependencyInjection" Version="1.5.*" />
     <!-- Agents -->
+    <PackageReference Include="Anthropic" Version="12.17.0" />
     <PackageReference Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
     <PackageReference Include="Microsoft.Agents.AI" Version="1.4.0" />
     <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.4.0" />
