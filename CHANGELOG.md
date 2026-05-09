@@ -10,10 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
-- Save LLM costs by caching Morgana presentation once per-channel
-- Reduce `Anthropic` costs by hinting SDK for exploiting system prompt caching (especially for agents)
-- Adopt `Microsoft.Extensions.AI.OpenTelemetryChatClient` for automatic `gen_ai.*` chat-client telemetry across every LLM provider
-- Bump Rune's `MaxMessageLength` budget capability to 500
+- Save LLM costs by caching Morgana presentation message once per-channel
+- Dramatically reduce `Anthropic` costs by exploiting system prompt caching
+- Adopt `OpenTelemetryChatClient` for automatic `gen_ai.*` telemetry across every LLM provider
+- Reinforce `ToolParameterContextGuidance` with explicit no-shortcut clause
+- Bump Rune's `MaxMessageLength` advertised budget capability to 500
 - Updated `Microsoft.Agents.AI` dependency to 1.4.0
 - Updated `Microsoft.IdentityModel.JsonWebTokens` to 8.18.0
 
@@ -23,7 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Solve memory leak due to unbounded growth of MCP executor cache
 - Solve memory leak due to undisposed OTel spans in `ConversationSupervisorActor.PostStop`
 - Make `Anthropic` resilient against `no-prefill in trailing message` limitations of Claude 4.6+ models
-- Reinforce `ToolParameterContextGuidance` with explicit no-shortcut clause
 - Filter intermediate tool-use assistant messages from rendered history
 
 ### 🚀 Future Enablement
