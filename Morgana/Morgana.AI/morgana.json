@@ -63,7 +63,7 @@
             },
             {
               "Name": "ToolParameterContextGuidance",
-              "Description": "BEFORE INVOKING THIS TOOL: call the GetContextVariable tool to check if the information is already available. Ask the user ONLY if the GetContextVariable tool returns that the information is missing.",
+              "Description": "BEFORE INVOKING THIS TOOL: call the GetContextVariable tool to check if the information is already available. Ask the user ONLY if the GetContextVariable tool returns that the information is missing. NEVER ask the user before this check completes — doing so is a malformed turn.",
               "Type": "Operational",
               "Priority": 0
             },
