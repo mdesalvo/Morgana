@@ -1,6 +1,7 @@
 using System.ClientModel;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
 using OpenAI;
 
@@ -34,15 +35,19 @@ public class OpenAI : MorganaLLM
     /// </summary>
     /// <param name="configuration">Application configuration containing OpenAI key and model</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
+    /// <param name="loggerFactory">Optional logger factory used to instrument the chat client with the MEAI OpenTelemetry decorator.</param>
     public OpenAI(
         IConfiguration configuration,
-        IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
+        IPromptResolverService promptResolverService,
+        ILoggerFactory? loggerFactory = null) : base(configuration, promptResolverService, loggerFactory)
     {
         OpenAIClient openaiClient = new OpenAIClient(
             new ApiKeyCredential(this.configuration["Morgana:LLM:OpenAI:ApiKey"]!));
         string model = this.configuration["Morgana:LLM:OpenAI:Model"]!;
 
-        // Get chat client for specific deployment and wrap with Microsoft.Extensions.AI abstraction
-        chatClient = openaiClient.GetChatClient(model).AsIChatClient();
+        // Get chat client for specific model and wrap with the MEAI OpenTelemetry decorator
+        // for gen_ai.* spans and metrics (input/output tokens, latency, errors).
+        chatClient = WrapWithTelemetry(
+            openaiClient.GetChatClient(model).AsIChatClient());
     }
 }

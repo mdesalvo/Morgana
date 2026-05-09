@@ -2,6 +2,7 @@ using Azure;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Abstractions.LLMs;
@@ -35,16 +36,20 @@ public class AzureOpenAI : MorganaLLM
     /// </summary>
     /// <param name="configuration">Application configuration containing Azure endpoint, key, and deployment</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
+    /// <param name="loggerFactory">Optional logger factory used to instrument the chat client with the MEAI OpenTelemetry decorator.</param>
     public AzureOpenAI(
         IConfiguration configuration,
-        IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
+        IPromptResolverService promptResolverService,
+        ILoggerFactory? loggerFactory = null) : base(configuration, promptResolverService, loggerFactory)
     {
         AzureOpenAIClient azureClient = new AzureOpenAIClient(
             new Uri(this.configuration["Morgana:LLM:AzureOpenAI:Endpoint"]!),
             new AzureKeyCredential(this.configuration["Morgana:LLM:AzureOpenAI:ApiKey"]!));
         string deploymentName = this.configuration["Morgana:LLM:AzureOpenAI:DeploymentName"]!;
 
-        // Get chat client for specific deployment and wrap with Microsoft.Extensions.AI abstraction
-        chatClient = azureClient.GetChatClient(deploymentName).AsIChatClient();
+        // Get chat client for specific deployment and wrap with the MEAI OpenTelemetry decorator
+        // for gen_ai.* spans and metrics (input/output tokens, latency, errors).
+        chatClient = WrapWithTelemetry(
+            azureClient.GetChatClient(deploymentName).AsIChatClient());
     }
 }

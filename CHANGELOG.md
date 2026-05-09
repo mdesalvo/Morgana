@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 - Save LLM costs by caching the initial Morgana presentation once per-channel
-- Save `Antrhopic` costs by caching static system messages (especially agent messages)
+- Save `Anthropic` costs by caching static system messages (especially agent messages)
+- Adopt `Microsoft.Extensions.AI.OpenTelemetryChatClient` for automatic `gen_ai.*` chat-client telemetry across every LLM provider
 - Bumped Rune's `MaxMessageLength` budget capability to 500
 - Updated `Microsoft.Agents.AI` dependency to 1.4.0
 - Updated `Microsoft.IdentityModel.JsonWebTokens` to 8.18.0
@@ -21,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Handle `Terminated` message in `ConversationManagerActor` to prevent `DeathPactException
 - Solved memory leak due to unbounded growth of MCP executor cache
 - Solved memory leak due to undisposed OTel spans in `ConversationSupervisorActor.PostStop`
-- Make `Anthropic` resilient against `no-prefill in trailing message` limitations characterizing Claude 4.6+ models
+- Make `Anthropic` resilient against `no-prefill in trailing message` limitations of Claude 4.6+ models
 
 ### 🚀 Future Enablement
 

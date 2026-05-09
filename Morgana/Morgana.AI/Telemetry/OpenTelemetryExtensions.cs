@@ -52,6 +52,7 @@ public static class TelemetryExtensions
                 tracing
                     .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
                     .AddSource(MorganaTelemetry.Source.Name)
+                    .AddSource(MorganaTelemetry.LLMChatClientSourceName) // MEAI OpenTelemetryChatClient activity source
                     .AddAspNetCoreInstrumentation();
 
                 if (otlpExporter is not null)
@@ -69,6 +70,7 @@ public static class TelemetryExtensions
                 metrics
                     .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
                     .AddMeter(MorganaTelemetry.MorganaMeter.Name)
+                    .AddMeter(MorganaTelemetry.LLMChatClientSourceName) // MEAI OpenTelemetryChatClient meter
                     .AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpExporter.Endpoint ?? "http://localhost:4317"));
             });
         }

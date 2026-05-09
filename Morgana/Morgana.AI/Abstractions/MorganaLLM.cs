@@ -1,6 +1,8 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Telemetry;
 
 namespace Morgana.AI.Abstractions;
 
@@ -55,19 +57,68 @@ public class MorganaLLM : ILLMService
     protected IChatClient chatClient;
 
     /// <summary>
+    /// Logger factory used to instrument the chat client pipeline (in particular,
+    /// <see cref="OpenTelemetryChatClient"/> via <see cref="WrapWithTelemetry"/>). May be
+    /// <c>null</c> in test scenarios; in that case the telemetry decorator is skipped.
+    /// </summary>
+    protected readonly ILoggerFactory? loggerFactory;
+
+    /// <summary>
     /// Initializes MorganaLLM abstraction.
     /// Loads the Morgana framework prompt for error message templates.
     /// </summary>
     /// <param name="configuration">Application configuration for provider-specific settings</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
+    /// <param name="loggerFactory">
+    /// Optional logger factory used to instrument the chat client with the MEAI OpenTelemetry
+    /// decorator. Pass <c>null</c> to skip the decorator (test paths, unit tests).
+    /// </param>
     public MorganaLLM(
         IConfiguration configuration,
-        IPromptResolverService promptResolverService)
+        IPromptResolverService promptResolverService,
+        ILoggerFactory? loggerFactory = null)
     {
         this.configuration = configuration;
         this.promptResolverService = promptResolverService;
+        this.loggerFactory = loggerFactory;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Wraps the supplied <paramref name="inner"/> chat client with the MEAI
+    /// <see cref="OpenTelemetryChatClient"/> decorator so every request emits OTel spans and
+    /// metrics under the standard <c>gen_ai.*</c> semantic conventions (input/output token
+    /// counts, cache_read input tokens, model name, response latency, errors).
+    /// </summary>
+    /// <param name="inner">The chat client to wrap (typically the raw provider client, possibly
+    /// already wrapped by a provider-specific decorator like Anthropic's no-prefill guard).</param>
+    /// <returns>
+    /// The instrumented chat client when <see cref="loggerFactory"/> is available and
+    /// <c>Morgana:OpenTelemetry:Enabled</c> is true; otherwise <paramref name="inner"/>
+    /// unchanged. Provider-agnostic — all four concrete providers go through this single hook.
+    /// </returns>
+    /// <remarks>
+    /// <para>The activity source / meter name is fixed (<c>Morgana.AI.LLM</c>) so the OTel
+    /// pipeline registration is centralised; per-provider differentiation comes from the
+    /// <c>gen_ai.system</c> attribute that the MEAI decorator emits automatically.</para>
+    /// <para><c>EnableSensitiveData</c> is read from <c>Morgana:OpenTelemetry:EnableSensitiveData</c>
+    /// (default <c>false</c>): when true, the spans include the actual message contents — useful
+    /// in dev/troubleshooting, off in production for privacy.</para>
+    /// </remarks>
+    protected IChatClient WrapWithTelemetry(IChatClient inner)
+    {
+        if (loggerFactory is null)
+            return inner;
+        if (!configuration.GetValue("Morgana:OpenTelemetry:Enabled", true))
+            return inner;
+
+        bool enableSensitiveData = configuration.GetValue("Morgana:OpenTelemetry:EnableSensitiveData", false);
+
+        return new ChatClientBuilder(inner)
+            .UseOpenTelemetry(loggerFactory, MorganaTelemetry.LLMChatClientSourceName,
+                otel => otel.EnableSensitiveData = enableSensitiveData)
+            .Build();
     }
 
     /// <summary>

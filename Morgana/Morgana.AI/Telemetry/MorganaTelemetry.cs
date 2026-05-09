@@ -43,6 +43,14 @@ public static class MorganaTelemetry
     /// </summary>
     public static readonly ActivitySource Source = new ActivitySource("Morgana");
 
+    /// <summary>
+    /// Activity source / meter name used by the MEAI <c>OpenTelemetryChatClient</c> decorator
+    /// applied uniformly to every LLM provider via <c>MorganaLLM.WrapWithTelemetry</c>. Single
+    /// name across providers; the <c>gen_ai.system</c> attribute on each emitted span
+    /// differentiates them at consumption time.
+    /// </summary>
+    public const string LLMChatClientSourceName = "Morgana.AI.LLM";
+
     // ==============================================================================
     // METER & METRICS
     // ==============================================================================

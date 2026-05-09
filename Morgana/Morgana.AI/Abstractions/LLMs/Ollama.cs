@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
 using OllamaSharp;
 
@@ -36,16 +37,20 @@ public class Ollama : MorganaLLM
     /// </summary>
     /// <param name="configuration">Application configuration containing Ollama endpoint and model</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
+    /// <param name="loggerFactory">Optional logger factory used to instrument the chat client with the MEAI OpenTelemetry decorator.</param>
     public Ollama(
         IConfiguration configuration,
-        IPromptResolverService promptResolverService) : base(configuration, promptResolverService)
+        IPromptResolverService promptResolverService,
+        ILoggerFactory? loggerFactory = null) : base(configuration, promptResolverService, loggerFactory)
     {
         // Get chat client for specific Ollama model (it is already compatible with Microsoft.Extensions.AI abstraction)
-        chatClient = new OllamaApiClient(
-            new HttpClient
-            {
-                BaseAddress = new Uri(this.configuration["Morgana:LLM:Ollama:Endpoint"]!),
-                Timeout = TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"]))
-            }, this.configuration["Morgana:LLM:Ollama:Model"]!);
+        // and wrap with the MEAI OpenTelemetry decorator for gen_ai.* spans and metrics.
+        chatClient = WrapWithTelemetry(
+            new OllamaApiClient(
+                new HttpClient
+                {
+                    BaseAddress = new Uri(this.configuration["Morgana:LLM:Ollama:Endpoint"]!),
+                    Timeout = TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"]))
+                }, this.configuration["Morgana:LLM:Ollama:Model"]!));
     }
 }
