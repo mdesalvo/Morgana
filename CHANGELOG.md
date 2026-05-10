@@ -8,8 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.22.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: System Prompt Caching for Anthropic
 This release unlocks **dramatic cost reduction** for Anthropic users by exploiting **Anthropic's native prompt caching** with 1-hour TTL.
-System prompts (containing Morgana/Agents personality, global policies and formatting rules) are automatically marked for caching via `cache_control: ephemeral` and reused across every conversation turn.
-A single system prompt is cached once and hit repeatedly, reducing token costs by **60%+ on high-volume deployments**.
+System prompts (containing Morgana/Agents personalities, global policies and formatting rules) are automatically marked for caching via `cache_control: ephemeral` and reused across every conversation turn. A single system prompt is cached once and hit repeatedly, reducing token costs by **60%+ on high-volume deployments**.
 The release also fortifies Morgana against Claude 4.6+ **no-prefill constraints** that previously caused `AnthropicBadRequestException` on trailing assistant messages, ensuring compatibility with the latest Claude models while maintaining prompt caching semantics intact.
 ### 🎯 Major Feature: Conversation-Scoped Shared Context Registry
 This release replaces **fragile in-memory P2P broadcast** with a **durable, first-write-wins shared context registry** persisted in the per-conversation SQLite database.
@@ -18,11 +17,12 @@ Previously, when an agent set a shared variable and then was decommissioned befo
 Now every agent loads the shared registry at the start of each turn and merges incoming shared variables with first-write-wins collision resolution, making the entire multi-agent system **resilient to Akka.NET actor lifecycle events** while maintaining **cross-agent context transparency**.
 
 ### ✨ Added
+- Sensible cost reduction for Morgana experiences based on Anthropic, thanks to system prompt caching
+- Resilient Morgana's behavior with Claude 4.6+ models, which are intolerant against trailing assistant messages
+- Replace cross-agent context broadcast with conversation-scoped `shared_context` registry
 
 ### 🔄 Changed
-- Save LLM costs by caching Morgana presentation message once per-channel
-- Dramatically reduce `Anthropic` costs by exploiting **system prompt caching**
-- Replace cross-agent context broadcast with conversation-scoped `shared_context` registry
+- Further save LLM costs by **caching Morgana's presentation message** once per-channel
 - Use `OpenTelemetryChatClient` to get automatic `gen_ai.*` telemetry across LLM providers
 - Bump Rune's `MaxMessageLength` advertised budget capability to 500
 - Restyled Morgana's messaging avatar in Cauldron
@@ -34,7 +34,6 @@ Now every agent loads the shared registry at the start of each turn and merges i
 - Handle `Terminated` message in `ConversationManagerActor` to prevent `DeathPactException
 - Solve memory leak due to unbounded growth of MCP executor cache
 - Solve memory leak due to undisposed OTel spans in `ConversationSupervisorActor.PostStop`
-- Make `Anthropic` resilient against `no-prefill in trailing message` limitations of Claude 4.6+ models
 - Filter intermediate tool-use assistant messages from rendered history
 
 ### 🚀 Future Enablement
