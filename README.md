@@ -62,7 +62,7 @@ Morgana leverages the **actor model** to create a fault-tolerant, scalable orche
 - **ConversationSupervisor**: Orchestrates the entire conversation flow and coordinates child actors
 - **Guard**: Validates every interaction against business policies and brand guidelines
 - **Classifier**: Analyzes user intent through LLM-powered classification
-- **Router**: Dynamically routes requests to appropriate agents and serves as message bus for P2P context synchronization
+- **Router**: Dynamically routes requests to appropriate agents
 
 This architecture ensures that failures are isolated, system state remains consistent, and conversations can scale horizontally without bottlenecks.
 
@@ -201,9 +201,9 @@ Prompts also define **Global Policies** (critical rules like context handling, i
 ### 💾 Morgana Context System
 *Distributed memory with encrypted persistence and first-write-wins shared registry*
 
-Morgana extends **Microsoft.Agents.AI** framework with a sophisticated context management layer that balances isolation, sharing, and persistence. Each agent maintains its own **isolated context** through `MorganaAIContextProvider`, a custom implementation that manages both conversation history and stateful variables.
+Morgana extends **Microsoft.Agents.AI** framework with a sophisticated context management layer that balances isolation, sharing and persistence. Each agent maintains its own **isolated context** through `MorganaAIContextProvider`, a custom implementation that manages both conversation history and stateful variables.
 
-**Context isolation** ensures agents operate independently—their memories, variables, and state remain private by default. However, the system enables selective **shared context** for variables declared in configuration:
+**Context isolation** ensures agents operate independently—their memories, variables, and state remain private by default. However, the system enables selective **shared context** synchronization for variables declared in configuration:
 
 ```json
 {
