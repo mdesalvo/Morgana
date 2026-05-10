@@ -34,7 +34,7 @@ Now every agent loads the shared registry at the start of each turn and merges i
 - Handle `Terminated` message in `ConversationManagerActor` to prevent `DeathPactException
 - Solve memory leak due to unbounded growth of MCP executor cache
 - Solve memory leak due to undisposed OTel spans in `ConversationSupervisorActor.PostStop`
-- Filter intermediate tool-use assistant messages from rendered history
+- Filter intermediate tool-use assistant messages from rendered history (observed on Haiku 4.5)
 
 ### 🚀 Future Enablement
 - **LLM Provider Cost Optimization via Cache Analytics** — With system prompt caching now active across Anthropic (and extensible to Azure OpenAI and other providers), Morgana can surface **cache performance dashboards** showing hit rate, token savings per provider, cost-per-conversation trends, and cache density metrics. Combined with OpenTelemetry's `gen_ai.usage.cache_*` attributes, operators gain data-driven visibility into which LLM providers and prompt strategies deliver best cost-performance, unlocking competitive cost optimization across multi-provider deployments.
