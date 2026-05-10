@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.22.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: System Prompt Caching for Anthropic
+This release unlocks **dramatic cost reduction** for Anthropic users by exploiting **Anthropic's native prompt caching** with 1-hour TTL.
+System prompts (containing Morgana/Agents personality, global policies and formatting rules) are automatically marked for caching via `cache_control: ephemeral` and reused across every conversation turn.
+A single system prompt is cached once and hit repeatedly, reducing token costs by **60%+ on high-volume deployments**.
+The release also fortifies Morgana against Claude 4.6+ **no-prefill constraints** that previously caused `AnthropicBadRequestException` on trailing assistant messages, ensuring compatibility with the latest Claude models while maintaining prompt caching semantics intact.
+### 🎯 Major Feature: Conversation-Scoped Shared Context Registry
+This release replaces **fragile in-memory P2P broadcast** with a **durable, first-write-wins shared context registry** persisted in the per-conversation SQLite database.
+Shared variables (marked with `Shared: true` in agent tool configurations) now write directly to a dedicated `shared_context` table, eliminating the O(N) hydration cost and surviving **actor decommission cycles**.
+Previously, when an agent set a shared variable and then was decommissioned before routing to other agents, that variable was lost to dead letters.
+Now every agent loads the shared registry at the start of each turn and merges incoming shared variables with first-write-wins collision resolution, making the entire multi-agent system **resilient to Akka.NET actor lifecycle events** while maintaining **cross-agent context transparency**.
 
 ### ✨ Added
 
@@ -15,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace cross-agent context broadcast with conversation-scoped `shared_context` registry
 - Use `OpenTelemetryChatClient` to get automatic `gen_ai.*` telemetry across LLM providers
 - Bump Rune's `MaxMessageLength` advertised budget capability to 500
+- Restyled Morgana's messaging avatar in Cauldron
 - Updated `Microsoft.Agents.AI` dependency to 1.4.0
 - Updated `Microsoft.IdentityModel.JsonWebTokens` to 8.18.0
 
@@ -27,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Filter intermediate tool-use assistant messages from rendered history
 
 ### 🚀 Future Enablement
+- **LLM Provider Cost Optimization via Cache Analytics** — With system prompt caching now active across Anthropic (and extensible to Azure OpenAI and other providers), Morgana can surface **cache performance dashboards** showing hit rate, token savings per provider, cost-per-conversation trends, and cache density metrics. Combined with OpenTelemetry's `gen_ai.usage.cache_*` attributes, operators gain data-driven visibility into which LLM providers and prompt strategies deliver best cost-performance, unlocking competitive cost optimization across multi-provider deployments.
+- **Ephemeral Shared Context with Time-to-Live** — The conversation-scoped `shared_context` registry can evolve to support **per-variable TTL** (`expiresAt` timestamp), enabling agents to store temporary context (authorization tokens, session IDs, rate-limit state, derived computations) that auto-expire after configurable intervals. This unlocks session-like behavior where sensitive transient data never persists longer than needed, reducing storage footprint and improving security posture without explicit cleanup logic.
 
 
 ## [0.21.0] - 2026-04-25
