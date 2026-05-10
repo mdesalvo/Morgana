@@ -199,11 +199,11 @@ For example, BillingAgent might be "a pragmatic and concrete witch" while Contra
 Prompts also define **Global Policies** (critical rules like context handling, interaction tokens) that are automatically composed into agent instructions, ensuring system-wide behavioral consistency without repetition.
 
 ### 💾 Morgana Context System
-*Distributed memory with encrypted persistence and P2P synchronization*
+*Distributed memory with encrypted persistence and first-write-wins shared registry*
 
 Morgana extends **Microsoft.Agents.AI** framework with a sophisticated context management layer that balances isolation, sharing, and persistence. Each agent maintains its own **isolated context** through `MorganaAIContextProvider`, a custom implementation that manages both conversation history and stateful variables.
 
-**Context isolation** ensures agents operate independently—their memories, variables, and state remain private by default. However, the system enables selective **P2P synchronization** for shared variables declared in configuration:
+**Context isolation** ensures agents operate independently—their memories, variables, and state remain private by default. However, the system enables selective **shared context** for variables declared in configuration:
 
 ```json
 {
@@ -213,16 +213,16 @@ Morgana extends **Microsoft.Agents.AI** framework with a sophisticated context m
 }
 ```
 
-When one agent collects shared information (e.g., customer ID), the `RouterActor` broadcasts updates to all other agents through a publish/subscribe mechanism. This eliminates redundant user interactions—information provided once becomes available everywhere, creating a seamless multi-agent experience.
+When one agent writes a shared variable (e.g., `userId`), the value is persisted into a conversation-scoped `shared_context` SQLite table with **first-write-wins** semantics. At the start of each turn, every agent loads the registry and merges incoming shared variables into its local context (again using first-write-wins: existing local values are never overwritten). This eliminates redundant user interactions—information provided once becomes available everywhere, creating a seamless multi-agent experience while remaining resilient to actor lifecycle changes.
 
-**Conversation persistence** is handled through the `IConversationPersistenceService` abstraction, with a default SQLite implementation providing enterprise-grade security. Each agent's context and message history are encrypted using industry-standard algorithms and stored per-conversation, enabling sessions to resume across application restarts without losing context.
+**Conversation persistence** is handled through the `IConversationPersistenceService` abstraction, with a default SQLite implementation providing enterprise-grade security. The schema includes both per-agent `AgentSession` BLOBs (encrypted with AES-256-CBC) and a `shared_context` table for cross-agent variables. Sessions can resume across application restarts without losing context or requiring all actors to remain in memory.
 
 The persistence layer supports **multi-agent history reconciliation**: while agents maintain isolated threads, Morgana reconstructs a unified timeline for UI presentation, giving users an uninterrupted conversational experience regardless of which agents participated behind the scenes.
 
 This architecture delivers 3 critical benefits—all configurable through declarative JSON rather than coding:
 - **data security** through encryption and isolation
-- **intelligent context sharing** via P2P sync
-- **resilient conversations** that survive system restarts
+- **intelligent context sharing** via persistent, first-write-wins registry
+- **resilient conversations** that survive actor decommission and system restarts
 
 ---
 ## 🚀 Quick Start (Docker Hub)

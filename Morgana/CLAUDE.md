@@ -122,7 +122,7 @@ Tools with `Shared: true` parameters route their values into a conversation-scop
 | `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents via `[HandlesIntent]` reflection scanning. Bidirectional validation: every configured intent must have an agent and vice versa. Throws on mismatch at startup |
 | `ProvidesToolForIntentRegistryService` | `IToolRegistryService` | Discovers tools via `[ProvidesToolForIntent]` scanning. Diagnostic console output with validation warnings for orphaned tools/agents |
 | `MCPClientRegistryService` | `IMCPClientRegistryService` | MCP client connection pool: keyed by URI (Http) or `stdio:{command}` (Stdio). Thread-safe via `ConcurrentDictionary`. Contains `MCPClient` wrapper over `McpClient` from ModelContextProtocol.Core |
-| `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite DB (`morgana-{id}.db`). AES-256-CBC encrypted `AgentSession` BLOBs. Schema v3: tables `morgana` + `rate_limit_log` + `channel_metadata`. History retrieval decrypts all agent sessions and merges chronologically |
+| `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite DB (`morgana-{id}.db`). AES-256-CBC encrypted `AgentSession` BLOBs + `shared_context` registry (first-write-wins). Schema v4: tables `morgana` + `rate_limit_log` + `channel_metadata` + `shared_context`. Manages `UpsertSharedVariableAsync` and `LoadSharedVariablesAsync` for cross-agent context synchronization |
 | `SQLiteRateLimitService` | `IRateLimitService` | Sliding window algorithm (per-minute/hour/day) in same SQLite DB. Fails open on error. Delegates DB init to persistence service |
 | `JWTAuthenticationService` | `IAuthenticationService` | Validates JWT tokens: HMAC-SHA256, issuer whitelist, audience, lifetime (30s clock skew). Extracts `sub`→UserId, `name`→DisplayName |
 | `SummarizingChatReducerService` | *(factory, not an interface)* | Creates `SummarizingChatReducer` from `Morgana:HistoryReducer` config. Threshold (default 20) triggers summarization of older messages down to target count (default 8) |
@@ -133,7 +133,7 @@ Tools with `Shared: true` parameters route their values into a conversation-scop
 
 | Provider | Framework Base | Purpose |
 |---|---|---|
-| `MorganaAIContextProvider` | `AIContextProvider` | Per-session variable dictionary via `ProviderSessionState<MorganaContextState>`. Supports `GetVariable`/`SetVariable`/`DropVariable`/`MergeSharedContext`/`PropagateSharedVariables`. Shared variables trigger `OnSharedContextUpdate` callback wired to RouterActor |
+| `MorganaAIContextProvider` | `AIContextProvider` | Per-session variable dictionary via `ProviderSessionState<MorganaContextState>`. Supports `GetVariable`/`SetVariable`/`DropVariable`/`MergeSharedContext`. Shared variables (declared with `Shared: true` in config) trigger `OnSharedContextUpdate` callback wired to `IConversationPersistenceService.UpsertSharedVariableAsync` for cross-agent persistence |
 | `MorganaChatHistoryProvider` | `ChatHistoryProvider` | Full history in `AgentSession`, optional reduced view via `IChatReducer` for LLM context. `ProvideChatHistoryAsync` returns reduced view for LLM; `StoreChatHistoryAsync` always appends to full history. Timestamps response messages with server UTC |
 
 ## LLM Provider Abstraction
@@ -234,13 +234,14 @@ Resolution: `ConfigurationPromptResolverService` merges morgana.json + agents.js
 
 | Table | Schema | Purpose |
 |---|---|---|
-| `morgana` | `agent_identifier` PK, `agent_name` UNIQUE, `agent_session` BLOB (AES-256-CBC encrypted), `creation_date`, `last_update`, `is_active` | Agent session storage |
+| `morgana` | `agent_identifier` PK, `agent_name` UNIQUE, `agent_session` BLOB (AES-256-CBC encrypted), `creation_date`, `last_update`, `is_active` | Agent session storage (per-agent, isolated) |
 | `rate_limit_log` | `request_timestamp` TEXT | Sliding window rate limiting |
 | `channel_metadata` | `id` (=1), `channel_name`, `supports_rich_cards`, `supports_quick_replies`, `supports_streaming`, `supports_markdown`, `max_message_length` | Persisted channel handshake |
+| `shared_context` | `variable_name` PK, `variable_value` BLOB (JSON serialized), `set_by_agent`, `creation_date` | Cross-agent shared variables (first-write-wins via `INSERT OR IGNORE`) |
 
-Schema version tracked via `PRAGMA user_version` (current: 3). `EnsureDatabaseInitializedAsync` is idempotent.
+Schema version tracked via `PRAGMA user_version` (current: 4). `EnsureDatabaseInitializedAsync` is idempotent.
 
-History retrieval (`GetConversationHistoryAsync`): loads all agent rows → decrypts each → extracts messages from `AgentSession.stateBag.MorganaChatHistoryProvider.messages` → filters tool messages and summarization markers → merges chronologically → extracts quick replies and rich cards from `SetQuickReplies`/`SetRichCard` function calls.
+History retrieval (`GetConversationHistoryAsync`): loads all agent rows → decrypts each → extracts messages from `AgentSession.stateBag.MorganaChatHistoryProvider.messages` → applies user_facing filter (skips tool-call and non-final assistant messages from marked agents) → merges chronologically → extracts quick replies and rich cards from `SetQuickReplies`/`SetRichCard` function calls.
 
 ## Authentication
 
@@ -304,5 +305,4 @@ At application startup, three registries perform comprehensive validation:
 - Actor naming: `/user/{suffix}-{conversationId}` (e.g. `/user/supervisor-abc123`)
 - Agent identifier format: `{agent_name}-{conversation_id}` (e.g. `billing-abc123`)
 - Channel names normalized to lowercase at ingress
-- All service registries use `Lazy<T>` initialization for thread-safe startup
 - Sensitive values in appsettings.json use `_SECURE_OVERRIDE_` placeholder — real values via User Secrets or environment variables
