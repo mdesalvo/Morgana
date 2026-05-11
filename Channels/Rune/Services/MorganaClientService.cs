@@ -9,7 +9,7 @@ namespace Rune.Services;
 /// Relies on <see cref="IHttpClientFactory"/>'s named <c>Morgana</c> client, which
 /// is wired with the per-issuer JWT <see cref="Handlers.MorganaAuthHandler"/>.
 /// </summary>
-public sealed class MorganaClient
+public sealed class MorganaClientService
 {
     /// <summary>Fallback cap advertised at the handshake when <c>Rune:MaxMessageLength</c> is absent.</summary>
     private const int DefaultMaxMessageLength = 500;
@@ -25,7 +25,7 @@ public sealed class MorganaClient
 
     /// <summary>Captures the callback URL (required) and the advertised message length cap.</summary>
     /// <exception cref="InvalidOperationException">Thrown when <c>Rune:CallbackURL</c> is missing.</exception>
-    public MorganaClient(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+    public MorganaClientService(IHttpClientFactory httpClientFactory, IConfiguration configuration)
     {
         this.httpClientFactory = httpClientFactory;
         callbackUrl = configuration["Rune:CallbackURL"]

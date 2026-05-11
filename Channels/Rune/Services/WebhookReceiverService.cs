@@ -8,9 +8,9 @@ namespace Rune.Services;
 /// in <c>Program.cs</c> after both the receiver and the UI have been resolved from DI,
 /// avoiding a constructor-level circular dependency.
 /// </summary>
-public sealed class WebhookReceiver
+public sealed class WebhookReceiverService
 {
-    /// <summary>Callback invoked for every inbound message; wired in <c>Program.cs</c> to <see cref="ConsoleUi.EnqueueIncoming"/>.</summary>
+    /// <summary>Callback invoked for every inbound message; wired in <c>Program.cs</c> to <see cref="ConsoleUiService.EnqueueIncoming"/>.</summary>
     public Action<ChannelMessage>? OnMessage { get; set; }
 
     /// <summary>Forwards the deserialized webhook payload to <see cref="OnMessage"/>; a no-op if no handler is attached yet.</summary>

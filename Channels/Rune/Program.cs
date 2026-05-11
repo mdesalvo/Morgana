@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using Rune.Handlers;
+using Rune.Interfaces;
 using Rune.Messages.Contracts;
 using Rune.Services;
 using Spectre.Console;
@@ -8,7 +9,7 @@ using Spectre.Console;
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // ==============================================================================
-// RUNE - POOR-BUT-HONEST WEBHOOK CHANNEL FOR MORGANA
+// RUNE - WEBHOOK CHANNEL FOR MORGANA
 // ==============================================================================
 // Rune is a minimal CLI reference channel talking to Morgana over the webhook
 // delivery mode. It declares a tight capability budget (500-char hard limit, no
@@ -53,7 +54,7 @@ if (!AnsiConsole.Profile.Capabilities.Interactive)
 // ==============================================================================
 // Spectre.Console renders over the terminal via Live, so any stray log line from
 // Kestrel/ASP.NET Core corrupts the layout. Drop all providers; errors still
-// surface through explicit UI messages (see ConsoleUi's red system line).
+// surface through explicit UI messages (see ConsoleUiService's red system line).
 builder.Logging.ClearProviders();
 
 // ==============================================================================
@@ -71,14 +72,30 @@ builder.Services.AddHttpClient("Morgana", client =>
 // ==============================================================================
 // 5. SERVICES
 // ==============================================================================
-// MorganaClient     : wraps start/send/end conversation lifecycle.
-// WebhookReceiver   : thin dispatcher invoked by the /morgana-hook endpoint.
-// ConsoleUi         : Spectre.Console Live(Layout) with sticky header + REPL body.
+// MorganaClientService     : wraps start/send/end conversation lifecycle.
+// WebhookReceiverService   : thin dispatcher invoked by the /morgana-hook endpoint.
+// ConsoleUiService         : Spectre.Console Live(Layout) with sticky header + REPL body.
 // All singletons: the process hosts exactly one Rune "session" at a time.
-builder.Services.AddSingleton<MorganaClient>();
-builder.Services.AddSingleton<WebhookReceiver>();
-builder.Services.AddSingleton<ConsoleUi>();
+builder.Services.AddSingleton<MorganaClientService>();
+builder.Services.AddSingleton<WebhookReceiverService>();
+builder.Services.AddSingleton<ConsoleUiService>();
 builder.Services.AddSingleton<LandingMessageService>();
+
+// ==============================================================================
+// 5a. VIEWPORT RESIZE WATCHER - PLATFORM-SPECIFIC STRATEGY
+// ==============================================================================
+// ConsoleUiService keeps a fixed-viewport history slice anchored to the current terminal
+// size. It needs a notification whenever the user resizes the host window so the
+// slice can be recomputed without polling on every keystroke. Two strategies:
+//   - POSIX (Linux + macOS): SIGWINCH delivered by the kernel — zero idle CPU.
+//   - Windows: no SIGWINCH equivalent at this layer, fall back to a 250 ms
+//     Console.Window* comparison loop.
+// The decision is made once, here, and the chosen implementation is injected
+// into ConsoleUiService via DI so the UI itself stays platform-agnostic.
+if (OperatingSystem.IsWindows())
+    builder.Services.AddSingleton<IViewportResizeWatcher, PollingResizeWatcherService>();
+else
+    builder.Services.AddSingleton<IViewportResizeWatcher, SigWinchResizeWatcherService>();
 
 WebApplication app = builder.Build();
 
@@ -105,11 +122,11 @@ PosixSignalRegistration? sighupRegistration = OperatingSystem.IsWindows()
 // ==============================================================================
 // 6. LANDING MESSAGE - FILL THE STARTUP SILENCE
 // ==============================================================================
-// Between app.StartAsync (Kestrel bind), morganaClient.StartConversationAsync
+// Between app.StartAsync (Kestrel bind), morganaClientService.StartConversationAsync
 // (TLS + JWT + Morgana-side actor creation) and the arrival of the first webhook
 // from Morgana, the terminal stays empty for ~0.5–2s. Print a random themed line
 // on stdout now so the user sees something alive while the boring plumbing runs.
-// The line is overwritten cleanly by AnsiConsole.Clear() just before ui.RunAsync,
+// The line is overwritten cleanly by AnsiConsole.Clear() just before uiService.RunAsync,
 // so it disappears the moment the Live UI takes over — same feel as Cauldron's
 // magic-sparkle splash.
 LandingMessageService landingMessageService = app.Services.GetRequiredService<LandingMessageService>();
@@ -121,12 +138,12 @@ AnsiConsole.MarkupLine($"[italic grey70]{Markup.Escape(landingMessageService.Get
 // Morgana POSTs a serialized ChannelMessage here on every outbound turn (no JWT
 // today — trust model is asymmetric by design, matching the WebhookChannelService
 // convention). Bind the payload and hand it to the dispatcher.
-app.MapPost("/morgana-hook", async (HttpContext httpContext, WebhookReceiver receiver) =>
+app.MapPost("/morgana-hook", async (HttpContext httpContext, WebhookReceiverService receiverService) =>
 {
     ChannelMessage? message = await httpContext.Request.ReadFromJsonAsync<ChannelMessage>();
     if (message is null)
         return Results.BadRequest();
-    receiver.Dispatch(message);
+    receiverService.Dispatch(message);
     return Results.Ok();
 });
 
@@ -135,17 +152,17 @@ app.MapPost("/morgana-hook", async (HttpContext httpContext, WebhookReceiver rec
 // ==============================================================================
 // Start Kestrel asynchronously (the UI must be on the main thread), wire the
 // webhook → UI callback, open a conversation with Morgana, hand over to the
-// ConsoleUi loop, and on exit gracefully end the conversation and stop Kestrel.
+// ConsoleUiService loop, and on exit gracefully end the conversation and stop Kestrel.
 await app.StartAsync();
 
-MorganaClient morganaClient = app.Services.GetRequiredService<MorganaClient>();
-WebhookReceiver webhook = app.Services.GetRequiredService<WebhookReceiver>();
-ConsoleUi ui = app.Services.GetRequiredService<ConsoleUi>();
+MorganaClientService morganaClientService = app.Services.GetRequiredService<MorganaClientService>();
+WebhookReceiverService webhook = app.Services.GetRequiredService<WebhookReceiverService>();
+ConsoleUiService uiService = app.Services.GetRequiredService<ConsoleUiService>();
 
 // Two-step wiring of the webhook callback: the first inbound ChannelMessage fires
 // a TaskCompletionSource so we can gate the UI handover on "Morgana has actually
 // started talking", then every message (including the first) is queued into the
-// ConsoleUi incoming channel. Without this gate we'd clear the landing and enter
+// ConsoleUiService incoming channel. Without this gate we'd clear the landing and enter
 // the Live Layout the moment StartConversationAsync returns (202 Accepted, fast),
 // leaving the user staring at an empty panel for ~1–2s while Morgana's presentation
 // message is still in flight over the webhook — exactly the "black screen" the
@@ -154,13 +171,13 @@ TaskCompletionSource firstMessageReady = new(TaskCreationOptions.RunContinuation
 webhook.OnMessage = message =>
 {
     firstMessageReady.TrySetResult();
-    ui.EnqueueIncoming(message);
+    uiService.EnqueueIncoming(message);
 };
 
 string conversationId;
 try
 {
-    conversationId = await morganaClient.StartConversationAsync();
+    conversationId = await morganaClientService.StartConversationAsync();
 }
 catch (Exception ex)
 {
@@ -173,7 +190,7 @@ catch (Exception ex)
 // doesn't send anything within the budget (backend down, stuck actor, firewall
 // blocking the callback URL), we still enter the UI — an empty Layout is a better
 // end-state than a terminal stuck forever on the landing line. The message that
-// triggered the TCS is already in the ConsoleUi queue and gets drained on the
+// triggered the TCS is already in the ConsoleUiService queue and gets drained on the
 // first DrainIncomingLoop iteration, so the presentation lands instantly.
 //
 // Rune:StartupTimeoutSeconds governs the budget (default 30s). Raising it helps on
@@ -204,14 +221,14 @@ try
     // container. The finally block then ends the conversation and stops Kestrel,
     // letting the .NET process exit so docker's --rm reclaims the container and
     // releases morgana-network.
-    await ui.RunAsync(
+    await uiService.RunAsync(
         conversationId,
-        text => morganaClient.SendMessageAsync(conversationId, text),
+        text => morganaClientService.SendMessageAsync(conversationId, text),
         app.Lifetime.ApplicationStopping);
 }
 finally
 {
     sighupRegistration?.Dispose();
-    await morganaClient.EndConversationAsync(conversationId);
+    await morganaClientService.EndConversationAsync(conversationId);
     await app.StopAsync();
 }
