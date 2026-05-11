@@ -31,7 +31,7 @@ Now every agent loads the shared registry at the start of each turn and merges i
 
 ### 🐛 Fixed
 - Make Rune exit cleanly when its host terminal is killed brutally, so the container terminates and docker releases `morgana-network` instead of leaving it attached and tripping `compose down` with "_Resource is still in use_"
-- Make Rune viewport resize-aware with flat-row anchor and platform-specific watcher
+- Make Rune viewport resize-aware with flat-row anchor and platform-specific (SIGWINCH/poll) watcher
 - Handle `Terminated` message in `ConversationManagerActor` to prevent `DeathPactException
 - Solve memory leak due to unbounded growth of MCP executor cache
 - Solve memory leak due to undisposed OTel spans in `ConversationSupervisorActor.PostStop`
