@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.22.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: System Prompt Caching for Anthropic
-This release unlocks **dramatic cost reduction** for Anthropic users by exploiting **Anthropic's native prompt caching** with 1-hour TTL.
+This release unlocks **dramatic cost reduction** for Anthropic users by exploiting **Anthropic's native system prompt caching** with 1-hour TTL.
 System prompts (containing Morgana/Agents personalities, global policies and formatting rules) are automatically marked for caching via `cache_control: ephemeral` and reused across every conversation turn. A single system prompt is cached once and hit repeatedly, reducing token costs by **60%+ on high-volume deployments**.
 The release also fortifies Morgana against Claude 4.6+ **no-prefill constraints** that previously caused `AnthropicBadRequestException` on trailing assistant messages, ensuring compatibility with the latest Claude models while maintaining prompt caching semantics intact.
 ### 🎯 Major Feature: Conversation-Scoped Shared Context Registry
