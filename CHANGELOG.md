@@ -17,17 +17,18 @@ Previously, when an agent set a shared variable and then was decommissioned befo
 Now every agent loads the shared registry at the start of each turn and merges incoming shared variables with first-write-wins collision resolution, making the entire multi-agent system **resilient to Akka.NET actor lifecycle events** while maintaining **cross-agent context transparency**.
 
 ### ✨ Added
-- Sensible cost reduction for Morgana experiences based on Anthropic, thanks to system prompt caching
-- Resilient Morgana's behavior with Claude 4.6+ models, which are intolerant against trailing assistant messages
+- Sensible LLM cost reduction for Morgana experiences based on Anthropic, thanks to system prompt caching
+- Interesting LLM-agnostic cost reduction, thanks to Morgana's presentation message caching
+- Stabilize Morgana's behavior with Claude 4.6+ models, which are intolerant against trailing assistant messages
 - Replace cross-agent context broadcast with conversation-scoped `shared_context` registry
 
 ### 🔄 Changed
-- Further LLM cost reductions by **caching Morgana's presentation message** once per-channel
 - Use `OpenTelemetryChatClient` to get automatic `gen_ai.*` telemetry across LLM providers
 - Bump Rune's `MaxMessageLength` advertised budget capability to 500
 - Restyled Morgana's messaging avatar in Cauldron
-- Updated `Microsoft.Agents.AI` dependency to 1.4.0
-- Updated `Microsoft.IdentityModel.JsonWebTokens` to 8.18.0
+- Updated `Microsoft.Agents.AI` dependency to 1.5.0
+- Updated `Microsoft.Extensions.AI` dependency to 10.6.0
+- Updated `ModelContextProtocol.Core` dependency to 1.3.0
 
 ### 🐛 Fixed
 - Make Rune exit cleanly when its host terminal is killed brutally, so the container terminates and docker releases `morgana-network` instead of leaving it attached and tripping `compose down` with "_Resource is still in use_"
@@ -111,10 +112,8 @@ This release completes the **Cauldron extension points** model: `IChatStateServi
 - Cauldron settings moved under `Cauldron` root key for clearer semantic (was `Morgana`)
 - Improved OpenTelemetry observability: accurate turn span, metrics and exception recording
 - Improved health check endpoint with actor system liveness detection
-- Updated `Akka.NET` dependency to 1.5.64
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0
 - Updated `ModelContextProtocol.Core` dependency to 1.1.0
-- Updated `OpenTelemetry` dependency to v1.15.1
 
 ### 🐛 Fixed
 - `Index.razor@isSending` not being reset on HTTP error response in `SendMessageAsync`, which permanently blocked user input after a failed send
@@ -196,7 +195,6 @@ This release sets the milestone of distributing **Morgana.AI** as **NuGet** pack
 - Morgana's avatar is now animated (with magical glowing effects when thinking)
 - Send button has been componentized and totally restyled
 - Make streaming response mode configurable under `StreamingResponse:Enabled` appsetting
-- Updated `Akka.NET` dependency to 1.5.62
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.3
 - Updated `Microsoft.Extensions.AI` dependency to 12.4.0
 - Updated `ModelContextProtocol.Core` dependency to 1.0.0
@@ -217,7 +215,6 @@ This release sets the milestone of distributing **Morgana.AI** as **NuGet** pack
 
 ### 🔄 Changed
 - `PluginLoaderService` now follows *directories-to-scan* paradigm instead of *assemblies-to-scan*. Morgana gains a **true plugin system**!
-- Updated `Akka.NET` dependency to 1.5.60
 
 ### 🐛 Fixed
 - Arguments of `SummarizingChatReducer` in `SummarizingChatReducerService.CreateReducer` were swapped (correct order: targetCount, threshold)
@@ -292,7 +289,7 @@ This release introduces **automatic conversation history management** through **
 
 ### 🔄 Changed
 - Converted residual Akka.NET `.Ask` flows into `.Tell` pattern, eliminating temporary actors and improving guard+classifier performances
-- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260205.1 (**BREAKING CHANGES**: `AIAgent.GetNewSessionAsync` -> `AIAgent.CreateSessionAsync`, `AgentSession.Serialize` -> `AIAgent.SerializeSession`)
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260205.1
 - Updated `ModelContextProtocol.Core` dependency to 0.8.0-preview.1
 
 ### 🐛 Fixed
@@ -380,8 +377,7 @@ CREATE TABLE rate_limit_log (
 ### 🔄 Changed
 - Standardized failure handling across all actors using `Records.FailureContext` wrapper for consistent error routing
 - Unified error and warning handling in Cauldron: All runtime errors and system warnings now use auto-dismissing `FadingMessage` component with severity-appropriate durations, replacing scattered error banner implementations
-- Updated `Akka.NET` dependency to 1.5.59
-- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260128.1 (**BREAKING CHANGES**: `AgentThread` -> `AgentSession`)
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260128.1
 - Updated `ModelContextProtocol.Core` dependency to 0.7.0-preview.1
 
 ### 🐛 Fixed
@@ -482,7 +478,7 @@ This release introduces **virtual unified conversation timeline**, enabling **Ca
 - **Presentation message injection**: Synthetic presentation message prepended when history exists (for visual consistency)
 
 ### 🔄 Changed
-- Updated `Microsoft.Agents.AI` dependency to **1.0.0-preview.260121.1**
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260121.1
 - Enhanced `MorganaAIContextProvider` to handle context data as **thread-safe** and **immutable** collections
 - Optimized `ConversationController` to replace `Ask<T>` with `Tell` fire-and-forget
 - Introduced SignalR data contract between Morgana and Cauldron for better maintainability
@@ -932,15 +928,8 @@ This refactoring unlocks:
 - Dedicated **ConversationManagerAgent** for per-session lifecycle handling
 - Policy-aware **Guard Agent** ensuring compliance and professional tone
 - Real-time conversational streaming through **SignalR**
-- InternalExecuteResponse messaging to expose the concrete executor agent
 - BillingExecutor enhanced with local memory and `#INT#` interactive protocol
 
 ### 🔄 Changed
-- Supervisor routing stabilized for multi-turn flows
-- Clarified agent responsibilities and improved modularity
-- Updated intermediate agents to support transparent executor forwarding
 
 ### 🐛 Fixed
-- Resolved context loss during multi-step billing interactions
-- Eliminated routing loops caused by agents self-handling fallback messages
-- Fixed inconsistent actor instantiation across conversations
