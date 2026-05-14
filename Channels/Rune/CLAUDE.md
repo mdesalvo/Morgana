@@ -124,7 +124,7 @@ DTOs in `Messages/Contracts/` are **duplicated** from Morgana's `Records.cs` —
 
 Built on Spectre.Console's `LiveDisplay` + `Layout`:
 
-- **Header** (sticky, 3 rows): panel `Rune → Morgana` with the current speaker name colored by role and a truncated conversation id.
+- **Header** (sticky, 3 rows): panel titled `Rune` with the current speaker name colored by role and a truncated conversation id.
 - **Body** (scrolling): chat history with each line colored by speaker, plus a bottom-most input line with a blinking cursor.
 
 ### Colors (dark-theme palette)
