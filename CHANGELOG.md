@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.22.0] - UNDER DEVELOPMENT
+## [0.22.0] - 2026-05-14
 ### 🎯 Major Feature: System Prompt Caching for Anthropic
 This release unlocks **dramatic cost reduction** for Anthropic users by exploiting **Anthropic's native system prompt caching** with 1-hour TTL.
 System prompts (containing Morgana/Agents personalities, global policies and formatting rules) are automatically marked for caching via `cache_control: ephemeral` and reused across every conversation turn. A single system prompt is cached once and hit repeatedly, reducing token costs by **60%+ on high-volume deployments**.
