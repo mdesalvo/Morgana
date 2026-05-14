@@ -54,7 +54,7 @@ Blazor Server app at `Channels/Cauldron/` (separate solution, has its own `CLAUD
 
 ### Rune (poor-but-honest reference channel)
 
-Spectre.Console CLI at `Channels/Rune/` (separate solution, has its own `CLAUDE.md`). Second reference channel, complementary to Cauldron: Kestrel-hosted console app that exercises the webhook delivery path (`deliveryMode=webhook`) and the "poor but honest" capability profile (all rich features off, `MaxMessageLength=200`) — the contract surface `MorganaChannelAdapter` is supposed to degrade toward. Self-issues JWT tokens for authentication (`iss=rune`). Like Cauldron, duplicates wire-format DTOs in `Messages/Contracts/`.
+Spectre.Console CLI at `Channels/Rune/` (separate solution, has its own `CLAUDE.md`). Second reference channel, complementary to Cauldron: Kestrel-hosted console app that exercises the webhook delivery path (`deliveryMode=webhook`) and the "poor but honest" capability profile (all rich features off, `MaxMessageLength=500`) — the contract surface `MorganaChannelAdapter` is supposed to degrade toward. Self-issues JWT tokens for authentication (`iss=rune`). Like Cauldron, duplicates wire-format DTOs in `Messages/Contracts/`.
 
 ### Morgana.Examples (plugin)
 
@@ -271,20 +271,20 @@ At application startup, three registries perform comprehensive validation:
 
 ## Key Configuration Sections (appsettings.json)
 
-| Section | Purpose |
-|---|---|
-| `Morgana:LLM:Provider` | LLM provider: `Anthropic`, `AzureOpenAI`, `Ollama`, `OpenAI` |
-| `Morgana:LLM:{Provider}` | Provider-specific settings (ApiKey, Model, Endpoint, DeploymentName) |
-| `Morgana:ActorSystem:TimeoutSeconds` | Actor/agent receive timeout (default 180s) |
-| `Morgana:ActorSystem:EnableGuardrail` | Toggle guard rail (useful for local dev) |
-| `Morgana:AdaptiveMessaging:StreamingResponse:Enabled` | Toggle streaming responses |
+| Section | Purpose                                                                                                                                                                                                                                        |
+|---|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Morgana:LLM:Provider` | LLM provider: `Anthropic`, `AzureOpenAI`, `Ollama`, `OpenAI`                                                                                                                                                                                   |
+| `Morgana:LLM:{Provider}` | Provider-specific settings (ApiKey, Model, Endpoint, DeploymentName)                                                                                                                                                                           |
+| `Morgana:ActorSystem:TimeoutSeconds` | Actor/agent receive timeout (default 180s)                                                                                                                                                                                                     |
+| `Morgana:ActorSystem:EnableGuardrail` | Toggle guard rail (useful for local dev)                                                                                                                                                                                                       |
+| `Morgana:AdaptiveMessaging:StreamingResponse:Enabled` | Toggle streaming responses                                                                                                                                                                                                                     |
 | `Morgana:AdaptiveMessaging:RichFeaturesMinLength` | Ingress heuristic: if the client's `MaxMessageLength` is below this threshold, `SupportsRichCards` and `SupportsQuickReplies` are forced to `false` at the handshake (SMS/IVR profile). Null/0 disables the heuristic. Streaming is unaffected |
-| `Morgana:ConversationPersistence` | StoragePath, EncryptionKey (AES-256, base64, must be 32 bytes) |
-| `Morgana:RateLimiting` | Enabled, MaxMessagesPerMinute/Hour/Day, custom ErrorMessage templates with `{limit}` placeholder |
-| `Morgana:Authentication` | Audience, Issuers[] (per-issuer Name + SymmetricKey min 256-bit) |
-| `Morgana:HistoryReducer` | Enabled, SummarizationThreshold (default 20), SummarizationTargetCount (default 8), SummarizationPrompt |
-| `Morgana:OpenTelemetry` | Enabled, ServiceName, Exporters array (name, enabled, endpoint) |
-| `Morgana:Plugins:Directories` | Plugin scan directories (default: `["plugins"]`) |
+| `Morgana:ConversationPersistence` | StoragePath, EncryptionKey (AES-256, base64, must be 32 bytes)                                                                                                                                                                                 |
+| `Morgana:RateLimiting` | Enabled, MaxMessagesPerMinute/Hour/Day, custom ErrorMessage templates with `{limit}` placeholder                                                                                                                                               |
+| `Morgana:Authentication` | Audience, Issuers[] (per-issuer Name + SymmetricKey min 256-bit)                                                                                                                                                                               |
+| `Morgana:HistoryReducer` | Enabled, SummarizationThreshold (default 12), SummarizationTargetCount (default 8), SummarizationPrompt                                                                                                                                        |
+| `Morgana:OpenTelemetry` | Enabled, ServiceName, Exporters array (name, enabled, endpoint)                                                                                                                                                                                |
+| `Morgana:Plugins:Directories` | Plugin scan directories (default: `["plugins"]`)                                                                                                                                                                                               |
 
 ## Build and Run
 
