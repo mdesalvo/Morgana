@@ -94,7 +94,7 @@ public class SummarizingChatReducerService
         }
 
         int targetCount = config.GetValue<int>("SummarizationTargetCount", 8);
-        int threshold = config.GetValue<int>("SummarizationThreshold", 20);
+        int threshold = config.GetValue<int>("SummarizationThreshold", 12);
 
         SummarizingChatReducer chatReducer = new SummarizingChatReducer(chatClient, targetCount, threshold);
 

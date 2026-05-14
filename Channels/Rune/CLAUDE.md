@@ -17,12 +17,15 @@ Channels/Rune/
   Program.cs                         # Entry point: Kestrel + DI + lifecycle
   Rune.csproj                        # .NET 10 Web SDK, deps: Spectre.Console, JsonWebTokens
   Rune.slnx                          # Solution (sibling to Cauldron.slnx)
-  Directory.Build.props              # Shared build/version metadata (0.21.0 aligned)
+  Directory.Build.props              # Shared build/version metadata
+  Directory.Build.targets            # MSBuild target that regenerates root .env.versions on each build
   appsettings.json                   # Morgana URL, callback URL, auth config
   Properties/launchSettings.json     # Dev profile: https://localhost:5003
   Rune.Dockerfile                    # Multi-stage container build (root context)
   Handlers/
     MorganaAuthHandler.cs            # DelegatingHandler: self-issues JWT for outbound calls
+  Interfaces/
+    IViewportResizeWatcher.cs        # Abstraction over terminal resize notifications (SIGWINCH vs polling)
   Messages/                          # Response DTOs that mirror anonymous controller shapes
     StartConversationResponse.cs     # Echo of conversation id from MorganaController.StartConversation
   Messages/Contracts/                # DTOs duplicated in lockstep from Morgana.AI.Records
@@ -35,10 +38,12 @@ Channels/Rune/
     QuickReply.cs                    # Kept for binary compat (stripped by adapter)
     RichCard.cs                      # Kept for binary compat (stripped by adapter)
   Services/
-    MorganaClient.cs                 # REST wrapper: start / send / end conversation
-    WebhookReceiver.cs               # Thin dispatcher, OnMessage delegate wired in Program.cs
-    ConsoleUi.cs                     # Spectre.Console Live(Layout) — sticky header + REPL body
+    MorganaClientService.cs          # REST wrapper: start / send / end conversation
+    WebhookReceiverService.cs        # Thin dispatcher, OnMessage delegate wired in Program.cs
+    ConsoleUiService.cs              # Spectre.Console Live(Layout) — sticky header + REPL body
     LandingMessageService.cs         # Random startup line from Rune:LandingMessages pool
+    PollingResizeWatcherService.cs   # IViewportResizeWatcher impl: cross-platform Console.WindowWidth/Height polling
+    SigWinchResizeWatcherService.cs  # IViewportResizeWatcher impl: Linux/macOS SIGWINCH-driven (no polling overhead)
 ```
 
 ## Architecture
@@ -59,18 +64,20 @@ Rune   ──REST──────→ Morgana.Web (MorganaController)        # 
 |---|---|---|
 | `MorganaAuthHandler` | Transient | JWT token generation for outbound REST auth |
 | `HttpClient` "Morgana" | Named | REST API calls with auto Bearer token injection |
-| `MorganaClient` | Singleton | Start/send/end conversation wrapper |
-| `WebhookReceiver` | Singleton | Minimal-API dispatcher, settable `OnMessage` callback |
-| `ConsoleUi` | Singleton | Spectre.Console Live UI (one Rune session per process) |
+| `MorganaClientService` | Singleton | Start/send/end conversation wrapper |
+| `WebhookReceiverService` | Singleton | Minimal-API dispatcher, settable `OnMessage` callback |
+| `ConsoleUiService` | Singleton | Spectre.Console Live UI (one Rune session per process) |
+| `LandingMessageService` | Singleton | Picks a random "warming up" line from the `Rune:LandingMessages` pool |
+| `IViewportResizeWatcher` | Singleton | OS-specific resize watcher: `SigWinchResizeWatcherService` on Linux/macOS, `PollingResizeWatcherService` elsewhere — selected at startup in `Program.cs` |
 
 ### Lifecycle (Program.cs)
 
 1. `builder.Logging.ClearProviders()` — silence Kestrel / ASP.NET Core logs (they corrupt the Live TUI)
 2. `app.StartAsync()` — Kestrel listens on `https://localhost:5003` (dev) / `http://+:5003` (container)
-3. `webhook.OnMessage = ui.EnqueueIncoming` — wire inbound to UI
-4. `morganaClient.StartConversationAsync()` — handshake with `ChannelMetadata.Build(callbackUrl)` → returns conversationId
-5. `ui.RunAsync(conversationId, onSend)` — blocks on the Live loop until `/quit` / `Esc`
-6. `finally { morganaClient.EndConversationAsync(); await app.StopAsync(); }`
+3. `webhook.OnMessage = uiService.EnqueueIncoming` — wire inbound to UI
+4. `morganaClientService.StartConversationAsync()` — handshake with `ChannelMetadata.Build(callbackUrl)` → returns conversationId
+5. `uiService.RunAsync(conversationId, onSend)` — blocks on the Live loop until `/quit` / `Esc`
+6. `finally { morganaClientService.EndConversationAsync(); await app.StopAsync(); }`
 
 ## Channel Handshake
 
@@ -122,11 +129,11 @@ Built on Spectre.Console's `LiveDisplay` + `Layout`:
 
 ### Colors (dark-theme palette)
 
-| Who | Color | Rationale |
-|---|---|---|
+| Who | Color      | Rationale |
+|---|------------|---|
 | `Morgana` | `magenta1` | Base assistant identity |
-| `Morgana (Agent)` | `hotpink` | Specialized agent (billing, contract, …) — `AgentName` derived from the wire contract |
-| `You` | `skyblue1` | User input and committed messages |
+| `Morgana (Agent)` | `hotpink`  | Specialized agent (billing, contract, …) — `AgentName` derived from the wire contract |
+| `You` | `white`    | User input and committed messages |
 
 ### Input handling
 
@@ -151,7 +158,7 @@ No resume in v1. Every Rune process start begins a fresh conversation. Keep this
 | `Rune:Authentication:Audience` | Token audience (default `morgana.ai`)                                                                                                                                                                                                                                                                                                                                                                     |
 | `Rune:AgentExitMessage` | Template for the courtesy line appended when a specialised agent completes (default `"{0} has completed its spell. I'm back to you!"`; `{0}` is the agent's display name). Mirrors Cauldron's `Cauldron:AgentExitMessage`.                                                                                                                                                                                |
 | `Rune:LandingMessages` | String array of whimsical "warming up" lines printed to stdout during the startup window between `builder.Build()` and `ui.RunAsync`. Picked uniformly at random per process; overwritten by `AnsiConsole.Clear()` just before the Live UI takes over. Mirrors Cauldron's `Cauldron:LandingMessages` (same pool, same intent).                                                                            |
-| `Rune:MaxMessageLength` | Hard cap (in characters) Rune advertises to Morgana's channel adapter at the handshake. Default `500` — aggressive on purpose so the downgrade path is exercised on every turn. Raise it (e.g. `500`) for a less ruthless rewrite without losing Rune's "poor but honest" profile; values below `Morgana:AdaptiveMessaging:RichFeaturesMinLength` keep rich cards / quick replies forced off server-side. |
+| `Rune:MaxMessageLength` | Hard cap (in characters) Rune advertises to Morgana's channel adapter at the handshake. Default `500` — aggressive on purpose so the downgrade path is exercised on every turn. Raise it (e.g. `2000`) for a less ruthless rewrite without losing Rune's "poor but honest" profile; values below `Morgana:AdaptiveMessaging:RichFeaturesMinLength` keep rich cards / quick replies forced off server-side. |
 | `Rune:StartupTimeoutSeconds` | How long (in seconds) to keep the landing line visible while waiting for Morgana's first webhook delivery before entering the Live UI anyway. Default `30`. Raise on slow LLM providers with cold starts (Ollama on CPU, Azure OpenAI in a distant region); lower for faster "something's wrong" feedback during development. Non-positive values fall back to the default.                               |
 
 ## Build and Run
@@ -169,5 +176,5 @@ No resume in v1. Every Rune process start begins a fresh conversation. Keep this
 
 - **Logging is silenced** at startup — the Spectre.Console Live UI owns the terminal; errors surface as red in-UI system lines.
 - **Asymmetric trust** is a first-class design choice, not a bug — do not introduce webhook signing without revisiting the decision recorded in the `WebhookChannelService` notes.
-- **Singletons** — one Rune process == one Rune session; if multi-session ever becomes a goal, move state (`ConsoleUi.history`, `WebhookReceiver.OnMessage`) onto a per-conversation scope first.
+- **Singletons** — one Rune process == one Rune session; if multi-session ever becomes a goal, move state (`ConsoleUiService.history`, `WebhookReceiverService.OnMessage`) onto a per-conversation scope first.
 - **Server is source of truth** for final message text — even though Rune suppresses streaming, it still defers to whatever Morgana's channel adapter decides to send.

@@ -9,7 +9,18 @@ Cauldron lives at `Channels/Cauldron/` in the repo root, alongside other referen
 ## Project Structure
 
 ```
-Cauldron/
+Channels/Cauldron/
+  Program.cs                          # DI wiring and app pipeline
+  Cauldron.csproj                     # .NET 10 Web SDK
+  Cauldron.slnx                       # Solution (sibling to Rune.slnx)
+  Directory.Build.props               # Shared build/version metadata
+  Directory.Build.targets             # MSBuild target that regenerates root .env.versions on each build
+  appsettings.json                    # Morgana URL, auth, streaming and landing-message config
+  Properties/launchSettings.json      # Dev profile: https://localhost:5002
+  Cauldron.Dockerfile                 # Multi-stage container build (root context)
+  App.razor                           # Blazor root component
+  _Imports.razor                      # Shared @using directives for components
+  Pages/_Host.cshtml                  # Blazor Server host page
   Pages/Index.razor                   # Main chat page (single-page app)
   Components/                         # Reusable Blazor components
     RichCard.razor                    # Rich card container (dispatches to sub-renderers)
@@ -131,13 +142,18 @@ Scoped service holding all UI state for one Blazor circuit:
 ## Authentication
 
 `MorganaAuthHandler` is a `DelegatingHandler` that generates short-lived JWT tokens:
-- Algorithm: HMAC-SHA256 with shared symmetric key from `Cauldron:Authentication:SymmetricKey`
-- Issuer: `cauldron` (must be in Morgana's `ValidIssuers` list)
-- Subject: `cauldron-app`
-- Audience: `morgana.ai`
-- Lifetime: 5 minutes (re-generated per request)
+- **Algorithm**: HMAC-SHA256 with shared symmetric key from `Cauldron:Authentication:SymmetricKey`
+- **Issuer**: `cauldron` — must be present in Morgana's `Morgana:Authentication:Issuers[]` list with a matching `SymmetricKey`; unknown issuers are rejected at the Morgana gate
+- **Subject**: `cauldron-app`
+- **Audience**: `morgana.ai`
+- **Lifetime**: 5 minutes (re-generated per request)
 
 Used by both the named `HttpClient` (automatic via handler pipeline) and `SignalRService` (via `AccessTokenProvider` callback in hub connection builder).
+
+**Onboarding checklist for a fresh Morgana instance:**
+1. Add an entry to `Morgana:Authentication:Issuers[]` in the destination Morgana configuration: `{ "Name": "cauldron", "SymmetricKey": "<at least 256 bit, base64>" }`
+2. Put the same `SymmetricKey` under `Cauldron:Authentication:SymmetricKey` via user-secrets or env var (never commit)
+3. Start Morgana (`:5001`), then `dotnet run` from `Channels/Cauldron/` (`:5002`)
 
 ## Contract Duplication
 
@@ -164,13 +180,14 @@ Morgana persists this and uses it to decide whether to adapt (degrade) outbound 
 
 | Section | Purpose |
 |---|---|
-| `Cauldron:MorganaURL` | Morgana backend base URL for REST + SignalR |
-| `Cauldron:Authentication:SymmetricKey` | Shared HMAC key (must match Morgana's) |
+| `Cauldron:MorganaURL` | Morgana backend base URL for REST + SignalR (default `https://localhost:5001`) |
+| `Cauldron:Authentication:SymmetricKey` | Shared HMAC key matching Morgana's `Issuers[].SymmetricKey` for `Name=cauldron` |
 | `Cauldron:Authentication:Issuer` | Token issuer (default `cauldron`) |
 | `Cauldron:Authentication:Audience` | Token audience (default `morgana.ai`) |
-| `Cauldron:StreamingResponse:TypewriterTickMilliseconds` | Typewriter speed (default 15ms) |
-| `Cauldron:StreamingResponse:TypewriterTickChars` | Chars per tick (default 1) |
-| `Cauldron:LandingMessages` | Array of random welcome messages for sparkle loader |
+| `Cauldron:AgentExitMessage` | Template for the courtesy line injected when a specialised agent completes (default `"{0} has completed its spell. I'm back to you!"`; `{0}` is the agent's display name). Mirrors Rune's `Rune:AgentExitMessage`. |
+| `Cauldron:StreamingResponse:TypewriterTickMilliseconds` | Typewriter speed (default `15`ms) |
+| `Cauldron:StreamingResponse:TypewriterTickChars` | Chars per tick (default `1`) |
+| `Cauldron:LandingMessages` | String array of whimsical "warming up" lines for the sparkle loader, picked uniformly at random per session. Mirrors Rune's `Rune:LandingMessages` (same pool, same intent). |
 
 ## UI Patterns
 
