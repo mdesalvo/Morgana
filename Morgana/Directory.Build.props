@@ -47,12 +47,11 @@
     <PackageReference Include="Akka" Version="1.5.*" />
     <PackageReference Include="Akka.DependencyInjection" Version="1.5.*" />
     <!-- Agents -->
-    <PackageReference Include="Anthropic" Version="12.20.0" />
     <PackageReference Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.5.0" />
-    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.5.0" />
-    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.5.0-preview.260507.1" />
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.5.0" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.6.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.6.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.6.1-preview.260514.1" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.6.1" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.6.0" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.6.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />

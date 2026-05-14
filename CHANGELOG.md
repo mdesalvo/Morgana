@@ -26,7 +26,7 @@ Now every agent loads the shared registry at the start of each turn and merges i
 - Use `OpenTelemetryChatClient` to get automatic `gen_ai.*` telemetry across LLM providers
 - Bump Rune's `MaxMessageLength` advertised budget capability to 500
 - Restyled Morgana's messaging avatar in Cauldron
-- Updated `Microsoft.Agents.AI` dependency to 1.5.0
+- Updated `Microsoft.Agents.AI` dependency to 1.6.1
 - Updated `Microsoft.Extensions.AI` dependency to 10.6.0
 - Updated `ModelContextProtocol.Core` dependency to 1.3.0
 
