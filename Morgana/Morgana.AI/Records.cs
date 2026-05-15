@@ -67,10 +67,14 @@ public static class Records
     /// (channel name + capability budget). Required on fresh starts — Morgana refuses to
     /// create a conversation for a channel that does not announce itself. Null on restore,
     /// where the manager loads the persisted entry instead.</param>
+    /// <param name="SeedSummary">Optional memory seed: a summary of a prior (budget-exhausted)
+    /// conversation, surfaced to the user as the first message so the new conversation starts
+    /// "warm" instead of vanilla. Null for ordinary fresh starts.</param>
     public record CreateConversation(
         string ConversationId,
         bool IsRestore,
-        ChannelMetadata? ChannelMetadata = null);
+        ChannelMetadata? ChannelMetadata = null,
+        string? SeedSummary = null);
 
     /// <summary>
     /// Request to terminate a conversation and stop all associated actors.
@@ -334,6 +338,71 @@ public static class Records
         bool IsAllowed,
         string? ViolatedLimit = null,
         int? RetryAfterSeconds = null);
+
+    // ==========================================================================
+    // MAGIC DUST (TOKEN BUDGET)
+    // ==========================================================================
+
+    /// <summary>
+    /// Per-provider pricing: how many tokens of each direction equal one dust unit.
+    /// Lives under <c>Morgana:LLM:{Provider}:MagicDust</c> because cost is a property of the
+    /// concrete model. Zero on either axis means that direction does not consume dust
+    /// (e.g. Ollama local models, set both to 0 for "free").
+    /// </summary>
+    public record MagicDustPricing
+    {
+        /// <summary>Input tokens that equal one dust unit. 0 disables input charging.</summary>
+        public int InputTokensPerDustUnit { get; set; } = 1000;
+
+        /// <summary>Output tokens that equal one dust unit. 0 disables output charging.</summary>
+        public int OutputTokensPerDustUnit { get; set; } = 200;
+    }
+
+    /// <summary>
+    /// Policy for the per-conversation lifetime dust budget — a token-consumption guard
+    /// orthogonal to <see cref="RateLimitOptions"/>. The budget is a lifetime resource: no
+    /// sliding window, no reset; the only way to refresh it is a new conversation (optionally
+    /// seeded from the exhausted one).
+    /// <para>Message templates are framework-neutral English defaults; deployments override
+    /// them in <c>Morgana:DustLimiting</c> with their own copy and personality, exactly like
+    /// <see cref="RateLimitOptions"/>. Placeholders: <c>{remaining}</c> (dust left, rounded)
+    /// and <c>{budget}</c> (total budget, rounded).</para>
+    /// </summary>
+    public record DustLimitingOptions
+    {
+        /// <summary>Master toggle. When false the limiter is fully bypassed (fail open).</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Total dust a conversation may consume over its lifetime.</summary>
+        public double BudgetPerConversation { get; set; } = 100;
+
+        /// <summary>One-shot advisory shown when consumption crosses 80%.</summary>
+        public string Warning80Message { get; set; } =
+            "Heads up — this conversation has used 80% of its budget ({remaining} of {budget} left).";
+
+        /// <summary>One-shot advisory shown when consumption crosses 90%.</summary>
+        public string Warning90Message { get; set; } =
+            "Almost out — only {remaining} of {budget} budget left. Wrap up what you're doing.";
+
+        /// <summary>Blocking message shown when the budget is exhausted (100%).</summary>
+        public string ErrorMessage { get; set; } =
+            "This conversation has used up its budget. You can continue in a new conversation — the context will carry over.";
+
+        /// <summary>
+        /// Prefix prepended to the carried-over memory summary when a new conversation is
+        /// seeded from an exhausted one. The LLM-generated summary follows verbatim.
+        /// </summary>
+        public string SeedSummaryPrefix { get; set; } = "I remember we were talking about:";
+    }
+
+    /// <summary>
+    /// Conversation-level metadata carried by every outbound <see cref="ChannelMessage"/>.
+    /// Holds dimensions that characterise the conversation itself, not the message content
+    /// (remaining budget today; active agent, health, … as the framework grows).
+    /// </summary>
+    /// <param name="DustLevel">Ratio of consumed dust to budget, 0.0 to &gt;1.0. Null when
+    /// dust limiting is disabled (frontends hide the indicator in that case).</param>
+    public record ConversationMetadata(double? DustLevel = null);
 
     // ==========================================================================
     // AUTHENTICATION
@@ -605,10 +674,15 @@ public static class Records
     /// capability budget. Required: Morgana rejects start requests from channels that do not
     /// announce both their name and their capability budget.</param>
     /// <param name="InitialContext">Optional initial context information (reserved for future use)</param>
+    /// <param name="SeedConversationId">Optional id of a prior conversation whose memory should
+    /// seed this one. When present, Morgana compresses that conversation's history into a
+    /// summary (surfaced to the user) and carries over its shared context. Used by the
+    /// "continue in a new conversation" flow after a budget exhaustion.</param>
     public record StartConversationRequest(
         string ConversationId,
         ChannelMetadata? ChannelMetadata,
-        Dictionary<string, object>? InitialContext = null);
+        Dictionary<string, object>? InitialContext = null,
+        string? SeedConversationId = null);
 
     /// <summary>
     /// HTTP request model for sending a message to a conversation via REST API.
@@ -855,6 +929,13 @@ public static class Records
         /// </summary>
         [JsonPropertyName("fadingMessageDurationSeconds")]
         public int? FadingMessageDurationSeconds { get; set; } = 10;
+
+        /// <summary>
+        /// Conversation-level metadata (e.g. remaining dust budget). Characterises the
+        /// conversation, not this message. Null when no such metadata is available.
+        /// </summary>
+        [JsonPropertyName("conversationMetadata")]
+        public ConversationMetadata? ConversationMetadata { get; init; }
     }
 
     /// <summary>

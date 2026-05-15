@@ -195,7 +195,7 @@ builder.Services.AddSingleton<ILLMService>(sp => {
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
     string llmProvider = builder.Configuration["Morgana:LLM:Provider"]!;
 
-    return llmProvider.ToLowerInvariant() switch
+    Morgana.AI.Abstractions.MorganaLLM llm = llmProvider.ToLowerInvariant() switch
     {
         "anthropic"   => new Morgana.AI.Abstractions.LLMs.Anthropic(config, promptResolver, loggerFactory),
         "azureopenai" => new Morgana.AI.Abstractions.LLMs.AzureOpenAI(config, promptResolver, loggerFactory),
@@ -203,6 +203,15 @@ builder.Services.AddSingleton<ILLMService>(sp => {
         "openai"      => new Morgana.AI.Abstractions.LLMs.OpenAI(config, promptResolver, loggerFactory),
         _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'Anthropic', 'AzureOpenAI', 'Ollama', 'OpenAI'")
     };
+
+    // Wire dust accounting for the framework-actor path (CompleteWithSystemPromptAsync).
+    // Done post-construction because the dust limiter depends on conversation persistence,
+    // which is registered after this factory. Lazy resolution makes the order safe.
+    llm.EnableDustAccounting(
+        sp.GetRequiredService<IDustLimitService>(),
+        sp.GetRequiredService<Records.MagicDustPricing>());
+
+    return llm;
 });
 builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMService>().GetChatClient());
 
@@ -236,6 +245,34 @@ builder.Services.AddSingleton<IConversationPersistenceService, SQLiteConversatio
 builder.Services.Configure<Records.RateLimitOptions>(
     builder.Configuration.GetSection("Morgana:RateLimiting"));
 builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
+
+
+// ==============================================================================
+// SECTION 7.3: Dust Limiting (token budget)
+// ==============================================================================
+// Orthogonal to rate limiting: caps token CONSUMPTION (not message frequency) over the
+// conversation's lifetime. Shares the per-conversation SQLite database.
+//
+// - DustLimitingOptions: policy (budget + warning/error message templates)
+// - MagicDustPricing: per-provider tokens-per-dust-unit, read from the active provider's
+//   Morgana:LLM:{Provider}:MagicDust section (IConfiguration keys are case-insensitive)
+//
+// Configuration: Morgana:DustLimiting + Morgana:LLM:{Provider}:MagicDust in appsettings.json
+
+builder.Services.Configure<Records.DustLimitingOptions>(
+    builder.Configuration.GetSection("Morgana:DustLimiting"));
+
+builder.Services.AddSingleton<Records.MagicDustPricing>(sp =>
+{
+    IConfiguration config = sp.GetRequiredService<IConfiguration>();
+    string provider = config["Morgana:LLM:Provider"]!;
+
+    Records.MagicDustPricing pricing = new Records.MagicDustPricing();
+    config.GetSection($"Morgana:LLM:{provider}:MagicDust").Bind(pricing);
+    return pricing;
+});
+
+builder.Services.AddSingleton<IDustLimitService, SQLiteDustLimitService>();
 
 // ==============================================================================
 // SECTION 7.3: Authentication

@@ -64,6 +64,33 @@ public class MorganaLLM : ILLMService
     protected readonly ILoggerFactory? loggerFactory;
 
     /// <summary>
+    /// Dust limiter, wired post-construction by <see cref="EnableDustAccounting"/> from
+    /// Program.cs (DI ordering: the limiter depends on persistence, registered after the LLM).
+    /// Null until wired, or whenever dust limiting is disabled — in which case
+    /// <see cref="CompleteWithSystemPromptAsync"/> uses the bare chat client.
+    /// </summary>
+    private IDustLimitService? dustLimitService;
+
+    /// <summary>
+    /// Per-provider dust pricing, set alongside <see cref="dustLimitService"/>. Used to
+    /// convert this provider's token counts into dust units for framework-actor calls.
+    /// </summary>
+    private Records.MagicDustPricing? dustPricing;
+
+    /// <summary>
+    /// Wires dust accounting for framework-actor LLM calls (guard, classifier, presenter,
+    /// channel adapter) routed through <see cref="CompleteWithSystemPromptAsync"/>. Called
+    /// once from Program.cs after both this service and <see cref="IDustLimitService"/> are
+    /// constructed. Agent calls are metered separately by
+    /// <see cref="Adapters.MorganaAgentAdapter"/> with a per-agent role.
+    /// </summary>
+    public void EnableDustAccounting(IDustLimitService dustLimitService, Records.MagicDustPricing dustPricing)
+    {
+        this.dustLimitService = dustLimitService;
+        this.dustPricing = dustPricing;
+    }
+
+    /// <summary>
     /// Initializes MorganaLLM abstraction.
     /// Loads the Morgana framework prompt for error message templates.
     /// </summary>
@@ -149,7 +176,14 @@ public class MorganaLLM : ILLMService
     {
         try
         {
-            ChatResponse response = await chatClient.GetResponseAsync(
+            // Framework-actor calls (guard, classifier, presenter, channel adapter) are
+            // metered under the role "Morgana". Wrapping is per-call: no singleton dust
+            // wrapper exists on chatClient, so this never double-counts the agent path.
+            IChatClient client = dustLimitService is not null && dustPricing is not null
+                ? new DustAccountingChatClient(chatClient, dustLimitService, dustPricing, "Morgana")
+                : chatClient;
+
+            ChatResponse response = await client.GetResponseAsync(
                 [
                     new ChatMessage(ChatRole.System, systemPrompt),
                     new ChatMessage(ChatRole.User, userPrompt)

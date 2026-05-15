@@ -1,6 +1,7 @@
 using Akka.Actor;
 using Akka.Event;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
@@ -42,6 +43,17 @@ public class ConversationManagerActor : MorganaActor
     private readonly IConversationPersistenceService conversationPersistenceService;
 
     /// <summary>
+    /// Per-conversation lifetime token-budget limiter. Read after each turn to stamp the
+    /// remaining dust level on the outbound message and to emit one-shot 80%/90% warnings.
+    /// </summary>
+    private readonly IDustLimitService dustLimitService;
+
+    /// <summary>
+    /// Dust-limiting policy (budget + warning message templates) for placeholder substitution.
+    /// </summary>
+    private readonly Records.DustLimitingOptions dustLimitingOptions;
+
+    /// <summary>
     /// Reference to the active conversation supervisor actor.
     /// Null until a conversation is created.
     /// </summary>
@@ -54,6 +66,8 @@ public class ConversationManagerActor : MorganaActor
     /// <param name="channelService">Channel service used to deliver outbound messages to the end user</param>
     /// <param name="channelMetadataStore">Registry where this actor publishes the per-conversation channel metadata</param>
     /// <param name="conversationPersistenceService">Persistence service used to save/load the channel handshake</param>
+    /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
+    /// <param name="dustLimitingOptions">Dust-limiting policy and warning message templates</param>
     /// <param name="llmService">LLM service for AI completions</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
@@ -62,6 +76,8 @@ public class ConversationManagerActor : MorganaActor
         IChannelService channelService,
         IChannelMetadataStore channelMetadataStore,
         IConversationPersistenceService conversationPersistenceService,
+        IDustLimitService dustLimitService,
+        IOptions<Records.DustLimitingOptions> dustLimitingOptions,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
@@ -69,6 +85,8 @@ public class ConversationManagerActor : MorganaActor
         this.channelService = channelService;
         this.channelMetadataStore = channelMetadataStore;
         this.conversationPersistenceService = conversationPersistenceService;
+        this.dustLimitService = dustLimitService;
+        this.dustLimitingOptions = dustLimitingOptions.Value;
 
         // Handle incoming user messages from SignalR:
         // - Ensures supervisor exists (creates if missing)
@@ -137,6 +155,25 @@ public class ConversationManagerActor : MorganaActor
             // Trigger automatic presentation (only in case of new conversation)
             if (!msg.IsRestore)
             {
+                // Memory seed: when this conversation was started to continue a
+                // budget-exhausted one, surface the carried-over summary as the very first
+                // message — exposed, not silent context — so the user understands Morgana
+                // resumes with a minimal conscious state rather than from scratch. Sent
+                // before the presentation so the chronology reads "I remember … / hello".
+                if (!string.IsNullOrWhiteSpace(msg.SeedSummary))
+                {
+                    await channelService.SendMessageAsync(new Records.ChannelMessage
+                    {
+                        ConversationId = msg.ConversationId,
+                        Text = msg.SeedSummary,
+                        MessageType = "system",
+                        AgentName = "Morgana",
+                        AgentCompleted = false
+                    });
+
+                    actorLogger.Info("Seed summary delivered for {0}", msg.ConversationId);
+                }
+
                 supervisor.Tell(new Records.GeneratePresentationMessage());
 
                 actorLogger.Info("Presentation generation triggered");
@@ -356,6 +393,13 @@ public class ConversationManagerActor : MorganaActor
             $"#quickReplies: {response.QuickReplies?.Count ?? 0}" +
             $"#richCard: {response.RichCard != null}");
 
+        // The turn just completed, so all of its LLM calls have already been charged:
+        // read the fresh dust level to stamp it on the outbound message (frontends render
+        // it as a depleting gauge). Null when dust limiting is off → indicator hidden.
+        Records.ConversationMetadata? conversationMetadata = dustLimitingOptions.Enabled
+            ? new Records.ConversationMetadata(await dustLimitService.GetUsageRatioAsync(conversationId))
+            : null;
+
         // Send response to client via the active channel
         try
         {
@@ -368,13 +412,18 @@ public class ConversationManagerActor : MorganaActor
                 AgentName = response.AgentName ?? "Morgana",
                 AgentCompleted = response.AgentCompleted,
                 Timestamp = response.OriginalTimestamp ?? DateTime.UtcNow,
-                RichCard = response.RichCard
+                RichCard = response.RichCard,
+                ConversationMetadata = conversationMetadata
             });
 
             actorLogger.Info(
                 $"Response sent successfully to client via channel " +
                 $"(#quickReplies: {response.QuickReplies?.Count ?? 0}," +
                 $"hasRichCard: {response.RichCard != null})");
+
+            // After delivering the answer, surface one-shot budget warnings (80% / 90%).
+            // These are advisory system messages, separate from the conversational flow.
+            await EmitDustWarningsIfNeededAsync();
         }
         catch (Exception ex)
         {
@@ -398,6 +447,62 @@ public class ConversationManagerActor : MorganaActor
                 actorLogger.Error(fallbackEx, "Failed to send error notification to client");
             }
         }
+    }
+
+    /// <summary>
+    /// Checks the dust-budget warning thresholds and, for any threshold newly crossed,
+    /// emits a one-shot advisory <c>system_warning</c> message. The 80% / 90% one-shot
+    /// flags are owned and atomically marked by <see cref="IDustLimitService"/>, so this
+    /// never re-sends the same warning. Best-effort: failures are logged, never thrown.
+    /// </summary>
+    private async Task EmitDustWarningsIfNeededAsync()
+    {
+        if (!dustLimitingOptions.Enabled)
+            return;
+
+        try
+        {
+            (bool send80, bool send90) = await dustLimitService.CheckAndMarkWarningsAsync(conversationId);
+            if (!send80 && !send90)
+                return;
+
+            double ratio = await dustLimitService.GetUsageRatioAsync(conversationId);
+
+            // 90% supersedes 80%: if both crossed in the same turn, the user only needs
+            // the more urgent message.
+            string template = send90
+                ? dustLimitingOptions.Warning90Message
+                : dustLimitingOptions.Warning80Message;
+
+            await channelService.SendMessageAsync(new Records.ChannelMessage
+            {
+                ConversationId = conversationId,
+                Text = FormatDustMessage(template, ratio),
+                MessageType = "system_warning",
+                ErrorReason = send90 ? "dust_budget_low_90" : "dust_budget_low_80",
+                AgentName = "Morgana",
+                AgentCompleted = false
+            });
+        }
+        catch (Exception ex)
+        {
+            actorLogger.Error(ex, "Failed to emit dust budget warning for {0}", conversationId);
+        }
+    }
+
+    /// <summary>
+    /// Substitutes the <c>{remaining}</c> and <c>{budget}</c> placeholders in a dust message
+    /// template with rounded integer values. <c>remaining</c> is clamped at zero (a turn may
+    /// finish slightly over budget under the let-it-finish policy).
+    /// </summary>
+    private string FormatDustMessage(string template, double ratio)
+    {
+        double budget = dustLimitingOptions.BudgetPerConversation;
+        long remaining = (long)Math.Round(Math.Max(0.0, budget * (1.0 - ratio)));
+
+        return template
+            .Replace("{remaining}", remaining.ToString())
+            .Replace("{budget}", ((long)Math.Round(budget)).ToString());
     }
 
     /// <summary>

@@ -652,12 +652,13 @@ WHERE id = 1;
         checkCommand.CommandText = "PRAGMA user_version;";
         long currentVersion = (long)(await checkCommand.ExecuteScalarAsync() ?? 0L);
 
-        if (currentVersion >= 4)
+        if (currentVersion >= 5)
             return; // Already initialized
 
         // Create schema. CREATE TABLE IF NOT EXISTS makes this safe to run on databases that
-        // are already at v3 — the existing tables are left intact and only shared_context (the
-        // v4 addition) is created.
+        // are already at an earlier version — existing tables are left intact and only the
+        // tables introduced by later versions (shared_context in v4; dust_budget +
+        // dust_usage_log in v5) are created.
         await using SqliteCommand schemaCommand = connection.CreateCommand();
         schemaCommand.CommandText =
 """
@@ -692,16 +693,30 @@ CREATE TABLE IF NOT EXISTS shared_context (
     source_agent_intent  TEXT NOT NULL,
     last_update          TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS dust_budget (
+    id                 INTEGER PRIMARY KEY CHECK (id = 1),
+    dust_consumed      REAL    NOT NULL DEFAULT 0,
+    warning_80_sent    INTEGER NOT NULL DEFAULT 0,
+    warning_90_sent    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS dust_usage_log (
+    timestamp     TEXT NOT NULL,
+    dust_consumed REAL NOT NULL,
+    llm_role      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 """;
         await schemaCommand.ExecuteNonQueryAsync();
 
-        // Mark database as initialized (version 4)
+        // Mark database as initialized (version 5)
         await using SqliteCommand versionCommand = connection.CreateCommand();
-        versionCommand.CommandText = "PRAGMA user_version = 4;";
+        versionCommand.CommandText = "PRAGMA user_version = 5;";
         await versionCommand.ExecuteNonQueryAsync();
 
         logger.LogInformation(
-            "Initialized database schema v4 for: {GetFileName}", Path.GetFileName(connection.DataSource));
+            "Initialized database schema v5 for: {GetFileName}", Path.GetFileName(connection.DataSource));
     }
 
     /// <summary>

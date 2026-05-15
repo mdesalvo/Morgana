@@ -1,7 +1,9 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
 using Akka.Actor;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Morgana.AI;
 using Morgana.AI.Actors;
@@ -42,6 +44,10 @@ public class MorganaController : ControllerBase
     private readonly IAuthenticationService authenticationService;
     private readonly IRateLimitService rateLimitService;
     private readonly Records.RateLimitOptions rateLimitOptions;
+    private readonly IDustLimitService dustLimitService;
+    private readonly Records.DustLimitingOptions dustLimitingOptions;
+    private readonly ILLMService llmService;
+    private readonly IConfiguration configuration;
 
     // ==============================================================================
     /// <summary>
@@ -55,6 +61,10 @@ public class MorganaController : ControllerBase
     /// <param name="authenticationService">Service for authenticating incoming requests</param>
     /// <param name="rateLimitService">Service for rate limiting an existing conversation</param>
     /// <param name="rateLimitOptions">Options for configuration of the rate limiting service</param>
+    /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
+    /// <param name="dustLimitingOptions">Dust-limiting policy and message templates</param>
+    /// <param name="llmService">LLM service used to compress a seed conversation's history</param>
+    /// <param name="configuration">Configuration (read for the seed summarization prompt)</param>
     public MorganaController(
         ActorSystem actorSystem,
         ILogger logger,
@@ -63,7 +73,11 @@ public class MorganaController : ControllerBase
         IConversationPersistenceService conversationPersistenceService,
         IAuthenticationService authenticationService,
         IRateLimitService rateLimitService,
-        IOptions<Records.RateLimitOptions> rateLimitOptions)
+        IOptions<Records.RateLimitOptions> rateLimitOptions,
+        IDustLimitService dustLimitService,
+        IOptions<Records.DustLimitingOptions> dustLimitingOptions,
+        ILLMService llmService,
+        IConfiguration configuration)
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
@@ -73,6 +87,10 @@ public class MorganaController : ControllerBase
         this.authenticationService = authenticationService;
         this.rateLimitService = rateLimitService;
         this.rateLimitOptions = rateLimitOptions.Value;
+        this.dustLimitService = dustLimitService;
+        this.dustLimitingOptions = dustLimitingOptions.Value;
+        this.llmService = llmService;
+        this.configuration = configuration;
     }
 
     /// <summary>
@@ -138,11 +156,18 @@ public class MorganaController : ControllerBase
                 });
             }
 
+            // Memory seed: when continuing from a budget-exhausted conversation, compress its
+            // history into a summary and carry over its shared context. Best-effort — a
+            // failure here must not block the new conversation, it just starts vanilla.
+            string? seedSummary = null;
+            if (!string.IsNullOrWhiteSpace(request.SeedConversationId))
+                seedSummary = await BuildSeedAsync(request.SeedConversationId, request.ConversationId);
+
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 "manager", request.ConversationId);
 
             manager.Tell(new Records.CreateConversation(
-                request.ConversationId, false, request.ChannelMetadata));
+                request.ConversationId, false, request.ChannelMetadata, seedSummary));
 
             logger.LogInformation("Conversation creation queued: {RequestConversationId}", request.ConversationId);
 
@@ -348,6 +373,41 @@ public class MorganaController : ControllerBase
             }
             #endregion
 
+            #region Dust Limiting
+            // Orthogonal to rate limiting: the rate limiter caps message frequency, the dust
+            // limiter caps token consumption. Checked after it, same 429 shape. The error
+            // carries a quick reply CTA — the AdaptingChannelService degrades it to plain
+            // text for channels that do not support quick replies (e.g. Rune).
+            if (await dustLimitService.IsOverBudgetAsync(request.ConversationId))
+            {
+                logger.LogWarning(
+                    "Dust budget exhausted for conversation {RequestConversationId}", request.ConversationId);
+
+                await channelService.SendMessageAsync(new Records.ChannelMessage
+                {
+                    ConversationId = request.ConversationId,
+                    Text = dustLimitingOptions.ErrorMessage,
+                    MessageType = "error",
+                    ErrorReason = "dust_budget_exhausted",
+                    AgentName = "Morgana",
+                    AgentCompleted = false,
+                    QuickReplies =
+                    [
+                        new Records.QuickReply(
+                            "seed_conversation",
+                            "✨ Continue in a new conversation",
+                            "seed_conversation")
+                    ]
+                });
+
+                return StatusCode(429, new
+                {
+                    error = "Dust budget exhausted",
+                    message = dustLimitingOptions.ErrorMessage
+                });
+            }
+            #endregion
+
             logger.LogInformation("Sending message to conversation {RequestConversationId}", request.ConversationId);
 
             // Capture the HTTP span context so the supervisor can link its turn span back to it.
@@ -433,6 +493,67 @@ public class MorganaController : ControllerBase
         }
 
         return (null, authResult.UserId);
+    }
+
+    /// <summary>
+    /// Builds the memory seed for a "continue in a new conversation" start: compresses the
+    /// exhausted conversation's history into a single summary (surfaced to the user by the
+    /// manager actor) and copies its shared context into the new conversation so extracted
+    /// facts (userId, contract numbers, …) are not lost.
+    /// </summary>
+    /// <returns>The summary text, or null if there is nothing to seed (no history / failure).
+    /// Failures are swallowed: the new conversation simply starts vanilla.</returns>
+    private async Task<string?> BuildSeedAsync(string seedConversationId, string newConversationId)
+    {
+        try
+        {
+            if (!conversationPersistenceService.ConversationExists(seedConversationId))
+            {
+                logger.LogWarning(
+                    "Seed requested from unknown conversation {SeedConversationId}; starting vanilla",
+                    seedConversationId);
+                return null;
+            }
+
+            // Carry over shared context (first-write-wins is enforced by the persistence layer).
+            Dictionary<string, object> sharedVariables =
+                await conversationPersistenceService.LoadSharedVariablesAsync(seedConversationId);
+            foreach (KeyValuePair<string, object> variable in sharedVariables)
+                await conversationPersistenceService.UpsertSharedVariableAsync(
+                    newConversationId, variable.Key, variable.Value, "seed");
+
+            // Compress the prior history into one summary using the configured prompt.
+            Records.MorganaChatMessage[] history =
+                await conversationPersistenceService.GetConversationHistoryAsync(seedConversationId);
+            if (history.Length == 0)
+                return null;
+
+            StringBuilder transcript = new StringBuilder();
+            foreach (Records.MorganaChatMessage message in history)
+                transcript.AppendLine($"{message.AgentName}: {message.Text}");
+
+            string summarizationPrompt =
+                configuration["Morgana:HistoryReducer:SummarizationPrompt"]
+                ?? "Summarize this conversation concisely, preserving user IDs, numbers, " +
+                   "amounts, dates, decisions and unresolved issues.";
+
+            string summary = await llmService.CompleteWithSystemPromptAsync(
+                newConversationId, summarizationPrompt, transcript.ToString());
+
+            if (string.IsNullOrWhiteSpace(summary))
+                return null;
+
+            // Exposed to the user, not silent system context: Morgana wakes with a minimal
+            // conscious state, the user sees it remembers rather than starting from zero.
+            return $"{dustLimitingOptions.SeedSummaryPrefix} {summary.Trim()}";
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed to build seed from {SeedConversationId} for {NewConversationId}; starting vanilla",
+                seedConversationId, newConversationId);
+            return null;
+        }
     }
 
     /// <summary>
