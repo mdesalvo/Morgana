@@ -268,11 +268,19 @@ public class MorganaController : ControllerBase
             logger.LogInformation(
                 "Conversation resume queued: {ConversationId} with active agent: {LastActiveAgent}", conversationId, lastActiveAgent);
 
+            // Surface the consumed-dust ratio on resume
+            // so the client can rehydrate its gauge immediately.
+            // Null when dust limiting is disabled → client keeps the indicator hidden.
+            double? dustLevel = dustLimitingOptions.Enabled
+                ? await dustLimitService.GetUsageRatioAsync(conversationId)
+                : null;
+
             return Accepted(new
             {
                 conversationId = conversationId,
                 resumed = true,
-                activeAgent = lastActiveAgent
+                activeAgent = lastActiveAgent,
+                dustLevel = dustLevel
             });
         }
         catch (Exception ex)

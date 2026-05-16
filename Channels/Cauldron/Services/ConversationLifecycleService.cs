@@ -101,6 +101,12 @@ public class ConversationLifecycleService : IConversationLifecycleService
 
                 _chatStateService.ConversationId = result?.ConversationId ?? savedConversationId;
 
+                // Rehydrate the dust gauge from the resumed conversation's budget so the
+                // widget reflects real residual dust immediately, not a pristine bar that
+                // only corrects itself after the first post-resume turn. Null leaves the
+                // indicator hidden (dust limiting disabled on Morgana).
+                _chatStateService.DustLevel = result?.DustLevel;
+
                 if (string.IsNullOrEmpty(result?.ActiveAgent)
                     || string.Equals(result.ActiveAgent, "Morgana", StringComparison.OrdinalIgnoreCase))
                 {
