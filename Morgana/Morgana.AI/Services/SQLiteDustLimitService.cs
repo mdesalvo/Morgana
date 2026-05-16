@@ -66,14 +66,8 @@ public class SQLiteDustLimitService : IDustLimitService
             await using SqliteTransaction transaction = connection.BeginTransaction();
             try
             {
-                await using (SqliteCommand ensureCommand = connection.CreateCommand())
-                {
-                    ensureCommand.Transaction = transaction;
-                    ensureCommand.CommandText =
-                        "INSERT OR IGNORE INTO dust_budget (id, dust_consumed, warning_80_sent, warning_90_sent) VALUES (1, 0, 0, 0);";
-                    await ensureCommand.ExecuteNonQueryAsync();
-                }
-
+                // The id=1 row is seeded once at schema init (EnsureDatabaseInitializedAsync
+                // above guarantees it exists), so the hot path is a bare UPDATE.
                 await using (SqliteCommand updateCommand = connection.CreateCommand())
                 {
                     updateCommand.Transaction = transaction;
@@ -168,8 +162,7 @@ public class SQLiteDustLimitService : IDustLimitService
                 await using (SqliteCommand readCommand = connection.CreateCommand())
                 {
                     readCommand.Transaction = transaction;
-                    readCommand.CommandText =
-                        "SELECT dust_consumed, warning_80_sent, warning_90_sent FROM dust_budget WHERE id = 1;";
+                    readCommand.CommandText = "SELECT dust_consumed, warning_80_sent, warning_90_sent FROM dust_budget WHERE id = 1;";
                     await using SqliteDataReader reader = await readCommand.ExecuteReaderAsync();
                     if (!await reader.ReadAsync())
                     {

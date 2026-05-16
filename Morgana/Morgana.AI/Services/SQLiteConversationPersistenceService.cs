@@ -72,7 +72,6 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
 
         if (string.IsNullOrWhiteSpace(this.options.StoragePath))
             throw new ArgumentException("StoragePath must be configured in appsettings.json");
-
         if (string.IsNullOrWhiteSpace(this.options.EncryptionKey))
             throw new ArgumentException("EncryptionKey must be configured in appsettings.json");
 
@@ -700,6 +699,7 @@ CREATE TABLE IF NOT EXISTS dust_budget (
     warning_80_sent    INTEGER NOT NULL DEFAULT 0,
     warning_90_sent    INTEGER NOT NULL DEFAULT 0
 );
+INSERT OR IGNORE INTO dust_budget (id) VALUES (1);
 
 CREATE TABLE IF NOT EXISTS dust_usage_log (
     timestamp     TEXT NOT NULL,
@@ -901,9 +901,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             // at least one user_facing marker. Widgets that those messages may have introduced
             // are already in pendingRichCardCallId / pendingQuickRepliesCallId from a few lines
             // above, ready to be attached to the surviving final assistant.
-            if (chatMessage.Role == ChatRole.Assistant
-             && markedAgents.Contains(agentName)
-             && !isUserFacing)
+            if (chatMessage.Role == ChatRole.Assistant && markedAgents.Contains(agentName) && !isUserFacing)
                 continue;
 
             // Process messages with text content
@@ -913,26 +911,17 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
             // Attach rich card to assistant message following SetRichCard
             RichCard? richCard = null;
-            if (pendingRichCardCallId != null
-                 && chatMessage.Role == ChatRole.Assistant
-                 && richCardsByCallId.TryGetValue(pendingRichCardCallId, out richCard))
-            {
+            if (pendingRichCardCallId != null && chatMessage.Role == ChatRole.Assistant && richCardsByCallId.TryGetValue(pendingRichCardCallId, out richCard))
                 pendingRichCardCallId = null; // Reset after attachment
-            }
 
             // Attach quick replies to assistant message following SetQuickReplies
             List<QuickReply>? quickReplies = null;
-            if (pendingQuickRepliesCallId != null
-                 && chatMessage.Role == ChatRole.Assistant
-                 && quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
-            {
+            if (pendingQuickRepliesCallId != null && chatMessage.Role == ChatRole.Assistant && quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
                 pendingQuickRepliesCallId = null; // Reset after attachment
-            }
 
             // Add message with both attachments (if present)
             historyMessages.Add(
-                MapToMorganaChatMessage(conversationId, agentName, agentCompleted,
-                                        chatMessage, isLastHistoryMessage, quickReplies, richCard));
+                MapToMorganaChatMessage(conversationId, agentName, agentCompleted, chatMessage, isLastHistoryMessage, quickReplies, richCard));
         }
 
         logger.LogInformation(
