@@ -379,8 +379,9 @@ public static class Records
     /// forward is a brand-new conversation.
     /// <para>Message templates are framework-neutral English defaults; deployments override
     /// them in <c>Morgana:DustLimiting</c> with their own copy and personality, exactly like
-    /// <see cref="RateLimitOptions"/>. Placeholders: <c>{remaining}</c> (dust left, rounded)
-    /// and <c>{budget}</c> (total budget, rounded).</para>
+    /// <see cref="RateLimitOptions"/>. The warning templates support one placeholder,
+    /// <c>{percent}</c> (remaining budget as a 0–100 integer — fuel-gauge semantics, the
+    /// same number the gauge shows; users reason in "how much is left", not dust units).</para>
     /// </summary>
     public record DustLimitingOptions
     {

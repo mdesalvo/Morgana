@@ -475,18 +475,15 @@ public class ConversationManagerActor : MorganaActor
     }
 
     /// <summary>
-    /// Substitutes the <c>{remaining}</c> and <c>{budget}</c> placeholders in a dust message
-    /// template with rounded integer values. <c>remaining</c> is clamped at zero (a turn may
-    /// finish slightly over budget under the let-it-finish policy).
+    /// Substitutes the single <c>{percent}</c> placeholder with the remaining budget as a
+    /// 0–100 integer (fuel-gauge semantics — the same number the DustMeter/Rune gauge shows).
+    /// Users reason in "how much is left", not in abstract dust units. Clamped at zero (a
+    /// turn may finish slightly over budget under the let-it-finish policy).
     /// </summary>
     private string FormatDustMessage(string template, double ratio)
     {
-        double budget = dustLimitingOptions.BudgetPerConversation;
-        long remaining = (long)Math.Round(Math.Max(0.0, budget * (1.0 - ratio)));
-
-        return template
-            .Replace("{remaining}", remaining.ToString())
-            .Replace("{budget}", ((long)Math.Round(budget)).ToString());
+        int percent = (int)Math.Round(Math.Clamp(1.0 - ratio, 0.0, 1.0) * 100);
+        return template.Replace("{percent}", percent.ToString());
     }
 
     /// <summary>
