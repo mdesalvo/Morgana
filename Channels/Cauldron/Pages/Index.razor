@@ -325,6 +325,16 @@
                 if (string.Equals(message.MessageType, "system_warning", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(message.MessageType, "error", StringComparison.OrdinalIgnoreCase))
                 {
+                    // The dust-exhausted notice is terminal and never fades, so further
+                    // blocked sends must not stack duplicate persistent banners — keep at
+                    // most one. Transient notices (rate limit) fade on their own.
+                    bool isDustExhausted = string.Equals(
+                        message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal);
+                    if (isDustExhausted
+                        && ChatStateService.TemporaryMessages.Any(m => string.Equals(
+                            m.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal)))
+                        return;
+
                     ChatStateService.TemporaryMessages.Add(message);
                     StateHasChanged();
                     return;
