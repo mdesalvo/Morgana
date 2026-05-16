@@ -1,0 +1,44 @@
+@*
+    ============================================================================
+    DUST METER — Morgana's per-conversation magic-dust budget gauge
+    ============================================================================
+
+    Battery-style depleting bar shown in the chat header. Renders the REMAINING
+    budget (1 - consumed ratio) as a purple cell that empties as the conversation
+    burns tokens, shifting to amber then red as it runs low.
+
+    DustLevel is the CONSUMED ratio (0.0 .. >1.0) from
+    ChannelMessage.ConversationMetadata.DustLevel. Null => dust limiting is
+    disabled on the backend => the gauge renders nothing at all.
+*@
+
+@if (DustLevel is { } consumed)
+{
+    double remaining = Math.Clamp(1.0 - consumed, 0.0, 1.0);
+    int percent = (int)Math.Round(remaining * 100);
+    string state = remaining > 0.20 ? "ok" : remaining > 0.08 ? "low" : "critical";
+
+    <div class="dust-meter @state"
+         role="meter"
+         aria-valuemin="0"
+         aria-valuemax="100"
+         aria-valuenow="@percent"
+         aria-label="Magic dust remaining"
+         title="Magic dust remaining: @percent%">
+        <span class="dust-meter-spark" aria-hidden="true">✨</span>
+        <div class="dust-meter-cell">
+            <div class="dust-meter-fill" style="width: @percent%;"></div>
+        </div>
+        <span class="dust-meter-cap" aria-hidden="true"></span>
+        <span class="dust-meter-label">@percent%</span>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// Consumed dust ratio (0.0 .. &gt;1.0) as reported by Morgana. Null when dust
+    /// limiting is disabled — the component renders nothing.
+    /// </summary>
+    [Parameter]
+    public double? DustLevel { get; set; }
+}

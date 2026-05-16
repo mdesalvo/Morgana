@@ -357,25 +357,23 @@ public static class Records
     public record MagicDustPricing
     {
         /// <summary>Input tokens that equal one dust unit. 0 disables input charging.</summary>
-        public int InputTokensPerDustUnit { get; set; } = 1000;
+        public int InputTokensPerDustUnit { get; set; }
 
         /// <summary>Output tokens that equal one dust unit. 0 disables output charging.</summary>
-        public int OutputTokensPerDustUnit { get; set; } = 200;
+        public int OutputTokensPerDustUnit { get; set; }
 
         /// <summary>
         /// Cost weight applied to cache-read input tokens (<c>CachedInputTokenCount</c>)
         /// relative to a fresh input token. Anthropic cache-read ≈ 0.10; OpenAI ≈ 0.50.
-        /// Default 1.0 = treat cache reads as full price (cache-unaware).
         /// </summary>
-        public double CachedInputWeight { get; set; } = 1.0;
+        public double CachedInputWeight { get; set; }
 
         /// <summary>
         /// Cost weight applied to cache-creation input tokens
         /// (<c>AdditionalCounts["CacheCreationInputTokens"]</c>) relative to a fresh input
         /// token. Anthropic 1h cache write ≈ 2.0; providers with no separate write cost = 1.0.
-        /// Default 1.0 = cache-unaware.
         /// </summary>
-        public double CacheCreationWeight { get; set; } = 1.0;
+        public double CacheCreationWeight { get; set; }
     }
 
     /// <summary>
@@ -394,25 +392,22 @@ public static class Records
         public bool Enabled { get; set; }
 
         /// <summary>Total dust a conversation may consume over its lifetime.</summary>
-        public double BudgetPerConversation { get; set; } = 100;
+        public double BudgetPerConversation { get; set; }
 
         /// <summary>One-shot advisory shown when consumption crosses 80%.</summary>
-        public string Warning80Message { get; set; } =
-            "Heads up — this conversation has used 80% of its budget ({remaining} of {budget} left).";
+        public string Warning80Message { get; set; }
 
         /// <summary>One-shot advisory shown when consumption crosses 90%.</summary>
-        public string Warning90Message { get; set; } =
-            "Almost out — only {remaining} of {budget} budget left. Wrap up what you're doing.";
+        public string Warning90Message { get; set; }
 
         /// <summary>Blocking message shown when the budget is exhausted (100%).</summary>
-        public string ErrorMessage { get; set; } =
-            "This conversation has used up its budget. You can continue in a new conversation — the context will carry over.";
+        public string ErrorMessage { get; set; }
 
         /// <summary>
         /// Prefix prepended to the carried-over memory summary when a new conversation is
         /// seeded from an exhausted one. The LLM-generated summary follows verbatim.
         /// </summary>
-        public string SeedSummaryPrefix { get; set; } = "I remember we were talking about:";
+        public string SeedSummaryPrefix { get; set; }
     }
 
     /// <summary>

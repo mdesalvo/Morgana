@@ -1,0 +1,87 @@
+/* ==========================================================================
+   DUST METER — magic-dust budget gauge (chat header)
+   Battery-style cell that depletes left-to-right as the conversation burns
+   its token budget. Purple when healthy, amber when low, red when critical.
+   ========================================================================== */
+
+.dust-meter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+}
+
+.dust-meter-spark {
+    font-size: 0.75rem;
+    line-height: 1;
+    opacity: 0.85;
+}
+
+/* The battery body */
+.dust-meter-cell {
+    position: relative;
+    width: 88px;
+    height: 12px;
+    border: 1px solid var(--surface-light);
+    border-radius: 4px;
+    background: var(--bg-color);
+    overflow: hidden;
+}
+
+/* The depleting fill — width is set inline from the remaining percentage */
+.dust-meter-fill {
+    height: 100%;
+    border-radius: 3px 0 0 3px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.6s ease;
+    background: linear-gradient(90deg, var(--primary-dark), var(--primary-color));
+}
+
+/* The little battery terminal on the right */
+.dust-meter-cap {
+    width: 3px;
+    height: 6px;
+    border-radius: 0 2px 2px 0;
+    background: var(--surface-light);
+}
+
+.dust-meter-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    min-width: 2.6em;
+    text-align: right;
+    color: var(--primary-color);
+    font-variant-numeric: tabular-nums;
+}
+
+/* --- Low: amber warning -------------------------------------------------- */
+.dust-meter.low .dust-meter-fill {
+    background: linear-gradient(90deg, #b45309, #f59e0b);
+}
+
+.dust-meter.low .dust-meter-label {
+    color: #f59e0b;
+}
+
+/* --- Critical: red, gently pulsing -------------------------------------- */
+.dust-meter.critical .dust-meter-fill {
+    background: linear-gradient(90deg, #991b1b, #ef4444);
+}
+
+.dust-meter.critical .dust-meter-label {
+    color: #ef4444;
+}
+
+.dust-meter.critical .dust-meter-spark {
+    animation: dust-meter-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dust-meter-pulse {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dust-meter-fill { transition: none; }
+    .dust-meter.critical .dust-meter-spark { animation: none; }
+}

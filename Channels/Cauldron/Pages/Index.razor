@@ -36,6 +36,7 @@
                       style="color: @(ChatStateService.IsConnected ? "#10b981" : "#ef4444");">
                     @(ChatStateService.IsConnected ? "Online" : "Offline")
                 </span>
+                <DustMeter DustLevel="ChatStateService.DustLevel" />
             </div>
 
             <button class="new-conversation-btn @(IsNewConversationButtonVisible ? "visible" : "hidden")"
@@ -312,6 +313,14 @@
         {
             try
             {
+                // Refresh the dust gauge from conversation metadata BEFORE any early return:
+                // warnings, the lockout error and ordinary turns all carry it, and the
+                // low-budget moments are exactly when the user wants to see the gauge move.
+                // Only overwrite when metadata is present, so a metadata-less message never
+                // clobbers a known level.
+                if (message.ConversationMetadata?.DustLevel is { } dustLevel)
+                    ChatStateService.DustLevel = dustLevel;
+
                 // Temporary messages (system warnings, errors) - display as banners
                 if (string.Equals(message.MessageType, "system_warning", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(message.MessageType, "error", StringComparison.OrdinalIgnoreCase))
