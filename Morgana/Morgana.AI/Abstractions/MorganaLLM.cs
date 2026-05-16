@@ -238,7 +238,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
 
     /// <summary>
     /// Wraps <paramref name="innerClient"/>, metering every call against
-    /// <paramref name="dustLimitService"/> using <paramref name="pricing"/> and attributing
+    /// <paramref name="dustLimitService"/> using <paramref name="dustPricing"/> and attributing
     /// the cost to <paramref name="llmRole"/>.
     /// </summary>
     public DustAccountingChatClient(
