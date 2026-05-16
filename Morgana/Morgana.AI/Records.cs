@@ -253,7 +253,7 @@ public static class Records
     ///       "Enabled": true,
     ///       "MaxMessagesPerMinute": 5,
     ///       "MaxMessagesPerHour": 30,
-    ///       "MaxMessagesPerDay": 100,
+    ///       "MaxMessagesPerDay": 80,
     ///       "ErrorMessagePerMinute": "✋ Whoa there! You're casting spells too quickly...",
     ///       "ErrorMessagePerHour": "⏰ You've reached your hourly spell quota...",
     ///       "ErrorMessagePerDay": "🌙 You've exhausted today's magical energy...",
@@ -290,7 +290,7 @@ public static class Records
         /// Enforces daily quotas. Set to 0 to disable this check.
         /// </summary>
         /// <example>100</example>
-        public int MaxMessagesPerDay { get; set; } = 100;
+        public int MaxMessagesPerDay { get; set; } = 80;
 
         /// <summary>
         /// Error message displayed when per-minute limit is exceeded.
