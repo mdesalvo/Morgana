@@ -44,7 +44,7 @@ public class ConversationManagerActor : MorganaActor
 
     /// <summary>
     /// Per-conversation lifetime token-budget limiter. Read after each turn to stamp the
-    /// remaining dust level on the outbound message and to emit one-shot 80%/90% warnings.
+    /// remaining dust level on the outbound message and to emit one-shot 70%/90% warnings.
     /// </summary>
     private readonly IDustLimitService dustLimitService;
 
@@ -405,7 +405,7 @@ public class ConversationManagerActor : MorganaActor
                 $"(#quickReplies: {response.QuickReplies?.Count ?? 0}," +
                 $"hasRichCard: {response.RichCard != null})");
 
-            // After delivering the answer, surface one-shot budget warnings (80% / 90%).
+            // After delivering the answer, surface one-shot budget warnings (70% / 90%).
             // These are advisory system messages, separate from the conversational flow.
             await EmitDustWarningsIfNeededAsync();
         }
@@ -435,7 +435,7 @@ public class ConversationManagerActor : MorganaActor
 
     /// <summary>
     /// Checks the dust-budget warning thresholds and, for any threshold newly crossed,
-    /// emits a one-shot advisory <c>system_warning</c> message. The 80% / 90% one-shot
+    /// emits a one-shot advisory <c>system_warning</c> message. The 70% / 90% one-shot
     /// flags are owned and atomically marked by <see cref="IDustLimitService"/>, so this
     /// never re-sends the same warning. Best-effort: failures are logged, never thrown.
     /// </summary>
@@ -446,24 +446,24 @@ public class ConversationManagerActor : MorganaActor
 
         try
         {
-            (bool send80, bool send90) = await dustLimitService.CheckAndMarkWarningsAsync(conversationId);
-            if (!send80 && !send90)
+            (bool send70, bool send90) = await dustLimitService.CheckAndMarkWarningsAsync(conversationId);
+            if (!send70 && !send90)
                 return;
 
             double ratio = await dustLimitService.GetUsageRatioAsync(conversationId);
 
-            // 90% supersedes 80%: if both crossed in the same turn, the user only needs
+            // 90% supersedes 70%: if both crossed in the same turn, the user only needs
             // the more urgent message.
             string template = send90
                 ? dustLimitingOptions.Warning90Message
-                : dustLimitingOptions.Warning80Message;
+                : dustLimitingOptions.Warning70Message;
 
             await channelService.SendMessageAsync(new Records.ChannelMessage
             {
                 ConversationId = conversationId,
                 Text = FormatDustMessage(template, ratio),
                 MessageType = "system_warning",
-                ErrorReason = send90 ? "dust_budget_low_90" : "dust_budget_low_80",
+                ErrorReason = send90 ? "dust_budget_low_90" : "dust_budget_low_70",
                 AgentName = "Morgana",
                 AgentCompleted = false
             });

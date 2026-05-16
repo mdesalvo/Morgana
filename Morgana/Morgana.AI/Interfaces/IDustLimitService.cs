@@ -37,9 +37,9 @@ public interface IDustLimitService
     Task<double> GetUsageRatioAsync(string conversationId);
 
     /// <summary>
-    /// Atomically checks the 80% and 90% thresholds against their one-shot flags, marking
+    /// Atomically checks the 70% and 90% thresholds against their one-shot flags, marking
     /// any newly-crossed threshold so it never re-triggers. Returns which warnings the caller
     /// should emit. (false, false) on error or when disabled.
     /// </summary>
-    Task<(bool Send80, bool Send90)> CheckAndMarkWarningsAsync(string conversationId);
+    Task<(bool Send70, bool Send90)> CheckAndMarkWarningsAsync(string conversationId);
 }

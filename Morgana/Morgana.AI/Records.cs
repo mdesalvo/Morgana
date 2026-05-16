@@ -391,8 +391,8 @@ public static class Records
         /// <summary>Total dust a conversation may consume over its lifetime.</summary>
         public double BudgetPerConversation { get; set; }
 
-        /// <summary>One-shot advisory shown when consumption crosses 80%.</summary>
-        public string Warning80Message { get; set; }
+        /// <summary>One-shot advisory shown when consumption crosses 70%.</summary>
+        public string Warning70Message { get; set; }
 
         /// <summary>One-shot advisory shown when consumption crosses 90%.</summary>
         public string Warning90Message { get; set; }

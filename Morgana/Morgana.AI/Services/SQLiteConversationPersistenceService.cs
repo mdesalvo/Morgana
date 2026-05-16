@@ -696,7 +696,7 @@ CREATE TABLE IF NOT EXISTS shared_context (
 CREATE TABLE IF NOT EXISTS dust_budget (
     id                 INTEGER PRIMARY KEY CHECK (id = 1),
     dust_consumed      REAL    NOT NULL DEFAULT 0,
-    warning_80_sent    INTEGER NOT NULL DEFAULT 0,
+    warning_70_sent    INTEGER NOT NULL DEFAULT 0,
     warning_90_sent    INTEGER NOT NULL DEFAULT 0
 );
 INSERT OR IGNORE INTO dust_budget (id) VALUES (1);

@@ -164,7 +164,7 @@ public class SQLiteDustLimitService : IDustLimitService
     }
 
     /// <inheritdoc/>
-    public async Task<(bool Send80, bool Send90)> CheckAndMarkWarningsAsync(string conversationId)
+    public async Task<(bool Send70, bool Send90)> CheckAndMarkWarningsAsync(string conversationId)
     {
         if (!options.Enabled || options.BudgetPerConversation <= 0)
             return (false, false);
@@ -183,13 +183,13 @@ public class SQLiteDustLimitService : IDustLimitService
             try
             {
                 double consumed;
-                bool warning80Sent;
+                bool warning70Sent;
                 bool warning90Sent;
 
                 await using (SqliteCommand readCommand = connection.CreateCommand())
                 {
                     readCommand.Transaction = transaction;
-                    readCommand.CommandText = "SELECT dust_consumed, warning_80_sent, warning_90_sent FROM dust_budget WHERE id = 1;";
+                    readCommand.CommandText = "SELECT dust_consumed, warning_70_sent, warning_90_sent FROM dust_budget WHERE id = 1;";
                     await using SqliteDataReader reader = await readCommand.ExecuteReaderAsync();
                     if (!await reader.ReadAsync())
                     {
@@ -198,30 +198,30 @@ public class SQLiteDustLimitService : IDustLimitService
                     }
 
                     consumed = reader.GetDouble(0);
-                    warning80Sent = reader.GetInt32(1) != 0;
+                    warning70Sent = reader.GetInt32(1) != 0;
                     warning90Sent = reader.GetInt32(2) != 0;
                 }
 
                 double ratio = consumed / options.BudgetPerConversation;
-                bool send80 = ratio >= 0.80 && !warning80Sent;
+                bool send70 = ratio >= 0.70 && !warning70Sent;
                 bool send90 = ratio >= 0.90 && !warning90Sent;
 
-                if (send80 || send90)
+                if (send70 || send90)
                 {
                     await using SqliteCommand updateCommand = connection.CreateCommand();
                     updateCommand.Transaction = transaction;
                     updateCommand.CommandText =
                         "UPDATE dust_budget SET " +
-                        "warning_80_sent = CASE WHEN @set80 = 1 THEN 1 ELSE warning_80_sent END, " +
+                        "warning_70_sent = CASE WHEN @set70 = 1 THEN 1 ELSE warning_70_sent END, " +
                         "warning_90_sent = CASE WHEN @set90 = 1 THEN 1 ELSE warning_90_sent END " +
                         "WHERE id = 1;";
-                    updateCommand.Parameters.AddWithValue("@set80", send80 ? 1 : 0);
+                    updateCommand.Parameters.AddWithValue("@set70", send70 ? 1 : 0);
                     updateCommand.Parameters.AddWithValue("@set90", send90 ? 1 : 0);
                     await updateCommand.ExecuteNonQueryAsync();
                 }
 
                 await transaction.CommitAsync();
-                return (send80, send90);
+                return (send70, send90);
             }
             catch
             {
