@@ -36,6 +36,9 @@ public sealed class ConsoleUiService
     /// <summary>Color for the user's own input and committed lines.</summary>
     private const string UserColor = "white";
 
+    /// <summary>Color for the magic-dust gauge in the sticky header.</summary>
+    private const string DustColor = "mediumpurple1";
+
     /// <summary>Fallback for <c>Rune:AgentExitMessage</c> when the setting is absent.</summary>
     private const string DefaultAgentExitMessage = "{0} has completed its spell. I'm back to you!";
 
@@ -63,6 +66,11 @@ public sealed class ConsoleUiService
 
     /// <summary>Current conversation id, displayed (truncated) in the header.</summary>
     private string conversationId = string.Empty;
+
+    /// <summary>Last reported consumed-dust ratio (0.0..&gt;1.0). Null until Morgana sends
+    /// conversation metadata, or whenever dust limiting is disabled — the header omits the
+    /// gauge entirely in that case. Mutated only under <see cref="renderLock"/>.</summary>
+    private double? dustLevel;
 
     /// <summary>Set once the user types <c>/quit</c> or presses <see cref="ConsoleKey.Escape"/>.</summary>
     private volatile bool exitRequested;
@@ -154,6 +162,14 @@ public sealed class ConsoleUiService
                     currentSpeaker = message.AgentCompleted || string.IsNullOrWhiteSpace(message.AgentName)
                         ? "Morgana"
                         : message.AgentName;
+
+                    // Refresh the header gauge from conversation metadata. Updated under the
+                    // same lock as currentSpeaker; only overwrite when present so a
+                    // metadata-less message never clears a known level. Lives in the sticky
+                    // header (BuildHeader), never appended to history — no accountant-style
+                    // spam in the transcript.
+                    if (message.ConversationMetadata?.DustLevel is { } level)
+                        dustLevel = level;
 
                     // Release the input gate: ReadKeysLoop was swallowing keystrokes until
                     // this first webhook delivery landed.
@@ -318,11 +334,24 @@ public sealed class ConsoleUiService
         // terminals without forcing the panel to wrap.
         string shortId = conversationId.Length > 12 ? conversationId[..12] + "…" : conversationId;
 
+        // Magic-dust gauge: REMAINING budget (1 - consumed) as a purple percentage, in the
+        // same understated grammar as the conv id ([grey54]label[/] [color]value[/]).
+        // Omitted entirely when dustLevel is null (dust limiting disabled). This segment is
+        // rebuilt by BuildLayout on every resize via the existing IViewportResizeWatcher
+        // callback, so it stays correctly aligned without any extra resize plumbing.
+        string dustSegment = string.Empty;
+        if (dustLevel is { } consumed)
+        {
+            int remaining = Math.Clamp((int)Math.Round((1.0 - consumed) * 100), 0, 100);
+            dustSegment = $"   [grey54]dust[/] [bold {DustColor}]{remaining}%[/]";
+        }
+
         // Markup uses [/] to close the tag — always run user-controlled strings through
         // Markup.Escape so a speaker name containing '[' can't break the layout.
         Markup content = new(
             $"[bold {speakerColor}]{Markup.Escape(currentSpeaker)}[/]   " +
-            $"[grey54]conv[/] [grey85]{Markup.Escape(shortId)}[/]");
+            $"[grey54]conv[/] [grey85]{Markup.Escape(shortId)}[/]" +
+            dustSegment);
 
         return new Panel(Align.Center(content, VerticalAlignment.Middle))
         {
