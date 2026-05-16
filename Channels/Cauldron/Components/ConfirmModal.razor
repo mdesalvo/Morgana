@@ -20,16 +20,6 @@
                     <span class="btn-icon">✕</span>
                     <span>@CancelText</span>
                 </button>
-                @if (ShowSeedOption)
-                {
-                    @* Only surfaced when the current conversation is dust-exhausted: start
-                       fresh but carry a compressed memory of this one. Distinct from the
-                       plain confirm (which forgets everything). *@
-                    <button class="modal-btn seed" @onclick="OnSeedContinue">
-                        <span class="btn-icon">✨</span>
-                        <span>@SeedText</span>
-                    </button>
-                }
                 <button class="modal-btn confirm" @onclick="OnConfirm">
                     <span class="btn-icon">✓</span>
                     <span>@ConfirmText</span>
@@ -60,21 +50,6 @@
 
     [Parameter]
     public EventCallback OnCancel { get; set; }
-
-    /// <summary>
-    /// When true, a third action is shown: start a new conversation that remembers the
-    /// current (dust-exhausted) one. Off by default — only the dust lockout enables it.
-    /// </summary>
-    [Parameter]
-    public bool ShowSeedOption { get; set; }
-
-    /// <summary>Label for the seed-continue action (shown only when <see cref="ShowSeedOption"/>).</summary>
-    [Parameter]
-    public string SeedText { get; set; } = "Continue, remembering this one";
-
-    /// <summary>Invoked when the user picks the seed-continue action.</summary>
-    [Parameter]
-    public EventCallback OnSeedContinue { get; set; }
 
     [Parameter]
     public bool CloseOnBackdrop { get; set; } = true;

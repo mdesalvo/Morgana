@@ -36,20 +36,12 @@ public class ConversationLifecycleService : IConversationLifecycleService
     /// <summary>
     /// Starts a new conversation with Morgana backend.
     /// </summary>
-    /// <param name="seedConversationId">
-    /// When set, the backend compresses that conversation's history into a memory seed and
-    /// copies its shared context into the new conversation, so the user "continues" rather
-    /// than starting from scratch (used by the dust-exhausted "continue" CTA). Null for an
-    /// ordinary fresh start.
-    /// </param>
     /// <returns>True if conversation started successfully.</returns>
-    public async Task<bool> StartConversationAsync(string? seedConversationId = null)
+    public async Task<bool> StartConversationAsync()
     {
         try
         {
-            _logger.LogInformation(
-                "Starting new conversation... (seed={SeedConversationId})",
-                seedConversationId ?? "<none>");
+            _logger.LogInformation("Starting new conversation...");
 
             HttpResponseMessage response = await _http.PostAsJsonAsync("/api/morgana/conversation/start", new
             {
@@ -58,12 +50,7 @@ public class ConversationLifecycleService : IConversationLifecycleService
                 // Cauldron is the reference channel: announces itself by name and declares
                 // full capabilities at handshake, so Morgana persists the metadata and stops
                 // relying on hard-coded defaults.
-                channelMetadata = ChannelMetadata.Cauldron,
-
-                // Null on an ordinary start; the dead conversation's id when the user chose
-                // to continue past dust exhaustion. The backend's start endpoint reads this
-                // (case-insensitive) and runs BuildSeedAsync before returning 202.
-                seedConversationId = seedConversationId
+                channelMetadata = ChannelMetadata.Cauldron
             });
 
             if (response.IsSuccessStatusCode)
@@ -91,48 +78,6 @@ public class ConversationLifecycleService : IConversationLifecycleService
             _chatStateService.AddErrorBanner($"Connection error: {ex.Message}", "conversation_start_exception", 20);
             return false;
         }
-    }
-
-    /// <summary>
-    /// Continues past dust exhaustion: opens a fresh conversation that carries a compressed
-    /// memory seed (and shared context) from the current, budget-exhausted one. Invoked by
-    /// the "✨ Continue in a new conversation" CTA on the lockout banner.
-    /// </summary>
-    /// <remarks>
-    /// Stays on the page (no forced reload) on purpose: the backend pushes the seed summary
-    /// ("I remember we were talking about…") and the new presentation over SignalR right
-    /// after creation, and those live messages are not in persisted history — a reload would
-    /// lose them. We leave the dead group, clear the visible surface (keeping the
-    /// initialization flags so the OnAfterRender auto-start gate stays closed and does not
-    /// race a second vanilla conversation), then start the seeded one. The new id is set and
-    /// its group joined inside <see cref="StartConversationAsync"/> before the 202 returns,
-    /// so the inbound seed/presentation messages pass the conversation-scope guard.
-    /// </remarks>
-    /// <returns>True if the seeded conversation started successfully.</returns>
-    public async Task<bool> ContinueWithSeededConversationAsync()
-    {
-        string seedConversationId = _chatStateService.ConversationId;
-
-        if (string.IsNullOrWhiteSpace(seedConversationId))
-        {
-            _logger.LogWarning("Seed continuation requested with no active conversation; starting vanilla");
-            return await StartConversationAsync();
-        }
-
-        _logger.LogInformation(
-            "Continuing past dust exhaustion: seeding new conversation from {SeedConversationId}", seedConversationId);
-
-        // Stop receiving from the dead conversation's group before we repoint the UI.
-        await _signalR.LeaveConversation(seedConversationId);
-
-        // Clear only the visible surface — NOT Reset(), which would re-arm HasCheckedStorage
-        // and let OnAfterRenderAsync kick off a competing vanilla start.
-        _chatStateService.ChatMessages.Clear();
-        _chatStateService.TemporaryMessages.Clear();
-        _chatStateService.CurrentAgentName = "Morgana";
-        _chatStateService.DustLevel = null;
-
-        return await StartConversationAsync(seedConversationId);
     }
 
     /// <summary>

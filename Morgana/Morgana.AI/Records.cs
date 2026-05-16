@@ -67,14 +67,10 @@ public static class Records
     /// (channel name + capability budget). Required on fresh starts — Morgana refuses to
     /// create a conversation for a channel that does not announce itself. Null on restore,
     /// where the manager loads the persisted entry instead.</param>
-    /// <param name="SeedSummary">Optional memory seed: a summary of a prior (budget-exhausted)
-    /// conversation, surfaced to the user as the first message so the new conversation starts
-    /// "warm" instead of vanilla. Null for ordinary fresh starts.</param>
     public record CreateConversation(
         string ConversationId,
         bool IsRestore,
-        ChannelMetadata? ChannelMetadata = null,
-        string? SeedSummary = null);
+        ChannelMetadata? ChannelMetadata = null);
 
     /// <summary>
     /// Request to terminate a conversation and stop all associated actors.
@@ -379,8 +375,8 @@ public static class Records
     /// <summary>
     /// Policy for the per-conversation lifetime dust budget — a token-consumption guard
     /// orthogonal to <see cref="RateLimitOptions"/>. The budget is a lifetime resource: no
-    /// sliding window, no reset; the only way to refresh it is a new conversation (optionally
-    /// seeded from the exhausted one).
+    /// sliding window, no reset. Once exhausted the conversation is done; the only way
+    /// forward is a brand-new conversation.
     /// <para>Message templates are framework-neutral English defaults; deployments override
     /// them in <c>Morgana:DustLimiting</c> with their own copy and personality, exactly like
     /// <see cref="RateLimitOptions"/>. Placeholders: <c>{remaining}</c> (dust left, rounded)
@@ -402,12 +398,6 @@ public static class Records
 
         /// <summary>Blocking message shown when the budget is exhausted (100%).</summary>
         public string ErrorMessage { get; set; }
-
-        /// <summary>
-        /// Prefix prepended to the carried-over memory summary when a new conversation is
-        /// seeded from an exhausted one. The LLM-generated summary follows verbatim.
-        /// </summary>
-        public string SeedSummaryPrefix { get; set; }
     }
 
     /// <summary>
@@ -691,15 +681,10 @@ public static class Records
     /// capability budget. Required: Morgana rejects start requests from channels that do not
     /// announce both their name and their capability budget.</param>
     /// <param name="InitialContext">Optional initial context information (reserved for future use)</param>
-    /// <param name="SeedConversationId">Optional id of a prior conversation whose memory should
-    /// seed this one. When present, Morgana compresses that conversation's history into a
-    /// summary (surfaced to the user) and carries over its shared context. Used by the
-    /// "continue in a new conversation" flow after a budget exhaustion.</param>
     public record StartConversationRequest(
         string ConversationId,
         ChannelMetadata? ChannelMetadata,
-        Dictionary<string, object>? InitialContext = null,
-        string? SeedConversationId = null);
+        Dictionary<string, object>? InitialContext = null);
 
     /// <summary>
     /// HTTP request model for sending a message to a conversation via REST API.

@@ -233,25 +233,6 @@
         box-shadow: 0 8px 20px color-mix(in srgb, var(--primary-color) 45%, transparent);
     }
 
-/* Seed Button - the dust-aware "continue, remembering" path. Filled by default
-   (not an outline like confirm/cancel) so the recommended action on a spent
-   conversation reads as primary. Purple to tie it to the dust gauge. */
-.modal-btn.seed {
-    border-color: var(--primary-color);
-    color: white;
-    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-}
-
-    .modal-btn.seed::before {
-        background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
-    }
-
-    .modal-btn.seed:hover {
-        color: white;
-        border-color: var(--primary-color);
-        box-shadow: 0 12px 28px color-mix(in srgb, var(--primary-color) 50%, transparent);
-    }
-
 /* Active state - Press down effect */
 .modal-btn:active {
     transform: scale(0.97);

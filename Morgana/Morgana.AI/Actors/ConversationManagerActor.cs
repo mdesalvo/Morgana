@@ -155,25 +155,6 @@ public class ConversationManagerActor : MorganaActor
             // Trigger automatic presentation (only in case of new conversation)
             if (!msg.IsRestore)
             {
-                // Memory seed: when this conversation was started to continue a
-                // budget-exhausted one, surface the carried-over summary as the very first
-                // message — exposed, not silent context — so the user understands Morgana
-                // resumes with a minimal conscious state rather than from scratch. Sent
-                // before the presentation so the chronology reads "I remember … / hello".
-                if (!string.IsNullOrWhiteSpace(msg.SeedSummary))
-                {
-                    await channelService.SendMessageAsync(new Records.ChannelMessage
-                    {
-                        ConversationId = msg.ConversationId,
-                        Text = msg.SeedSummary,
-                        MessageType = "system",
-                        AgentName = "Morgana",
-                        AgentCompleted = false
-                    });
-
-                    actorLogger.Info("Seed summary delivered for {0}", msg.ConversationId);
-                }
-
                 supervisor.Tell(new Records.GeneratePresentationMessage());
 
                 actorLogger.Info("Presentation generation triggered");
