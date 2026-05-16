@@ -344,10 +344,15 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Per-provider pricing: how many tokens of each direction equal one dust unit.
-    /// Lives under <c>Morgana:LLM:{Provider}:MagicDust</c> because cost is a property of the
-    /// concrete model. Zero on either axis means that direction does not consume dust
-    /// (e.g. Ollama local models, set both to 0 for "free").
+    /// Per-provider pricing: how many tokens of each direction equal one dust unit, plus
+    /// cache cost-weights. Lives under <c>Morgana:LLM:{Provider}:MagicDust</c> because cost
+    /// is a property of the concrete model. Zero on either axis means that direction does
+    /// not consume dust (e.g. Ollama local models, set both to 0 for "free").
+    /// <para>The MEAI Anthropic adapter reports <c>InputTokenCount</c> as the <em>total</em>
+    /// prompt (fresh + cache-read + cache-write). Charging it flat would over-count cache
+    /// reads (real cost ~0.1×) and under-count 1h cache writes (~2×). The two weights below
+    /// let the limiter track real cache economics; defaults are 1.0 (cache-unaware no-op, so
+    /// behaviour is unchanged unless a deployment configures them).</para>
     /// </summary>
     public record MagicDustPricing
     {
@@ -356,6 +361,21 @@ public static class Records
 
         /// <summary>Output tokens that equal one dust unit. 0 disables output charging.</summary>
         public int OutputTokensPerDustUnit { get; set; } = 200;
+
+        /// <summary>
+        /// Cost weight applied to cache-read input tokens (<c>CachedInputTokenCount</c>)
+        /// relative to a fresh input token. Anthropic cache-read ≈ 0.10; OpenAI ≈ 0.50.
+        /// Default 1.0 = treat cache reads as full price (cache-unaware).
+        /// </summary>
+        public double CachedInputWeight { get; set; } = 1.0;
+
+        /// <summary>
+        /// Cost weight applied to cache-creation input tokens
+        /// (<c>AdditionalCounts["CacheCreationInputTokens"]</c>) relative to a fresh input
+        /// token. Anthropic 1h cache write ≈ 2.0; providers with no separate write cost = 1.0.
+        /// Default 1.0 = cache-unaware.
+        /// </summary>
+        public double CacheCreationWeight { get; set; } = 1.0;
     }
 
     /// <summary>

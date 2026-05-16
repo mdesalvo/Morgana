@@ -84,17 +84,41 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
     /// No-op when the conversation id or usage is absent, or when the computed dust is zero
     /// (e.g. Ollama priced at 0 tokens-per-unit on both axes). Never throws.
     /// </summary>
+    /// <remarks>
+    /// The Anthropic MEAI adapter reports <see cref="UsageDetails.InputTokenCount"/> as the
+    /// total prompt (fresh + cache-read + cache-write), with cache-read in
+    /// <see cref="UsageDetails.CachedInputTokenCount"/> and cache-write in
+    /// <c>AdditionalCounts["CacheCreationInputTokens"]</c>. We decompose it and apply the
+    /// per-provider cache weights so the charge tracks real cache economics rather than
+    /// over-counting cheap cache reads at full price.
+    /// </remarks>
     private async Task ChargeAsync(string? conversationId, UsageDetails? usage)
     {
         if (string.IsNullOrEmpty(conversationId) || usage is null)
             return;
 
-        long inputTokens = usage.InputTokenCount ?? 0;
+        long totalInput = usage.InputTokenCount ?? 0;
+        long cacheRead = usage.CachedInputTokenCount ?? 0;
+
+        long cacheWrite = 0;
+        if (usage.AdditionalCounts is not null &&
+            usage.AdditionalCounts.TryGetValue("CacheCreationInputTokens", out long w))
+            cacheWrite = w;
+
+        // Fresh = total minus the two cache components. Clamp at 0: defends against any
+        // adapter that might report the components non-disjointly.
+        long freshInput = Math.Max(0, totalInput - cacheRead - cacheWrite);
+
+        double effectiveInput =
+            freshInput +
+            cacheRead * pricing.CachedInputWeight +
+            cacheWrite * pricing.CacheCreationWeight;
+
         long outputTokens = usage.OutputTokenCount ?? 0;
 
         double dust =
             (pricing.InputTokensPerDustUnit > 0
-                ? (double)inputTokens / pricing.InputTokensPerDustUnit
+                ? effectiveInput / pricing.InputTokensPerDustUnit
                 : 0.0) +
             (pricing.OutputTokensPerDustUnit > 0
                 ? (double)outputTokens / pricing.OutputTokensPerDustUnit
