@@ -186,10 +186,13 @@ public class MorganaAgentAdapter
         // also burn tokens) under a per-agent role. There is no singleton dust wrapper on
         // chatClient, so wrapping here does not double-count: the framework-actor path is
         // wrapped independently inside MorganaLLM.CompleteWithSystemPromptAsync.
+        // Pass conversationId as the fallback: Microsoft.Agents.AI does not flow a
+        // ChatOptions.ConversationId on the agent path (client-side conversation state), so
+        // without this the agent's calls — the dominant token cost — would never be charged.
         string intent = intentAttribute.Intent;
         string dustRole = $"Morgana ({char.ToUpperInvariant(intent[0])}{intent[1..]})";
         IChatClient agentChatClient =
-            new DustAccountingChatClient(chatClient, dustLimitService, dustPricing, dustRole);
+            new DustAccountingChatClient(chatClient, dustLimitService, dustPricing, dustRole, conversationId);
 
         IChatReducer? chatReducer = chatReducerService.CreateReducer(agentChatClient);
 
