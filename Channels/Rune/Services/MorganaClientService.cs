@@ -75,6 +75,17 @@ public sealed class MorganaClientService
             $"/api/morgana/conversation/{conversationId}/message",
             new SendMessageRequest { ConversationId = conversationId, Text = text },
             cancellationToken);
+
+        // 429 (rate-limit OR dust exhaustion) is not a transport failure: before returning
+        // it the backend has already pushed a user-facing explanatory ChannelMessage over
+        // the webhook (rendered by DrainIncomingLoop, with its own terminal styling). Letting
+        // EnsureSuccessStatusCode throw here would surface a raw "send failed: 429" line that
+        // buries that message and reads like a crash. Swallow it and let the channel speak —
+        // same contract Cauldron honours. Any other non-success still throws so genuine
+        // failures stay visible.
+        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            return;
+
         response.EnsureSuccessStatusCode();
     }
 
