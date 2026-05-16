@@ -39,6 +39,12 @@ public sealed class ConsoleUiService
     /// <summary>Color for the magic-dust gauge in the sticky header.</summary>
     private const string DustColor = "mediumpurple1";
 
+    /// <summary>Color for advisory warnings (rate-limit / low-budget): orange.</summary>
+    private const string WarningColor = "orange1";
+
+    /// <summary>Color for error notices (dust exhausted / delivery error): red.</summary>
+    private const string ErrorColor = "red";
+
     /// <summary>Fallback for <c>Rune:AgentExitMessage</c> when the setting is absent.</summary>
     private const string DefaultAgentExitMessage = "{0} has completed its spell. I'm back to you!";
 
@@ -148,7 +154,7 @@ public sealed class ConsoleUiService
 
                 lock (renderLock)
                 {
-                    history.Add(new DisplayedMessage(messageSpeaker, message.Text, SpeakerColor(messageSpeaker)));
+                    history.Add(new DisplayedMessage(messageSpeaker, message.Text, RowColor(message, messageSpeaker)));
 
                     // On agent completion append a base-Morgana courtesy line — same pattern
                     // as Cauldron's ChatStateService.AddCompletionMessageIfNeeded.
@@ -607,6 +613,22 @@ public sealed class ConsoleUiService
         if (agentName.Equals("Morgana", StringComparison.OrdinalIgnoreCase))
             return MorganaColor;
         return MorganaAgentColor;
+    }
+
+    /// <summary>
+    /// Row color for an inbound message: advisory warnings (rate-limit, low-budget —
+    /// <c>MessageType="system_warning"</c>) render orange, error notices (dust exhausted,
+    /// delivery error — <c>MessageType="error"</c>) render red, everything else keeps the
+    /// speaker's palette color. Rune has no banner widget, so color is the only signal that
+    /// separates a diagnostic line from an ordinary turn.
+    /// </summary>
+    private static string RowColor(ChannelMessage message, string speaker)
+    {
+        if (string.Equals(message.MessageType, "error", StringComparison.OrdinalIgnoreCase))
+            return ErrorColor;
+        if (string.Equals(message.MessageType, "system_warning", StringComparison.OrdinalIgnoreCase))
+            return WarningColor;
+        return SpeakerColor(speaker);
     }
 
     /// <summary>
