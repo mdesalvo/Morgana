@@ -177,7 +177,10 @@
               ConfirmText="Yes, start new"
               CancelText="No, stay here"
               OnConfirm="@ConfirmNewConversationAsync"
-              OnCancel="@HideConfirmModal" />
+              OnCancel="@HideConfirmModal"
+              ShowSeedOption="@IsDustExhausted"
+              SeedText="Continue, remembering this one"
+              OnSeedContinue="@ContinueSeededConversationAsync" />
 
 @code {
     // =========================================================================
@@ -475,6 +478,29 @@
 
         await ConversationLifecycleService.ClearConversationAsync();
         NavigationManager.NavigateTo("/", forceLoad: true);
+    }
+
+    /// <summary>
+    /// True once the conversation's dust is spent — DustLevel is the REMAINING fraction
+    /// (fuel-gauge semantics), so empty is ≤ 0.0, mirroring the backend lockout
+    /// (IsOverBudgetAsync trips at the same point). Drives the modal's third option.
+    /// DustLevel is set by the prior completed turn's metadata (and, on a
+    /// resumed-already-exhausted conversation, by the resume endpoint), so it is reliably
+    /// at 0.0 by the time the user is blocked and reaches for "New Conversation".
+    /// </summary>
+    private bool IsDustExhausted => ChatStateService.DustLevel is <= 0.0;
+
+    /// <summary>
+    /// Modal's third action: start a fresh conversation that carries a compressed memory
+    /// of this dust-exhausted one. No page reload (unlike the plain confirm) — the backend
+    /// pushes the seed summary and presentation live over SignalR.
+    /// </summary>
+    private async Task ContinueSeededConversationAsync()
+    {
+        showConfirmModal = false;
+        StateHasChanged();
+
+        await ConversationLifecycleService.ContinueWithSeededConversationAsync();
     }
 
     private void HandleMessageDismissed(ChannelMessage message)

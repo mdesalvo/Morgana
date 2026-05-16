@@ -9,8 +9,20 @@ public interface IConversationLifecycleService
     /// <summary>
     /// Starts a new conversation with Morgana backend.
     /// </summary>
+    /// <param name="seedConversationId">
+    /// When set, the backend seeds the new conversation with a compressed memory of that
+    /// conversation (history summary + shared context). Null for an ordinary fresh start.
+    /// </param>
     /// <returns>True if conversation started successfully.</returns>
-    Task<bool> StartConversationAsync();
+    Task<bool> StartConversationAsync(string? seedConversationId = null);
+
+    /// <summary>
+    /// Continues past dust exhaustion by opening a fresh conversation that carries a
+    /// compressed memory seed from the current, budget-exhausted one. Backs the
+    /// "✨ Continue in a new conversation" lockout CTA.
+    /// </summary>
+    /// <returns>True if the seeded conversation started successfully.</returns>
+    Task<bool> ContinueWithSeededConversationAsync();
 
     /// <summary>
     /// Resumes an existing conversation from storage.
