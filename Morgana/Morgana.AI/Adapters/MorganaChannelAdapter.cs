@@ -157,7 +157,8 @@ public class MorganaChannelAdapter
                     ErrorReason = channelMessage.ErrorReason,
                     AgentName = channelMessage.AgentName,
                     AgentCompleted = channelMessage.AgentCompleted,
-                    FadingMessageDurationSeconds = channelMessage.FadingMessageDurationSeconds
+                    FadingMessageDurationSeconds = channelMessage.FadingMessageDurationSeconds,
+                    ConversationMetadata = channelMessage.ConversationMetadata
                 };
             }
 
@@ -287,7 +288,8 @@ public class MorganaChannelAdapter
             ErrorReason = channelMessage.ErrorReason,
             AgentName = channelMessage.AgentName,
             AgentCompleted = channelMessage.AgentCompleted,
-            FadingMessageDurationSeconds = channelMessage.FadingMessageDurationSeconds
+            FadingMessageDurationSeconds = channelMessage.FadingMessageDurationSeconds,
+            ConversationMetadata = channelMessage.ConversationMetadata
         };
     }
 
