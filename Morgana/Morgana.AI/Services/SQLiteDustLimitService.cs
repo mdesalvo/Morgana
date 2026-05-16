@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Telemetry;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Services;
@@ -97,6 +98,11 @@ public class SQLiteDustLimitService : IDustLimitService
                 }
 
                 await transaction.CommitAsync();
+
+                MorganaTelemetry.DustConsumed.Add(
+                    dust,
+                    new KeyValuePair<string, object?>(MorganaTelemetry.DustLlmRole, llmRole),
+                    new KeyValuePair<string, object?>(MorganaTelemetry.ConversationId, conversationId));
 
                 logger.LogDebug(
                     "Charged {Dust:F4} dust to {ConversationId} (role={LlmRole})", dust, conversationId, llmRole);

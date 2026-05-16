@@ -84,6 +84,14 @@ public static class MorganaTelemetry
     public static readonly Histogram<double> AgentTtftHistogram =
         MorganaMeter.CreateHistogram<double>("morgana.agent.ttft", "ms", "Agent time-to-first-token");
 
+    /// <summary>
+    /// Magic dust charged per LLM call, tagged with the consuming role
+    /// (<c>"Morgana"</c> for framework actors, <c>"Morgana (Intent)"</c> for agents) and
+    /// the conversation id.
+    /// </summary>
+    public static readonly Counter<double> DustConsumed =
+        MorganaMeter.CreateCounter<double>("morgana.dust.consumed", "dust", "Magic dust charged per LLM call");
+
     // ==============================================================================
     // ACTIVITY NAMES
     // ==============================================================================
@@ -109,6 +117,10 @@ public static class MorganaTelemetry
 
     /// <summary>Unique identifier of the conversation. Maps to conversationId.</summary>
     public const string ConversationId = "conversation.id";
+
+    /// <summary>Role that consumed dust on a charge: "Morgana" (framework actors) or
+    /// "Morgana (Intent)" (domain agents). Tag on <see cref="DustConsumed"/>.</summary>
+    public const string DustLlmRole = "dust.llm_role";
 
     // ==============================================================================
     // ATTRIBUTE NAMES — TURN
