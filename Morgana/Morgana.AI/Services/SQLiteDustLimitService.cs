@@ -57,6 +57,15 @@ public class SQLiteDustLimitService : IDustLimitService
         if (!options.Enabled || dust <= 0)
             return;
 
+        // Never materialize a database for a non-conversation. The
+        // CompleteWithSystemPromptAsync path is reached with framework-internal logging
+        // labels too (e.g. the presenter passes the literal "presentation"); dust is only
+        // chargeable against a real, already-handshaken conversation. A real conversation's
+        // DB always exists by the time any chargeable LLM call runs (created at the
+        // conversation/start handshake), so legitimate per-turn charges still land.
+        if (!persistenceService.ConversationExists(conversationId))
+            return;
+
         try
         {
             await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
@@ -110,6 +119,10 @@ public class SQLiteDustLimitService : IDustLimitService
         if (!options.Enabled)
             return false;
 
+        // No DB for a non-existent conversation → nothing consumed → not over budget.
+        if (!persistenceService.ConversationExists(conversationId))
+            return false;
+
         try
         {
             double consumed = await ReadConsumedAsync(conversationId);
@@ -128,6 +141,10 @@ public class SQLiteDustLimitService : IDustLimitService
         if (!options.Enabled || options.BudgetPerConversation <= 0)
             return 0.0;
 
+        // No DB for a non-existent conversation → nothing consumed → ratio 0.
+        if (!persistenceService.ConversationExists(conversationId))
+            return 0.0;
+
         try
         {
             double consumed = await ReadConsumedAsync(conversationId);
@@ -144,6 +161,10 @@ public class SQLiteDustLimitService : IDustLimitService
     public async Task<(bool Send80, bool Send90)> CheckAndMarkWarningsAsync(string conversationId)
     {
         if (!options.Enabled || options.BudgetPerConversation <= 0)
+            return (false, false);
+
+        // No DB for a non-existent conversation → no usage → nothing to warn about.
+        if (!persistenceService.ConversationExists(conversationId))
             return (false, false);
 
         try
