@@ -21,8 +21,9 @@ namespace Cauldron.Messages.Contracts;
 public sealed class ConversationMetadata
 {
     /// <summary>
-    /// Ratio of consumed dust to the conversation's budget, 0.0 to &gt;1.0.
-    /// Null when dust limiting is disabled — the UI hides the gauge in that case.
+    /// REMAINING dust as a fraction of the conversation's budget (fuel-gauge semantics:
+    /// 1.0 = full, 0.0 = empty), clamped to [0.0, 1.0]. Null when dust limiting is
+    /// disabled — the UI hides the gauge in that case.
     /// </summary>
     public double? DustLevel { get; set; }
 }

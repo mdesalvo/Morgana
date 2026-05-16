@@ -50,9 +50,9 @@ public interface IChatStateService
     bool HasCheckedStorage { get; set; }
 
     /// <summary>
-    /// Ratio of consumed dust to the conversation's budget (0.0 to &gt;1.0), as last
-    /// reported by Morgana via <c>ChannelMessage.ConversationMetadata</c>. Null when dust
-    /// limiting is disabled — the dust gauge is hidden in that case.
+    /// REMAINING dust as a fraction of the conversation's budget (1.0 = full, 0.0 =
+    /// empty), as last reported by Morgana via <c>ChannelMessage.ConversationMetadata</c>.
+    /// Null when dust limiting is disabled — the dust gauge is hidden in that case.
     /// </summary>
     double? DustLevel { get; set; }
 

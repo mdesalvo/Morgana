@@ -21,9 +21,10 @@ public class ConversationResumeResponse
     public string ActiveAgent { get; set; } = string.Empty;
 
     /// <summary>
-    /// Consumed-dust ratio (0.0 to &gt;1.0) of the resumed conversation's lifetime
-    /// budget, so the dust gauge can be rehydrated on resume rather than staying hidden
-    /// until the first post-resume turn. Null when dust limiting is disabled on Morgana.
+    /// REMAINING dust as a fraction of the resumed conversation's lifetime budget
+    /// (fuel-gauge semantics: 1.0 = full, 0.0 = empty), so the gauge can be rehydrated on
+    /// resume rather than staying hidden until the first post-resume turn. Null when dust
+    /// limiting is disabled on Morgana.
     /// </summary>
     public double? DustLevel { get; set; }
 }

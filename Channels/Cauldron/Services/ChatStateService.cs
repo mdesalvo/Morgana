@@ -61,8 +61,8 @@ public class ChatStateService : IChatStateService
     public bool HasCheckedStorage { get; set; }
 
     /// <summary>
-    /// Ratio of consumed dust to the conversation's budget (0.0 to &gt;1.0), as last
-    /// reported by Morgana. Null when dust limiting is disabled — gauge hidden.
+    /// REMAINING dust as a fraction of the conversation's budget (1.0 = full, 0.0 =
+    /// empty), as last reported by Morgana. Null when dust limiting is disabled — gauge hidden.
     /// </summary>
     public double? DustLevel { get; set; }
 

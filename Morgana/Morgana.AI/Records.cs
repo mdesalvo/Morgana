@@ -415,8 +415,10 @@ public static class Records
     /// Holds dimensions that characterise the conversation itself, not the message content
     /// (remaining budget today; active agent, health, … as the framework grows).
     /// </summary>
-    /// <param name="DustLevel">Ratio of consumed dust to budget, 0.0 to &gt;1.0. Null when
-    /// dust limiting is disabled (frontends hide the indicator in that case).</param>
+    /// <param name="DustLevel">REMAINING dust as a fraction of the budget, fuel-gauge
+    /// semantics: 1.0 = full (nothing consumed), 0.0 = empty (budget spent or overshot).
+    /// Always clamped to [0.0, 1.0]. Null when dust limiting is disabled (frontends hide
+    /// the indicator in that case).</param>
     public record ConversationMetadata(double? DustLevel = null);
 
     // ==========================================================================

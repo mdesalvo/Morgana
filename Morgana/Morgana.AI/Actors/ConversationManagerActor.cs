@@ -394,10 +394,13 @@ public class ConversationManagerActor : MorganaActor
             $"#richCard: {response.RichCard != null}");
 
         // The turn just completed, so all of its LLM calls have already been charged:
-        // read the fresh dust level to stamp it on the outbound message (frontends render
-        // it as a depleting gauge). Null when dust limiting is off → indicator hidden.
+        // read the fresh dust level to stamp it on the outbound message. DustLevel is the
+        // REMAINING fraction (fuel-gauge semantics: 1.0 = full, 0.0 = empty), so invert the
+        // consumed ratio and clamp — an overshoot under let-it-finish reads as empty, not
+        // negative. Null when dust limiting is off → indicator hidden.
         Records.ConversationMetadata? conversationMetadata = dustLimitingOptions.Enabled
-            ? new Records.ConversationMetadata(await dustLimitService.GetUsageRatioAsync(conversationId))
+            ? new Records.ConversationMetadata(
+                Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0))
             : null;
 
         // Send response to client via the active channel

@@ -7,15 +7,14 @@
     budget (1 - consumed ratio) as a purple cell that empties as the conversation
     burns tokens, shifting to amber then red as it runs low.
 
-    DustLevel is the CONSUMED ratio (0.0 .. >1.0) from
-    ChannelMessage.ConversationMetadata.DustLevel. Null => dust limiting is
-    disabled on the backend => the gauge renders nothing at all.
+    DustLevel is the REMAINING fraction (fuel-gauge semantics: 1.0 = full,
+    0.0 = empty), already clamped to [0,1] by the backend. Null => dust
+    limiting is disabled on the backend => the gauge renders nothing at all.
 *@
 
-@if (DustLevel is { } consumed)
+@if (DustLevel is { } remaining)
 {
-    double remaining = Math.Clamp(1.0 - consumed, 0.0, 1.0);
-    int percent = (int)Math.Round(remaining * 100);
+    int percent = (int)Math.Round(Math.Clamp(remaining, 0.0, 1.0) * 100);
     string state = remaining > 0.20 ? "ok" : remaining > 0.08 ? "low" : "critical";
 
     <div class="dust-meter @state"
@@ -36,8 +35,9 @@
 
 @code {
     /// <summary>
-    /// Consumed dust ratio (0.0 .. &gt;1.0) as reported by Morgana. Null when dust
-    /// limiting is disabled — the component renders nothing.
+    /// Remaining dust as a fraction of the budget (1.0 = full, 0.0 = empty), as
+    /// reported by Morgana. Null when dust limiting is disabled — the component
+    /// renders nothing.
     /// </summary>
     [Parameter]
     public double? DustLevel { get; set; }
