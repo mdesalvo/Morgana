@@ -85,6 +85,17 @@ public sealed class ConsoleUiService
     /// <summary>When true, keystrokes (except Esc) are swallowed and the input line shows a thinking hint. Starts true: Rune always waits for Morgana's presentation before the first user turn.</summary>
     private volatile bool awaitingResponse = true;
 
+    /// <summary>
+    /// Latched true when Morgana delivers the terminal dust-exhaustion notice
+    /// (<c>ErrorReason == "dust_budget_exhausted"</c>). The conversation is spent and
+    /// — unlike Cauldron — Rune cannot start a fresh one in-process, so this is a
+    /// one-way door: input stays locked (only Esc works) and the prompt is replaced
+    /// by an honest "quit and relaunch" hint. Never cleared. Mutated only under
+    /// <see cref="renderLock"/>; volatile so <see cref="ReadKeysLoop"/> sees it
+    /// without taking the lock on every polled keystroke.
+    /// </summary>
+    private volatile bool conversationDead;
+
     /// <summary>Platform-specific terminal-resize notifier; subscribed in <see cref="RunAsync"/> so the viewport anchor follows live window resizes without per-frame polling.</summary>
     private readonly IViewportResizeWatcher viewportResizeWatcher;
 
@@ -178,8 +189,22 @@ public sealed class ConsoleUiService
                     if (message.ConversationMetadata?.DustLevel is { } level)
                         dustLevel = level;
 
+                    // Terminal lockout. Morgana proactively pushes this at end of turn
+                    // (same ErrorReason as the doomed-next-send path), so the user sees
+                    // it BEFORE wasting a keystroke. Morgana's text says "start a new
+                    // one to keep going" — true for Cauldron, NOT for Rune, which has no
+                    // in-process restart. So latch a one-way dead state: the red banner
+                    // line above stays as Morgana's canonical word, and BuildInputRows
+                    // overrides the prompt with a Rune-honest "quit and relaunch" hint.
+                    if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
+                    {
+                        conversationDead = true;
+                        currentInput = string.Empty; // discard any half-typed doomed line
+                    }
+
                     // Release the input gate: ReadKeysLoop was swallowing keystrokes until
-                    // this first webhook delivery landed.
+                    // this first webhook delivery landed. (No-op once conversationDead:
+                    // ReadKeysLoop keeps swallowing on the dead latch regardless.)
                     awaitingResponse = false;
                     ctx.UpdateTarget(BuildLayout());
                     ctx.Refresh();
@@ -229,9 +254,12 @@ public sealed class ConsoleUiService
             }
 
             // Swallow every keystroke that isn't an explicit exit while we're waiting for
-            // Morgana to speak. Esc is always honoured so the user can bail out even
-            // mid-turn; everything else (printable characters, Enter, Backspace) is a no-op.
-            if (awaitingResponse && key.Key != ConsoleKey.Escape)
+            // Morgana to speak — or forever once the conversation is dust-dead (a
+            // one-way latch: no point typing into a budget the backend will reject).
+            // Esc is always honoured so the user can bail out even mid-turn or quit a
+            // spent conversation; everything else (printable chars, Enter, Backspace)
+            // is a no-op.
+            if ((awaitingResponse || conversationDead) && key.Key != ConsoleKey.Escape)
                 continue;
 
             switch (key.Key)
@@ -550,6 +578,15 @@ public sealed class ConsoleUiService
     /// </remarks>
     private List<IRenderable> BuildInputRows(int termWidth)
     {
+        // Terminal state supersedes everything. Morgana's banner already told the user
+        // the dust ran out; here we give the Rune-honest next step, because Morgana's
+        // "start a new one to keep going" is not (yet) actionable inside this CLI —
+        // the only way forward is to quit and relaunch the process.
+        if (conversationDead)
+            return ChunkStyledRows(
+                "✦ Conversation spent — press Esc to quit, then relaunch Rune to start fresh",
+                termWidth, $"{ErrorColor} italic");
+
         if (awaitingResponse)
         {
             string content = $"{currentSpeaker} is thinking…";

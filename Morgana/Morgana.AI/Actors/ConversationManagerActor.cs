@@ -405,9 +405,17 @@ public class ConversationManagerActor : MorganaActor
                 $"(#quickReplies: {response.QuickReplies?.Count ?? 0}," +
                 $"hasRichCard: {response.RichCard != null})");
 
-            // After delivering the answer, surface one-shot budget warnings (70% / 90%).
-            // These are advisory system messages, separate from the conversational flow.
-            await EmitDustWarningsIfNeededAsync();
+            // If this turn spent the last of the budget, surface the terminal lockout
+            // NOW — at end of turn — instead of letting the user fire a doomed next
+            // message just to eat an instant 429. DustLevel == 0.0 is exactly the
+            // over-budget state the controller gate rejects on the next send, so the
+            // notice we push here is identical to the one that path would emit.
+            // Exhaustion supersedes the advisory 70% / 90% warnings (a dead
+            // conversation does not need to be told it is "running low").
+            if (conversationMetadata is { DustLevel: <= 0.0 })
+                await EmitDustExhaustionAsync();
+            else
+                await EmitDustWarningsIfNeededAsync();
         }
         catch (Exception ex)
         {
@@ -471,6 +479,34 @@ public class ConversationManagerActor : MorganaActor
         catch (Exception ex)
         {
             actorLogger.Error(ex, "Failed to emit dust budget warning for {0}", conversationId);
+        }
+    }
+
+    /// <summary>
+    /// Pushes the terminal dust-exhaustion notice at end of turn, when the budget has
+    /// just been spent. Deliberately identical (text, <c>MessageType</c>,
+    /// <c>ErrorReason</c>) to the banner the message endpoint emits on a doomed next
+    /// send, so a channel that already renders the lockout (Cauldron's non-fading
+    /// terminal banner) and its de-dup keep working unchanged. Best-effort: a delivery
+    /// failure is logged, never thrown — the conversation is already over.
+    /// </summary>
+    private async Task EmitDustExhaustionAsync()
+    {
+        try
+        {
+            await channelService.SendMessageAsync(new Records.ChannelMessage
+            {
+                ConversationId = conversationId,
+                Text = dustLimitingOptions.ErrorMessage,
+                MessageType = "error",
+                ErrorReason = "dust_budget_exhausted",
+                AgentName = "Morgana",
+                AgentCompleted = false
+            });
+        }
+        catch (Exception ex)
+        {
+            actorLogger.Error(ex, "Failed to emit dust exhaustion notice for {0}", conversationId);
         }
     }
 

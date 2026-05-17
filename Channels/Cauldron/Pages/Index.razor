@@ -504,7 +504,8 @@
         string.IsNullOrWhiteSpace(inputText) ||
         !ChatStateService.IsInitialized ||
         ChatStateService.HasActiveQuickReplies() ||
-        ChatStateService.HasTypingIndicator();
+        ChatStateService.HasTypingIndicator() ||
+        ChatStateService.IsConversationDeadFromDust();
 
     private bool IsNewConversationButtonVisible =>
         ChatStateService.HasCheckedStorage
@@ -522,7 +523,12 @@
         ChatStateService.IsSending ||
         !ChatStateService.IsInitialized ||
         ChatStateService.HasActiveQuickReplies() ||
-        ChatStateService.HasTypingIndicator();
+        ChatStateService.HasTypingIndicator() ||
+        // Conversation is dust-dead: the input is locked so the user can't waste a
+        // keystroke on a turn the backend will reject — the terminal banner (pushed
+        // proactively at end of turn) and the New Conversation button are the only
+        // affordances left.
+        ChatStateService.IsConversationDeadFromDust();
 
     // =========================================================================
     // CLEANUP
