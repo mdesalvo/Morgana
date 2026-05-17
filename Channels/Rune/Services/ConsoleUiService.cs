@@ -351,7 +351,10 @@ public sealed class ConsoleUiService
         string dustSegment = string.Empty;
         if (dustLevel is { } remaining)
         {
-            int remainingPct = Math.Clamp((int)Math.Round(remaining * 100), 0, 100);
+            // Truncate toward zero, don't round: a sub-1% residual reads as 0% — that
+            // swallowed fraction is the slack that funds per-channel presentation
+            // messages and the let-it-finish turn.
+            int remainingPct = Math.Clamp((int)(remaining * 100), 0, 100);
             dustSegment = $"   [grey54]dust[/] [bold {DustColor}]{remainingPct}%[/]";
         }
 

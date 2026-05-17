@@ -14,7 +14,10 @@
 
 @if (DustLevel is { } remaining)
 {
-    int percent = (int)Math.Round(Math.Clamp(remaining, 0.0, 1.0) * 100);
+    @* Truncate toward zero, don't round: a sub-1% residual reads as 0% — that
+       swallowed fraction is the slack that funds per-channel presentation
+       messages and the let-it-finish turn. *@
+    int percent = (int)(Math.Clamp(remaining, 0.0, 1.0) * 100);
     string state = remaining > 0.20 ? "ok" : remaining > 0.08 ? "low" : "critical";
 
     <div class="dust-meter @state"

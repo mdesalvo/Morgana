@@ -479,10 +479,15 @@ public class ConversationManagerActor : MorganaActor
     /// 0–100 integer (fuel-gauge semantics — the same number the DustMeter/Rune gauge shows).
     /// Users reason in "how much is left", not in abstract dust units. Clamped at zero (a
     /// turn may finish slightly over budget under the let-it-finish policy).
+    /// <para>
+    /// Truncated toward zero (not rounded): a sub-1% residual reads as 0%. That swallowed
+    /// fraction is deliberate slack — over the conversation lifetime it pays for the
+    /// let-it-finish turn already in flight when the budget runs out.
+    /// </para>
     /// </summary>
     private string FormatDustMessage(string template, double ratio)
     {
-        int percent = (int)Math.Round(Math.Clamp(1.0 - ratio, 0.0, 1.0) * 100);
+        int percent = (int)(Math.Clamp(1.0 - ratio, 0.0, 1.0) * 100);
         return template.Replace("{percent}", percent.ToString());
     }
 
