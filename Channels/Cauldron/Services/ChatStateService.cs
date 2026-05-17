@@ -160,12 +160,17 @@ public class ChatStateService : IChatStateService
     }
 
     /// <summary>
-    /// Removes all error-type temporary messages.
+    /// Removes all transient error-type temporary messages, but preserves the terminal
+    /// dust-exhaustion banner: that is not a retryable error, it is a permanent
+    /// "this conversation is dead" state marker. Clearing it (e.g. the post-init
+    /// ClearErrorMessages on resume) would strand the user with a locked input and no
+    /// explanation, so it survives until a brand-new conversation replaces all state.
     /// </summary>
     public void ClearErrorMessages()
     {
         TemporaryMessages.RemoveAll(m =>
-            string.Equals(m.MessageType, "error", StringComparison.OrdinalIgnoreCase));
+            string.Equals(m.MessageType, "error", StringComparison.OrdinalIgnoreCase)
+             && !string.Equals(m.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal));
     }
 
     /// <summary>

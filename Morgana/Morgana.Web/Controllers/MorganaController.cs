@@ -260,12 +260,25 @@ public class MorganaController : ControllerBase
                 ? Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0)
                 : null;
 
+            // If the resumed conversation is already dust-dead, hand the client the
+            // canonical terminal message (the very same dustLimitingOptions.ErrorMessage
+            // the message endpoint emits on a doomed send and EmitDustExhaustionAsync
+            // emits at end of turn) so a page refresh can re-surface the lockout banner
+            // up front, instead of letting the user rediscover it by firing a message
+            // that is instantly rejected. dustLevel == 0.0 is exactly ratio >= 1.0,
+            // i.e. the same over-budget boundary IsOverBudgetAsync gates on. Null
+            // otherwise (including when dust limiting is disabled).
+            string? dustExhaustedMessage = dustLevel is <= 0.0
+                ? dustLimitingOptions.ErrorMessage
+                : null;
+
             return Accepted(new
             {
                 conversationId = conversationId,
                 resumed = true,
                 activeAgent = lastActiveAgent,
-                dustLevel = dustLevel
+                dustLevel = dustLevel,
+                dustExhaustedMessage = dustExhaustedMessage
             });
         }
         catch (Exception ex)
