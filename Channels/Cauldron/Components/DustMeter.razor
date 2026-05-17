@@ -18,7 +18,7 @@
        swallowed fraction is the slack that funds per-channel presentation
        messages and the let-it-finish turn. *@
     int percent = (int)(Math.Clamp(remaining, 0.0, 1.0) * 100);
-    string state = remaining > 0.20 ? "ok" : remaining > 0.08 ? "low" : "critical";
+    string state = remaining > 0.30 ? "ok" : remaining > 0.10 ? "low" : "critical";
 
     <div class="dust-meter @state"
          role="meter"
