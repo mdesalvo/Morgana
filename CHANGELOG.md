@@ -5,14 +5,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.23.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Magic Dust — Token-Budget Protection
+This release introduces **Magic Dust**, a per-conversation **lifetime token budget** that guards Morgana **orthogonally to the rate limiter**: where the rate limiter caps message *frequency*, Magic Dust caps token *consumption*.
+Every conversation is born with a finite budget of dust; each LLM call (guard, classifier, agent, presenter) burns some, and the running balance is **artistically represented as the quantity of magic dust left in the cauldron** — a fuel-gauge the user watches deplete.
+The budget is **cache-aware** (cached prompt tokens cost a fraction, 1-hour cache writes cost more, mirroring real provider economics), persisted in the per-conversation SQLite database so it survives actor decommission and resume, and enforced **fail-open** so a storage fault never blocks the user.
+As the budget drains Morgana emits **one-shot advisory warnings at 70% and 90%**; once it is spent the conversation is **terminal** — the lockout is surfaced proactively at end of turn (and re-surfaced on resume) and the only way forward is a brand-new conversation.
 
 ### ✨ Added
+- **Magic Dust** per-conversation lifetime token-budget guard (`IDustLimitService` / `SQLiteDustLimitService`), orthogonal to `IRateLimitService` — consumption vs frequency — failing open on any storage error
+- Per-provider **cache-aware dust pricing** (`MagicDustPricing`): fresh / cache-read / cache-creation input tokens are weighted independently so the budget tracks real LLM cost, not raw token count
+- Dust state persisted in the per-conversation SQLite database (`dust_budget` + `dust_usage_log`, schema v5), with one-shot 70% / 90% advisory warnings and a terminal lockout when the budget is exhausted
+- Cauldron **`DustMeter`** — a depleting magic-dust fuel-gauge in the header, rehydrated from the persisted budget on conversation resume
+- Rune sticky-header dust gauge for the CLI channel
+- `morgana.dust.consumed` OpenTelemetry counter (tagged by `llm_role` and conversation) for cost observability
 
 ### 🔄 Changed
+- **BREAKING**: `Morgana:AdaptiveMessaging:StreamingResponse:Enabled` has been renamed to the flat key `Morgana:AdaptiveMessaging:EnableStreamingResponse`
+- `RateLimiting:MaxMessagesPerHour` set to 80, aligned with the 80-dust per-conversation budget (per-minute and per-day guards unchanged)
 
 ### 🐛 Fixed
+- The Cauldron textarea and send button were **live during the initial presentation-load window**
 
 ### 🚀 Future Enablement
+- **Adaptive Dust Pricing & Budget Analytics** — With `dust_usage_log` capturing per-call, per-role token economics and the `morgana.dust.consumed` counter feeding OpenTelemetry, operators can build **per-conversation cost dashboards** and graduate from a static `BudgetPerConversation` to **adaptive budgets** tuned per tenant, channel or agent mix — turning the dust model into a data-driven cost-governance lever rather than a fixed ceiling.
+- **Economic Backpressure & Graceful Degradation** — A live dust balance opens the door to **budget-aware orchestration**: as dust runs low Morgana could automatically shed expensive steps (skip the classifier on obvious follow-ups, shrink the history context window, prefer a cheaper provider) so a conversation degrades gracefully toward its budget instead of hitting a hard wall, maximizing usefulness per token spent.
 
 
 ## [0.22.0] - 2026-05-14
