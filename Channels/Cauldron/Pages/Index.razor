@@ -505,6 +505,7 @@
         !ChatStateService.IsInitialized ||
         ChatStateService.HasActiveQuickReplies() ||
         ChatStateService.HasTypingIndicator() ||
+        IsAwaitingFirstBackendMessage ||
         ChatStateService.IsConversationDeadFromDust();
 
     private bool IsNewConversationButtonVisible =>
@@ -524,11 +525,24 @@
         !ChatStateService.IsInitialized ||
         ChatStateService.HasActiveQuickReplies() ||
         ChatStateService.HasTypingIndicator() ||
+        IsAwaitingFirstBackendMessage ||
         // Conversation is dust-dead: the input is locked so the user can't waste a
         // keystroke on a turn the backend will reject — the terminal banner (pushed
         // proactively at end of turn) and the New Conversation button are the only
         // affordances left.
         ChatStateService.IsConversationDeadFromDust();
+
+    /// <summary>
+    /// True while the magical loader is still spinning — Morgana has connected and
+    /// the conversation has started, but the first backend message (the presentation,
+    /// or the rehydrated history on resume) has not landed yet. Mirrors the loader's
+    /// own <c>ChatMessages.Count == 0</c> condition and is the Cauldron analogue of
+    /// Rune's initial <c>awaitingResponse = true</c> gate: typing/sending into this
+    /// window would race the presentation and scramble the conversation, so the input
+    /// stays locked until Morgana has spoken once.
+    /// </summary>
+    private bool IsAwaitingFirstBackendMessage =>
+        ChatStateService.ChatMessages.Count == 0;
 
     // =========================================================================
     // CLEANUP
