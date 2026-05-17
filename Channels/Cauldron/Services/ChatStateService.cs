@@ -273,6 +273,17 @@ public class ChatStateService : IChatStateService
         ChatMessages.Any(m => m.IsTyping);
 
     /// <summary>
+    /// True when the conversation is terminally spent: a dust-exhaustion banner
+    /// (ErrorReason <c>"dust_budget_exhausted"</c>) is on screen. The conversation is
+    /// dead and the only way forward is a brand-new one, so the "New Conversation"
+    /// button must stay reachable even when the usual connection/history/init gates
+    /// would otherwise hide it (e.g. a transient SignalR reconnect right after lockout).
+    /// </summary>
+    public bool IsConversationDeadFromDust() =>
+        TemporaryMessages.Any(m =>
+            string.Equals(m.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal));
+
+    /// <summary>
     /// Resets all state for a fresh start.
     /// </summary>
     public void Reset()

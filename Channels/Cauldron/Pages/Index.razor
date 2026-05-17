@@ -507,11 +507,15 @@
         ChatStateService.HasTypingIndicator();
 
     private bool IsNewConversationButtonVisible =>
-        ChatStateService.IsConnected
-        && ChatStateService.IsInitialized
-        && ChatStateService.HasCheckedStorage
+        ChatStateService.HasCheckedStorage
         && !string.IsNullOrWhiteSpace(ChatStateService.ConversationId)
-        && ChatStateService.ChatMessages.Count > 0;
+        // A dust-dead conversation MUST always expose its only escape hatch, even if
+        // IsConnected/IsInitialized/ChatMessages momentarily say otherwise — the
+        // terminal banner never fades, so a hidden button would strand the user.
+        && (ChatStateService.IsConversationDeadFromDust()
+            || (ChatStateService.IsConnected
+                && ChatStateService.IsInitialized
+                && ChatStateService.ChatMessages.Count > 0));
 
     private bool IsTextareaDisabled =>
         !ChatStateService.IsConnected ||
