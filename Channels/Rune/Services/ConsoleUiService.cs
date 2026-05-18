@@ -383,7 +383,9 @@ public sealed class ConsoleUiService
             // swallowed fraction is the slack that funds per-channel presentation
             // messages and the let-it-finish turn.
             int remainingPct = Math.Clamp((int)(remaining * 100), 0, 100);
-            dustSegment = $"   [grey54]dust[/] [bold {DustColor}]{remainingPct}%[/]";
+            // Scale color with depletion: mirrors Cauldron DustMeter thresholds (>30% ok, >10% low, ≤10% critical).
+            string dustColor = remaining > 0.30 ? DustColor : remaining > 0.10 ? WarningColor : ErrorColor;
+            dustSegment = $"   [grey54]dust[/] [bold {dustColor}]{remainingPct}%[/]";
         }
 
         // Markup uses [/] to close the tag — always run user-controlled strings through
