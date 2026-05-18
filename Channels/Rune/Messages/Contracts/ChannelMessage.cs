@@ -63,4 +63,11 @@ public sealed class ChannelMessage
     /// Duration of the eventual fading message — Rune ignores it since the CLI has no fading UI.
     /// </summary>
     public int? FadingMessageDurationSeconds { get; set; } = 10;
+
+    /// <summary>
+    /// Conversation-level metadata (e.g. remaining dust budget). Characterises the
+    /// conversation, not this message. Rune renders it in the sticky header.
+    /// Null when no such metadata is available (dust limiting disabled).
+    /// </summary>
+    public ConversationMetadata? ConversationMetadata { get; set; }
 }

@@ -63,6 +63,17 @@ public class MorganaAgentAdapter
     protected readonly SummarizingChatReducerService chatReducerService;
 
     /// <summary>
+    /// Per-conversation lifetime token-budget limiter. Domain-agent LLM calls (and their
+    /// history reducer) are metered through it under a per-agent role.
+    /// </summary>
+    protected readonly IDustLimitService dustLimitService;
+
+    /// <summary>
+    /// Per-provider dust pricing used to convert token counts into dust units for agents.
+    /// </summary>
+    protected readonly Records.MagicDustPricing dustPricing;
+
+    /// <summary>
     /// Logger instance for agent creation diagnostics and tool registration tracking.
     /// </summary>
     protected readonly ILogger logger;
@@ -82,6 +93,8 @@ public class MorganaAgentAdapter
     /// <param name="toolRegistryService">Service for discovering custom MorganaTool implementations</param>
     /// <param name="imcpClientRegistryService">Service for managing MCP server connections</param>
     /// <param name="chatReducerService">Service for reducing context window sent to LLM</param>
+    /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
+    /// <param name="dustPricing">Per-provider dust pricing (tokens per dust unit)</param>
     /// <param name="logger">Logger instance for diagnostics</param>
     public MorganaAgentAdapter(
         IChatClient chatClient,
@@ -89,6 +102,8 @@ public class MorganaAgentAdapter
         IToolRegistryService toolRegistryService,
         IMCPClientRegistryService imcpClientRegistryService,
         SummarizingChatReducerService chatReducerService,
+        IDustLimitService dustLimitService,
+        Records.MagicDustPricing dustPricing,
         ILogger logger)
     {
         this.chatClient = chatClient;
@@ -96,6 +111,8 @@ public class MorganaAgentAdapter
         this.toolRegistryService = toolRegistryService;
         this.imcpClientRegistryService = imcpClientRegistryService;
         this.chatReducerService = chatReducerService;
+        this.dustLimitService = dustLimitService;
+        this.dustPricing = dustPricing;
         this.logger = logger;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
@@ -165,14 +182,26 @@ public class MorganaAgentAdapter
 
         RegisterMCPTools(agentType, morganaToolAdapter);
 
-        IChatReducer? chatReducer = chatReducerService.CreateReducer(chatClient);
+        // Meter this agent's LLM calls (and its history-reducer summarization calls, which
+        // also burn tokens) under a per-agent role. There is no singleton dust wrapper on
+        // chatClient, so wrapping here does not double-count: the framework-actor path is
+        // wrapped independently inside MorganaLLM.CompleteWithSystemPromptAsync.
+        // Pass conversationId as the fallback: Microsoft.Agents.AI does not flow a
+        // ChatOptions.ConversationId on the agent path (client-side conversation state), so
+        // without this the agent's calls — the dominant token cost — would never be charged.
+        string intent = intentAttribute.Intent;
+        string dustRole = $"Morgana ({char.ToUpperInvariant(intent[0])}{intent[1..]})";
+        IChatClient agentChatClient =
+            new DustAccountingChatClient(chatClient, dustLimitService, dustPricing, dustRole, conversationId);
+
+        IChatReducer? chatReducer = chatReducerService.CreateReducer(agentChatClient);
 
         MorganaChatHistoryProvider chatHistoryProvider = new MorganaChatHistoryProvider(
             intentAttribute.Intent,
             chatReducer,
             logger);
 
-        AIAgent aiAgent = chatClient.AsAIAgent(
+        AIAgent aiAgent = agentChatClient.AsAIAgent(
             new ChatClientAgentOptions
             {
                 // Give the agent its context providers

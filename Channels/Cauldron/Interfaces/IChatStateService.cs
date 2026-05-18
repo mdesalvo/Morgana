@@ -50,6 +50,13 @@ public interface IChatStateService
     bool HasCheckedStorage { get; set; }
 
     /// <summary>
+    /// REMAINING dust as a fraction of the conversation's budget (1.0 = full, 0.0 =
+    /// empty), as last reported by Morgana via <c>ChannelMessage.ConversationMetadata</c>.
+    /// Null when dust limiting is disabled — the dust gauge is hidden in that case.
+    /// </summary>
+    double? DustLevel { get; set; }
+
+    /// <summary>
     /// Adds a user message to the chat.
     /// </summary>
     void AddUserMessage(string text);
@@ -131,6 +138,15 @@ public interface IChatStateService
     /// True if any message is currently showing a typing indicator.
     /// </summary>
     bool HasTypingIndicator();
+
+    /// <summary>
+    /// True when the conversation is terminally spent: a dust-exhaustion banner
+    /// (ErrorReason <c>"dust_budget_exhausted"</c>) is on screen. The conversation is
+    /// dead and the only way forward is a brand-new one, so the "New Conversation"
+    /// button must stay reachable even when the usual connection/history/init gates
+    /// would otherwise hide it.
+    /// </summary>
+    bool IsConversationDeadFromDust();
 
     /// <summary>
     /// Resets all state for a fresh start.

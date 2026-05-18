@@ -60,6 +60,12 @@ public class ChatStateService : IChatStateService
     /// </summary>
     public bool HasCheckedStorage { get; set; }
 
+    /// <summary>
+    /// REMAINING dust as a fraction of the conversation's budget (1.0 = full, 0.0 =
+    /// empty), as last reported by Morgana. Null when dust limiting is disabled — gauge hidden.
+    /// </summary>
+    public double? DustLevel { get; set; }
+
     // =========================================================================
     // MESSAGE OPERATIONS
     // =========================================================================
@@ -154,12 +160,17 @@ public class ChatStateService : IChatStateService
     }
 
     /// <summary>
-    /// Removes all error-type temporary messages.
+    /// Removes all transient error-type temporary messages, but preserves the terminal
+    /// dust-exhaustion banner: that is not a retryable error, it is a permanent
+    /// "this conversation is dead" state marker. Clearing it (e.g. the post-init
+    /// ClearErrorMessages on resume) would strand the user with a locked input and no
+    /// explanation, so it survives until a brand-new conversation replaces all state.
     /// </summary>
     public void ClearErrorMessages()
     {
         TemporaryMessages.RemoveAll(m =>
-            string.Equals(m.MessageType, "error", StringComparison.OrdinalIgnoreCase));
+            string.Equals(m.MessageType, "error", StringComparison.OrdinalIgnoreCase)
+             && !string.Equals(m.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -267,6 +278,17 @@ public class ChatStateService : IChatStateService
         ChatMessages.Any(m => m.IsTyping);
 
     /// <summary>
+    /// True when the conversation is terminally spent: a dust-exhaustion banner
+    /// (ErrorReason <c>"dust_budget_exhausted"</c>) is on screen. The conversation is
+    /// dead and the only way forward is a brand-new one, so the "New Conversation"
+    /// button must stay reachable even when the usual connection/history/init gates
+    /// would otherwise hide it (e.g. a transient SignalR reconnect right after lockout).
+    /// </summary>
+    public bool IsConversationDeadFromDust() =>
+        TemporaryMessages.Any(m =>
+            string.Equals(m.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal));
+
+    /// <summary>
     /// Resets all state for a fresh start.
     /// </summary>
     public void Reset()
@@ -279,5 +301,6 @@ public class ChatStateService : IChatStateService
         IsSending = false;
         IsInitialized = false;
         HasCheckedStorage = false;
+        DustLevel = null;
     }
 }

@@ -1,9 +1,12 @@
-@* 
-    FadingMessage - Temporary System Warning Banner
+@*
+    FadingMessage - System Warning / Error Banner
 
     Features:
-    - Auto-dismiss after configurable N seconds (default 10)
-    - Smooth fade-out animation (last 2 seconds)
+    - Auto-dismiss after configurable N seconds (default 10) for TRANSIENT notices
+      (rate-limit "slow down", generic warnings)
+    - TERMINAL notices (dust budget exhausted) never auto-dismiss and get their own
+      styling — the conversation is dead, this is not a "wait and retry" hint
+    - Smooth fade-out animation (last 2 seconds) for transient notices only
     - Self-contained state management
     - Configurable icon based on error reason
 *@
@@ -55,10 +58,20 @@
     /// </summary>
     private CancellationTokenSource? cancellationTokenSource;
 
+    /// <summary>
+    /// A terminal notice ends the conversation (dust budget spent): unlike a rate-limit
+    /// "slow down" or a generic warning it must persist — there is nothing to wait for,
+    /// the only way forward is a new conversation. Drives both the no-auto-dismiss
+    /// behaviour and the distinct banner styling so it is not read as a transient warning.
+    /// </summary>
+    private bool IsTerminal =>
+        string.Equals(Message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal);
+
     protected override void OnInitialized()
     {
-        // Start auto-dismiss timer
-        StartAutoDismissTimer();
+        // Transient notices fade away; a terminal notice stays put until the user acts.
+        if (!IsTerminal)
+            StartAutoDismissTimer();
     }
 
     /// <summary>
@@ -109,16 +122,22 @@
         return Message.ErrorReason switch
         {
             "rate_limit_exceeded" => "✋",
+            "dust_budget_exhausted" => "🪄",
             _ => "⚠️"
         };
     }
 
     /// <summary>
-    /// Gets the CSS class for banner styling based on MessageType.
+    /// Gets the CSS class for banner styling. The terminal dust notice gets its own
+    /// variant (calm purple, dust-theme) so it never reads as the alarming red of a
+    /// transient error or the pink of a rate-limit warning.
     /// </summary>
-    /// <returns>CSS class name ("error" for errors, empty for warnings)</returns>
+    /// <returns>"dust-exhausted" for the terminal notice, "error" for errors, empty for warnings.</returns>
     private string GetBannerClass()
     {
+        if (IsTerminal)
+            return "dust-exhausted";
+
         return string.Equals(Message.MessageType, "error", StringComparison.OrdinalIgnoreCase) ? "error" : "";
     }
 

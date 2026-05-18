@@ -35,6 +35,22 @@
     border-left: 4px solid #ef4444; /* Red */
 }
 
+/* Terminal dust-exhausted variant — purple, tied to the dust gauge identity.
+   Deliberately NOT the alarming red of .error nor the pink of a rate-limit
+   warning: the conversation is simply spent. This banner never fades (the
+   component does not start its dismiss timer for terminal notices), so it
+   stays as a calm, persistent "this conversation is done" marker. */
+.temporary-message-banner.dust-exhausted {
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--primary-color) 22%, transparent) 0%,
+        color-mix(in srgb, var(--primary-dark) 16%, transparent) 100%);
+    border-left: 4px solid var(--primary-color);
+}
+
+.temporary-message-banner.dust-exhausted .banner-icon {
+    filter: drop-shadow(0 0 4px var(--primary-color));
+}
+
 /* Icon styling */
 .temporary-message-banner .banner-icon {
     font-size: 20px;

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Akka.Actor;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Morgana.AI;
 using Morgana.AI.Actors;
@@ -42,6 +43,8 @@ public class MorganaController : ControllerBase
     private readonly IAuthenticationService authenticationService;
     private readonly IRateLimitService rateLimitService;
     private readonly Records.RateLimitOptions rateLimitOptions;
+    private readonly IDustLimitService dustLimitService;
+    private readonly Records.DustLimitingOptions dustLimitingOptions;
 
     // ==============================================================================
     /// <summary>
@@ -55,6 +58,8 @@ public class MorganaController : ControllerBase
     /// <param name="authenticationService">Service for authenticating incoming requests</param>
     /// <param name="rateLimitService">Service for rate limiting an existing conversation</param>
     /// <param name="rateLimitOptions">Options for configuration of the rate limiting service</param>
+    /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
+    /// <param name="dustLimitingOptions">Dust-limiting policy and message templates</param>
     public MorganaController(
         ActorSystem actorSystem,
         ILogger logger,
@@ -63,7 +68,9 @@ public class MorganaController : ControllerBase
         IConversationPersistenceService conversationPersistenceService,
         IAuthenticationService authenticationService,
         IRateLimitService rateLimitService,
-        IOptions<Records.RateLimitOptions> rateLimitOptions)
+        IOptions<Records.RateLimitOptions> rateLimitOptions,
+        IDustLimitService dustLimitService,
+        IOptions<Records.DustLimitingOptions> dustLimitingOptions)
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
@@ -73,6 +80,8 @@ public class MorganaController : ControllerBase
         this.authenticationService = authenticationService;
         this.rateLimitService = rateLimitService;
         this.rateLimitOptions = rateLimitOptions.Value;
+        this.dustLimitService = dustLimitService;
+        this.dustLimitingOptions = dustLimitingOptions.Value;
     }
 
     /// <summary>
@@ -243,11 +252,33 @@ public class MorganaController : ControllerBase
             logger.LogInformation(
                 "Conversation resume queued: {ConversationId} with active agent: {LastActiveAgent}", conversationId, lastActiveAgent);
 
+            // Surface the REMAINING dust fraction on resume (fuel-gauge semantics:
+            // 1.0 = full, 0.0 = empty) so the client can rehydrate its gauge immediately.
+            // Invert the consumed ratio and clamp. Null when dust limiting is disabled →
+            // client keeps the indicator hidden.
+            double? dustLevel = dustLimitingOptions.Enabled
+                ? Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0)
+                : null;
+
+            // If the resumed conversation is already dust-dead, hand the client the
+            // canonical terminal message (the very same dustLimitingOptions.ErrorMessage
+            // the message endpoint emits on a doomed send and EmitDustExhaustionAsync
+            // emits at end of turn) so a page refresh can re-surface the lockout banner
+            // up front, instead of letting the user rediscover it by firing a message
+            // that is instantly rejected. dustLevel == 0.0 is exactly ratio >= 1.0,
+            // i.e. the same over-budget boundary IsOverBudgetAsync gates on. Null
+            // otherwise (including when dust limiting is disabled).
+            string? dustExhaustedMessage = dustLevel is <= 0.0
+                ? dustLimitingOptions.ErrorMessage
+                : null;
+
             return Accepted(new
             {
                 conversationId = conversationId,
                 resumed = true,
-                activeAgent = lastActiveAgent
+                activeAgent = lastActiveAgent,
+                dustLevel = dustLevel,
+                dustExhaustedMessage = dustExhaustedMessage
             });
         }
         catch (Exception ex)
@@ -344,6 +375,34 @@ public class MorganaController : ControllerBase
                     violatedLimit = rateLimitResult.ViolatedLimit,
                     retryAfterSeconds = rateLimitResult.RetryAfterSeconds,
                     message = rateLimitViolation
+                });
+            }
+            #endregion
+
+            #region Dust Limiting
+            // Orthogonal to rate limiting: the rate limiter caps message frequency, the dust
+            // limiter caps token consumption. Checked after it, same 429 shape. Once the
+            // budget is spent the conversation is terminal — there is no continuation, the
+            // user must start a brand-new conversation.
+            if (await dustLimitService.IsOverBudgetAsync(request.ConversationId))
+            {
+                logger.LogWarning(
+                    "Dust budget exhausted for conversation {RequestConversationId}", request.ConversationId);
+
+                await channelService.SendMessageAsync(new Records.ChannelMessage
+                {
+                    ConversationId = request.ConversationId,
+                    Text = dustLimitingOptions.ErrorMessage,
+                    MessageType = "error",
+                    ErrorReason = "dust_budget_exhausted",
+                    AgentName = "Morgana",
+                    AgentCompleted = false
+                });
+
+                return StatusCode(429, new
+                {
+                    error = "Dust budget exhausted",
+                    message = dustLimitingOptions.ErrorMessage
                 });
             }
             #endregion

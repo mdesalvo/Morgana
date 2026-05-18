@@ -101,6 +101,20 @@ public class ConversationLifecycleService : IConversationLifecycleService
 
                 _chatStateService.ConversationId = result?.ConversationId ?? savedConversationId;
 
+                // Rehydrate the dust gauge from the resumed conversation's budget so the
+                // widget reflects real residual dust immediately, not a pristine bar that
+                // only corrects itself after the first post-resume turn. Null leaves the
+                // indicator hidden (dust limiting disabled on Morgana).
+                _chatStateService.DustLevel = result?.DustLevel;
+
+                // The resumed conversation is already dust-dead: re-surface the canonical
+                // terminal banner up front (same ErrorReason as the live lockout, so the
+                // input lock, the guaranteed New Conversation button and the non-fading
+                // purple styling all engage) instead of letting the user discover the
+                // wall by firing a message that is instantly rejected.
+                if (!string.IsNullOrEmpty(result?.DustExhaustedMessage))
+                    _chatStateService.AddErrorBanner(result.DustExhaustedMessage, "dust_budget_exhausted");
+
                 if (string.IsNullOrEmpty(result?.ActiveAgent)
                     || string.Equals(result.ActiveAgent, "Morgana", StringComparison.OrdinalIgnoreCase))
                 {

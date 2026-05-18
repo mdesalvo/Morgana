@@ -253,7 +253,7 @@ public static class Records
     ///       "Enabled": true,
     ///       "MaxMessagesPerMinute": 5,
     ///       "MaxMessagesPerHour": 30,
-    ///       "MaxMessagesPerDay": 100,
+    ///       "MaxMessagesPerDay": 80,
     ///       "ErrorMessagePerMinute": "✋ Whoa there! You're casting spells too quickly...",
     ///       "ErrorMessagePerHour": "⏰ You've reached your hourly spell quota...",
     ///       "ErrorMessagePerDay": "🌙 You've exhausted today's magical energy...",
@@ -290,7 +290,7 @@ public static class Records
         /// Enforces daily quotas. Set to 0 to disable this check.
         /// </summary>
         /// <example>100</example>
-        public int MaxMessagesPerDay { get; set; } = 100;
+        public int MaxMessagesPerDay { get; set; } = 80;
 
         /// <summary>
         /// Error message displayed when per-minute limit is exceeded.
@@ -334,6 +334,83 @@ public static class Records
         bool IsAllowed,
         string? ViolatedLimit = null,
         int? RetryAfterSeconds = null);
+
+    // ==========================================================================
+    // MAGIC DUST (TOKEN BUDGET)
+    // ==========================================================================
+
+    /// <summary>
+    /// Per-provider pricing: how many tokens of each direction equal one dust unit, plus
+    /// cache cost-weights. Lives under <c>Morgana:LLM:{Provider}:MagicDust</c> because cost
+    /// is a property of the concrete model. Zero on either axis means that direction does
+    /// not consume dust (e.g. Ollama local models, set both to 0 for "free").
+    /// <para>The MEAI Anthropic adapter reports <c>InputTokenCount</c> as the <em>total</em>
+    /// prompt (fresh + cache-read + cache-write). Charging it flat would over-count cache
+    /// reads (real cost ~0.1×) and under-count 1h cache writes (~2×). The two weights below
+    /// let the limiter track real cache economics; defaults are 1.0 (cache-unaware no-op, so
+    /// behaviour is unchanged unless a deployment configures them).</para>
+    /// </summary>
+    public record MagicDustPricing
+    {
+        /// <summary>Input tokens that equal one dust unit. 0 disables input charging.</summary>
+        public int InputTokensPerDustUnit { get; set; }
+
+        /// <summary>Output tokens that equal one dust unit. 0 disables output charging.</summary>
+        public int OutputTokensPerDustUnit { get; set; }
+
+        /// <summary>
+        /// Cost weight applied to cache-read input tokens (<c>CachedInputTokenCount</c>)
+        /// relative to a fresh input token. Anthropic cache-read ≈ 0.10; OpenAI ≈ 0.50.
+        /// </summary>
+        public double CachedInputWeight { get; set; }
+
+        /// <summary>
+        /// Cost weight applied to cache-creation input tokens
+        /// (<c>AdditionalCounts["CacheCreationInputTokens"]</c>) relative to a fresh input
+        /// token. Anthropic 1h cache write ≈ 2.0; providers with no separate write cost = 1.0.
+        /// </summary>
+        public double CacheCreationWeight { get; set; }
+    }
+
+    /// <summary>
+    /// Policy for the per-conversation lifetime dust budget — a token-consumption guard
+    /// orthogonal to <see cref="RateLimitOptions"/>. The budget is a lifetime resource: no
+    /// sliding window, no reset. Once exhausted the conversation is done; the only way
+    /// forward is a brand-new conversation.
+    /// <para>Message templates are framework-neutral English defaults; deployments override
+    /// them in <c>Morgana:DustLimiting</c> with their own copy and personality, exactly like
+    /// <see cref="RateLimitOptions"/>. The warning templates support one placeholder,
+    /// <c>{percent}</c> (remaining budget as a 0–100 integer — fuel-gauge semantics, the
+    /// same number the gauge shows; users reason in "how much is left", not dust units).</para>
+    /// </summary>
+    public record DustLimitingOptions
+    {
+        /// <summary>Master toggle. When false the limiter is fully bypassed (fail open).</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Total dust a conversation may consume over its lifetime.</summary>
+        public double BudgetPerConversation { get; set; }
+
+        /// <summary>One-shot advisory shown when consumption crosses 70%.</summary>
+        public string Warning70Message { get; set; }
+
+        /// <summary>One-shot advisory shown when consumption crosses 90%.</summary>
+        public string Warning90Message { get; set; }
+
+        /// <summary>Blocking message shown when the budget is exhausted (100%).</summary>
+        public string ErrorMessage { get; set; }
+    }
+
+    /// <summary>
+    /// Conversation-level metadata carried by every outbound <see cref="ChannelMessage"/>.
+    /// Holds dimensions that characterise the conversation itself, not the message content
+    /// (remaining budget today; active agent, health, … as the framework grows).
+    /// </summary>
+    /// <param name="DustLevel">REMAINING dust as a fraction of the budget, fuel-gauge
+    /// semantics: 1.0 = full (nothing consumed), 0.0 = empty (budget spent or overshot).
+    /// Always clamped to [0.0, 1.0]. Null when dust limiting is disabled (frontends hide
+    /// the indicator in that case).</param>
+    public record ConversationMetadata(double? DustLevel = null);
 
     // ==========================================================================
     // AUTHENTICATION
@@ -855,6 +932,13 @@ public static class Records
         /// </summary>
         [JsonPropertyName("fadingMessageDurationSeconds")]
         public int? FadingMessageDurationSeconds { get; set; } = 10;
+
+        /// <summary>
+        /// Conversation-level metadata (e.g. remaining dust budget). Characterises the
+        /// conversation, not this message. Null when no such metadata is available.
+        /// </summary>
+        [JsonPropertyName("conversationMetadata")]
+        public ConversationMetadata? ConversationMetadata { get; init; }
     }
 
     /// <summary>

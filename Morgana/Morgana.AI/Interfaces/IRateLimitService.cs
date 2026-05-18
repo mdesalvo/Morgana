@@ -26,7 +26,7 @@ namespace Morgana.AI.Interfaces;
 ///       "Enabled": true,
 ///       "MaxMessagesPerMinute": 5,
 ///       "MaxMessagesPerHour": 30,
-///       "MaxMessagesPerDay": 100
+///       "MaxMessagesPerDay": 80
 ///     }
 ///   }
 /// }

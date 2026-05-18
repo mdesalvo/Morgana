@@ -72,7 +72,6 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
 
         if (string.IsNullOrWhiteSpace(this.options.StoragePath))
             throw new ArgumentException("StoragePath must be configured in appsettings.json");
-
         if (string.IsNullOrWhiteSpace(this.options.EncryptionKey))
             throw new ArgumentException("EncryptionKey must be configured in appsettings.json");
 
@@ -652,12 +651,13 @@ WHERE id = 1;
         checkCommand.CommandText = "PRAGMA user_version;";
         long currentVersion = (long)(await checkCommand.ExecuteScalarAsync() ?? 0L);
 
-        if (currentVersion >= 4)
+        if (currentVersion >= 5)
             return; // Already initialized
 
         // Create schema. CREATE TABLE IF NOT EXISTS makes this safe to run on databases that
-        // are already at v3 — the existing tables are left intact and only shared_context (the
-        // v4 addition) is created.
+        // are already at an earlier version — existing tables are left intact and only the
+        // tables introduced by later versions (shared_context in v4; dust_budget +
+        // dust_usage_log in v5) are created.
         await using SqliteCommand schemaCommand = connection.CreateCommand();
         schemaCommand.CommandText =
 """
@@ -692,16 +692,31 @@ CREATE TABLE IF NOT EXISTS shared_context (
     source_agent_intent  TEXT NOT NULL,
     last_update          TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS dust_budget (
+    id                 INTEGER PRIMARY KEY CHECK (id = 1),
+    dust_consumed      REAL    NOT NULL DEFAULT 0,
+    warning_70_sent    INTEGER NOT NULL DEFAULT 0,
+    warning_90_sent    INTEGER NOT NULL DEFAULT 0
+);
+INSERT OR IGNORE INTO dust_budget (id) VALUES (1);
+
+CREATE TABLE IF NOT EXISTS dust_usage_log (
+    timestamp     TEXT NOT NULL,
+    dust_consumed REAL NOT NULL,
+    llm_role      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 """;
         await schemaCommand.ExecuteNonQueryAsync();
 
-        // Mark database as initialized (version 4)
+        // Mark database as initialized (version 5)
         await using SqliteCommand versionCommand = connection.CreateCommand();
-        versionCommand.CommandText = "PRAGMA user_version = 4;";
+        versionCommand.CommandText = "PRAGMA user_version = 5;";
         await versionCommand.ExecuteNonQueryAsync();
 
         logger.LogInformation(
-            "Initialized database schema v4 for: {GetFileName}", Path.GetFileName(connection.DataSource));
+            "Initialized database schema v5 for: {GetFileName}", Path.GetFileName(connection.DataSource));
     }
 
     /// <summary>
@@ -886,9 +901,7 @@ CREATE TABLE IF NOT EXISTS shared_context (
             // at least one user_facing marker. Widgets that those messages may have introduced
             // are already in pendingRichCardCallId / pendingQuickRepliesCallId from a few lines
             // above, ready to be attached to the surviving final assistant.
-            if (chatMessage.Role == ChatRole.Assistant
-             && markedAgents.Contains(agentName)
-             && !isUserFacing)
+            if (chatMessage.Role == ChatRole.Assistant && markedAgents.Contains(agentName) && !isUserFacing)
                 continue;
 
             // Process messages with text content
@@ -898,26 +911,17 @@ CREATE TABLE IF NOT EXISTS shared_context (
 
             // Attach rich card to assistant message following SetRichCard
             RichCard? richCard = null;
-            if (pendingRichCardCallId != null
-                 && chatMessage.Role == ChatRole.Assistant
-                 && richCardsByCallId.TryGetValue(pendingRichCardCallId, out richCard))
-            {
+            if (pendingRichCardCallId != null && chatMessage.Role == ChatRole.Assistant && richCardsByCallId.TryGetValue(pendingRichCardCallId, out richCard))
                 pendingRichCardCallId = null; // Reset after attachment
-            }
 
             // Attach quick replies to assistant message following SetQuickReplies
             List<QuickReply>? quickReplies = null;
-            if (pendingQuickRepliesCallId != null
-                 && chatMessage.Role == ChatRole.Assistant
-                 && quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
-            {
+            if (pendingQuickRepliesCallId != null && chatMessage.Role == ChatRole.Assistant && quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
                 pendingQuickRepliesCallId = null; // Reset after attachment
-            }
 
             // Add message with both attachments (if present)
             historyMessages.Add(
-                MapToMorganaChatMessage(conversationId, agentName, agentCompleted,
-                                        chatMessage, isLastHistoryMessage, quickReplies, richCard));
+                MapToMorganaChatMessage(conversationId, agentName, agentCompleted, chatMessage, isLastHistoryMessage, quickReplies, richCard));
         }
 
         logger.LogInformation(

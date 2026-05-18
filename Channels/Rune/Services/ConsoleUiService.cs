@@ -36,6 +36,15 @@ public sealed class ConsoleUiService
     /// <summary>Color for the user's own input and committed lines.</summary>
     private const string UserColor = "white";
 
+    /// <summary>Color for the magic-dust gauge in the sticky header.</summary>
+    private const string DustColor = "mediumpurple1";
+
+    /// <summary>Color for advisory warnings (rate-limit / low-budget): orange.</summary>
+    private const string WarningColor = "orange1";
+
+    /// <summary>Color for error notices (dust exhausted / delivery error): red.</summary>
+    private const string ErrorColor = "red";
+
     /// <summary>Fallback for <c>Rune:AgentExitMessage</c> when the setting is absent.</summary>
     private const string DefaultAgentExitMessage = "{0} has completed its spell. I'm back to you!";
 
@@ -64,11 +73,28 @@ public sealed class ConsoleUiService
     /// <summary>Current conversation id, displayed (truncated) in the header.</summary>
     private string conversationId = string.Empty;
 
+    /// <summary>Last reported REMAINING-dust fraction (1.0 = full, 0.0 = empty). Null until
+    /// Morgana sends conversation metadata, or whenever dust limiting is disabled — the
+    /// header omits the gauge entirely in that case. Mutated only under
+    /// <see cref="renderLock"/>.</summary>
+    private double? dustLevel;
+
     /// <summary>Set once the user types <c>/quit</c> or presses <see cref="ConsoleKey.Escape"/>.</summary>
     private volatile bool exitRequested;
 
     /// <summary>When true, keystrokes (except Esc) are swallowed and the input line shows a thinking hint. Starts true: Rune always waits for Morgana's presentation before the first user turn.</summary>
     private volatile bool awaitingResponse = true;
+
+    /// <summary>
+    /// Latched true when Morgana delivers the terminal dust-exhaustion notice
+    /// (<c>ErrorReason == "dust_budget_exhausted"</c>). The conversation is spent and
+    /// — unlike Cauldron — Rune cannot start a fresh one in-process, so this is a
+    /// one-way door: input stays locked (only Esc works) and the prompt is replaced
+    /// by an honest "quit and relaunch" hint. Never cleared. Mutated only under
+    /// <see cref="renderLock"/>; volatile so <see cref="ReadKeysLoop"/> sees it
+    /// without taking the lock on every polled keystroke.
+    /// </summary>
+    private volatile bool conversationDead;
 
     /// <summary>Platform-specific terminal-resize notifier; subscribed in <see cref="RunAsync"/> so the viewport anchor follows live window resizes without per-frame polling.</summary>
     private readonly IViewportResizeWatcher viewportResizeWatcher;
@@ -139,7 +165,7 @@ public sealed class ConsoleUiService
 
                 lock (renderLock)
                 {
-                    history.Add(new DisplayedMessage(messageSpeaker, message.Text, SpeakerColor(messageSpeaker)));
+                    history.Add(new DisplayedMessage(messageSpeaker, message.Text, RowColor(message, messageSpeaker)));
 
                     // On agent completion append a base-Morgana courtesy line — same pattern
                     // as Cauldron's ChatStateService.AddCompletionMessageIfNeeded.
@@ -155,8 +181,30 @@ public sealed class ConsoleUiService
                         ? "Morgana"
                         : message.AgentName;
 
+                    // Refresh the header gauge from conversation metadata. Updated under the
+                    // same lock as currentSpeaker; only overwrite when present so a
+                    // metadata-less message never clears a known level. Lives in the sticky
+                    // header (BuildHeader), never appended to history — no accountant-style
+                    // spam in the transcript.
+                    if (message.ConversationMetadata?.DustLevel is { } level)
+                        dustLevel = level;
+
+                    // Terminal lockout. Morgana proactively pushes this at end of turn
+                    // (same ErrorReason as the doomed-next-send path), so the user sees
+                    // it BEFORE wasting a keystroke. Morgana's text says "start a new
+                    // one to keep going" — true for Cauldron, NOT for Rune, which has no
+                    // in-process restart. So latch a one-way dead state: the red banner
+                    // line above stays as Morgana's canonical word, and BuildInputRows
+                    // overrides the prompt with a Rune-honest "quit and relaunch" hint.
+                    if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
+                    {
+                        conversationDead = true;
+                        currentInput = string.Empty; // discard any half-typed doomed line
+                    }
+
                     // Release the input gate: ReadKeysLoop was swallowing keystrokes until
-                    // this first webhook delivery landed.
+                    // this first webhook delivery landed. (No-op once conversationDead:
+                    // ReadKeysLoop keeps swallowing on the dead latch regardless.)
                     awaitingResponse = false;
                     ctx.UpdateTarget(BuildLayout());
                     ctx.Refresh();
@@ -206,9 +254,12 @@ public sealed class ConsoleUiService
             }
 
             // Swallow every keystroke that isn't an explicit exit while we're waiting for
-            // Morgana to speak. Esc is always honoured so the user can bail out even
-            // mid-turn; everything else (printable characters, Enter, Backspace) is a no-op.
-            if (awaitingResponse && key.Key != ConsoleKey.Escape)
+            // Morgana to speak — or forever once the conversation is dust-dead (a
+            // one-way latch: no point typing into a budget the backend will reject).
+            // Esc is always honoured so the user can bail out even mid-turn or quit a
+            // spent conversation; everything else (printable chars, Enter, Backspace)
+            // is a no-op.
+            if ((awaitingResponse || conversationDead) && key.Key != ConsoleKey.Escape)
                 continue;
 
             switch (key.Key)
@@ -318,11 +369,29 @@ public sealed class ConsoleUiService
         // terminals without forcing the panel to wrap.
         string shortId = conversationId.Length > 12 ? conversationId[..12] + "…" : conversationId;
 
+        // Magic-dust gauge: REMAINING budget as a purple percentage, in the same
+        // understated grammar as the conv id ([grey54]label[/] [color]value[/]).
+        // dustLevel is already the remaining fraction (fuel-gauge semantics), so just
+        // scale it. Omitted entirely when dustLevel is null (dust limiting disabled).
+        // This segment is rebuilt by BuildLayout on every resize via the existing
+        // IViewportResizeWatcher callback, so it stays correctly aligned without any
+        // extra resize plumbing.
+        string dustSegment = string.Empty;
+        if (dustLevel is { } remaining)
+        {
+            // Truncate toward zero, don't round: a sub-1% residual reads as 0% — that
+            // swallowed fraction is the slack that funds per-channel presentation
+            // messages and the let-it-finish turn.
+            int remainingPct = Math.Clamp((int)(remaining * 100), 0, 100);
+            dustSegment = $"   [grey54]dust[/] [bold {DustColor}]{remainingPct}%[/]";
+        }
+
         // Markup uses [/] to close the tag — always run user-controlled strings through
         // Markup.Escape so a speaker name containing '[' can't break the layout.
         Markup content = new(
             $"[bold {speakerColor}]{Markup.Escape(currentSpeaker)}[/]   " +
-            $"[grey54]conv[/] [grey85]{Markup.Escape(shortId)}[/]");
+            $"[grey54]conv[/] [grey85]{Markup.Escape(shortId)}[/]" +
+            dustSegment);
 
         return new Panel(Align.Center(content, VerticalAlignment.Middle))
         {
@@ -509,6 +578,15 @@ public sealed class ConsoleUiService
     /// </remarks>
     private List<IRenderable> BuildInputRows(int termWidth)
     {
+        // Terminal state supersedes everything. Morgana's banner already told the user
+        // the dust ran out; here we give the Rune-honest next step, because Morgana's
+        // "start a new one to keep going" is not (yet) actionable inside this CLI —
+        // the only way forward is to quit and relaunch the process.
+        if (conversationDead)
+            return ChunkStyledRows(
+                "✦ Conversation spent — press Esc to quit, then relaunch Rune to start fresh",
+                termWidth, $"{ErrorColor} italic");
+
         if (awaitingResponse)
         {
             string content = $"{currentSpeaker} is thinking…";
@@ -575,6 +653,22 @@ public sealed class ConsoleUiService
         if (agentName.Equals("Morgana", StringComparison.OrdinalIgnoreCase))
             return MorganaColor;
         return MorganaAgentColor;
+    }
+
+    /// <summary>
+    /// Row color for an inbound message: advisory warnings (rate-limit, low-budget —
+    /// <c>MessageType="system_warning"</c>) render orange, error notices (dust exhausted,
+    /// delivery error — <c>MessageType="error"</c>) render red, everything else keeps the
+    /// speaker's palette color. Rune has no banner widget, so color is the only signal that
+    /// separates a diagnostic line from an ordinary turn.
+    /// </summary>
+    private static string RowColor(ChannelMessage message, string speaker)
+    {
+        if (string.Equals(message.MessageType, "error", StringComparison.OrdinalIgnoreCase))
+            return ErrorColor;
+        if (string.Equals(message.MessageType, "system_warning", StringComparison.OrdinalIgnoreCase))
+            return WarningColor;
+        return SpeakerColor(speaker);
     }
 
     /// <summary>

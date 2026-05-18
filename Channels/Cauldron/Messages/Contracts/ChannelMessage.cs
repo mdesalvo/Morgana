@@ -92,4 +92,10 @@ public sealed class ChannelMessage
     /// by this channel message (depending on its MessageType).
     /// </summary>
     public int? FadingMessageDurationSeconds { get; set; } = 10;
+
+    /// <summary>
+    /// Conversation-level metadata (e.g. remaining dust budget). Characterises the
+    /// conversation, not this message. Null when no such metadata is available.
+    /// </summary>
+    public ConversationMetadata? ConversationMetadata { get; set; }
 }

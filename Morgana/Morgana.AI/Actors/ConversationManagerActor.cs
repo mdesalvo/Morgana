@@ -1,6 +1,7 @@
 using Akka.Actor;
 using Akka.Event;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
@@ -42,6 +43,17 @@ public class ConversationManagerActor : MorganaActor
     private readonly IConversationPersistenceService conversationPersistenceService;
 
     /// <summary>
+    /// Per-conversation lifetime token-budget limiter. Read after each turn to stamp the
+    /// remaining dust level on the outbound message and to emit one-shot 70%/90% warnings.
+    /// </summary>
+    private readonly IDustLimitService dustLimitService;
+
+    /// <summary>
+    /// Dust-limiting policy (budget + warning message templates) for placeholder substitution.
+    /// </summary>
+    private readonly Records.DustLimitingOptions dustLimitingOptions;
+
+    /// <summary>
     /// Reference to the active conversation supervisor actor.
     /// Null until a conversation is created.
     /// </summary>
@@ -54,6 +66,8 @@ public class ConversationManagerActor : MorganaActor
     /// <param name="channelService">Channel service used to deliver outbound messages to the end user</param>
     /// <param name="channelMetadataStore">Registry where this actor publishes the per-conversation channel metadata</param>
     /// <param name="conversationPersistenceService">Persistence service used to save/load the channel handshake</param>
+    /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
+    /// <param name="dustLimitingOptions">Dust-limiting policy and warning message templates</param>
     /// <param name="llmService">LLM service for AI completions</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
@@ -62,6 +76,8 @@ public class ConversationManagerActor : MorganaActor
         IChannelService channelService,
         IChannelMetadataStore channelMetadataStore,
         IConversationPersistenceService conversationPersistenceService,
+        IDustLimitService dustLimitService,
+        IOptions<Records.DustLimitingOptions> dustLimitingOptions,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
@@ -69,6 +85,8 @@ public class ConversationManagerActor : MorganaActor
         this.channelService = channelService;
         this.channelMetadataStore = channelMetadataStore;
         this.conversationPersistenceService = conversationPersistenceService;
+        this.dustLimitService = dustLimitService;
+        this.dustLimitingOptions = dustLimitingOptions.Value;
 
         // Handle incoming user messages from SignalR:
         // - Ensures supervisor exists (creates if missing)
@@ -356,6 +374,16 @@ public class ConversationManagerActor : MorganaActor
             $"#quickReplies: {response.QuickReplies?.Count ?? 0}" +
             $"#richCard: {response.RichCard != null}");
 
+        // The turn just completed, so all of its LLM calls have already been charged:
+        // read the fresh dust level to stamp it on the outbound message. DustLevel is the
+        // REMAINING fraction (fuel-gauge semantics: 1.0 = full, 0.0 = empty), so invert the
+        // consumed ratio and clamp — an overshoot under let-it-finish reads as empty, not
+        // negative. Null when dust limiting is off → indicator hidden.
+        Records.ConversationMetadata? conversationMetadata = dustLimitingOptions.Enabled
+            ? new Records.ConversationMetadata(
+                Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0))
+            : null;
+
         // Send response to client via the active channel
         try
         {
@@ -368,13 +396,26 @@ public class ConversationManagerActor : MorganaActor
                 AgentName = response.AgentName ?? "Morgana",
                 AgentCompleted = response.AgentCompleted,
                 Timestamp = response.OriginalTimestamp ?? DateTime.UtcNow,
-                RichCard = response.RichCard
+                RichCard = response.RichCard,
+                ConversationMetadata = conversationMetadata
             });
 
             actorLogger.Info(
                 $"Response sent successfully to client via channel " +
                 $"(#quickReplies: {response.QuickReplies?.Count ?? 0}," +
                 $"hasRichCard: {response.RichCard != null})");
+
+            // If this turn spent the last of the budget, surface the terminal lockout
+            // NOW — at end of turn — instead of letting the user fire a doomed next
+            // message just to eat an instant 429. DustLevel == 0.0 is exactly the
+            // over-budget state the controller gate rejects on the next send, so the
+            // notice we push here is identical to the one that path would emit.
+            // Exhaustion supersedes the advisory 70% / 90% warnings (a dead
+            // conversation does not need to be told it is "running low").
+            if (conversationMetadata is { DustLevel: <= 0.0 })
+                await EmitDustExhaustionAsync();
+            else
+                await EmitDustWarningsIfNeededAsync();
         }
         catch (Exception ex)
         {
@@ -398,6 +439,92 @@ public class ConversationManagerActor : MorganaActor
                 actorLogger.Error(fallbackEx, "Failed to send error notification to client");
             }
         }
+    }
+
+    /// <summary>
+    /// Checks the dust-budget warning thresholds and, for any threshold newly crossed,
+    /// emits a one-shot advisory <c>system_warning</c> message. The 70% / 90% one-shot
+    /// flags are owned and atomically marked by <see cref="IDustLimitService"/>, so this
+    /// never re-sends the same warning. Best-effort: failures are logged, never thrown.
+    /// </summary>
+    private async Task EmitDustWarningsIfNeededAsync()
+    {
+        if (!dustLimitingOptions.Enabled)
+            return;
+
+        try
+        {
+            (bool send70, bool send90) = await dustLimitService.CheckAndMarkWarningsAsync(conversationId);
+            if (!send70 && !send90)
+                return;
+
+            double ratio = await dustLimitService.GetUsageRatioAsync(conversationId);
+
+            // 90% supersedes 70%: if both crossed in the same turn, the user only needs
+            // the more urgent message.
+            string template = send90
+                ? dustLimitingOptions.Warning90Message
+                : dustLimitingOptions.Warning70Message;
+
+            await channelService.SendMessageAsync(new Records.ChannelMessage
+            {
+                ConversationId = conversationId,
+                Text = FormatDustMessage(template, ratio),
+                MessageType = "system_warning",
+                ErrorReason = send90 ? "dust_budget_low_90" : "dust_budget_low_70",
+                AgentName = "Morgana",
+                AgentCompleted = false
+            });
+        }
+        catch (Exception ex)
+        {
+            actorLogger.Error(ex, "Failed to emit dust budget warning for {0}", conversationId);
+        }
+    }
+
+    /// <summary>
+    /// Pushes the terminal dust-exhaustion notice at end of turn, when the budget has
+    /// just been spent. Deliberately identical (text, <c>MessageType</c>,
+    /// <c>ErrorReason</c>) to the banner the message endpoint emits on a doomed next
+    /// send, so a channel that already renders the lockout (Cauldron's non-fading
+    /// terminal banner) and its de-dup keep working unchanged. Best-effort: a delivery
+    /// failure is logged, never thrown — the conversation is already over.
+    /// </summary>
+    private async Task EmitDustExhaustionAsync()
+    {
+        try
+        {
+            await channelService.SendMessageAsync(new Records.ChannelMessage
+            {
+                ConversationId = conversationId,
+                Text = dustLimitingOptions.ErrorMessage,
+                MessageType = "error",
+                ErrorReason = "dust_budget_exhausted",
+                AgentName = "Morgana",
+                AgentCompleted = false
+            });
+        }
+        catch (Exception ex)
+        {
+            actorLogger.Error(ex, "Failed to emit dust exhaustion notice for {0}", conversationId);
+        }
+    }
+
+    /// <summary>
+    /// Substitutes the single <c>{percent}</c> placeholder with the remaining budget as a
+    /// 0–100 integer (fuel-gauge semantics — the same number the DustMeter/Rune gauge shows).
+    /// Users reason in "how much is left", not in abstract dust units. Clamped at zero (a
+    /// turn may finish slightly over budget under the let-it-finish policy).
+    /// <para>
+    /// Truncated toward zero (not rounded): a sub-1% residual reads as 0%. That swallowed
+    /// fraction is deliberate slack — over the conversation lifetime it pays for the
+    /// let-it-finish turn already in flight when the budget runs out.
+    /// </para>
+    /// </summary>
+    private string FormatDustMessage(string template, double ratio)
+    {
+        int percent = (int)(Math.Clamp(1.0 - ratio, 0.0, 1.0) * 100);
+        return template.Replace("{percent}", percent.ToString());
     }
 
     /// <summary>
