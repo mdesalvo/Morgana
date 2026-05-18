@@ -20,8 +20,6 @@ As the budget drains Morgana emits **one-shot advisory warnings at 70% and 90%**
 - `morgana.dust.consumed` OpenTelemetry counter (tagged by `llm_role` and conversation) for cost observability
 
 ### 🔄 Changed
-- **BREAKING**: `Morgana:AdaptiveMessaging:StreamingResponse:Enabled` has been renamed to the flat key `Morgana:AdaptiveMessaging:EnableStreamingResponse`
-- `RateLimiting:MaxMessagesPerHour` set to 80, aligned with the 80-dust per-conversation budget (per-minute and per-day guards unchanged)
 
 ### 🐛 Fixed
 - The Cauldron textarea and send button were **live during the initial presentation-load window**
