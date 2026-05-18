@@ -374,11 +374,12 @@ public class ConversationManagerActor : MorganaActor
             $"#quickReplies: {response.QuickReplies?.Count ?? 0}" +
             $"#richCard: {response.RichCard != null}");
 
-        // The turn just completed, so all of its LLM calls have already been charged:
-        // read the fresh dust level to stamp it on the outbound message. DustLevel is the
-        // REMAINING fraction (fuel-gauge semantics: 1.0 = full, 0.0 = empty), so invert the
-        // consumed ratio and clamp — an overshoot under let-it-finish reads as empty, not
-        // negative. Null when dust limiting is off → indicator hidden.
+        // Read the post-turn ratio once and invert it into the REMAINING fraction
+        // (fuel-gauge semantics: 1.0 = full, 0.0 = empty). This single double is then
+        // reused verbatim for the gauge (ConversationMetadata) and, if a warning fires,
+        // for the warning text and its own ConversationMetadata — no second DB read, no
+        // repeated 1.0-ratio arithmetic, no adapter-charge race. Null when dust limiting
+        // is off → indicator hidden everywhere.
         Records.ConversationMetadata? conversationMetadata = dustLimitingOptions.Enabled
             ? new Records.ConversationMetadata(
                 Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0))
@@ -415,7 +416,7 @@ public class ConversationManagerActor : MorganaActor
             if (conversationMetadata is { DustLevel: <= 0.0 })
                 await EmitDustExhaustionAsync();
             else
-                await EmitDustWarningsIfNeededAsync();
+                await EmitDustWarningsIfNeededAsync(conversationMetadata?.DustLevel ?? 0.0);
         }
         catch (Exception ex)
         {
@@ -447,7 +448,7 @@ public class ConversationManagerActor : MorganaActor
     /// flags are owned and atomically marked by <see cref="IDustLimitService"/>, so this
     /// never re-sends the same warning. Best-effort: failures are logged, never thrown.
     /// </summary>
-    private async Task EmitDustWarningsIfNeededAsync()
+    private async Task EmitDustWarningsIfNeededAsync(double remaining)
     {
         if (!dustLimitingOptions.Enabled)
             return;
@@ -458,22 +459,23 @@ public class ConversationManagerActor : MorganaActor
             if (!send70 && !send90)
                 return;
 
-            double ratio = await dustLimitService.GetUsageRatioAsync(conversationId);
-
             // 90% supersedes 70%: if both crossed in the same turn, the user only needs
             // the more urgent message.
             string template = send90
                 ? dustLimitingOptions.Warning90Message
                 : dustLimitingOptions.Warning70Message;
 
+            // Use the identical `remaining` value from the main response's ConversationMetadata
+            // so the warning text percentage and the gauge are always in sync.
             await channelService.SendMessageAsync(new Records.ChannelMessage
             {
                 ConversationId = conversationId,
-                Text = FormatDustMessage(template, ratio),
+                Text = FormatDustMessage(template, remaining),
                 MessageType = "system_warning",
                 ErrorReason = send90 ? "dust_budget_low_90" : "dust_budget_low_70",
                 AgentName = "Morgana",
-                AgentCompleted = false
+                AgentCompleted = false,
+                ConversationMetadata = new Records.ConversationMetadata(remaining)
             });
         }
         catch (Exception ex)
@@ -501,7 +503,8 @@ public class ConversationManagerActor : MorganaActor
                 MessageType = "error",
                 ErrorReason = "dust_budget_exhausted",
                 AgentName = "Morgana",
-                AgentCompleted = false
+                AgentCompleted = false,
+                ConversationMetadata = new Records.ConversationMetadata(0.0)
             });
         }
         catch (Exception ex)
@@ -521,9 +524,9 @@ public class ConversationManagerActor : MorganaActor
     /// let-it-finish turn already in flight when the budget runs out.
     /// </para>
     /// </summary>
-    private string FormatDustMessage(string template, double ratio)
+    private static string FormatDustMessage(string template, double remaining)
     {
-        int percent = (int)(Math.Clamp(1.0 - ratio, 0.0, 1.0) * 100);
+        int percent = (int)(Math.Clamp(remaining, 0.0, 1.0) * 100);
         return template.Replace("{percent}", percent.ToString());
     }
 
