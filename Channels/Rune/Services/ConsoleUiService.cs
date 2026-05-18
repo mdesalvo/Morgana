@@ -397,9 +397,7 @@ public sealed class ConsoleUiService
         {
             Border = BoxBorder.Rounded,
             BorderStyle = new Style(Color.Grey50),
-            // Panel title is static ("Rune") — it identifies the channel, not
-            // the current speaker; that's what the body Markup above is for.
-            Header = new PanelHeader($"[bold {MorganaColor}]Rune[/]"),
+            Header = new PanelHeader(""),
             Padding = new Padding(1, 0, 1, 0),
             Expand = true
         };
