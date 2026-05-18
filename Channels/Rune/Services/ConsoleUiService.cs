@@ -73,11 +73,11 @@ public sealed class ConsoleUiService
     /// <summary>Current conversation id, displayed (truncated) in the header.</summary>
     private string conversationId = string.Empty;
 
-    /// <summary>Last reported REMAINING-dust fraction (1.0 = full, 0.0 = empty). Null until
-    /// Morgana sends conversation metadata, or whenever dust limiting is disabled — the
-    /// header omits the gauge entirely in that case. Mutated only under
-    /// <see cref="renderLock"/>.</summary>
-    private double? dustLevel;
+    /// <summary>Pre-rendered Spectre markup segment for the dust gauge, or <see cref="string.Empty"/>
+    /// when dust limiting is disabled (Morgana never sent metadata). Computed eagerly under
+    /// <see cref="renderLock"/> so <see cref="BuildHeader"/> can read it without taking the lock
+    /// — <c>volatile</c> guarantees the reference is always seen fresh across threads.</summary>
+    private volatile string _dustSegment = string.Empty;
 
     /// <summary>Set once the user types <c>/quit</c> or presses <see cref="ConsoleKey.Escape"/>.</summary>
     private volatile bool exitRequested;
@@ -117,13 +117,19 @@ public sealed class ConsoleUiService
     /// token fires. <paramref name="onSend"/> is invoked on each committed user input line.
     /// </summary>
     public async Task RunAsync(
-        string conversationId,
+        string convId,
         Func<string, Task> onSend,
         CancellationToken cancellationToken = default)
     {
-        this.conversationId = conversationId;
-
-        Layout layout = BuildLayout();
+        // Lock even here (pre-threading, zero contention) so all fields read by
+        // BuildLayout/BuildHeader/AppendHistoryTail are always accessed under renderLock —
+        // keeps Rider's inconsistent-sync analysis clean.
+        Layout layout;
+        lock (renderLock)
+        {
+            conversationId = convId;
+            layout = BuildLayout();
+        }
 
         await AnsiConsole
             .Live(layout)
@@ -181,13 +187,20 @@ public sealed class ConsoleUiService
                         ? "Morgana"
                         : message.AgentName;
 
-                    // Refresh the header gauge from conversation metadata. Updated under the
-                    // same lock as currentSpeaker; only overwrite when present so a
-                    // metadata-less message never clears a known level. Lives in the sticky
-                    // header (BuildHeader), never appended to history — no accountant-style
-                    // spam in the transcript.
-                    if (message.ConversationMetadata?.DustLevel is { } level)
-                        dustLevel = level;
+                    // Refresh the header gauge from the main assistant response only — skipping
+                    // system_warning and error notifications avoids a double-render glitch when
+                    // a warning fires immediately after the response on the same turn.
+                    if (string.Equals(message.MessageType, "assistant", StringComparison.OrdinalIgnoreCase)
+                        && message.ConversationMetadata?.DustLevel is { } level)
+                    {
+                        // Truncate toward zero, don't round: a sub-1% residual reads as 0% — that
+                        // swallowed fraction is the slack that funds per-channel presentation
+                        // messages and the let-it-finish turn.
+                        int dustLevel = Math.Clamp((int)(level * 100), 0, 100);
+                        // Scale color with depletion: mirrors Cauldron DustMeter thresholds (>30% ok, >10% low, ≤10% critical).
+                        string dustColor = level > 0.30 ? DustColor : level > 0.10 ? WarningColor : ErrorColor;
+                        _dustSegment = $"   [grey54]dust[/] [bold {dustColor}]{dustLevel}%[/]";
+                    }
 
                     // Terminal lockout. Morgana proactively pushes this at end of turn
                     // (same ErrorReason as the doomed-next-send path), so the user sees
@@ -259,21 +272,30 @@ public sealed class ConsoleUiService
             // Esc is always honoured so the user can bail out even mid-turn or quit a
             // spent conversation; everything else (printable chars, Enter, Backspace)
             // is a no-op.
+            // Lock-free read is intentional: awaitingResponse and conversationDead are both
+            // volatile, guaranteeing visibility. Taking renderLock here on every polled
+            // keystroke would cause unnecessary contention with DrainIncomingLoop.
+            // ReSharper disable InconsistentlySynchronizedField
             if ((awaitingResponse || conversationDead) && key.Key != ConsoleKey.Escape)
+            // ReSharper restore InconsistentlySynchronizedField
                 continue;
 
             switch (key.Key)
             {
-                case ConsoleKey.Enter when currentInput.Length > 0:
+                case ConsoleKey.Enter:
                 {
                     // Snapshot-and-clear before awaiting: any late keystroke during onSend
                     // must land on a fresh buffer, not reappend to the line we just sent.
+                    // Length check is inside the lock — DrainIncomingLoop also writes
+                    // currentInput (under lock), so the when-guard read would be a cross-thread
+                    // race if left outside.
                     string toSend;
                     lock (renderLock)
                     {
                         toSend = currentInput;
                         currentInput = string.Empty;
                     }
+                    if (toSend.Length == 0) break;
 
                     // /quit is a client-only command: never round-trip it to Morgana.
                     if (toSend.Equals("/quit", StringComparison.OrdinalIgnoreCase))
@@ -312,12 +334,15 @@ public sealed class ConsoleUiService
                     }
                     break;
                 }
-                case ConsoleKey.Backspace when currentInput.Length > 0:
+                case ConsoleKey.Backspace:
                     lock (renderLock)
                     {
-                        currentInput = currentInput[..^1];
-                        ctx.UpdateTarget(BuildLayout());
-                        ctx.Refresh();
+                        if (currentInput.Length > 0)
+                        {
+                            currentInput = currentInput[..^1];
+                            ctx.UpdateTarget(BuildLayout());
+                            ctx.Refresh();
+                        }
                     }
                     break;
                 case ConsoleKey.Escape:
@@ -369,24 +394,11 @@ public sealed class ConsoleUiService
         // terminals without forcing the panel to wrap.
         string shortId = conversationId.Length > 12 ? conversationId[..12] + "…" : conversationId;
 
-        // Magic-dust gauge: REMAINING budget as a purple percentage, in the same
-        // understated grammar as the conv id ([grey54]label[/] [color]value[/]).
-        // dustLevel is already the remaining fraction (fuel-gauge semantics), so just
-        // scale it. Omitted entirely when dustLevel is null (dust limiting disabled).
-        // This segment is rebuilt by BuildLayout on every resize via the existing
-        // IViewportResizeWatcher callback, so it stays correctly aligned without any
-        // extra resize plumbing.
-        string dustSegment = string.Empty;
-        if (dustLevel is { } remaining)
-        {
-            // Truncate toward zero, don't round: a sub-1% residual reads as 0% — that
-            // swallowed fraction is the slack that funds per-channel presentation
-            // messages and the let-it-finish turn.
-            int remainingPct = Math.Clamp((int)(remaining * 100), 0, 100);
-            // Scale color with depletion: mirrors Cauldron DustMeter thresholds (>30% ok, >10% low, ≤10% critical).
-            string dustColor = remaining > 0.30 ? DustColor : remaining > 0.10 ? WarningColor : ErrorColor;
-            dustSegment = $"   [grey54]dust[/] [bold {dustColor}]{remainingPct}%[/]";
-        }
+        // Magic-dust gauge: pre-rendered under renderLock when metadata arrives; empty
+        // string means dust limiting is disabled (gauge hidden). Rebuilt by BuildLayout on
+        // every resize via the existing IViewportResizeWatcher callback, so it stays
+        // correctly aligned without any extra resize plumbing.
+        string dustSegment = _dustSegment;
 
         // Markup uses [/] to close the tag — always run user-controlled strings through
         // Markup.Escape so a speaker name containing '[' can't break the layout.
@@ -465,7 +477,6 @@ public sealed class ConsoleUiService
             {
                 firstMessageIdx = i;
                 skipFromFirst = wrapRows - (budget - covered);
-                covered = budget;
                 break;
             }
             covered += wrapRows;
@@ -491,9 +502,8 @@ public sealed class ConsoleUiService
     private static int MessageWrapRowCount(DisplayedMessage message, int termWidth)
     {
         string fullText = $"{message.Who}: {message.Text}";
-        int total = 0;
-        foreach (string line in fullText.Split('\n'))
-            total += line.Length == 0 ? 1 : (line.Length + termWidth - 1) / termWidth;
+        int total = fullText.Split('\n')
+                            .Sum(line => line.Length == 0 ? 1 : (line.Length + termWidth - 1) / termWidth);
         return Math.Max(1, total);
     }
 
@@ -564,7 +574,7 @@ public sealed class ConsoleUiService
     }
 
     /// <summary>
-    /// Builds the sacred input/hint area as a list of pre-wrapped single-row markups.
+    /// Builds the input/hint area as a list of pre-wrapped single-row markups.
     /// Two regimes match the two states <see cref="BuildBody"/>'s caller can be in:
     /// <c>awaitingResponse</c> (italic "speaker is thinking…" hint) and prompt mode
     /// (<c>›</c> chevron + buffer + blinking <c>_</c> cursor).
@@ -598,12 +608,9 @@ public sealed class ConsoleUiService
         // markup row-by-row, applying the chevron / cursor style tags at their exact
         // positions so the cursor stays at the very end regardless of where the wrap
         // boundaries land.
-        int totalLen = currentInput.Length + 3 /* "› " + "_" */;
-        if (totalLen == 0)
-            return [new Markup(string.Empty)];
-
+        int totalLen = currentInput.Length + 3;
         int cursorPos = totalLen - 1;
-        List<IRenderable> rows = new();
+        List<IRenderable> rows = [];
         int rowStart = 0;
         StringBuilder sb = new(capacity: termWidth + 32 /* slack for style tags */);
         while (rowStart < totalLen)
