@@ -374,13 +374,14 @@ public class ConversationManagerActor : MorganaActor
             $"#quickReplies: {response.QuickReplies?.Count ?? 0}" +
             $"#richCard: {response.RichCard != null}");
 
-        // Read the post-turn ratio once and invert it into the REMAINING fraction
-        // (fuel-gauge semantics: 1.0 = full, 0.0 = empty). This single double is then
-        // reused verbatim for the gauge (ConversationMetadata) and, if a warning fires,
-        // for the warning text and its own ConversationMetadata — no second DB read, no
-        // repeated 1.0-ratio arithmetic, no adapter-charge race. Null when dust limiting
-        // is off → indicator hidden everywhere.
-        Records.ConversationMetadata? conversationMetadata = dustLimitingOptions.Enabled
+        // PRE-send reading: the REMAINING fraction (fuel-gauge semantics: 1.0 = full,
+        // 0.0 = empty) measured BEFORE the adapting send. It is cumulative-correct —
+        // it already includes every prior turn's channel-adapter cost — and misses only
+        // THIS message's adaptation cost, which is unknowable until the adapter has run.
+        // It rides on the main response as a best-effort gauge value; the authoritative
+        // post-adaptation reading taken right after the send (below) overrides it on the
+        // trailing warning/exhaustion message. Null when dust limiting is off.
+        Records.ConversationMetadata? preSendMetadata = dustLimitingOptions.Enabled
             ? new Records.ConversationMetadata(
                 Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0))
             : null;
@@ -398,7 +399,7 @@ public class ConversationManagerActor : MorganaActor
                 AgentCompleted = response.AgentCompleted,
                 Timestamp = response.OriginalTimestamp ?? DateTime.UtcNow,
                 RichCard = response.RichCard,
-                ConversationMetadata = conversationMetadata
+                ConversationMetadata = preSendMetadata
             });
 
             actorLogger.Info(
@@ -406,17 +407,30 @@ public class ConversationManagerActor : MorganaActor
                 $"(#quickReplies: {response.QuickReplies?.Count ?? 0}," +
                 $"hasRichCard: {response.RichCard != null})");
 
-            // If this turn spent the last of the budget, surface the terminal lockout
-            // NOW — at end of turn — instead of letting the user fire a doomed next
-            // message just to eat an instant 429. DustLevel == 0.0 is exactly the
-            // over-budget state the controller gate rejects on the next send, so the
-            // notice we push here is identical to the one that path would emit.
-            // Exhaustion supersedes the advisory 70% / 90% warnings (a dead
-            // conversation does not need to be told it is "running low").
-            if (conversationMetadata is { DustLevel: <= 0.0 })
+            // POST-send reading: the adapting send may have spent more dust degrading
+            // this response for a poor channel (Rune squeezing a long answer into its
+            // 500-char profile via the ChannelAdapter LLM). Re-read NOW so the terminal
+            // / warning decision — and the gauge value the trailing message carries —
+            // reflect post-adaptation reality, not the stale pre-send snapshot. This is
+            // the authoritative end-of-turn level: the same number IsOverBudgetAsync
+            // would see on the next send, so the gauge and the exhaustion gate finally
+            // agree.
+            Records.ConversationMetadata? postSendMetadata = dustLimitingOptions.Enabled
+                ? new Records.ConversationMetadata(
+                    Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0))
+                : null;
+
+            // If this turn (delivery included) spent the last of the budget, surface the
+            // terminal lockout NOW — proactively, on the very turn that drained it —
+            // instead of letting the user fire a doomed next message just to eat an
+            // instant 429. DustLevel <= 0.0 is exactly the over-budget state the
+            // controller gate rejects on the next send. Exhaustion supersedes the
+            // advisory 70% / 90% warnings (a dead conversation does not need to be told
+            // it is "running low").
+            if (postSendMetadata is { DustLevel: <= 0.0 })
                 await EmitDustExhaustionAsync();
             else
-                await EmitDustWarningsIfNeededAsync(conversationMetadata?.DustLevel ?? 0.0);
+                await EmitDustWarningsIfNeededAsync(postSendMetadata?.DustLevel ?? 0.0);
         }
         catch (Exception ex)
         {

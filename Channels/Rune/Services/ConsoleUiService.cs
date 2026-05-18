@@ -187,11 +187,15 @@ public sealed class ConsoleUiService
                         ? "Morgana"
                         : message.AgentName;
 
-                    // Refresh the header gauge from the main assistant response only — skipping
-                    // system_warning and error notifications avoids a double-render glitch when
-                    // a warning fires immediately after the response on the same turn.
-                    if (string.Equals(message.MessageType, "assistant", StringComparison.OrdinalIgnoreCase)
-                        && message.ConversationMetadata?.DustLevel is { } level)
+                    // Refresh the header gauge from ANY metadata-bearing message. The main
+                    // assistant response carries the pre-delivery estimate; the trailing
+                    // warning/exhaustion (same turn, moments later) carries the AUTHORITATIVE
+                    // post-adaptation level — for a poor channel that just spent extra dust
+                    // degrading the answer, the second value is lower and we WANT the gauge
+                    // to snap to it. The earlier "double-render" was redundant identical
+                    // repaints; now the two updates are intentionally distinct (pre → post)
+                    // and Spectre's diffing makes an unchanged segment an invisible no-op.
+                    if (message.ConversationMetadata?.DustLevel is { } level)
                     {
                         // Truncate toward zero, don't round: a sub-1% residual reads as 0% — that
                         // swallowed fraction is the slack that funds per-channel presentation
@@ -593,9 +597,7 @@ public sealed class ConsoleUiService
         // "start a new one to keep going" is not (yet) actionable inside this CLI —
         // the only way forward is to quit and relaunch the process.
         if (conversationDead)
-            return ChunkStyledRows(
-                "✦ Conversation spent — press Esc to quit, then relaunch Rune to start fresh",
-                termWidth, $"{ErrorColor} italic");
+            return ChunkStyledRows("✦ Conversation spent — press Esc to quit, then relaunch Rune to start fresh", termWidth, $"{ErrorColor} italic");
 
         if (awaitingResponse)
         {
