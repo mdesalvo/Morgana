@@ -219,13 +219,22 @@ public class MCPToolAdapter
         for (int i = 0; i < parameters.Count; i++)
             dynamicMethod.DefineParameter(i + 1, ParameterAttributes.None, parameters[i].Name);
 
-        // Deterministic key: server URI + tool name uniquely identify the wiring object.
-        // Prevents unbounded cache growth — one entry per tool per server, regardless of
-        // how many conversations invoke the same tool.
+        // Deterministic key: server URI + tool name. One entry per tool per server,
+        // regardless of how many conversations invoke it — keeps the static cache bounded.
+        //
+        // OVERWRITE, not TryAdd: the executor closes over a SPECIFIC mcpClient instance.
+        // When the registry reconnects a recycled server it disposes the old client and
+        // pools a fresh one, so a new MCPToolAdapter rebuilds the executor against the live
+        // client. The key is unchanged (same server URI), so TryAdd would silently keep
+        // the executor bound to the now-disposed client: every tool call would then return
+        // an opaque "Error: ..." string and the agent would look brain-dead despite the
+        // tool definitions being present. Re-publishing the latest executor keeps the
+        // cache pointing at the live session (and even repairs any still-running older
+        // conversation, since the session is just transport for a stateless tool call).
         string fieldKey = $"{mcpClient.ServerLabel}:{toolName}";
         lock (executorCache)
         {
-            executorCache.TryAdd(fieldKey, executor);
+            executorCache[fieldKey] = executor;
         }
 
         // Generate IL: the remote MCP tool is handled as an equivalent
