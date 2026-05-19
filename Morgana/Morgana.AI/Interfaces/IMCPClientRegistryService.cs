@@ -21,6 +21,24 @@ public interface IMCPClientRegistryService : IDisposable, IAsyncDisposable
     Task<MCPClient> GetOrCreateClientAsync(UsesMCPServerAttribute serverAttribute);
 
     /// <summary>
+    /// Runs an operation against the pooled client for the given server, transparently
+    /// recovering from a terminated server-side session. The MCP Streamable HTTP spec
+    /// mandates that a server which has dropped a session answer any request carrying
+    /// that session id with HTTP <c>404</c>, and that the client then re-initialize.
+    /// When the operation hits that signal, the dead client is evicted, a fresh one is
+    /// connected (new <c>initialize</c> handshake → new session), and the operation is
+    /// retried once. This makes any MCP host whose session store does not survive
+    /// instance recycling or horizontal scale-out usable without manual reconnection.
+    /// </summary>
+    /// <typeparam name="T">Operation result type.</typeparam>
+    /// <param name="serverAttribute">The attribute identifying the target server.</param>
+    /// <param name="operation">The work to perform against the (possibly reconnected) client.</param>
+    /// <returns>The operation result, after at most one transparent reconnect+retry.</returns>
+    Task<T> ExecuteWithReconnectAsync<T>(
+        UsesMCPServerAttribute serverAttribute,
+        Func<MCPClient, Task<T>> operation);
+
+    /// <summary>
     /// Disconnects and removes a specific MCP client from the pool.
     /// </summary>
     /// <param name="serverAttribute">The attribute identifying the server to disconnect</param>
