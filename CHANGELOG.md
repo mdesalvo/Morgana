@@ -23,7 +23,7 @@ As the budget drains Morgana emits **one-shot advisory warnings at 70% and 90%**
 
 ### 🐛 Fixed
 - The Cauldron textarea and send button were **live during the initial presentation-load window**
-- MCP tool registration **aborted permanently** when a serverless or horizontally-scaled MCP host dropped the session between connect and tool discovery (the spec-mandated HTTP 404 on a session-bearing request); the registry now treats a terminated session as recoverable — **single-flight, instance-conditional reconnect+retry** — so a recycled host no longer strips an agent of its MCP tools, with no thundering-herd of redundant re-initializes and no risk of a straggler evicting a healthy peer-restored client
+- MCP tool registration **aborted permanently** when a serverless or horizontally-scaled MCP host dropped the session between connect and tool discovery (the spec-mandates HTTP 404 on a session-bearing request)
 
 ### 🚀 Future Enablement
 - **Adaptive Dust Pricing & Budget Analytics** — With `dust_usage_log` capturing per-call, per-role token economics and the `morgana.dust.consumed` counter feeding OpenTelemetry, operators can build **per-conversation cost dashboards** and graduate from a static `BudgetPerConversation` to **adaptive budgets** tuned per tenant, channel or agent mix — turning the dust model into a data-driven cost-governance lever rather than a fixed ceiling.
