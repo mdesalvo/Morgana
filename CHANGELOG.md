@@ -16,14 +16,14 @@ As the budget drains Morgana emits **one-shot advisory warnings at 70% and 90%**
 - Per-provider **cache-aware dust pricing** (`MagicDustPricing`): fresh / cache-read / cache-creation input tokens are weighted independently so the budget tracks real LLM cost, not raw token count
 - Dust state persisted in the per-conversation SQLite database (`dust_budget` + `dust_usage_log`, schema v5), with one-shot 70% / 90% advisory warnings and a terminal lockout when the budget is exhausted
 - Cauldron **`DustMeter`** — a depleting magic-dust fuel-gauge in the header, rehydrated from the persisted budget on conversation resume
-- Rune sticky-header dust gauge for the CLI channel
+- Rune sticky-header dust gauge for the TTY channel
 - `morgana.dust.consumed` OpenTelemetry counter (tagged by `llm_role` and conversation) for cost observability
 
 ### 🔄 Changed
 
 ### 🐛 Fixed
 - The Cauldron textarea and send button were **live during the initial presentation-load window**
-- MCP tool registration **aborted permanently** when a serverless or horizontally-scaled MCP host dropped the session between connect and tool discovery (the spec-mandates HTTP 404 on a session-bearing request); the registry now transparently reconnects (single-flight, instance-conditional) and retries, and the IL-generated tool executor cache is **re-published on reconnect instead of first-write-wins** so recovered tools actually invoke the live session — previously a recycled host left an agent with visible-but-dead tools, every call returning an opaque error and the agent appearing brain-dead
+- MCP tool registration **aborted permanently** when a serverless or horizontally-scaled MCP host dropped the session between connect and tool discovery (the spec-mandates HTTP 404 on a session-bearing request)
 
 ### 🚀 Future Enablement
 - **Adaptive Dust Pricing & Budget Analytics** — With `dust_usage_log` capturing per-call, per-role token economics and the `morgana.dust.consumed` counter feeding OpenTelemetry, operators can build **per-conversation cost dashboards** and graduate from a static `BudgetPerConversation` to **adaptive budgets** tuned per tenant, channel or agent mix — turning the dust model into a data-driven cost-governance lever rather than a fixed ceiling.
