@@ -417,7 +417,7 @@ public sealed class ConsoleUiService
         // Markup.Escape so a speaker name containing '[' can't break the layout.
         Markup content = new(
             $"[bold {speakerColor}]{Markup.Escape(currentSpeaker)}[/]   " +
-            $"[grey54]conv[/] [grey85]{Markup.Escape(shortId)}[/]" +
+            $"[grey54]conv[/] [bold {MorganaColor}]{Markup.Escape(shortId)}[/]" +
             dustSegment);
 
         return new Panel(Align.Center(content, VerticalAlignment.Middle))
