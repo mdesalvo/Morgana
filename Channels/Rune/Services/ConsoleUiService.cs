@@ -36,8 +36,16 @@ public sealed class ConsoleUiService
     /// <summary>Color for the user's own input and committed lines.</summary>
     private const string UserColor = "white";
 
-    /// <summary>Color for the magic-dust gauge in the sticky header.</summary>
-    private const string DustColor = "mediumpurple1";
+    /// <summary>Color for the magic-dust gauge in the sticky header. Hex matches
+    /// Cauldron's <c>--primary-color #8b5cf6</c> so both channels start the gauge on
+    /// the same Morgana primary purple.</summary>
+    private const string DustColor = "#8b5cf6";
+
+    /// <summary>Gauge color when remaining ≤ 30% — Cauldron's <c>.dust-meter.low</c> amber.</summary>
+    private const string DustLowColor = "#f59e0b";
+
+    /// <summary>Gauge color when remaining ≤ 10% — Cauldron's <c>.dust-meter.critical</c> red.</summary>
+    private const string DustCriticalColor = "#ef4444";
 
     /// <summary>Color for advisory warnings (rate-limit / low-budget): orange.</summary>
     private const string WarningColor = "orange1";
@@ -202,7 +210,7 @@ public sealed class ConsoleUiService
                         // messages and the let-it-finish turn.
                         int dustLevel = Math.Clamp((int)(level * 100), 0, 100);
                         // Scale color with depletion: mirrors Cauldron DustMeter thresholds (>30% ok, >10% low, ≤10% critical).
-                        string dustColor = level > 0.30 ? DustColor : level > 0.10 ? WarningColor : ErrorColor;
+                        string dustColor = level > 0.30 ? DustColor : level > 0.10 ? DustLowColor : DustCriticalColor;
                         _dustSegment = $"   [grey54]dust[/] [bold {dustColor}]{dustLevel}%[/]";
                     }
 
