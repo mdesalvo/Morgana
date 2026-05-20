@@ -383,7 +383,7 @@ public class ConversationManagerActor : MorganaActor
         // trailing warning/exhaustion message. Null when dust limiting is off.
         Records.ConversationMetadata? preSendMetadata = dustLimitingOptions.Enabled
             ? new Records.ConversationMetadata(
-                Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0))
+                Math.Floor(Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0) * 100.0) / 100.0)
             : null;
 
         // Send response to client via the active channel
@@ -417,7 +417,7 @@ public class ConversationManagerActor : MorganaActor
             // agree.
             Records.ConversationMetadata? postSendMetadata = dustLimitingOptions.Enabled
                 ? new Records.ConversationMetadata(
-                    Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0))
+                    Math.Floor(Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0) * 100.0) / 100.0)
                 : null;
 
             // If this turn (delivery included) spent the last of the budget, surface the

@@ -254,10 +254,10 @@ public class MorganaController : ControllerBase
 
             // Surface the REMAINING dust fraction on resume (fuel-gauge semantics:
             // 1.0 = full, 0.0 = empty) so the client can rehydrate its gauge immediately.
-            // Invert the consumed ratio and clamp. Null when dust limiting is disabled →
-            // client keeps the indicator hidden.
+            // Floor to whole-percent steps so this matches the gauge display and the
+            // DustLevel <= 0.0 exhaustion gate. Null when dust limiting is disabled.
             double? dustLevel = dustLimitingOptions.Enabled
-                ? Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0)
+                ? Math.Floor(Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0) * 100.0) / 100.0
                 : null;
 
             // If the resumed conversation is already dust-dead, hand the client the
