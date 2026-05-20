@@ -27,11 +27,12 @@ namespace Rune.Services;
 /// </remarks>
 public sealed class ConsoleUiService
 {
-    /// <summary>Color for base Morgana turns.</summary>
-    private const string MorganaColor = "magenta1";
+    /// <summary>Color for base Morgana turns. Matches Cauldron's <c>--primary-color #8b5cf6</c>.</summary>
+    private const string MorganaColor = "#8b5cf6";
 
-    /// <summary>Color for specialised agent turns (<c>Morgana (Agent)</c>).</summary>
-    private const string MorganaAgentColor = "hotpink";
+    /// <summary>Color for specialised agent turns (<c>Morgana (Agent)</c>).
+    /// Matches Cauldron's <c>--secondary-color #ec4899</c>.</summary>
+    private const string MorganaAgentColor = "#ec4899";
 
     /// <summary>Color for the user's own input and committed lines.</summary>
     private const string UserColor = "white";
