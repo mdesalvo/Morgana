@@ -16,6 +16,7 @@
       <MorganaPropsFile>$(RepoRoot)\Morgana\Directory.Build.props</MorganaPropsFile>
       <CauldronPropsFile>$(RepoRoot)\Channels\Cauldron\Directory.Build.props</CauldronPropsFile>
       <RunePropsFile>$(RepoRoot)\Channels\Rune\Directory.Build.props</RunePropsFile>
+      <GrimoirePropsFile>$(RepoRoot)\Channels\Grimoire\Directory.Build.props</GrimoirePropsFile>
     </PropertyGroup>
 
     <Message Text="════════════════════════════════════════════════════════════" Importance="high" />
@@ -67,6 +68,21 @@
     <Message Text="[Morgana Docker] ✓ Rune version:     $(RuneVersion)" Importance="high" Condition="'$(RuneVersion)' != ''" />
     <Warning Text="[Morgana Docker] Could not find $(RunePropsFile)" Condition="'$(RuneVersion)' == ''" />
 
+    <!-- Read Grimoire version -->
+    <XmlPeek
+      XmlInputPath="$(GrimoirePropsFile)"
+      Query="/Project/PropertyGroup/Version/text()"
+      Condition="Exists('$(GrimoirePropsFile)')">
+      <Output TaskParameter="Result" ItemName="GrimoireVersionResult" />
+    </XmlPeek>
+
+    <PropertyGroup>
+      <GrimoireVersion>@(GrimoireVersionResult)</GrimoireVersion>
+    </PropertyGroup>
+
+    <Message Text="[Morgana Docker] ✓ Grimoire version: $(GrimoireVersion)" Importance="high" Condition="'$(GrimoireVersion)' != ''" />
+    <Warning Text="[Morgana Docker] Could not find $(GrimoirePropsFile)" Condition="'$(GrimoireVersion)' == ''" />
+
     <!-- Generate .env.versions content -->
     <PropertyGroup>
       <EnvVersionsContent>
@@ -76,6 +92,7 @@
 MORGANA_VERSION=$(MorganaVersion)
 CAULDRON_VERSION=$(CauldronVersion)
 RUNE_VERSION=$(RuneVersion)
+GRIMOIRE_VERSION=$(GrimoireVersion)
 ]]>
       </EnvVersionsContent>
     </PropertyGroup>
@@ -85,9 +102,9 @@ RUNE_VERSION=$(RuneVersion)
       File="$(EnvVersionsFile)"
       Lines="$(EnvVersionsContent)"
       Overwrite="true"
-      Condition="'$(MorganaVersion)' != '' AND '$(CauldronVersion)' != '' AND '$(RuneVersion)' != ''" />
+      Condition="'$(MorganaVersion)' != '' AND '$(CauldronVersion)' != '' AND '$(RuneVersion)' != '' AND '$(GrimoireVersion)' != ''" />
 
-    <Message Text="[Morgana Docker] ✅ Generated: $(EnvVersionsFile)" Importance="high" Condition="'$(MorganaVersion)' != '' AND '$(CauldronVersion)' != '' AND '$(RuneVersion)' != ''" />
+    <Message Text="[Morgana Docker] ✅ Generated: $(EnvVersionsFile)" Importance="high" Condition="'$(MorganaVersion)' != '' AND '$(CauldronVersion)' != '' AND '$(RuneVersion)' != '' AND '$(GrimoireVersion)' != ''" />
     <Message Text="════════════════════════════════════════════════════════════" Importance="high" />
 
   </Target>

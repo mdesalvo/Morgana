@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+       <Title>Grimoire</Title>
+       <PackageId>Grimoire</PackageId>
+       <UserSecretsId>2d150094-0c85-48aa-9bb4-213fb9d06217</UserSecretsId>
+    </PropertyGroup>
+
+</Project>

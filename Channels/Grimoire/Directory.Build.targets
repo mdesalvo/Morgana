@@ -9,7 +9,7 @@
 
     <PropertyGroup>
       <!-- Repository root is TWO levels up from this file
-           (Channels/Cauldron/ → Channels/ → repo root) -->
+           (Channels/Grimoire/ → Channels/ → repo root) -->
       <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))</RepoRoot>
       <EnvVersionsFile>$(RepoRoot)\.env.versions</EnvVersionsFile>
 
@@ -81,7 +81,7 @@
       <GrimoireVersion>@(GrimoireVersionResult)</GrimoireVersion>
     </PropertyGroup>
 
-    <Message Text="[Morgana Docker] ✓ Grimoire version: $(GrimoireVersion)" Importance="high" Condition="'$(GrimoireVersion)' != ''" />
+    <Message Text="[Morgana Docker] ✓ Grimoire version:     $(GrimoireVersion)" Importance="high" Condition="'$(GrimoireVersion)' != ''" />
     <Warning Text="[Morgana Docker] Could not find $(GrimoirePropsFile)" Condition="'$(GrimoireVersion)' == ''" />
 
     <!-- Generate .env.versions content -->

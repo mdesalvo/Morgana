@@ -24,12 +24,12 @@ namespace Morgana.Web.Services;
 /// on its own side — Morgana's position here mirrors GitHub/Stripe/Twilio webhook conventions.</para>
 ///
 /// <para><strong>Streaming:</strong></para>
-/// <para><see cref="SendStreamChunkAsync"/> is intentionally a logged no-op: the webhook profile
-/// declares <see cref="ChannelCapabilities.SupportsStreaming"/> = <see langword="false"/>, so
-/// upstream suppression in <c>MorganaAgent</c> / <c>ConversationManagerActor</c> must have
-/// prevented any chunk from reaching this method. A call landing here at all is a regression,
-/// worth a warning but not a throw — we still refuse to invent a "chunk endpoint" convention on
-/// behalf of the client.</para>
+/// <para><see cref="SendStreamChunkAsync"/> POSTs each chunk to <c>{callbackUrl}/chunk</c> with a
+/// minimal body (<c>{ conversationId, chunkText }</c>) mirroring SignalR's
+/// <c>ReceiveStreamChunk</c> contract. The endpoint suffix is a convention: a channel that
+/// declares <see cref="ChannelCapabilities.SupportsStreaming"/> = <see langword="true"/> over
+/// webhook is expected to expose it. Channels that opt out simply declare streaming off and the
+/// supervisor never invokes this method.</para>
 ///
 /// <para><strong>Reliability:</strong></para>
 /// <para>HTTP failures are logged and swallowed so a misbehaving callback target can't fault the
@@ -119,12 +119,49 @@ public class WebhookChannelService : IChannelService
     }
 
     /// <inheritdoc/>
-    public Task SendStreamChunkAsync(string conversationId, string chunkText)
+    public async Task SendStreamChunkAsync(string conversationId, string chunkText)
     {
-        logger.LogWarning(
-            "SendStreamChunkAsync called on WebhookChannelService for conversation {ConversationId}; " +
-            "the webhook profile declares SupportsStreaming=false and upstream suppression should have prevented this. Chunk dropped.",
-            conversationId);
-        return Task.CompletedTask;
+        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? channelMetadata))
+            throw new InvalidOperationException(
+                $"No channel metadata registered for conversation {conversationId}; " +
+                "the start-conversation gate should have ensured registration before any stream chunk dispatch.");
+
+        string? callbackUrl = channelMetadata.Coordinates.CallbackUrl;
+        if (string.IsNullOrWhiteSpace(callbackUrl))
+            throw new InvalidOperationException(
+                $"Webhook stream-chunk dispatch for conversation {conversationId} has no callbackUrl in coordinates; " +
+                "the start-conversation gate should have rejected a deliveryMode=webhook handshake without an absolute callbackUrl.");
+
+        // Convention: chunks land at "{callbackUrl}/chunk". Channels that advertise
+        // SupportsStreaming=true over webhook are expected to expose this path; the alternative
+        // (a separate streamCallbackUrl on coordinates) would double the handshake surface for
+        // no real flexibility — the path suffix is enough.
+        string chunkUrl = callbackUrl.TrimEnd('/') + "/chunk";
+
+        try
+        {
+            HttpClient httpClient = httpClientFactory.CreateClient(HttpClientName);
+            using HttpResponseMessage response = await httpClient.PostAsJsonAsync(
+                chunkUrl, new StreamChunkRequest(conversationId, chunkText));
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogError(
+                    "Webhook chunk callback returned {StatusCode} for conversation {ConversationId} at {ChunkUrl}",
+                    (int)response.StatusCode, conversationId, chunkUrl);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Same reliability contract as SendMessageAsync: a misbehaving callback target must not fault the agent turn.
+            logger.LogError(ex,
+                "Failed to deliver stream chunk for conversation {ConversationId} at {ChunkUrl}",
+                conversationId, chunkUrl);
+        }
     }
+
+    /// <summary>
+    /// Minimal wire shape for the chunk endpoint. Mirrors SignalR's <c>ReceiveStreamChunk</c>
+    /// payload — conversation id plus the incremental chunk text.
+    /// </summary>
+    private sealed record StreamChunkRequest(string ConversationId, string ChunkText);
 }
