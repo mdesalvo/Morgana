@@ -413,7 +413,8 @@
           <tr><td>IGuardRailService</td><td>LLMGuardRailService</td><td>Content moderation &amp; policy enforcement</td></tr>
           <tr><td>IClassifierService</td><td>LLMClassifierService</td><td>Intent classification</td></tr>
           <tr><td>IPresenterService</td><td>LLMPresenterService</td><td>Welcome presentation &amp; first engagement</td></tr>
-          <tr><td>IRateLimitService</td><td>SQLiteRateLimitService</td><td>Per-conversation throttling</td></tr>
+          <tr><td>IRateLimitService</td><td>SQLiteRateLimitService</td><td>Per-conversation message frequency throttling</td></tr>
+          <tr><td>IDustLimitService</td><td>SQLiteDustLimitService</td><td>Per-conversation token budget protection</td></tr>
           <tr><td>IConversationPersistenceService</td><td>SQLiteConversationPersistenceService</td><td>Encrypted conversation storage</td></tr>
           <tr><td>IAgentConfigurationService</td><td>JsonAgentConfigurationService</td><td>Agent discovery</td></tr>
           <tr><td>IPromptResolverService</td><td>EmbeddedResourcePromptResolverService</td><td>System &amp; Domain prompt loading</td></tr>
@@ -469,6 +470,7 @@
         <tbody>
           <tr><td>Morgana:LLM:Provider</td><td>LLM backend: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code></td></tr>
           <tr><td>Morgana:LLM:{Provider}:*</td><td>Provider-specific settings (ApiKey, Model, Endpoint, ...)</td></tr>
+          <tr><td>Morgana:LLM:{Provider}:MagicDust:*</td><td>Per-provider token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
           <tr><td>Morgana:Authentication:Audience</td><td>Expected JWT audience (default: <code>morgana.ai</code>)</td></tr>
           <tr><td>Morgana:Authentication:Issuers[]</td><td>Per-channel trust list: array of <code>{ Name, SymmetricKey }</code> entries (e.g. <code>cauldron</code>, <code>rune</code>)</td></tr>
           <tr><td>Morgana:ConversationPersistence:EncryptionKey</td><td>AES-256 key for SQLite encryption (base64)</td></tr>
@@ -477,6 +479,7 @@
           <tr><td>Morgana:ActorSystem:EnableGuardrail</td><td>Toggle content moderation guard</td></tr>
           <tr><td>Morgana:AdaptiveMessaging:*</td><td>Streaming toggle, rich-features threshold for ingress heuristic</td></tr>
           <tr><td>Morgana:RateLimiting:*</td><td>Per-minute, per-hour, per-day message limits</td></tr>
+          <tr><td>Morgana:DustLimiting:*</td><td>Token budget: enabled, budget per conversation, warning &amp; error messages, per-provider MagicDust pricing</td></tr>
           <tr><td>Morgana:OpenTelemetry:*</td><td>Tracing: exporters, service name, endpoints</td></tr>
         </tbody>
       </table>
@@ -664,6 +667,6 @@
         <span>6</span>
       </div>
     </div>
-  
+
   </body>
 </html>

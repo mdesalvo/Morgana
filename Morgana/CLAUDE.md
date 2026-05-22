@@ -2,7 +2,7 @@
 
 ## What is Morgana
 
-Morgana is an advanced conversational AI framework built on **.NET 10**, **Akka.NET** (actor model) and **Microsoft.Agents.AI** (agent framework). It orchestrates specialized AI agents that collaborate to understand, classify and resolve user inquiries through intent-based routing, content moderation, shared context and tool calling. **Cauldron** is the reference Blazor Server frontend that talks to Morgana via REST + SignalR.
+Morgana is a modern conversational AI framework built on **.NET 10**, **Akka.NET** (actor model) and **Microsoft.Agents.AI** (agent framework). It orchestrates specialized AI agents that collaborate to understand, classify and resolve user inquiries through intent-based routing, content moderation, shared context and tool calling. **Cauldron** is the reference Blazor Server frontend that talks to Morgana via REST + SignalR.
 
 **Key value proposition**: domain experts model agents declaratively (prompt + tools in JSON, thin C# class), package them as plugin DLLs, and Morgana handles orchestration, streaming, persistence, guard rails, channel adaptation and observability automatically.
 
@@ -86,7 +86,7 @@ ConversationManagerActor          ← entry point, lifecycle, channel metadata p
 | `conversation/start` | POST | Creates conversation, validates `ChannelMetadata` (required), creates manager actor | 202 |
 | `conversation/{id}/end` | POST | Terminates conversation, stops supervisor | 200 |
 | `conversation/{id}/resume` | POST | Checks `ConversationExists` (404 if not), restores active agent | 202 + activeAgent |
-| `conversation/{id}/message` | POST | Auth check → rate limit check (429) → captures OTel context → tells `UserMessage` | 202 |
+| `conversation/{id}/message` | POST | Auth check → rate limit check (429) → dust budget check (429) → captures OTel context → tells `UserMessage` | 202 |
 | `conversation/{id}/history` | GET | Returns `MorganaChatMessage[]` via persistence service | 200/404 |
 | `health` | GET | Actor system liveness check | 200/503 |
 
@@ -124,6 +124,7 @@ Tools with `Shared: true` parameters route their values into a conversation-scop
 | `MCPClientRegistryService` | `IMCPClientRegistryService` | MCP client connection pool: keyed by URI (Http) or `stdio:{command}` (Stdio). Thread-safe via `ConcurrentDictionary`. Contains `MCPClient` wrapper over `McpClient` from ModelContextProtocol.Core |
 | `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite DB (`morgana-{id}.db`). AES-256-CBC encrypted `AgentSession` BLOBs + `shared_context` registry (first-write-wins). Schema v4: tables `morgana` + `rate_limit_log` + `channel_metadata` + `shared_context`. Manages `UpsertSharedVariableAsync` and `LoadSharedVariablesAsync` for cross-agent context synchronization |
 | `SQLiteRateLimitService` | `IRateLimitService` | Sliding window algorithm (per-minute/hour/day) in same SQLite DB. Fails open on error. Delegates DB init to persistence service |
+| `SQLiteDustLimitService` | `IDustLimitService` | Per-conversation token budget enforcement. Tracks cumulative dust consumed (tokens weighted by I/O asymmetry and cache tiers). Three thresholds: 70% warning (one-shot), 90% warning (one-shot), 100% lockout (blocks new turns, conversation stays alive). Fails open on DB error. Emits OTel counter `morgana.dust.consumed` tagged by LLM role |
 | `JWTAuthenticationService` | `IAuthenticationService` | Validates JWT tokens: HMAC-SHA256, issuer whitelist, audience, lifetime (30s clock skew). Extracts `sub`→UserId, `name`→DisplayName |
 | `SummarizingChatReducerService` | *(factory, not an interface)* | Creates `SummarizingChatReducer` from `Morgana:HistoryReducer` config. Threshold (hysteresis buffer above target, default 12) plus target count (default 8) drives summarization: reduction triggers when message count > target + threshold |
 | `AdaptingChannelService` | `IChannelService` | Decorator: intercepts every `SendMessageAsync`, routes through `MorganaChannelAdapter` for capability-based degradation, then dispatches to the concrete transport via `IChannelServiceFactory` |
@@ -238,8 +239,10 @@ Resolution: `ConfigurationPromptResolverService` merges morgana.json + agents.js
 | `rate_limit_log` | `request_timestamp` TEXT | Sliding window rate limiting |
 | `channel_metadata` | `id` (=1), `channel_name`, `supports_rich_cards`, `supports_quick_replies`, `supports_streaming`, `supports_markdown`, `max_message_length` | Persisted channel handshake |
 | `shared_context` | `variable_name` PK, `variable_value` BLOB (JSON serialized), `set_by_agent`, `creation_date` | Cross-agent shared variables (first-write-wins via `INSERT OR IGNORE`) |
+| `dust_budget` | `dust_consumed` REAL, `warning_70_sent` INTEGER, `warning_90_sent` INTEGER | Lifetime token budget tracking (single row, CHECK=1 constraint on `id`) |
+| `dust_usage_log` | `timestamp` TEXT, `dust_consumed` REAL, `llm_role` TEXT | Per-charge diagnostic log (optional, indexed by timestamp); enables OTel and per-role attribution |
 
-Schema version tracked via `PRAGMA user_version` (current: 4). `EnsureDatabaseInitializedAsync` is idempotent.
+Schema version tracked via `PRAGMA user_version` (current: 5). `EnsureDatabaseInitializedAsync` is idempotent.
 
 History retrieval (`GetConversationHistoryAsync`): loads all agent rows → decrypts each → extracts messages from `AgentSession.stateBag.MorganaChatHistoryProvider.messages` → applies user_facing filter (skips tool-call and non-final assistant messages from marked agents) → merges chronologically → extracts quick replies and rich cards from `SetQuickReplies`/`SetRichCard` function calls.
 
@@ -258,6 +261,8 @@ OpenTelemetry distributed tracing with per-turn spans:
 morgana.turn → morgana.guard → morgana.classifier → morgana.router → morgana.agent
 ```
 Attributes: `conversation.id`, `guard.compliant`, `classification.intent`, `classification.confidence`, `agent.ttft_ms`, `agent.response_preview`, `agent.is_completed`. HTTP Activity context propagated as `ActivityLink` to turn span in supervisor.
+
+**Metrics**: `morgana.dust.consumed` counter (unit `dust`) tagged by `dust.llm_role` for per-agent/role attribution; emitted post-commit in `SQLiteDustLimitService.ChargeAsync`. Complements `gen_ai.usage.*` MEAI counters from `MorganaLLM` which break down cache tiers.
 
 Exporters configured via `Morgana:OpenTelemetry:Exporters` array: console, OTLP (Jaeger, Grafana Tempo).
 
@@ -281,6 +286,7 @@ At application startup, three registries perform comprehensive validation:
 | `Morgana:AdaptiveMessaging:RichFeaturesMinLength`   | Ingress heuristic: if the client's `MaxMessageLength` is below this threshold, `SupportsRichCards` and `SupportsQuickReplies` are forced to `false` at the handshake. Null/0 disables the heuristic. Streaming is unaffected. |
 | `Morgana:ConversationPersistence`                   | StoragePath, EncryptionKey (AES-256, base64, must be 32 bytes)                                                                                                                                                                |
 | `Morgana:RateLimiting`                              | Enabled, MaxMessagesPerMinute/Hour/Day, custom ErrorMessage templates with `{limit}` placeholder                                                                                                                              |
+| `Morgana:DustLimiting`                              | Enabled, BudgetPerConversation (default 80 units), Warning70Message, Warning90Message, ErrorMessage; per-provider `MagicDust` config (InputTokensPerDustUnit, OutputTokensPerDustUnit, CachedInputWeight, CacheCreationWeight) |
 | `Morgana:Authentication`                            | Audience, Issuers[] (per-issuer Name + SymmetricKey min 256-bit)                                                                                                                                                              |
 | `Morgana:HistoryReducer`                            | Enabled, SummarizationThreshold (default 12), SummarizationTargetCount (default 8), SummarizationPrompt                                                                                                                       |
 | `Morgana:OpenTelemetry`                             | Enabled, ServiceName, Exporters array (name, enabled, endpoint)                                                                                                                                                               |
