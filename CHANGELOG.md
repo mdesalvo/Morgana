@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.23.0] - UNDER DEVELOPMENT
+## [0.23.0] - 2026-05-22
 ### 🎯 Major Feature: Magic Dust — Token-Budget Protection
 This release introduces **Magic Dust**, a per-conversation **lifetime token budget** that guards Morgana **orthogonally to the rate limiter**: where the rate limiter caps message *frequency*, Magic Dust caps token *consumption*.
 Every conversation is born with a finite budget of dust; each LLM call (guard, classifier, agent, presenter) burns some, and the running balance is **artistically represented as the quantity of magic dust left in the cauldron** — a fuel-gauge the user watches deplete.
