@@ -152,6 +152,22 @@ public sealed class ConsoleUiService
     /// </summary>
     private volatile bool conversationDead;
 
+    /// <summary>
+    /// Fast lock-free gate for "quick-reply mode": true while the current turn's offered quick
+    /// replies <em>are</em> the prompt (the usual text input is suspended). Set in
+    /// <see cref="CommitFinalMessage"/> when a message carries quick replies, cleared once the
+    /// user picks one. Volatile so <see cref="ReadKeysLoop"/> can branch on it without taking
+    /// <see cref="renderLock"/> on every polled keystroke; the backing list/index below are only
+    /// ever touched under the lock.
+    /// </summary>
+    private volatile bool quickReplyActive;
+
+    /// <summary>Quick replies offered by the current turn while <see cref="quickReplyActive"/>, or null. Mutated/read only under <see cref="renderLock"/>.</summary>
+    private IReadOnlyList<QuickReply>? activeQuickReplies;
+
+    /// <summary>Index of the highlighted option within <see cref="activeQuickReplies"/>. Mutated/read only under <see cref="renderLock"/>.</summary>
+    private int quickReplyIndex;
+
     /// <summary>Platform-specific terminal-resize notifier; subscribed in <see cref="RunAsync"/> so the viewport anchor follows live window resizes without per-frame polling.</summary>
     private readonly IViewportResizeWatcher viewportResizeWatcher;
 
@@ -437,16 +453,29 @@ public sealed class ConsoleUiService
                 currentInput = string.Empty; // discard any half-typed doomed line
             }
 
+            // Quick replies turn the bottom line INTO the prompt for this turn: instead of
+            // freeing the text input, enter "QR mode" where the offered options ARE the prompt
+            // and ReadKeysLoop drives a selection over them. Mirrors Cauldron locking its
+            // textarea while quick replies are pending. Suppressed once the conversation is
+            // dust-dead — the dead latch wins, there's nothing left to branch into.
+            if (!conversationDead && message.QuickReplies is { Count: > 0 })
+            {
+                activeQuickReplies = message.QuickReplies;
+                quickReplyIndex = 0;
+                quickReplyActive = true;
+            }
+
             // Release the input gate: ReadKeysLoop was swallowing keystrokes until
             // this first webhook delivery landed. (No-op once conversationDead:
-            // ReadKeysLoop keeps swallowing on the dead latch regardless.)
+            // ReadKeysLoop keeps swallowing on the dead latch regardless. In QR mode the
+            // text input stays suspended too, but via quickReplyActive, not this flag.)
             awaitingResponse = false;
             ctx.UpdateTarget(BuildLayout());
             ctx.Refresh();
         }
     }
 
-    /// <summary>Polls <see cref="Console.KeyAvailable"/> every 25 ms and dispatches keys: Enter commits (or exits on <c>/quit</c>), Backspace edits, Esc exits, printable chars append to the buffer.</summary>
+    /// <summary>Polls <see cref="Console.KeyAvailable"/> every 25 ms and dispatches keys: in quick-reply mode the arrows move the highlight and Enter sends the choice; otherwise Enter commits (or exits on <c>/quit</c>), Backspace edits, Esc exits, printable chars append to the buffer.</summary>
     private async Task ReadKeysLoop(LiveDisplayContext ctx, Func<string, Task> onSend, CancellationToken cancellationToken)
     {
         while (!exitRequested && !cancellationToken.IsCancellationRequested)
@@ -490,6 +519,18 @@ public sealed class ConsoleUiService
             if ((awaitingResponse || conversationDead) && key.Key != ConsoleKey.Escape)
             // ReSharper restore InconsistentlySynchronizedField
                 continue;
+
+            // Quick-reply mode owns the keyboard: the offered options ARE the prompt, so the
+            // arrows move the highlight and Enter sends the chosen option's Value. Esc is left to
+            // fall through to the switch below (it always exits); every other key is consumed here
+            // — no free-text typing while a branch choice is pending (Cauldron parity). The fast
+            // gate is the volatile flag; HandleQuickReplyKeyAsync re-checks the backing list under
+            // the lock to stay safe against a concurrent clear.
+            if (quickReplyActive && key.Key != ConsoleKey.Escape)
+            {
+                await HandleQuickReplyKeyAsync(ctx, onSend, key.Key);
+                continue;
+            }
 
             switch (key.Key)
             {
@@ -576,6 +617,70 @@ public sealed class ConsoleUiService
                         }
                     }
                     break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handles a keystroke while in quick-reply mode. Up/Left and Down/Right wrap the highlight
+    /// (both axes accepted so the user needn't guess which the current layout wants); Enter leaves
+    /// QR mode, echoes the chosen option as a <c>"You: {Value}"</c> line — Cauldron sends the
+    /// <see cref="QuickReply.Value"/>, not the label — and dispatches it through
+    /// <paramref name="onSend"/>; any other key is ignored. All state mutation happens under
+    /// <see cref="renderLock"/>; the send awaits outside it.
+    /// </summary>
+    private async Task HandleQuickReplyKeyAsync(LiveDisplayContext ctx, Func<string, Task> onSend, ConsoleKey key)
+    {
+        QuickReply? chosen = null;
+        lock (renderLock)
+        {
+            // Re-check under the lock: the gate is volatile but the list could have been cleared
+            // by a racing commit between the loop's fast read and here.
+            if (activeQuickReplies is not { Count: > 0 } options)
+                return;
+
+            switch (key)
+            {
+                case ConsoleKey.UpArrow or ConsoleKey.LeftArrow:
+                    quickReplyIndex = (quickReplyIndex - 1 + options.Count) % options.Count;
+                    break;
+                case ConsoleKey.DownArrow or ConsoleKey.RightArrow:
+                    quickReplyIndex = (quickReplyIndex + 1) % options.Count;
+                    break;
+                case ConsoleKey.Enter:
+                    chosen = options[quickReplyIndex];
+                    // Leave QR mode and optimistically echo the choice, exactly as the text-input
+                    // Enter path does — the bottom line flips to the thinking hint while we send.
+                    quickReplyActive = false;
+                    activeQuickReplies = null;
+                    history.Add(new DisplayedMessage("You", chosen.Value, UserColor));
+                    awaitingResponse = true;
+                    break;
+                default:
+                    return; // non-navigation key: nothing changed, skip the refresh
+            }
+
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+
+        if (chosen is null)
+            return;
+
+        try
+        {
+            await onSend(chosen.Value);
+        }
+        catch (Exception ex)
+        {
+            // Same recovery as the text path: surface the failure and release the gate so the
+            // user can act again (the quick replies are gone, but free text is available).
+            lock (renderLock)
+            {
+                history.Add(new DisplayedMessage("system", $"send failed: {ex.Message}", "red"));
+                awaitingResponse = false;
+                ctx.UpdateTarget(BuildLayout());
+                ctx.Refresh();
             }
         }
     }
@@ -807,6 +912,12 @@ public sealed class ConsoleUiService
         // the only way forward is to quit and relaunch the process.
         if (conversationDead)
             return ChunkStyledRows("✦ Conversation spent — press Esc to quit, then relaunch Grimoire to start fresh", termWidth, $"{ErrorColor} italic");
+
+        // Quick replies own the prompt for this turn (set in CommitFinalMessage): render the
+        // selectable options in place of the text input. The accent is the user colour because
+        // this is the user's choice surface. Markup → IRenderable via the spread, as elsewhere.
+        if (quickReplyActive && activeQuickReplies is { Count: > 0 } replies)
+            return [.. QuickReplyTerminalRenderService.RenderRows(replies, quickReplyIndex, UserColor, termWidth)];
 
         if (awaitingResponse)
         {
