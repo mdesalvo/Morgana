@@ -3,9 +3,9 @@ using System.Text.Json.Serialization;
 namespace Grimoire.Messages.Contracts;
 
 /// <summary>
-/// Rich card container. Grimoire declares <c>SupportsRichCards=false</c> so this DTO should be
-/// stripped by Morgana's <c>MorganaChannelAdapter</c> before delivery — kept here only for
-/// binary compatibility with the shared wire contract.
+/// Rich card container. Grimoire declares <c>SupportsRichCards=true</c>, so this DTO arrives
+/// integral (Morgana's <c>MorganaChannelAdapter</c> takes its short-circuit hot path and never
+/// degrades it) and is Spectrized for the terminal by <c>RichCardTerminalRenderService</c>.
 /// </summary>
 public class RichCard
 {

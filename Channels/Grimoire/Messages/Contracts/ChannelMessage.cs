@@ -33,16 +33,14 @@ public sealed class ChannelMessage
     public string MessageType { get; set; } = "assistant";
 
     /// <summary>
-    /// Optional list of quick reply buttons. For Grimoire (SupportsQuickReplies=false) Morgana's
-    /// channel adapter strips these before delivery, so the list is expected to be null/empty;
-    /// the contract is kept intact for binary compatibility.
+    /// Optional list of quick reply buttons. Grimoire declares <c>SupportsQuickReplies=true</c>,
+    /// so these arrive integral and drive a blocking selection prompt.
     /// </summary>
     public List<QuickReply>? QuickReplies { get; set; }
 
     /// <summary>
-    /// Optional rich card. For Grimoire (SupportsRichCards=false) Morgana's channel adapter strips
-    /// this before delivery, so the field is expected to be null; the contract is kept intact
-    /// for binary compatibility.
+    /// Optional rich card. Grimoire declares <c>SupportsRichCards=true</c>, so this arrives
+    /// integral and is Spectrized beneath the message text by <c>RichCardTerminalRenderService</c>.
     /// </summary>
     public RichCard? RichCard { get; set; }
 

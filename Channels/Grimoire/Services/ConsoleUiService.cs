@@ -388,7 +388,7 @@ public sealed class ConsoleUiService
         lock (renderLock)
         {
 
-            history.Add(new DisplayedMessage(messageSpeaker, message.Text, RowColor(message, messageSpeaker)));
+            history.Add(new DisplayedMessage(messageSpeaker, message.Text, RowColor(message, messageSpeaker), message.RichCard));
 
             // On agent completion append a base-Morgana courtesy line — same pattern
             // as Cauldron's ChatStateService.AddCompletionMessageIfNeeded.
@@ -761,10 +761,13 @@ public sealed class ConsoleUiService
     /// <summary>
     /// Renders <paramref name="message"/> to single-row markups: its text through
     /// <see cref="MarkdownTerminalRenderService"/> with the speaker colour as base prose colour and
-    /// a bold <c>"Who: "</c> prefix on the first row. The result is memoised on the message
-    /// keyed by <paramref name="termWidth"/> so the typewriter's 15 ms ticks — which re-render
-    /// the whole body — don't re-parse markdown for every history entry on every frame. The
-    /// cache invalidates automatically when the terminal width changes (resize).
+    /// a bold <c>"Who: "</c> prefix on the first row, followed — when the message carries a
+    /// <see cref="DisplayedMessage.Card"/> — by the card Spectrized through
+    /// <see cref="RichCardTerminalRenderService"/> (separated by one blank row, mirroring
+    /// Cauldron's text-bubble-then-card stacking). The result is memoised on the message keyed by
+    /// <paramref name="termWidth"/> so the typewriter's 15 ms ticks — which re-render the whole
+    /// body — don't re-parse markdown for every history entry on every frame. The cache
+    /// invalidates automatically when the terminal width changes (resize).
     /// </summary>
     /// <remarks>Mutates <paramref name="message"/>'s cache fields; always invoked under <see cref="renderLock"/> via <see cref="BuildBody"/>.</remarks>
     private static List<Markup> RenderMessageRows(DisplayedMessage message, int termWidth)
@@ -773,6 +776,11 @@ public sealed class ConsoleUiService
             return message.CachedRows;
 
         List<Markup> rows = MarkdownTerminalRenderService.RenderToRows(message.Text, message.Color, $"{message.Who}: ", termWidth);
+        if (message.Card is not null)
+        {
+            rows.Add(new Markup(string.Empty));
+            rows.AddRange(RichCardTerminalRenderService.RenderRichCard(message.Card, message.Color, termWidth));
+        }
         message.CachedRows = rows;
         message.CachedWidth = termWidth;
         return rows;
@@ -896,17 +904,20 @@ public sealed class ConsoleUiService
         agentName is not null && agentName.Contains('(') && agentName.Contains(')');
 
     /// <summary>
-    /// A single history entry: speaker name, raw (markdown) text, and the base Spectre colour
-    /// token for the speaker. Carries a per-width memo of the rendered rows so the typewriter's
-    /// per-tick full-body redraw doesn't re-parse markdown for stable history on every frame —
-    /// see <see cref="RenderMessageRows"/>. A class (not a record) because the cache fields are
-    /// mutated in place after construction.
+    /// A single history entry: speaker name, raw (markdown) text, the base Spectre colour token
+    /// for the speaker, and an optional <see cref="Card"/> rendered beneath the text. Carries a
+    /// per-width memo of the rendered rows so the typewriter's per-tick full-body redraw doesn't
+    /// re-parse markdown/cards for stable history on every frame — see <see cref="RenderMessageRows"/>.
+    /// A class (not a record) because the cache fields are mutated in place after construction.
     /// </summary>
-    private sealed class DisplayedMessage(string who, string text, string color)
+    private sealed class DisplayedMessage(string who, string text, string color, RichCard? card = null)
     {
         public string Who { get; } = who;
         public string Text { get; } = text;
         public string Color { get; } = color;
+
+        /// <summary>Optional rich card delivered with the message, Spectrized beneath the prose. Null for user echoes, system notices and agent-completion courtesy lines.</summary>
+        public RichCard? Card { get; } = card;
 
         /// <summary>Terminal width the cached rows were wrapped at, or -1 when never rendered.</summary>
         public int CachedWidth { get; set; } = -1;
