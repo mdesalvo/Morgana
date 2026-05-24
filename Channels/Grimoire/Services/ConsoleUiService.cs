@@ -168,6 +168,22 @@ public sealed class ConsoleUiService
     /// <summary>Index of the highlighted option within <see cref="activeQuickReplies"/>. Mutated/read only under <see cref="renderLock"/>.</summary>
     private int quickReplyIndex;
 
+    /// <summary>
+    /// Scrollback offset in rows: how far above the live bottom the viewport is anchored.
+    /// 0 = pinned to the newest content (the default live view). Only ever non-zero while the
+    /// conversation is at rest — <see cref="ReadKeysLoop"/> gates scrolling on
+    /// <c>!awaitingResponse</c>, so the window never moves under an in-flight stream — and it is
+    /// reset to 0 whenever the user sends. Mutated/read only under <see cref="renderLock"/>; the
+    /// upper bound is re-clamped against the live content height in <see cref="BuildBody"/>.
+    /// </summary>
+    private int scrollOffset;
+
+    /// <summary>Whether older content exists above the visible window (drives the header's ▲ glyph). Set in <see cref="BuildBody"/>, read in <see cref="BuildHeader"/>; both under <see cref="renderLock"/>.</summary>
+    private bool scrollHasAbove;
+
+    /// <summary>Whether content exists below the visible window — i.e. the user has scrolled up (drives the header's ▼ glyph). Set in <see cref="BuildBody"/>, read in <see cref="BuildHeader"/>.</summary>
+    private bool scrollHasBelow;
+
     /// <summary>Platform-specific terminal-resize notifier; subscribed in <see cref="RunAsync"/> so the viewport anchor follows live window resizes without per-frame polling.</summary>
     private readonly IViewportResizeWatcher viewportResizeWatcher;
 
@@ -506,6 +522,17 @@ public sealed class ConsoleUiService
                 return;
             }
 
+            // Scrollback: review the finished conversation. Enabled only at rest — NOT in
+            // quick-reply mode (the QR prompt is sacred and must be answered first) and NOT while
+            // a turn is in flight (awaitingResponse covers both "thinking" and streaming; you only
+            // scroll content that's done). Handled before the swallow gate below so it still works
+            // once the conversation is dust-dead (awaitingResponse is false there) for re-reading.
+            if (!quickReplyActive && !awaitingResponse && TryScrollDelta(key.Key, out int scrollDelta))
+            {
+                ApplyScroll(ctx, scrollDelta);
+                continue;
+            }
+
             // Swallow every keystroke that isn't an explicit exit while we're waiting for
             // Morgana to speak — or forever once the conversation is dust-dead (a
             // one-way latch: no point typing into a budget the backend will reject).
@@ -563,6 +590,7 @@ public sealed class ConsoleUiService
                     {
                         history.Add(new DisplayedMessage("You", toSend, UserColor));
                         awaitingResponse = true;
+                        scrollOffset = 0; // jump back to the live bottom for the new turn
                         ctx.UpdateTarget(BuildLayout());
                         ctx.Refresh();
                     }
@@ -655,6 +683,7 @@ public sealed class ConsoleUiService
                     activeQuickReplies = null;
                     history.Add(new DisplayedMessage("You", chosen.Value, UserColor));
                     awaitingResponse = true;
+                    scrollOffset = 0; // back to live for the new turn (already 0 in QR mode, but keep it explicit)
                     break;
                 default:
                     return; // non-navigation key: nothing changed, skip the refresh
@@ -685,6 +714,41 @@ public sealed class ConsoleUiService
         }
     }
 
+    /// <summary>Number of rows the scrollback advances per keystroke. Fixed (not configurable).</summary>
+    private const int ScrollStep = 5;
+
+    /// <summary>
+    /// Maps a key to a scroll direction: Up / Left / PageUp move toward older content (+),
+    /// Down / Right / PageDown move back toward the present (−). Returns false for any other key.
+    /// Both arrow axes are accepted so the user needn't think about which one this view wants.
+    /// </summary>
+    private static bool TryScrollDelta(ConsoleKey key, out int delta)
+    {
+        switch (key)
+        {
+            case ConsoleKey.UpArrow or ConsoleKey.LeftArrow or ConsoleKey.PageUp:
+                delta = ScrollStep;
+                return true;
+            case ConsoleKey.DownArrow or ConsoleKey.RightArrow or ConsoleKey.PageDown:
+                delta = -ScrollStep;
+                return true;
+            default:
+                delta = 0;
+                return false;
+        }
+    }
+
+    /// <summary>Advances the scrollback by <paramref name="delta"/> rows and refreshes. Floors at the live bottom (0); the upper bound is clamped against the live content height in <see cref="BuildBody"/>.</summary>
+    private void ApplyScroll(LiveDisplayContext ctx, int delta)
+    {
+        lock (renderLock)
+        {
+            scrollOffset = Math.Max(0, scrollOffset + delta);
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+    }
+
     /// <summary>Builds the two-row Spectre layout (fixed 3-row header + flex body).</summary>
     private Layout BuildLayout()
     {
@@ -693,8 +757,11 @@ public sealed class ConsoleUiService
                 new Layout("header").Size(3),
                 new Layout("body").Ratio(1));
 
+        // Body first: it recomputes the scroll flags (scrollHasAbove/Below) the header's ▲▼
+        // glyphs read, so they reflect this same frame rather than lagging one behind.
+        IRenderable body = BuildBody();
         root["header"].Update(BuildHeader());
-        root["body"].Update(BuildBody());
+        root["body"].Update(body);
         return root;
     }
 
@@ -716,12 +783,21 @@ public sealed class ConsoleUiService
         // correctly aligned without any extra resize plumbing.
         string dustSegment = _dustSegment;
 
+        // Scrollback indicator: ▲ when older content sits above the viewport, ▼ when the user has
+        // scrolled up (content below). Each glyph is lit in the user colour when that direction is
+        // available, dim otherwise; the whole segment is omitted unless at least one is actionable
+        // so a live, fully-visible conversation keeps a clean header. BuildBody set these flags
+        // for this same frame (see BuildLayout's ordering), and only when scrolling is enabled.
+        string scrollSegment = scrollHasAbove || scrollHasBelow
+            ? $"   {(scrollHasAbove ? $"[{UserColor}]▲[/]" : "[grey50]▲[/]")}{(scrollHasBelow ? $"[{UserColor}]▼[/]" : "[grey50]▼[/]")}"
+            : string.Empty;
+
         // Markup uses [/] to close the tag — always run user-controlled strings through
         // Markup.Escape so a speaker name containing '[' can't break the layout.
         Markup content = new(
             $"[bold {speakerColor}]{Markup.Escape(currentSpeaker)}[/]   " +
             $"[grey54]conv[/] [bold {MorganaColor}]{Markup.Escape(shortId)}[/]" +
-            dustSegment);
+            dustSegment + scrollSegment);
 
         return new Panel(Align.Center(content, VerticalAlignment.Middle))
         {
@@ -764,21 +840,36 @@ public sealed class ConsoleUiService
             inputRows = inputRows.GetRange(inputRows.Count - bodyHeight, bodyHeight);
         }
 
-        List<IRenderable> streamingRows = BuildStreamingRows(termWidth);
-        int availableForStreaming = Math.Max(0, bodyHeight - inputRows.Count);
-        if (streamingRows.Count > availableForStreaming)
-        {
-            // Streaming buffer outgrew the room left under history. Drop head rows (oldest
-            // delta) so the tail — the latest tokens the user is reading right now — stays
-            // visible. History gets zero budget in this case; that's fine, the streaming
-            // pane is the focal element of the in-progress turn.
-            streamingRows = streamingRows.GetRange(streamingRows.Count - availableForStreaming, availableForStreaming);
-        }
+        // The scrollable content is the whole conversation stream: every history message
+        // (markdown + rich card, memoised per width) followed by the live streaming pane. We
+        // materialise it once — cheap, since each message's rows are cached — then take a window.
+        // The input row(s) are NOT part of the stream: they stay pinned at the bottom (the sacred
+        // prompt), so the content gets whatever height the input leaves free.
+        List<IRenderable> contentRows = [];
+        foreach (DisplayedMessage message in history)
+            contentRows.AddRange(RenderMessageRows(message, termWidth));
+        contentRows.AddRange(BuildStreamingRows(termWidth));
 
-        int historyBudget = Math.Max(0, bodyHeight - inputRows.Count - streamingRows.Count);
-        List<IRenderable> rows = new(historyBudget + streamingRows.Count + inputRows.Count);
-        AppendHistoryTail(rows, termWidth, historyBudget);
-        rows.AddRange(streamingRows);
+        int contentHeight = Math.Max(0, bodyHeight - inputRows.Count);
+
+        // Anchor the window. scrollOffset counts rows up from the bottom of the stream; clamp it
+        // to the live content so a resize or a shorter conversation can't strand the viewport off
+        // the end. Scrolling is only enabled at rest (see ReadKeysLoop), so during a turn the
+        // offset is 0 and this pins to the bottom — the previous live behaviour, unchanged.
+        int maxOffset = Math.Max(0, contentRows.Count - contentHeight);
+        scrollOffset = Math.Clamp(scrollOffset, 0, maxOffset);
+        int windowEnd = contentRows.Count - scrollOffset;
+        int windowStart = Math.Max(0, windowEnd - contentHeight);
+
+        // Light the header glyphs only when scrolling is actually actionable — don't tease ▲▼
+        // mid-stream or in QR mode, where the keys do nothing (or mean something else).
+        bool scrollable = !quickReplyActive && !awaitingResponse;
+        scrollHasAbove = scrollable && windowStart > 0;
+        scrollHasBelow = scrollable && scrollOffset > 0;
+
+        List<IRenderable> rows = new(contentHeight + inputRows.Count);
+        for (int i = windowStart; i < windowEnd; i++)
+            rows.Add(contentRows[i]);
         rows.AddRange(inputRows);
         return new Rows(rows);
     }
@@ -807,60 +898,6 @@ public sealed class ConsoleUiService
         // No speaker prefix on the streaming pane (matches prior behaviour); no caching —
         // the buffer changes every tick, and Markdig is cheap on these small payloads.
         return [.. MarkdownTerminalRenderService.RenderToRows(streamingDisplayed, MorganaAgentColor, null, termWidth)];
-    }
-
-    /// <summary>
-    /// Walks <see cref="history"/> from tail to head, summing wrap-row counts until it
-    /// covers <paramref name="budget"/> rows, then renders forward from that point so
-    /// the produced rows are exactly <paramref name="budget"/>-tall. If the head-side
-    /// message is partially visible, its leading wrap rows are skipped — that's the
-    /// sacrifice-head-never-tail invariant applied at row granularity.
-    /// </summary>
-    private void AppendHistoryTail(List<IRenderable> output, int termWidth, int budget)
-    {
-        if (budget == 0 || history.Count == 0)
-            return;
-
-        int firstMessageIdx = 0;
-        int skipFromFirst = 0;
-        int covered = 0;
-        for (int i = history.Count - 1; i >= 0; i--)
-        {
-            int wrapRows = MessageWrapRowCount(history[i], termWidth);
-            if (covered + wrapRows >= budget)
-            {
-                firstMessageIdx = i;
-                skipFromFirst = wrapRows - (budget - covered);
-                break;
-            }
-            covered += wrapRows;
-            firstMessageIdx = i;
-        }
-
-        for (int i = firstMessageIdx; i < history.Count; i++)
-        {
-            int skip = i == firstMessageIdx ? skipFromFirst : 0;
-            AppendMessageRows(output, history[i], termWidth, skip);
-        }
-    }
-
-    /// <summary>
-    /// Number of terminal rows <paramref name="message"/> spans at <paramref name="termWidth"/>,
-    /// computed by rendering it through the markdown pipeline (cached). Always ≥ 1.
-    /// </summary>
-    private static int MessageWrapRowCount(DisplayedMessage message, int termWidth)
-        => RenderMessageRows(message, termWidth).Count;
-
-    /// <summary>
-    /// Emits the cached markdown-rendered rows of <paramref name="message"/>, skipping the
-    /// first <paramref name="skipRows"/> head rows (the sacrifice-head-never-tail invariant
-    /// applied at row granularity).
-    /// </summary>
-    private static void AppendMessageRows(List<IRenderable> output, DisplayedMessage message, int termWidth, int skipRows)
-    {
-        List<Markup> rows = RenderMessageRows(message, termWidth);
-        for (int i = Math.Max(0, skipRows); i < rows.Count; i++)
-            output.Add(rows[i]);
     }
 
     /// <summary>
@@ -917,7 +954,7 @@ public sealed class ConsoleUiService
         // selectable options in place of the text input. The accent is the user colour because
         // this is the user's choice surface. Markup → IRenderable via the spread, as elsewhere.
         if (quickReplyActive && activeQuickReplies is { Count: > 0 } replies)
-            return [.. QuickReplyTerminalRenderService.RenderRows(replies, quickReplyIndex, UserColor, termWidth)];
+            return [.. QuickReplyTerminalRenderService.RenderQuickReplies(replies, quickReplyIndex, UserColor, termWidth)];
 
         if (awaitingResponse)
         {

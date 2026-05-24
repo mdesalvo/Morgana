@@ -13,17 +13,19 @@ namespace Grimoire.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Form adapts to option count: <b>≤2 options render horizontally</b> side-by-side (the "comfortable"
-/// case), <b>more than two stack vertically</b>. A horizontal row that would overrun the terminal
-/// width falls back to vertical, so the layout never breaks the "one <see cref="Markup"/> = one
-/// terminal row" invariant <see cref="ConsoleUiService.BuildBody"/> budgets against.
+/// Options always stack <b>vertically</b>, one per row, regardless of count — chosen for usability
+/// and predictability over a compact horizontal strip. Each option is truncated to the row width,
+/// so the layout never breaks the "one <see cref="Markup"/> = one terminal row" invariant
+/// <see cref="ConsoleUiService.BuildBody"/> budgets against.
 /// </para>
 /// <para>
-/// Parity with Cauldron: the <see cref="QuickReply.Label"/> is shown, the highlighted option reads
-/// inverted (dark text on the speaker/accent colour), and a <see cref="QuickReply.Termination"/>
-/// reply is tinted red to signal it closes the branch — exactly the role Cauldron's
-/// <c>.quick-reply-btn.termination</c> CSS class plays. The actual send (<see cref="QuickReply.Value"/>)
-/// is the caller's job; this service is pure presentation.
+/// Parity with Cauldron: the <see cref="QuickReply.Label"/> is shown and the highlighted option
+/// reads inverted (dark text on the speaker/accent colour). A <see cref="QuickReply.Termination"/>
+/// reply is tinted with the Morgana primary purple instead — where Cauldron's
+/// <c>.quick-reply-btn.termination</c> class warns in red, Grimoire reads the close more kindly:
+/// the primary signals that picking it ends the specialised branch and hands the conversation
+/// back to base Morgana. The actual send (<see cref="QuickReply.Value"/>) is the caller's job;
+/// this service is pure presentation.
 /// </para>
 /// </remarks>
 public static class QuickReplyTerminalRenderService
@@ -34,75 +36,39 @@ public static class QuickReplyTerminalRenderService
     /// <summary>Style of the leading affordance hint line.</summary>
     private const string HintStyle = "grey54 italic";
 
-    /// <summary>Highlight style for the selected option when it terminates the branch (red, since it ends the conversation thread).</summary>
-    private const string TerminationActive = "white on red";
+    /// <summary>Highlight style for the selected option when it terminates the branch: Morgana primary (<c>#8b5cf6</c>, matching <c>ConsoleUiService.MorganaColor</c> / Cauldron's <c>--primary-color</c>), signalling the return to base Morgana once the branch closes.</summary>
+    private const string TerminationActive = "white on #8b5cf6";
 
-    /// <summary>Resting style for a non-selected termination option.</summary>
-    private const string TerminationInactive = "red";
+    /// <summary>Resting style for a non-selected termination option — Morgana primary as foreground.</summary>
+    private const string TerminationInactive = "#8b5cf6";
 
     /// <summary>Affordance line: a TTY has no obvious "clickable button" cue, so spell out the controls.</summary>
     private const string HintText = "↑↓ move · Enter choose · Esc quit";
 
     /// <summary>
-    /// Renders <paramref name="options"/> with the entry at <paramref name="selectedIndex"/>
-    /// highlighted, tinting the active option / carets with <paramref name="accentColor"/>
-    /// (the channel's user colour). The first row is always the controls hint; the option
-    /// rows follow in the adaptive horizontal/vertical form. <paramref name="width"/> is the
-    /// terminal width available.
+    /// Renders <paramref name="quickReplies"/> with the entry at <paramref name="selectedIndex"/>
+    /// highlighted, tinting the active option / caret with <paramref name="accentColor"/>
+    /// (the channel's user colour). The first row is always the controls hint; the option rows
+    /// follow, one per row. <paramref name="width"/> is the terminal width available.
     /// </summary>
-    public static List<Markup> RenderRows(IReadOnlyList<QuickReply> options, int selectedIndex, string accentColor, int width)
+    public static List<Markup> RenderQuickReplies(IReadOnlyList<QuickReply> quickReplies, int selectedIndex, string accentColor, int width)
     {
         int termWidth = Math.Max(1, width);
         List<Markup> rows = WrapHint(termWidth);
-        if (options.Count == 0)
-            return rows; // defensive: callers only enter QR mode with a non-empty set
-
-        // ≤2 reads best on one line — but only if the chips actually fit; otherwise drop to the
-        // vertical list, which always fits because each option is truncated to the row width.
-        if (options.Count <= 2 && TryRenderHorizontal(options, selectedIndex, accentColor, termWidth, out Markup horizontal))
-        {
-            rows.Add(horizontal);
-            return rows;
-        }
-
-        for (int i = 0; i < options.Count; i++)
-            rows.Add(RenderVerticalOption(options[i], i == selectedIndex, accentColor, termWidth));
+        // Always vertical, one option per row, whatever the count (callers only enter QR mode with
+        // a non-empty set, so an empty loop here is simply a no-op beyond the hint).
+        for (int i = 0; i < quickReplies.Count; i++)
+            rows.Add(RenderQuickReply(quickReplies[i], i == selectedIndex, accentColor, termWidth));
         return rows;
     }
 
-    /// <summary>
-    /// Builds all options as chips on a single row separated by two spaces, measuring visible
-    /// columns as it goes (style tags cost none). Returns false — and the caller goes vertical —
-    /// when the assembled row would exceed <paramref name="width"/>.
-    /// </summary>
-    private static bool TryRenderHorizontal(IReadOnlyList<QuickReply> options, int selectedIndex, string accentColor, int width, out Markup row)
-    {
-        StringBuilder sb = new(width + 64);
-        int visible = 0;
-        for (int i = 0; i < options.Count; i++)
-        {
-            if (i > 0)
-            {
-                sb.Append("  ");
-                visible += 2;
-            }
-            bool active = i == selectedIndex;
-            AppendCaret(sb, active, accentColor);
-            string label = $" {options[i].Label} "; // one space of chip padding each side
-            sb.Append('[').Append(ChipStyle(options[i], active, accentColor)).Append(']').Append(Markup.Escape(label)).Append("[/]");
-            visible += 2 /* caret */ + label.Length;
-        }
-        row = new Markup(sb.ToString());
-        return visible <= width;
-    }
-
     /// <summary>Builds one option as its own row: a caret, then the space-padded label. The label is truncated so caret(2) + padding(2) + label never exceeds <paramref name="width"/>.</summary>
-    private static Markup RenderVerticalOption(QuickReply reply, bool active, string accentColor, int width)
+    private static Markup RenderQuickReply(QuickReply quickReply, bool active, string accentColor, int width)
     {
-        string label = Trunc(reply.Label, Math.Max(1, width - 4));
+        string label = Trunc(quickReply.Label, Math.Max(1, width - 4));
         StringBuilder sb = new(width + 32);
         AppendCaret(sb, active, accentColor);
-        sb.Append('[').Append(ChipStyle(reply, active, accentColor)).Append("] ").Append(Markup.Escape(label)).Append(" [/]");
+        sb.Append('[').Append(ChipStyle(quickReply, active, accentColor)).Append("] ").Append(Markup.Escape(label)).Append(" [/]");
         return new Markup(sb.ToString());
     }
 
@@ -117,8 +83,8 @@ public static class QuickReplyTerminalRenderService
 
     /// <summary>
     /// The chip body style. A normal option inverts to dark-on-accent when selected and rests on
-    /// the dim grey otherwise; a termination option swaps that ramp for red so "this ends the
-    /// thread" reads at a glance.
+    /// the dim grey otherwise; a termination option swaps that ramp for the Morgana primary so
+    /// "this closes the branch — back to Morgana" reads at a glance.
     /// </summary>
     private static string ChipStyle(QuickReply reply, bool active, string accentColor)
     {
