@@ -11,6 +11,7 @@
   <img src="https://img.shields.io/badge/OpenTelemetry-932BD4?logo=nuget" alt="OpenTelemetry"/><br/>
   <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/pulls/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana&color=9f7aea" alt="Morgana (Docker Pulls)"></a>
   <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/pulls/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron&color=9f7aea" alt="Cauldron (Docker Pulls)"></a>
+  <a href="https://hub.docker.com/r/mdesalvo/grimoire"><img src="https://img.shields.io/docker/pulls/mdesalvo/grimoire?logo=docker&logoColor=white&label=Grimoire&color=9f7aea" alt="Grimoire (Docker Pulls)"></a>
   <a href="https://hub.docker.com/r/mdesalvo/rune"><img src="https://img.shields.io/docker/pulls/mdesalvo/rune?logo=docker&logoColor=white&label=Rune&color=9f7aea" alt="Rune (Docker Pulls)"></a>
 </p>
 
@@ -77,7 +78,7 @@ graph LR
   %% Channels (reference clients, out-of-the-box)
   subgraph Channels["Channels"]
     CLD@{shape: rounded, label: "🌐 Cauldron"}
-    RUN@{shape: rounded, label: "📟 Rune"}
+    RUN@{shape: rounded, label: "📟 Grimoire/Rune"}
   end
 
   %% Backend boundary
@@ -152,7 +153,7 @@ graph LR
   %% Channels (reference clients, out-of-the-box)
   subgraph Channels["Channels"]
     CLD@{shape: rounded, label: "🌐 Cauldron"}
-    RUN@{shape: rounded, label: "📟 Rune"}
+    RUN@{shape: rounded, label: "📟 Grimoire/Rune"}
   end
 
   %% Backend boundary
@@ -242,11 +243,11 @@ docker compose up
 
 # ✅ Open your browser at http://localhost:5002
 
-# 💬 (Optional) Chat with Morgana via Rune's TUI in a separate terminal
-#    Rune owns the terminal (Spectre.Console Live UI), so it must be launched
+# 💬 (Optional) Chat with Morgana via Grimoire's TUI in a separate terminal
+#    Grimoire owns the terminal (Spectre.Console Live UI), so it must be launched
 #    interactively with `run --service-ports`, not via `up`. `--use-aliases`
-#    registers `rune` as a network alias so Morgana's webhook callback resolves.
-docker compose run --rm --service-ports --use-aliases rune
+#    registers `grimoire` as a network alias so Morgana's webhook callback resolves.
+docker compose run --rm --service-ports --use-aliases grimoire
 
 # 🛑 Stop the containers
 docker compose down
@@ -265,6 +266,7 @@ nano .env
 # 🔨 Build .NET projects (from project root)
 dotnet build ./Morgana
 dotnet build ./Channels/Cauldron
+dotnet build ./Channels/Grimoire
 dotnet build ./Channels/Rune
 
 # 🐳 Build Docker images
@@ -275,11 +277,11 @@ docker compose --env-file .env --env-file .env.versions up
 
 # ✅ Open your browser at http://localhost:5002
 
-# 💬 (Optional) Chat with Morgana via Rune's TUI in a separate terminal
-#    Rune owns the terminal (Spectre.Console Live UI), so it must be launched
+# 💬 (Optional) Chat with Morgana via Grimoire's TUI in a separate terminal
+#    Grimoire owns the terminal (Spectre.Console Live UI), so it must be launched
 #    interactively with `run --service-ports`, not via `up`. `--use-aliases`
-#    registers `rune` as a network alias so Morgana's webhook callback resolves.
-docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
+#    registers `grimoire` as a network alias so Morgana's webhook callback resolves.
+docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases grimoire
 
 # 🛑 Stop the containers
 docker compose --env-file .env --env-file .env.versions down

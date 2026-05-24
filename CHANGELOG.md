@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [0.24.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Grimoire — the Rich-TTY Reference Channel
+This release introduces **Grimoire**, a third reference channel that completes the **channel × capability matrix**: where Cauldron is the rich browser client and Rune is the poor-but-honest CLI, Grimoire is the **rich terminal** — the quadrant that was empty until now.
+Grimoire is the textual sibling of Cauldron — declaring the **full capability profile** (rich cards, quick replies, streaming, markdown, no length cap) over the **webhook** delivery mode. This makes Grimoire the proving ground for rendering Morgana's *vanilla* richness in a terminal — markdown becomes styled ANSI, rich cards become bordered boxes, quick replies become an arrow-key selector.
+Architecturally it reaffirms that Morgana adapts on the **capability profile, not the transport**: Grimoire and Rune share the very same webhook delivery, yet land at opposite ends of the expressivity spectrum purely by what they declare at the handshake.
+
+### ✨ Added
+- **Grimoire** reference channel at `Channels/Grimoire/` — a Spectre.Console CLI (Kestrel-hosted console app, HTTPS 5004) on the **webhook** delivery mode with the **full capability profile** (`SupportsRichCards/QuickReplies/Streaming/Markdown = true`, no `MaxMessageLength`). Onboards as its own JWT issuer (`iss=grimoire`, dedicated `Issuers[]` entry and symmetric key) and ships its own `Grimoire.Dockerfile`, a `profiles: ["tui"]` docker-compose service (launched interactively, like Rune) and Docker Hub publishing step — proving the channel abstraction supports a *rich* TTY with zero changes to Morgana core
+- **Terminal markdown rendering** (`MarkdownTerminalRenderService`): walks the Markdig AST into inline-styled, pre-wrapped single-row Spectre `Markup`s — headings, bold/italic, inline & fenced code, lists, links, blockquotes and horizontal rules — rendered **live during streaming** (re-parsed each typewriter tick, no raw→formatted snap on commit), at parity with Cauldron's bubble
+- **Terminal rich-card mapper** (`RichCardTerminalRenderService`): Spectrizes a `RichCard` into a hand-drawn bordered box of single-row markups covering all eight component types (text_block, key_value, divider, list, section, grid, badge, image), chrome tinted by speaker colour and body in a neutral grey ramp, at parity with Cauldron's card component tree
+- **Terminal quick-reply selection** (`QuickReplyTerminalRenderService`): the offered replies *become* the prompt for the turn — an arrow-key selector driven inside the live display (the keys move a `❯` caret, Enter sends the reply's `Value`, Esc exits), blocking free-text until answered, at parity with Cauldron locking its textarea
+- **Per-turn streaming** with a Cauldron-style typewriter (`AnsiConsole.Live` + two-buffer paced reveal), resize-aware via the `IViewportResizeWatcher` pattern
+- **Conversation scrollback** (pager): review long, verbose conversations that outgrow the viewport — ↑/←/PageUp toward older content, ↓/→/PageDown back toward the present (±5 rows), with ▲/▼ header glyphs lighting when scrolling that direction is available. Enabled only at rest (suppressed mid-stream and during a pending quick-reply), reset to live on every send
+
+### 🔄 Changed
+- **Rune gains conversation scrollback**, ported from Grimoire — the same pager (↑/←/PageUp · ↓/→/PageDown, ±5 rows, ▲/▼ header glyphs) so a long conversation that exceeds the viewport is no longer lost off the top. This is a **UX-only** addition: Rune's capability profile is **deliberately untouched** (all rich features off, `MaxMessageLength=500`), so it keeps its role as *the* reference channel that exercises `MorganaChannelAdapter`'s degradation path
+- **Framework formatting policy** (`morgana.json`) no longer forbids markdown: agents are now free to emit light markdown (emphasis, inline code, lists, headings, rules) in their message text. Channels that can't render it are downgraded automatically downstream by the channel adapter, so the LLM expresses formatting freely and the right surface adapts — Cauldron and Grimoire render it, Rune strips it
+
+### 🚀 Future Enablement
+- **Rich-TTY domain experiences** — Grimoire proves Morgana's *full* expressive surface (streaming, markdown, rich cards, quick replies) lives natively in a terminal, with no browser and no HTML. Pair it with your own plugins and your domain AI becomes a **rich command-line experience**: an ops console that renders structured cards, a runbook agent with guided quick replies, a headless-but-expressive CI assistant — everything Cauldron offers, shipped straight to the shell. Where 0.21's Rune opened *TTY-native domain AI*, Grimoire makes it **TTY-native and visually rich**
+- **Slash-command agentic extensions** — Grimoire's in-`Live` input model already multiplexes typed text, an arrow-key quick-reply selector and a scrollback pager over the same keyboard. That client-side command substrate is the natural foundation for local `/commands` (clear, export, jump-to-turn, search, theme) — turning the rich terminal from a pure conversation surface into an **interactive agentic console** without round-tripping every keystroke to Morgana
+
+
 ## [0.23.0] - 2026-05-22
 ### 🎯 Major Feature: Magic Dust — Token-Budget Protection
 This release introduces **Magic Dust**, a per-conversation **lifetime token budget** that guards Morgana **orthogonally to the rate limiter**: where the rate limiter caps message *frequency*, Magic Dust caps token *consumption*.

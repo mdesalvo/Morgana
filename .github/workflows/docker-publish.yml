@@ -74,3 +74,15 @@ jobs:
             ${{ env.DOCKER_USERNAME }}/rune:latest
           cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/rune:latest
           cache-to: type=inline
+
+      - name: Build and push Grimoire
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Channels/Grimoire/Grimoire.Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_USERNAME }}/grimoire:${{ steps.version.outputs.VERSION }}
+            ${{ env.DOCKER_USERNAME }}/grimoire:latest
+          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/grimoire:latest
+          cache-to: type=inline

@@ -18,18 +18,18 @@
     <Company>Marco De Salvo</Company>
     <Product>Morgana</Product>
     <Copyright>Marco De Salvo</Copyright>
-    
+
     <!-- Repository Information -->
     <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mdesalvo/Morgana.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseUrl>https://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
-    
+
     <!-- Common Description -->
     <Description>
-    Cauldron is a modular web layer that talks with the Morgana conversational AI framework.
-    Built on cutting-edge .NET 10 and leveraging the Blazor Server + SignalR development platform,
-    Cauldron is the official and recommended Morgana's frontend.
+    Grimoire is a rich-TTY reference channel that talks with the Morgana conversational AI framework.
+    Built on cutting-edge .NET 10 and leveraging the Spectre.Console terminal UI library, Grimoire is the textual sibling of Cauldron:
+    it consumes Morgana's full expressive surface (rich cards, quick replies, streaming, markdown, no length cap) over the webhook delivery mode and renders it as ANSI primitives.
     </Description>
 
   </PropertyGroup>
@@ -37,11 +37,11 @@
   <!-- Package References -->
   <ItemGroup>
     <!-- ASP.NET -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.*" />
     <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.*" />
     <!-- Services -->
     <PackageReference Include="Markdig" Version="1.2.*" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.18.*" />
+    <PackageReference Include="Spectre.Console" Version="0.55.2" />
   </ItemGroup>
 
 </Project>

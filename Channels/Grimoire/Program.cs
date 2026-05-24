@@ -1,0 +1,251 @@
+using System.Runtime.InteropServices;
+using System.Text;
+using Grimoire.Handlers;
+using Grimoire.Interfaces;
+using Grimoire.Messages.Contracts;
+using Grimoire.Services;
+using Spectre.Console;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+// ==============================================================================
+// GRIMOIRE - WEBHOOK CHANNEL FOR MORGANA
+// ==============================================================================
+// Grimoire is the rich-TTY reference channel for Morgana: a "textual Cauldron"
+// that consumes Morgana's full expressive surface (rich cards, quick replies,
+// streaming, markdown, no message-length cap) inside a Spectre.Console terminal
+// UI. Where Cauldron renders the full profile in HTML, Grimoire renders it as
+// ANSI primitives — content arrives integral, never degraded, and is Spectrized
+// locally rather than rewritten by MorganaChannelAdapter.
+//
+// Architecture: a Kestrel-hosted HTTPS listener on port 5004 receives inbound
+// ChannelMessage payloads at POST /morgana-hook (and incremental stream chunks
+// at POST /morgana-hook/chunk) and drives a Spectre.Console live display; user
+// input is captured from stdin and sent back to Morgana via the REST conversation
+// endpoints, authenticated with a self-issued JWT signed under iss=grimoire
+// (the matching entry must live in Morgana's Authentication:Issuers).
+
+// ==============================================================================
+// 1. CONSOLE ENCODING - UTF-8 I/O
+// ==============================================================================
+// On Windows the default OutputEncoding is the OEM/ANSI code page (CP437/CP850/CP1252),
+// none of which covers the BMP glyphs Grimoire renders: the header arrow (→ U+2192),
+// the input prompt chevron (› U+203A), the conversation-id ellipsis (… U+2026), and
+// the courtesy dashes. Under those code pages the console falls back to the "symbol
+// for delete" glyph (␦), which looks like a tofu box to the user. Forcing both streams
+// to UTF-8 up front is idempotent on Linux/macOS (already UTF-8) and makes Spectre's
+// Unicode output render correctly on Windows without asking the user to chcp 65001.
+Console.OutputEncoding = Encoding.UTF8;
+Console.InputEncoding  = Encoding.UTF8;
+
+// ==============================================================================
+// 2. TTY GATE - FAIL CLOSED ON NON-INTERACTIVE TERMINALS
+// ==============================================================================
+// Spectre.Console's Live UI requires a real PTY: ANSI escape support and a blocking
+// Console.ReadKey. Non-interactive hosts (IDE run windows, CI, redirected or piped
+// output, headless processes) capture stdout but don't expose one, so Spectre
+// silently refuses to render and the user sees an empty screen. Detect this at
+// startup and exit with an actionable message instead of a blank terminal.
+if (!AnsiConsole.Profile.Capabilities.Interactive)
+{
+    Console.WriteLine("Grimoire requires an interactive TTY but the current output stream is not one. Launch it from a real terminal emulator (bash, zsh, pwsh, ...); if you are running it from an IDE, enable the equivalent of 'emulate terminal' on the run configuration.");
+    return;
+}
+
+// ==============================================================================
+// 3. LOGGING - KEEP THE TUI CLEAN
+// ==============================================================================
+// Spectre.Console renders over the terminal via Live, so any stray log line from
+// Kestrel/ASP.NET Core corrupts the layout. Drop all providers; errors still
+// surface through explicit UI messages (see ConsoleUiService's red system line).
+builder.Logging.ClearProviders();
+
+// ==============================================================================
+// 4. OUTBOUND TO MORGANA - JWT + HTTP CLIENT
+// ==============================================================================
+// MorganaAuthHandler self-issues short-lived JWTs with iss=grimoire on each request.
+// The named HttpClient "Morgana" targets the Morgana base URL from configuration
+// and runs through the handler so the Authorization header is set automatically.
+builder.Services.AddTransient<MorganaAuthHandler>();
+builder.Services.AddHttpClient("Morgana", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Grimoire:MorganaURL"]!);
+}).AddHttpMessageHandler<MorganaAuthHandler>();
+
+// ==============================================================================
+// 5. SERVICES
+// ==============================================================================
+// MorganaClientService     : wraps start/send/end conversation lifecycle.
+// WebhookReceiverService   : thin dispatcher invoked by the /morgana-hook endpoint.
+// ConsoleUiService         : Spectre.Console Live(Layout) with sticky header + REPL body.
+// All singletons: the process hosts exactly one Grimoire "session" at a time.
+builder.Services.AddSingleton<MorganaClientService>();
+builder.Services.AddSingleton<WebhookReceiverService>();
+builder.Services.AddSingleton<ConsoleUiService>();
+builder.Services.AddSingleton<LandingMessageService>();
+
+// ==============================================================================
+// 5a. VIEWPORT RESIZE WATCHER - PLATFORM-SPECIFIC STRATEGY
+// ==============================================================================
+// ConsoleUiService keeps a fixed-viewport history slice anchored to the current terminal
+// size. It needs a notification whenever the user resizes the host window so the
+// slice can be recomputed without polling on every keystroke. Two strategies:
+//   - POSIX (Linux + macOS): SIGWINCH delivered by the kernel — zero idle CPU.
+//   - Windows: no SIGWINCH equivalent at this layer, fall back to a 250 ms
+//     Console.Window* comparison loop.
+// The decision is made once, here, and the chosen implementation is injected
+// into ConsoleUiService via DI so the UI itself stays platform-agnostic.
+if (OperatingSystem.IsWindows())
+    builder.Services.AddSingleton<IViewportResizeWatcher, PollingResizeWatcherService>();
+else
+    builder.Services.AddSingleton<IViewportResizeWatcher, SigWinchResizeWatcherService>();
+
+WebApplication app = builder.Build();
+
+// ==============================================================================
+// 5b. SIGHUP HANDLER - GRACEFUL EXIT WHEN THE PARENT TTY DIES
+// ==============================================================================
+// .NET's WebApplication host already wires SIGTERM/SIGINT to ApplicationStopping
+// on every platform. On POSIX, closing the host terminal window also sends SIGHUP
+// to the foreground process group, but SIGHUP is *not* handled by default:
+// without this registration, the docker CLI dies, the Grimoire container keeps
+// running, --rm never fires, and `compose down` then complains that
+// morgana-network is still in use. Hooking SIGHUP to StopApplication makes the
+// brutal-close case clean. Skipped on Windows because SIGHUP has no mapping
+// there — the equivalent (CTRL_CLOSE_EVENT on the console X button) is already
+// delivered as SIGTERM, which the host handles natively.
+PosixSignalRegistration? sighupRegistration = OperatingSystem.IsWindows()
+    ? null
+    : PosixSignalRegistration.Create(PosixSignal.SIGHUP, ctx =>
+    {
+        ctx.Cancel = true;
+        app.Lifetime.StopApplication();
+    });
+
+// ==============================================================================
+// 6. LANDING MESSAGE - FILL THE STARTUP SILENCE
+// ==============================================================================
+// Between app.StartAsync (Kestrel bind), morganaClientService.StartConversationAsync
+// (TLS + JWT + Morgana-side actor creation) and the arrival of the first webhook
+// from Morgana, the terminal stays empty for ~0.5–2s. Print a random themed line
+// on stdout now so the user sees something alive while the boring plumbing runs.
+// The line is overwritten cleanly by AnsiConsole.Clear() just before uiService.RunAsync,
+// so it disappears the moment the Live UI takes over — same feel as Cauldron's
+// magic-sparkle splash.
+LandingMessageService landingMessageService = app.Services.GetRequiredService<LandingMessageService>();
+AnsiConsole.MarkupLine($"[italic grey70]{Markup.Escape(landingMessageService.GetLandingMessage())}[/]");
+
+// ==============================================================================
+// 7. INBOUND WEBHOOK ENDPOINT
+// ==============================================================================
+// Morgana POSTs a serialized ChannelMessage here on every outbound turn (no JWT
+// today — trust model is asymmetric by design, matching the WebhookChannelService
+// convention). Bind the payload and hand it to the dispatcher.
+app.MapPost("/morgana-hook", async (HttpContext httpContext, WebhookReceiverService receiverService) =>
+{
+    ChannelMessage? message = await httpContext.Request.ReadFromJsonAsync<ChannelMessage>();
+    if (message is null)
+        return Results.BadRequest();
+    receiverService.Dispatch(message);
+    return Results.Ok();
+});
+
+// Streaming chunk endpoint — counterpart of WebhookChannelService.SendStreamChunkAsync.
+// Each POST carries an incremental delta of the agent's response; the ConsoleUiService
+// accumulates them into a per-turn buffer rendered live, then commits to the transcript
+// when the final ChannelMessage lands on /morgana-hook.
+app.MapPost("/morgana-hook/chunk", async (HttpContext httpContext, WebhookReceiverService receiverService) =>
+{
+    StreamChunkRequest? chunk = await httpContext.Request.ReadFromJsonAsync<StreamChunkRequest>();
+    if (chunk is null)
+        return Results.BadRequest();
+    receiverService.DispatchChunk(chunk);
+    return Results.Ok();
+});
+
+// ==============================================================================
+// 8. LIFECYCLE
+// ==============================================================================
+// Start Kestrel asynchronously (the UI must be on the main thread), wire the
+// webhook → UI callback, open a conversation with Morgana, hand over to the
+// ConsoleUiService loop, and on exit gracefully end the conversation and stop Kestrel.
+await app.StartAsync();
+
+MorganaClientService morganaClientService = app.Services.GetRequiredService<MorganaClientService>();
+WebhookReceiverService webhook = app.Services.GetRequiredService<WebhookReceiverService>();
+ConsoleUiService uiService = app.Services.GetRequiredService<ConsoleUiService>();
+
+// Two-step wiring of the webhook callback: the first inbound ChannelMessage fires
+// a TaskCompletionSource so we can gate the UI handover on "Morgana has actually
+// started talking", then every message (including the first) is queued into the
+// ConsoleUiService incoming channel. Without this gate we'd clear the landing and enter
+// the Live Layout the moment StartConversationAsync returns (202 Accepted, fast),
+// leaving the user staring at an empty panel for ~1–2s while Morgana's presentation
+// message is still in flight over the webhook — exactly the "black screen" the
+// landing was meant to avoid.
+TaskCompletionSource firstMessageReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+webhook.OnMessage = message =>
+{
+    firstMessageReady.TrySetResult();
+    uiService.EnqueueIncoming(message);
+};
+webhook.OnChunk = chunk => uiService.EnqueueChunk(chunk.ChunkText);
+
+string conversationId;
+try
+{
+    conversationId = await morganaClientService.StartConversationAsync();
+}
+catch (Exception ex)
+{
+    AnsiConsole.MarkupLine($"[red]Failed to open conversation with Morgana:[/] {Markup.Escape(ex.Message)}");
+    await app.StopAsync();
+    return;
+}
+
+// Wait for the first webhook delivery, bounded to a sensible timeout. If Morgana
+// doesn't send anything within the budget (backend down, stuck actor, firewall
+// blocking the callback URL), we still enter the UI — an empty Layout is a better
+// end-state than a terminal stuck forever on the landing line. The message that
+// triggered the TCS is already in the ConsoleUiService queue and gets drained on the
+// first DrainIncomingLoop iteration, so the presentation lands instantly.
+//
+// Grimoire:StartupTimeoutSeconds governs the budget (default 30s). Raising it helps on
+// slow LLM providers with cold starts; lowering it makes the "Morgana isn't
+// answering" state visible sooner. Non-positive values fall back to the default to
+// avoid a zero-timeout that would swallow the wait altogether.
+int startupTimeoutSeconds = app.Configuration.GetValue<int?>("Grimoire:StartupTimeoutSeconds") ?? 30;
+if (startupTimeoutSeconds <= 0)
+    startupTimeoutSeconds = 30;
+try
+{
+    await firstMessageReady.Task.WaitAsync(TimeSpan.FromSeconds(startupTimeoutSeconds));
+}
+catch (TimeoutException)
+{
+    // Morgana didn't deliver a presentation in time — proceed to the UI anyway.
+}
+
+// The landing line (and any transient startup noise) gets wiped out here so the
+// Live Layout takes over a clean terminal — Live would otherwise start painting
+// beneath the landing line, leaving it orphaned in the scrollback.
+AnsiConsole.Clear();
+
+try
+{
+    // Pass the host lifetime token so SIGTERM / SIGINT / SIGHUP (registered above)
+    // tear the UI loop down cleanly instead of leaving it polling stdin in a dead
+    // container. The finally block then ends the conversation and stops Kestrel,
+    // letting the .NET process exit so docker's --rm reclaims the container and
+    // releases morgana-network.
+    await uiService.RunAsync(
+        conversationId,
+        text => morganaClientService.SendMessageAsync(conversationId, text),
+        app.Lifetime.ApplicationStopping);
+}
+finally
+{
+    sighupRegistration?.Dispose();
+    await morganaClientService.EndConversationAsync(conversationId);
+    await app.StopAsync();
+}
