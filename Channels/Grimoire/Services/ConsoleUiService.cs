@@ -679,38 +679,29 @@ public sealed class ConsoleUiService
     }
 
     /// <summary>
-    /// Renders <see cref="streamingDisplayed"/> as a list of pre-wrapped single-row markups
-    /// styled in the specialised-agent color. Streaming is assumed to originate from agents
-    /// (base Morgana turns ship as single messages, not chunked) so the pane uses
-    /// <see cref="MorganaAgentColor"/> without needing to thread an agent-name field through
-    /// the chunk wire shape. Returns an empty list when no character has been revealed yet —
-    /// keeping the prompt area otherwise unchanged.
+    /// Renders <see cref="streamingDisplayed"/> through the markdown pipeline as a list of
+    /// pre-wrapped single-row markups, with prose tinted in the specialised-agent color.
+    /// Streaming is assumed to originate from agents (base Morgana turns ship as single
+    /// messages, not chunked) so the pane uses <see cref="MorganaAgentColor"/> as the base
+    /// without threading an agent-name field through the chunk wire shape. Returns an empty
+    /// list when no character has been revealed yet — keeping the prompt area unchanged.
     /// </summary>
     /// <remarks>
-    /// The buffer can carry embedded newlines (LLMs frequently emit them); they are honoured
-    /// as hard row breaks the same way <see cref="AppendMessageRows"/> does, then each line
-    /// is char-wrapped at <paramref name="termWidth"/>. Every emitted Markup is therefore a
-    /// single visual row — Spectre can't surprise us into inflating one into multiple terminal
-    /// rows behind the budget accounting in <see cref="BuildBody"/>.
+    /// Markdown is rendered <em>live</em>, exactly like Cauldron's bubble (which runs
+    /// <c>MarkdownRendererService.ToHtml</c> on every re-render, streaming included): the
+    /// buffer is re-parsed each typewriter tick, so syntax resolves progressively as the
+    /// closing tokens arrive and there is no grezzo→formatted "snap" when the turn commits
+    /// to history. <see cref="MarkdownTerminalRenderService.Wrap"/> still guarantees one terminal
+    /// row per <see cref="Markup"/>, so the budget accounting in <see cref="BuildBody"/> holds.
     /// </remarks>
     private List<IRenderable> BuildStreamingRows(int termWidth)
     {
         if (streamingDisplayed.Length == 0)
             return [];
 
-        List<IRenderable> rows = [];
-        foreach (string line in streamingDisplayed.Split('\n'))
-        {
-            int lineRows = line.Length == 0 ? 1 : (line.Length + termWidth - 1) / termWidth;
-            for (int rowInLine = 0; rowInLine < lineRows; rowInLine++)
-            {
-                int offset = rowInLine * termWidth;
-                int chunkLen = Math.Min(termWidth, Math.Max(0, line.Length - offset));
-                string chunk = chunkLen > 0 ? line.Substring(offset, chunkLen) : string.Empty;
-                rows.Add(new Markup($"[{MorganaAgentColor}]{Markup.Escape(chunk)}[/]"));
-            }
-        }
-        return rows;
+        // No speaker prefix on the streaming pane (matches prior behaviour); no caching —
+        // the buffer changes every tick, and Markdig is cheap on these small payloads.
+        return [.. MarkdownTerminalRenderService.RenderToRows(streamingDisplayed, MorganaAgentColor, null, termWidth)];
     }
 
     /// <summary>
@@ -749,86 +740,42 @@ public sealed class ConsoleUiService
     }
 
     /// <summary>
-    /// Number of terminal rows the rendered <c>"Who: Text"</c> spans at
-    /// <paramref name="termWidth"/>. Splits the rendered string on embedded newlines
-    /// first (Spectre's <see cref="Markup"/> honours <c>\n</c> as a hard row break,
-    /// so an LLM reply with <c>...?\n\n#INT#</c> renders as three rows even if its
-    /// total char count fits in one terminal row), then char-wraps each line at
-    /// <paramref name="termWidth"/>. Empty messages and trailing empty lines still
-    /// contribute one row each, matching what Spectre actually paints.
+    /// Number of terminal rows <paramref name="message"/> spans at <paramref name="termWidth"/>,
+    /// computed by rendering it through the markdown pipeline (cached). Always ≥ 1.
     /// </summary>
     private static int MessageWrapRowCount(DisplayedMessage message, int termWidth)
+        => RenderMessageRows(message, termWidth).Count;
+
+    /// <summary>
+    /// Emits the cached markdown-rendered rows of <paramref name="message"/>, skipping the
+    /// first <paramref name="skipRows"/> head rows (the sacrifice-head-never-tail invariant
+    /// applied at row granularity).
+    /// </summary>
+    private static void AppendMessageRows(List<IRenderable> output, DisplayedMessage message, int termWidth, int skipRows)
     {
-        string fullText = $"{message.Who}: {message.Text}";
-        int total = fullText.Split('\n')
-                            .Sum(line => line.Length == 0 ? 1 : (line.Length + termWidth - 1) / termWidth);
-        return Math.Max(1, total);
+        List<Markup> rows = RenderMessageRows(message, termWidth);
+        for (int i = Math.Max(0, skipRows); i < rows.Count; i++)
+            output.Add(rows[i]);
     }
 
     /// <summary>
-    /// Emits one <see cref="Markup"/> per wrap-row of <paramref name="message"/>, skipping
-    /// the first <paramref name="skipRows"/> head rows. The entire message body is tinted
-    /// in the speaker colour (magenta1 for Morgana, hotpink for specialised agents,
-    /// skyblue1 for the user); the leading <c>Who:</c> prefix on the first row is the
-    /// same colour but bold, so the speaker tag stands out without breaking colour
-    /// continuity across wrap rows.
+    /// Renders <paramref name="message"/> to single-row markups: its text through
+    /// <see cref="MarkdownTerminalRenderService"/> with the speaker colour as base prose colour and
+    /// a bold <c>"Who: "</c> prefix on the first row. The result is memoised on the message
+    /// keyed by <paramref name="termWidth"/> so the typewriter's 15 ms ticks — which re-render
+    /// the whole body — don't re-parse markdown for every history entry on every frame. The
+    /// cache invalidates automatically when the terminal width changes (resize).
     /// </summary>
-    /// <remarks>
-    /// Mirrors <see cref="MessageWrapRowCount"/>: embedded newlines split the text into
-    /// independent lines, each char-wrapped at <paramref name="termWidth"/>. Every
-    /// emitted <see cref="Markup"/> is a single-line, single-row payload — no <c>\n</c>
-    /// inside, no longer than <paramref name="termWidth"/> visible columns — so Spectre
-    /// can never inflate it into multiple terminal rows behind the viewport budget's
-    /// back. That contract is what keeps the sacred prompt and the conversation tail
-    /// from being cropped by Spectre when a message with newlines slips into history.
-    /// </remarks>
-    private static void AppendMessageRows(List<IRenderable> output, DisplayedMessage message, int termWidth, int skipRows)
+    /// <remarks>Mutates <paramref name="message"/>'s cache fields; always invoked under <see cref="renderLock"/> via <see cref="BuildBody"/>.</remarks>
+    private static List<Markup> RenderMessageRows(DisplayedMessage message, int termWidth)
     {
-        string fullText = $"{message.Who}: {message.Text}";
+        if (message.CachedWidth == termWidth && message.CachedRows is not null)
+            return message.CachedRows;
 
-        int rowsSeen = 0;
-        foreach (string line in fullText.Split('\n'))
-        {
-            int lineRows = line.Length == 0 ? 1 : (line.Length + termWidth - 1) / termWidth;
-            for (int rowInLine = 0; rowInLine < lineRows; rowInLine++)
-            {
-                if (rowsSeen >= skipRows)
-                {
-                    int offset = rowInLine * termWidth;
-                    int chunkLen = Math.Min(termWidth, Math.Max(0, line.Length - offset));
-                    string chunk = chunkLen > 0 ? line.Substring(offset, chunkLen) : string.Empty;
-                    EmitMessageRow(output, message, chunk, isFirstRowOfMessage: rowsSeen == 0);
-                }
-                rowsSeen++;
-            }
-        }
-    }
-
-    /// <summary>Renders a single pre-wrapped row of a message: bold "Who:" prefix on the very first row, same speaker colour without bold on every other row.</summary>
-    private static void EmitMessageRow(List<IRenderable> output, DisplayedMessage message, string chunk, bool isFirstRowOfMessage)
-    {
-        if (isFirstRowOfMessage)
-        {
-            // First row of the message — bold the "Who:" prefix, then the rest of the
-            // row in the same colour but non-bold. If the speaker name itself wraps
-            // past the colon, fall back to bolding the whole chunk so the message
-            // still visually starts emphasised.
-            int colonIdx = chunk.IndexOf(':');
-            if (colonIdx > 0 && colonIdx < chunk.Length)
-            {
-                string who = chunk[..colonIdx];
-                string rest = chunk[(colonIdx + 1)..];
-                output.Add(new Markup($"[bold {message.Color}]{Markup.Escape(who)}:[/][{message.Color}]{Markup.Escape(rest)}[/]"));
-            }
-            else
-            {
-                output.Add(new Markup($"[bold {message.Color}]{Markup.Escape(chunk)}[/]"));
-            }
-        }
-        else
-        {
-            output.Add(new Markup($"[{message.Color}]{Markup.Escape(chunk)}[/]"));
-        }
+        List<Markup> rows = MarkdownTerminalRenderService.RenderToRows(message.Text, message.Color, $"{message.Who}: ", termWidth);
+        message.CachedRows = rows;
+        message.CachedWidth = termWidth;
+        return rows;
     }
 
     /// <summary>
@@ -948,8 +895,25 @@ public sealed class ConsoleUiService
     private static bool IsSpecializedAgent(string? agentName) =>
         agentName is not null && agentName.Contains('(') && agentName.Contains(')');
 
-    /// <summary>A single history row: speaker name, rendered text, and the Spectre color token used for the name.</summary>
-    private record DisplayedMessage(string Who, string Text, string Color);
+    /// <summary>
+    /// A single history entry: speaker name, raw (markdown) text, and the base Spectre colour
+    /// token for the speaker. Carries a per-width memo of the rendered rows so the typewriter's
+    /// per-tick full-body redraw doesn't re-parse markdown for stable history on every frame —
+    /// see <see cref="RenderMessageRows"/>. A class (not a record) because the cache fields are
+    /// mutated in place after construction.
+    /// </summary>
+    private sealed class DisplayedMessage(string who, string text, string color)
+    {
+        public string Who { get; } = who;
+        public string Text { get; } = text;
+        public string Color { get; } = color;
+
+        /// <summary>Terminal width the cached rows were wrapped at, or -1 when never rendered.</summary>
+        public int CachedWidth { get; set; } = -1;
+
+        /// <summary>Memoised rendered rows valid for <see cref="CachedWidth"/>, or null when stale.</summary>
+        public List<Markup>? CachedRows { get; set; }
+    }
 
     /// <summary>
     /// Tagged union for items posted to <see cref="inbound"/>: full <see cref="ChannelMessage"/>s
