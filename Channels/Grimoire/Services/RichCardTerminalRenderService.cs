@@ -21,8 +21,9 @@ namespace Grimoire.Services;
 /// <list type="bullet">
 ///   <item><c>text_block</c> → styled prose rows (Normal/Bold/Muted/Small map to grey ramps —
 ///     a TTY can't shrink the glyph, so Small dims like Muted).</item>
-///   <item><c>key_value</c> → a left key + right-aligned value on one row when it fits, else
-///     stacked; <c>Emphasize</c> bolds both (mirrors Cauldron's highlighted row).</item>
+///   <item><c>key_value</c> → a left key + right-aligned value on one row when it fits, else the
+///     key over a wrapped (not truncated) value; <c>Emphasize</c> bolds both (mirrors Cauldron's
+///     highlighted row).</item>
 ///   <item><c>divider</c> → an inner dim rule spanning the content width.</item>
 ///   <item><c>list</c> → <c>✦</c> bullets (Cauldron's marker), <c>n.</c> ordinals or plain rows,
 ///     with hanging-indent continuations.</item>
@@ -176,12 +177,13 @@ public static class RichCardTerminalRenderService
             return [Content([new CardSeg(key, keyStyle), new CardSeg(new string(' ', fill), ""), new CardSeg(value, valueStyle)])];
         }
 
-        // Doesn't fit on one row: stack the key (left) over the value, the value still
-        // right-aligned by leading filler. Both are truncated to the content width so neither
-        // line can overflow and break the single-row-per-Markup contract.
-        List<CardLine> lines = [Content([new CardSeg(Trunc(key, width), keyStyle)])];
-        string clippedValue = Trunc(value, width);
-        lines.Add(Content([new CardSeg(new string(' ', width - clippedValue.Length), ""), new CardSeg(clippedValue, valueStyle)]));
+        // Doesn't fit on one row: stack the key over the value, both wrapped to the content width
+        // and left-aligned. We WRAP rather than truncate so a long prose value (e.g. a profile
+        // "Details" field) is preserved in full instead of being cut with an ellipsis — each
+        // wrapped slice becomes its own single-row CardLine. Key (dim) and value (bright) stay
+        // visually distinct by colour alone, so no indentation is needed.
+        List<CardLine> lines = [.. WrapText(key, width).Select(slice => Content([new CardSeg(slice, keyStyle)]))];
+        lines.AddRange(WrapText(value, width).Select(slice => Content([new CardSeg(slice, valueStyle)])));
         return lines;
     }
 
@@ -303,13 +305,14 @@ public static class RichCardTerminalRenderService
     private static List<CardLine> BuildImage(Messages.Contracts.ImageComponent image, int width)
     {
         // No bitmap rendering and no OSC 8 hyperlinks (the frozen low-effort decision): surface the
-        // image as honest text — an "[image: alt]" tag, the raw URL on its own line, and an optional
-        // italic caption. All dim, since it's metadata about content the terminal can't actually show.
+        // image as honest text — an "[image: alt]" tag, the URL, and an optional italic caption.
+        // All dim, since it's metadata about content the terminal can't actually show. The URL is
+        // WRAPPED, not truncated: a clipped URL is useless (can't be read or copied), so we'd
+        // rather spend a couple of rows and keep it whole.
         string alt = string.IsNullOrWhiteSpace(image.Alt) ? "image" : Plain(image.Alt);
-        List<CardSeg> head = [new CardSeg(Trunc($"[image: {alt}]", width), MutedForeground)];
-        List<CardLine> output = [Content(head)];
+        List<CardLine> output = [.. WrapText($"[image: {alt}]", width).Select(slice => Content([new CardSeg(slice, MutedForeground)]))];
         if (!string.IsNullOrWhiteSpace(image.Src))
-            output.Add(Content([new CardSeg(Trunc($"({image.Src})", width), MutedForeground)]));
+            output.AddRange(WrapText($"({image.Src})", width).Select(slice => Content([new CardSeg(slice, MutedForeground)])));
         if (!string.IsNullOrWhiteSpace(image.Caption))
             foreach (string slice in WrapText(Plain(image.Caption), width))
                 output.Add(Content([new CardSeg(slice, $"{MutedForeground} italic")]));
