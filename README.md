@@ -1,5 +1,5 @@
 <a href="https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Morgana-Handbook.html" title="Morgana Handbook">
-  <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-Banner.jpg" alt="Morgana Logo" width="100%" />
+  <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Banner.jpg" alt="Morgana Logo" width="100%" />
 </a>
 
 <p>
@@ -29,19 +29,39 @@ Morgana will kindly assist you with her magical AI potions just the way you **ne
   </tr>
   <tr>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-SparkleLoader.jpg?raw=true" alt="Morgana Sparkle Loader"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-SparkleLoader.jpg" alt="Morgana - Sparkle Loader (Cauldron)"/>
     </td>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-Presentation.jpg?raw=true" alt="Morgana Presentation"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Presentation.jpg" alt="Morgana - Presentation (Cauldron)"/>
     </td>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-Chatting.jpg?raw=true" alt="Morgana Chatting"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Chatting.jpg" alt="Morgana - Chatting (Cauldron)"/>
     </td>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-Agent.jpg?raw=true" alt="Morgana Agent"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Agent.jpg" alt="Morgana - Agent (Cauldron)"/>
     </td>
     <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-RichCards.jpg?raw=true" alt="Morgana Rich Cards"/>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Agent2.jpg" alt="Morgana - Agent2 (Cauldron)"/>
+    </td>
+  </tr>
+  <tr>
+    <th colspan=5>Grimoire (TTY Channel)</th>
+  </tr>
+  <tr>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-SparkleLoaderGRM.jpg" alt="Morgana - Sparkle Loader (Grimoire)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-PresentationGRM.jpg" alt="Morgana - Presentation (Grimoire)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-ChattingGRM.jpg" alt="Morgana - Chatting (Grimoire)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-AgentGRM.jpg" alt="Morgana - Agent (Grimoire)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-Agent2GRM.jpg" alt="Morgana - Agent2 (Grimoire)"/>
     </td>
   </tr>
 </table>

@@ -354,7 +354,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page">
       <h2>Architecture Overview</h2>
-      <p>Morgana is a <strong>conversational AI framework</strong> built on a multi-agent, intent-driven architecture. It is <strong>multi-channel by design</strong>: the backend intelligence (<strong>Morgana</strong>) is decoupled from the channels users actually reach it through, and ships with <strong>two reference channels out-of-the-box</strong> &mdash; <strong>Cauldron</strong> (HTML / Blazor Server, rich UI over SignalR) and <strong>Rune</strong> (TTY / Spectre.Console, poor-but-honest CLI over webhook). Every channel advertises its <strong>capability budget</strong> at conversation start, Morgana adapts its outbound expressivity accordingly, and each channel authenticates with its own JWT issuer.</p>
+      <p>Morgana is a <strong>conversational AI framework</strong> built on a multi-agent, intent-driven architecture. It is <strong>multi-channel by design</strong>: the backend intelligence (<strong>Morgana</strong>) is decoupled from the channels users actually reach it through, and ships with <strong>three reference channels out-of-the-box</strong> &mdash; <strong>Cauldron</strong> (HTML / Blazor Server, rich UI over SignalR), <strong>Grimoire</strong> (TTY / Spectre.Console, rich CLI over webhook) and <strong>Rune</strong> (TTY / Spectre.Console, poor-but-honest CLI over webhook). Every channel advertises its <strong>capability budget</strong> at conversation start, Morgana adapts its outbound expressivity accordingly, and each channel authenticates with its own JWT issuer.</p>
       <p>Morgana <strong>reimagines conversational AI</strong> through 4 foundational pillars that <strong>work in harmony</strong> to deliver an <strong>orchestration framework</strong> that is powerful yet remarkably simple to configure.</p>
       
       <div class="pillars">
@@ -386,6 +386,7 @@
         <tbody>
           <tr><td><strong>Morgana</strong></td><td>Backend &mdash; SignalR Hub, Actors, Agents</td><td>ASP.NET 10, Akka.NET, Microsoft.Agents.AI</td><td>5001</td></tr>
           <tr><td><strong>Cauldron</strong></td><td>Reference channel &mdash; HTML rich UI (SignalR delivery, full capability budget)</td><td>Blazor Server</td><td>5002</td></tr>
+          <tr><td><strong>Grimoire</strong></td><td>Reference channel &mdash; TTY rich CLI (webhook delivery, full capability budget)</td><td>Spectre.Console on Kestrel</td><td>5004</td></tr>
           <tr><td><strong>Rune</strong></td><td>Reference channel &mdash; TTY CLI (webhook delivery, poor-but-honest capability budget)</td><td>Spectre.Console on Kestrel</td><td>5003</td></tr>
           <tr><td><strong>LLM</strong></td><td>Language model provider</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>&mdash;</td></tr>
           <tr><td><strong>MCP Server</strong></td><td>External tool provider (optional)</td><td>Model Context Protocol</td><td>&mdash;</td></tr>
@@ -441,7 +442,7 @@
       <h3>Authentication Flow</h3>
       <div class="flow-box">
         <span class="actor">Channel</span>
-        <span style="font-size:10px;">(Cauldron <code>iss=cauldron</code> &middot; Rune <code>iss=rune</code> &mdash; each self-issues JWTs signed with its own shared key)</span>
+        <span style="font-size:10px;">(Cauldron <code>iss=cauldron</code> &middot; Grimoire <code>iss=grimoire</code> &middot; Rune <code>iss=rune</code> &mdash; each self-issues JWTs signed with its own shared key)</span>
         <span class="arrow">&rarr;</span><br/>
         <span style="font-size:10px;">Bearer token in HTTP &amp; SignalR / Webhook</span>
         <span class="arrow">&rarr;</span><br/>
@@ -472,7 +473,7 @@
           <tr><td>Morgana:LLM:{Provider}:*</td><td>Provider-specific settings (ApiKey, Model, Endpoint, ...)</td></tr>
           <tr><td>Morgana:LLM:{Provider}:MagicDust:*</td><td>Per-provider token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
           <tr><td>Morgana:Authentication:Audience</td><td>Expected JWT audience (default: <code>morgana.ai</code>)</td></tr>
-          <tr><td>Morgana:Authentication:Issuers[]</td><td>Per-channel trust list: array of <code>{ Name, SymmetricKey }</code> entries (e.g. <code>cauldron</code>, <code>rune</code>)</td></tr>
+          <tr><td>Morgana:Authentication:Issuers[]</td><td>Per-channel trust list: array of <code>{ Name, SymmetricKey }</code> entries (e.g. <code>cauldron</code>, <code>grimoire</code>, <code>rune</code>)</td></tr>
           <tr><td>Morgana:ConversationPersistence:EncryptionKey</td><td>AES-256 key for SQLite encryption (base64)</td></tr>
           <tr><td>Morgana:ConversationPersistence:StoragePath</td><td>Directory for SQLite database files</td></tr>
           <tr><td>Morgana:ActorSystem:TimeoutSeconds</td><td>Actor/agent timeout (default: 180)</td></tr>
@@ -495,6 +496,20 @@
         </tbody>
       </table>
 
+      <h3>Grimoire (TTY rich channel)</h3>
+      <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Grimoire:MorganaURL</td><td>Morgana backend URL</td></tr>
+          <tr><td>Grimoire:CallbackURL</td><td>Absolute URL Morgana posts inbound messages &amp; stream chunks to (webhook listener)</td></tr>
+          <tr><td>Grimoire:Authentication:SymmetricKey</td><td>HMAC-SHA256 key matching the <code>grimoire</code> entry in Morgana's <code>Issuers[]</code></td></tr>
+          <tr><td>Grimoire:Authentication:Issuer</td><td>Token issuer (default: <code>grimoire</code>)</td></tr>
+          <tr><td>Grimoire:Authentication:Audience</td><td>Token audience (default: <code>morgana.ai</code>)</td></tr>
+          <tr><td>Grimoire:StreamingResponse:*</td><td>Typewriter cadence for the live streaming pane (tick ms, chars per tick)</td></tr>
+          <tr><td>Grimoire:LandingMessages</td><td>Array of random startup loading messages</td></tr>
+        </tbody>
+      </table>
+
       <h3>Rune (TTY channel)</h3>
       <table>
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
@@ -509,18 +524,19 @@
       </table>
     
       <h2 style="margin-top: 24px;">Docker Deployment</h2>
-      <p>Morgana ships with a ready-to-use <code>docker-compose.yml</code> defining Morgana, Cauldron and Rune on a dedicated bridge network with persistent SQLite volume. <code>docker compose up</code> starts Morgana + Cauldron; Rune is a TUI that needs its own terminal, so it is launched interactively on demand in a separate shell.</p>
+      <p>Morgana ships with a ready-to-use <code>docker-compose.yml</code> defining Morgana, Cauldron, Grimoire and Rune on a dedicated bridge network with persistent SQLite volume. <code>docker compose up</code> starts Morgana + Cauldron; Grimoire and Rune are TUIs that need their own terminal, so each is launched interactively on demand in a separate shell (and only one TTY channel can own stdin/stdout at a time).</p>
 
       <div class="code-block"><span class="comment"># Quick Start (production images from Docker Hub)</span>
     cp production.env.template .env
     nano .env                          <span class="comment"># fill in secrets</span>
     docker compose up                  <span class="comment"># Morgana + Cauldron (HTML on :5002)</span>
-    docker compose run --rm --service-ports --use-aliases rune   <span class="comment"># Rune TUI (TTY on :5003) — `--use-aliases` registers `rune` as a network alias so Morgana's webhook callback resolves</span>
+    docker compose run --rm --service-ports --use-aliases grimoire   <span class="comment"># Grimoire TUI (rich TTY on :5004)</span>
+    docker compose run --rm --service-ports --use-aliases rune   <span class="comment"># Rune TUI (poor TTY on :5003) — `--use-aliases` registers the service as a network alias so Morgana's webhook callback resolves</span>
 
     <span class="comment"># Development (build from source)</span>
     cp development.env.template .env
     nano .env
-    dotnet build ./Morgana && dotnet build ./Channels/Cauldron && dotnet build ./Channels/Rune
+    dotnet build ./Morgana && dotnet build ./Channels/Cauldron && dotnet build ./Channels/Grimoire && dotnet build ./Channels/Rune
     docker compose --env-file .env --env-file .env.versions build
     docker compose --env-file .env --env-file .env.versions up</div>
 
@@ -612,18 +628,35 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page">
       <h2>Reference Channels</h2>
-      <p>Morgana ships with <strong>two reference channels out-of-the-box</strong>, chosen to exercise opposite ends of the channel capability spectrum so the framework's multi-channel design is demonstrable without any extra work.</p>
+      <p>Morgana ships with <strong>three reference channels out-of-the-box</strong>, chosen to populate the <strong>channel &times; capability matrix</strong> so the framework's multi-channel design is demonstrable without any extra work: a rich renderer in two different surfaces (HTML and TTY) plus a deliberately poor one that exercises the degradation path.</p>
 
-      <h3 style="margin-top:14px;">Cauldron &mdash; HTML / Blazor Server</h3>
+      <table style="width:60%; margin:10px auto 16px;">
+        <thead><tr><th>&nbsp;</th><th>HTML</th><th>TTY</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Full</strong></td><td>Cauldron</td><td><strong>Grimoire</strong></td></tr>
+          <tr><td><strong>Poor</strong></td><td>&mdash;</td><td>Rune</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="margin-top:14px;">Cauldron &mdash; HTML / Blazor Server (rich)</h3>
       <p>Cauldron is a Blazor Server application providing a rich, real-time chat interface with streaming responses, quick replies, rich cards, and animated feedback. It communicates with Morgana over authenticated SignalR and REST (<code>deliveryMode=signalr</code>), with all capability flags on. It can be depicted as the <b>official Morgana's home</b>.</p>
 
       <div class="screenshots">
-        <img src="Channels/Cauldron/wwwroot/assets/Morgana-Presentation.jpg" alt="Presentation"/>
-        <img src="Channels/Cauldron/wwwroot/assets/Morgana-Chatting.jpg" alt="Chatting"/>
-        <img src="Channels/Cauldron/wwwroot/assets/Morgana-RichCards.jpg" alt="Rich Cards"/>
+        <img src="Channels/Cauldron/Assets/Morgana-Presentation.jpg" alt="Presentation"/>
+        <img src="Channels/Cauldron/Assets/Morgana-Chatting.jpg" alt="Chatting"/>
+        <img src="Channels/Cauldron/Assets/Morgana-RichCards.jpg" alt="Rich Cards"/>
       </div>
 
-      <h3 style="margin-top:18px;">Rune &mdash; TTY / Spectre.Console</h3>
+      <h3 style="margin-top:18px;">Grimoire &mdash; TTY / Spectre.Console (rich)</h3>
+      <p>Grimoire is the <strong>textual Cauldron</strong>: a Kestrel-hosted console app with a Spectre.Console Live UI that renders Morgana's <strong>full</strong> expressive surface inside the terminal &mdash; streaming responses, markdown, rich cards and quick replies, all capability flags on (<code>MaxMessageLength=null</code>). It uses the same <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) as Rune, proving the framework adapts on the <em>capability profile</em>, not the transport. Content arrives intact and is &ldquo;Spectrized&rdquo; locally: markdown via a Markdig&rarr;Spectre renderer, rich cards mapped to bordered boxes, quick replies into an inline arrow-key selector.</p>
+
+      <div class="screenshots">
+        <img src="Channels/Grimoire/Assets/Morgana-PresentationGRM.jpg" alt="Grimoire Presentation"/>
+        <img src="Channels/Grimoire/Assets/Morgana-ChattingGRM.jpg" alt="Grimoire Chatting"/>
+        <img src="Channels/Grimoire/Assets/Morgana-AgentGRM.jpg" alt="Grimoire Agent"/>
+      </div>
+
+      <h3 style="margin-top:18px;">Rune &mdash; TTY / Spectre.Console (poor)</h3>
       <p>Rune is a minimal command-line channel: a Kestrel-hosted console app with a Spectre.Console Live UI (sticky header, streaming-free rendering), exercising the <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) with lowest capability profile</strong> (all rich features off, <code>MaxMessageLength=500</code>). It is the contract surface <code>MorganaChannelAdapter</code> is supposed to degrade toward &mdash; a working proof that the channel abstraction holds, not just a demo.</p>
       <p class="muted" style="font-size:12px;">Rune is launched interactively (<code>docker compose run --rm --service-ports --use-aliases rune</code>, or <code>dotnet run</code> from <code>Channels/Rune/</code>) because the Spectre.Console Live UI needs to own the terminal. <code>--use-aliases</code> is mandatory: <code>compose run</code> skips network aliases by default, so without it Morgana's webhook callback to <code>http://rune:5003</code> fails DNS resolution.</p>
     
@@ -653,6 +686,7 @@
           <tr><td>NuGet package</td><td>nuget.org/packages/Morgana.AI</td></tr>
           <tr><td>Docker Hub (Morgana)</td><td>hub.docker.com/r/mdesalvo/morgana</td></tr>
           <tr><td>Docker Hub (Cauldron)</td><td>hub.docker.com/r/mdesalvo/cauldron</td></tr>
+          <tr><td>Docker Hub (Grimoire)</td><td>hub.docker.com/r/mdesalvo/grimoire</td></tr>
           <tr><td>Docker Hub (Rune)</td><td>hub.docker.com/r/mdesalvo/rune</td></tr>
           <tr><td>Changelog</td><td>CHANGELOG.md in repository root</td></tr>
         </tbody>
