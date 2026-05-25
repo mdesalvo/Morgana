@@ -10,9 +10,9 @@
   <img src="https://img.shields.io/badge/Microsoft.Extensions.AI-932BD4?logo=nuget" alt="Microsoft.Extensions.AI"/>
   <img src="https://img.shields.io/badge/OpenTelemetry-932BD4?logo=nuget" alt="OpenTelemetry"/><br/>
   <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/pulls/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana&color=9f7aea" alt="Morgana (Docker Pulls)"></a>
-  <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/pulls/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron&color=9f7aea" alt="Cauldron (Docker Pulls)"></a>
-  <a href="https://hub.docker.com/r/mdesalvo/grimoire"><img src="https://img.shields.io/docker/pulls/mdesalvo/grimoire?logo=docker&logoColor=white&label=Grimoire&color=9f7aea" alt="Grimoire (Docker Pulls)"></a>
-  <a href="https://hub.docker.com/r/mdesalvo/rune"><img src="https://img.shields.io/docker/pulls/mdesalvo/rune?logo=docker&logoColor=white&label=Rune&color=9f7aea" alt="Rune (Docker Pulls)"></a>
+  <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/pulls/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron%20(Channel)&color=9f7aea" alt="Cauldron (Docker Pulls)"></a>
+  <a href="https://hub.docker.com/r/mdesalvo/grimoire"><img src="https://img.shields.io/docker/pulls/mdesalvo/grimoire?logo=docker&logoColor=white&label=Grimoire%20(Channel)&color=9f7aea" alt="Grimoire (Docker Pulls)"></a>
+  <a href="https://hub.docker.com/r/mdesalvo/rune"><img src="https://img.shields.io/docker/pulls/mdesalvo/rune?logo=docker&logoColor=white&label=Rune%20(Channel)&color=9f7aea" alt="Rune (Docker Pulls)"></a>
 </p>
 
 ## About Morgana 
