@@ -25,6 +25,9 @@ Morgana will kindly assist you with her magical AI potions just the way you **ne
 
 <table style="border:none;">
   <tr>
+    <th colspan=5>Cauldron (Web Channel)</th>
+  </tr>
+  <tr>
     <td>
       <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/wwwroot/assets/Morgana-SparkleLoader.jpg?raw=true" alt="Morgana Sparkle Loader"/>
     </td>
