@@ -21,6 +21,7 @@ Architecturally it reaffirms that Morgana adapts on the **capability profile, no
 
 ### 🔄 Changed
 - **Rune gains conversation scrollback**, ported from Grimoire — the same pager (↑/←/PageUp · ↓/→/PageDown, ±5 rows, ▲/▼ header glyphs) so a long conversation that exceeds the viewport is no longer lost off the top. This is a **UX-only** addition: Rune's capability profile is **deliberately untouched** (all rich features off, `MaxMessageLength=500`), so it keeps its role as *the* reference channel that exercises `MorganaChannelAdapter`'s degradation path
+- Changed Rune's theme to emerald green
 - **Framework formatting policy** (`morgana.json`) no longer forbids markdown: agents are now free to emit light markdown (emphasis, inline code, lists, headings, rules) in their message text. Channels that can't render it are downgraded automatically downstream by the channel adapter, so the LLM expresses formatting freely and the right surface adapts — Cauldron and Grimoire render it, Rune strips it
 
 ### 🚀 Future Enablement
