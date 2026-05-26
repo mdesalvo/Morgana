@@ -10,8 +10,8 @@ namespace Rune.Services;
 /// <summary>
 /// Terminal UI for Rune built on Spectre.Console's <see cref="LiveDisplay"/>: a sticky
 /// header pinned at the top shows the conversation id and the current speaker
-/// (<c>Morgana</c> → magenta1; <c>Morgana (Agent)</c> → hotpink), a scrolling body
-/// prints the chat history colored by speaker (the user is azure / skyblue1), and the
+/// (<c>Morgana</c> → emerald green; <c>Morgana (Agent)</c> → light green), a scrolling body
+/// prints the chat history colored by speaker (the user is white), and the
 /// bottom-most line hosts the input buffer with a blinking cursor. Incoming webhook
 /// messages are drained from a channel and trigger a refresh; user keystrokes are
 /// captured via <see cref="Console.ReadKey(bool)"/> on a pool thread.
@@ -27,20 +27,18 @@ namespace Rune.Services;
 /// </remarks>
 public sealed class ConsoleUiService
 {
-    /// <summary>Color for base Morgana turns. Matches Cauldron's <c>--primary-color #8b5cf6</c>.</summary>
-    private const string MorganaColor = "#8b5cf6";
+    /// <summary>Color for base Morgana turns: Emerald green.</summary>
+    private const string MorganaColor = "#10b981";
 
-    /// <summary>Color for specialised agent turns (<c>Morgana (Agent)</c>).
-    /// Matches Cauldron's <c>--secondary-color #ec4899</c>.</summary>
-    private const string MorganaAgentColor = "#ec4899";
+    /// <summary>Color for specialised agent turns: Light green.</summary>
+    private const string MorganaAgentColor = "#6ee7b7";
 
     /// <summary>Color for the user's own input and committed lines.</summary>
     private const string UserColor = "white";
 
-    /// <summary>Color for the magic-dust gauge in the sticky header. Hex matches
-    /// Cauldron's <c>--primary-color #8b5cf6</c> so both channels start the gauge on
-    /// the same Morgana primary purple.</summary>
-    private const string DustColor = "#8b5cf6";
+    /// <summary>Color for the magic-dust gauge in the sticky header.
+    /// Matches MorganaColor.</summary>
+    private const string DustColor = "#10b981";
 
     /// <summary>Gauge color when remaining ≤ 30% — Cauldron's <c>.dust-meter.low</c> amber.</summary>
     private const string DustLowColor = "#f59e0b";
