@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Rune.Interfaces;
 using Rune.Messages.Contracts;
@@ -54,6 +55,16 @@ public sealed class ConsoleUiService
 
     /// <summary>Fallback for <c>Rune:AgentExitMessage</c> when the setting is absent.</summary>
     private const string DefaultAgentExitMessage = "{0} has completed its spell. I'm back to you!";
+
+    /// <summary>
+    /// Matches a run of three or more consecutive newlines (i.e. two or more blank lines).
+    /// Rune renders Morgana's replies verbatim — unlike Grimoire it has no Markdig pipeline to
+    /// normalize whitespace — so the doubled blank lines Morgana emits when formatting for rich
+    /// channels would each count as a phantom row in <see cref="RenderMessageRows"/> and trip the
+    /// scroll indicator on a conversation that actually fits. Collapsed to a single blank line,
+    /// mirroring how a markdown renderer treats a paragraph break.
+    /// </summary>
+    private static readonly Regex BlankRunRegex = new(@"\n{3,}", RegexOptions.Compiled);
 
     /// <summary>
     /// Source of truth: every message ever displayed, chronologically ordered, append-only.
@@ -579,7 +590,15 @@ public sealed class ConsoleUiService
     private static List<IRenderable> RenderMessageRows(DisplayedMessage message, int termWidth)
     {
         List<IRenderable> rows = [];
-        string fullText = $"{message.Who}: {message.Text}";
+
+        // Normalize before counting: trim leading/trailing whitespace and collapse blank-line
+        // runs. Morgana authors replies for rich channels (trailing newlines, doubled blank
+        // lines); Rune has no markdown renderer to absorb them, and counting one row per '\n'
+        // would inflate the content height with invisible phantom rows — lighting the header's
+        // ▲ scroll glyph on a conversation that fits the viewport. This is the Grimoire-port
+        // adjustment for a channel that carries neither rich cards nor quick replies.
+        string text = BlankRunRegex.Replace(message.Text.Trim(), "\n\n");
+        string fullText = $"{message.Who}: {text}";
         bool first = true;
         foreach (string line in fullText.Split('\n'))
         {
