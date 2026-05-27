@@ -3,11 +3,11 @@ name: Build and Push Docker Images
 on:
   push:
     tags:
-      - 'v*.*.*'  # Trigger on version tags (v0.12.0, v1.0.0, etc.)
+      - 'v*.*.*'  # Trigger on version tags (v0.25.0, etc.)
   workflow_dispatch:
     inputs:
       version:
-        description: 'Docker image version to be emitted (e.g., 0.17.0)'
+        description: 'Docker image version to be emitted (e.g: 0.25.0)'
         required: true
         type: string
 
@@ -63,18 +63,6 @@ jobs:
           cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/cauldron:latest
           cache-to: type=inline
 
-      - name: Build and push Rune
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Channels/Rune/Rune.Dockerfile
-          push: true
-          tags: |
-            ${{ env.DOCKER_USERNAME }}/rune:${{ steps.version.outputs.VERSION }}
-            ${{ env.DOCKER_USERNAME }}/rune:latest
-          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/rune:latest
-          cache-to: type=inline
-
       - name: Build and push Grimoire
         uses: docker/build-push-action@v5
         with:
@@ -85,4 +73,16 @@ jobs:
             ${{ env.DOCKER_USERNAME }}/grimoire:${{ steps.version.outputs.VERSION }}
             ${{ env.DOCKER_USERNAME }}/grimoire:latest
           cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/grimoire:latest
+          cache-to: type=inline
+
+      - name: Build and push Rune
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Channels/Rune/Rune.Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_USERNAME }}/rune:${{ steps.version.outputs.VERSION }}
+            ${{ env.DOCKER_USERNAME }}/rune:latest
+          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/rune:latest
           cache-to: type=inline
