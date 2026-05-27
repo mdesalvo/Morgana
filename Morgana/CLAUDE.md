@@ -2,7 +2,9 @@
 
 ## What is Morgana
 
-Morgana is a modern conversational AI framework built on **.NET 10**, **Akka.NET** (actor model) and **Microsoft.Agents.AI** (agent framework). It orchestrates specialized AI agents that collaborate to understand, classify and resolve user inquiries through intent-based routing, content moderation, shared context and tool calling. **Cauldron** is the reference Blazor Server frontend that talks to Morgana via REST + SignalR.
+Morgana is a modern conversational AI framework built on **.NET 10**, **Akka.NET** (actor model) and **Microsoft.Agents.AI** (agent framework). It orchestrates specialized AI agents that collaborate to understand, classify and resolve user inquiries through intent-based routing, content moderation, shared context and tool calling.
+**Cauldron** is the reference Blazor Server frontend that talks to Morgana via REST + SignalR.
+**Grimoire** is the reference Spectre.Console frontend that talks to Morgana via REST + WebHook.
 
 **Key value proposition**: domain experts model agents declaratively (prompt + tools in JSON, thin C# class), package them as plugin DLLs, and Morgana handles orchestration, streaming, persistence, guard rails, channel adaptation and observability automatically.
 
@@ -16,6 +18,7 @@ Morgana/
     Directory.Build.props  # Shared build settings, version, NuGet dependencies
   Channels/                # Reference channels (clients that talk to Morgana)
     Cauldron/              # Blazor Server frontend — rich reference channel (SignalR)
+    Grimoire/              # Spectre.Console CLI — rich-TTY reference channel (webhook)
     Rune/                  # Spectre.Console CLI — poor-but-honest reference channel (webhook)
   Morgana.Examples/        # Example plugin with BillingAgent, ContractAgent, MonkeyAgent
   CHANGELOG.md
@@ -51,6 +54,10 @@ Morgana/
 ### Cauldron (rich reference channel)
 
 Blazor Server app at `Channels/Cauldron/` (separate solution, has its own `CLAUDE.md`). Reference channel for Morgana: rich chat UI with streaming, quick replies, rich cards, typing indicators, conversation resume via `ProtectedLocalStorage`. Communicates via REST + SignalR (`deliveryMode=signalr`). Self-issues JWT tokens for authentication (`iss=cauldron`). Duplicates wire-format DTOs in `Messages/Contracts/` (no shared contracts project — sync changes in lockstep).
+
+### Grimoire (rich reference channel — TTY)
+
+Spectre.Console CLI at `Channels/Grimoire/` (separate solution, has its own `CLAUDE.md`). Third reference channel, sibling of Cauldron and Rune: it completes the channel × capability matrix by occupying the rich-TTY quadrant ("Rune with steroids" — not a fork of Rune, a sibling with its own life). Same stack as Rune (Kestrel-hosted console, `deliveryMode=webhook`, port 5004) but declares the **full** capability profile (all rich features on, `MaxMessageLength=null`), so it renders Morgana's non-degraded rich output natively in the terminal: Markdig→Spectre markdown rendering, hand-drawn bordered rich cards, per-turn `AnsiConsole.Live` streaming with a typewriter effect, blocking arrow-key quick replies, and scrollback. Because it advertises `MaxMessageLength=null` the `MorganaChannelAdapter` always short-circuits (hot path) — Grimoire never exercises the degradation codepath, which remains Rune's job. Self-issues JWT tokens for authentication (`iss=grimoire`). Like Cauldron and Rune, duplicates wire-format DTOs in `Messages/Contracts/`.
 
 ### Rune (poor-but-honest reference channel)
 
@@ -297,7 +304,7 @@ At application startup, three registries perform comprehensive validation:
 - **Target**: .NET 10, C# latest (uses C# 14 features like `extension` blocks)
 - **Build**: `dotnet build` from solution root
 - **Run**: start both `Morgana.Web` (backend, default https://localhost:5001) and `Cauldron` (frontend, default https://localhost:5002)
-- **Docker**: `docker compose up` starts Morgana + Cauldron (`Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`); Rune is profile-gated (`profiles: ["tui"]`) so `up` skips it, and it must be launched interactively in a separate terminal via `docker compose run --rm --service-ports --use-aliases rune` (using `Channels/Rune/Rune.Dockerfile`), because Spectre.Console needs to own stdin/stdout. `compose run` auto-activates the service's profiles so no `--profile` flag is needed. `--use-aliases` is mandatory: `compose run` skips network aliases by default, so without it Morgana's webhook callback to `http://rune:5003` fails DNS resolution
+- **Docker**: `docker compose up` starts Morgana + Cauldron (`Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`); the two TTY channels Grimoire and Rune are profile-gated (`profiles: ["tui"]`) so `up` skips them, and each must be launched interactively in a separate terminal via `docker compose run --rm --service-ports --use-aliases grimoire` (or `… rune`, using `Channels/Grimoire/Grimoire.Dockerfile` / `Channels/Rune/Rune.Dockerfile`), because Spectre.Console needs to own stdin/stdout (only one TTY channel at a time). `compose run` auto-activates the service's profiles so no `--profile` flag is needed. `--use-aliases` is mandatory: `compose run` skips network aliases by default, so without it Morgana's webhook callback to `http://grimoire:5004` (resp. `http://rune:5003`) fails DNS resolution
 
 ## Conventions
 
