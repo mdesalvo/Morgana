@@ -13,6 +13,7 @@ Morgana is a modern conversational AI framework built on **.NET 10**, **Akka.NET
 ```
 Morgana/
   Morgana/                 # Main solution folder (working directory)
+    Morgana.Contracts/     # Zero-dependency wire contracts (NuGet package, foundation for Morgana.AI + channels)
     Morgana.AI/            # Core framework library (NuGet package)
     Morgana.Web/           # ASP.NET Core host (controllers, SignalR hub, DI wiring)
     Directory.Build.props  # Shared build settings, version, NuGet dependencies
