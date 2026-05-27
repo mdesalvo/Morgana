@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
+using Morgana.Contracts;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Services;

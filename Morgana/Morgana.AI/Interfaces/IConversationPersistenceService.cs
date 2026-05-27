@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Morgana.AI.Providers;
+using Morgana.Contracts;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Interfaces;
@@ -158,7 +159,7 @@ public interface IConversationPersistenceService
     /// MUST therefore call <see cref="EnsureDatabaseInitializedAsync(string)"/> internally so
     /// that the database file and schema exist before the INSERT.</para>
     /// </remarks>
-    Task SaveChannelMetadataAsync(string conversationId, Records.ChannelMetadata metadata);
+    Task SaveChannelMetadataAsync(string conversationId, ChannelMetadata metadata);
 
     /// <summary>
     /// Loads the channel metadata previously persisted for a conversation. Returns
@@ -167,8 +168,8 @@ public interface IConversationPersistenceService
     /// in which case callers should fall back to the channel's hard-coded default metadata.
     /// </summary>
     /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
-    /// <returns>The persisted <see cref="Records.ChannelMetadata"/>, or null if absent.</returns>
-    Task<Records.ChannelMetadata?> LoadChannelMetadataAsync(string conversationId);
+    /// <returns>The persisted <see cref="ChannelMetadata"/>, or null if absent.</returns>
+    Task<ChannelMetadata?> LoadChannelMetadataAsync(string conversationId);
 
     /// <summary>
     /// Persists a shared context variable into the conversation-scoped <c>shared_context</c>

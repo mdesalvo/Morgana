@@ -8,6 +8,7 @@ using Morgana.AI;
 using Morgana.AI.Actors;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
+using Morgana.Contracts;
 
 namespace Morgana.Web.Controllers;
 
@@ -93,7 +94,7 @@ public class MorganaController : ControllerBase
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/start")]
-    public async Task<IActionResult> StartConversation([FromBody] Records.StartConversationRequest request)
+    public async Task<IActionResult> StartConversation([FromBody] StartConversationRequest request)
     {
         try
         {
@@ -340,7 +341,7 @@ public class MorganaController : ControllerBase
     /// 500 Internal Server Error on failure to queue message.
     /// </returns>
     [HttpPost("conversation/{conversationId}/message")]
-    public async Task<IActionResult> SendMessage([FromBody] Records.SendMessageRequest request)
+    public async Task<IActionResult> SendMessage([FromBody] SendMessageRequest request)
     {
         try
         {
@@ -358,7 +359,7 @@ public class MorganaController : ControllerBase
                     "Rate limit exceeded for conversation {RequestConversationId}: {ViolatedLimit}", request.ConversationId, rateLimitResult.ViolatedLimit);
 
                 string rateLimitViolation = GetRateLimitErrorMessage(rateLimitResult);
-                await channelService.SendMessageAsync(new Records.ChannelMessage
+                await channelService.SendMessageAsync(new ChannelMessage
                 {
                     ConversationId = request.ConversationId,
                     Text = rateLimitViolation,
@@ -389,7 +390,7 @@ public class MorganaController : ControllerBase
                 logger.LogWarning(
                     "Dust budget exhausted for conversation {RequestConversationId}", request.ConversationId);
 
-                await channelService.SendMessageAsync(new Records.ChannelMessage
+                await channelService.SendMessageAsync(new ChannelMessage
                 {
                     ConversationId = request.ConversationId,
                     Text = dustLimitingOptions.ErrorMessage,

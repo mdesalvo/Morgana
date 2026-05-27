@@ -4,6 +4,7 @@
 # Multi-stage build for optimized image with all required projects:
 # - Morgana.Web (API + SignalR Hub)
 # - Morgana.AI (AI framework)
+# - Morgana.Contracts (zero-dependency wire contracts, referenced by Morgana.AI)
 # - Morgana.Examples (showcase plugins with 3 agents)
 # ==============================================================================
 
@@ -21,6 +22,7 @@ WORKDIR /src
 # Copy project files for all required projects (layer caching optimization)
 COPY ["Morgana/Morgana.Web/Morgana.Web.csproj", "Morgana.Web/"]
 COPY ["Morgana/Morgana.AI/Morgana.AI.csproj", "Morgana.AI/"]
+COPY ["Morgana/Morgana.Contracts/Morgana.Contracts.csproj", "Morgana.Contracts/"]
 COPY ["Morgana.Examples/Morgana.Examples.csproj", "Morgana.Examples/"]
 COPY ["Morgana/Directory.Build.props", "Directory.Build.props"]
 
@@ -30,6 +32,7 @@ RUN dotnet restore "Morgana.Web/Morgana.Web.csproj"
 # Copy all source code from all projects
 COPY Morgana/Morgana.Web/ Morgana.Web/
 COPY Morgana/Morgana.AI/ Morgana.AI/
+COPY Morgana/Morgana.Contracts/ Morgana.Contracts/
 COPY Morgana.Examples/ Morgana.Examples/
 
 # Build main project — InsideDockerBuild skips Directory.Build.targets'

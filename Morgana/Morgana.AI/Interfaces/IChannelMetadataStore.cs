@@ -1,12 +1,13 @@
 using System.Diagnostics.CodeAnalysis;
+using Morgana.Contracts;
 
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// In-process registry of per-conversation <see cref="Records.ChannelMetadata"/> (channel
+/// In-process registry of per-conversation <see cref="ChannelMetadata"/> (channel
 /// name plus capability budget). Owned by the same singleton that decorates the outbound
 /// channel (<c>AdaptingChannelService</c>) so the decorator can look up the metadata to
-/// apply when degrading an outbound <see cref="Records.ChannelMessage"/>, while producers
+/// apply when degrading an outbound <see cref="ChannelMessage"/>, while producers
 /// (typically <c>ConversationManagerActor</c>) register and unregister entries at
 /// conversation start / end.
 /// </summary>
@@ -27,7 +28,7 @@ public interface IChannelMetadataStore
     /// <summary>
     /// Registers (or replaces) the channel metadata for a conversation.
     /// </summary>
-    void RegisterChannelMetadata(string conversationId, Records.ChannelMetadata channelMetadata);
+    void RegisterChannelMetadata(string conversationId, ChannelMetadata channelMetadata);
 
     /// <summary>
     /// Removes the metadata entry for a conversation. No-op if no entry exists.
@@ -40,5 +41,5 @@ public interface IChannelMetadataStore
     /// <returns>True when an entry exists; false otherwise. A false result indicates that the
     /// controller gate or the manager registration step was bypassed and callers must treat
     /// this as an invariant violation — there is no transport-level default to fallback to.</returns>
-    bool TryGetChannelMetadata(string conversationId, [NotNullWhen(true)] out Records.ChannelMetadata? channelMetadata);
+    bool TryGetChannelMetadata(string conversationId, [NotNullWhen(true)] out ChannelMetadata? channelMetadata);
 }

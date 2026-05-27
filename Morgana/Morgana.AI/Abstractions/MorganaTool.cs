@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Providers;
+using Morgana.Contracts;
 
 namespace Morgana.AI.Abstractions;
 
@@ -143,7 +144,7 @@ public class MorganaTool
     {
         try
         {
-            List<Records.QuickReply>? parsedQuickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickReplies);
+            List<QuickReply>? parsedQuickReplies = JsonSerializer.Deserialize<List<QuickReply>>(quickReplies);
             if (parsedQuickReplies == null || parsedQuickReplies.Count == 0)
             {
                 toolLogger.LogWarning("SetQuickReplies called with empty or invalid JSON");
@@ -192,7 +193,7 @@ public class MorganaTool
     {
         try
         {
-            Records.RichCard? parsedRichCard = JsonSerializer.Deserialize<Records.RichCard>(
+            RichCard? parsedRichCard = JsonSerializer.Deserialize<RichCard>(
                 richCard, Records.DefaultJsonSerializerOptions);
             if (parsedRichCard == null)
             {
@@ -244,13 +245,13 @@ public class MorganaTool
     /// <param name="components">List of card components to analyze</param>
     /// <param name="currentDepth">Current depth level (starts at 1)</param>
     /// <returns>Maximum depth found in the component tree</returns>
-    private int CalculateMaxDepth(List<Records.CardComponent> components, int currentDepth)
+    private int CalculateMaxDepth(List<CardComponent> components, int currentDepth)
     {
         int maxDepth = currentDepth;
 
-        foreach (Records.CardComponent component in components)
+        foreach (CardComponent component in components)
         {
-            if (component is Records.SectionComponent section)
+            if (component is SectionComponent section)
             {
                 int sectionDepth = CalculateMaxDepth(section.Components, currentDepth + 1);
                 maxDepth = Math.Max(maxDepth, sectionDepth);
@@ -266,13 +267,13 @@ public class MorganaTool
     /// </summary>
     /// <param name="components">List of card components to count</param>
     /// <returns>Total component count including all nested components</returns>
-    private int CountComponents(List<Records.CardComponent> components)
+    private int CountComponents(List<CardComponent> components)
     {
         int count = components.Count;
 
-        foreach (Records.CardComponent component in components)
+        foreach (CardComponent component in components)
         {
-            if (component is Records.SectionComponent section)
+            if (component is SectionComponent section)
                 count += CountComponents(section.Components);
         }
 

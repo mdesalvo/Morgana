@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Morgana.AI.Interfaces;
+using Morgana.Contracts;
 
 namespace Morgana.AI.Services;
 
@@ -18,10 +19,10 @@ namespace Morgana.AI.Services;
 /// </remarks>
 public class ChannelMetadataStore : IChannelMetadataStore
 {
-    private readonly ConcurrentDictionary<string, Records.ChannelMetadata> metadataByConversation = new();
+    private readonly ConcurrentDictionary<string, ChannelMetadata> metadataByConversation = new();
 
     /// <inheritdoc/>
-    public void RegisterChannelMetadata(string conversationId, Records.ChannelMetadata channelMetadata) =>
+    public void RegisterChannelMetadata(string conversationId, ChannelMetadata channelMetadata) =>
         metadataByConversation[conversationId] = channelMetadata;
 
     /// <inheritdoc/>
@@ -29,6 +30,6 @@ public class ChannelMetadataStore : IChannelMetadataStore
         metadataByConversation.TryRemove(conversationId, out _);
 
     /// <inheritdoc/>
-    public bool TryGetChannelMetadata(string conversationId, [NotNullWhen(true)] out Records.ChannelMetadata? channelMetadata) =>
+    public bool TryGetChannelMetadata(string conversationId, [NotNullWhen(true)] out ChannelMetadata? channelMetadata) =>
         metadataByConversation.TryGetValue(conversationId, out channelMetadata);
 }

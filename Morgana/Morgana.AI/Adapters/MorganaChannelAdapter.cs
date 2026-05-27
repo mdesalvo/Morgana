@@ -5,11 +5,12 @@ using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
+using Morgana.Contracts;
 
 namespace Morgana.AI.Adapters;
 
 /// <summary>
-/// Transcodes a fully-featured <see cref="Records.ChannelMessage"/> into a form that
+/// Transcodes a fully-featured <see cref="ChannelMessage"/> into a form that
 /// conforms to the expressive capabilities of the target channel. Invoked by producers
 /// (presenter, supervisor, manager, controller) right before handing the message to
 /// <see cref="IChannelService.SendMessageAsync"/>.
@@ -79,7 +80,7 @@ public class MorganaChannelAdapter
     }
 
     /// <summary>
-    /// Produces a <see cref="Records.ChannelMessage"/> whose features fit inside
+    /// Produces a <see cref="ChannelMessage"/> whose features fit inside
     /// <paramref name="channelCapabilities"/>. Returns <paramref name="channelMessage"/> unchanged when no
     /// degradation is needed.
     /// </summary>
@@ -87,9 +88,9 @@ public class MorganaChannelAdapter
     /// <param name="channelCapabilities">Expressive budget advertised by the target channel.</param>
     /// <param name="cancellationToken">Cancellation token for the async operation.</param>
     /// <returns>A channel-conformant message. Never null, never throws.</returns>
-    public async Task<Records.ChannelMessage> AdaptAsync(
-        Records.ChannelMessage channelMessage,
-        Records.ChannelCapabilities channelCapabilities,
+    public async Task<ChannelMessage> AdaptAsync(
+        ChannelMessage channelMessage,
+        ChannelCapabilities channelCapabilities,
         CancellationToken cancellationToken = default)
     {
         // ── Short-circuit: nothing to degrade ─────────────────────────────────────
@@ -144,7 +145,7 @@ public class MorganaChannelAdapter
                     enforcedText.Length,
                     channelAdapterResponse.QuickReplies?.Count ?? 0);
 
-                return new Records.ChannelMessage
+                return new ChannelMessage
                 {
                     ConversationId = channelMessage.ConversationId,
                     Text = enforcedText,
@@ -178,7 +179,7 @@ public class MorganaChannelAdapter
 
     // ── Short-circuit predicate ───────────────────────────────────────────────────
 
-    private static bool FitsWithin(Records.ChannelMessage channelMessage, Records.ChannelCapabilities channelCapabilities)
+    private static bool FitsWithin(ChannelMessage channelMessage, ChannelCapabilities channelCapabilities)
     {
         if (channelMessage.RichCard != null && !channelCapabilities.SupportsRichCards)
             return false;
@@ -197,13 +198,13 @@ public class MorganaChannelAdapter
 
     /// <summary>
     /// Sums the visual cost of the whole outbound message (text + rich card + quick replies)
-    /// so that <see cref="Records.ChannelCapabilities.MaxMessageLength"/> governs the entire
+    /// so that <see cref="ChannelCapabilities.MaxMessageLength"/> governs the entire
     /// rendered payload, not only the free-form text field. Keeping the three contributions
     /// in a single budget keeps the check symmetric and prevents silent asymmetries
     /// (a 3 KB card slipping past a 500-char cap because only Text was measured).
     /// Per-component weighing is delegated to the records themselves (<c>EstimateCost</c>).
     /// </summary>
-    private static int EstimateVisualCost(Records.ChannelMessage channelMessage) =>
+    private static int EstimateVisualCost(ChannelMessage channelMessage) =>
         channelMessage.Text.Length
       + (channelMessage.RichCard?.EstimateCost() ?? 0)
       + (channelMessage.QuickReplies?.Sum(quickReply => quickReply.EstimateCost()) ?? 0);
@@ -227,13 +228,13 @@ public class MorganaChannelAdapter
     }
 
     /// <summary>
-    /// Enforces <see cref="Records.ChannelCapabilities.MaxMessageLength"/> on <paramref name="text"/>.
+    /// Enforces <see cref="ChannelCapabilities.MaxMessageLength"/> on <paramref name="text"/>.
     /// If the text overflows, markdown is stripped first (cheaper, often enough to fit); any
     /// residual overflow is then truncated with an ellipsis, guaranteeing the cut lands on
     /// plain prose and never leaves dangling markdown syntax (<c>**text…</c>, <c>[label…</c>).
     /// Returns <paramref name="text"/> unchanged when no limit is declared or it already fits.
     /// </summary>
-    private static string EnforceLengthBudget(string text, Records.ChannelCapabilities channelCapabilities)
+    private static string EnforceLengthBudget(string text, ChannelCapabilities channelCapabilities)
     {
         if (channelCapabilities.MaxMessageLength is not { } max || max <= 0 || text.Length <= max)
             return text;
@@ -247,9 +248,9 @@ public class MorganaChannelAdapter
 
     // ── Template fallback ─────────────────────────────────────────────────────────
 
-    private static Records.ChannelMessage BuildTemplateFallback(
-        Records.ChannelMessage channelMessage,
-        Records.ChannelCapabilities channelCapabilities)
+    private static ChannelMessage BuildTemplateFallback(
+        ChannelMessage channelMessage,
+        ChannelCapabilities channelCapabilities)
     {
         // When the channel cannot carry a rich card, we deliberately drop it here:
         // title + subtitle in isolation (without the component payload) would look alien
@@ -277,7 +278,7 @@ public class MorganaChannelAdapter
 
         text = EnforceLengthBudget(text, channelCapabilities);
 
-        return new Records.ChannelMessage
+        return new ChannelMessage
         {
             ConversationId = channelMessage.ConversationId,
             Text = text,

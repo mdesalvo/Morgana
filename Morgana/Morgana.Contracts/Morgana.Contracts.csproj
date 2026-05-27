@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Title>Morgana.Contracts</Title>
+    <PackageId>Morgana.Contracts</PackageId>
+    <OutputType>Library</OutputType>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Override the shared (Morgana.AI-centric) description from Directory.Build.props -->
+    <Description>
+    Morgana.Contracts is the zero-dependency wire-contract foundation for the Morgana
+    conversational AI framework. It defines the DTOs exchanged between Morgana and its
+    channels (channel handshake metadata and capabilities, quick replies, rich cards and
+    the outbound message envelope), so the framework and every channel client share a
+    single source of truth instead of duplicating the wire format.
+    </Description>
+  </PropertyGroup>
+
+</Project>

@@ -11,6 +11,7 @@ using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.AI.Telemetry;
+using Morgana.Contracts;
 using Status = Akka.Actor.Status;
 
 namespace Morgana.AI.Abstractions;
@@ -284,10 +285,10 @@ public class MorganaAgent : MorganaActor
             bool endsWithQuestion = llmResponseText.EndsWith('?');
 
             #region LLM tools
-            List<Records.QuickReply>? quickReplies = GetQuickRepliesFromContext(aiAgentSession);
+            List<QuickReply>? quickReplies = GetQuickRepliesFromContext(aiAgentSession);
             bool hasQuickReplies = quickReplies?.Count > 0;
 
-            Records.RichCard? richCard = GetRichCardFromContext(aiAgentSession);
+            RichCard? richCard = GetRichCardFromContext(aiAgentSession);
             bool hasRichCard = richCard != null;
 
             if (hasQuickReplies)
@@ -401,14 +402,14 @@ public class MorganaAgent : MorganaActor
     /// </summary>
     /// <param name="session">Active agent session.</param>
     /// <returns>The deserialized quick replies, or <c>null</c> if absent or invalid.</returns>
-    protected List<Records.QuickReply>? GetQuickRepliesFromContext(AgentSession session)
+    protected List<QuickReply>? GetQuickRepliesFromContext(AgentSession session)
     {
         #region Utilities
-        List<Records.QuickReply>? GetQuickReplies(string quickRepliesJSON)
+        List<QuickReply>? GetQuickReplies(string quickRepliesJSON)
         {
             try
             {
-                List<Records.QuickReply>? quickReplies = JsonSerializer.Deserialize<List<Records.QuickReply>>(quickRepliesJSON);
+                List<QuickReply>? quickReplies = JsonSerializer.Deserialize<List<QuickReply>>(quickRepliesJSON);
                 if (quickReplies is { Count: > 0 })
                 {
                     agentLogger.LogInformation("Retrieved {QuickRepliesCount} quick replies from context", quickReplies.Count);
@@ -441,14 +442,14 @@ public class MorganaAgent : MorganaActor
     /// </summary>
     /// <param name="session">Active agent session.</param>
     /// <returns>The deserialized rich card, or <c>null</c> if absent or invalid.</returns>
-    protected Records.RichCard? GetRichCardFromContext(AgentSession session)
+    protected RichCard? GetRichCardFromContext(AgentSession session)
     {
         #region Utilities
-        Records.RichCard? GetRichCard(string richCardJSON)
+        RichCard? GetRichCard(string richCardJSON)
         {
             try
             {
-                Records.RichCard? richCard = JsonSerializer.Deserialize<Records.RichCard>(
+                RichCard? richCard = JsonSerializer.Deserialize<RichCard>(
                     richCardJSON, Records.DefaultJsonSerializerOptions);
                 if (richCard != null)
                 {

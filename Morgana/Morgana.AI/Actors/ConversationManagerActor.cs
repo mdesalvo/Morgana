@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
+using Morgana.Contracts;
 
 namespace Morgana.AI.Actors;
 
@@ -23,7 +24,7 @@ public class ConversationManagerActor : MorganaActor
     /// Outbound channel used to deliver messages from the actor system to the end user.
     /// Abstracts the transport + client pair (e.g. SignalR + Cauldron web UI) so the actor
     /// does not depend on any specific delivery mechanism. Also exposes
-    /// <see cref="Records.ChannelCapabilities"/> so producers can degrade features
+    /// <see cref="ChannelCapabilities"/> so producers can degrade features
     /// (rich cards, streaming, quick replies) when the target channel does not support them.
     /// </summary>
     private readonly IChannelService channelService;
@@ -133,7 +134,7 @@ public class ConversationManagerActor : MorganaActor
             // Resolve and publish the per-conversation channel metadata BEFORE creating the
             // supervisor, so any outbound message produced by the supervisor (including the
             // presentation on a fresh start) is already covered by the registered entry.
-            Records.ChannelMetadata effectiveMetadata = await ResolveChannelMetadataAsync(msg);
+            ChannelMetadata effectiveMetadata = await ResolveChannelMetadataAsync(msg);
             channelMetadataStore.RegisterChannelMetadata(msg.ConversationId, effectiveMetadata);
             actorLogger.Info(
                 $"Channel metadata registered for {msg.ConversationId}: " +
@@ -173,7 +174,7 @@ public class ConversationManagerActor : MorganaActor
     /// lost) and we refuse to invent an identity on its behalf.</item>
     /// </list>
     /// </summary>
-    private async Task<Records.ChannelMetadata> ResolveChannelMetadataAsync(Records.CreateConversation msg)
+    private async Task<ChannelMetadata> ResolveChannelMetadataAsync(Records.CreateConversation msg)
     {
         if (!msg.IsRestore)
         {
@@ -191,7 +192,7 @@ public class ConversationManagerActor : MorganaActor
             // name spaces stay case-insensitive end-to-end, and Capabilities are reconciled
             // against the AdaptiveMessaging policy (see NormaliseCapabilities) before being
             // persisted and registered.
-            Records.ChannelMetadata channelMetadata = new Records.ChannelMetadata
+            ChannelMetadata channelMetadata = new ChannelMetadata
             {
                 Coordinates = msg.ChannelMetadata.Coordinates with
                 {
@@ -216,7 +217,7 @@ public class ConversationManagerActor : MorganaActor
         // Restore path: metadata must have been announced and persisted in a previous
         // lifetime of the conversation. No fallback to the transport's self-advertised
         // identity — that would reintroduce the transport≡channel coupling we just removed.
-        Records.ChannelMetadata? restoredChannelMetadata = await conversationPersistenceService.LoadChannelMetadataAsync(msg.ConversationId);
+        ChannelMetadata? restoredChannelMetadata = await conversationPersistenceService.LoadChannelMetadataAsync(msg.ConversationId);
         if (restoredChannelMetadata is null)
             throw new InvalidOperationException(
                 $"Restore requested for conversation {msg.ConversationId} but no channel metadata is persisted; " +
@@ -226,7 +227,7 @@ public class ConversationManagerActor : MorganaActor
     }
 
     /// <summary>
-    /// Normalises incoming <see cref="Records.ChannelCapabilities"/> so clearly incoherent
+    /// Normalises incoming <see cref="ChannelCapabilities"/> so clearly incoherent
     /// declarations are reconciled at the ingress, not carried all the way to the adapter.
     /// A channel whose hard per-message cap falls below
     /// <c>Morgana:AdaptiveMessaging:RichFeaturesMinLength</c> is treated as primitive:
@@ -238,7 +239,7 @@ public class ConversationManagerActor : MorganaActor
     /// Setting the threshold to <c>null</c> or a non-positive value disables the heuristic
     /// and restores full trust of the declaration.
     /// </summary>
-    private Records.ChannelCapabilities NormaliseCapabilities(Records.ChannelCapabilities declaredCapabilities)
+    private ChannelCapabilities NormaliseCapabilities(ChannelCapabilities declaredCapabilities)
     {
         if (declaredCapabilities.MaxMessageLength is not { } max)
             return declaredCapabilities;
@@ -332,7 +333,7 @@ public class ConversationManagerActor : MorganaActor
     /// <param name="chunk">Streaming chunk containing partial response text</param>
     /// <remarks>
     /// Chunks are suppressed entirely when the active channel does not advertise
-    /// <see cref="Records.ChannelCapabilities.SupportsStreaming"/>. The final complete message
+    /// <see cref="ChannelCapabilities.SupportsStreaming"/>. The final complete message
     /// still reaches the client via <see cref="HandleConversationResponseAsync"/>, so no content
     /// is lost — only the progressive rendering effect is skipped.
     /// </remarks>
@@ -340,7 +341,7 @@ public class ConversationManagerActor : MorganaActor
     {
         // Skip streaming entirely on channels that don't support it.
         // The final response is delivered as a single structured message by HandleConversationResponseAsync.
-        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out Records.ChannelMetadata? registeredMetadata))
+        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? registeredMetadata))
             throw new InvalidOperationException(
                 $"No channel metadata registered for conversation {conversationId}; " +
                 "the start-conversation gate should have ensured registration before any stream chunk.");
@@ -381,15 +382,15 @@ public class ConversationManagerActor : MorganaActor
         // It rides on the main response as a best-effort gauge value; the authoritative
         // post-adaptation reading taken right after the send (below) overrides it on the
         // trailing warning/exhaustion message. Null when dust limiting is off.
-        Records.ConversationMetadata? preSendMetadata = dustLimitingOptions.Enabled
-            ? new Records.ConversationMetadata(
+        ConversationMetadata? preSendMetadata = dustLimitingOptions.Enabled
+            ? new ConversationMetadata(
                 Math.Floor(Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0) * 100.0) / 100.0)
             : null;
 
         // Send response to client via the active channel
         try
         {
-            await channelService.SendMessageAsync(new Records.ChannelMessage
+            await channelService.SendMessageAsync(new ChannelMessage
             {
                 ConversationId = conversationId,
                 Text = response.Response,
@@ -415,8 +416,8 @@ public class ConversationManagerActor : MorganaActor
             // the authoritative end-of-turn level: the same number IsOverBudgetAsync
             // would see on the next send, so the gauge and the exhaustion gate finally
             // agree.
-            Records.ConversationMetadata? postSendMetadata = dustLimitingOptions.Enabled
-                ? new Records.ConversationMetadata(
+            ConversationMetadata? postSendMetadata = dustLimitingOptions.Enabled
+                ? new ConversationMetadata(
                     Math.Floor(Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0) * 100.0) / 100.0)
                 : null;
 
@@ -439,7 +440,7 @@ public class ConversationManagerActor : MorganaActor
             // Attempt to send error notification to client
             try
             {
-                await channelService.SendMessageAsync(new Records.ChannelMessage
+                await channelService.SendMessageAsync(new ChannelMessage
                 {
                     ConversationId = conversationId,
                     Text = "An error occurred while sending the response.",
@@ -481,7 +482,7 @@ public class ConversationManagerActor : MorganaActor
 
             // Use the identical `remaining` value from the main response's ConversationMetadata
             // so the warning text percentage and the gauge are always in sync.
-            await channelService.SendMessageAsync(new Records.ChannelMessage
+            await channelService.SendMessageAsync(new ChannelMessage
             {
                 ConversationId = conversationId,
                 Text = FormatDustMessage(template, remaining),
@@ -489,7 +490,7 @@ public class ConversationManagerActor : MorganaActor
                 ErrorReason = send90 ? "dust_budget_low_90" : "dust_budget_low_70",
                 AgentName = "Morgana",
                 AgentCompleted = false,
-                ConversationMetadata = new Records.ConversationMetadata(remaining)
+                ConversationMetadata = new ConversationMetadata(remaining)
             });
         }
         catch (Exception ex)
@@ -510,7 +511,7 @@ public class ConversationManagerActor : MorganaActor
     {
         try
         {
-            await channelService.SendMessageAsync(new Records.ChannelMessage
+            await channelService.SendMessageAsync(new ChannelMessage
             {
                 ConversationId = conversationId,
                 Text = dustLimitingOptions.ErrorMessage,
@@ -518,7 +519,7 @@ public class ConversationManagerActor : MorganaActor
                 ErrorReason = "dust_budget_exhausted",
                 AgentName = "Morgana",
                 AgentCompleted = false,
-                ConversationMetadata = new Records.ConversationMetadata(0.0)
+                ConversationMetadata = new ConversationMetadata(0.0)
             });
         }
         catch (Exception ex)

@@ -1,3 +1,5 @@
+using Morgana.Contracts;
+
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
@@ -22,20 +24,20 @@ namespace Morgana.AI.Interfaces;
 ///
 /// <para><strong>Built-In implementation:</strong></para>
 /// <para><c>SignalRChannelService</c> (in Morgana.Web) is the reference transport used by the
-/// Cauldron web UI. It only knows how to push <see cref="Records.ChannelMessage"/> envelopes
+/// Cauldron web UI. It only knows how to push <see cref="ChannelMessage"/> envelopes
 /// and streaming chunks over a SignalR hub; it has no opinion on who is listening.</para>
 /// </remarks>
 public interface IChannelService
 {
     /// <summary>
     /// Sends a message to the conversation group targeted by
-    /// <see cref="Records.ChannelMessage.ConversationId"/>. The message envelope carries the
+    /// <see cref="ChannelMessage.ConversationId"/>. The message envelope carries the
     /// full payload (text, message type, quick replies, rich card, agent identity, error
     /// reason, fading duration) and is delivered through the channel's native transport.
     /// </summary>
     /// <param name="channelMessage">The fully-formed channel message to deliver.</param>
     /// <returns>Task representing the async send operation</returns>
-    Task SendMessageAsync(Records.ChannelMessage channelMessage);
+    Task SendMessageAsync(ChannelMessage channelMessage);
 
     /// <summary>
     /// Sends a streaming chunk to a conversation group via the channel for progressive response rendering.

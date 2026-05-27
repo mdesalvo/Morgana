@@ -1,5 +1,6 @@
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;
+using Morgana.Contracts;
 
 namespace Morgana.AI.Services;
 
@@ -84,11 +85,11 @@ public class AdaptingChannelService : IChannelService
     }
 
     /// <inheritdoc/>
-    public async Task SendMessageAsync(Records.ChannelMessage channelMessage)
+    public async Task SendMessageAsync(ChannelMessage channelMessage)
     {
-        Records.ChannelMetadata registeredChannelMetadata = GetRegisteredMetadataOrThrow(channelMessage.ConversationId);
+        ChannelMetadata registeredChannelMetadata = GetRegisteredMetadataOrThrow(channelMessage.ConversationId);
 
-        Records.ChannelMessage adaptedChannelMessage = await channelAdapter.AdaptAsync(channelMessage, registeredChannelMetadata.Capabilities);
+        ChannelMessage adaptedChannelMessage = await channelAdapter.AdaptAsync(channelMessage, registeredChannelMetadata.Capabilities);
         IChannelService concreteChannelService = channelServiceFactory.Resolve(registeredChannelMetadata.Coordinates.DeliveryMode);
         await concreteChannelService.SendMessageAsync(adaptedChannelMessage);
     }
@@ -96,7 +97,7 @@ public class AdaptingChannelService : IChannelService
     /// <inheritdoc/>
     public Task SendStreamChunkAsync(string conversationId, string chunkText)
     {
-        Records.ChannelMetadata registeredChannelMetadata = GetRegisteredMetadataOrThrow(conversationId);
+        ChannelMetadata registeredChannelMetadata = GetRegisteredMetadataOrThrow(conversationId);
         IChannelService concreteChannelService = channelServiceFactory.Resolve(registeredChannelMetadata.Coordinates.DeliveryMode);
         return concreteChannelService.SendStreamChunkAsync(conversationId, chunkText);
     }
@@ -108,9 +109,9 @@ public class AdaptingChannelService : IChannelService
     /// before any outbound send happens — reaching a send path without a registered entry is
     /// therefore an internal invariant violation, not a client mistake.
     /// </summary>
-    private Records.ChannelMetadata GetRegisteredMetadataOrThrow(string conversationId)
+    private ChannelMetadata GetRegisteredMetadataOrThrow(string conversationId)
     {
-        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out Records.ChannelMetadata? registeredChannelMetadata))
+        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? registeredChannelMetadata))
             throw new InvalidOperationException(
                 $"No channel metadata registered for conversation {conversationId}; " +
                 "the start-conversation gate should have ensured registration before any send.");

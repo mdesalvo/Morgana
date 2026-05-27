@@ -3,6 +3,7 @@
     <File Path="Directory.Build.props" />
     <File Path="CLAUDE.md" />
   </Folder>
+  <Project Path="Morgana.Contracts\Morgana.Contracts.csproj" />
   <Project Path="Morgana.AI\Morgana.AI.csproj" />
   <Project Path="Morgana.Web\Morgana.Web.csproj" />
 </Solution>

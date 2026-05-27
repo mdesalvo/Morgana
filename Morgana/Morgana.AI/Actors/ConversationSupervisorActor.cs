@@ -6,6 +6,7 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Telemetry;
+using Morgana.Contracts;
 using Status = Akka.Actor.Status;
 
 namespace Morgana.AI.Actors;
@@ -207,13 +208,13 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("Sending presentation to client via channel");
 
-        List<Records.QuickReply> quickReplies = ctx.LLMQuickReplies?
-            .Select(qr => new Records.QuickReply(qr.Id, qr.Label, qr.Value))
+        List<QuickReply> quickReplies = ctx.LLMQuickReplies?
+            .Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value))
             .ToList() ?? [];
 
         try
         {
-            await channelService.SendMessageAsync(new Records.ChannelMessage
+            await channelService.SendMessageAsync(new ChannelMessage
             {
                 ConversationId = conversationId,
                 Text = ctx.Message,
@@ -773,14 +774,14 @@ public class ConversationSupervisorActor : MorganaActor
     /// is suppressed: streamed chunks bypass the adapter, so the user would see raw content
     /// that then gets visibly rewritten once the final adapted message lands — a jarring UX glitch.
     /// </summary>
-    private Records.ChannelCapabilities GetEffectiveCapabilities()
+    private ChannelCapabilities GetEffectiveCapabilities()
     {
-        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out Records.ChannelMetadata? registeredChannelMetadata))
+        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? registeredChannelMetadata))
             throw new InvalidOperationException(
                 $"No channel metadata registered for conversation {conversationId}; " +
                 "the start-conversation gate and ConversationManagerActor should have ensured registration before any turn.");
 
-        Records.ChannelCapabilities channelCapabilities = registeredChannelMetadata.Capabilities;
+        ChannelCapabilities channelCapabilities = registeredChannelMetadata.Capabilities;
 
         bool willNeedAdaptation = !channelCapabilities.SupportsRichCards
                                    || !channelCapabilities.SupportsQuickReplies

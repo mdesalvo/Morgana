@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI.Actors;
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;
+using Morgana.Contracts;
 
 namespace Morgana.AI.Services;
 
@@ -72,7 +73,7 @@ public class LLMPresenterService : IPresenterService
     /// </param>
     /// <param name="channelAdapter">
     /// Canonical capability-driven adaptation chain. Invoked on the rich
-    /// <see cref="Records.ChannelMessage"/> built around the LLM-generated presentation so that
+    /// <see cref="ChannelMessage"/> built around the LLM-generated presentation so that
     /// resource-poor channels see the same degradation any other outbound message would receive.
     /// </param>
     /// <param name="logger">Logger for diagnostic output.</param>
@@ -98,7 +99,7 @@ public class LLMPresenterService : IPresenterService
         // Resolve the originating channel from the conversation id.
         // The store contract guarantees an entry exists once the controller gate and ConversationManagerActor have run,
         // so a miss here is an invariant violation we have to surface rather than mask.
-        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out Records.ChannelMetadata? channelMetadata))
+        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? channelMetadata))
         {
             throw new InvalidOperationException(
                 $"LLMPresenterService: no channel metadata registered for conversation '{conversationId}'. " +
@@ -108,7 +109,7 @@ public class LLMPresenterService : IPresenterService
         // Single-shot per channel. The first caller for `channelName` triggers BuildPresentationResultAsync
         // through the Lazy<Task<>>; every subsequent caller re-enters the same Task and observes
         // the same materialised PresentationResult.
-        Records.ChannelCapabilities channelCapabilities = channelMetadata.Capabilities;
+        ChannelCapabilities channelCapabilities = channelMetadata.Capabilities;
         string channelName = channelMetadata.Coordinates.ChannelName;
         return cache.GetOrAdd(
             channelName,
@@ -123,7 +124,7 @@ public class LLMPresenterService : IPresenterService
     /// </summary>
     private async Task<Records.PresentationResult> BuildPresentationResultAsync(
         IReadOnlyList<Records.IntentDefinition> displayableIntents,
-        Records.ChannelCapabilities channelCapabilities,
+        ChannelCapabilities channelCapabilities,
         string channelName)
     {
         logger.LogInformation(
@@ -138,8 +139,8 @@ public class LLMPresenterService : IPresenterService
 
         // Capability-driven degradation with caching of the outcome:
         // subsequent conversations on this channel pay zero LLM cost.
-        Records.ChannelMessage channelMessage = await channelAdapter.AdaptAsync(
-            new Records.ChannelMessage
+        ChannelMessage channelMessage = await channelAdapter.AdaptAsync(
+            new ChannelMessage
             {
                 ConversationId = $"{channelName}-presentation-cache",
                 Text = presentationResult.Message,
@@ -185,8 +186,8 @@ public class LLMPresenterService : IPresenterService
                  ?? throw new InvalidOperationException("LLM returned null presentation");
 
             // Map the wire-format DTO into the domain QuickReply records the rest of Morgana speaks.
-            List<Records.QuickReply> quickReplies = presentation.QuickReplies
-                .Select(qr => new Records.QuickReply(qr.Id, qr.Label, qr.Value))
+            List<QuickReply> quickReplies = presentation.QuickReplies
+                .Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value))
                 .ToList();
 
             logger.LogInformation(
@@ -217,8 +218,8 @@ public class LLMPresenterService : IPresenterService
 
         // One quick reply per intent. Label falls back to the intent name; value falls back to a
         // generic "Help me with X" so the button always carries a usable payload.
-        List<Records.QuickReply> fallbackReplies = displayableIntents
-            .Select(intent => new Records.QuickReply(
+        List<QuickReply> fallbackReplies = displayableIntents
+            .Select(intent => new QuickReply(
                 intent.Name,
                 intent.Label ?? intent.Name,
                 intent.DefaultValue ?? $"Help me with {intent.Name}"))
