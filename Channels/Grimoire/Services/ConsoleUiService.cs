@@ -10,8 +10,8 @@ namespace Grimoire.Services;
 /// <summary>
 /// Terminal UI for Grimoire built on Spectre.Console's <see cref="LiveDisplay"/>: a sticky
 /// header pinned at the top shows the conversation id and the current speaker
-/// (<c>Morgana</c> → magenta1; <c>Morgana (Agent)</c> → hotpink), a scrolling body
-/// prints the chat history colored by speaker (the user is azure / skyblue1), and the
+/// (<c>Morgana</c> → purple; <c>Morgana (Agent)</c> → pink), a scrolling body
+/// prints the chat history colored by speaker (the user is white), and the
 /// bottom-most line hosts the input buffer with a blinking cursor. Incoming webhook
 /// messages are drained from a channel and trigger a refresh; user keystrokes are
 /// captured via <see cref="Console.ReadKey(bool)"/> on a pool thread.
@@ -1017,7 +1017,7 @@ public sealed class ConsoleUiService
         return rows;
     }
 
-    /// <summary>Maps a speaker name to its palette color: <c>You</c> → skyblue1, <c>Morgana</c> → magenta1, everything else → hotpink.</summary>
+    /// <summary>Maps a speaker name to its palette color: <c>You</c> → white, <c>Morgana</c> → purple, everything else (specialised agents) → pink.</summary>
     private static string SpeakerColor(string agentName)
     {
         if (agentName.Equals("You", StringComparison.OrdinalIgnoreCase))

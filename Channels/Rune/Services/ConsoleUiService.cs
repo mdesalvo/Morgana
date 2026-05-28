@@ -579,7 +579,7 @@ public sealed class ConsoleUiService
     /// at <paramref name="termWidth"/>, honouring embedded newlines as hard row breaks (an LLM
     /// reply with <c>...?\n\n#INT#</c> spans three rows even if its char count fits one). The
     /// leading <c>Who:</c> prefix on the very first row is bold; every row is tinted in the speaker
-    /// colour (magenta1 for Morgana, hotpink for specialised agents, skyblue1 for the user).
+    /// colour (emerald green for Morgana, light green for specialised agents, white for the user).
     /// </summary>
     /// <remarks>
     /// Every emitted <see cref="Markup"/> is a single line no wider than <paramref name="termWidth"/>
@@ -778,7 +778,7 @@ public sealed class ConsoleUiService
         return sb.ToString();
     }
 
-    /// <summary>Maps a speaker name to its palette color: <c>You</c> → skyblue1, <c>Morgana</c> → magenta1, everything else → hotpink.</summary>
+    /// <summary>Maps a speaker name to its palette color: <c>You</c> → white, <c>Morgana</c> → emerald green, everything else (specialised agents) → light green.</summary>
     private static string SpeakerColor(string agentName)
     {
         if (agentName.Equals("You", StringComparison.OrdinalIgnoreCase))

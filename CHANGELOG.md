@@ -26,6 +26,9 @@ Architecturally it reaffirms that Morgana adapts on the **capability profile, no
 - **Deterministic container builds** — `Morgana.Examples` now references `Morgana.AI` by **project reference** instead of a version-pinned NuGet `PackageReference`, and the channel/server Dockerfiles stage the first-party project subtrees and mirror the repo layout under `/src`. The Docker build no longer has to resolve the in-development framework version from the public feed (which previously broke with `NU1102` until the version was published), making the **image build self-contained and reproducible**
 - Updated `Microsoft.Agents.AI` dependency to 1.7.0
 
+### 🐛 Fixed
+- Rune scrollback row budgeting and text wrapping miscounted wide/zero-width glyphs
+
 ### 🚀 Future Enablement
 - **Rich-TTY domain experiences** — Grimoire proves Morgana's *full* expressive surface (streaming, markdown, rich cards, quick replies) lives natively in a terminal, with no browser and no HTML. Pair it with your own plugins and your domain AI becomes a **rich command-line experience**: an ops console that renders structured cards, a runbook agent with guided quick replies, a headless-but-expressive CI assistant — everything Cauldron offers, shipped straight to the shell. Where 0.21's Rune opened *TTY-native domain AI*, Grimoire makes it **TTY-native and visually rich**
 - **Slash-command agentic extensions** — Grimoire's in-`Live` input model already multiplexes typed text, an arrow-key quick-reply selector and a scrollback pager over the same keyboard. That client-side command substrate is the natural foundation for local `/commands` (clear, export, jump-to-turn, search, theme) — turning the rich terminal from a pure conversation surface into an **interactive agentic console** without round-tripping every keystroke to Morgana
