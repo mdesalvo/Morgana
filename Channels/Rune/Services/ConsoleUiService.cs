@@ -597,17 +597,17 @@ public sealed class ConsoleUiService
         // would inflate the content height with invisible phantom rows — lighting the header's
         // ▲ scroll glyph on a conversation that fits the viewport. This is the Grimoire-port
         // adjustment for a channel that carries neither rich cards nor quick replies.
-        string text = BlankRunRegex.Replace(message.Text.Trim(), "\n\n");
+        string text = StripVariationSelectors(BlankRunRegex.Replace(message.Text.Trim(), "\n\n"));
         string fullText = $"{message.Who}: {text}";
         bool first = true;
         foreach (string line in fullText.Split('\n'))
         {
-            int lineRows = line.Length == 0 ? 1 : (line.Length + termWidth - 1) / termWidth;
-            for (int rowInLine = 0; rowInLine < lineRows; rowInLine++)
+            // Wrap by terminal CELLS (not char count) on whole runes: a wide CJK glyph counts as
+            // two columns and a combining mark as zero, so a char-indexed chunk could overflow the
+            // row and Spectre would silently wrap it — breaking the one-Markup-per-row contract that
+            // BuildBody's scrollback budget depends on.
+            foreach (string chunk in ChunkByCells(line, termWidth))
             {
-                int offset = rowInLine * termWidth;
-                int chunkLen = Math.Min(termWidth, Math.Max(0, line.Length - offset));
-                string chunk = chunkLen > 0 ? line.Substring(offset, chunkLen) : string.Empty;
                 EmitMessageRow(rows, message, chunk, isFirstRowOfMessage: first);
                 first = false;
             }
@@ -675,48 +675,107 @@ public sealed class ConsoleUiService
         // markup row-by-row, applying the chevron / cursor style tags at their exact
         // positions so the cursor stays at the very end regardless of where the wrap
         // boundaries land.
-        int totalLen = currentInput.Length + 3;
-        int cursorPos = totalLen - 1;
+        // Visible layout: chevron, a space, the input runes, then the cursor — packed into rows of
+        // at most termWidth CELLS (a wide rune counts as two, so the cursor stays put and rows never
+        // wrap silently behind the budget). currentInput is iterated by rune, so a surrogate pair is
+        // never split across a wrap boundary.
+        List<(string Markup, int Cells)> units =
+        [
+            ($"[{UserColor}]›[/]", 1),
+            (" ", 1),
+        ];
+        foreach (System.Text.Rune rune in currentInput.EnumerateRunes())
+            units.Add((Markup.Escape(rune.ToString()), RuneCells(rune)));
+        units.Add(($"[blink {UserColor}]_[/]", 1));
+
         List<IRenderable> rows = [];
-        int rowStart = 0;
         StringBuilder sb = new(capacity: termWidth + 32 /* slack for style tags */);
-        while (rowStart < totalLen)
+        int rowCells = 0;
+        foreach ((string markup, int cells) in units)
         {
-            int rowEnd = Math.Min(rowStart + termWidth, totalLen);
-            sb.Clear();
-            for (int p = rowStart; p < rowEnd; p++)
+            // Close the current row before a unit that would overflow it — but never on an empty
+            // row, so a unit wider than the whole width still lands somewhere.
+            if (rowCells + cells > termWidth && sb.Length > 0)
             {
-                if (p == 0)
-                    sb.Append($"[{UserColor}]›[/]");
-                else if (p == 1)
-                    sb.Append(' ');
-                else if (p == cursorPos)
-                    sb.Append($"[blink {UserColor}]_[/]");
-                else
-                    sb.Append(Markup.Escape(currentInput[p - 2].ToString()));
+                rows.Add(new Markup(sb.ToString()));
+                sb.Clear();
+                rowCells = 0;
             }
-            rows.Add(new Markup(sb.ToString()));
-            rowStart = rowEnd;
+            sb.Append(markup);
+            rowCells += cells;
         }
+        if (sb.Length > 0)
+            rows.Add(new Markup(sb.ToString()));
         return rows;
     }
 
-    /// <summary>Splits <paramref name="content"/> into <paramref name="termWidth"/>-wide chunks, each rendered as a single-row <see cref="Markup"/> wrapped in <paramref name="style"/>.</summary>
+    /// <summary>Splits <paramref name="content"/> into <paramref name="termWidth"/>-cell chunks, each rendered as a single-row <see cref="Markup"/> wrapped in <paramref name="style"/>.</summary>
     private static List<IRenderable> ChunkStyledRows(string content, int termWidth, string style)
     {
-        if (content.Length == 0)
-            return [new Markup(string.Empty)];
-
-        List<IRenderable> rows = new(capacity: (content.Length + termWidth - 1) / termWidth);
-        int offset = 0;
-        while (offset < content.Length)
-        {
-            int len = Math.Min(termWidth, content.Length - offset);
-            string chunk = content.Substring(offset, len);
+        List<IRenderable> rows = [];
+        foreach (string chunk in ChunkByCells(content, termWidth))
             rows.Add(new Markup($"[{style}]{Markup.Escape(chunk)}[/]"));
-            offset += len;
-        }
         return rows;
+    }
+
+    /// <summary>
+    /// Greedy wrap of <paramref name="text"/> at <paramref name="width"/> terminal columns, measured
+    /// in cells (Spectre's Wcwidth-backed <c>GetCellWidth</c>: wide CJK count as two, combining
+    /// marks/variation selectors as zero) and broken on whole runes so a surrogate pair is never
+    /// split. Always returns at least one (possibly empty) slice, so an empty line still emits one row.
+    /// </summary>
+    private static List<string> ChunkByCells(string text, int width)
+    {
+        width = Math.Max(1, width);
+        if (text.Length == 0)
+            return [string.Empty];
+
+        List<string> slices = [];
+        StringBuilder current = new();
+        int currentCells = 0;
+        foreach (System.Text.Rune rune in text.EnumerateRunes())
+        {
+            int runeCells = RuneCells(rune);
+            // Close the current slice before a rune that would overflow the width — but never on an
+            // empty slice, otherwise a rune wider than the whole width (pathological) would loop.
+            if (currentCells + runeCells > width && current.Length > 0)
+            {
+                slices.Add(current.ToString());
+                current.Clear();
+                currentCells = 0;
+            }
+            current.Append(rune.ToString());
+            currentCells += runeCells;
+        }
+        if (current.Length > 0 || slices.Count == 0)
+            slices.Add(current.ToString());
+        return slices;
+    }
+
+    /// <summary>Terminal cell width of a single rune (0 for combining/zero-width, 2 for wide CJK, 1 otherwise), via Spectre's Wcwidth-backed measurement.</summary>
+    private static int RuneCells(System.Text.Rune rune) => rune.ToString().GetCellWidth();
+
+    /// <summary>
+    /// Removes Unicode variation selectors (U+FE00–U+FE0F): zero-width format codepoints that flip a
+    /// base glyph between text and emoji presentation. An emoji-presentation sequence such as <c>⚠️</c>
+    /// (<c>⚠</c> + U+FE0F) is measured as two cells by Wcwidth yet rendered as one by most terminals,
+    /// which would throw the per-message row budget off by a column. Forcing text presentation keeps
+    /// measured and rendered widths in agreement. All selectors are single BMP chars, so a char scan
+    /// is surrogate-safe.
+    /// </summary>
+    private static string StripVariationSelectors(string text)
+    {
+        bool hasSelector = false;
+        foreach (char c in text)
+            if (c is >= '\uFE00' and <= '\uFE0F') { hasSelector = true; break; }
+        if (!hasSelector)
+            return text; // hot path: the overwhelming majority of message text has none
+
+        StringBuilder sb = new(text.Length);
+        foreach (char c in text)
+            if (c is not (>= '\uFE00' and <= '\uFE0F'))
+                sb.Append(c);
+        return sb.ToString();
     }
 
     /// <summary>Maps a speaker name to its palette color: <c>You</c> → skyblue1, <c>Morgana</c> → magenta1, everything else → hotpink.</summary>
