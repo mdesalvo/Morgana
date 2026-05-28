@@ -169,12 +169,15 @@ public static class RichCardTerminalRenderService
         string valueStyle = keyValue.Emphasize ? $"{ValueForeground} bold" : ValueForeground;
 
         // Single-row layout when "key" + at least one gap + "value" fits the content width
-        // (the +1 is that minimum one-space gap). The middle segment is pure filler spaces that
-        // push the value flush to the right edge: key…………value. fill is guaranteed ≥ 1 here
+        // (the +1 is that minimum one-space gap). Widths are measured in terminal cells, not chars,
+        // so wide/zero-width glyphs don't skew the fill. The middle segment is pure filler spaces
+        // that push the value flush to the right edge: key…………value. fill is guaranteed ≥ 1 here
         // because the branch condition reserved that one column, so the value never abuts the key.
-        if (key.Length + value.Length + 1 <= width)
+        int keyCells = key.GetCellWidth();
+        int valueCells = value.GetCellWidth();
+        if (keyCells + valueCells + 1 <= width)
         {
-            int fill = width - key.Length - value.Length;
+            int fill = width - keyCells - valueCells;
             return [Content([new CardSeg(key, keyStyle), new CardSeg(new string(' ', fill), ""), new CardSeg(value, valueStyle)])];
         }
 
@@ -346,10 +349,13 @@ public static class RichCardTerminalRenderService
         else
         {
             // Emit each segment, wrapping it in its [style]…[/] tag when it has one. Crucially we
-            // track `visible` from seg.Text.Length — the COLUMN count — not from the bytes written:
-            // the markup tags and the doubling from Markup.Escape (which turns "[" into "[[" so a
-            // literal bracket survives the parser) cost zero screen columns. Builders upstream have
-            // already guaranteed the segments sum to ≤ innerWidth, so this never overflows.
+            // track `visible` from the segment's terminal CELL WIDTH — not its char length and not
+            // the bytes written. The markup tags and the doubling from Markup.Escape (which turns
+            // "[" into "[[" so a literal bracket survives the parser) cost zero screen columns; and
+            // a char count would be wrong for wide glyphs (CJK), zero-width combining marks and
+            // variation selectors (e.g. ⚠️ = ⚠ + U+FE0F: two chars, one column). Measuring cells is
+            // what keeps the right border aligned for those rows. Builders upstream have already
+            // wrapped/truncated each line to ≤ innerWidth cells, so this never overflows.
             int visible = 0;
             foreach (CardSeg seg in line.Segs)
             {
@@ -359,7 +365,7 @@ public static class RichCardTerminalRenderService
                     sb.Append('[').Append(seg.Style).Append(']').Append(Markup.Escape(seg.Text)).Append("[/]");
                 else
                     sb.Append(Markup.Escape(seg.Text));
-                visible += seg.Text.Length;
+                visible += seg.Text.GetCellWidth();
             }
             // Pad the remainder so the interior is always exactly innerWidth columns — this is what
             // makes the right border line up vertically no matter how short the content is.
@@ -383,36 +389,97 @@ public static class RichCardTerminalRenderService
     private static CardLine Blank()
         => new CardLine([], IsDivider: false);
 
-    /// <summary>Strips inline markdown to plain text, mirroring Cauldron's <c>SanitizeRichCard</c>.</summary>
+    /// <summary>Strips inline markdown to plain text (mirroring Cauldron's <c>SanitizeRichCard</c>), then normalises emoji presentation so measured width matches what the terminal draws.</summary>
     private static string Plain(string? text) =>
-        string.IsNullOrEmpty(text) ? string.Empty : Markdown.ToPlainText(text, Pipeline).Trim();
+        string.IsNullOrEmpty(text) ? string.Empty : StripVariationSelectors(Markdown.ToPlainText(text, Pipeline).Trim());
 
-    /// <summary>Greedy char-wrap at <paramref name="width"/> columns — same slicing model the markdown renderer uses. Always returns at least one (possibly empty) slice.</summary>
+    /// <summary>
+    /// Removes Unicode variation selectors (U+FE00–U+FE0F). These are zero-width format codepoints
+    /// that flip a base glyph between text and emoji presentation; an emoji-presentation sequence
+    /// such as <c>⚠️</c> (<c>⚠</c> + U+FE0F) is measured as <b>two</b> cells by Wcwidth yet rendered
+    /// as <b>one</b> by most terminals — a mismatch that insets that single row's right border.
+    /// Forcing text presentation keeps the measured and rendered widths in agreement. All selectors
+    /// are single BMP chars, so a char-level scan is surrogate-safe.
+    /// </summary>
+    private static string StripVariationSelectors(string text)
+    {
+        bool hasSelector = false;
+        foreach (char c in text)
+            if (c is >= '\uFE00' and <= '\uFE0F') { hasSelector = true; break; }
+        if (!hasSelector)
+            return text; // hot path: the overwhelming majority of card text has none
+
+        StringBuilder sb = new(text.Length);
+        foreach (char c in text)
+            if (c is not (>= '\uFE00' and <= '\uFE0F'))
+                sb.Append(c);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Greedy wrap at <paramref name="width"/> terminal columns, measured in cells (CJK count as
+    /// two, combining marks/variation selectors as zero) and broken on whole runes so a surrogate
+    /// pair is never split. Always returns at least one (possibly empty) slice.
+    /// </summary>
     private static List<string> WrapText(string text, int width)
     {
         width = Math.Max(1, width);
         if (text.Length == 0)
             return [string.Empty];
-        List<string> slices = new((text.Length + width - 1) / width);
-        for (int offset = 0; offset < text.Length; offset += width)
-            slices.Add(text.Substring(offset, Math.Min(width, text.Length - offset)));
+
+        List<string> slices = [];
+        StringBuilder current = new();
+        int currentCells = 0;
+        foreach (Rune rune in text.EnumerateRunes())
+        {
+            int runeCells = RuneCells(rune);
+            // Close the current slice before a rune that would overflow the width — but never on an
+            // empty slice, otherwise a rune wider than the whole width (pathological) would loop.
+            if (currentCells + runeCells > width && current.Length > 0)
+            {
+                slices.Add(current.ToString());
+                current.Clear();
+                currentCells = 0;
+            }
+            current.Append(rune.ToString());
+            currentCells += runeCells;
+        }
+        if (current.Length > 0 || slices.Count == 0)
+            slices.Add(current.ToString());
         return slices;
     }
 
-    /// <summary>Truncates to <paramref name="width"/> columns, appending an ellipsis when it has to cut and there is room for one.</summary>
+    /// <summary>Truncates to <paramref name="width"/> terminal columns (cell-measured, rune-safe), appending an ellipsis when it has to cut and there is room for one.</summary>
     private static string Trunc(string text, int width)
     {
         width = Math.Max(1, width);
-        if (text.Length <= width)
+        if (text.GetCellWidth() <= width)
             return text;
-        // The "…" itself occupies one column, so keep width-1 chars and append it — total stays
-        // exactly `width`. When width is 1 there's no room for both, so hard-cut to a single char.
-        return width >= 2 ? text[..(width - 1)] + "…" : text[..width];
+        // The "…" itself occupies one column, so keep width-1 columns of content and append it —
+        // total stays ≤ width. When width is 1 there's no room for both, so hard-cut to a single column.
+        int budget = width >= 2 ? width - 1 : width;
+        StringBuilder sb = new();
+        int cells = 0;
+        foreach (Rune rune in text.EnumerateRunes())
+        {
+            int runeCells = RuneCells(rune);
+            if (cells + runeCells > budget)
+                break;
+            sb.Append(rune.ToString());
+            cells += runeCells;
+        }
+        return width >= 2 ? sb.ToString() + "…" : sb.ToString();
     }
 
-    /// <summary>Right-pads with spaces to exactly <paramref name="width"/> columns (input assumed already ≤ width).</summary>
-    private static string Pad(string text, int width) =>
-        text.Length >= width ? text : text + new string(' ', width - text.Length);
+    /// <summary>Right-pads with spaces to exactly <paramref name="width"/> terminal columns (cell-measured; input assumed already ≤ width).</summary>
+    private static string Pad(string text, int width)
+    {
+        int cells = text.GetCellWidth();
+        return cells >= width ? text : text + new string(' ', width - cells);
+    }
+
+    /// <summary>Terminal cell width of a single rune (0 for combining/zero-width, 2 for wide CJK, 1 otherwise), via Spectre's Wcwidth-backed measurement.</summary>
+    private static int RuneCells(Rune rune) => rune.ToString().GetCellWidth();
 
     /// <summary>One styled run of visible text inside a card line. <paramref name="Style"/> is a full Spectre style token string (e.g. <c>"grey85 bold"</c>) or empty for unstyled padding.</summary>
     private readonly record struct CardSeg(string Text, string Style);
