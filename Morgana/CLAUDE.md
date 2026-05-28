@@ -18,9 +18,9 @@ Morgana/
     Morgana.Web/           # ASP.NET Core host (controllers, SignalR hub, DI wiring)
     Directory.Build.props  # Shared build settings, version, NuGet dependencies
   Channels/                # Reference channels (clients that talk to Morgana)
-    Cauldron/              # Blazor Server frontend — rich reference channel (SignalR)
+    Cauldron/              # Blazor Server frontend — rich-Web reference channel (SignalR)
     Grimoire/              # Spectre.Console CLI — rich-TTY reference channel (webhook)
-    Rune/                  # Spectre.Console CLI — poor-but-honest reference channel (webhook)
+    Rune/                  # Spectre.Console CLI — basic-TTY reference channel (webhook)
   Morgana.Examples/        # Example plugin with BillingAgent, ContractAgent, MonkeyAgent
   CHANGELOG.md
 ```
@@ -38,7 +38,7 @@ Morgana/
 | `Providers/` | `MorganaAIContextProvider` (per-agent context variables, with cross-agent shared variables persisted in the conversation-scoped `shared_context` registry), `MorganaChatHistoryProvider` (chat history with optional summarizing reducer) |
 | `Services/` | Default implementations of all interfaces |
 | `Telemetry/` | `MorganaTelemetry` (ActivitySource, metrics), `OpenTelemetryExtensions` |
-| `Records.cs` | All immutable record types (DTOs) for actor messages, configuration, rich cards, channel capabilities |
+| `Records.cs` | All immutable record types (DTOs) for actor messages, configuration |
 | `morgana.json` | Framework-level prompts (Morgana, Classifier, Guard, Presentation, ChannelAdapter) with global policies, base tools, error answers |
 
 ### Morgana.Web (host)
@@ -54,15 +54,15 @@ Morgana/
 
 ### Cauldron (rich reference channel)
 
-Blazor Server app at `Channels/Cauldron/` (separate solution, has its own `CLAUDE.md`). Reference channel for Morgana: rich chat UI with streaming, quick replies, rich cards, typing indicators, conversation resume via `ProtectedLocalStorage`. Communicates via REST + SignalR (`deliveryMode=signalr`). Self-issues JWT tokens for authentication (`iss=cauldron`). Duplicates wire-format DTOs in `Messages/Contracts/` (no shared contracts project — sync changes in lockstep).
+Blazor Server app at `Channels/Cauldron/` (separate solution, has its own `CLAUDE.md`). Reference channel for Morgana: rich chat UI with streaming, quick replies, rich cards, typing indicators, conversation resume via `ProtectedLocalStorage`. Communicates via REST + SignalR (`deliveryMode=signalr`). Self-issues JWT tokens for authentication (`iss=cauldron`).
 
 ### Grimoire (rich reference channel — TTY)
 
-Spectre.Console CLI at `Channels/Grimoire/` (separate solution, has its own `CLAUDE.md`). Third reference channel, sibling of Cauldron and Rune: it completes the channel × capability matrix by occupying the rich-TTY quadrant ("Rune with steroids" — not a fork of Rune, a sibling with its own life). Same stack as Rune (Kestrel-hosted console, `deliveryMode=webhook`, port 5004) but declares the **full** capability profile (all rich features on, `MaxMessageLength=null`), so it renders Morgana's non-degraded rich output natively in the terminal: Markdig→Spectre markdown rendering, hand-drawn bordered rich cards, per-turn `AnsiConsole.Live` streaming with a typewriter effect, blocking arrow-key quick replies, and scrollback. Because it advertises `MaxMessageLength=null` the `MorganaChannelAdapter` always short-circuits (hot path) — Grimoire never exercises the degradation codepath, which remains Rune's job. Self-issues JWT tokens for authentication (`iss=grimoire`). Like Cauldron and Rune, duplicates wire-format DTOs in `Messages/Contracts/`.
+Spectre.Console CLI at `Channels/Grimoire/` (separate solution, has its own `CLAUDE.md`). Third reference channel, sibling of Cauldron and Rune: it completes the channel × capability matrix by occupying the rich-TTY quadrant ("Rune with steroids" — not a fork of Rune, a sibling with its own life). Same stack as Rune (Kestrel-hosted console, `deliveryMode=webhook`, port 5004) but declares the **full** capability profile (all rich features on, `MaxMessageLength=null`), so it renders Morgana's non-degraded rich output natively in the terminal: Markdig→Spectre markdown rendering, hand-drawn bordered rich cards, per-turn `AnsiConsole.Live` streaming with a typewriter effect, blocking arrow-key quick replies, and scrollback. Because it advertises `MaxMessageLength=null` the `MorganaChannelAdapter` always short-circuits (hot path) — Grimoire never exercises the degradation codepath, which remains Rune's job. Self-issues JWT tokens for authentication (`iss=grimoire`)..
 
 ### Rune (poor-but-honest reference channel)
 
-Spectre.Console CLI at `Channels/Rune/` (separate solution, has its own `CLAUDE.md`). Second reference channel, complementary to Cauldron: Kestrel-hosted console app that exercises the webhook delivery path (`deliveryMode=webhook`) and the "poor but honest" capability profile (all rich features off, `MaxMessageLength=500`) — the contract surface `MorganaChannelAdapter` is supposed to degrade toward. Self-issues JWT tokens for authentication (`iss=rune`). Like Cauldron, duplicates wire-format DTOs in `Messages/Contracts/`.
+Spectre.Console CLI at `Channels/Rune/` (separate solution, has its own `CLAUDE.md`). Second reference channel, complementary to Cauldron: Kestrel-hosted console app that exercises the webhook delivery path (`deliveryMode=webhook`) and the "poor but honest" capability profile (all rich features off, `MaxMessageLength=500`) — the contract surface `MorganaChannelAdapter` is supposed to degrade toward. Self-issues JWT tokens for authentication (`iss=rune`).
 
 ### Morgana.Examples (plugin)
 
