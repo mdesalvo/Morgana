@@ -34,7 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Morgana.AI" Version="$(Version)" />
+    <ProjectReference Include="..\Morgana\Morgana.AI\Morgana.AI.csproj" />
   </ItemGroup>
 
   <!-- Copy plugin to Morgana.Web plugins directory after build -->

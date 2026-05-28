@@ -19,25 +19,29 @@ ARG VERSION=latest
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy project files for all required projects (layer caching optimization)
-COPY ["Morgana/Morgana.Web/Morgana.Web.csproj", "Morgana.Web/"]
-COPY ["Morgana/Morgana.AI/Morgana.AI.csproj", "Morgana.AI/"]
-COPY ["Morgana/Morgana.Contracts/Morgana.Contracts.csproj", "Morgana.Contracts/"]
+# Copy project files for all required projects (layer caching optimization). The repo
+# layout is mirrored under /src so every ProjectReference resolves identically to the
+# host: Morgana.Web/AI/Contracts reference each other as siblings under Morgana/, and
+# Morgana.Examples (which lives outside Morgana/) references ..\Morgana\Morgana.AI.
+COPY ["Morgana/Morgana.Web/Morgana.Web.csproj", "Morgana/Morgana.Web/"]
+COPY ["Morgana/Morgana.AI/Morgana.AI.csproj", "Morgana/Morgana.AI/"]
+COPY ["Morgana/Morgana.Contracts/Morgana.Contracts.csproj", "Morgana/Morgana.Contracts/"]
 COPY ["Morgana.Examples/Morgana.Examples.csproj", "Morgana.Examples/"]
-COPY ["Morgana/Directory.Build.props", "Directory.Build.props"]
+COPY ["Morgana/Directory.Build.props", "Morgana/"]
 
-# Restore NuGet dependencies
-RUN dotnet restore "Morgana.Web/Morgana.Web.csproj"
+# Restore NuGet dependencies (host app + the separately-published plugin project)
+RUN dotnet restore "Morgana/Morgana.Web/Morgana.Web.csproj" && \
+    dotnet restore "Morgana.Examples/Morgana.Examples.csproj"
 
 # Copy all source code from all projects
-COPY Morgana/Morgana.Web/ Morgana.Web/
-COPY Morgana/Morgana.AI/ Morgana.AI/
-COPY Morgana/Morgana.Contracts/ Morgana.Contracts/
+COPY Morgana/Morgana.Web/ Morgana/Morgana.Web/
+COPY Morgana/Morgana.AI/ Morgana/Morgana.AI/
+COPY Morgana/Morgana.Contracts/ Morgana/Morgana.Contracts/
 COPY Morgana.Examples/ Morgana.Examples/
 
 # Build main project — InsideDockerBuild skips Directory.Build.targets'
 # host-side .env.versions generation, which can't see sibling projects here.
-WORKDIR "/src/Morgana.Web"
+WORKDIR "/src/Morgana/Morgana.Web"
 RUN dotnet build "Morgana.Web.csproj" -c Release -o /app/build /p:InsideDockerBuild=true
 
 # ==============================================================================
@@ -46,7 +50,7 @@ RUN dotnet build "Morgana.Web.csproj" -c Release -o /app/build /p:InsideDockerBu
 FROM build AS publish
 
 # Publish Morgana.Web (main application)
-WORKDIR "/src/Morgana.Web"
+WORKDIR "/src/Morgana/Morgana.Web"
 RUN dotnet publish "Morgana.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false /p:InsideDockerBuild=true
 
 # Publish Morgana.Examples to plugins/ directory
@@ -64,7 +68,7 @@ ARG VERSION=latest
 
 # Metadata labels (OCI standard)
 LABEL org.opencontainers.image.title="Morgana"
-LABEL org.opencontainers.image.description="A magical witch assistant equipped with an enchanted AI-driven grimoire (BackEnd)"
+LABEL org.opencontainers.image.description="A magical witch assistant equipped with an enchanted AI-driven grimoire"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.authors="Marco De Salvo"
 LABEL org.opencontainers.image.url="https://github.com/mdesalvo/Morgana"
