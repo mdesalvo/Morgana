@@ -1,6 +1,6 @@
 using Cauldron.Interfaces;
 using Cauldron.Messages;
-using Cauldron.Messages.Contracts;
+using Morgana.Contracts;
 
 namespace Cauldron.Services;
 

@@ -24,7 +24,7 @@
     /// The rich card data to render.
     /// </summary>
     [Parameter]
-    public Cauldron.Messages.Contracts.RichCard? Card { get; set; }
+    public Morgana.Contracts.RichCard? Card { get; set; }
 
     private bool _sanitized;
 
@@ -32,7 +32,7 @@
     {
         if (Card != null && !_sanitized)
         {
-            MarkdownRendererService.SanitizeRichCard(Card);
+            Card = MarkdownRendererService.SanitizeRichCard(Card);
             _sanitized = true;
         }
     }

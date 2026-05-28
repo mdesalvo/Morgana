@@ -17,20 +17,26 @@ ARG VERSION=latest
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy project file and dependencies (for optimal layer caching)
-COPY ["Channels/Cauldron/Cauldron.csproj", "Cauldron/"]
-COPY ["Channels/Cauldron/Directory.Build.props", "Directory.Build.props"]
+# Copy project files and dependencies (for optimal layer caching). The repo layout is
+# mirrored under /src so Cauldron's ProjectReference to ../../Morgana/Morgana.Contracts
+# resolves, and each project picks up its own Directory.Build.props (Cauldron's vs the
+# Morgana one that the zero-dependency Morgana.Contracts inherits).
+COPY ["Channels/Cauldron/Cauldron.csproj", "Channels/Cauldron/"]
+COPY ["Channels/Cauldron/Directory.Build.props", "Channels/Cauldron/"]
+COPY ["Morgana/Morgana.Contracts/Morgana.Contracts.csproj", "Morgana/Morgana.Contracts/"]
+COPY ["Morgana/Directory.Build.props", "Morgana/"]
 
-# Restore NuGet dependencies (cached layer if .csproj doesn't change)
-RUN dotnet restore "Cauldron/Cauldron.csproj"
+# Restore NuGet dependencies (cached layer if .csproj files don't change)
+RUN dotnet restore "Channels/Cauldron/Cauldron.csproj"
 
-# Copy all source code
-COPY Channels/Cauldron/ Cauldron/
+# Copy all source code (channel + the referenced wire-contract project)
+COPY Channels/Cauldron/ Channels/Cauldron/
+COPY Morgana/Morgana.Contracts/ Morgana/Morgana.Contracts/
 
 # Build application in Release mode — InsideDockerBuild skips
 # Directory.Build.targets' host-side .env.versions generation, which can't see
 # sibling projects here.
-WORKDIR "/src/Cauldron"
+WORKDIR "/src/Channels/Cauldron"
 RUN dotnet build "Cauldron.csproj" -c Release -o /app/build /p:InsideDockerBuild=true
 
 # ==============================================================================

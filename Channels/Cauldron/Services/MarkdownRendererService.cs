@@ -1,4 +1,4 @@
-using Cauldron.Messages.Contracts;
+using Morgana.Contracts;
 using Markdig;
 using Microsoft.AspNetCore.Components;
 
@@ -50,58 +50,51 @@ public static class MarkdownRendererService
     /// plain text in every string property.  Call this once before rendering the card
     /// so that downstream Razor components receive clean content.
     /// </summary>
-    public static RichCard SanitizeRichCard(RichCard card)
-    {
-        card.Title = StripMarkdown(card.Title);
-        card.Subtitle = StripMarkdown(card.Subtitle);
-        SanitizeComponents(card.Components);
-        return card;
-    }
-
-    private static void SanitizeComponents(List<CardComponent> components)
-    {
-        foreach (CardComponent component in components)
+    public static RichCard SanitizeRichCard(RichCard card) =>
+        card with
         {
-            switch (component)
-            {
-                case TextBlockComponent textBlock:
-                    textBlock.Content = StripMarkdown(textBlock.Content);
-                    break;
+            Title = StripMarkdown(card.Title),
+            Subtitle = StripMarkdown(card.Subtitle),
+            Components = SanitizeComponents(card.Components)
+        };
 
-                case KeyValueComponent keyValue:
-                    keyValue.Key = StripMarkdown(keyValue.Key);
-                    keyValue.Value = StripMarkdown(keyValue.Value);
-                    break;
+    // The wire contracts are immutable records, so sanitization rebuilds the component
+    // tree functionally (`with`) instead of mutating in place.
+    private static List<CardComponent> SanitizeComponents(List<CardComponent> components) =>
+        components.Select(SanitizeComponent).ToList();
 
-                case BadgeComponent badge:
-                    badge.Text = StripMarkdown(badge.Text);
-                    break;
+    private static CardComponent SanitizeComponent(CardComponent component) => component switch
+    {
+        TextBlockComponent textBlock => textBlock with { Content = StripMarkdown(textBlock.Content) },
 
-                case ListComponent list:
-                    for (int i = 0; i < list.Items.Count; i++)
-                        list.Items[i] = StripMarkdown(list.Items[i]);
-                    break;
+        KeyValueComponent keyValue => keyValue with
+        {
+            Key = StripMarkdown(keyValue.Key),
+            Value = StripMarkdown(keyValue.Value)
+        },
 
-                case GridComponent grid:
-                    foreach (GridItem item in grid.Items)
-                    {
-                        item.Key = StripMarkdown(item.Key);
-                        item.Value = StripMarkdown(item.Value);
-                    }
-                    break;
+        BadgeComponent badge => badge with { Text = StripMarkdown(badge.Text) },
 
-                case SectionComponent section:
-                    section.Title = StripMarkdown(section.Title);
-                    section.Subtitle = StripMarkdown(section.Subtitle);
-                    SanitizeComponents(section.Components);
-                    break;
+        ListComponent list => list with { Items = list.Items.Select(StripMarkdown).ToList() },
 
-                case ImageComponent image:
-                    image.Caption = StripMarkdown(image.Caption);
-                    break;
-            }
-        }
-    }
+        GridComponent grid => grid with
+        {
+            Items = grid.Items
+                .Select(item => item with { Key = StripMarkdown(item.Key), Value = StripMarkdown(item.Value) })
+                .ToList()
+        },
+
+        SectionComponent section => section with
+        {
+            Title = StripMarkdown(section.Title),
+            Subtitle = StripMarkdown(section.Subtitle),
+            Components = SanitizeComponents(section.Components)
+        },
+
+        ImageComponent image => image with { Caption = StripMarkdown(image.Caption) },
+
+        _ => component
+    };
 
     private static string StripMarkdown(string? text) =>
         string.IsNullOrEmpty(text) ? text ?? string.Empty : Markdown.ToPlainText(text, Pipeline).Trim();

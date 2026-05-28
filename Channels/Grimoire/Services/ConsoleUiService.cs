@@ -1,7 +1,7 @@
 using System.Text;
 using System.Threading.Channels;
 using Grimoire.Interfaces;
-using Grimoire.Messages.Contracts;
+using Morgana.Contracts;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 

@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Rune.Interfaces;
-using Rune.Messages.Contracts;
+using Morgana.Contracts;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 

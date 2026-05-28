@@ -155,19 +155,19 @@ Used by both the named `HttpClient` (automatic via handler pipeline) and `Signal
 2. Put the same `SymmetricKey` under `Cauldron:Authentication:SymmetricKey` via user-secrets or env var (never commit)
 3. Start Morgana (`:5001`), then `dotnet run` from `Channels/Cauldron/` (`:5002`)
 
-## Contract Duplication
+## Wire Contracts (shared project)
 
-DTOs in `Messages/Contracts/` are **duplicated** from Morgana's `Records.cs` — there is no shared contracts project. When modifying these types, both sides must be updated in lockstep:
-- `ChannelMessage` ↔ `Records.ChannelMessage`
-- `ChannelMetadata` ↔ `Records.ChannelMetadata`
-- `ChannelCoordinates` ↔ `Records.ChannelCoordinates`
-- `ChannelCapabilities` ↔ `Records.ChannelCapabilities`
-- `QuickReply` ↔ `Records.QuickReply`
-- `RichCard` / `CardComponent` ↔ `Records.RichCard` / `Records.CardComponent` (with JSON polymorphic `type` discriminator)
+The wire DTOs (`ChannelMessage`, `ChannelMetadata`, `ChannelCoordinates`, `ChannelCapabilities`, `QuickReply`, `RichCard`/`CardComponent`, …) are **no longer duplicated**: Cauldron takes a direct `ProjectReference` to **`Morgana.Contracts`** (`..\..\Morgana\Morgana.Contracts\Morgana.Contracts.csproj`) — the single source of truth shared with Morgana.AI — and consumes them under the `Morgana.Contracts` namespace. There is nothing to keep in lockstep anymore; change a contract once, in `Morgana.Contracts`.
+
+The contract types are immutable records (init-only / positional), so code that used to mutate them in place (e.g. rich-card Markdown sanitization in `MarkdownRendererService`) now rebuilds via `with` expressions. Channel identity lives channel-side in `Messages/CauldronChannelMetadata.cs` (`CauldronChannelMetadata.Profile`), not on the shared contract.
+
+The Docker build mirrors the repo layout under `/src` and stages the `Morgana.Contracts` subtree so the `ProjectReference` resolves (see `Cauldron.Dockerfile`).
+
+Channel-only shapes that are **not** part of `Morgana.Contracts` stay under `Messages/` (e.g. the response DTOs that mirror anonymous shapes returned by `MorganaController`).
 
 ## Channel Handshake
 
-At conversation start, Cauldron announces itself via `ChannelMetadata.Cauldron` singleton:
+At conversation start, Cauldron announces itself via the `CauldronChannelMetadata.Profile` singleton (`Messages/CauldronChannelMetadata.cs`):
 ```csharp
 Coordinates = { ChannelName = "cauldron", DeliveryMode = "signalr" }
 Capabilities = { SupportsRichCards: true, SupportsQuickReplies: true,

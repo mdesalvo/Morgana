@@ -1,4 +1,4 @@
-using Grimoire.Messages.Contracts;
+using Morgana.Contracts;
 
 namespace Grimoire.Services;
 

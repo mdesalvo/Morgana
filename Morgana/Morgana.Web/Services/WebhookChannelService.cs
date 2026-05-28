@@ -1,6 +1,5 @@
 using Morgana.AI.Interfaces;
 using Morgana.Contracts;
-using static Morgana.AI.Records;
 
 namespace Morgana.Web.Services;
 
@@ -159,10 +158,4 @@ public class WebhookChannelService : IChannelService
                 conversationId, chunkUrl);
         }
     }
-
-    /// <summary>
-    /// Minimal wire shape for the chunk endpoint. Mirrors SignalR's <c>ReceiveStreamChunk</c>
-    /// payload — conversation id plus the incremental chunk text.
-    /// </summary>
-    private sealed record StreamChunkRequest(string ConversationId, string ChunkText);
 }

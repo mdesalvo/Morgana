@@ -1,5 +1,5 @@
 using Cauldron.Handlers;
-using Cauldron.Messages.Contracts;
+using Morgana.Contracts;
 using Microsoft.AspNetCore.SignalR.Client;
 
 namespace Cauldron.Services;

@@ -1,11 +1,12 @@
 using System.Text;
+using Morgana.Contracts;
 using Markdig;
 using Spectre.Console;
 
 namespace Grimoire.Services;
 
 /// <summary>
-/// Spectrizes Morgana's <see cref="Messages.Contracts.RichCard"/> into a flat stream of
+/// Spectrizes Morgana's <see cref="RichCard"/> into a flat stream of
 /// single-row Spectre <see cref="Markup"/>s — the terminal-side counterpart of Cauldron's
 /// <c>RichCard.razor</c> component tree. Where Cauldron hands each component to a Razor
 /// partial that the browser lays out with CSS (flex, grid, borders), Grimoire has no layout
@@ -62,7 +63,7 @@ public static class RichCardTerminalRenderService
     /// body keeps Cauldron's neutral grey ramp for legibility. <paramref name="width"/> is the
     /// full terminal width the box may occupy.
     /// </summary>
-    public static List<Markup> RenderRichCard(Messages.Contracts.RichCard richCard, string baseColor, int width)
+    public static List<Markup> RenderRichCard(RichCard richCard, string baseColor, int width)
     {
         // Geometry. The box owns the full terminal width; each interior content row is
         // `│␣ … ␣│` — two border glyphs plus one padding space on each side — so the text
@@ -110,11 +111,11 @@ public static class RichCardTerminalRenderService
     // ---- component walking --------------------------------------------------------------
 
     /// <summary>Walks a component list into logical card lines, inserting a blank breather between consecutive cardComponents (no leading/trailing blank) to mirror Cauldron's margins.</summary>
-    private static List<CardLine> BuildComponents(IEnumerable<Messages.Contracts.CardComponent> cardComponents, string baseColor, int width)
+    private static List<CardLine> BuildComponents(IEnumerable<CardComponent> cardComponents, string baseColor, int width)
     {
         List<CardLine> output = [];
         bool first = true;
-        foreach (Messages.Contracts.CardComponent cardComponent in cardComponents)
+        foreach (CardComponent cardComponent in cardComponents)
         {
             List<CardLine> rendered = BuildComponent(cardComponent, baseColor, width);
             // An unknown/empty component contributes nothing — and must NOT trigger a breather,
@@ -130,29 +131,29 @@ public static class RichCardTerminalRenderService
         return output;
     }
 
-    private static List<CardLine> BuildComponent(Messages.Contracts.CardComponent component, string baseColor, int width) => component switch
+    private static List<CardLine> BuildComponent(CardComponent component, string baseColor, int width) => component switch
     {
-        Messages.Contracts.TextBlockComponent textBlock => BuildTextBlock(textBlock, width),
-        Messages.Contracts.KeyValueComponent keyValue => BuildKeyValue(keyValue, width),
-        Messages.Contracts.DividerComponent => [new CardLine([], IsDivider: true)],
-        Messages.Contracts.ListComponent list => BuildList(list, baseColor, width),
-        Messages.Contracts.SectionComponent section => BuildSection(section, baseColor, width),
-        Messages.Contracts.GridComponent grid => BuildGrid(grid, width),
-        Messages.Contracts.BadgeComponent badge => BuildBadge(badge, width),
-        Messages.Contracts.ImageComponent image => BuildImage(image, width),
+        TextBlockComponent textBlock => BuildTextBlock(textBlock, width),
+        KeyValueComponent keyValue => BuildKeyValue(keyValue, width),
+        DividerComponent => [new CardLine([], IsDivider: true)],
+        ListComponent list => BuildList(list, baseColor, width),
+        SectionComponent section => BuildSection(section, baseColor, width),
+        GridComponent grid => BuildGrid(grid, width),
+        BadgeComponent badge => BuildBadge(badge, width),
+        ImageComponent image => BuildImage(image, width),
         _ => []
     };
 
-    private static List<CardLine> BuildTextBlock(Messages.Contracts.TextBlockComponent textBlock, int width)
+    private static List<CardLine> BuildTextBlock(TextBlockComponent textBlock, int width)
     {
         // Map the four declared text styles onto what a TTY can actually express. Bold is real;
         // Muted and Small both collapse to the dim grey — a terminal can't shrink a glyph, so
         // "small" degrades to the same de-emphasis as "muted" rather than being faked with art.
         string style = textBlock.Style switch
         {
-            Messages.Contracts.TextStyle.Bold => $"{BodyForeground} bold",
-            Messages.Contracts.TextStyle.Muted => MutedForeground,
-            Messages.Contracts.TextStyle.Small => MutedForeground,
+            TextStyle.Bold => $"{BodyForeground} bold",
+            TextStyle.Muted => MutedForeground,
+            TextStyle.Small => MutedForeground,
             _ => BodyForeground
         };
         // Wrap the (plain-text) content to the content width, then turn each wrapped slice into
@@ -160,7 +161,7 @@ public static class RichCardTerminalRenderService
         return [.. WrapText(Plain(textBlock.Content), width).Select(slice => Content([new CardSeg(slice, style)]))];
     }
 
-    private static List<CardLine> BuildKeyValue(Messages.Contracts.KeyValueComponent keyValue, int width)
+    private static List<CardLine> BuildKeyValue(KeyValueComponent keyValue, int width)
     {
         string key = Plain(keyValue.Key);
         string value = Plain(keyValue.Value);
@@ -187,7 +188,7 @@ public static class RichCardTerminalRenderService
         return lines;
     }
 
-    private static List<CardLine> BuildList(Messages.Contracts.ListComponent list, string baseColor, int width)
+    private static List<CardLine> BuildList(ListComponent list, string baseColor, int width)
     {
         List<CardLine> output = [];
         int ordinal = 1; // only consumed by the Numbered style, but advanced every item to stay in lockstep
@@ -197,8 +198,8 @@ public static class RichCardTerminalRenderService
             // bullet glyph. `pad` is a same-width run of spaces used to align continuation rows.
             string marker = list.Style switch
             {
-                Messages.Contracts.ListStyle.Numbered => $"{ordinal}. ",
-                Messages.Contracts.ListStyle.Plain => string.Empty,
+                ListStyle.Numbered => $"{ordinal}. ",
+                ListStyle.Plain => string.Empty,
                 _ => "✦ "
             };
             ordinal++;
@@ -217,7 +218,7 @@ public static class RichCardTerminalRenderService
         return output;
     }
 
-    private static List<CardLine> BuildSection(Messages.Contracts.SectionComponent section, string baseColor, int width)
+    private static List<CardLine> BuildSection(SectionComponent section, string baseColor, int width)
     {
         // No leading blank here: BuildComponents already inserts a breather before every
         // non-first component, so a self-blank would double the gap ahead of a section.
@@ -249,7 +250,7 @@ public static class RichCardTerminalRenderService
         return output;
     }
 
-    private static List<CardLine> BuildGrid(Messages.Contracts.GridComponent grid, int width)
+    private static List<CardLine> BuildGrid(GridComponent grid, int width)
     {
         // Clamp the requested column count: at least 1, and at most width/2 so every cell keeps
         // a usable ≥2-column slot even on a narrow terminal. Then each cell gets an equal share of
@@ -266,7 +267,7 @@ public static class RichCardTerminalRenderService
             List<CardSeg> values = [];
             for (int c = 0; c < columns && start + c < grid.Items.Count; c++)
             {
-                Messages.Contracts.GridItem item = grid.Items[start + c];
+                GridItem item = grid.Items[start + c];
                 if (c > 0) // insert the gutter space before every cell except the first
                 {
                     keys.Add(new CardSeg(" ", ""));
@@ -283,17 +284,17 @@ public static class RichCardTerminalRenderService
         return output;
     }
 
-    private static List<CardLine> BuildBadge(Messages.Contracts.BadgeComponent badge, int width)
+    private static List<CardLine> BuildBadge(BadgeComponent badge, int width)
     {
         // Semantic variant → a "foreground on background" Spectre style. The background fill is
         // what makes it read as a pill/chip; the fg is chosen for contrast against each bg.
         // Neutral falls back to the Morgana-purple family (mediumpurple3) like Cauldron's default.
         string style = badge.Variant switch
         {
-            Messages.Contracts.BadgeVariant.Success => "black on green",
-            Messages.Contracts.BadgeVariant.Warning => "black on orange1",
-            Messages.Contracts.BadgeVariant.Error => "white on red",
-            Messages.Contracts.BadgeVariant.Info => "black on deepskyblue1",
+            BadgeVariant.Success => "black on green",
+            BadgeVariant.Warning => "black on orange1",
+            BadgeVariant.Error => "white on red",
+            BadgeVariant.Info => "black on deepskyblue1",
             _ => "white on mediumpurple3"
         };
         // Upper-case + one space of breathing room each side (the "chip" padding), Cauldron-style.
@@ -302,7 +303,7 @@ public static class RichCardTerminalRenderService
         return [Content([new CardSeg(chip, style)])];
     }
 
-    private static List<CardLine> BuildImage(Messages.Contracts.ImageComponent image, int width)
+    private static List<CardLine> BuildImage(ImageComponent image, int width)
     {
         // No bitmap rendering and no OSC 8 hyperlinks (the frozen low-effort decision): surface the
         // image as honest text — an "[image: alt]" tag, the URL, and an optional italic caption.

@@ -15,7 +15,7 @@ A pure-text channel doesn't have to be poor. Grimoire's role is to demonstrate t
 | **Full**    | Cauldron    | **Grimoire**       |
 | **Poor**    | —           | Rune               |
 
-Grimoire is **not a Cauldron fork**. It is its own channel identity: self-issued JWTs under `iss=grimoire` with its own `SymmetricKey`, its own Kestrel port (`5004`), its own DTOs duplicated in lockstep. The per-issuer auth gate is closed end-to-end by a third channel identity, independent of Cauldron and Rune.
+Grimoire is **not a Cauldron fork**. It is its own channel identity: self-issued JWTs under `iss=grimoire` with its own `SymmetricKey`, its own Kestrel port (`5004`), and a direct project reference to the shared `Morgana.Contracts` wire package. The per-issuer auth gate is closed end-to-end by a third channel identity, independent of Cauldron and Rune.
 
 ## Project Structure
 
@@ -33,18 +33,9 @@ Channels/Grimoire/
     MorganaAuthHandler.cs            # DelegatingHandler: self-issues JWT for outbound calls
   Interfaces/
     IViewportResizeWatcher.cs        # Abstraction over terminal resize notifications (SIGWINCH vs polling)
-  Messages/                          # Response DTOs that mirror anonymous controller shapes
+  Messages/                          # Channel-only shapes (the shared wire DTOs come from Morgana.Contracts)
     StartConversationResponse.cs     # Echo of conversation id from MorganaController.StartConversation
-  Messages/Contracts/                # DTOs duplicated in lockstep from Morgana.AI.Records
-    ChannelMessage.cs                # Inbound webhook payload
-    ChannelMetadata.cs               # Handshake metadata (with Grimoire.Build(callbackUrl) factory)
-    ChannelCoordinates.cs            # Identity + addressing (channelName, deliveryMode, callbackUrl)
-    ChannelCapabilities.cs           # Feature flags (all true for Grimoire; MaxMessageLength null)
-    StartConversationRequest.cs      # conversation/start body (conversationId + channelMetadata)
-    SendMessageRequest.cs            # conversation/{id}/message body (conversationId + text)
-    StreamChunkRequest.cs            # /morgana-hook/chunk body (conversationId + chunkText)
-    QuickReply.cs                    # Rendered by Grimoire as a Spectre SelectionPrompt
-    RichCard.cs                      # Rendered by Grimoire as Spectre primitives (Panel/Table/Rule/Tree/…)
+    GrimoireChannelMetadata.cs       # Build(callbackUrl) factory over Morgana.Contracts.ChannelMetadata (channel identity)
   Services/
     MorganaClientService.cs          # REST wrapper: start / send / end conversation
     WebhookReceiverService.cs        # Thin dispatcher, OnMessage + OnChunk delegates wired in Program.cs
@@ -118,20 +109,15 @@ Morgana's controller gate additionally requires `callbackUrl` to be an absolute 
 2. Put the same `SymmetricKey` under `Grimoire:Authentication:SymmetricKey` via user-secrets or env var (never commit)
 3. Start Morgana (`:5001`), then `dotnet run` from `Channels/Grimoire/` (`:5004`)
 
-## Contract Duplication
+## Wire Contracts (shared project)
 
-DTOs in `Messages/Contracts/` are **duplicated** from Morgana's `Records.cs` — there is no shared contracts project. When modifying these types, both sides must be updated in lockstep:
-- `ChannelMessage` ↔ `Records.ChannelMessage`
-- `ChannelMetadata` ↔ `Records.ChannelMetadata`
-- `ChannelCoordinates` ↔ `Records.ChannelCoordinates` (including `CallbackUrl`)
-- `ChannelCapabilities` ↔ `Records.ChannelCapabilities`
-- `QuickReply` ↔ `Records.QuickReply`
-- `RichCard` / `CardComponent` ↔ `Records.RichCard` / `Records.CardComponent`
-- `StartConversationRequest` ↔ `Records.StartConversationRequest`
-- `SendMessageRequest` ↔ `Records.SendMessageRequest`
-- `StreamChunkRequest` ↔ private wire shape in `Morgana.Web.Services.WebhookChannelService`
+The wire DTOs (`ChannelMessage`, `ChannelMetadata`, `ChannelCoordinates` incl. `CallbackUrl`, `ChannelCapabilities`, `QuickReply`, `RichCard`/`CardComponent`, `StartConversationRequest`, `SendMessageRequest`, `StreamChunkRequest`) are **no longer duplicated**: Grimoire takes a direct `ProjectReference` to **`Morgana.Contracts`** (`..\..\Morgana\Morgana.Contracts\Morgana.Contracts.csproj`) — the single source of truth shared with Morgana.AI — and consumes them under the `Morgana.Contracts` namespace. Change a contract once, in `Morgana.Contracts`. `StreamChunkRequest` (the `{callbackUrl}/chunk` webhook body) now lives in `Morgana.Contracts` too and is consumed directly by Morgana.Web's `WebhookChannelService`, so there is no longer a private server-side copy to keep in lockstep.
 
-`StartConversationResponse` lives under `Messages/` (not `Messages/Contracts/`) because it mirrors an anonymous response shape in `MorganaController.StartConversation`, not a declared record — same split Cauldron uses for its own response DTOs.
+The contract types are immutable records (init-only / positional): `StartConversationRequest`/`SendMessageRequest` are constructed positionally, and `QuickReply.Termination` is now `bool?`. Channel identity lives channel-side in `Messages/GrimoireChannelMetadata.cs` (`GrimoireChannelMetadata.Build(callbackUrl)`), not on the shared contract.
+
+The Docker build mirrors the repo layout under `/src` and stages the `Morgana.Contracts` subtree so the `ProjectReference` resolves (see `Grimoire.Dockerfile`).
+
+`StartConversationResponse` stays under `Messages/` because it mirrors an anonymous response shape in `MorganaController.StartConversation`, not a declared contract (same split Cauldron uses for its own response DTOs).
 
 ## Terminal UI (ConsoleUiService)
 

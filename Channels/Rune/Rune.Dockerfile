@@ -20,20 +20,26 @@ ARG VERSION=latest
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy project file and dependencies (for optimal layer caching)
-COPY ["Channels/Rune/Rune.csproj", "Rune/"]
-COPY ["Channels/Rune/Directory.Build.props", "Directory.Build.props"]
+# Copy project files and dependencies (for optimal layer caching). The repo layout is
+# mirrored under /src so Rune's ProjectReference to ../../Morgana/Morgana.Contracts
+# resolves, and each project picks up its own Directory.Build.props (Rune's vs the
+# Morgana one that the zero-dependency Morgana.Contracts inherits).
+COPY ["Channels/Rune/Rune.csproj", "Channels/Rune/"]
+COPY ["Channels/Rune/Directory.Build.props", "Channels/Rune/"]
+COPY ["Morgana/Morgana.Contracts/Morgana.Contracts.csproj", "Morgana/Morgana.Contracts/"]
+COPY ["Morgana/Directory.Build.props", "Morgana/"]
 
-# Restore NuGet dependencies (cached layer if .csproj doesn't change)
-RUN dotnet restore "Rune/Rune.csproj"
+# Restore NuGet dependencies (cached layer if .csproj files don't change)
+RUN dotnet restore "Channels/Rune/Rune.csproj"
 
-# Copy all source code
-COPY Channels/Rune/ Rune/
+# Copy all source code (channel + the referenced wire-contract project)
+COPY Channels/Rune/ Channels/Rune/
+COPY Morgana/Morgana.Contracts/ Morgana/Morgana.Contracts/
 
 # Build application in Release mode — InsideDockerBuild skips
 # Directory.Build.targets' host-side .env.versions generation, which can't see
 # sibling projects here.
-WORKDIR "/src/Rune"
+WORKDIR "/src/Channels/Rune"
 RUN dotnet build "Rune.csproj" -c Release -o /app/build /p:InsideDockerBuild=true
 
 # ==============================================================================

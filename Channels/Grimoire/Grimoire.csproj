@@ -6,4 +6,8 @@
        <UserSecretsId>2d150094-0c85-48aa-9bb4-213fb9d06217</UserSecretsId>
     </PropertyGroup>
 
+    <ItemGroup>
+       <ProjectReference Include="..\..\Morgana\Morgana.Contracts\Morgana.Contracts.csproj" />
+    </ItemGroup>
+
 </Project>

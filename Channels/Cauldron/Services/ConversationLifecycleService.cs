@@ -1,6 +1,6 @@
 using Cauldron.Interfaces;
 using Cauldron.Messages;
-using Cauldron.Messages.Contracts;
+using Morgana.Contracts;
 
 namespace Cauldron.Services;
 
@@ -50,7 +50,7 @@ public class ConversationLifecycleService : IConversationLifecycleService
                 // Cauldron is the reference channel: announces itself by name and declares
                 // full capabilities at handshake, so Morgana persists the metadata and stops
                 // relying on hard-coded defaults.
-                channelMetadata = ChannelMetadata.Cauldron
+                channelMetadata = CauldronChannelMetadata.Profile
             });
 
             if (response.IsSuccessStatusCode)

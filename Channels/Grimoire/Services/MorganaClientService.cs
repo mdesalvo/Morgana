@@ -1,5 +1,5 @@
 using Grimoire.Messages;
-using Grimoire.Messages.Contracts;
+using Morgana.Contracts;
 
 namespace Grimoire.Services;
 
@@ -38,11 +38,9 @@ public sealed class MorganaClientService
         // We mint a candidate id ("N" = 32-char hex, no dashes — matches Morgana's
         // conversation id shape), but the server is source of truth: whatever it returns
         // on the response is what Grimoire will use from this point on.
-        StartConversationRequest body = new()
-        {
-            ConversationId = Guid.NewGuid().ToString("N"),
-            ChannelMetadata = ChannelMetadata.Build(callbackUrl)
-        };
+        StartConversationRequest body = new(
+            ConversationId: Guid.NewGuid().ToString("N"),
+            ChannelMetadata: GrimoireChannelMetadata.Build(callbackUrl));
 
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(
             "/api/morgana/conversation/start", body, cancellationToken);
@@ -62,7 +60,7 @@ public sealed class MorganaClientService
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(
             $"/api/morgana/conversation/{conversationId}/message",
-            new SendMessageRequest { ConversationId = conversationId, Text = text },
+            new SendMessageRequest(conversationId, text),
             cancellationToken);
 
         // 429 (rate-limit OR dust exhaustion) is not a transport failure: before returning

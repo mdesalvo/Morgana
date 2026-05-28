@@ -1,5 +1,5 @@
 using System.Text;
-using Grimoire.Messages.Contracts;
+using Morgana.Contracts;
 using Spectre.Console;
 
 namespace Grimoire.Services;
@@ -88,7 +88,7 @@ public static class QuickReplyTerminalRenderService
     /// </summary>
     private static string ChipStyle(QuickReply reply, bool active, string accentColor)
     {
-        if (reply.Termination)
+        if (reply.Termination == true)
             return active ? TerminationActive : TerminationInactive;
         return active ? $"black on {accentColor}" : InactiveForeground;
     }

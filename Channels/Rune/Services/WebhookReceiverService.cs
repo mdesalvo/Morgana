@@ -1,4 +1,4 @@
-using Rune.Messages.Contracts;
+using Morgana.Contracts;
 
 namespace Rune.Services;
 

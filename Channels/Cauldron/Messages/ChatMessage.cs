@@ -1,4 +1,4 @@
-using Cauldron.Messages.Contracts;
+using Morgana.Contracts;
 
 namespace Cauldron.Messages;
 

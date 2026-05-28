@@ -26,17 +26,9 @@ Channels/Rune/
     MorganaAuthHandler.cs            # DelegatingHandler: self-issues JWT for outbound calls
   Interfaces/
     IViewportResizeWatcher.cs        # Abstraction over terminal resize notifications (SIGWINCH vs polling)
-  Messages/                          # Response DTOs that mirror anonymous controller shapes
+  Messages/                          # Channel-only shapes (the shared wire DTOs come from Morgana.Contracts)
     StartConversationResponse.cs     # Echo of conversation id from MorganaController.StartConversation
-  Messages/Contracts/                # DTOs duplicated in lockstep from Morgana.AI.Records
-    ChannelMessage.cs                # Inbound webhook payload
-    ChannelMetadata.cs               # Handshake metadata (with Rune.Build(callbackUrl) factory)
-    ChannelCoordinates.cs            # Identity + addressing (channelName, deliveryMode, callbackUrl)
-    ChannelCapabilities.cs           # Feature flags (all false for Rune; MaxMessageLength from Rune:MaxMessageLength, default 500)
-    StartConversationRequest.cs      # conversation/start body (conversationId + channelMetadata)
-    SendMessageRequest.cs            # conversation/{id}/message body (conversationId + text)
-    QuickReply.cs                    # Kept for binary compat (stripped by adapter)
-    RichCard.cs                      # Kept for binary compat (stripped by adapter)
+    RuneChannelMetadata.cs           # Build(callbackUrl, maxMessageLength) factory over Morgana.Contracts.ChannelMetadata (channel identity)
   Services/
     MorganaClientService.cs          # REST wrapper: start / send / end conversation
     WebhookReceiverService.cs        # Thin dispatcher, OnMessage delegate wired in Program.cs
@@ -106,19 +98,15 @@ Morgana's controller gate additionally requires `callbackUrl` to be an absolute 
 2. Put the same `SymmetricKey` under `Rune:Authentication:SymmetricKey` via user-secrets or env var (never commit)
 3. Start Morgana (`:5001`), then `dotnet run` from `Channels/Rune/` (`:5003`)
 
-## Contract Duplication
+## Wire Contracts (shared project)
 
-DTOs in `Messages/Contracts/` are **duplicated** from Morgana's `Records.cs` — there is no shared contracts project. When modifying these types, both sides must be updated in lockstep:
-- `ChannelMessage` ↔ `Records.ChannelMessage`
-- `ChannelMetadata` ↔ `Records.ChannelMetadata`
-- `ChannelCoordinates` ↔ `Records.ChannelCoordinates` (including `CallbackUrl`)
-- `ChannelCapabilities` ↔ `Records.ChannelCapabilities`
-- `QuickReply` ↔ `Records.QuickReply` (kept for binary compat even though Rune doesn't render them)
-- `RichCard` / `CardComponent` ↔ `Records.RichCard` / `Records.CardComponent` (kept for binary compat even though Rune doesn't render them)
-- `StartConversationRequest` ↔ `Records.StartConversationRequest`
-- `SendMessageRequest` ↔ `Records.SendMessageRequest`
+The wire DTOs (`ChannelMessage`, `ChannelMetadata`, `ChannelCoordinates` incl. `CallbackUrl`, `ChannelCapabilities`, `QuickReply`, `RichCard`/`CardComponent`, `StartConversationRequest`, `SendMessageRequest`) are **no longer duplicated**: Rune takes a direct `ProjectReference` to **`Morgana.Contracts`** (`..\..\Morgana\Morgana.Contracts\Morgana.Contracts.csproj`) — the single source of truth shared with Morgana.AI — and consumes them under the `Morgana.Contracts` namespace. Change a contract once, in `Morgana.Contracts`. (Rune still doesn't render `QuickReply`/`RichCard`; they just arrive as part of the shared contract and are stripped by the adapter upstream.)
 
-`StartConversationResponse` lives under `Messages/` (not `Messages/Contracts/`) because it mirrors an anonymous response shape in `MorganaController.StartConversation`, not a declared record — same split Cauldron uses for its own response DTOs.
+The contract types are immutable records (init-only / positional): `StartConversationRequest`/`SendMessageRequest` are constructed positionally, and `QuickReply.Termination` is now `bool?`. Channel identity lives channel-side in `Messages/RuneChannelMetadata.cs` (`RuneChannelMetadata.Build(callbackUrl, maxMessageLength)`), not on the shared contract.
+
+The Docker build mirrors the repo layout under `/src` and stages the `Morgana.Contracts` subtree so the `ProjectReference` resolves (see `Rune.Dockerfile`).
+
+`StartConversationResponse` lives under `Messages/` because it mirrors an anonymous response shape in `MorganaController.StartConversation`, not a declared contract — same split Cauldron uses for its own response DTOs.
 
 ## Terminal UI (ConsoleUi)
 
