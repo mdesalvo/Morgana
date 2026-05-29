@@ -101,18 +101,20 @@ public sealed class ConsoleUiService
     private string streamingDisplayed = string.Empty;
 
     /// <summary>
-    /// Set true when the final <see cref="ChannelMessage"/> for the turn arrives while the
+    /// Set true when at least one final <see cref="ChannelMessage"/> has been enqueued while the
     /// typewriter is still draining <see cref="streamingPending"/>. Tells the timer "no more
-    /// chunks are coming — drain what you have, then commit". Reset on commit.
+    /// chunks are coming — drain what you have, then commit". Reset when the queue empties.
     /// </summary>
     private bool streamingComplete;
 
     /// <summary>
-    /// The final <see cref="ChannelMessage"/> deferred until the typewriter finishes revealing the
+    /// Final <see cref="ChannelMessage"/>s deferred until the typewriter finishes revealing the
     /// buffered text. Captured by <see cref="HandleInboundMessage"/> when the buffer is non-empty,
-    /// consumed by <see cref="TypewriterTick"/> once the buffer drains.
+    /// consumed in order by <see cref="TypewriterTick"/> once the buffer drains. A queue (not a
+    /// single field) so that a trailing system_warning arriving while the agent turn is still
+    /// revealing does not overwrite the agent message and erase its QuickReplies.
     /// </summary>
-    private ChannelMessage? pendingFinalMessage;
+    private readonly Queue<ChannelMessage> pendingFinalMessages = new();
 
     /// <summary>Active typewriter timer, or null when no streaming session is in flight.</summary>
     private Timer? typewriterTimer;
@@ -334,13 +336,13 @@ public sealed class ConsoleUiService
 
     /// <summary>
     /// Reveals up to <see cref="streamingTickChars"/> characters from <see cref="streamingPending"/>
-    /// into <see cref="streamingDisplayed"/> and refreshes the UI. When the buffer drains AND the
-    /// final message has already arrived (<see cref="streamingComplete"/>), commits the deferred
-    /// <see cref="pendingFinalMessage"/> into history and tears the session down.
+    /// into <see cref="streamingDisplayed"/> and refreshes the UI. When the buffer drains AND finals
+    /// have arrived (<see cref="streamingComplete"/>), commits all deferred
+    /// <see cref="pendingFinalMessages"/> in order and tears the session down.
     /// </summary>
     private void TypewriterTick(LiveDisplayContext ctx)
     {
-        ChannelMessage? finalToCommit = null;
+        List<ChannelMessage>? toCommit = null;
         lock (renderLock)
         {
             if (streamingPending.Length > 0)
@@ -353,13 +355,13 @@ public sealed class ConsoleUiService
                 return;
             }
 
-            // Buffer is empty. If the final has landed, capture it for commit below; otherwise
-            // idle here — more chunks may still be on the way (the tick will re-check next time).
-            if (!streamingComplete)
+            // Buffer is empty. If finals have landed, drain the whole queue so no message is lost.
+            // Idle otherwise — more chunks may still be on the way.
+            if (!streamingComplete || pendingFinalMessages.Count == 0)
                 return;
 
-            finalToCommit = pendingFinalMessage;
-            pendingFinalMessage = null;
+            toCommit = [.. pendingFinalMessages];
+            pendingFinalMessages.Clear();
             streamingComplete = false;
             streamingDisplayed = string.Empty;
             StopTypewriter();
@@ -367,8 +369,8 @@ public sealed class ConsoleUiService
 
         // Commit outside the lock — CommitFinalMessage takes the lock itself and we don't want
         // to acquire it twice (System.Threading.Lock is not reentrant).
-        if (finalToCommit is not null)
-            CommitFinalMessage(ctx, finalToCommit);
+        foreach (ChannelMessage msg in toCommit)
+            CommitFinalMessage(ctx, msg);
     }
 
     /// <summary>Disposes <see cref="typewriterTimer"/> and clears the reference. Must be called under <see cref="renderLock"/>.</summary>
@@ -390,10 +392,11 @@ public sealed class ConsoleUiService
         {
             if (typewriterTimer is not null && (streamingPending.Length > 0 || streamingDisplayed.Length > 0))
             {
-                // Typewriter still revealing: stash the final and let the timer commit when
-                // streamingPending drains. The deferred path keeps the typewriter rhythm intact
-                // and avoids the "snap to full text" jump Cauldron exhibits on FinalizeStreaming.
-                pendingFinalMessage = message;
+                // Typewriter still revealing: enqueue the final and let the timer commit when
+                // streamingPending drains. Using a queue (not a single field) ensures that a
+                // trailing system_warning arriving in the same window does not overwrite an
+                // agent message that carries QuickReplies — both are committed in order.
+                pendingFinalMessages.Enqueue(message);
                 streamingComplete = true;
                 return exitRequested;
             }
