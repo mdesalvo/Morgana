@@ -59,7 +59,7 @@ ARG VERSION=latest
 
 # Metadata labels (OCI standard)
 LABEL org.opencontainers.image.title="Grimoire"
-LABEL org.opencontainers.image.description="A rich-TTY reference channel for the Morgana conversational AI framework — the textual sibling of Cauldron, rendering streaming, rich cards, quick replies and markdown as Spectre.Console ANSI primitives over the webhook delivery mode"
+LABEL org.opencontainers.image.description="A rich-TTY reference channel for the Morgana conversational AI framework — rendering streaming, rich cards, quick replies and markdown as Spectre.Console ANSI primitives over the webhook delivery mode"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.authors="Marco De Salvo"
 LABEL org.opencontainers.image.url="https://github.com/mdesalvo/Morgana"
