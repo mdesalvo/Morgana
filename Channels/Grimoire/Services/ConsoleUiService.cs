@@ -470,6 +470,11 @@ public sealed class ConsoleUiService
             {
                 conversationDead = true;
                 currentInput = string.Empty; // discard any half-typed doomed line
+                // Tear down any quick replies a same-turn agent message already activated:
+                // the dead latch suppresses them on both the render and input gates anyway,
+                // but clearing the backing state makes "game over" explicit rather than masked.
+                quickReplyActive = false;
+                activeQuickReplies = null;
             }
 
             // Quick replies turn the bottom line INTO the prompt for this turn: instead of
