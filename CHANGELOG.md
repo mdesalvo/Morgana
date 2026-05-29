@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.24.0] - 2026-05-29
+## [0.24.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Grimoire — the Rich-TTY Reference Channel
 This release introduces **Grimoire**, a third reference channel that completes the **channel × capability matrix**: where Cauldron is the rich browser client and Rune is the poor-but-honest CLI, Grimoire is the **rich terminal** — the quadrant that was empty until now.
 Grimoire is the textual sibling of Cauldron — declaring the **full capability profile** (rich cards, quick replies, streaming, markdown, no length cap) over the **webhook** delivery mode. This makes Grimoire the proving ground for rendering Morgana's *vanilla* richness in a terminal — markdown becomes styled ANSI, rich cards become bordered boxes, quick replies become an arrow-key selector.
