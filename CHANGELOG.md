@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.24.0] - UNDER DEVELOPMENT
+## [0.24.0] - 2026-05-29
 ### 🎯 Major Feature: Grimoire — the Rich-TTY Reference Channel
 This release introduces **Grimoire**, a third reference channel that completes the **channel × capability matrix**: where Cauldron is the rich browser client and Rune is the poor-but-honest CLI, Grimoire is the **rich terminal** — the quadrant that was empty until now.
 Grimoire is the textual sibling of Cauldron — declaring the **full capability profile** (rich cards, quick replies, streaming, markdown, no length cap) over the **webhook** delivery mode. This makes Grimoire the proving ground for rendering Morgana's *vanilla* richness in a terminal — markdown becomes styled ANSI, rich cards become bordered boxes, quick replies become an arrow-key selector.
@@ -24,7 +24,6 @@ Architecturally it reaffirms that Morgana adapts on the **capability profile, no
 - **Framework formatting policy** (`morgana.json`) no longer forbids markdown: agents are now free to emit light markdown (emphasis, inline code, lists, headings, rules) in their message text. Channels that can't render it are downgraded automatically downstream by the channel adapter, so the LLM expresses formatting freely and the right surface adapts — Cauldron and Grimoire render it, Rune strips it
 - **Wire contracts consolidated into `Morgana.Contracts`** — the DTOs exchanged between Morgana and its channels (handshake metadata/capabilities/coordinates, outbound message envelope, quick replies, rich cards and their components hierarchy, start/send request bodies and webhook `StreamChunkRequest` chunk body) were previously duplicated in 4 places (Morgana.AI + each of Cauldron/Rune/Grimoire). They now live once in a new **zero-dependency `Morgana.Contracts`** package: Morgana.AI references it and the 3 reference channels were rewired from their hand-maintained `Messages/Contracts/` copies to a **direct project reference** — a single source of truth, no more lockstep edits
 - **Deterministic container builds** — `Morgana.Examples` now references `Morgana.AI` by **project reference** instead of a version-pinned NuGet `PackageReference`, and the channel/server Dockerfiles stage the first-party project subtrees and mirror the repo layout under `/src`. The Docker build no longer has to resolve the in-development framework version from the public feed (which previously broke with `NU1102` until the version was published), making the **image build self-contained and reproducible**
-- Updated `Microsoft.Agents.AI` dependency to 1.7.0
 
 ### 🐛 Fixed
 - Rune scrollback row budgeting and text wrapping miscounted wide/zero-width glyphs
