@@ -132,7 +132,7 @@
               "Parameters": [
                 {
                   "Name": "quickReplies",
-                  "Description": "JSON string containing an array of quick reply button definitions. Each button must have three fields: 'id' (unique identifier, like for example 'no-internet' or 'invoice-001'), 'label' (display text with emoji for visual appeal, e.g., '🔴 No Internet Connection' or '📄 Invoice INV-001'), 'value' (the complete natural message that will be sent when the user clicks, e.g., 'Show me the no-internet assistance guide' or 'Show details for invoice INV-001'). Format: [{\"id\":\"option1\",\"label\":\"🔧 Option 1\",\"value\":\"User message for option 1\"},{\"id\":\"option2\",\"label\":\"📖 Option 2\",\"value\":\"User message for option 2\"}]. Use clear action-oriented labels. Make values natural user messages.",
+                  "Description": "Array of quick reply button definitions. Each button must have three fields: 'id' (unique identifier, like for example 'no-internet' or 'invoice-001'), 'label' (display text with emoji for visual appeal, e.g., '🔴 No Internet Connection' or '📄 Invoice INV-001'), 'value' (the complete natural message that will be sent when the user clicks, e.g., 'Show me the no-internet assistance guide' or 'Show details for invoice INV-001'), plus the optional 'termination' boolean flag used only by the exit button. Format: [{\"id\":\"option1\",\"label\":\"🔧 Option 1\",\"value\":\"User message for option 1\"},{\"id\":\"option2\",\"label\":\"📖 Option 2\",\"value\":\"User message for option 2\"}]. Use clear action-oriented labels. Make values natural user messages.",
                   "Required": true,
                   "Scope": "context",
                   "Shared": false
@@ -145,7 +145,6 @@
               "Parameters": [
                 {
                   "Name": "richCard",
-                  "Type": "string",
                   "Description": "JSON string containing the complete rich card structure. Root structure: {\"title\": \"...\", \"subtitle\": \"...\", \"components\": [array of component objects]}. Each component must have 'type' as first property matching one of the 8 available types (text_block, key_value, divider, list, section, grid, badge, image). 🚨 MANDATORY JSON WELL-FORMEDNESS: the string MUST be strictly valid JSON — every '{' closed by '}', every '[' closed by ']', no trailing commas, double quotes only, internal quotes escaped as \\\", no comments, no truncation. A malformed payload is silently dropped and the user sees NOTHING. If uncertain, simplify the card rather than risk an unclosed brace.",
                   "Required": true,
                   "Scope": "context",

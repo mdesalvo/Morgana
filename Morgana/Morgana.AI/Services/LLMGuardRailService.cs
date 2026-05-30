@@ -75,7 +75,7 @@ public class LLMGuardRailService : IGuardRailService
                 message);
 
             Records.GuardCheckResponse? llmResult =
-                System.Text.Json.JsonSerializer.Deserialize<Records.GuardCheckResponse>(response);
+                System.Text.Json.JsonSerializer.Deserialize<Records.GuardCheckResponse>(response, Records.DefaultJsonSerializerOptions);
 
             bool compliant = llmResult?.Compliant ?? true;
 

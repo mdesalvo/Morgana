@@ -65,7 +65,9 @@ public static class QuickReplyTerminalRenderService
     /// <summary>Builds one option as its own row: a caret, then the space-padded label. The label is truncated so caret(2) + padding(2) + label never exceeds <paramref name="width"/>.</summary>
     private static Markup RenderQuickReply(QuickReply quickReply, bool active, string accentColor, int width)
     {
-        string label = Trunc(quickReply.Label, Math.Max(1, width - 4));
+        // Resolve emoji shortcodes to glyphs before truncation/escaping, consistent with the prose
+        // and rich-card renderers — Markup leaves :shortcodes: literal in this path otherwise.
+        string label = Trunc(Emoji.Replace(quickReply.Label), Math.Max(1, width - 4));
         StringBuilder sb = new(width + 32);
         AppendCaret(sb, active, accentColor);
         sb.Append('[').Append(ChipStyle(quickReply, active, accentColor)).Append("] ").Append(Markup.Escape(label)).Append(" [/]");

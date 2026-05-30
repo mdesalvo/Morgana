@@ -389,9 +389,15 @@ public static class RichCardTerminalRenderService
     private static CardLine Blank()
         => new CardLine([], IsDivider: false);
 
-    /// <summary>Strips inline markdown to plain text (mirroring Cauldron's <c>SanitizeRichCard</c>), then normalises emoji presentation so measured width matches what the terminal draws.</summary>
+    /// <summary>Strips inline markdown to plain text (mirroring Cauldron's <c>SanitizeRichCard</c>), resolves
+    /// emoji shortcodes (<c>:white_check_mark:</c> → ✅) to real glyphs, then normalises emoji presentation so
+    /// measured width matches what the terminal draws. Resolving shortcodes here — the single chokepoint every
+    /// card builder funnels through — is what keeps them out of the rendered output: <see cref="Markup"/> does
+    /// not expand them in this path, and the badge builder upper-cases its text (turning <c>:tada:</c> into the
+    /// non-shortcode <c>:TADA:</c>), so the conversion must happen before either step. A resolved glyph is then
+    /// measured correctly by <c>GetCellWidth</c>, keeping the right border aligned.</summary>
     private static string Plain(string? text) =>
-        string.IsNullOrEmpty(text) ? string.Empty : StripVariationSelectors(Markdown.ToPlainText(text, Pipeline).Trim());
+        string.IsNullOrEmpty(text) ? string.Empty : StripVariationSelectors(Emoji.Replace(Markdown.ToPlainText(text, Pipeline).Trim()));
 
     /// <summary>
     /// Removes Unicode variation selectors (U+FE00–U+FE0F). These are zero-width format codepoints

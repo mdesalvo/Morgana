@@ -409,7 +409,7 @@ public class MorganaAgent : MorganaActor
         {
             try
             {
-                List<QuickReply>? quickReplies = JsonSerializer.Deserialize<List<QuickReply>>(quickRepliesJSON);
+                List<QuickReply>? quickReplies = JsonSerializer.Deserialize<List<QuickReply>>(quickRepliesJSON, Records.DefaultJsonSerializerOptions);
                 if (quickReplies is { Count: > 0 })
                 {
                     agentLogger.LogInformation("Retrieved {QuickRepliesCount} quick replies from context", quickReplies.Count);

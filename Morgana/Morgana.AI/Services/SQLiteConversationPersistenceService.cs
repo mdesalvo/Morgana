@@ -944,11 +944,16 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
         try
         {
-            // The value might be a string (JSON) or already a JsonElement
+            // The argument may arrive in three shapes:
+            //  • a JSON string wrapping the array (legacy: when the tool parameter was 'string'),
+            //  • a JsonElement that IS a string (legacy, re-hydrated from the session),
+            //  • a JsonElement that IS the array itself (current: tool parameter is List<QuickReply>).
+            // For the first two we want the inner string; for a native array/object we take the raw JSON.
             string quickRepliesString = quickRepliesValue switch
             {
                 string str => str,
-                JsonElement jsonElement => jsonElement.GetString() ?? "[]",
+                JsonElement { ValueKind: JsonValueKind.String } jsonElement => jsonElement.GetString() ?? "[]",
+                JsonElement jsonElement => jsonElement.GetRawText(),
                 _ => JsonSerializer.Serialize(quickRepliesValue, jsonSerializerOptions)
             };
 
@@ -978,11 +983,14 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
         try
         {
-            // The value might be a string (JSON) or already a JsonElement
+            // The argument may arrive as a JSON string wrapping the card, a JsonElement that IS a
+            // string (both legacy/current, since SetRichCard still takes a 'string' parameter), or
+            // a native JsonElement object (defensive, in case the contract ever switches like QR did).
             string richCardString = richCardsValue switch
             {
                 string str => str,
-                JsonElement jsonElement => jsonElement.GetString() ?? "[]",
+                JsonElement { ValueKind: JsonValueKind.String } jsonElement => jsonElement.GetString() ?? "{}",
+                JsonElement jsonElement => jsonElement.GetRawText(),
                 _ => JsonSerializer.Serialize(richCardsValue, jsonSerializerOptions)
             };
 

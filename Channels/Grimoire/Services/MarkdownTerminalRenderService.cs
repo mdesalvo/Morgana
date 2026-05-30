@@ -85,7 +85,10 @@ public static class MarkdownTerminalRenderService
     /// <summary>Walks the Markdig AST of <paramref name="markdown"/> into logical lines, colouring prose in <paramref name="baseColor"/>.</summary>
     internal static List<RenderedLine> Render(string markdown, string baseColor)
     {
-        MarkdownDocument document = Markdown.Parse(markdown ?? string.Empty, Pipeline);
+        // Resolve emoji shortcodes (:tada: → 🎉) to real glyphs up front, mirroring the rich-card
+        // path (RichCardTerminalRenderService.Plain): Markup does not expand them downstream, so a
+        // model that emits GitHub-style shortcodes in prose would otherwise leave them literal.
+        MarkdownDocument document = Markdown.Parse(Emoji.Replace(markdown ?? string.Empty), Pipeline);
         List<RenderedLine> lines = RenderBlocks(document, baseColor);
         // An empty document (e.g. whitespace-only message) still owes one line so the
         // speaker prefix has somewhere to land and the row never silently vanishes.

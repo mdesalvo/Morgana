@@ -597,7 +597,13 @@ public sealed class ConsoleUiService
         // would inflate the content height with invisible phantom rows — lighting the header's
         // ▲ scroll glyph on a conversation that fits the viewport. This is the Grimoire-port
         // adjustment for a channel that carries neither rich cards nor quick replies.
-        string text = StripVariationSelectors(BlankRunRegex.Replace(message.Text.Trim(), "\n\n"));
+        // Resolve emoji shortcodes (:white_check_mark: → ✅) to real glyphs, mirroring Grimoire's
+        // renderers. Rune renders verbatim and has no Markup expansion for shortcodes, so a model
+        // that emits GitHub-style codes would otherwise leave them literal on screen. Glyphs are
+        // honest plain Unicode (not a "rich" capability), and Rune's rune/cell-based wrapper below
+        // measures the resolved glyph correctly. Order: resolve first, then strip variation
+        // selectors from the produced glyphs so the cell-width accounting stays exact.
+        string text = StripVariationSelectors(BlankRunRegex.Replace(Emoji.Replace(message.Text.Trim()), "\n\n"));
         string fullText = $"{message.Who}: {text}";
         bool first = true;
         foreach (string line in fullText.Split('\n'))

@@ -182,7 +182,7 @@ public class LLMPresenterService : IPresenterService
             // The LLM is asked to return strict JSON; a null result indicates either an unparseable
             // payload or an empty body — both treated as failure and routed to the fallback.
             Records.PresentationResponse? presentation =
-                JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse)
+                JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse, Records.DefaultJsonSerializerOptions)
                  ?? throw new InvalidOperationException("LLM returned null presentation");
 
             // Map the wire-format DTO into the domain QuickReply records the rest of Morgana speaks.

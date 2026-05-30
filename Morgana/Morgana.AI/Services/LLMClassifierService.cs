@@ -91,7 +91,7 @@ public class LLMClassifierService : IClassifierService
                 message);
 
             Records.ClassificationResponse? classificationResponse =
-                JsonSerializer.Deserialize<Records.ClassificationResponse>(response);
+                JsonSerializer.Deserialize<Records.ClassificationResponse>(response, Records.DefaultJsonSerializerOptions);
 
             string intent = classificationResponse?.Intent ?? "other";
             string confidence = (classificationResponse?.Confidence ?? 0.5).ToString("F2");

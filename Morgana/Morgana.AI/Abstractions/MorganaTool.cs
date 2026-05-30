@@ -124,49 +124,34 @@ public class MorganaTool
     /// Sets quick reply buttons to be rendered in the user interface below the agent's response.
     /// </summary>
     /// <param name="quickReplies">
-    /// JSON array of quick reply definitions. Each object requires:
-    /// <c>id</c> (identifier), <c>label</c> (display text, may include emoji), <c>value</c> (message sent on tap).
+    /// Array of quick reply definitions. Each object requires:
+    /// <c>id</c> (identifier), <c>label</c> (display text, may include emoji), <c>value</c> (message sent on tap),
+    /// plus the optional <c>termination</c> flag.
     /// </param>
     /// <returns>Confirmation message for the LLM.</returns>
     /// <remarks>
-    /// <para><strong>Expected JSON format:</strong></para>
-    /// <code>
-    /// [
-    ///   {
-    ///     "id": "no-internet",
-    ///     "label": "🔴 No Internet Connection",
-    ///     "value": "Show me the no-internet assistance guide"
-    ///   }
-    /// ]
-    /// </code>
+    /// <para>The parameter is a strongly-typed array (not a stringified JSON blob): the LLM emits the
+    /// buttons as a native JSON array and <c>AIFunctionFactory</c> binds them directly to
+    /// <see cref="QuickReply"/> instances. The values are re-serialized to JSON before being stored
+    /// in the ephemeral <c>quick_replies</c> context variable, where downstream readers expect a string.</para>
     /// </remarks>
-    public Task<object> SetQuickReplies(string quickReplies)
+    public Task<object> SetQuickReplies(List<QuickReply> quickReplies)
     {
-        try
+        if (quickReplies == null || quickReplies.Count == 0)
         {
-            List<QuickReply>? parsedQuickReplies = JsonSerializer.Deserialize<List<QuickReply>>(quickReplies);
-            if (parsedQuickReplies == null || parsedQuickReplies.Count == 0)
-            {
-                toolLogger.LogWarning("SetQuickReplies called with empty or invalid JSON");
-                return Task.FromResult<object>("Warning: No quick replies were set (empty or invalid data).");
-            }
-
-            ToolContext ctx = getToolContext();
-            ctx.Provider.SetVariable(ctx.Session, "quick_replies", quickReplies);
-
-            toolLogger.LogInformation("LLM set {Count} quick reply buttons via SetQuickReplies tool", parsedQuickReplies.Count);
-
-            return Task.FromResult<object>(
-                $"Quick reply buttons set successfully. The user will see {parsedQuickReplies.Count} interactive options. " +
-                $"Now provide your text response to the user - the quick reply buttons will appear below your message.");
+            toolLogger.LogWarning("SetQuickReplies called with no quick replies");
+            return Task.FromResult<object>("Warning: No quick replies were set (empty data).");
         }
-        catch (JsonException ex)
-        {
-            toolLogger.LogError(ex, "Failed to parse quick replies JSON in SetQuickReplies");
-            return Task.FromResult<object>(
-                "Error: Quick replies JSON format is invalid. Expected format: " +
-                "[{\"id\": \"option1\", \"label\": \"🔧 Option 1\", \"value\": \"User message for option 1\"}]");
-        }
+
+        ToolContext ctx = getToolContext();
+        ctx.Provider.SetVariable(ctx.Session, "quick_replies",
+            JsonSerializer.Serialize(quickReplies, Records.DefaultJsonSerializerOptions));
+
+        toolLogger.LogInformation("LLM set {Count} quick reply buttons via SetQuickReplies tool", quickReplies.Count);
+
+        return Task.FromResult<object>(
+            $"Quick reply buttons set successfully. The user will see {quickReplies.Count} interactive options. " +
+            $"Now provide your text response to the user - the quick reply buttons will appear below your message.");
     }
 
     // =========================================================================
