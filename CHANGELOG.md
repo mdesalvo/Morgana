@@ -27,6 +27,8 @@ Architecturally it reaffirms that Morgana adapts on the **capability profile, no
 
 ### 🐛 Fixed
 - Rune scrollback row budgeting and text wrapping miscounted wide/zero-width glyphs
+- Quick replies could silently fail to render when the model emitted them as a native JSON array: `SetQuickReplies` now takes a typed `List<QuickReply>` instead of a stringified blob, ending the `JsonException` that dropped the buttons
+- `:shortcode:` emoji (e.g. `:white_check_mark:`) rendered literally instead of as glyphs in Cauldron and Rune — now resolved to real glyphs by each channel's renderer (Markdig for Cauldron, Spectre.Console for Rune)
 
 ### 🚀 Future Enablement
 - **Rich-TTY domain experiences** — Grimoire proves Morgana's *full* expressive surface (streaming, markdown, rich cards, quick replies) lives natively in a terminal, with no browser and no HTML. Pair it with your own plugins and your domain AI becomes a **rich command-line experience**: an ops console that renders structured cards, a runbook agent with guided quick replies, a headless-but-expressive CI assistant — everything Cauldron offers, shipped straight to the shell. Where 0.21's Rune opened *TTY-native domain AI*, Grimoire makes it **TTY-native and visually rich**
