@@ -26,7 +26,6 @@ Architecturally it reaffirms that Morgana adapts on the **capability profile, no
 - **Deterministic container builds** — `Morgana.Examples` now references `Morgana.AI` by **project reference** instead of a version-pinned NuGet `PackageReference`, and the channel/server Dockerfiles stage the first-party project subtrees and mirror the repo layout under `/src`. The Docker build no longer has to resolve the in-development framework version from the public feed (which previously broke with `NU1102` until the version was published), making the **image build self-contained and reproducible**
 
 ### 🐛 Fixed
-- Rune scrollback row budgeting and text wrapping miscounted wide/zero-width glyphs
 - Quick replies could silently fail to render when the model emitted them as a native JSON array: `SetQuickReplies` now takes a typed `List<QuickReply>` instead of a stringified blob, ending the `JsonException` that dropped the buttons
 - `:shortcode:` emoji (e.g. `:white_check_mark:`) rendered literally instead of as glyphs in Cauldron and Rune — now resolved to real glyphs by each channel's renderer (Markdig for Cauldron, Spectre.Console for Rune)
 
