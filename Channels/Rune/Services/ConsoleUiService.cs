@@ -85,6 +85,23 @@ public sealed class ConsoleUiService
     /// <summary>Buffer holding keystrokes not yet committed with <see cref="ConsoleKey.Enter"/>.</summary>
     private string currentInput = string.Empty;
 
+    /// <summary>
+    /// Insertion caret as a <see cref="currentInput"/> char (UTF-16 code-unit) index, kept on a rune
+    /// boundary so it never splits a surrogate pair (matching the rune-aware prompt rendering).
+    /// Invariant <c>0 ≤ cursorPosition ≤ currentInput.Length</c>. Left/Right walk it; typing inserts and
+    /// Backspace/Delete remove at this point, so a line can be fixed in place rather than only chopped at
+    /// the tail. Reset to 0 whenever <see cref="currentInput"/> is cleared. Mutated only under <see cref="renderLock"/>.
+    /// </summary>
+    private int cursorPosition;
+
+    /// <summary>
+    /// Hard cap on the prompt length in UTF-16 chars. Typing past it is swallowed (←/→/Backspace/Delete
+    /// stay live, so the line can still be edited down); the header counter makes the stop self-explanatory.
+    /// From <c>Rune:MaxInputLength</c>, default 500. Also keeps the prompt short enough that it never
+    /// out-grows the body cell on a normal terminal, so the caret can't scroll out of the kept tail.
+    /// </summary>
+    private readonly int maxInputLength;
+
     /// <summary>Name shown in the sticky header; swaps to the agent's name mid-turn and back to <c>Morgana</c> on completion.</summary>
     private string currentSpeaker = "Morgana";
 
@@ -141,6 +158,11 @@ public sealed class ConsoleUiService
     {
         agentExitTemplate = configuration["Rune:AgentExitMessage"] ?? DefaultAgentExitMessage;
         this.viewportResizeWatcher = viewportResizeWatcher;
+
+        // Non-positive (or absent) falls back to 500 so a misconfiguration can't lock the prompt shut.
+        maxInputLength = configuration.GetValue<int?>("Rune:MaxInputLength") ?? 500;
+        if (maxInputLength <= 0)
+            maxInputLength = 500;
     }
 
     /// <summary>Called by <see cref="WebhookReceiverService"/> when Morgana delivers a message.</summary>
@@ -251,6 +273,7 @@ public sealed class ConsoleUiService
                     {
                         conversationDead = true;
                         currentInput = string.Empty; // discard any half-typed doomed line
+                        cursorPosition = 0;
                     }
 
                     // Release the input gate: ReadKeysLoop was swallowing keystrokes until
@@ -342,6 +365,7 @@ public sealed class ConsoleUiService
                     {
                         toSend = currentInput;
                         currentInput = string.Empty;
+                        cursorPosition = 0;
                     }
                     if (toSend.Length == 0) break;
 
@@ -386,9 +410,48 @@ public sealed class ConsoleUiService
                 case ConsoleKey.Backspace:
                     lock (renderLock)
                     {
-                        if (currentInput.Length > 0)
+                        // Delete the rune to the LEFT of the caret (whole surrogate pair) and step the
+                        // caret back over it — not the tail: the two only coincide at end-of-line.
+                        if (cursorPosition > 0)
                         {
-                            currentInput = currentInput[..^1];
+                            int n = RuneLengthBefore(cursorPosition);
+                            currentInput = currentInput.Remove(cursorPosition - n, n);
+                            cursorPosition -= n;
+                            ctx.UpdateTarget(BuildLayout());
+                            ctx.Refresh();
+                        }
+                    }
+                    break;
+                case ConsoleKey.Delete:
+                    lock (renderLock)
+                    {
+                        // Forward delete: remove the rune UNDER the caret, leaving the caret put.
+                        if (cursorPosition < currentInput.Length)
+                        {
+                            int n = RuneLengthAt(cursorPosition);
+                            currentInput = currentInput.Remove(cursorPosition, n);
+                            ctx.UpdateTarget(BuildLayout());
+                            ctx.Refresh();
+                        }
+                    }
+                    break;
+                case ConsoleKey.LeftArrow:
+                    lock (renderLock)
+                    {
+                        if (cursorPosition > 0)
+                        {
+                            cursorPosition -= RuneLengthBefore(cursorPosition);
+                            ctx.UpdateTarget(BuildLayout());
+                            ctx.Refresh();
+                        }
+                    }
+                    break;
+                case ConsoleKey.RightArrow:
+                    lock (renderLock)
+                    {
+                        if (cursorPosition < currentInput.Length)
+                        {
+                            cursorPosition += RuneLengthAt(cursorPosition);
                             ctx.UpdateTarget(BuildLayout());
                             ctx.Refresh();
                         }
@@ -408,9 +471,18 @@ public sealed class ConsoleUiService
                     {
                         lock (renderLock)
                         {
-                            currentInput += key.KeyChar;
-                            ctx.UpdateTarget(BuildLayout());
-                            ctx.Refresh();
+                            // Hard cap: once the buffer is full, swallow further glyphs. Length is read
+                            // under the lock (DrainIncomingLoop also mutates currentInput) to avoid a
+                            // cross-thread race. Caret moves and deletions stay live, so a maxed-out line
+                            // can still be trimmed; the header N/max counter explains the stop.
+                            if (currentInput.Length < maxInputLength)
+                            {
+                                // Insert AT the caret (not append) so typing mid-line splices in place.
+                                currentInput = currentInput.Insert(cursorPosition, key.KeyChar.ToString());
+                                cursorPosition++;
+                                ctx.UpdateTarget(BuildLayout());
+                                ctx.Refresh();
+                            }
                         }
                     }
                     break;
@@ -422,18 +494,19 @@ public sealed class ConsoleUiService
     private const int ScrollStep = 5;
 
     /// <summary>
-    /// Maps a key to a scroll direction: Up / Left / PageUp move toward older content (+),
-    /// Down / Right / PageDown move back toward the present (−). Returns false for any other key.
-    /// Both arrow axes are accepted so the user needn't think about which one this view wants.
+    /// Maps a key to a scroll direction: Up / PageUp move toward older content (+),
+    /// Down / PageDown move back toward the present (−). Returns false for any other key.
+    /// Only the vertical axis scrolls: Left/Right are reserved for caret movement inside the
+    /// prompt line (the muscle-memory expectation in a text field), so they never reach here.
     /// </summary>
     private static bool TryScrollDelta(ConsoleKey key, out int delta)
     {
         switch (key)
         {
-            case ConsoleKey.UpArrow or ConsoleKey.LeftArrow or ConsoleKey.PageUp:
+            case ConsoleKey.UpArrow or ConsoleKey.PageUp:
                 delta = ScrollStep;
                 return true;
-            case ConsoleKey.DownArrow or ConsoleKey.RightArrow or ConsoleKey.PageDown:
+            case ConsoleKey.DownArrow or ConsoleKey.PageDown:
                 delta = -ScrollStep;
                 return true;
             default:
@@ -496,12 +569,28 @@ public sealed class ConsoleUiService
             ? $"   {(scrollHasAbove ? $"[{UserColor}]▲[/]" : "[grey50]▲[/]")}{(scrollHasBelow ? $"[{UserColor}]▼[/]" : "[grey50]▼[/]")}"
             : string.Empty;
 
+        // Input-length counter: shown only while a text prompt is actually being typed — i.e. NOT
+        // while awaiting a reply and NOT on the dead latch, and only once at least one char is in
+        // the buffer (Rune has no quick-reply mode, so there's no QR case to exclude). It's the
+        // prompt's own "dust gauge": white → orange at ≥70% → red at ≥100% (reusing the dust
+        // palette), so a line creeping toward the cap telegraphs the same unease as a depleting
+        // budget, and the swallowed keystrokes at the top read as "you hit the cap", not a glitch.
+        string countSegment = string.Empty;
+        if (!awaitingResponse && !conversationDead && currentInput.Length >= 1)
+        {
+            string countColor =
+                currentInput.Length >= maxInputLength ? DustCriticalColor :
+                currentInput.Length * 10 >= maxInputLength * 7 ? DustLowColor :
+                UserColor;
+            countSegment = $"   [grey54]chars[/] [bold {countColor}]{currentInput.Length}/{maxInputLength}[/]";
+        }
+
         // Markup uses [/] to close the tag — always run user-controlled strings through
         // Markup.Escape so a speaker name containing '[' can't break the layout.
         Markup content = new(
             $"[bold {speakerColor}]{Markup.Escape(currentSpeaker)}[/]   " +
             $"[grey54]conv[/] [bold {MorganaColor}]{Markup.Escape(shortId)}[/]" +
-            dustSegment + scrollSegment);
+            dustSegment + scrollSegment + countSegment);
 
         return new Panel(Align.Center(content, VerticalAlignment.Middle))
         {
@@ -676,23 +765,33 @@ public sealed class ConsoleUiService
             return ChunkStyledRows(content, termWidth, "grey54 italic");
         }
 
-        // Visible layout: position 0 = chevron, position 1 = space, positions 2..N+1 =
-        // currentInput chars (N = currentInput.Length), position N+2 = cursor. Build the
-        // markup row-by-row, applying the chevron / cursor style tags at their exact
-        // positions so the cursor stays at the very end regardless of where the wrap
-        // boundaries land.
         // Visible layout: chevron, a space, the input runes, then the cursor — packed into rows of
         // at most termWidth CELLS (a wide rune counts as two, so the cursor stays put and rows never
         // wrap silently behind the budget). currentInput is iterated by rune, so a surrogate pair is
-        // never split across a wrap boundary.
+        // never split across a wrap boundary. The caret is drawn ON the rune it sits before (inverted
+        // block) so it stays visible mid-line, or as a trailing blink '_' when it's at end-of-line —
+        // cursorPosition is a char index, mapped to the owning rune by tracking the char offset.
         List<(string Markup, int Cells)> units =
         [
             ($"[{UserColor}]›[/]", 1),
             (" ", 1),
         ];
+        int charOffset = 0;
+        bool caretPlaced = false;
         foreach (System.Text.Rune rune in currentInput.EnumerateRunes())
-            units.Add((Markup.Escape(rune.ToString()), RuneCells(rune)));
-        units.Add(($"[blink {UserColor}]_[/]", 1));
+        {
+            string glyph = Markup.Escape(rune.ToString());
+            if (!caretPlaced && cursorPosition >= charOffset && cursorPosition < charOffset + rune.Utf16SequenceLength)
+            {
+                units.Add(($"[blink {UserColor} invert]{glyph}[/]", RuneCells(rune)));
+                caretPlaced = true;
+            }
+            else
+                units.Add((glyph, RuneCells(rune)));
+            charOffset += rune.Utf16SequenceLength;
+        }
+        if (!caretPlaced) // caret at end-of-line
+            units.Add(($"[blink {UserColor}]_[/]", 1));
 
         List<IRenderable> rows = [];
         StringBuilder sb = new(capacity: termWidth + 32 /* slack for style tags */);
@@ -760,6 +859,14 @@ public sealed class ConsoleUiService
 
     /// <summary>Terminal cell width of a single rune (0 for combining/zero-width, 2 for wide CJK, 1 otherwise), via Spectre's Wcwidth-backed measurement.</summary>
     private static int RuneCells(System.Text.Rune rune) => rune.ToString().GetCellWidth();
+
+    /// <summary>UTF-16 length (1, or 2 for a surrogate pair) of the rune ending just before <paramref name="pos"/> in <see cref="currentInput"/>. Caller guarantees <paramref name="pos"/> &gt; 0; keeps the caret on a rune boundary going left.</summary>
+    private int RuneLengthBefore(int pos) =>
+        pos >= 2 && char.IsLowSurrogate(currentInput[pos - 1]) && char.IsHighSurrogate(currentInput[pos - 2]) ? 2 : 1;
+
+    /// <summary>UTF-16 length (1, or 2 for a surrogate pair) of the rune starting at <paramref name="pos"/> in <see cref="currentInput"/>. Caller guarantees <paramref name="pos"/> &lt; length; keeps the caret on a rune boundary going right.</summary>
+    private int RuneLengthAt(int pos) =>
+        pos + 1 < currentInput.Length && char.IsHighSurrogate(currentInput[pos]) && char.IsLowSurrogate(currentInput[pos + 1]) ? 2 : 1;
 
     /// <summary>
     /// Removes Unicode variation selectors (U+FE00–U+FE0F): zero-width format codepoints that flip a

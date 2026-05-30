@@ -84,6 +84,22 @@ public sealed class ConsoleUiService
     private string currentInput = string.Empty;
 
     /// <summary>
+    /// Insertion caret as a <see cref="currentInput"/> char index (invariant <c>0 ≤ cursorPosition ≤ currentInput.Length</c>).
+    /// Left/Right walk it through the buffer; typing inserts and Backspace/Delete remove at this point, so the user can
+    /// fix a line in place instead of only chopping the tail. Reset to 0 whenever <see cref="currentInput"/> is cleared.
+    /// Mutated only under <see cref="renderLock"/>, alongside <see cref="currentInput"/>.
+    /// </summary>
+    private int cursorPosition;
+
+    /// <summary>
+    /// Hard cap on the prompt length in UTF-16 chars. Typing past it is swallowed (←/→/Backspace/Delete
+    /// stay live, so the line can still be edited down); the header counter makes the stop self-explanatory.
+    /// From <c>Grimoire:MaxInputLength</c>, default 500. Also keeps the prompt short enough that it never
+    /// out-grows the body cell on a normal terminal, so the caret can't scroll out of the kept tail.
+    /// </summary>
+    private readonly int maxInputLength;
+
+    /// <summary>
     /// Queue of chunk deltas waiting to be revealed by the typewriter. <see cref="HandleInboundChunk"/>
     /// appends here; <see cref="TypewriterTick"/> pulls characters off the front and moves them into
     /// <see cref="streamingDisplayed"/>. Mirror of Cauldron's <c>_streamingBuffer</c>: raw stream on
@@ -207,6 +223,11 @@ public sealed class ConsoleUiService
         streamingTickChars = configuration.GetValue<int?>("Grimoire:StreamingResponse:TypewriterTickChars") ?? 1;
         if (streamingTickChars <= 0)
             streamingTickChars = 1;
+
+        // Non-positive (or absent) falls back to 500 so a misconfiguration can't lock the prompt shut.
+        maxInputLength = configuration.GetValue<int?>("Grimoire:MaxInputLength") ?? 500;
+        if (maxInputLength <= 0)
+            maxInputLength = 500;
     }
 
     /// <summary>Called by <see cref="WebhookReceiverService"/> when Morgana delivers a message.</summary>
@@ -470,6 +491,7 @@ public sealed class ConsoleUiService
             {
                 conversationDead = true;
                 currentInput = string.Empty; // discard any half-typed doomed line
+                cursorPosition = 0;
                 // Tear down any quick replies a same-turn agent message already activated:
                 // the dead latch suppresses them on both the render and input gates anyway,
                 // but clearing the backing state makes "game over" explicit rather than masked.
@@ -581,6 +603,7 @@ public sealed class ConsoleUiService
                     {
                         toSend = currentInput;
                         currentInput = string.Empty;
+                        cursorPosition = 0;
                     }
                     if (toSend.Length == 0) break;
 
@@ -625,9 +648,46 @@ public sealed class ConsoleUiService
                 case ConsoleKey.Backspace:
                     lock (renderLock)
                     {
-                        if (currentInput.Length > 0)
+                        // Delete the char to the LEFT of the caret (and step the caret back over it),
+                        // not the tail: with an in-place caret the two only coincide at end-of-line.
+                        if (cursorPosition > 0)
                         {
-                            currentInput = currentInput[..^1];
+                            currentInput = currentInput.Remove(cursorPosition - 1, 1);
+                            cursorPosition--;
+                            ctx.UpdateTarget(BuildLayout());
+                            ctx.Refresh();
+                        }
+                    }
+                    break;
+                case ConsoleKey.Delete:
+                    lock (renderLock)
+                    {
+                        // Forward delete: remove the char UNDER the caret, leaving the caret put.
+                        if (cursorPosition < currentInput.Length)
+                        {
+                            currentInput = currentInput.Remove(cursorPosition, 1);
+                            ctx.UpdateTarget(BuildLayout());
+                            ctx.Refresh();
+                        }
+                    }
+                    break;
+                case ConsoleKey.LeftArrow:
+                    lock (renderLock)
+                    {
+                        if (cursorPosition > 0)
+                        {
+                            cursorPosition--;
+                            ctx.UpdateTarget(BuildLayout());
+                            ctx.Refresh();
+                        }
+                    }
+                    break;
+                case ConsoleKey.RightArrow:
+                    lock (renderLock)
+                    {
+                        if (cursorPosition < currentInput.Length)
+                        {
+                            cursorPosition++;
                             ctx.UpdateTarget(BuildLayout());
                             ctx.Refresh();
                         }
@@ -647,9 +707,18 @@ public sealed class ConsoleUiService
                     {
                         lock (renderLock)
                         {
-                            currentInput += key.KeyChar;
-                            ctx.UpdateTarget(BuildLayout());
-                            ctx.Refresh();
+                            // Hard cap: once the buffer is full, swallow further glyphs. Length is read
+                            // under the lock (DrainIncomingLoop also mutates currentInput) to avoid a
+                            // cross-thread race. Caret moves and deletions stay live, so a maxed-out line
+                            // can still be trimmed; the header N/max counter explains the stop.
+                            if (currentInput.Length < maxInputLength)
+                            {
+                                // Insert AT the caret (not append) so typing mid-line splices in place.
+                                currentInput = currentInput.Insert(cursorPosition, key.KeyChar.ToString());
+                                cursorPosition++;
+                                ctx.UpdateTarget(BuildLayout());
+                                ctx.Refresh();
+                            }
                         }
                     }
                     break;
@@ -726,18 +795,19 @@ public sealed class ConsoleUiService
     private const int ScrollStep = 5;
 
     /// <summary>
-    /// Maps a key to a scroll direction: Up / Left / PageUp move toward older content (+),
-    /// Down / Right / PageDown move back toward the present (−). Returns false for any other key.
-    /// Both arrow axes are accepted so the user needn't think about which one this view wants.
+    /// Maps a key to a scroll direction: Up / PageUp move toward older content (+),
+    /// Down / PageDown move back toward the present (−). Returns false for any other key.
+    /// Only the vertical axis scrolls: Left/Right are reserved for caret movement inside the
+    /// prompt line (the muscle-memory expectation in a text field), so they never reach here.
     /// </summary>
     private static bool TryScrollDelta(ConsoleKey key, out int delta)
     {
         switch (key)
         {
-            case ConsoleKey.UpArrow or ConsoleKey.LeftArrow or ConsoleKey.PageUp:
+            case ConsoleKey.UpArrow or ConsoleKey.PageUp:
                 delta = ScrollStep;
                 return true;
-            case ConsoleKey.DownArrow or ConsoleKey.RightArrow or ConsoleKey.PageDown:
+            case ConsoleKey.DownArrow or ConsoleKey.PageDown:
                 delta = -ScrollStep;
                 return true;
             default:
@@ -800,12 +870,28 @@ public sealed class ConsoleUiService
             ? $"   {(scrollHasAbove ? $"[{UserColor}]▲[/]" : "[grey50]▲[/]")}{(scrollHasBelow ? $"[{UserColor}]▼[/]" : "[grey50]▼[/]")}"
             : string.Empty;
 
+        // Input-length counter: shown only while a text prompt is actually being typed — i.e. NOT
+        // while awaiting a reply, NOT on the dead latch, NOT in quick-reply mode (no buffer there),
+        // and only once at least one char is in the buffer. It's the prompt's own "dust gauge":
+        // white → orange at ≥70% → red at ≥100% (reusing the dust palette), so a line creeping
+        // toward the cap telegraphs the same unease as a depleting budget, and the swallowed
+        // keystrokes at the top read as "you hit the cap" rather than a glitch.
+        string countSegment = string.Empty;
+        if (!awaitingResponse && !conversationDead && !quickReplyActive && currentInput.Length >= 1)
+        {
+            string countColor =
+                currentInput.Length >= maxInputLength ? DustCriticalColor :
+                currentInput.Length * 10 >= maxInputLength * 7 ? DustLowColor :
+                UserColor;
+            countSegment = $"   [grey54]chars[/] [bold {countColor}]{currentInput.Length}/{maxInputLength}[/]";
+        }
+
         // Markup uses [/] to close the tag — always run user-controlled strings through
         // Markup.Escape so a speaker name containing '[' can't break the layout.
         Markup content = new(
             $"[bold {speakerColor}]{Markup.Escape(currentSpeaker)}[/]   " +
             $"[grey54]conv[/] [bold {MorganaColor}]{Markup.Escape(shortId)}[/]" +
-            dustSegment + scrollSegment);
+            dustSegment + scrollSegment + countSegment);
 
         return new Panel(Align.Center(content, VerticalAlignment.Middle))
         {
@@ -976,34 +1062,40 @@ public sealed class ConsoleUiService
             return ChunkStyledRows(content, termWidth, "grey54 italic");
         }
 
-        // Visible layout: position 0 = chevron, position 1 = space, positions 2..N+1 =
-        // currentInput chars (N = currentInput.Length), position N+2 = cursor. Build the
-        // markup row-by-row, applying the chevron / cursor style tags at their exact
-        // positions so the cursor stays at the very end regardless of where the wrap
-        // boundaries land.
-        int totalLen = currentInput.Length + 3;
-        int cursorPos = totalLen - 1;
-        List<IRenderable> rows = [];
-        int rowStart = 0;
-        StringBuilder sb = new(capacity: termWidth + 32 /* slack for style tags */);
-        while (rowStart < totalLen)
+        // Visible layout, one cell per visible column: chevron, a space, then the input chars —
+        // with the caret drawn ON the char it sits before (inverted block) so it stays visible
+        // mid-line, or as a trailing blink '_' when it's at end-of-line. Each cell is exactly one
+        // column wide, so packing termWidth cells per row keeps the exact-width contract the
+        // history budget relies on, no matter where the caret lands.
+        List<string> cells = new(currentInput.Length + 3)
         {
-            int rowEnd = Math.Min(rowStart + termWidth, totalLen);
-            sb.Clear();
-            for (int p = rowStart; p < rowEnd; p++)
-            {
-                if (p == 0)
-                    sb.Append($"[{UserColor}]›[/]");
-                else if (p == 1)
-                    sb.Append(' ');
-                else if (p == cursorPos)
-                    sb.Append($"[blink {UserColor}]_[/]");
-                else
-                    sb.Append(Markup.Escape(currentInput[p - 2].ToString()));
-            }
-            rows.Add(new Markup(sb.ToString()));
-            rowStart = rowEnd;
+            $"[{UserColor}]›[/]",
+            " ",
+        };
+        for (int i = 0; i < currentInput.Length; i++)
+        {
+            string ch = Markup.Escape(currentInput[i].ToString());
+            cells.Add(i == cursorPosition ? $"[blink {UserColor} invert]{ch}[/]" : ch);
         }
+        if (cursorPosition >= currentInput.Length)
+            cells.Add($"[blink {UserColor}]_[/]");
+
+        List<IRenderable> rows = [];
+        StringBuilder sb = new(capacity: termWidth + 32 /* slack for style tags */);
+        int col = 0;
+        foreach (string cell in cells)
+        {
+            if (col == termWidth)
+            {
+                rows.Add(new Markup(sb.ToString()));
+                sb.Clear();
+                col = 0;
+            }
+            sb.Append(cell);
+            col++;
+        }
+        if (sb.Length > 0)
+            rows.Add(new Markup(sb.ToString()));
         return rows;
     }
 
