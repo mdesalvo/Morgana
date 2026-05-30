@@ -81,7 +81,7 @@
       <GrimoireVersion>@(GrimoireVersionResult)</GrimoireVersion>
     </PropertyGroup>
 
-    <Message Text="[Morgana Docker] ✓ Grimoire version:     $(GrimoireVersion)" Importance="high" Condition="'$(GrimoireVersion)' != ''" />
+    <Message Text="[Morgana Docker] ✓ Grimoire version: $(GrimoireVersion)" Importance="high" Condition="'$(GrimoireVersion)' != ''" />
     <Warning Text="[Morgana Docker] Could not find $(GrimoirePropsFile)" Condition="'$(GrimoireVersion)' == ''" />
 
     <!-- Generate .env.versions content -->
