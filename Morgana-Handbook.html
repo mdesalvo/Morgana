@@ -504,6 +504,7 @@
           <tr><td>Grimoire:CallbackURL</td><td>Absolute URL Morgana posts inbound messages &amp; stream chunks to (webhook listener)</td></tr>
           <tr><td>Grimoire:Authentication:SymmetricKey</td><td>HMAC-SHA256 key matching the <code>grimoire</code> entry in Morgana's <code>Issuers[]</code></td></tr>
           <tr><td>Grimoire:StreamingResponse:*</td><td>Typewriter cadence for the live streaming pane (tick ms, chars per tick)</td></tr>
+          <tr><td>Grimoire:MaxInputLength</td><td>Hard cap on the typed prompt length in chars; typing past it is swallowed and a <code>chars N/max</code> header counter shows progress (default: <code>500</code>)</td></tr>
           <tr><td>Grimoire:LandingMessages</td><td>Array of random startup loading messages</td></tr>
         </tbody>
       </table>
@@ -515,6 +516,7 @@
           <tr><td>Rune:MorganaURL</td><td>Morgana backend URL</td></tr>
           <tr><td>Rune:CallbackURL</td><td>Absolute URL Morgana posts inbound messages to (webhook listener)</td></tr>
           <tr><td>Rune:Authentication:SymmetricKey</td><td>HMAC-SHA256 key matching the <code>rune</code> entry in Morgana's <code>Issuers[]</code></td></tr>
+          <tr><td>Rune:MaxInputLength</td><td>Hard cap on the typed prompt length in chars; typing past it is swallowed and a <code>chars N/max</code> header counter shows progress (default: <code>500</code>)</td></tr>
           <tr><td>Rune:MaxMessageLength</td><td>Budget capability declared for maximum message length (default: <code>500</code>)</td></tr>
         </tbody>
       </table>
