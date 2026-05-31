@@ -205,7 +205,7 @@ public sealed class ConsoleUiService
     /// <summary>Platform-specific terminal-resize notifier; subscribed in <see cref="RunAsync"/> so the viewport anchor follows live window resizes without per-frame polling.</summary>
     private readonly IViewportResizeWatcher viewportResizeWatcher;
 
-    /// <summary>Serializes mutations of <see cref="history"/>, <see cref="currentInput"/>, <see cref="currentSpeaker"/> and the paired <see cref="LiveDisplayContext.UpdateTarget"/>/<see cref="LiveDisplayContext.Refresh"/> calls. The resize callback runs on its own thread (SIGWINCH handler / polling task) and would otherwise race with <see cref="ReadKeysLoop"/> and <see cref="DrainIncomingLoop"/> over the shared list. Uses <see cref="System.Threading.Lock"/> (.NET 9+) instead of <c>object</c> so the compiler emits the optimised primitive and rejects misuse (e.g. passing the lock as an <c>object</c>).</summary>
+    /// <summary>Serializes mutations of <see cref="history"/>, <see cref="currentInput"/>, <see cref="currentSpeaker"/> and the paired <see cref="LiveDisplayContext.UpdateTarget"/>/<see cref="LiveDisplayContext.Refresh"/> calls. The resize callback runs on its own thread (SIGWINCH handler / polling task) and would otherwise race with <see cref="ReadKeysLoop"/> and <see cref="DrainInboundLoop"/> over the shared list. Uses <see cref="System.Threading.Lock"/> (.NET 9+) instead of <c>object</c> so the compiler emits the optimised primitive and rejects misuse (e.g. passing the lock as an <c>object</c>).</summary>
     private readonly Lock renderLock = new();
 
     /// <summary>Reads the <c>Grimoire:AgentExitMessage</c> template, falling back to <see cref="DefaultAgentExitMessage"/>, the typewriter cadence settings, and captures the injected resize watcher.</summary>
@@ -1070,7 +1070,7 @@ public sealed class ConsoleUiService
         List<string> cells = new(currentInput.Length + 3)
         {
             $"[{UserColor}]›[/]",
-            " ",
+            " "
         };
         for (int i = 0; i < currentInput.Length; i++)
         {

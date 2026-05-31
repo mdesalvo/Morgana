@@ -65,7 +65,7 @@ public sealed class PollingResizeWatcherService : IViewportResizeWatcher
                     onResize();
                 }
             }
-        });
+        }, cts.Token);
 
         return new Subscription(cts);
     }

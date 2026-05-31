@@ -78,8 +78,10 @@ public static class RichCardTerminalRenderService
         // PHASE 1 — build "logical" lines (CardLine), independent of the border.
         // Header = the always-present title (bold, speaker-tinted) plus an optional subtitle,
         // each already wrapped/truncated to innerWidth so phase 2 never has to re-measure.
-        List<CardLine> header = [];
-        header.Add(Content([new CardSeg(Trunc(Plain(richCard.Title), innerWidth), $"{baseColor} bold")]));
+        List<CardLine> header =
+        [
+            Content([new CardSeg(Trunc(Plain(richCard.Title), innerWidth), $"{baseColor} bold")])
+        ];
         if (!string.IsNullOrWhiteSpace(richCard.Subtitle))
         {
             foreach (string slice in WrapText(Plain(richCard.Subtitle), innerWidth))
@@ -94,8 +96,10 @@ public static class RichCardTerminalRenderService
         // borders and pads it to innerWidth. The header/body split is drawn as ╭─╮ … ├─┤ … ╰─╯;
         // the ├─┤ separator (and the body block) is emitted only when there is a body, so a
         // title-only richCard collapses to a tidy two-border box.
-        List<Markup> rows = [];
-        rows.Add(Border($"╭{new string('─', cardWidth - 2)}╮", baseColor));
+        List<Markup> rows =
+        [
+            Border($"╭{new string('─', cardWidth - 2)}╮", baseColor)
+        ];
         foreach (CardLine line in header)
             rows.Add(FrameLine(line, innerWidth, baseColor));
         if (body.Count > 0)
@@ -152,8 +156,7 @@ public static class RichCardTerminalRenderService
         string style = textBlock.Style switch
         {
             TextStyle.Bold => $"{BodyForeground} bold",
-            TextStyle.Muted => MutedForeground,
-            TextStyle.Small => MutedForeground,
+            TextStyle.Muted or TextStyle.Small => MutedForeground,
             _ => BodyForeground
         };
         // Wrap the (plain-text) content to the content width, then turn each wrapped slice into
@@ -474,7 +477,7 @@ public static class RichCardTerminalRenderService
             sb.Append(rune.ToString());
             cells += runeCells;
         }
-        return width >= 2 ? sb.ToString() + "…" : sb.ToString();
+        return width >= 2 ? sb + "…" : sb.ToString();
     }
 
     /// <summary>Right-pads with spaces to exactly <paramref name="width"/> terminal columns (cell-measured; input assumed already ≤ width).</summary>

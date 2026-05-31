@@ -774,7 +774,7 @@ public sealed class ConsoleUiService
         List<(string Markup, int Cells)> units =
         [
             ($"[{UserColor}]›[/]", 1),
-            (" ", 1),
+            (" ", 1)
         ];
         int charOffset = 0;
         bool caretPlaced = false;
