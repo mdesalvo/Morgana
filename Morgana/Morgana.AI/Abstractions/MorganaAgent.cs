@@ -330,9 +330,8 @@ public class MorganaAgent : MorganaActor
             // and the marker sits on the message whose text is what the user actually saw live.
             ChatMessage? finalAssistantMessage = aiChatHistoryProvider
                 .GetMessages(aiAgentSession)
-                .Where(m => m.Role == ChatRole.Assistant
-                         && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)))
-                .LastOrDefault();
+                .LastOrDefault(m => m.Role == ChatRole.Assistant
+                                     && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)));
             if (finalAssistantMessage is not null)
             {
                 finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();

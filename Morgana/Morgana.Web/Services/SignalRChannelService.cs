@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.SignalR;
 using Morgana.AI.Interfaces;
 using Morgana.Contracts;
 using Morgana.Web.Hubs;
-using static Morgana.AI.Records;
 
 namespace Morgana.Web.Services;
 

@@ -135,16 +135,12 @@ public class MorganaLLM : ILLMService
     /// </remarks>
     protected IChatClient WrapWithTelemetry(IChatClient inner)
     {
-        if (loggerFactory is null)
-            return inner;
-        if (!configuration.GetValue("Morgana:OpenTelemetry:Enabled", true))
+        if (loggerFactory is null || !configuration.GetValue("Morgana:OpenTelemetry:Enabled", true))
             return inner;
 
         bool enableSensitiveData = configuration.GetValue("Morgana:OpenTelemetry:EnableSensitiveData", false);
-
         return new ChatClientBuilder(inner)
-            .UseOpenTelemetry(loggerFactory, MorganaTelemetry.LLMChatClientSourceName,
-                otel => otel.EnableSensitiveData = enableSensitiveData)
+            .UseOpenTelemetry(loggerFactory, MorganaTelemetry.LLMChatClientSourceName, otel => otel.EnableSensitiveData = enableSensitiveData)
             .Build();
     }
 
