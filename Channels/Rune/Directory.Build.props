@@ -39,8 +39,8 @@
     <!-- ASP.NET -->
     <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.*" />
     <!-- Services -->
-    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.18.*" />
-    <PackageReference Include="Spectre.Console" Version="0.55.2" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.*" />
+    <PackageReference Include="Spectre.Console" Version="0.57.2" />
   </ItemGroup>
 
 </Project>
