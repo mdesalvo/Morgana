@@ -20,6 +20,9 @@ Morgana is a modern and flexible **conversational AI framework** designed to han
 
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
+> [!IMPORTANT]
+> *“Morgana acts as an enchanted LLM seamlessly bound to your application domain; her grimoire holds every spell and tool required to serve your specific world of intents, as you are the sole master who whispers the teachings that shape her personality and her magical capabilities.”*
+
 <table style="border:none;">
   <tr>
     <th colspan=5>Cauldron (Web Channel)</th>
