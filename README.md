@@ -14,14 +14,14 @@
   <a href="https://hub.docker.com/r/mdesalvo/rune"><img src="https://img.shields.io/docker/pulls/mdesalvo/rune?logo=docker&logoColor=white&label=Rune&color=9f7aea" alt="Rune (Docker Pulls)"></a>
 </p>
 
-## About Morgana 
+## About Morgana
 
 Morgana is a modern and flexible **conversational AI framework** designed to handle complex scenarios through a sophisticated **multi-agent, intent-driven architecture**. Built on cutting-edge **.NET 10** and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that collaborate to understand, classify and resolve customer inquiries with precision and context awareness.
 
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
 > [!IMPORTANT]
-> *“Morgana acts as an enchanted LLM seamlessly bound to your application domain; her grimoire holds every spell and tool required to serve your specific world of intents, as you are the sole master who whispers the teachings that shape her personality and her magical capabilities.”*
+> *Morgana acts as an enchanted LLM seamlessly bound to your application domain; her grimoire holds every spell and tool required to serve your specific world of intents, as you are the sole master who whispers the teachings that shape her personality and her magical capabilities 🔮*
 
 <table style="border:none;">
   <tr>
