@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.25.0] - UNDER DEVELOPMENT
+
+### ✨ Added
+
+### 🔄 Changed
+- Updated `Microsoft.Agents.AI` dependency to 1.13.0
+- Updated `ModelContextProtocol.Core` dependency to 1.4.1
+
+### 🐛 Fixed
+- Active quick replies on the last turn (e.g. a farewell prompt) could show up disabled after a page refresh/resume
+
+### 🚀 Future Enablement
+
+
 ## [0.24.0] - 2026-05-31
 ### 🎯 Major Feature: Grimoire — the Rich-TTY Reference Channel
 This release introduces **Grimoire**, a third reference channel that completes the **channel × capability matrix**: where Cauldron is the rich browser client and Rune is the poor-but-honest CLI, Grimoire is the **rich terminal** — the quadrant that was empty until now.
