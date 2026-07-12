@@ -820,8 +820,6 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         List<MorganaChatMessage> historyMessages = [];
         string? pendingQuickRepliesCallId = null;
         string? pendingRichCardCallId = null;
-        int msgIndex = 0;
-        bool isLastHistoryMessage = false;
 
         // Set of agents whose persisted history carries at least one user_facing marker. Within
         // those agents we filter out intermediate (non-user-facing) assistant messages so the
@@ -842,11 +840,6 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in allMessages)
         {
             bool chatMessageHasToolCalls = false;
-
-            // Determine if the current message is the last one
-            msgIndex++;
-            if (msgIndex == allMessages.Count)
-                isLastHistoryMessage = true;
 
             // Skip tool messages
             if (chatMessage.Role == ChatRole.Tool)
@@ -922,7 +915,16 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
             // Add message with both attachments (if present)
             historyMessages.Add(
-                MapToMorganaChatMessage(conversationId, agentName, agentCompleted, chatMessage, isLastHistoryMessage, quickReplies, richCard));
+                MapToMorganaChatMessage(conversationId, agentName, agentCompleted, chatMessage, isLastHistoryMessage: false, quickReplies, richCard));
+        }
+
+        // Mark the last emitted message (the one actually rendered in the UI) as the last
+        // history message, so trailing quick replies/rich cards on it stay interactive after
+        // a resume/refresh instead of being frozen because the raw session tail was empty.
+        if (historyMessages.Count > 0)
+        {
+            int lastIndex = historyMessages.Count - 1;
+            historyMessages[lastIndex] = historyMessages[lastIndex] with { IsLastHistoryMessage = true };
         }
 
         logger.LogInformation(
