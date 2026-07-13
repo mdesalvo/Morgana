@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.25.0] - UNDER DEVELOPMENT
 
 ### ✨ Added
+- Support **Azure AI Foundry v1** endpoints in AzureOpenAI provider
 
 ### 🔄 Changed
 - Updated `Microsoft.Agents.AI` dependency to 1.13.0
