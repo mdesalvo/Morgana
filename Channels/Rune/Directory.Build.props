@@ -9,7 +9,7 @@
     <LangVersion>latest</LangVersion>
 
     <!-- Version Information -->
-    <Version>0.24.0</Version>
+    <Version>0.25.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
 
@@ -40,7 +40,7 @@
     <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.*" />
     <!-- Services -->
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.*" />
-    <PackageReference Include="Spectre.Console" Version="0.57.2" />
+    <PackageReference Include="Spectre.Console" Version="0.57.*" />
   </ItemGroup>
 
 </Project>
