@@ -22,6 +22,7 @@ A billing FAQ agent can run on the cheapest model while a contract-analysis agen
 - Dust roles now include the tier (`Morgana (Billing/Low)`), giving the dust ledger and `morgana.dust.consumed` OTel counter per-tier attribution
 - Updated `Microsoft.Agents.AI` dependency to 1.13.0
 - Updated `ModelContextProtocol.Core` dependency to 1.4.1
+- Update `OllamaSharp` to 5.4.26
 
 ### 🐛 Fixed
 - Active quick replies on the last turn (e.g. a farewell prompt) could show up disabled after a page refresh/resume
