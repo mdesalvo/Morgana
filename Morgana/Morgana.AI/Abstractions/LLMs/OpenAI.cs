@@ -20,7 +20,10 @@ namespace Morgana.AI.Abstractions.LLMs;
 ///       "Provider": "openai",
 ///       "OpenAI": {
 ///         "ApiKey": "your-api-key",
-///         "Model": "your-openai-model" //e.g: gpt-4o
+///         "Models": {
+///           "Low": { "Name": "gpt-4o-mini", "MagicDust": { ... } },
+///           "Moderate": { "Name": "gpt-4o", "MagicDust": { ... } }
+///         }
 ///       }
 ///     }
 ///   }
@@ -43,11 +46,21 @@ public class OpenAI : MorganaLLM
     {
         OpenAIClient openaiClient = new OpenAIClient(
             new ApiKeyCredential(this.configuration["Morgana:LLM:OpenAI:ApiKey"]!));
-        string model = this.configuration["Morgana:LLM:OpenAI:Model"]!;
 
-        // Get chat client for specific model and wrap with the MEAI OpenTelemetry decorator
-        // for gen_ai.* spans and metrics (input/output tokens, latency, errors).
-        chatClient = WrapWithTelemetry(
-            openaiClient.GetChatClient(model).AsIChatClient());
+        // Binds the models declared in configuration so they're available at runtime for
+        // matching against each agent's declared tier (see Records.ModelDefinition remarks
+        // for how the config layout is structured).
+        Dictionary<Records.LLMTier, Records.ModelDefinition> models =
+            this.configuration.GetSection("Morgana:LLM:OpenAI:Models").Get<Dictionary<Records.LLMTier, Records.ModelDefinition>>() ?? [];
+
+        // One chat client per configured tier, sharing the same OpenAIClient (API key only),
+        // wrapped with the MEAI OpenTelemetry decorator for gen_ai.* spans and metrics.
+        foreach ((Records.LLMTier tier, Records.ModelDefinition model) in models)
+            RegisterTierClient(tier, model.Name, WrapWithTelemetry(openaiClient.GetChatClient(model.Name).AsIChatClient()), model.MagicDust);
+
+        // Wraps up tier registration and picks which client the framework's own actors
+        // (Guard, Classifier, Presenter, ChannelAdapter) will use.
+
+        FinalizeModelRegistration();
     }
 }

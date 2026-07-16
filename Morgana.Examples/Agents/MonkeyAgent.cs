@@ -28,6 +28,7 @@ namespace Morgana.Examples.Agents;
 /// </list>
 /// </remarks>
 [HandlesIntent("monkeys")]
+[RequiresLLMTier(Morgana.AI.Records.LLMTier.Low)]
 [UsesMCPServer("https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/")]
 public class MonkeyAgent : MorganaAgent
 {

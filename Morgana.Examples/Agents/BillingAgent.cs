@@ -8,6 +8,7 @@ using Morgana.AI.Interfaces;
 namespace Morgana.Examples.Agents;
 
 [HandlesIntent("billing")]
+[RequiresLLMTier(Morgana.AI.Records.LLMTier.Low)]
 public class BillingAgent : MorganaAgent
 {
     public BillingAgent(

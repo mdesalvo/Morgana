@@ -40,7 +40,7 @@ public class MorganaLLM : ILLMService
 
     /// <summary>
     /// Service for resolving prompt templates by name. Used to load the Morgana framework
-    /// prompt at construction and exposed to callers via <see cref="GetPromptResolverService"/>.
+    /// prompt at construction.
     /// </summary>
     protected readonly IPromptResolverService promptResolverService;
 
@@ -51,10 +51,28 @@ public class MorganaLLM : ILLMService
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
-    /// Microsoft.Extensions.AI chat client for LLM interactions.
-    /// Initialized by derived classes (Anthropic, AzureOpenAI, Ollama, OpenAI).
+    /// Chat client used by Morgana's own framework actors (Guard, Classifier, Presenter,
+    /// ChannelAdapter) — always the cheapest tier the active provider has configured, set by
+    /// <see cref="FinalizeModelRegistration"/>, which every provider constructor is required
+    /// to call (hence the <c>null!</c> initializer: the field is guaranteed assigned before
+    /// any instance is ever handed out by DI). Domain agents never read this field; they
+    /// resolve their own tier via <see cref="GetChatClient(Records.LLMTier)"/>.
     /// </summary>
-    protected IChatClient chatClient;
+    private IChatClient frameworkChatClient = null!;
+
+    /// <summary>
+    /// Per-tier client + pricing, populated by derived class constructors via
+    /// <see cref="RegisterTierClient"/> — one entry per tier key configured under
+    /// <c>Models</c> for the active provider.
+    /// </summary>
+    private readonly Dictionary<Records.LLMTier, (IChatClient Client, Records.MagicDustPricing Pricing)> tierClients = new();
+
+    /// <summary>
+    /// The tier used for framework-actor calls (Guard, Classifier, Presenter, ChannelAdapter).
+    /// Always the cheapest tier the active provider has configured. Computed lazily from
+    /// <see cref="tierClients"/> once <see cref="FinalizeModelRegistration"/> has run.
+    /// </summary>
+    private Records.LLMTier FrameworkDefaultTier => tierClients.Keys.Min();
 
     /// <summary>
     /// Logger factory used to instrument the chat client pipeline (in particular,
@@ -84,10 +102,13 @@ public class MorganaLLM : ILLMService
     /// constructed. Agent calls are metered separately by
     /// <see cref="Adapters.MorganaAgentAdapter"/> with a per-agent role.
     /// </summary>
-    public void EnableDustAccounting(IDustLimitService dustLimitService, Records.MagicDustPricing dustPricing)
+    public void EnableDustAccounting(IDustLimitService dustLimitService)
     {
         this.dustLimitService = dustLimitService;
-        this.dustPricing = dustPricing;
+
+        // Guard, Classifier, Presenter and ChannelAdapter always run on the cheapest tier, so
+        // their pricing can be fixed once here instead of looked up on every call.
+        dustPricing = tierClients[FrameworkDefaultTier].Pricing;
     }
 
     /// <summary>
@@ -109,20 +130,122 @@ public class MorganaLLM : ILLMService
         this.promptResolverService = promptResolverService;
         this.loggerFactory = loggerFactory;
 
+        // Loads the framework prompt once at startup, so the error-message templates it
+        // carries are ready before the first LLM call ever happens.
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
     }
 
     /// <summary>
-    /// Wraps the supplied <paramref name="inner"/> chat client with the MEAI
+    /// Registers a fully-built chat client for one <c>Models</c> entry. Called once per
+    /// entry by each derived provider's constructor, after applying that provider's own
+    /// decorator chain (no-prefill guard, telemetry, etc.) to the model-specific client.
+    /// </summary>
+    /// <param name="tier">Tier this model serves — the key it was registered under in the <c>Models</c> map.</param>
+    /// <param name="modelName">
+    /// The model/deployment identifier this tier resolves to (<c>ModelDefinition.Name</c>),
+    /// checked against <see cref="Records.OverridePlaceholders"/> before registration. Not
+    /// stored — the client already has it baked in — this parameter exists purely so every
+    /// provider gets the check for free instead of each duplicating it.
+    /// </param>
+    /// <param name="client">Fully decorated chat client for this specific model.</param>
+    /// <param name="pricing">Dust pricing for this specific model.</param>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when <paramref name="modelName"/> is still an unreplaced override placeholder.
+    /// Deliberately narrow: it only catches the exact sentinel strings, not "implausible"
+    /// values in general (empty, whitespace, garbage) — those remain the deployer's problem,
+    /// surfacing as an HTTP error from the provider on first real call.
+    /// </exception>
+    protected void RegisterTierClient(Records.LLMTier tier, string modelName, IChatClient client, Records.MagicDustPricing pricing)
+    {
+        // A tier left on its placeholder would otherwise bind and register just fine, then
+        // pass every later check (ConfiguredTiers reports it as present, so
+        // RequiresLLMTierValidationService's "tier exists" check sees nothing wrong) — this is
+        // the only point left where the raw, still-a-placeholder value is visible before it
+        // disappears into an already-built client.
+        if (Records.OverridePlaceholders.Contains(modelName))
+            throw new InvalidOperationException(
+                $"Morgana:LLM:{{Provider}}:Models:{tier} has a Name that is still the " +
+                $"placeholder '{modelName}'. Override it via User Secrets or environment variables before " +
+                $"starting — this is checked now, at provider startup, so a tier nobody has requested yet " +
+                $"(e.g. one only a plugin discovered later will use) can't silently ship broken.");
+
+        tierClients[tier] = (client, pricing);
+    }
+
+    /// <summary>
+    /// Finalizes tier registration: picks the cheapest configured tier as the
+    /// <see cref="frameworkChatClient"/>. Must be called by every derived provider's
+    /// constructor after all <see cref="RegisterTierClient"/> calls for its <c>Models</c> map.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when a provider declares no <c>Models</c> entries at all (an agent could never
+    /// resolve any tier against it), or when <see cref="Records.LLMTier.Omni"/> is mixed with
+    /// any other tier (ambiguous — Omni is meant to be the sole entry for that provider).
+    /// </exception>
+    protected void FinalizeModelRegistration()
+    {
+        if (tierClients.Count == 0)
+            throw new InvalidOperationException(
+                "No models configured under 'Morgana:LLM:{Provider}:Models'. At least one model " +
+                "(keyed by Tier, with a Name and MagicDust pricing) is required for the active LLM provider.");
+
+        // A deployment that configures Omni AND Low/Moderate/High doesn't know what it wants:
+        // should an agent asking for Low get the explicit Low model, or the Omni catch-all?
+        // Refuse to guess.
+        if (tierClients.ContainsKey(Records.LLMTier.Omni) && tierClients.Count > 1)
+            throw new InvalidOperationException(
+                "'Morgana:LLM:{Provider}:Models' mixes an Omni entry with other tiers. Omni means " +
+                "\"this one model serves every tier\" and must be the sole entry — either configure " +
+                "Omni alone, or drop it and configure Low/Moderate/High explicitly.");
+
+        // The framework's own actors (Guard, Classifier, Presenter, ChannelAdapter) always run
+        // on the cheapest tier available, whatever that turns out to be for this provider.
+        frameworkChatClient = tierClients[FrameworkDefaultTier].Client;
+    }
+
+    /// <summary>
+    /// Resolves the tier client/pricing entry to actually serve for <paramref name="tier"/>:
+    /// if the provider is configured Omni-only, EVERY request — regardless of the tier asked
+    /// for — is transparently redirected to that single entry (see <see cref="Records.LLMTier.Omni"/>).
+    /// Otherwise, an exact match is required.
+    /// </summary>
+    private (IChatClient Client, Records.MagicDustPricing Pricing) ResolveTierEntry(Records.LLMTier tier)
+    {
+        // On an Omni deployment, every request lands on the same single model, whatever tier
+        // was actually asked for.
+        if (tierClients.TryGetValue(Records.LLMTier.Omni, out (IChatClient Client, Records.MagicDustPricing Pricing) omniEntry))
+            return omniEntry;
+
+        // Otherwise the requested tier must exist exactly as declared — an agent asking for a
+        // tier the deployment never configured is a misconfiguration, not something to paper
+        // over with a fallback.
+        return tierClients.TryGetValue(tier, out (IChatClient Client, Records.MagicDustPricing Pricing) entry)
+            ? entry
+            : throw new InvalidOperationException(
+                $"LLM tier '{tier}' is not configured for the active provider. Add a \"{tier}\" entry " +
+                $"under Morgana:LLM:{{Provider}}:Models (or a single \"Omni\" entry to serve every tier).");
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyCollection<Records.LLMTier> ConfiguredTiers => tierClients.Keys;
+
+    /// <inheritdoc/>
+    public IChatClient GetChatClient(Records.LLMTier tier) => ResolveTierEntry(tier).Client;
+
+    /// <inheritdoc/>
+    public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => ResolveTierEntry(tier).Pricing;
+
+    /// <summary>
+    /// Wraps the supplied <paramref name="innerChatClient"/> chat client with the MEAI
     /// <see cref="OpenTelemetryChatClient"/> decorator so every request emits OTel spans and
     /// metrics under the standard <c>gen_ai.*</c> semantic conventions (input/output token
     /// counts, cache_read input tokens, model name, response latency, errors).
     /// </summary>
-    /// <param name="inner">The chat client to wrap (typically the raw provider client, possibly
+    /// <param name="innerChatClient">The chat client to wrap (typically the raw provider client, possibly
     /// already wrapped by a provider-specific decorator like Anthropic's no-prefill guard).</param>
     /// <returns>
     /// The instrumented chat client when <see cref="loggerFactory"/> is available and
-    /// <c>Morgana:OpenTelemetry:Enabled</c> is true; otherwise <paramref name="inner"/>
+    /// <c>Morgana:OpenTelemetry:Enabled</c> is true; otherwise <paramref name="innerChatClient"/>
     /// unchanged. Provider-agnostic — all four concrete providers go through this single hook.
     /// </returns>
     /// <remarks>
@@ -133,29 +256,16 @@ public class MorganaLLM : ILLMService
     /// (default <c>false</c>): when true, the spans include the actual message contents — useful
     /// in dev/troubleshooting, off in production for privacy.</para>
     /// </remarks>
-    protected IChatClient WrapWithTelemetry(IChatClient inner)
+    protected IChatClient WrapWithTelemetry(IChatClient innerChatClient)
     {
         if (loggerFactory is null || !configuration.GetValue("Morgana:OpenTelemetry:Enabled", true))
-            return inner;
+            return innerChatClient;
 
         bool enableSensitiveData = configuration.GetValue("Morgana:OpenTelemetry:EnableSensitiveData", false);
-        return new ChatClientBuilder(inner)
+        return new ChatClientBuilder(innerChatClient)
             .UseOpenTelemetry(loggerFactory, MorganaTelemetry.LLMChatClientSourceName, otel => otel.EnableSensitiveData = enableSensitiveData)
             .Build();
     }
-
-    /// <summary>
-    /// Gets the underlying Microsoft.Extensions.AI chat client.
-    /// Used by MorganaAgentAdapter to create AIAgent instances with tool calling support.
-    /// </summary>
-    /// <returns>IChatClient instance configured for the active provider</returns>
-    public IChatClient GetChatClient() => chatClient;
-
-    /// <summary>
-    /// Gets the prompt resolver service associated with this LLM service.
-    /// </summary>
-    /// <returns>IPromptResolverService instance</returns>
-    public IPromptResolverService GetPromptResolverService() => promptResolverService;
 
     /// <summary>
     /// Performs a completion with an explicit system prompt and user message.
@@ -172,12 +282,20 @@ public class MorganaLLM : ILLMService
     {
         try
         {
-            // Framework-actor calls (guard, classifier, presenter, channel adapter) are
-            // metered under the role "Morgana". Wrapping is per-call: no singleton dust
-            // wrapper exists on chatClient, so this never double-counts the agent path.
+            // This is how Morgana's own framework actors get an LLM, as opposed to how a
+            // domain agent gets one: Guard, Classifier, Presenter and ChannelAdapter all call
+            // THIS method (never GetChatClient(tier)), so they always run on
+            // frameworkChatClient — the cheapest tier the active provider has configured,
+            // fixed once at startup by FinalizeModelRegistration. They have no
+            // [RequiresLLMTier] of their own; a domain agent, by contrast, is built by
+            // MorganaAgentAdapter against its own declared tier via
+            // GetChatClient(tier)/GetPricing(tier), and never touches this method or
+            // frameworkChatClient at all.
+            //
+            // Framework-actor calls are metered under the role "Morgana"
             IChatClient client = dustLimitService is not null && dustPricing is not null
-                ? new DustAccountingChatClient(chatClient, dustLimitService, dustPricing, "Morgana")
-                : chatClient;
+                ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, dustPricing, "Morgana")
+                : frameworkChatClient;
 
             ChatResponse response = await client.GetResponseAsync(
                 [

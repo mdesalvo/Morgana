@@ -39,10 +39,11 @@ public class MorganaAgentAdapter
     protected readonly IPromptResolverService promptResolverService;
 
     /// <summary>
-    /// Microsoft.Extensions.AI chat client for creating AIAgent instances with tool calling support.
-    /// Wraps the underlying LLM provider (Anthropic, Azure OpenAI, etc.).
+    /// LLM service abstraction, queried per-agent for the chat client and dust pricing of the
+    /// tier its <c>[RequiresLLMTier]</c> attribute declares. There is no single process-wide
+    /// chat client here anymore — each agent resolves its own tier at creation time.
     /// </summary>
-    protected readonly IChatClient chatClient;
+    protected readonly ILLMService llmService;
 
     /// <summary>
     /// Service for discovering custom MorganaTool implementations via [ProvidesToolForIntent] attribute.
@@ -69,11 +70,6 @@ public class MorganaAgentAdapter
     protected readonly IDustLimitService dustLimitService;
 
     /// <summary>
-    /// Per-provider dust pricing used to convert token counts into dust units for agents.
-    /// </summary>
-    protected readonly Records.MagicDustPricing dustPricing;
-
-    /// <summary>
     /// Logger instance for agent creation diagnostics and tool registration tracking.
     /// </summary>
     protected readonly ILogger logger;
@@ -88,31 +84,28 @@ public class MorganaAgentAdapter
     /// Initializes a new instance of the MorganaAgentAdapter.
     /// Loads the Morgana framework prompt for later composition with domain prompts.
     /// </summary>
-    /// <param name="chatClient">Microsoft.Extensions.AI chat client for AIAgent creation</param>
+    /// <param name="llmService">LLM service abstraction, queried per-agent for its declared tier's chat client and pricing</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="toolRegistryService">Service for discovering custom MorganaTool implementations</param>
     /// <param name="imcpClientRegistryService">Service for managing MCP server connections</param>
     /// <param name="chatReducerService">Service for reducing context window sent to LLM</param>
     /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
-    /// <param name="dustPricing">Per-provider dust pricing (tokens per dust unit)</param>
     /// <param name="logger">Logger instance for diagnostics</param>
     public MorganaAgentAdapter(
-        IChatClient chatClient,
+        ILLMService llmService,
         IPromptResolverService promptResolverService,
         IToolRegistryService toolRegistryService,
         IMCPClientRegistryService imcpClientRegistryService,
         SummarizingChatReducerService chatReducerService,
         IDustLimitService dustLimitService,
-        Records.MagicDustPricing dustPricing,
         ILogger logger)
     {
-        this.chatClient = chatClient;
+        this.llmService = llmService;
         this.promptResolverService = promptResolverService;
         this.toolRegistryService = toolRegistryService;
         this.imcpClientRegistryService = imcpClientRegistryService;
         this.chatReducerService = chatReducerService;
         this.dustLimitService = dustLimitService;
-        this.dustPricing = dustPricing;
         this.logger = logger;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
@@ -154,7 +147,15 @@ public class MorganaAgentAdapter
         HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>()
             ?? throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
 
-        logger.LogInformation("Creating agent for intent '{IntentAttributeIntent}'...", intentAttribute.Intent);
+        // 1b) Tier: the agent's fixed, "existential" declaration of which model class it runs
+        //     on. Mandatory alongside [HandlesIntent] — see RequiresLLMTierAttribute remarks.
+        //     Startup validation (HandlesIntentAgentRegistryService) already guarantees this
+        //     attribute is present and its tier is configured for the active provider before
+        //     any agent is ever created, so both lookups below are safe.
+        RequiresLLMTierAttribute tierAttribute = agentType.GetCustomAttribute<RequiresLLMTierAttribute>()
+            ?? throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [RequiresLLMTier] attribute");
+
+        logger.LogInformation("Creating agent for intent '{IntentAttributeIntent}' on tier '{Tier}'...", intentAttribute.Intent, tierAttribute.Tier);
 
         // 2) Domain prompt for this intent (instructions/personality/formatting/tools),
         //    resolved from agents.json. Sync-over-async is intentional: agent creation is
@@ -203,15 +204,20 @@ public class MorganaAgentAdapter
         //     MCP-only agent simply ends up with no tools rather than failing to exist).
         RegisterMCPTools(agentType, morganaToolAdapter);
 
-        // 7) Wrap the shared chat client in a per-agent dust meter. The role label
-        //    ("Morgana (Billing)" etc.) attributes consumption to this agent in the
-        //    budget; conversationId scopes the charge. The reducer is built on the SAME
+        // 7) Resolve THIS agent's own tier client/pricing (never the framework-default
+        //    client) and wrap it in a per-agent dust meter. The role label
+        //    ("Morgana (Billing/Moderate)" etc.) attributes consumption to this agent+tier in
+        //    the budget; conversationId scopes the charge. The reducer is built on the SAME
         //    wrapped client so its summarization LLM calls (also token-bearing) are
         //    metered too, not silently free.
         string intent = intentAttribute.Intent;
-        string dustRole = $"Morgana ({char.ToUpperInvariant(intent[0])}{intent[1..]})";
+        // Builds a human-readable label for the dust ledger and OTel tags, e.g. "billing" ->
+        // "Morgana (Billing/Moderate)".
+        string dustRole = $"Morgana ({char.ToUpperInvariant(intent[0])}{intent[1..]}/{tierAttribute.Tier})";
+        IChatClient tierChatClient = llmService.GetChatClient(tierAttribute.Tier);
+        Records.MagicDustPricing tierPricing = llmService.GetPricing(tierAttribute.Tier);
         IChatClient agentChatClient =
-            new DustAccountingChatClient(chatClient, dustLimitService, dustPricing, dustRole, conversationId);
+            new DustAccountingChatClient(tierChatClient, dustLimitService, tierPricing, dustRole, conversationId);
 
         // 8) History provider: keeps the full transcript in AgentSession, exposes the
         //    (optionally reduced) view to the LLM. Null reducer → full history verbatim.

@@ -178,13 +178,13 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IGuardRailService: Checks user messages for content safety and compliance
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
-// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, OpenAI)
-// - IChatClient: Microsoft.Extensions.AI chat client for LLM interactions
+// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, OpenAI), multi-tier (Low/Moderate/High) via each provider's Models[] configuration
 
 builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryService>();
 builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistryService>();
 builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
+builder.Services.AddSingleton<ILLMTierValidationService, RequiresLLMTierValidationService>();
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
 builder.Services.AddSingleton<IGuardRailService, LLMGuardRailService>();
 builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
@@ -207,13 +207,10 @@ builder.Services.AddSingleton<ILLMService>(sp => {
     // Wire dust accounting for the framework-actor path (CompleteWithSystemPromptAsync).
     // Done post-construction because the dust limiter depends on conversation persistence,
     // which is registered after this factory. Lazy resolution makes the order safe.
-    llm.EnableDustAccounting(
-        sp.GetRequiredService<IDustLimitService>(),
-        sp.GetRequiredService<Records.MagicDustPricing>());
+    llm.EnableDustAccounting(sp.GetRequiredService<IDustLimitService>());
 
     return llm;
 });
-builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILLMService>().GetChatClient());
 
 // ==============================================================================
 // SECTION 7.1: Conversation Persistence
@@ -254,24 +251,13 @@ builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 // conversation's lifetime. Shares the per-conversation SQLite database.
 //
 // - DustLimitingOptions: policy (budget + warning/error message templates)
-// - MagicDustPricing: per-provider tokens-per-dust-unit, read from the active provider's
-//   Morgana:LLM:{Provider}:MagicDust section (IConfiguration keys are case-insensitive)
+// - Per-model pricing now lives inline on each Models[] entry (Morgana:LLM:{Provider}:Models[].MagicDust)
+//   and is resolved per-tier by ILLMService.GetPricing(tier) — no single process-wide pricing singleton.
 //
-// Configuration: Morgana:DustLimiting + Morgana:LLM:{Provider}:MagicDust in appsettings.json
+// Configuration: Morgana:DustLimiting + Morgana:LLM:{Provider}:Models[].MagicDust in appsettings.json
 
 builder.Services.Configure<Records.DustLimitingOptions>(
     builder.Configuration.GetSection("Morgana:DustLimiting"));
-
-builder.Services.AddSingleton<Records.MagicDustPricing>(sp =>
-{
-    IConfiguration config = sp.GetRequiredService<IConfiguration>();
-    string provider = config["Morgana:LLM:Provider"]!;
-
-    Records.MagicDustPricing pricing = new Records.MagicDustPricing();
-    config.GetSection($"Morgana:LLM:{provider}:MagicDust").Bind(pricing);
-    return pricing;
-});
-
 builder.Services.AddSingleton<IDustLimitService, SQLiteDustLimitService>();
 
 // ==============================================================================

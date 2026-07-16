@@ -24,7 +24,9 @@ namespace Morgana.AI.Abstractions.LLMs;
 ///       "AzureOpenAI": {
 ///         "Endpoint": "https://your-resource.openai.azure.com/",
 ///         "ApiKey": "your-api-key",
-///         "DeploymentName": "your-deployment-name"
+///         "Models": {
+///           "Low": { "Name": "your-low-tier-deployment-name", "MagicDust": { ... } }
+///         }
 ///       }
 ///     }
 ///   }
@@ -39,7 +41,9 @@ namespace Morgana.AI.Abstractions.LLMs;
 ///       "AzureOpenAI": {
 ///         "Endpoint": "https://your-resource.services.ai.azure.com/api/projects/your-project/openai/v1",
 ///         "ApiKey": "your-api-key",
-///         "DeploymentName": "your-model-deployment-name"
+///         "Models": {
+///           "Low": { "Name": "your-low-tier-deployment-name", "MagicDust": { ... } }
+///         }
 ///       }
 ///     }
 ///   }
@@ -62,28 +66,41 @@ public class AzureOpenAI : MorganaLLM
     {
         Uri endpoint = new Uri(this.configuration["Morgana:LLM:AzureOpenAI:Endpoint"]!);
         string apiKey = this.configuration["Morgana:LLM:AzureOpenAI:ApiKey"]!;
-        string deploymentName = this.configuration["Morgana:LLM:AzureOpenAI:DeploymentName"]!;
+
+        // Binds the models declared in configuration so they're available at runtime for
+        // matching against each agent's declared tier (see Records.ModelDefinition remarks
+        // for how the config layout is structured).
+        Dictionary<Records.LLMTier, Records.ModelDefinition> models =
+            this.configuration.GetSection("Morgana:LLM:AzureOpenAI:Models").Get<Dictionary<Records.LLMTier, Records.ModelDefinition>>() ?? [];
 
         // Azure AI Foundry projects expose an OpenAI-compatible unified "v1" API surface
         // (path containing "/openai/v1") that rejects the "api-version" query parameter that
         // AzureOpenAIClient always appends. For these endpoints, the vanilla OpenAI client
-        // (pointed at the Foundry endpoint) must be used instead.
-        IChatClient innerChatClient;
-        if (endpoint.AbsolutePath.Contains("/openai/v1", StringComparison.OrdinalIgnoreCase))
+        // (pointed at the Foundry endpoint) must be used instead. Either underlying client is
+        // built once and reused across every configured tier — each tier only differs by
+        // deployment name (ModelDefinition.Name).
+        bool isFoundryV1 = endpoint.AbsolutePath.Contains("/openai/v1", StringComparison.OrdinalIgnoreCase);
+        OpenAIClient? foundryClient = isFoundryV1
+            ? new OpenAIClient(new ApiKeyCredential(apiKey), new OpenAIClientOptions { Endpoint = endpoint })
+            : null;
+        AzureOpenAIClient? azureClient = isFoundryV1
+            ? null
+            : new AzureOpenAIClient(endpoint, new AzureKeyCredential(apiKey));
+
+        foreach ((Records.LLMTier tier, Records.ModelDefinition model) in models)
         {
-            // Azure AI Foundry
-            OpenAIClientOptions clientOptions = new OpenAIClientOptions { Endpoint = endpoint };
-            OpenAIClient foundryClient = new OpenAIClient(new ApiKeyCredential(apiKey), clientOptions);
-            innerChatClient = foundryClient.GetChatClient(deploymentName).AsIChatClient();
-        }
-        else
-        {
-            // Legacy AzureOpenAI
-            AzureOpenAIClient azureClient = new AzureOpenAIClient(endpoint, new AzureKeyCredential(apiKey));
-            innerChatClient = azureClient.GetChatClient(deploymentName).AsIChatClient();
+            // Picks whichever of the two client flavors was actually built above, matching the
+            // endpoint style detected for this deployment.
+            IChatClient innerChatClient = isFoundryV1
+                ? foundryClient!.GetChatClient(model.Name).AsIChatClient()
+                : azureClient!.GetChatClient(model.Name).AsIChatClient();
+
+            // Wrap with the MEAI OpenTelemetry decorator for gen_ai.* spans and metrics (input/output tokens, latency, errors).
+            RegisterTierClient(tier, model.Name, WrapWithTelemetry(innerChatClient), model.MagicDust);
         }
 
-        // Wrap with the MEAI OpenTelemetry decorator for gen_ai.* spans and metrics (input/output tokens, latency, errors).
-        chatClient = WrapWithTelemetry(innerChatClient);
+        // Wraps up tier registration and picks which client the framework's own actors
+        // (Guard, Classifier, Presenter, ChannelAdapter) will use.
+        FinalizeModelRegistration();
     }
 }

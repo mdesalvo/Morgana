@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Morgana.AI;
 
 namespace Morgana.AI.Interfaces;
 
@@ -14,7 +15,7 @@ namespace Morgana.AI.Interfaces;
 /// <para><strong>Usage Patterns:</strong></para>
 /// <list type="bullet">
 /// <item><term>Actors</term><description>GuardActor, ClassifierActor use CompleteWithSystemPromptAsync for stateless operations</description></item>
-/// <item><term>Agents</term><description>MorganaAgent uses IChatClient (via GetChatClient) for stateful conversations with tool calling</description></item>
+/// <item><term>Agents</term><description>MorganaAgent uses the IChatClient of its declared tier (via GetChatClient(tier)) for stateful conversations with tool calling</description></item>
 /// </list>
 /// </remarks>
 public interface ILLMService
@@ -38,31 +39,33 @@ public interface ILLMService
     Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt);
 
     /// <summary>
-    /// Gets the underlying Microsoft.Extensions.AI IChatClient for advanced scenarios.
-    /// Used by MorganaAgentAdapter to create AIAgent instances with tool calling support.
+    /// Gets the Microsoft.Extensions.AI IChatClient configured for a specific <see cref="Records.LLMTier"/>.
+    /// Used by <c>MorganaAgentAdapter</c> to build each agent's <c>AIAgent</c> on the model its
+    /// <c>[RequiresLLMTier]</c> attribute declares, rather than a single process-wide client.
     /// </summary>
-    /// <returns>IChatClient instance configured for the active LLM provider</returns>
-    /// <remarks>
-    /// <para><strong>Purpose:</strong></para>
-    /// <para>The IChatClient provides access to advanced features like tool calling, streaming, and
-    /// fine-grained control over LLM interactions. It's used by the agent system but typically not
-    /// by actors directly.</para>
-    /// <para><strong>Tool Calling:</strong></para>
-    /// <para>The IChatClient enables agents to call tools during LLM interactions. The LLM decides
-    /// when to invoke tools based on the conversation context, and the agent framework handles
-    /// tool execution and result injection back into the conversation.</para>
-    /// </remarks>
-    IChatClient GetChatClient();
+    /// <param name="tier">Power/cost tier to resolve a client for.</param>
+    /// <returns>IChatClient instance for the requested tier.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the active provider has no <c>Models</c> entry configured for <paramref name="tier"/>.
+    /// </exception>
+    IChatClient GetChatClient(Records.LLMTier tier);
 
     /// <summary>
-    /// Gets the prompt resolver service associated with this LLM service.
-    /// Provides access to prompt templates for actors and agents.
+    /// Gets the dust pricing for a specific <see cref="Records.LLMTier"/> — the pricing embedded
+    /// in that tier's <see cref="Records.ModelDefinition"/>, not a single process-wide value.
     /// </summary>
-    /// <returns>IPromptResolverService instance</returns>
-    /// <remarks>
-    /// <para><strong>Purpose:</strong></para>
-    /// <para>This accessor provides a convenient way for components that have ILLMService to also
-    /// access the prompt resolver without requiring a separate DI injection.</para>
-    /// </remarks>
-    IPromptResolverService GetPromptResolverService();
+    /// <param name="tier">Power/cost tier to resolve pricing for.</param>
+    /// <returns>MagicDustPricing for the requested tier's model.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the active provider has no <c>Models</c> entry configured for <paramref name="tier"/>.
+    /// </exception>
+    Records.MagicDustPricing GetPricing(Records.LLMTier tier);
+
+    /// <summary>
+    /// Gets the set of tiers actually configured (via <c>Models</c>) for the active provider.
+    /// Used at startup by agent/tier validation to check every agent's declared tier actually
+    /// exists, without relying on catching exceptions from
+    /// <see cref="GetChatClient(Records.LLMTier)"/>/<see cref="GetPricing(Records.LLMTier)"/>.
+    /// </summary>
+    IReadOnlyCollection<Records.LLMTier> ConfiguredTiers { get; }
 }

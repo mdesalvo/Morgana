@@ -6,11 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.25.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Multi-Tier LLM — the Right Model for Every Agent
+This release breaks the "one model serves the whole process" constraint: each provider now publishes a **catalog of models keyed by economic tier** (`Low`/`Moderate`/`High`), and every agent **declares the tier it binds to** via the new mandatory `[RequiresLLMTier]` attribute — a deliberate, per-agent economic/quality judgment made by the domain expert who authors it.
+A billing FAQ agent can run on the cheapest model while a contract-analysis agent runs on the most capable one, **within the same conversation**; Morgana's own framework actors (Guard, Classifier, Presenter, ChannelAdapter) automatically run on the cheapest configured tier. Magic Dust pricing moves **inside each model entry**, so dust burn always reflects the actual model that served the call.
 
 ### ✨ Added
+- **`[RequiresLLMTier]` attribute** — mandatory on every `MorganaAgent`, declares the economy/quality `LLMTier` the agent runs on. Resolved once at agent creation.
+- **Per-provider model catalog** — `Morgana:LLM:{Provider}:Models` is a JSON object keyed by tier name, each entry carrying the model/deployment `Name` and its own `MagicDust` pricing.
+- **`Omni` tier** — deployment-level escape hatch for **one-model setups** (canonical case: a single local Ollama model): a sole `Omni` entry transparently serves every tier for that LLM, making Morgana behave like the old `single-model setup` (running on that LLM and that model, regardless of whatever tier any agent declares); mixing it with other tiers is startup-fatal
+- **`ILLMTierValidationService`** (default `RequiresLLMTierValidationService`) — new extension point validating at startup that every discovered agent declares `[RequiresLLMTier]` and that its tier exists in the active provider's catalog (skipped on Omni deployments)
 - Support **Azure AI Foundry v1** endpoints in AzureOpenAI provider
 
 ### 🔄 Changed
+- **BREAKING — config schema**: `Morgana:LLM:{Provider}` drops the singular `Model`/`DeploymentName` and the provider-level `MagicDust` section in favor of the tiered `Models` map with per-model pricing (existing User Secrets/env deployments must migrate)
+- Dust roles now include the tier (`Morgana (Billing/Low)`), giving the dust ledger and `morgana.dust.consumed` OTel counter per-tier attribution
 - Updated `Microsoft.Agents.AI` dependency to 1.13.0
 - Updated `ModelContextProtocol.Core` dependency to 1.4.1
 
@@ -18,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Active quick replies on the last turn (e.g. a farewell prompt) could show up disabled after a page refresh/resume
 
 ### 🚀 Future Enablement
+- **Per-intent LLM economics** — with tiers declared per agent and dust attributed per agent+tier, a deployment can now see **which domain costs what and rebalance** (e.g: promote a struggling agent, demote an overserved one) by touching just one attribute and one config entry
 
 
 ## [0.24.0] - 2026-05-31

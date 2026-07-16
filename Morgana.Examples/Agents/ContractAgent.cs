@@ -8,6 +8,7 @@ using Morgana.AI.Interfaces;
 namespace Morgana.Examples.Agents;
 
 [HandlesIntent("contract")]
+[RequiresLLMTier(Morgana.AI.Records.LLMTier.Moderate)]
 public class ContractAgent : MorganaAgent
 {
     public ContractAgent(

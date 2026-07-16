@@ -23,7 +23,10 @@ namespace Morgana.AI.Abstractions.LLMs;
 ///       "Provider": "anthropic",
 ///       "Anthropic": {
 ///         "ApiKey": "sk-ant-...",
-///         "Model": "claude-sonnet-4-6"
+///         "Models": {
+///           "Low": { "Name": "claude-haiku-4-5", "MagicDust": { ... } },
+///           "Moderate": { "Name": "claude-sonnet-4-6", "MagicDust": { ... } }
+///         }
 ///       }
 ///     }
 ///   }
@@ -49,21 +52,39 @@ public class Anthropic : MorganaLLM
         IPromptResolverService promptResolverService,
         ILoggerFactory? loggerFactory = null) : base(configuration, promptResolverService, loggerFactory)
     {
+        // A single low-level AnthropicClient (API key only, no model) is enough — the SDK binds
+        // the model at the IChatClient adapter layer below, not here, so this one client is
+        // shared across every tier.
         AnthropicClient anthropicClient = new AnthropicClient(
             new ClientOptions
             {
                 ApiKey = this.configuration["Morgana:LLM:Anthropic:ApiKey"]!
             });
-        string anthropicModel = this.configuration["Morgana:LLM:Anthropic:Model"]!;
 
-        // Decorator chain (innermost → outermost):
+        // Binds the models declared in configuration so they're available at runtime for
+        // matching against each agent's declared tier (see Records.ModelDefinition remarks
+        // for how the config layout is structured).
+        Dictionary<Records.LLMTier, Records.ModelDefinition> models =
+            this.configuration.GetSection("Morgana:LLM:Anthropic:Models").Get<Dictionary<Records.LLMTier, Records.ModelDefinition>>() ?? [];
+
+        // One IChatClient per configured tier, all sharing the same underlying AnthropicClient
+        // (API key only) but each bound to its own model name. Decorator chain (innermost →
+        // outermost), applied per model:
         //   1. AnthropicClient.AsIChatClient(model)  — raw SDK adapter
         //   2. MorganaAnthropicClient                — Anthropic-specific: no-prefill guard +
         //                                              prompt-cache marker on leading system
         //   3. WrapWithTelemetry (MorganaLLM)        — MEAI OpenTelemetryChatClient: gen_ai.*
         //                                              spans/metrics, including cache_read.input_tokens
-        chatClient = WrapWithTelemetry(
-            new MorganaAnthropicClient(anthropicClient.AsIChatClient(anthropicModel), loggerFactory));
+        foreach ((Records.LLMTier tier, Records.ModelDefinition model) in models)
+        {
+            IChatClient tierClient = WrapWithTelemetry(
+                new MorganaAnthropicClient(anthropicClient.AsIChatClient(model.Name), loggerFactory));
+            RegisterTierClient(tier, model.Name, tierClient, model.MagicDust);
+        }
+
+        // Wraps up tier registration and picks which client the framework's own actors
+        // (Guard, Classifier, Presenter, ChannelAdapter) will use.
+        FinalizeModelRegistration();
     }
 
     /// <summary>

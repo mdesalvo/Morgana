@@ -67,6 +67,7 @@ namespace Morgana.AI.Services;
 public class HandlesIntentAgentRegistryService : IAgentRegistryService
 {
     private readonly IAgentConfigurationService agentConfigService;
+    private readonly ILLMTierValidationService llmTierValidationService;
 
     /// <summary>
     /// Registry mapping intent names to agent types.
@@ -80,12 +81,14 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// Performs agent discovery and bidirectional validation immediately.
     /// </summary>
     /// <param name="agentConfigService">Service for loading intent configuration from agents.json</param>
+    /// <param name="llmTierValidationService">Service validating each agent's declared [RequiresLLMTier] against the active provider's configuration — a separate concern from intent↔agent discovery, delegated rather than inlined here</param>
     /// <exception cref="InvalidOperationException">
     /// Thrown if bidirectional validation fails (missing agents or missing configuration)
     /// </exception>
-    public HandlesIntentAgentRegistryService(IAgentConfigurationService agentConfigService)
+    public HandlesIntentAgentRegistryService(IAgentConfigurationService agentConfigService, ILLMTierValidationService llmTierValidationService)
     {
         this.agentConfigService = agentConfigService;
+        this.llmTierValidationService = llmTierValidationService;
 
         intentToAgentType = new Lazy<Dictionary<string, Type>>(InitializeRegistry);
     }
@@ -169,17 +172,40 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
         HashSet<string> registeredIntents = [.. registry.Keys];
 
+        // All three checks run and are collected before anything is thrown, so a
+        // misconfigured deployment reports every problem it has at once instead of one
+        // category per restart cycle (intent mismatch, then tier mismatch, then...).
+        List<string> validationErrors = [];
+
         // Check 1: Configured intents without agent implementations
         List<string> unregisteredClassifierIntents = [.. classifierIntents.Except(registeredIntents)];
         if (unregisteredClassifierIntents.Count > 0)
-            throw new InvalidOperationException(
+            validationErrors.Add(
                 $"There are intents not handled by any Morgana agent: {string.Join(", ", unregisteredClassifierIntents)}");
 
         // Check 2: Agent implementations without configuration entries
         List<string> unconfiguredAgentIntents = [.. registeredIntents.Except(classifierIntents)];
         if (unconfiguredAgentIntents.Count > 0)
-            throw new InvalidOperationException(
+            validationErrors.Add(
                 $"There are Morgana agents handling an undeclared intent: {string.Join(", ", unconfiguredAgentIntents)}");
+
+        // Check 3: every agent must declare [RequiresLLMTier], and the declared tier must
+        // actually be configured (a Models entry) for the active LLM provider. Delegated to
+        // ILLMTierValidationService — a separate concern (LLM cost/tier governance) from
+        // intent↔agent discovery, kept as its own extension point rather than inlined here.
+        // It already aggregates every offending agent into its own message, so on failure
+        // that single message is folded into the overall list below rather than thrown here.
+        try
+        {
+            llmTierValidationService.ValidateAgentTiers(registry);
+        }
+        catch (InvalidOperationException ex)
+        {
+            validationErrors.Add(ex.Message);
+        }
+
+        if (validationErrors.Count > 0)
+            throw new InvalidOperationException(string.Join(Environment.NewLine, validationErrors));
         #endregion
 
         return registry;

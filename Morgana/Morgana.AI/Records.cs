@@ -373,6 +373,76 @@ public static class Records
         public double CacheCreationWeight { get; set; }
     }
 
+    // ==========================================================================
+    // LLM TIERS (MULTI-MODEL)
+    // ==========================================================================
+
+    /// <summary>
+    /// Closed set of LLM power/cost tiers an agent can declare itself against via
+    /// <see cref="Attributes.RequiresLLMTierAttribute"/>. Ordinal order (Low &lt; Moderate &lt;
+    /// High) is load-bearing: it is used to pick the framework-actor default (the cheapest
+    /// configured tier). Cross-tier pricing is deliberately NOT assumed to be monotonic — see
+    /// <c>Services.RequiresLLMTierValidationService</c> remarks.
+    /// </summary>
+    public enum LLMTier
+    {
+        /// <summary>Cheapest/fastest tier. Default for framework actors (Guard, Classifier, Presenter, ChannelAdapter).</summary>
+        Low,
+
+        /// <summary>Mid-range tier for agents whose domain requires more than basic reasoning.</summary>
+        Moderate,
+
+        /// <summary>Most capable/expensive tier, for agents whose domain requires deep reasoning.</summary>
+        High,
+
+        /// <summary>
+        /// Deployment-level escape hatch: "there is only one model here, and it serves every
+        /// tier." When a provider's <c>Models</c> map contains an <c>Omni</c> key, it must be
+        /// the SOLE entry (mixing it with Low/Moderate/High is a startup-fatal
+        /// misconfiguration — ambiguous intent). Every <see cref="LLMTier"/> resolution
+        /// (<see cref="Interfaces.ILLMService.GetChatClient(LLMTier)"/>,
+        /// <see cref="Interfaces.ILLMService.GetPricing(LLMTier)"/>) is transparently
+        /// redirected to it regardless of what tier was actually requested — an agent
+        /// authored against <c>[RequiresLLMTier(LLMTier.High)]</c> still resolves successfully
+        /// against an Omni-only deployment. Meant for small/local deployments (a single Ollama
+        /// model is the canonical case: you cannot conjure three distinct models out of one
+        /// loaded weights file) or any operator who deliberately opts out of per-agent tiering.
+        /// Not meant to be declared on an agent via <see cref="Attributes.RequiresLLMTierAttribute"/>
+        /// — it is a deployment override, not an authoring choice — though nothing prevents it
+        /// (harmless: Omni would simply always win at that deployment too).
+        /// </summary>
+        Omni
+    }
+
+    /// <summary>
+    /// A single named model offered by a provider at a given <see cref="LLMTier"/>, with its
+    /// own dust pricing. Lives under <c>Morgana:LLM:{Provider}:Models</c> — a JSON object keyed
+    /// by tier name (<c>"Low"</c>/<c>"Moderate"</c>/<c>"High"</c>/<c>"Omni"</c>), not an array:
+    /// .NET's configuration binder merges JSON objects across layered sources (appsettings.json,
+    /// User Secrets, environment variables) by key, so an override file only needs to repeat the
+    /// tiers it actually overrides — the tier name is unambiguous regardless of how many entries
+    /// are present in each layer or in what order they're written. An array keyed by ordinal
+    /// index instead would merge positionally, silently pairing an override's N-th entry with
+    /// the base config's N-th entry even when they name different tiers.
+    /// </summary>
+    /// <param name="Name">Provider-specific model/deployment identifier (e.g. "claude-haiku-4-5").</param>
+    /// <param name="MagicDust">Dust pricing for this specific model — not shared across tiers, since cost is a property of the concrete model, not the provider as a whole.</param>
+    public record ModelDefinition(
+        string Name,
+        MagicDustPricing MagicDust);
+
+    /// <summary>
+    /// Sentinel placeholder values used throughout appsettings.json for settings that MUST be
+    /// overridden via User Secrets or environment variables before the app is usable (see
+    /// CLAUDE.md "Conventions": <c>_SECURE_OVERRIDE_</c> for secrets, <c>_FUNCTIONAL_OVERRIDE_</c>
+    /// for non-secret required values). Lives here, next to <see cref="ModelDefinition"/>, rather
+    /// than inside <c>MorganaLLM</c>, because recognizing an unfilled placeholder is a config
+    /// convention — not LLM-specific behavior — that any consumer of appsettings.json could
+    /// reasonably need to check, not just the LLM provider constructors that happen to be the
+    /// only ones checking it today.
+    /// </summary>
+    internal static readonly string[] OverridePlaceholders = ["_SECURE_OVERRIDE_", "_FUNCTIONAL_OVERRIDE_"];
+
     /// <summary>
     /// Policy for the per-conversation lifetime dust budget — a token-consumption guard
     /// orthogonal to <see cref="RateLimitOptions"/>. The budget is a lifetime resource: no
