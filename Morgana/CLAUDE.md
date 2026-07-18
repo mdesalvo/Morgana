@@ -21,7 +21,7 @@ Morgana/
     Cauldron/              # Blazor Server frontend — rich-Web reference channel (SignalR)
     Grimoire/              # Spectre.Console CLI — rich-TTY reference channel (webhook)
     Rune/                  # Spectre.Console CLI — basic-TTY reference channel (webhook)
-  Morgana.Examples/        # Example plugin with BillingAgent, ContractAgent, MonkeyAgent
+  Morgana.Examples/        # Example plugin with BillingAgent, ContractAgent, MonkeyAgent, InventoryAgent
   CHANGELOG.md
 ```
 
@@ -66,10 +66,11 @@ Spectre.Console CLI at `Channels/Rune/` (separate solution, has its own `CLAUDE.
 
 ### Morgana.Examples (plugin)
 
-Three example agents packaged as a plugin DLL (copied to `plugins/` after build). References `Morgana.AI` via **project reference** (`..\Morgana\Morgana.AI`, bringing `Morgana.Contracts` transitively) — not the NuGet package — so the in-repo/Docker build is deterministic; an out-of-tree plugin would instead reference the `Morgana.AI` NuGet package:
+Four example agents packaged as a plugin DLL (copied to `plugins/` after build). References `Morgana.AI` via **project reference** (`..\Morgana\Morgana.AI`, bringing `Morgana.Contracts` transitively) — not the NuGet package — so the in-repo/Docker build is deterministic; an out-of-tree plugin would instead reference the `Morgana.AI` NuGet package:
 - `BillingAgent` + `BillingTool` — telecom billing with invoices, payment history
 - `ContractAgent` + `ContractTool` — contract summarization
 - `MonkeyAgent` — MCP-only agent using external MonkeyMCP server (no native tool)
+- `InventoryAgent` + `InventoryTool` — greenhouse/nursery inventory; the first *dispositive* (stateful) example agent: create/confirm/cancel orders, backed by its own standalone SQLite database
 - `agents.json` — embedded resource with intents and per-agent prompts/tool definitions
 
 ## Architecture and Message Flow

@@ -23,8 +23,8 @@
 
     <Description>
     Morgana.Examples is a showcase demostrating modeling of domain agents with Morgana.AI framework.
-    It includes 3 agents serving "billing", "contract" and "monkeys" intents. Each agent encodes
-    its prompt defining target, personality and the available tools (see agents.json).
+    It includes 4 agents serving "billing", "contract", "monkeys" and "inventory" intents. Each agent
+    encodes its prompt defining target, personality and the available tools (see agents.json).
     </Description>
 
   </PropertyGroup>

@@ -33,7 +33,8 @@ namespace Morgana.AI.Services;
 ///     ├── agents.json (domain configuration)
 ///     ├── BillingAgent.cs
 ///     ├── ContractAgent.cs
-///     └── MonkeysAgent.cs
+///     ├── MonkeysAgent.cs
+///     └── InventoryAgent.cs
 ///
 /// At runtime:
 /// 1. PluginLoaderService loads Morgana.Examples.dll
@@ -110,10 +111,11 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     /// // Success case
     /// Searching for agents.json in loaded assemblies...
     /// ✅ Found agents.json in assembly: Morgana.Examples
-    /// ✅ Loaded 3 intents and 3 agent prompts from agents.json
+    /// ✅ Loaded 4 intents and 4 agent prompts from agents.json
     ///    📋 Intent: billing - requests to view invoices...
     ///    📋 Intent: contract - requests to summarize contract...
     ///    📋 Intent: monkeys - requests to show a list of monkeys (MCP)...
+    ///    📋 Intent: inventory - requests to browse the greenhouse catalog and place/confirm orders...
     ///
     /// // No configuration found
     /// Searching for agents.json in loaded assemblies...
