@@ -2,6 +2,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Akka.Actor;
+using Microsoft.Extensions.AI;
 using Morgana.AI.Attributes;
 using Morgana.Contracts;
 
@@ -341,15 +342,26 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Per-provider pricing: how many tokens of each direction equal one dust unit, plus
-    /// cache cost-weights. Lives under <c>Morgana:LLM:{Provider}:MagicDust</c> because cost
-    /// is a property of the concrete model. Zero on either axis means that direction does
-    /// not consume dust (e.g. Ollama local models, set both to 0 for "free").
+    /// Per-tier pricing: how many tokens of each direction equal one dust unit, plus
+    /// cache cost-weights. Lives under <c>Morgana:LLM:{Provider}:Tiers:{Tier}:MagicDust</c>
+    /// because cost is a property of the concrete model behind that tier. Zero on either axis
+    /// means that direction does not consume dust (e.g. Ollama local models, set both to 0
+    /// for "free").
     /// <para>The MEAI Anthropic adapter reports <c>InputTokenCount</c> as the <em>total</em>
     /// prompt (fresh + cache-read + cache-write). Charging it flat would over-count cache
     /// reads (real cost ~0.1×) and under-count 1h cache writes (~2×). The two weights below
     /// let the limiter track real cache economics; defaults are 1.0 (cache-unaware no-op, so
     /// behaviour is unchanged unless a deployment configures them).</para>
+    /// <para><strong>Calibration of the shipped appsettings.json values:</strong>
+    /// <c>OutputTokensPerDustUnit = Max(realPriceDerived, safetyFloor)</c>, where
+    /// <c>realPriceDerived</c> tracks the tier's actual published per-token price (anchored to
+    /// <c>Efficiency</c>'s own real pricing so the dust currency stays meaningful) and
+    /// <c>safetyFloor = MaxOutputTokens × 10 / BudgetPerConversation</c> guarantees at least 10
+    /// full-length turns before <c>BudgetPerConversation</c> — shared across every tier and
+    /// provider a conversation might touch — runs out. The floor only bites when a tier's real
+    /// price gap over its own <c>Efficiency</c> sibling is extreme (e.g. gpt-4o-mini→gpt-4o is
+    /// ~17×); <c>InputTokensPerDustUnit</c> is that same output value scaled by the provider's
+    /// real input:output price ratio, which is never itself the source of imbalance.</para>
     /// </summary>
     public record MagicDustPricing
     {
@@ -379,63 +391,136 @@ public static class Records
 
     /// <summary>
     /// Closed set of LLM power/cost tiers an agent can declare itself against via
-    /// <see cref="Attributes.RequiresLLMTierAttribute"/>. Ordinal order (Low &lt; Moderate &lt;
-    /// High) is load-bearing: it is used to pick the framework-actor default (the cheapest
-    /// configured tier). Cross-tier pricing is deliberately NOT assumed to be monotonic — see
-    /// <c>Services.RequiresLLMTierValidationService</c> remarks.
+    /// <see cref="Attributes.RequiresLLMTierAttribute"/>. Modeled on the Intel E-core/P-core
+    /// die split rather than a graduated price ladder: there are exactly two physical
+    /// "core types" an agent can be built on, not a spectrum. Ordinal order (Efficiency &lt;
+    /// Performance) is load-bearing: it is used to pick the framework-actor default (the
+    /// cheapest configured tier). Cross-tier pricing is deliberately NOT assumed to be
+    /// monotonic — see <c>Services.RequiresLLMTierValidationService</c> remarks.
     /// </summary>
     public enum LLMTier
     {
-        /// <summary>Cheapest/fastest tier. Default for framework actors (Guard, Classifier, Presenter, ChannelAdapter).</summary>
-        Low,
-
-        /// <summary>Mid-range tier for agents whose domain requires more than basic reasoning.</summary>
-        Moderate,
-
-        /// <summary>Most capable/expensive tier, for agents whose domain requires deep reasoning.</summary>
-        High,
+        /// <summary>
+        /// The E-core die: Morgana's own framework actors (Guard, Classifier, Presenter,
+        /// ChannelAdapter) and any domain agent handling routine work run here. Default for
+        /// framework actors — always the cheapest configured tier. An agent belongs on
+        /// Efficiency unless its author can point to a genuine, existential need for the
+        /// expressive or computational headroom only Performance provides; "it might do a
+        /// bit better" is not that bar.
+        /// </summary>
+        Efficiency,
 
         /// <summary>
-        /// Deployment-level escape hatch: "there is only one model here, and it serves every
-        /// tier." When a provider's <c>Models</c> map contains an <c>Omni</c> key, it must be
-        /// the SOLE entry (mixing it with Low/Moderate/High is a startup-fatal
-        /// misconfiguration — ambiguous intent). Every <see cref="LLMTier"/> resolution
-        /// (<see cref="Interfaces.ILLMService.GetChatClient(LLMTier)"/>,
-        /// <see cref="Interfaces.ILLMService.GetPricing(LLMTier)"/>) is transparently
-        /// redirected to it regardless of what tier was actually requested — an agent
-        /// authored against <c>[RequiresLLMTier(LLMTier.High)]</c> still resolves successfully
-        /// against an Omni-only deployment. Meant for small/local deployments (a single Ollama
-        /// model is the canonical case: you cannot conjure three distinct models out of one
-        /// loaded weights file) or any operator who deliberately opts out of per-agent tiering.
-        /// Not meant to be declared on an agent via <see cref="Attributes.RequiresLLMTierAttribute"/>
-        /// — it is a deployment override, not an authoring choice — though nothing prevents it
-        /// (harmless: Omni would simply always win at that deployment too).
+        /// The P-core die: reserved exclusively for agents whose domain author declares an
+        /// existential need for deep reasoning or high expressive power — not a "nicer to
+        /// have" upgrade from Efficiency, a hard requirement the agent cannot function
+        /// without. Most capable/expensive tier.
         /// </summary>
-        Omni
+        Performance
     }
 
     /// <summary>
-    /// A single named model offered by a provider at a given <see cref="LLMTier"/>, with its
-    /// own dust pricing. Lives under <c>Morgana:LLM:{Provider}:Models</c> — a JSON object keyed
-    /// by tier name (<c>"Low"</c>/<c>"Moderate"</c>/<c>"High"</c>/<c>"Omni"</c>), not an array:
-    /// .NET's configuration binder merges JSON objects across layered sources (appsettings.json,
-    /// User Secrets, environment variables) by key, so an override file only needs to repeat the
-    /// tiers it actually overrides — the tier name is unambiguous regardless of how many entries
-    /// are present in each layer or in what order they're written. An array keyed by ordinal
-    /// index instead would merge positionally, silently pairing an override's N-th entry with
-    /// the base config's N-th entry even when they name different tiers.
+    /// A single provider die (E-core or P-core, per <see cref="LLMTier"/>), with its own dust
+    /// pricing. There is no standalone "model" concept in Morgana's config surface — a tier
+    /// IS the unit a deployer configures and an agent binds to via
+    /// <see cref="Attributes.RequiresLLMTierAttribute"/>; the underlying model/deployment
+    /// identifier is just one field of it (<see cref="TierConfiguration.ModelId"/>). Lives under
+    /// <c>Morgana:LLM:{Provider}:Tiers</c> — a JSON object keyed by tier name
+    /// (<c>"Efficiency"</c>/<c>"Performance"</c>), not an array: .NET's configuration binder
+    /// merges JSON objects across layered sources (appsettings.json, User Secrets, environment
+    /// variables) by key, so an override file only needs to repeat the tiers it actually
+    /// overrides — the tier name is unambiguous regardless of how many entries are present in
+    /// each layer or in what order they're written. An array keyed by ordinal index instead
+    /// would merge positionally, silently pairing an override's N-th entry with the base
+    /// config's N-th entry even when they name different tiers.
     /// </summary>
-    /// <param name="Name">Provider-specific model/deployment identifier (e.g. "claude-haiku-4-5").</param>
-    /// <param name="MagicDust">Dust pricing for this specific model — not shared across tiers, since cost is a property of the concrete model, not the provider as a whole.</param>
-    public record ModelDefinition(
-        string Name,
+    /// <param name="Options">
+    /// Deliberately narrow, JSON-bindable mirror of the handful of <see cref="ChatOptions"/>
+    /// fields Morgana lets a deployer default per tier — see <see cref="TierConfiguration"/> for
+    /// the census rationale (why these three fields and no others).
+    /// </param>
+    /// <param name="MagicDust">Dust pricing for this specific tier — not shared across tiers, since cost is a property of the concrete die, not the provider as a whole.</param>
+    public record TierDefinition(
+        TierConfiguration Options,
         MagicDustPricing MagicDust);
+
+    /// <summary>
+    /// The deliberately small subset of <see cref="ChatOptions"/> a deployer can default per
+    /// tier, mirrored here as a plain JSON-bindable DTO rather than binding
+    /// <see cref="ChatOptions"/> itself (which carries polymorphic/delegate members —
+    /// <c>Tools</c>, <c>ResponseFormat</c>, <c>RawRepresentationFactory</c> — that have no sane
+    /// JSON shape and are, deliberately, never sourced from tier config anyway).
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Why only these two fields.</strong> Every other <see cref="ChatOptions"/>
+    /// member was considered and rejected for a specific reason, not omitted by oversight:</para>
+    /// <list type="bullet">
+    ///   <item><c>Temperature</c>, <c>TopP</c>, <c>TopK</c>, <c>FrequencyPenalty</c>,
+    ///   <c>PresencePenalty</c> — sampling knobs a domain expert authoring an agent prompt has no
+    ///   principled way to tune, and which risk destabilizing both the crafted personality
+    ///   (<c>morgana.json</c>/<c>agents.json</c> prompts) and tool-call reliability.</item>
+    ///   <item><c>Reasoning</c> — deliberately NOT exposed as a per-tier JSON knob. Reasoning
+    ///   effort is a property of which die an agent is authored against, not an independent
+    ///   dial a deployer can turn: a JSON-configurable field would let someone set
+    ///   <c>ExtraHigh</c> reasoning on the <c>Efficiency</c> tier, silently defeating the
+    ///   entire point of the E-core/P-core split. Each provider's <c>Efficiency</c>/<c>Performance</c>
+    ///   connector code owns its own fixed reasoning behavior instead (see the per-provider
+    ///   <c>Abstractions.LLMs.*</c> classes).</item>
+    ///   <item><c>StopSequences</c> — a mis-set stop sequence reproduces the exact truncation
+    ///   failure mode <c>MaxOutputTokens</c> exists to fix, except with
+    ///   <c>FinishReason.Stop</c> instead of <c>.Length</c> — indistinguishable from a normal
+    ///   completion, defeating the diagnostic signal <see cref="Abstractions.MorganaAgent"/> logs.</item>
+    ///   <item><c>Instructions</c>, <c>ConversationId</c>, <c>Tools</c> — inherently per-call, set
+    ///   fresh every turn by <c>Microsoft.Agents.AI</c> (agent path) or
+    ///   <see cref="Abstractions.MorganaLLM.CompleteWithSystemPromptAsync"/> (framework-actor
+    ///   path); a static tier default would either be a no-op or, worse, a source of drift from
+    ///   the actual composed prompt/tool set.</item>
+    ///   <item><c>ToolMode</c>, <c>ResponseFormat</c>, <c>Tools</c> — risk silently overriding the
+    ///   mandatory tool-usage contracts several agent prompts impose (e.g. "you MUST call
+    ///   SetRichCard").</item>
+    ///   <item><c>Seed</c> — reproducibility knob with no uniform support across the four
+    ///   providers; useful for eval/testing scenarios Morgana doesn't yet have, not for
+    ///   production tiers.</item>
+    ///   <item><c>AllowMultipleToolCalls</c>, <c>AllowBackgroundResponses</c>,
+    ///   <c>ContinuationToken</c>, <c>RawRepresentationFactory</c>, <c>AdditionalProperties</c> —
+    ///   either not applicable to Morgana's synchronous/streaming actor-driven turn model, or a
+    ///   genuine vendor-raw escape hatch meant to stay a code-level extension point, not a JSON field.</item>
+    /// </list>
+    /// </remarks>
+    /// <param name="ModelId">
+    /// Provider-specific model/deployment identifier (e.g. "claude-haiku-4-5") this die actually
+    /// runs. Required — named after <see cref="ChatOptions.ModelId"/> itself so the shape stays
+    /// traceable to the real MEAI type, rather than inventing a Morgana-specific name for it.
+    /// </param>
+    /// <param name="MaxOutputTokens">
+    /// Default output token ceiling applied to every call on this tier whose caller did not
+    /// already set <see cref="ChatOptions.MaxOutputTokens"/>. Left <c>null</c>, no default is
+    /// enforced and each provider SDK's own behavior applies — which is NOT uniform: the
+    /// Anthropic SDK silently falls back to a hardcoded 1024-token cap (truncating agents that
+    /// compose rich cards under tool calling, observed in practice on both tiers), while
+    /// OpenAI/AzureOpenAI/Ollama leave the request uncapped up to the model's own context window.
+    /// </param>
+    public record TierConfiguration(
+        string ModelId,
+        int? MaxOutputTokens = null)
+    {
+        /// <summary>
+        /// Materializes this census into a real <see cref="ChatOptions"/>, ready to be merged
+        /// (field-by-field, fill-if-absent — see <see cref="Abstractions.TierDefaultsChatClient"/>)
+        /// into every per-turn call on this tier.
+        /// </summary>
+        public ChatOptions ToChatOptions() => new()
+        {
+            ModelId = ModelId,
+            MaxOutputTokens = MaxOutputTokens
+        };
+    }
 
     /// <summary>
     /// Sentinel placeholder values used throughout appsettings.json for settings that MUST be
     /// overridden via User Secrets or environment variables before the app is usable (see
     /// CLAUDE.md "Conventions": <c>_SECURE_OVERRIDE_</c> for secrets, <c>_FUNCTIONAL_OVERRIDE_</c>
-    /// for non-secret required values). Lives here, next to <see cref="ModelDefinition"/>, rather
+    /// for non-secret required values). Lives here, next to <see cref="TierDefinition"/>, rather
     /// than inside <c>MorganaLLM</c>, because recognizing an unfilled placeholder is a config
     /// convention — not LLM-specific behavior — that any consumer of appsettings.json could
     /// reasonably need to check, not just the LLM provider constructors that happen to be the

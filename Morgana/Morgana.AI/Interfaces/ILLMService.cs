@@ -46,23 +46,23 @@ public interface ILLMService
     /// <param name="tier">Power/cost tier to resolve a client for.</param>
     /// <returns>IChatClient instance for the requested tier.</returns>
     /// <exception cref="InvalidOperationException">
-    /// Thrown if the active provider has no <c>Models</c> entry configured for <paramref name="tier"/>.
+    /// Thrown if the active provider has no <c>Tiers</c> entry configured for <paramref name="tier"/>.
     /// </exception>
     IChatClient GetChatClient(Records.LLMTier tier);
 
     /// <summary>
     /// Gets the dust pricing for a specific <see cref="Records.LLMTier"/> — the pricing embedded
-    /// in that tier's <see cref="Records.ModelDefinition"/>, not a single process-wide value.
+    /// in that tier's <see cref="Records.TierDefinition"/>, not a single process-wide value.
     /// </summary>
     /// <param name="tier">Power/cost tier to resolve pricing for.</param>
     /// <returns>MagicDustPricing for the requested tier's model.</returns>
     /// <exception cref="InvalidOperationException">
-    /// Thrown if the active provider has no <c>Models</c> entry configured for <paramref name="tier"/>.
+    /// Thrown if the active provider has no <c>Tiers</c> entry configured for <paramref name="tier"/>.
     /// </exception>
     Records.MagicDustPricing GetPricing(Records.LLMTier tier);
 
     /// <summary>
-    /// Gets the set of tiers actually configured (via <c>Models</c>) for the active provider.
+    /// Gets the set of tiers actually configured (via <c>Tiers</c>) for the active provider.
     /// Used at startup by agent/tier validation to check every agent's declared tier actually
     /// exists, without relying on catching exceptions from
     /// <see cref="GetChatClient(Records.LLMTier)"/>/<see cref="GetPricing(Records.LLMTier)"/>.

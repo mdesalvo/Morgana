@@ -24,8 +24,8 @@ namespace Morgana.AI.Abstractions.LLMs;
 ///       "AzureOpenAI": {
 ///         "Endpoint": "https://your-resource.openai.azure.com/",
 ///         "ApiKey": "your-api-key",
-///         "Models": {
-///           "Low": { "Name": "your-low-tier-deployment-name", "MagicDust": { ... } }
+///         "Tiers": {
+///           "Efficiency": { "Options": { "ModelId": "gpt-4o-mini", "MaxOutputTokens": 8192 }, "MagicDust": { ... } }
 ///         }
 ///       }
 ///     }
@@ -41,14 +41,20 @@ namespace Morgana.AI.Abstractions.LLMs;
 ///       "AzureOpenAI": {
 ///         "Endpoint": "https://your-resource.services.ai.azure.com/api/projects/your-project/openai/v1",
 ///         "ApiKey": "your-api-key",
-///         "Models": {
-///           "Low": { "Name": "your-low-tier-deployment-name", "MagicDust": { ... } }
+///         "Tiers": {
+///           "Efficiency": { "Options": { "ModelId": "your-efficiency-tier-deployment-name", "MaxOutputTokens": 4096 }, "MagicDust": { ... } }
 ///         }
 ///       }
 ///     }
 ///   }
 /// }
 /// </code>
+/// <para><strong>MagicDust:</strong> uses the same values as the <see cref="OpenAI"/> provider
+/// (gpt-4o-mini/gpt-4o reference pricing on <c>Efficiency</c>, floored on <c>Performance</c> —
+/// see <see cref="Records.MagicDustPricing"/> remarks for the formula). A Foundry deployment
+/// name carries no pricing information Morgana can introspect, and Azure deployments run from
+/// "mini" variants to flagship models with no fixed price relationship between them —
+/// recalibrate whenever a tier's <c>ModelId</c> changes.</para>
 /// </remarks>
 public class AzureOpenAI : MorganaLLM
 {
@@ -67,18 +73,18 @@ public class AzureOpenAI : MorganaLLM
         Uri endpoint = new Uri(this.configuration["Morgana:LLM:AzureOpenAI:Endpoint"]!);
         string apiKey = this.configuration["Morgana:LLM:AzureOpenAI:ApiKey"]!;
 
-        // Binds the models declared in configuration so they're available at runtime for
-        // matching against each agent's declared tier (see Records.ModelDefinition remarks
+        // Binds the tiers declared in configuration so they're available at runtime for
+        // matching against each agent's declared tier (see Records.TierDefinition remarks
         // for how the config layout is structured).
-        Dictionary<Records.LLMTier, Records.ModelDefinition> models =
-            this.configuration.GetSection("Morgana:LLM:AzureOpenAI:Models").Get<Dictionary<Records.LLMTier, Records.ModelDefinition>>() ?? [];
+        Dictionary<Records.LLMTier, Records.TierDefinition> tiers =
+            this.configuration.GetSection("Morgana:LLM:AzureOpenAI:Tiers").Get<Dictionary<Records.LLMTier, Records.TierDefinition>>() ?? [];
 
         // Azure AI Foundry projects expose an OpenAI-compatible unified "v1" API surface
         // (path containing "/openai/v1") that rejects the "api-version" query parameter that
         // AzureOpenAIClient always appends. For these endpoints, the vanilla OpenAI client
         // (pointed at the Foundry endpoint) must be used instead. Either underlying client is
         // built once and reused across every configured tier — each tier only differs by
-        // deployment name (ModelDefinition.Name).
+        // deployment name (TierDefinition.Options.ModelId).
         bool isFoundryV1 = endpoint.AbsolutePath.Contains("/openai/v1", StringComparison.OrdinalIgnoreCase);
         OpenAIClient? foundryClient = isFoundryV1
             ? new OpenAIClient(new ApiKeyCredential(apiKey), new OpenAIClientOptions { Endpoint = endpoint })
@@ -87,16 +93,16 @@ public class AzureOpenAI : MorganaLLM
             ? null
             : new AzureOpenAIClient(endpoint, new AzureKeyCredential(apiKey));
 
-        foreach ((Records.LLMTier tier, Records.ModelDefinition model) in models)
+        foreach ((Records.LLMTier tier, Records.TierDefinition tierDefinition) in tiers)
         {
             // Picks whichever of the two client flavors was actually built above, matching the
             // endpoint style detected for this deployment.
             IChatClient innerChatClient = isFoundryV1
-                ? foundryClient!.GetChatClient(model.Name).AsIChatClient()
-                : azureClient!.GetChatClient(model.Name).AsIChatClient();
+                ? foundryClient!.GetChatClient(tierDefinition.Options.ModelId).AsIChatClient()
+                : azureClient!.GetChatClient(tierDefinition.Options.ModelId).AsIChatClient();
 
             // Wrap with the MEAI OpenTelemetry decorator for gen_ai.* spans and metrics (input/output tokens, latency, errors).
-            RegisterTierClient(tier, model.Name, WrapWithTelemetry(innerChatClient), model.MagicDust);
+            RegisterTierClient(tier, tierDefinition.Options.ModelId, WrapWithTelemetry(innerChatClient), tierDefinition.MagicDust, tierDefinition.Options.ToChatOptions());
         }
 
         // Wraps up tier registration and picks which client the framework's own actors

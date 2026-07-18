@@ -470,8 +470,9 @@
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td>Morgana:LLM:Provider</td><td>LLM backend: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code></td></tr>
-          <tr><td>Morgana:LLM:{Provider}:*</td><td>Provider-specific settings (ApiKey, Model, Endpoint, ...)</td></tr>
-          <tr><td>Morgana:LLM:{Provider}:MagicDust:*</td><td>Per-provider token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
+          <tr><td>Morgana:LLM:{Provider}:*</td><td>Provider credentials (ApiKey, Endpoint, ...) + <code>Tiers</code> map keyed by die (<code>Efficiency</code>/<code>Performance</code>)</td></tr>
+          <tr><td>Morgana:LLM:{Provider}:Tiers:{Tier}:Options:*</td><td>Narrow, JSON-bindable mirror of <code>ChatOptions</code> for this tier: <code>ModelId</code> (required), optional <code>MaxOutputTokens</code></td></tr>
+          <tr><td>Morgana:LLM:{Provider}:Tiers:{Tier}:MagicDust:*</td><td>Per-tier token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
           <tr><td>Morgana:Authentication:Audience</td><td>Expected JWT audience (default: <code>morgana.ai</code>)</td></tr>
           <tr><td>Morgana:Authentication:Issuers[]</td><td>Per-channel trust list: array of <code>{ Name, SymmetricKey }</code> entries (e.g. <code>cauldron</code>, <code>grimoire</code>, <code>rune</code>)</td></tr>
           <tr><td>Morgana:ConversationPersistence:EncryptionKey</td><td>AES-256 key for SQLite encryption (base64)</td></tr>

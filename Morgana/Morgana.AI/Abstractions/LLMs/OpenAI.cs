@@ -20,15 +20,21 @@ namespace Morgana.AI.Abstractions.LLMs;
 ///       "Provider": "openai",
 ///       "OpenAI": {
 ///         "ApiKey": "your-api-key",
-///         "Models": {
-///           "Low": { "Name": "gpt-4o-mini", "MagicDust": { ... } },
-///           "Moderate": { "Name": "gpt-4o", "MagicDust": { ... } }
+///         "Tiers": {
+///           "Efficiency": { "Options": { "ModelId": "gpt-4o-mini", "MaxOutputTokens": 4096 }, "MagicDust": { ... } },
+///           "Performance": { "Options": { "ModelId": "gpt-4o", "MaxOutputTokens": 8192 }, "MagicDust": { ... } }
 ///         }
 ///       }
 ///     }
 ///   }
 /// }
 /// </code>
+/// <para><strong>MagicDust:</strong> <c>Efficiency</c> matches gpt-4o-mini's real pricing
+/// exactly; <c>Performance</c> doesn't — gpt-4o-mini→gpt-4o is a real ~17× price jump, too steep
+/// for the shared, per-conversation <c>BudgetPerConversation</c> to absorb literally, so it's
+/// floored instead (see <see cref="Records.MagicDustPricing"/> remarks for the formula).
+/// Recalibrate both tiers whenever you change <c>ModelId</c> — OpenAI's lineup runs from "mini"
+/// variants to flagship models with no fixed price relationship between them.</para>
 /// </remarks>
 public class OpenAI : MorganaLLM
 {
@@ -47,16 +53,16 @@ public class OpenAI : MorganaLLM
         OpenAIClient openaiClient = new OpenAIClient(
             new ApiKeyCredential(this.configuration["Morgana:LLM:OpenAI:ApiKey"]!));
 
-        // Binds the models declared in configuration so they're available at runtime for
-        // matching against each agent's declared tier (see Records.ModelDefinition remarks
+        // Binds the tiers declared in configuration so they're available at runtime for
+        // matching against each agent's declared tier (see Records.TierDefinition remarks
         // for how the config layout is structured).
-        Dictionary<Records.LLMTier, Records.ModelDefinition> models =
-            this.configuration.GetSection("Morgana:LLM:OpenAI:Models").Get<Dictionary<Records.LLMTier, Records.ModelDefinition>>() ?? [];
+        Dictionary<Records.LLMTier, Records.TierDefinition> tiers =
+            this.configuration.GetSection("Morgana:LLM:OpenAI:Tiers").Get<Dictionary<Records.LLMTier, Records.TierDefinition>>() ?? [];
 
         // One chat client per configured tier, sharing the same OpenAIClient (API key only),
         // wrapped with the MEAI OpenTelemetry decorator for gen_ai.* spans and metrics.
-        foreach ((Records.LLMTier tier, Records.ModelDefinition model) in models)
-            RegisterTierClient(tier, model.Name, WrapWithTelemetry(openaiClient.GetChatClient(model.Name).AsIChatClient()), model.MagicDust);
+        foreach ((Records.LLMTier tier, Records.TierDefinition tierDefinition) in tiers)
+            RegisterTierClient(tier, tierDefinition.Options.ModelId, WrapWithTelemetry(openaiClient.GetChatClient(tierDefinition.Options.ModelId).AsIChatClient()), tierDefinition.MagicDust, tierDefinition.Options.ToChatOptions());
 
         // Wraps up tier registration and picks which client the framework's own actors
         // (Guard, Classifier, Presenter, ChannelAdapter) will use.

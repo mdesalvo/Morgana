@@ -6,20 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.25.0] - UNDER DEVELOPMENT
-### 🎯 Major Feature: Multi-Tier LLM — the Right Model for Every Agent
-This release breaks the "one model serves the whole process" constraint: each provider now publishes a **catalog of models keyed by economic tier** (`Low`/`Moderate`/`High`), and every agent **declares the tier it binds to** via the new mandatory `[RequiresLLMTier]` attribute — a deliberate, per-agent economic/quality judgment made by the domain expert who authors it.
-A billing FAQ agent can run on the cheapest model while a contract-analysis agent runs on the most capable one, **within the same conversation**; Morgana's own framework actors (Guard, Classifier, Presenter, ChannelAdapter) automatically run on the cheapest configured tier. Magic Dust pricing moves **inside each model entry**, so dust burn always reflects the actual model that served the call.
+### 🎯 Major Feature: Two-Tier LLM — Efficiency/Performance for Agents
+This release breaks the "one model serves the whole process" constraint: each provider now publishes a **catalog of exactly two models, keyed by die type** (`Efficiency`/`Performance` — modeled on Intel's E-core/P-core split), and every agent **declares the die it binds to** via the new mandatory `[RequiresLLMTier]` attribute. `Efficiency` is the default for Morgana's own framework actors and any agent handling routine work; `Performance` is reserved exclusively for agents whose author declares an existential need for deep reasoning or high expressive power — not a "nicer to have" upgrade.
+A billing FAQ agent runs on the efficient model while a contract-analysis agent with a genuine need for headroom runs on the performance one, **within the same conversation**. Magic Dust pricing moves **inside each model entry**, so dust burn always reflects the actual model that served the call.
 
 ### ✨ Added
-- **`[RequiresLLMTier]` attribute** — mandatory on every `MorganaAgent`, declares the economy/quality `LLMTier` the agent runs on. Resolved once at agent creation.
-- **Per-provider model catalog** — `Morgana:LLM:{Provider}:Models` is a JSON object keyed by tier name, each entry carrying the model/deployment `Name` and its own `MagicDust` pricing.
-- **`Omni` tier** — deployment-level escape hatch for **one-model setups** (canonical case: a single local Ollama model): a sole `Omni` entry transparently serves every tier for that LLM, making Morgana behave like the old `single-model setup` (running on that LLM and that model, regardless of whatever tier any agent declares); mixing it with other tiers is startup-fatal
-- **`ILLMTierValidationService`** (default `RequiresLLMTierValidationService`) — new extension point validating at startup that every discovered agent declares `[RequiresLLMTier]` and that its tier exists in the active provider's catalog (skipped on Omni deployments)
+- **`[RequiresLLMTier]` attribute** — mandatory on every `MorganaAgent`, declares the `LLMTier` (`Efficiency`/`Performance`) the agent runs on. Resolved once at agent creation.
+- **Per-provider tier catalog** — `Morgana:LLM:{Provider}:Tiers` is a JSON object keyed by tier name, each entry carrying the model/deployment `ModelId` and its own `MagicDust` pricing.
+- **`ILLMTierValidationService`** (default `RequiresLLMTierValidationService`) — new extension point validating at startup that every discovered agent declares `[RequiresLLMTier]` and that its tier exists in the active provider's catalog. No cross-tier fallback: an agent whose declared tier is not configured fails startup, full stop
 - Support **Azure AI Foundry v1** endpoints in AzureOpenAI provider
 
 ### 🔄 Changed
-- **BREAKING — config schema**: `Morgana:LLM:{Provider}` drops the singular `Model`/`DeploymentName` and the provider-level `MagicDust` section in favor of the tiered `Models` map with per-model pricing (existing User Secrets/env deployments must migrate)
-- Dust roles now include the tier (`Morgana (Billing/Low)`), giving the dust ledger and `morgana.dust.consumed` OTel counter per-tier attribution
+- **BREAKING — config schema**: `Morgana:LLM:{Provider}` drops the singular `Model`/`DeploymentName` and the provider-level `MagicDust` section in favor of the two-tier `Tiers` map (`Efficiency`/`Performance`) with per-model pricing (existing User Secrets/env deployments must migrate). Local single-model deployments (e.g. Ollama) now declare a single `Efficiency` entry.
+- Dust roles now include the tier (`Morgana (Billing/Efficiency)`), giving the dust ledger and `morgana.dust.consumed` OTel counter per-tier attribution
+- **Shipped `MagicDust` defaults recalibrated** for the two-tier world: values track official provider pricing assuming a dual deploy of Haiku 4.5/Sonnet 5 (Anthropic) and gpt-4o-mini/gpt-4o (OpenAI, AzureOpenAI), with a usability floor guaranteeing at least 10 full-length `Performance` turns per conversation budget — so an extreme real-world price gap (gpt-4o-mini→gpt-4o is ~17×) can't burn the shared budget in a couple of turns. Formula documented in `Records.MagicDustPricing`
 - Updated `Microsoft.Agents.AI` dependency to 1.13.0
 - Updated `ModelContextProtocol.Core` dependency to 1.4.1
 - Update `OllamaSharp` to 5.4.26

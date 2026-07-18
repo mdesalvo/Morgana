@@ -19,7 +19,7 @@ namespace Morgana.AI.Attributes;
 /// <para><strong>Usage example:</strong></para>
 /// <code>
 /// [HandlesIntent("contract")]
-/// [RequiresLLMTier(Records.LLMTier.Moderate)]
+/// [RequiresLLMTier(Records.LLMTier.Efficiency)]
 /// public class ContractAgent : MorganaAgent { ... }
 /// </code>
 /// </remarks>

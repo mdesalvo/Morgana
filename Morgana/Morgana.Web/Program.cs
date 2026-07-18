@@ -178,7 +178,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IGuardRailService: Checks user messages for content safety and compliance
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
-// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, OpenAI), multi-tier (Low/Moderate/High) via each provider's Models[] configuration
+// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, OpenAI), two-tier Efficiency/Performance via each provider's Tiers{} configuration
 
 builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryService>();
 builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistryService>();
@@ -251,10 +251,10 @@ builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 // conversation's lifetime. Shares the per-conversation SQLite database.
 //
 // - DustLimitingOptions: policy (budget + warning/error message templates)
-// - Per-model pricing now lives inline on each Models[] entry (Morgana:LLM:{Provider}:Models[].MagicDust)
+// - Per-model pricing now lives inline on each Tiers{} entry (Morgana:LLM:{Provider}:Tiers{}.MagicDust)
 //   and is resolved per-tier by ILLMService.GetPricing(tier) — no single process-wide pricing singleton.
 //
-// Configuration: Morgana:DustLimiting + Morgana:LLM:{Provider}:Models[].MagicDust in appsettings.json
+// Configuration: Morgana:DustLimiting + Morgana:LLM:{Provider}:Tiers{}.MagicDust in appsettings.json
 
 builder.Services.Configure<Records.DustLimitingOptions>(
     builder.Configuration.GetSection("Morgana:DustLimiting"));

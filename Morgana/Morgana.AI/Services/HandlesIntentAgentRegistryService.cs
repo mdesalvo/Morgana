@@ -190,7 +190,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 $"There are Morgana agents handling an undeclared intent: {string.Join(", ", unconfiguredAgentIntents)}");
 
         // Check 3: every agent must declare [RequiresLLMTier], and the declared tier must
-        // actually be configured (a Models entry) for the active LLM provider. Delegated to
+        // actually be configured (a Tiers entry) for the active LLM provider. Delegated to
         // ILLMTierValidationService — a separate concern (LLM cost/tier governance) from
         // intent↔agent discovery, kept as its own extension point rather than inlined here.
         // It already aggregates every offending agent into its own message, so on failure

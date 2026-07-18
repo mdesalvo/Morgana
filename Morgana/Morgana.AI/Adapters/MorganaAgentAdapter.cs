@@ -206,13 +206,13 @@ public class MorganaAgentAdapter
 
         // 7) Resolve THIS agent's own tier client/pricing (never the framework-default
         //    client) and wrap it in a per-agent dust meter. The role label
-        //    ("Morgana (Billing/Moderate)" etc.) attributes consumption to this agent+tier in
+        //    ("Morgana (Billing/Efficiency)" etc.) attributes consumption to this agent+tier in
         //    the budget; conversationId scopes the charge. The reducer is built on the SAME
         //    wrapped client so its summarization LLM calls (also token-bearing) are
         //    metered too, not silently free.
         string intent = intentAttribute.Intent;
         // Builds a human-readable label for the dust ledger and OTel tags, e.g. "billing" ->
-        // "Morgana (Billing/Moderate)".
+        // "Morgana (Billing/Efficiency)".
         string dustRole = $"Morgana ({char.ToUpperInvariant(intent[0])}{intent[1..]}/{tierAttribute.Tier})";
         IChatClient tierChatClient = llmService.GetChatClient(tierAttribute.Tier);
         Records.MagicDustPricing tierPricing = llmService.GetPricing(tierAttribute.Tier);

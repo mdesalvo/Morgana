@@ -43,30 +43,30 @@ services:
       - Morgana__ConversationPersistence__StoragePath=/app/data
 
       # LLM Provider (anthropic, azureopenai, ollama, openai)
-      # Models are keyed by tier (Low/Moderate/High, or a single Omni tier for a
-      # one-model deployment like Ollama) — see Morgana.Web/appsettings.json for
-      # the MagicDust pricing baked into the image per tier; these env vars only
-      # override the tier -> model/deployment name mapping and provider credentials.
-      # Every value falls back to its appsettings.json sentinel placeholder when the
-      # env var is unset: an unset variable would otherwise inject an EMPTY string,
-      # silently defeating Morgana's fail-fast placeholder check at startup and
+      # Tiers are keyed by name: "Efficiency" (E-core — Morgana's own framework actors and
+      # any agent handling routine work) and "Performance" (P-core — reserved for agents
+      # whose author declares an existential need for deep reasoning/expressive power).
+      # Ollama defaults to a single Efficiency entry (see Morgana.Web/appsettings.json) — add a
+      # Performance entry too only if you actually keep two distinct local models loaded.
+      # See Morgana.Web/appsettings.json for the MagicDust pricing baked into the image per
+      # tier; these env vars only override the tier -> model/deployment name mapping and
+      # provider credentials. Every value falls back to its appsettings.json sentinel
+      # placeholder when the env var is unset: an unset variable would otherwise inject an
+      # EMPTY string, silently defeating Morgana's fail-fast placeholder check at startup and
       # deferring the failure to the first real LLM call.
       - Morgana__LLM__Provider=${LLM_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__Anthropic__ApiKey=${ANTHROPIC_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Anthropic__Models__Low__Name=${ANTHROPIC_MODEL_LOW:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Anthropic__Models__Moderate__Name=${ANTHROPIC_MODEL_MODERATE:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Anthropic__Models__High__Name=${ANTHROPIC_MODEL_HIGH:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Anthropic__Tiers__Efficiency__Options__ModelId=${ANTHROPIC_MODEL_EFFICIENCY:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Anthropic__Tiers__Performance__Options__ModelId=${ANTHROPIC_MODEL_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__AzureOpenAI__ApiKey=${AZUREOPENAI_APIKEY:-_SECURE_OVERRIDE_}
       - Morgana__LLM__AzureOpenAI__Endpoint=${AZUREOPENAI_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__AzureOpenAI__Models__Low__Name=${AZUREOPENAI_DEPLOYMENTNAME_LOW:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__AzureOpenAI__Models__Moderate__Name=${AZUREOPENAI_DEPLOYMENTNAME_MODERATE:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__AzureOpenAI__Models__High__Name=${AZUREOPENAI_DEPLOYMENTNAME_HIGH:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__AzureOpenAI__Tiers__Efficiency__Options__ModelId=${AZUREOPENAI_DEPLOYMENTNAME_EFFICIENCY:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__AzureOpenAI__Tiers__Performance__Options__ModelId=${AZUREOPENAI_DEPLOYMENTNAME_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__Ollama__Endpoint=${OLLAMA_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Ollama__Models__Omni__Name=${OLLAMA_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Ollama__Tiers__Efficiency__Options__ModelId=${OLLAMA_MODEL:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__OpenAI__ApiKey=${OPENAI_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__OpenAI__Models__Low__Name=${OPENAI_MODEL_LOW:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__OpenAI__Models__Moderate__Name=${OPENAI_MODEL_MODERATE:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__OpenAI__Models__High__Name=${OPENAI_MODEL_HIGH:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__OpenAI__Tiers__Efficiency__Options__ModelId=${OPENAI_MODEL_EFFICIENCY:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__OpenAI__Tiers__Performance__Options__ModelId=${OPENAI_MODEL_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
     volumes:
       # Persistent volume for SQLite databases
       - morgana-data:/app/data

@@ -128,7 +128,7 @@ Tools with `Shared: true` parameters route their values into a conversation-scop
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json` (embedded in Morgana.AI) + domain prompts from `agents.json` (via `IAgentConfigurationService`). Case-insensitive lookup |
 | `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Scans all loaded assemblies for `agents.json` embedded resources. Graceful degradation if none found (agentless mode) |
 | `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents via `[HandlesIntent]` reflection scanning. Bidirectional validation: every configured intent must have an agent and vice versa. Throws on mismatch at startup. Delegates LLM tier validation to `ILLMTierValidationService` |
-| `RequiresLLMTierValidationService` | `ILLMTierValidationService` | Validates every discovered agent's `[RequiresLLMTier]` declaration against the active provider's configured tiers (skipped on Omni deployments). Startup-fatal on missing attribute or unconfigured tier |
+| `RequiresLLMTierValidationService` | `ILLMTierValidationService` | Validates every discovered agent's `[RequiresLLMTier]` declaration against the active provider's configured tiers. Startup-fatal on missing attribute or unconfigured tier |
 | `ProvidesToolForIntentRegistryService` | `IToolRegistryService` | Discovers tools via `[ProvidesToolForIntent]` scanning. Diagnostic console output with validation warnings for orphaned tools/agents |
 | `MCPClientRegistryService` | `IMCPClientRegistryService` | MCP client connection pool: keyed by URI (Http) or `stdio:{command}` (Stdio). Thread-safe via `ConcurrentDictionary`. Contains `MCPClient` wrapper over `McpClient` from ModelContextProtocol.Core |
 | `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite DB (`morgana-{id}.db`). AES-256-CBC encrypted `AgentSession` BLOBs + `shared_context` registry (first-write-wins). Schema v4: tables `morgana` + `rate_limit_log` + `channel_metadata` + `shared_context`. Manages `UpsertSharedVariableAsync` and `LoadSharedVariablesAsync` for cross-agent context synchronization |
@@ -156,19 +156,19 @@ Tools with `Shared: true` parameters route their values into a conversation-scop
 
 All wrap into `Microsoft.Extensions.AI.IChatClient`. Provider selected by `Morgana:LLM:Provider` setting.
 
-**Multi-tier models**: each provider configures a `Models` map keyed by `LLMTier` (`Low`/`Moderate`/`High`, or a single `Omni` entry meaning "one model serves every tier" — mixing Omni with other tiers is startup-fatal). Each entry carries the model/deployment `Name` and its own `MagicDust` pricing. The map is a JSON **object keyed by tier name** (not an array) so User Secrets/env var overrides merge per-tier instead of positionally. A `Name` left on its `_SECURE_OVERRIDE_`/`_FUNCTIONAL_OVERRIDE_` placeholder fails startup (`MorganaLLM.RegisterTierClient`).
+**Two-tier models (Efficiency/Performance)**: each provider configures a `Tiers` map keyed by `LLMTier` — exactly two dies, `Efficiency` and `Performance`, modeled on Intel's E-core/P-core split. `Efficiency` is the default for Morgana's own framework actors (Guard, Classifier, Presenter, ChannelAdapter) and for any agent handling routine work; `Performance` is reserved exclusively for agents whose domain author declares an existential need for deep reasoning or high expressive power — not a "nicer to have" upgrade. There is no cross-tier fallback: a local single-model deployment (Ollama being the canonical case) simply declares a single `Efficiency` entry, and any agent requiring `Performance` fails startup until a second entry is added. Each `Tiers` entry carries an `Options` object (`Records.TierConfiguration`) and its own `MagicDust` pricing. `Options` is a deliberately narrow, JSON-bindable mirror of `Microsoft.Extensions.AI.ChatOptions` — only `ModelId` (the model/deployment identifier, replacing the old top-level `Name` field) and `MaxOutputTokens` are exposed; every other `ChatOptions` field (Temperature, TopP, StopSequences, Reasoning, Tools, ...) was deliberately excluded — see `Records.TierConfiguration` remarks for the full census and rationale. The map is a JSON **object keyed by tier name** (not an array) so User Secrets/env var overrides merge per-tier instead of positionally. A `ModelId` left on its `_SECURE_OVERRIDE_`/`_FUNCTIONAL_OVERRIDE_` placeholder fails startup (`MorganaLLM.RegisterTierClient`). At runtime, `Options.ToChatOptions()` is materialized once per tier and merged field-by-field — fill-if-absent, never overriding an explicit per-call value — into every request on that tier via `TierDefaultsChatClient`, mirroring the same merge pattern `Microsoft.Agents.AI.ChatClientAgent` already uses one layer up for agent-level defaults.
 
 Two consumption modes:
 - `CompleteWithSystemPromptAsync(conversationId, systemPrompt, message)` — stateless, for guard/classifier/presenter/channel-adapter; always runs on the **cheapest configured tier**
-- `GetChatClient(tier)` / `GetPricing(tier)` — per-tier `IChatClient` + dust pricing for agent use (multi-turn with tool calling); on an Omni deployment every tier resolves to the single Omni model
+- `GetChatClient(tier)` / `GetPricing(tier)` — per-tier `IChatClient` + dust pricing for agent use (multi-turn with tool calling); an exact tier match is required, no fallback
 
-Startup validation: `ILLMTierValidationService` (`RequiresLLMTierValidationService`) verifies every discovered agent declares `[RequiresLLMTier]` and that the declared tier exists in the active provider's `Models` map (skipped on Omni deployments). Fail-fast on mismatch.
+Startup validation: `ILLMTierValidationService` (`RequiresLLMTierValidationService`) verifies every discovered agent declares `[RequiresLLMTier]` and that the declared tier exists in the active provider's `Tiers` map. Fail-fast on mismatch.
 
 ## Agent Authoring (how to create a new agent)
 
 1. **Define intent** in `agents.json` Intents array: Name, Description, Label, DefaultValue
 2. **Define prompt** in `agents.json` Agents array: ID matching the intent name, Target, Instructions, Personality, Formatting, Tools array
-3. **Create agent class** extending `MorganaAgent`, decorated with `[HandlesIntent("myintent")]` **and** `[RequiresLLMTier(LLMTier.X)]` (mandatory — declares the fixed model tier the agent runs on; validated at startup against the active provider's `Models` map). Constructor calls `MorganaAgentAdapter.CreateAgent()` which returns `(AIAgent, MorganaAIContextProvider, MorganaChatHistoryProvider)`
+3. **Create agent class** extending `MorganaAgent`, decorated with `[HandlesIntent("myintent")]` **and** `[RequiresLLMTier(LLMTier.X)]` (mandatory — declares the fixed die, `Efficiency` or `Performance`, the agent runs on; validated at startup against the active provider's `Tiers` map). Constructor calls `MorganaAgentAdapter.CreateAgent()` which returns `(AIAgent, MorganaAIContextProvider, MorganaChatHistoryProvider)`
 4. **Create tool class** (optional) extending `MorganaTool`, decorated with `[ProvidesToolForIntent("myintent")]`. Method names must match tool Names in JSON. Constructor signature: `(ILogger, Func<ToolContext>)`
 5. **Or use MCP** — decorate agent with `[UsesMCPServer("url")]` (Http) or `[UsesMCPServer(MCPTransport.Stdio, "cmd", args)]` for auto-discovered remote tools. Supports multiple `[UsesMCPServer]` on one agent
 6. **Package as plugin DLL** — place in `plugins/` directory, `PluginLoaderService` discovers it at startup
@@ -176,13 +176,15 @@ Startup validation: `ILLMTierValidationService` (`RequiresLLMTierValidationServi
 Minimal agent (see `BillingAgent.cs`):
 ```csharp
 [HandlesIntent("billing")]
-[RequiresLLMTier(Records.LLMTier.Low)]
+[RequiresLLMTier(Records.LLMTier.Efficiency)]
 public class BillingAgent : MorganaAgent
 {
-    public BillingAgent(string conversationId, ILLMService llmService,
+    public BillingAgent(string conversationId,
+        ILLMService llmService,
         IPromptResolverService promptResolverService,
         IConversationPersistenceService persistenceService,
-        ILogger logger, MorganaAgentAdapter adapter,
+        ILogger logger,
+        MorganaAgentAdapter adapter,
         IConfiguration configuration)
         : base(conversationId, llmService, promptResolverService, persistenceService, logger, configuration)
     {
@@ -285,24 +287,24 @@ Exporters configured via `Morgana:OpenTelemetry:Exporters` array: console, OTLP 
 At application startup, comprehensive validation is performed:
 
 1. **HandlesIntentAgentRegistryService**: bidirectional check — every configured intent (except `"other"`) must have a `[HandlesIntent]` agent, and every `[HandlesIntent]` agent must have a configured intent. Throws `InvalidOperationException` on mismatch
-2. **RequiresLLMTierValidationService** (`ILLMTierValidationService`, delegated to by the agent registry): every discovered agent must declare `[RequiresLLMTier]`, and the declared tier must exist in the active provider's `Models` map (both checks skipped on Omni deployments, where every tier resolves). Throws on mismatch
+2. **RequiresLLMTierValidationService** (`ILLMTierValidationService`, delegated to by the agent registry): every discovered agent must declare `[RequiresLLMTier]`, and the declared tier must exist in the active provider's `Tiers` map. Throws on mismatch
 3. **ProvidesToolForIntentRegistryService**: warns on agents without tools (MCP-only is valid), warns on orphaned tools, errors on duplicate tool registrations for same intent
 4. **EmbeddedAgentConfigurationService**: warns if no `agents.json` found (agentless mode is allowed)
-5. **MorganaLLM provider constructors**: reject a `Models` entry whose `Name` is still an override placeholder, an empty `Models` map, or `Omni` mixed with other tiers
+5. **MorganaLLM provider constructors**: reject a `Tiers` entry whose `ModelId` is still an override placeholder, or an empty `Tiers` map
 
 ## Key Configuration Sections (appsettings.json)
 
 | Section                                             | Purpose                                                                                                                                                                                                                       |
 |-----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `Morgana:LLM:Provider`                              | LLM provider: `Anthropic`, `AzureOpenAI`, `Ollama`, `OpenAI`                                                                                                                                                                  |
-| `Morgana:LLM:{Provider}`                            | Provider credentials (ApiKey, Endpoint) + `Models` map keyed by tier (`Low`/`Moderate`/`High` or sole `Omni`), each entry with `Name` (model/deployment id) and per-model `MagicDust` pricing                                 |
+| `Morgana:LLM:{Provider}`                            | Provider credentials (ApiKey, Endpoint) + `Tiers` map keyed by die (`Efficiency`/`Performance`), each entry with `Options` (`ModelId`, optional `MaxOutputTokens`) and per-model `MagicDust` pricing |
 | `Morgana:ActorSystem:TimeoutSeconds`                | Actor/agent receive timeout (default 180s)                                                                                                                                                                                    |
 | `Morgana:ActorSystem:EnableGuardrail`               | Toggle guard rail (useful for local dev)                                                                                                                                                                                      |
 | `Morgana:AdaptiveMessaging:EnableStreamingResponse` | Toggle streaming responses                                                                                                                                                                                                    |
 | `Morgana:AdaptiveMessaging:RichFeaturesMinLength`   | Ingress heuristic: if the client's `MaxMessageLength` is below this threshold, `SupportsRichCards` and `SupportsQuickReplies` are forced to `false` at the handshake. Null/0 disables the heuristic. Streaming is unaffected. |
 | `Morgana:ConversationPersistence`                   | StoragePath, EncryptionKey (AES-256, base64, must be 32 bytes)                                                                                                                                                                |
 | `Morgana:RateLimiting`                              | Enabled, MaxMessagesPerMinute/Hour/Day, custom ErrorMessage templates with `{limit}` placeholder                                                                                                                              |
-| `Morgana:DustLimiting`                              | Enabled, BudgetPerConversation (default 80 units), Warning70Message, Warning90Message, ErrorMessage. `MagicDust` pricing (InputTokensPerDustUnit, OutputTokensPerDustUnit, CachedInputWeight, CacheCreationWeight) lives per-model on each `Models` entry under `Morgana:LLM:{Provider}` |
+| `Morgana:DustLimiting`                              | Enabled, BudgetPerConversation (default 80 units), Warning70Message, Warning90Message, ErrorMessage. `MagicDust` pricing (InputTokensPerDustUnit, OutputTokensPerDustUnit, CachedInputWeight, CacheCreationWeight) lives per-tier on each `Tiers` entry under `Morgana:LLM:{Provider}`. Shipped defaults are calibrated on official provider pricing assuming a dual deploy of **Haiku 4.5/Sonnet 5** (Anthropic) and **gpt-4o-mini/gpt-4o** (OpenAI and AzureOpenAI), with a usability floor guaranteeing ≥10 full-length Performance turns per budget — formula in `Records.MagicDustPricing` remarks. Recalibrate when pointing a tier at a different model |
 | `Morgana:Authentication`                            | Audience, Issuers[] (per-issuer Name + SymmetricKey min 256-bit)                                                                                                                                                              |
 | `Morgana:HistoryReducer`                            | Enabled, SummarizationThreshold (default 12), SummarizationTargetCount (default 8), SummarizationPrompt                                                                                                                       |
 | `Morgana:OpenTelemetry`                             | Enabled, ServiceName, Exporters array (name, enabled, endpoint)                                                                                                                                                               |

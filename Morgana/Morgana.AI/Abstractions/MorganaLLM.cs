@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -16,11 +15,15 @@ namespace Morgana.AI.Abstractions;
 /// <para><strong>Architecture:</strong></para>
 /// <code>
 /// MorganaLLM (abstract base, this file)
-///   └── Abstractions/LLMs/
-///         ├── Anthropic.cs    (Anthropic Claude models)
-///         ├── AzureOpenAI.cs  (Azure OpenAI GPT models)
-///         ├── Ollama.cs       (Ollama local models)
-///         └── OpenAI.cs       (OpenAI GPT models)
+///   ├── Abstractions/LLMs/
+///   │     ├── Anthropic.cs    (Anthropic Claude models)
+///   │     ├── AzureOpenAI.cs  (Azure OpenAI GPT models)
+///   │     ├── Ollama.cs       (Ollama local models)
+///   │     └── OpenAI.cs       (OpenAI GPT models)
+///   └── Abstractions/ChatClients/
+///         ├── TierDefaultsChatClient.cs   (per-tier ChatOptions defaults)
+///         ├── DustAccountingChatClient.cs (Magic Dust metering)
+///         └── MorganaAnthropicClient.cs   (Anthropic no-prefill guard + cache marker)
 /// </code>
 /// <para><strong>Key Features:</strong></para>
 /// <list type="bullet">
@@ -63,7 +66,7 @@ public class MorganaLLM : ILLMService
     /// <summary>
     /// Per-tier client + pricing, populated by derived class constructors via
     /// <see cref="RegisterTierClient"/> — one entry per tier key configured under
-    /// <c>Models</c> for the active provider.
+    /// <c>Tiers</c> for the active provider.
     /// </summary>
     private readonly Dictionary<Records.LLMTier, (IChatClient Client, Records.MagicDustPricing Pricing)> tierClients = new();
 
@@ -136,26 +139,32 @@ public class MorganaLLM : ILLMService
     }
 
     /// <summary>
-    /// Registers a fully-built chat client for one <c>Models</c> entry. Called once per
+    /// Registers a fully-built chat client for one <c>Tiers</c> entry. Called once per
     /// entry by each derived provider's constructor, after applying that provider's own
     /// decorator chain (no-prefill guard, telemetry, etc.) to the model-specific client.
     /// </summary>
-    /// <param name="tier">Tier this model serves — the key it was registered under in the <c>Models</c> map.</param>
+    /// <param name="tier">Tier this model serves — the key it was registered under in the <c>Tiers</c> map.</param>
     /// <param name="modelName">
-    /// The model/deployment identifier this tier resolves to (<c>ModelDefinition.Name</c>),
+    /// The model/deployment identifier this tier resolves to (<c>TierDefinition.Options.ModelId</c>),
     /// checked against <see cref="Records.OverridePlaceholders"/> before registration. Not
     /// stored — the client already has it baked in — this parameter exists purely so every
     /// provider gets the check for free instead of each duplicating it.
     /// </param>
-    /// <param name="client">Fully decorated chat client for this specific model.</param>
-    /// <param name="pricing">Dust pricing for this specific model.</param>
+    /// <param name="client">Fully decorated chat client for this specific tier.</param>
+    /// <param name="pricing">Dust pricing for this specific tier.</param>
+    /// <param name="tierDefaultOptions">
+    /// Materialized tier defaults (<see cref="Records.TierConfiguration.ToChatOptions"/>), applied
+    /// field-by-field — fill-if-absent, never overriding a value the caller already set — to
+    /// every call through the registered client. See <see cref="TierDefaultsChatClient"/>.
+    /// Pass <c>null</c> to register the client with no tier-level defaults at all.
+    /// </param>
     /// <exception cref="InvalidOperationException">
     /// Thrown when <paramref name="modelName"/> is still an unreplaced override placeholder.
     /// Deliberately narrow: it only catches the exact sentinel strings, not "implausible"
     /// values in general (empty, whitespace, garbage) — those remain the deployer's problem,
     /// surfacing as an HTTP error from the provider on first real call.
     /// </exception>
-    protected void RegisterTierClient(Records.LLMTier tier, string modelName, IChatClient client, Records.MagicDustPricing pricing)
+    protected void RegisterTierClient(Records.LLMTier tier, string modelName, IChatClient client, Records.MagicDustPricing pricing, ChatOptions? tierDefaultOptions = null)
     {
         // A tier left on its placeholder would otherwise bind and register just fine, then
         // pass every later check (ConfiguredTiers reports it as present, so
@@ -164,10 +173,17 @@ public class MorganaLLM : ILLMService
         // disappears into an already-built client.
         if (Records.OverridePlaceholders.Contains(modelName))
             throw new InvalidOperationException(
-                $"Morgana:LLM:{{Provider}}:Models:{tier} has a Name that is still the " +
+                $"Morgana:LLM:{{Provider}}:Tiers:{tier} has a ModelId that is still the " +
                 $"placeholder '{modelName}'. Override it via User Secrets or environment variables before " +
                 $"starting — this is checked now, at provider startup, so a tier nobody has requested yet " +
                 $"(e.g. one only a plugin discovered later will use) can't silently ship broken.");
+
+        // Applied as the OUTERMOST decorator so it sees (and only fills in, never overrides) the
+        // ChatOptions the caller — Microsoft.Agents.AI for domain agents, CompleteWithSystemPromptAsync
+        // for framework actors — actually sent, regardless of which provider-specific decorators
+        // (no-prefill guard, telemetry, ...) sit underneath.
+        if (tierDefaultOptions is not null)
+            client = new TierDefaultsChatClient(client, tierDefaultOptions);
 
         tierClients[tier] = (client, pricing);
     }
@@ -175,28 +191,18 @@ public class MorganaLLM : ILLMService
     /// <summary>
     /// Finalizes tier registration: picks the cheapest configured tier as the
     /// <see cref="frameworkChatClient"/>. Must be called by every derived provider's
-    /// constructor after all <see cref="RegisterTierClient"/> calls for its <c>Models</c> map.
+    /// constructor after all <see cref="RegisterTierClient"/> calls for its <c>Tiers</c> map.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when a provider declares no <c>Models</c> entries at all (an agent could never
-    /// resolve any tier against it), or when <see cref="Records.LLMTier.Omni"/> is mixed with
-    /// any other tier (ambiguous — Omni is meant to be the sole entry for that provider).
+    /// Thrown when a provider declares no <c>Tiers</c> entries at all (an agent could never
+    /// resolve any tier against it).
     /// </exception>
     protected void FinalizeModelRegistration()
     {
         if (tierClients.Count == 0)
             throw new InvalidOperationException(
-                "No models configured under 'Morgana:LLM:{Provider}:Models'. At least one model " +
-                "(keyed by Tier, with a Name and MagicDust pricing) is required for the active LLM provider.");
-
-        // A deployment that configures Omni AND Low/Moderate/High doesn't know what it wants:
-        // should an agent asking for Low get the explicit Low model, or the Omni catch-all?
-        // Refuse to guess.
-        if (tierClients.ContainsKey(Records.LLMTier.Omni) && tierClients.Count > 1)
-            throw new InvalidOperationException(
-                "'Morgana:LLM:{Provider}:Models' mixes an Omni entry with other tiers. Omni means " +
-                "\"this one model serves every tier\" and must be the sole entry — either configure " +
-                "Omni alone, or drop it and configure Low/Moderate/High explicitly.");
+                "No tiers configured under 'Morgana:LLM:{Provider}:Tiers'. At least one tier " +
+                "(keyed by Efficiency/Performance, with a ModelId and MagicDust pricing) is required for the active LLM provider.");
 
         // The framework's own actors (Guard, Classifier, Presenter, ChannelAdapter) always run
         // on the cheapest tier available, whatever that turns out to be for this provider.
@@ -204,27 +210,16 @@ public class MorganaLLM : ILLMService
     }
 
     /// <summary>
-    /// Resolves the tier client/pricing entry to actually serve for <paramref name="tier"/>:
-    /// if the provider is configured Omni-only, EVERY request — regardless of the tier asked
-    /// for — is transparently redirected to that single entry (see <see cref="Records.LLMTier.Omni"/>).
-    /// Otherwise, an exact match is required.
+    /// Resolves the tier client/pricing entry to actually serve for <paramref name="tier"/>: an
+    /// exact match is required — an agent asking for a tier the deployment never configured is
+    /// a misconfiguration, not something to paper over with a fallback.
     /// </summary>
-    private (IChatClient Client, Records.MagicDustPricing Pricing) ResolveTierEntry(Records.LLMTier tier)
-    {
-        // On an Omni deployment, every request lands on the same single model, whatever tier
-        // was actually asked for.
-        if (tierClients.TryGetValue(Records.LLMTier.Omni, out (IChatClient Client, Records.MagicDustPricing Pricing) omniEntry))
-            return omniEntry;
-
-        // Otherwise the requested tier must exist exactly as declared — an agent asking for a
-        // tier the deployment never configured is a misconfiguration, not something to paper
-        // over with a fallback.
-        return tierClients.TryGetValue(tier, out (IChatClient Client, Records.MagicDustPricing Pricing) entry)
+    private (IChatClient Client, Records.MagicDustPricing Pricing) ResolveTierEntry(Records.LLMTier tier) =>
+        tierClients.TryGetValue(tier, out (IChatClient Client, Records.MagicDustPricing Pricing) entry)
             ? entry
             : throw new InvalidOperationException(
                 $"LLM tier '{tier}' is not configured for the active provider. Add a \"{tier}\" entry " +
-                $"under Morgana:LLM:{{Provider}}:Models (or a single \"Omni\" entry to serve every tier).");
-    }
+                $"under Morgana:LLM:{{Provider}}:Tiers.");
 
     /// <inheritdoc/>
     public IReadOnlyCollection<Records.LLMTier> ConfiguredTiers => tierClients.Keys;
@@ -320,152 +315,6 @@ public class MorganaLLM : ILLMService
 
             return llmError?.Content.Replace("((llm_error))", ex.Message)
                           ?? $"LLM service error: {ex.Message}";
-        }
-    }
-}
-
-/// <summary>
-/// A <see cref="DelegatingChatClient"/> that meters token consumption ("magic dust") for
-/// every LLM call passing through it and charges the conversation's lifetime budget.
-/// </summary>
-/// <remarks>
-/// <para><strong>Why an instance carries its own llmRole.</strong> There is no singleton dust
-/// wrapper on <see cref="MorganaLLM"/>'s chat client. Instead this client is constructed at
-/// exactly two points, each stamping its own <c>llmRole</c> at construction time — so we never
-/// need a separate llmRole-stamping decorator, and the same call is never charged twice:</para>
-/// <list type="bullet">
-///   <item><see cref="MorganaLLM.CompleteWithSystemPromptAsync"/> wraps per call with llmRole
-///   <c>"Morgana"</c> (framework actors: guard, classifier, presenter, channel adapter).</item>
-///   <item><see cref="Adapters.MorganaAgentAdapter"/> wraps per agent with llmRole
-///   <c>"Morgana (Intent)"</c> (domain agents and their history reducer).</item>
-/// </list>
-/// <para>The conversation id is read from <see cref="ChatOptions.ConversationId"/>, which
-/// every caller already sets. Charging is best-effort: <see cref="IDustLimitService"/> itself
-/// fails open, and any exception here is swallowed so dust accounting can never break a turn.</para>
-/// </remarks>
-public sealed class DustAccountingChatClient : DelegatingChatClient
-{
-    private readonly IDustLimitService dustLimitService;
-    private readonly Records.MagicDustPricing dustPricing;
-    private readonly string llmRole;
-    private readonly string? conversationId;
-
-    /// <summary>
-    /// Wraps <paramref name="innerClient"/>, metering every call against
-    /// <paramref name="dustLimitService"/> using <paramref name="dustPricing"/> and attributing
-    /// the cost to <paramref name="llmRole"/>.
-    /// </summary>
-    public DustAccountingChatClient(
-        IChatClient innerClient,
-        IDustLimitService dustLimitService,
-        Records.MagicDustPricing dustPricing,
-        string llmRole,
-        string? conversationId = null) : base(innerClient)
-    {
-        this.dustLimitService = dustLimitService;
-        this.dustPricing = dustPricing;
-        this.llmRole = llmRole;
-        this.conversationId = conversationId;
-    }
-
-    /// <inheritdoc/>
-    public override async Task<ChatResponse> GetResponseAsync(
-        IEnumerable<ChatMessage> chatMessages,
-        ChatOptions? chatOptions = null,
-        CancellationToken cancellationToken = default)
-    {
-        ChatResponse chatResponse = await base.GetResponseAsync(chatMessages, chatOptions, cancellationToken);
-        await ChargeAsync(ResolveConversationId(chatOptions), chatResponse.Usage);
-        return chatResponse;
-    }
-
-    /// <inheritdoc/>
-    public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
-        IEnumerable<ChatMessage> chatMessages,
-        ChatOptions? chatOptions = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        // Providers deliver streaming usage as a cumulative total (typically one final
-        // UsageContent), not per-chunk deltas — so we keep the LAST one seen and charge once
-        // when the stream completes. Summing would double-count.
-        UsageDetails? usageDetails = null;
-
-        await foreach (ChatResponseUpdate chatResponseUpdate in
-            base.GetStreamingResponseAsync(chatMessages, chatOptions, cancellationToken))
-        {
-            foreach (UsageContent usageContent in chatResponseUpdate.Contents.OfType<UsageContent>())
-                usageDetails = usageContent.Details;
-
-            yield return chatResponseUpdate;
-        }
-
-        await ChargeAsync(ResolveConversationId(chatOptions), usageDetails);
-    }
-
-    /// <summary>
-    /// Prefers the conversation id carried on the call's <see cref="ChatOptions"/> (the
-    /// framework-actor path sets it); falls back to the id baked in at construction (the
-    /// agent path, where Microsoft.Agents.AI does not flow a conversation id).
-    /// </summary>
-    private string? ResolveConversationId(ChatOptions? chatOptions) =>
-        string.IsNullOrEmpty(chatOptions?.ConversationId) ? conversationId : chatOptions.ConversationId;
-
-    /// <summary>
-    /// Converts a usageDetails report into dust via the per-provider dustPricing and charges it.
-    /// No-op when the conversation id or usageDetails is absent, or when the computed dust is zero
-    /// (e.g. Ollama priced at 0 tokens-per-unit on both axes). Never throws.
-    /// </summary>
-    /// <remarks>
-    /// The Anthropic MEAI adapter reports <see cref="UsageDetails.InputTokenCount"/> as the
-    /// total prompt (fresh + cache-read + cache-write), with cache-read in
-    /// <see cref="UsageDetails.CachedInputTokenCount"/> and cache-write in
-    /// <c>AdditionalCounts["CacheCreationInputTokens"]</c>. We decompose it and apply the
-    /// per-provider cache weights so the charge tracks real cache economics rather than
-    /// over-counting cheap cache reads at full price.
-    /// </remarks>
-    private async Task ChargeAsync(string? convId, UsageDetails? usageDetails)
-    {
-        if (string.IsNullOrEmpty(convId) || usageDetails is null)
-            return;
-
-        long totalInput = usageDetails.InputTokenCount ?? 0;
-        long cacheRead = usageDetails.CachedInputTokenCount ?? 0;
-
-        long cacheWrite = 0;
-        if (usageDetails.AdditionalCounts is not null &&
-            usageDetails.AdditionalCounts.TryGetValue("CacheCreationInputTokens", out long w))
-            cacheWrite = w;
-
-        // Fresh = total minus the two cache components. Clamp at 0: defends against any
-        // adapter that might report the components non-disjointly.
-        long freshInput = Math.Max(0, totalInput - cacheRead - cacheWrite);
-
-        double effectiveInput =
-            freshInput +
-            cacheRead * dustPricing.CachedInputWeight +
-            cacheWrite * dustPricing.CacheCreationWeight;
-
-        long outputTokens = usageDetails.OutputTokenCount ?? 0;
-
-        double dust =
-            (dustPricing.InputTokensPerDustUnit > 0
-                ? effectiveInput / dustPricing.InputTokensPerDustUnit
-                : 0.0) +
-            (dustPricing.OutputTokensPerDustUnit > 0
-                ? (double)outputTokens / dustPricing.OutputTokensPerDustUnit
-                : 0.0);
-
-        if (dust <= 0.0)
-            return;
-
-        try
-        {
-            await dustLimitService.ChargeAsync(convId, dust, llmRole);
-        }
-        catch
-        {
-            // Dust accounting must never break a turn. The service itself already fails open;
-            // this is the last-resort belt-and-braces for anything it might surface.
         }
     }
 }
