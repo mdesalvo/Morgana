@@ -26,6 +26,7 @@ A billing FAQ agent runs on the efficient model while a contract-analysis agent 
 
 ### 🐛 Fixed
 - Active quick replies on the last turn (e.g. a farewell prompt) could show up disabled after a page refresh/resume
+- **`MorganaAgentAdapter`** resolved a native tool's implementation via `Type.GetMethod(name)`, which throws `AmbiguousMatchException` the instant a `MorganaTool` subclass declares two methods sharing that name (e.g. an intentional `GetOrders()`/`GetOrders(string userId)` overload pair) — crashing agent creation even for a perfectly unambiguous `agents.json` declaration. Overload resolution now disambiguates by the parameter names `agents.json` actually declares, and fails loud with an actionable message only when that is still genuinely ambiguous (e.g. two overloads differing solely by CLR type, which the JSON schema cannot express)
 
 ### 🚀 Future Enablement
 - **Per-intent LLM economics** — with tiers declared per agent and dust attributed per agent+tier, a deployment can now see **which domain costs what and rebalance** (e.g: promote a struggling agent, demote an overserved one) by touching just one attribute and one config entry

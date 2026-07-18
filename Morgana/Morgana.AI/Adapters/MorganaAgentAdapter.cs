@@ -457,7 +457,13 @@ public class MorganaAgentAdapter
     {
         foreach (Records.ToolDefinition toolDefinition in tools)
         {
-            MethodInfo? method = toolInstance.GetType().GetMethod(toolDefinition.Name);
+            // Was `toolInstance.GetType().GetMethod(toolDefinition.Name)` — that single-argument
+            // overload throws AmbiguousMatchException the instant the tool class declares two
+            // methods sharing this name (e.g. an intentional GetOrders()/GetOrders(string)
+            // overload pair), even though the tool definition below is perfectly unambiguous on
+            // its own. ResolveToolMethod picks the right overload using the parameter names
+            // agents.json actually declares.
+            MethodInfo? method = ResolveToolMethod(toolInstance.GetType(), toolDefinition);
             if (method == null)
             {
                 logger.LogWarning("Tool '{ToolDefinitionName}' declared in agents.json but not found in {Name}", toolDefinition.Name, toolInstance.GetType().Name);
@@ -478,6 +484,74 @@ public class MorganaAgentAdapter
 
             morganaToolAdapter.AddTool(toolDefinition.Name, toolImplementation, toolDefinition);
         }
+    }
+
+    /// <summary>
+    /// Resolves the <see cref="MethodInfo"/> backing a <see cref="Records.ToolDefinition"/> by name,
+    /// tolerating C# method overloads that share that name.
+    /// </summary>
+    /// <remarks>
+    /// <para><see cref="Type.GetMethod(string)"/> throws <see cref="AmbiguousMatchException"/> the
+    /// moment two methods share a name, regardless of arity — a MorganaTool subclass declaring
+    /// e.g. both <c>GetOrders()</c> and <c>GetOrders(string userId)</c> would crash agent creation
+    /// entirely, for a tool definition that, on its own, looks perfectly valid. Overload resolution
+    /// here reuses the only signal agents.json actually carries for a parameter — its NAME — since
+    /// the JSON schema has no concept of a CLR type; this is the exact same signal
+    /// <see cref="MorganaToolAdapter"/>'s ValidateToolDefinition already checks after resolution,
+    /// just applied earlier to pick the right overload rather than an arbitrary one.</para>
+    /// </remarks>
+    /// <param name="toolType">Concrete MorganaTool subclass to search.</param>
+    /// <param name="toolDefinition">Tool definition whose declared parameter names disambiguate overloads.</param>
+    /// <returns>The resolved method, or <c>null</c> if no method with that name exists.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the declared parameter names match zero or more than one overload — a genuine
+    /// agents.json/tool-class mismatch that must be fixed by the author, not silently guessed at.
+    /// </exception>
+    private static MethodInfo? ResolveToolMethod(Type toolType, Records.ToolDefinition toolDefinition)
+    {
+        // GetMethods() (plural) never throws on its own — it just enumerates. Filtering by name
+        // ourselves, instead of handing that name straight to the throwing GetMethod(string)
+        // overload, is what buys us the chance to disambiguate before .NET reflection gets a say.
+        MethodInfo[] candidates = [.. toolType.GetMethods().Where(m => m.Name == toolDefinition.Name)];
+
+        // The overwhelmingly common case — one method, one name, nothing to disambiguate — exits
+        // here without ever building the parameter-name machinery below. FirstOrDefault() also
+        // quietly covers "zero candidates" (unknown tool name), same as the old GetMethod did.
+        if (candidates.Length <= 1)
+            return candidates.FirstOrDefault();
+
+        // Two or more C# methods share this name: only overload resolution by parameter NAME is
+        // possible here, because that is the only signal agents.json carries for a parameter —
+        // the JSON schema has no field for a CLR type, so "string userId" and "int userId" would
+        // look identical to this method. This mirrors exactly what MorganaToolAdapter's
+        // ValidateToolDefinition checks afterward; we are just checking it a step earlier, to
+        // choose the right overload instead of whichever one .NET reflection happened to see first.
+        HashSet<string> declaredParameterNames = [.. toolDefinition.Parameters.Select(p => p.Name)];
+
+        MethodInfo[] matchingCandidates = [.. candidates.Where(m =>
+        {
+            ParameterInfo[] methodParams = m.GetParameters();
+            return methodParams.Length == declaredParameterNames.Count
+                   && methodParams.All(p => declaredParameterNames.Contains(p.Name!));
+        })];
+
+        // Exactly one survivor is the success path (this is what makes GetOrders()/GetOrders(string)
+        // resolvable at all). Zero survivors means agents.json declared parameter names that don't
+        // match ANY overload — an authoring mistake, not something to silently paper over. More than
+        // one survivor means two overloads share both the name AND every parameter name (the
+        // string-vs-int case from the docstring): genuinely undecidable from agents.json alone, so
+        // this fails loud with an actionable message instead of guessing and binding the wrong one.
+        return matchingCandidates.Length switch
+        {
+            1 => matchingCandidates[0],
+            0 => throw new InvalidOperationException(
+                $"Tool '{toolDefinition.Name}' has {candidates.Length} overload(s) on {toolType.Name}, but none " +
+                $"matches the parameter names declared in agents.json ({string.Join(", ", declaredParameterNames)})."),
+            _ => throw new InvalidOperationException(
+                $"Tool '{toolDefinition.Name}' is ambiguous: {matchingCandidates.Length} overloads on {toolType.Name} " +
+                $"share the exact same parameter names declared in agents.json ({string.Join(", ", declaredParameterNames)}). " +
+                $"Overloads sharing both name and parameter names cannot be told apart — rename one of them.")
+        };
     }
 
     /// <summary>
