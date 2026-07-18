@@ -187,7 +187,7 @@ public class MorganaAgentAdapter
                     $"Agent '{intentAttribute.Intent}' has no active session during tool execution. " +
                     $"Ensure ExecuteAgentAsync sets aiAgentSession before invoking the agent.");
 
-            return new MorganaTool.ToolContext(morganaAIContextProvider, session);
+            return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId);
         };
 
         // 6a) Bind the declared tools to their delegates (native MorganaTool methods), then

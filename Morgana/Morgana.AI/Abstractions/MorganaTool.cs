@@ -28,7 +28,7 @@ namespace Morgana.AI.Abstractions;
 /// Wiring in concrete agent constructor:
 ///   new BillingTool(
 ///       logger,
-///       () => new ToolContext(aiContextProvider, CurrentSession!));
+///       () => new ToolContext(aiContextProvider, CurrentSession!, conversationId));
 /// </code>
 /// </remarks>
 public class MorganaTool
@@ -48,7 +48,7 @@ public class MorganaTool
     /// <param name="toolLogger">Logger for tool diagnostics.</param>
     /// <param name="getToolContext">
     /// Factory returning the <see cref="ToolContext"/> for the current turn.
-    /// Typically wired as <c>() =&gt; new ToolContext(aiContextProvider, CurrentSession!)</c>
+    /// Typically wired as <c>() =&gt; new ToolContext(aiContextProvider, CurrentSession!, conversationId)</c>
     /// inside the concrete agent constructor.
     /// </param>
     public MorganaTool(
@@ -289,15 +289,27 @@ public class MorganaTool
         public AgentSession Session { get; }
 
         /// <summary>
+        /// Conversation identifier this agent instance is scoped to. Unlike <see cref="Session"/>
+        /// (an opaque Microsoft.Agents.AI object with no conversation concept of its own), this is
+        /// the actual Akka-assigned conversationId — never writable by the LLM, unlike context
+        /// variables such as userId. Domain tools that need to scope persisted state to "this
+        /// conversation" (as opposed to a user-supplied, LLM-writable identifier) should use this,
+        /// not a context variable.
+        /// </summary>
+        public string ConversationId { get; }
+
+        /// <summary>
         /// Initializes a new <see cref="ToolContext"/> pairing the agent's context provider
-        /// with the session for the in-flight turn.
+        /// with the session and conversationId for the in-flight turn.
         /// </summary>
         /// <param name="provider">The singleton context provider for the agent.</param>
         /// <param name="session">The active agent session for the current turn.</param>
-        public ToolContext(MorganaAIContextProvider provider, AgentSession session)
+        /// <param name="conversationId">The Akka conversation identifier this agent instance is scoped to.</param>
+        public ToolContext(MorganaAIContextProvider provider, AgentSession session, string conversationId)
         {
             Provider = provider;
             Session = session;
+            ConversationId = conversationId;
         }
     }
 }
