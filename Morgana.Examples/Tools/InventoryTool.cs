@@ -99,6 +99,29 @@ public class InventoryTool : MorganaTool
         }
     }
 
+    /// <summary>
+    /// Opens (and returns) a connection to <see cref="DbPath"/> with a busy timeout applied.
+    /// </summary>
+    /// <remarks>
+    /// inventory.db is a SHARED, live database: different conversations WILL try to write to it at
+    /// the same instant (that is the whole point of this example). SQLite serializes writers with a
+    /// single write lock, and without a busy timeout the loser of that race throws "database is
+    /// locked" immediately. PRAGMA busy_timeout instead makes it WAIT for the holder to commit and
+    /// then proceed — the transactional writes in ConfirmOrder/CancelOrder rely on this so that two
+    /// concurrent commits queue up rather than one of them blowing up in the caller's face.
+    /// </remarks>
+    private static async Task<SqliteConnection> OpenConnectionAsync()
+    {
+        SqliteConnection connection = new SqliteConnection(ConnectionString);
+        await connection.OpenAsync();
+
+        await using SqliteCommand pragma = connection.CreateCommand();
+        pragma.CommandText = "PRAGMA busy_timeout = 5000;";
+        await pragma.ExecuteNonQueryAsync();
+
+        return connection;
+    }
+
     private static async Task<Product?> FindProductAsync(SqliteConnection connection, string sku)
     {
         // COLLATE NOCASE: the LLM types skus back from natural-language conversation, not from a
@@ -187,8 +210,7 @@ public class InventoryTool : MorganaTool
     /// <returns>JSON array of products with stock status icons.</returns>
     public async Task<string> GetProductCatalog()
     {
-        await using SqliteConnection connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync();
+        await using SqliteConnection connection = await OpenConnectionAsync();
 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT Sku, Name, Category, QuantityOnHand, ReorderThreshold, UnitPrice FROM Products ORDER BY Category, Name";
@@ -224,8 +246,7 @@ public class InventoryTool : MorganaTool
     /// <returns>JSON object with quantity, threshold, price and stock status.</returns>
     public async Task<string> CheckStockLevel(string sku)
     {
-        await using SqliteConnection connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync();
+        await using SqliteConnection connection = await OpenConnectionAsync();
 
         Product? product = await FindProductAsync(connection, sku);
         if (product == null)
@@ -266,8 +287,7 @@ public class InventoryTool : MorganaTool
         if (quantity <= 0)
             return JsonSerializer.Serialize(new { error = "Quantity must be a positive number", requestedQuantity = quantity }, JsonOptions);
 
-        await using SqliteConnection connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync();
+        await using SqliteConnection connection = await OpenConnectionAsync();
 
         Product? product = await FindProductAsync(connection, sku);
         if (product == null)
@@ -348,8 +368,7 @@ public class InventoryTool : MorganaTool
     /// <returns>JSON object with the confirmed order and remaining stock.</returns>
     public async Task<string> ConfirmOrder(string orderId, string sealWord)
     {
-        await using SqliteConnection connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync();
+        await using SqliteConnection connection = await OpenConnectionAsync();
 
         // Order-not-found and wrong-sealWord return the IDENTICAL message on purpose: if a wrong
         // seal word got its own distinct error, that alone would confirm to the caller that the
@@ -359,6 +378,11 @@ public class InventoryTool : MorganaTool
         if (order == null || !string.Equals(order.SealWord, sealWord, StringComparison.OrdinalIgnoreCase))
             return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, JsonOptions);
 
+        // This pre-read is ONLY for the seal-word gate and a friendly fast-path error. It is NOT the
+        // state the writes below trust: between here and the commit another conversation may
+        // confirm/cancel this same order or drain the shared stock. Everything that must actually be
+        // true for the commit to be legal is therefore re-asserted atomically INSIDE the transaction,
+        // as a WHERE clause on the write itself — the pre-read is never the authority.
         if (order.Status != "Pending")
         {
             return JsonSerializer.Serialize(new
@@ -369,39 +393,80 @@ public class InventoryTool : MorganaTool
             }, JsonOptions);
         }
 
-        // This is the SAME comparison CreatePurchaseOrder already made at quote time — repeated
-        // here because time has passed since then (possibly a whole session's worth), and nothing
-        // reserved this stock in the meantime. Re-checking right before the only statement that
-        // actually decrements QuantityOnHand is what keeps the "insufficient stock" error truthful.
-        Product? product = await FindProductAsync(connection, order.Sku);
-        if (product == null || product.QuantityOnHand < order.Quantity)
+        // Claiming the order (Pending -> Confirmed) and decrementing stock must both happen or
+        // neither: a single transaction. The transaction's FIRST statement is a write, so it takes
+        // the write lock straight away — no SELECT-then-UPDATE lock upgrade, hence none of SQLite's
+        // classic writer-upgrade deadlock — while PRAGMA busy_timeout (set in OpenConnectionAsync)
+        // makes a losing concurrent writer WAIT for our commit instead of throwing "database is locked".
+        await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
+
+        string confirmedAt = DateTime.UtcNow.ToString("O");
+
+        // Claim the order FIRST, conditionally on it still being Pending. This WHERE clause, not the
+        // pre-read above, is what serializes two simultaneous confirmations of the same order down
+        // to exactly one winner: the loser sees rows-affected 0 and bails out having touched nothing.
+        int orderRows;
+        await using (SqliteCommand claimOrder = connection.CreateCommand())
         {
+            claimOrder.Transaction = transaction;
+            claimOrder.CommandText = "UPDATE Orders SET Status = 'Confirmed', ConfirmedAt = $confirmedAt WHERE OrderId = $orderId AND Status = 'Pending'";
+            claimOrder.Parameters.AddWithValue("$confirmedAt", confirmedAt);
+            claimOrder.Parameters.AddWithValue("$orderId", order.OrderId);
+            orderRows = await claimOrder.ExecuteNonQueryAsync();
+        }
+
+        if (orderRows == 0)
+        {
+            // A concurrent ConfirmOrder/CancelOrder moved this order between our pre-read and now.
+            await transaction.RollbackAsync();
+            Order? latest = await FindOrderAsync(connection, orderId);
+            return JsonSerializer.Serialize(new
+            {
+                error = $"Order cannot be confirmed: current status is '{latest?.Status ?? "Unknown"}', not 'Pending'",
+                orderId,
+                status = latest?.Status
+            }, JsonOptions);
+        }
+
+        // Decrement stock, guarded so it can NEVER go negative: WHERE QuantityOnHand >= qty means a
+        // concurrent confirmation that already took the last specimens leaves rows-affected at 0
+        // here, and we roll the whole thing back (undoing the claim above too) rather than commit a
+        // sale of stock that no longer exists. This guard, not the pre-quote check, is the truthful one.
+        int stockRows;
+        await using (SqliteCommand updateStock = connection.CreateCommand())
+        {
+            updateStock.Transaction = transaction;
+            updateStock.CommandText = "UPDATE Products SET QuantityOnHand = QuantityOnHand - $qty WHERE Sku = $sku AND QuantityOnHand >= $qty";
+            updateStock.Parameters.AddWithValue("$qty", order.Quantity);
+            updateStock.Parameters.AddWithValue("$sku", order.Sku);
+            stockRows = await updateStock.ExecuteNonQueryAsync();
+        }
+
+        if (stockRows == 0)
+        {
+            await transaction.RollbackAsync();
+            Product? current = await FindProductAsync(connection, order.Sku);
             return JsonSerializer.Serialize(new
             {
                 error = "Stock is no longer sufficient to confirm this order",
                 orderId,
                 requestedQuantity = order.Quantity,
-                availableQuantity = product?.QuantityOnHand ?? 0
+                availableQuantity = current?.QuantityOnHand ?? 0
             }, JsonOptions);
         }
 
-        string confirmedAt = DateTime.UtcNow.ToString("O");
-
-        await using (SqliteCommand updateStock = connection.CreateCommand())
+        // Read the remaining stock back inside the SAME transaction, so the figure reported is the
+        // one we just wrote — not the possibly-stale pre-read value.
+        long remainingStock;
+        await using (SqliteCommand readStock = connection.CreateCommand())
         {
-            updateStock.CommandText = "UPDATE Products SET QuantityOnHand = QuantityOnHand - $qty WHERE Sku = $sku";
-            updateStock.Parameters.AddWithValue("$qty", order.Quantity);
-            updateStock.Parameters.AddWithValue("$sku", order.Sku);
-            await updateStock.ExecuteNonQueryAsync();
+            readStock.Transaction = transaction;
+            readStock.CommandText = "SELECT QuantityOnHand FROM Products WHERE Sku = $sku";
+            readStock.Parameters.AddWithValue("$sku", order.Sku);
+            remainingStock = Convert.ToInt64(await readStock.ExecuteScalarAsync());
         }
 
-        await using (SqliteCommand updateOrder = connection.CreateCommand())
-        {
-            updateOrder.CommandText = "UPDATE Orders SET Status = 'Confirmed', ConfirmedAt = $confirmedAt WHERE OrderId = $orderId";
-            updateOrder.Parameters.AddWithValue("$confirmedAt", confirmedAt);
-            updateOrder.Parameters.AddWithValue("$orderId", orderId);
-            await updateOrder.ExecuteNonQueryAsync();
-        }
+        await transaction.CommitAsync();
 
         toolLogger.LogInformation("Confirmed order {OrderId}: stock of {Sku} decremented by {Quantity}", orderId, order.Sku, order.Quantity);
 
@@ -412,7 +477,7 @@ public class InventoryTool : MorganaTool
             quantity = order.Quantity,
             status = "Confirmed",
             confirmedAt,
-            remainingStock = product.QuantityOnHand - order.Quantity
+            remainingStock
         }, JsonOptions);
     }
 
@@ -424,8 +489,7 @@ public class InventoryTool : MorganaTool
     /// <returns>JSON object with order status and timestamps.</returns>
     public async Task<string> GetOrderStatus(string orderId, string sealWord)
     {
-        await using SqliteConnection connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync();
+        await using SqliteConnection connection = await OpenConnectionAsync();
 
         // Same combined not-found/wrong-sealWord check as ConfirmOrder, same reason: a distinct
         // "wrong seal word" message would confirm the orderId is real even when it isn't the
@@ -456,8 +520,7 @@ public class InventoryTool : MorganaTool
     /// <returns>JSON object describing the cancellation outcome.</returns>
     public async Task<string> CancelOrder(string orderId, string sealWord, string? reason = null)
     {
-        await using SqliteConnection connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync();
+        await using SqliteConnection connection = await OpenConnectionAsync();
 
         // Same combined not-found/wrong-sealWord check as ConfirmOrder/GetOrderStatus, same reason.
         Order? order = await FindOrderAsync(connection, orderId);
@@ -467,35 +530,72 @@ public class InventoryTool : MorganaTool
         if (order.Status == "Cancelled")
             return JsonSerializer.Serialize(new { error = "Order is already cancelled", orderId }, JsonOptions);
 
+        // Cancel and (if needed) restore stock as one atomic unit, first statement a write so we
+        // take the write lock up front (no lock-upgrade deadlock; busy_timeout makes a concurrent
+        // writer wait). Crucially the PREVIOUS status is decided by WHICH conditional UPDATE wins a
+        // row, not by the pre-read above: that read can be stale, but only one of the two guarded
+        // UPDATEs below can ever affect a row for a given order, so exactly one caller restores
+        // stock for a given Confirmed->Cancelled transition — no double credit under concurrent cancels.
+        await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
+
         string cancelledAt = DateTime.UtcNow.ToString("O");
-        // A Pending order never reached ConfirmOrder, so it never decremented stock in the first
-        // place — restoring it here would double-credit the greenhouse. Only a Confirmed order
-        // actually needs its stock given back.
-        bool stockRestored = order.Status == "Confirmed";
+
+        // Attempt 1: claim it as a Confirmed order. Winning here (rows == 1) is the ONLY path that
+        // restores stock, and only one caller can ever win it.
+        int confirmedRows;
+        await using (SqliteCommand cancelConfirmed = connection.CreateCommand())
+        {
+            cancelConfirmed.Transaction = transaction;
+            cancelConfirmed.CommandText = "UPDATE Orders SET Status = 'Cancelled', CancelledAt = $cancelledAt WHERE OrderId = $orderId AND Status = 'Confirmed'";
+            cancelConfirmed.Parameters.AddWithValue("$cancelledAt", cancelledAt);
+            cancelConfirmed.Parameters.AddWithValue("$orderId", order.OrderId);
+            confirmedRows = await cancelConfirmed.ExecuteNonQueryAsync();
+        }
+
+        int pendingRows = 0;
+        if (confirmedRows == 0)
+        {
+            // Attempt 2: it wasn't Confirmed — try to cancel it as Pending. A Pending order never
+            // reached ConfirmOrder, so it never decremented stock: this path restores nothing.
+            await using SqliteCommand cancelPending = connection.CreateCommand();
+            cancelPending.Transaction = transaction;
+            cancelPending.CommandText = "UPDATE Orders SET Status = 'Cancelled', CancelledAt = $cancelledAt WHERE OrderId = $orderId AND Status = 'Pending'";
+            cancelPending.Parameters.AddWithValue("$cancelledAt", cancelledAt);
+            cancelPending.Parameters.AddWithValue("$orderId", order.OrderId);
+            pendingRows = await cancelPending.ExecuteNonQueryAsync();
+        }
+
+        if (confirmedRows == 0 && pendingRows == 0)
+        {
+            // Neither claim won a row: a concurrent CancelOrder already cancelled it between our
+            // pre-read and now (Cancelled is the only other status this order could be in).
+            await transaction.RollbackAsync();
+            return JsonSerializer.Serialize(new { error = "Order is already cancelled", orderId }, JsonOptions);
+        }
+
+        // stockRestored is derived from which UPDATE actually won a row — atomic with the claim,
+        // never from the stale pre-read.
+        bool stockRestored = confirmedRows == 1;
+        string previousStatus = stockRestored ? "Confirmed" : "Pending";
 
         if (stockRestored)
         {
             await using SqliteCommand restoreStock = connection.CreateCommand();
+            restoreStock.Transaction = transaction;
             restoreStock.CommandText = "UPDATE Products SET QuantityOnHand = QuantityOnHand + $qty WHERE Sku = $sku";
             restoreStock.Parameters.AddWithValue("$qty", order.Quantity);
             restoreStock.Parameters.AddWithValue("$sku", order.Sku);
             await restoreStock.ExecuteNonQueryAsync();
         }
 
-        await using (SqliteCommand updateOrder = connection.CreateCommand())
-        {
-            updateOrder.CommandText = "UPDATE Orders SET Status = 'Cancelled', CancelledAt = $cancelledAt WHERE OrderId = $orderId";
-            updateOrder.Parameters.AddWithValue("$cancelledAt", cancelledAt);
-            updateOrder.Parameters.AddWithValue("$orderId", orderId);
-            await updateOrder.ExecuteNonQueryAsync();
-        }
+        await transaction.CommitAsync();
 
-        toolLogger.LogInformation("Cancelled order {OrderId} (was {PreviousStatus}, stock restored: {StockRestored})", orderId, order.Status, stockRestored);
+        toolLogger.LogInformation("Cancelled order {OrderId} (was {PreviousStatus}, stock restored: {StockRestored})", orderId, previousStatus, stockRestored);
 
         return JsonSerializer.Serialize(new
         {
             orderId,
-            previousStatus = order.Status,
+            previousStatus,
             status = "Cancelled",
             cancelledAt,
             stockRestored,
@@ -516,8 +616,7 @@ public class InventoryTool : MorganaTool
         // Akka, not by whatever string a prompt-injected message might try to pass as an argument.
         ToolContext ctx = getToolContext();
 
-        await using SqliteConnection connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync();
+        await using SqliteConnection connection = await OpenConnectionAsync();
 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE ConversationId = $conversationId ORDER BY CreatedAt DESC";
@@ -558,8 +657,7 @@ public class InventoryTool : MorganaTool
         // unlike GetOrders()'s ConversationId, it is not a trust boundary, which is exactly why
         // this tool deliberately stops at a summary (no sealWord, no ability to act on any
         // of these orders) rather than granting the same access GetOrderStatus/ConfirmOrder do.
-        await using SqliteConnection connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync();
+        await using SqliteConnection connection = await OpenConnectionAsync();
 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE UserId = $userId COLLATE NOCASE ORDER BY CreatedAt DESC";

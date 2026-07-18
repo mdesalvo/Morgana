@@ -19,15 +19,12 @@ A billing FAQ agent runs on the efficient model while a contract-analysis agent 
 
 ### 🔄 Changed
 - **BREAKING — config schema**: `Morgana:LLM:{Provider}` drops the singular `Model`/`DeploymentName` and the provider-level `MagicDust` section in favor of the two-tier `Tiers` map (`Efficiency`/`Performance`) with per-model pricing (existing User Secrets/env deployments must migrate). Local single-model deployments (e.g. Ollama) now declare a single `Efficiency` entry.
-- Dust roles now include the tier (`Morgana (Billing/Efficiency)`), giving the dust ledger and `morgana.dust.consumed` OTel counter per-tier attribution
-- **Shipped `MagicDust` defaults recalibrated** for the two-tier world: values track official provider pricing assuming a dual deploy of Haiku 4.5/Sonnet 5 (Anthropic) and gpt-4o-mini/gpt-4o (OpenAI, AzureOpenAI), with a usability floor guaranteeing at least 10 full-length `Performance` turns per conversation budget — so an extreme real-world price gap (gpt-4o-mini→gpt-4o is ~17×) can't burn the shared budget in a couple of turns. Formula documented in `Records.MagicDustPricing`
 - Updated `Microsoft.Agents.AI` dependency to 1.13.0
 - Updated `ModelContextProtocol.Core` dependency to 1.4.1
 - Update `OllamaSharp` to 5.4.26
 
 ### 🐛 Fixed
 - Active quick replies on the last turn (e.g. a farewell prompt) could show up disabled after a page refresh/resume
-- `MorganaAgentAdapter` resolved a native tool's implementation via `Type.GetMethod(name)`, which throws `AmbiguousMatchException` the instant a `MorganaTool` subclass declares two methods sharing that name (e.g. an intentional `GetOrders()`/`GetOrders(string userId)` overload pair)
 
 ### 🚀 Future Enablement
 - **Per-intent LLM economics** — with tiers declared per agent and dust attributed per agent+tier, a deployment can now see **which domain costs what and rebalance** (e.g: promote a struggling agent, demote an overserved one) by touching just one attribute and one config entry
