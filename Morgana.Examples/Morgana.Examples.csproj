@@ -31,7 +31,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="agents.json" />
-    <EmbeddedResource Include="Data\InventorySeed.db" />
+    <EmbeddedResource Include="Data\Inventory.db" />
   </ItemGroup>
 
   <ItemGroup>

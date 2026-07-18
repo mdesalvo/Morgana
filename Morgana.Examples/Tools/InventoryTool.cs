@@ -34,35 +34,19 @@ public class InventoryTool : MorganaTool
     private static readonly object InitLock = new();
     private static bool _databaseReady;
 
-    /// <summary>
-    /// Name of the environment variable Morgana's own conversation persistence binds
-    /// <c>Morgana:ConversationPersistence:StoragePath</c> from (see docker-compose.yml:
-    /// <c>Morgana__ConversationPersistence__StoragePath=/app/data</c>, backed by the
-    /// <c>morgana-data</c> volume). InventoryTool reads the same variable directly — it has
-    /// no IConfiguration of its own (its constructor signature is fixed by
-    /// MorganaAgentAdapter's reflection-based instantiation) — so inventory.db lands in the
-    /// exact same durable volume as the per-conversation morgana-*.db files, and survives
-    /// container recreation the same way they do. Falls back to a local folder for
-    /// non-Docker/dev runs where that variable is not set.
-    /// </summary>
-    private const string StoragePathEnvVar = "Morgana__ConversationPersistence__StoragePath";
-
     private static string StorageDirectory
     {
         get
         {
-            string? configured = Environment.GetEnvironmentVariable(StoragePathEnvVar);
-            return string.IsNullOrWhiteSpace(configured)
-                ? Path.Combine(AppContext.BaseDirectory, "Data")
-                : configured;
+            string? storageDirectory = Environment.GetEnvironmentVariable("Morgana__ConversationPersistence__StoragePath");
+            return string.IsNullOrWhiteSpace(storageDirectory)
+                ? AppContext.BaseDirectory
+                : storageDirectory;
         }
     }
 
     private static string DbPath => Path.Combine(StorageDirectory, "inventory.db");
     private static string ConnectionString => $"Data Source={DbPath}";
-
-    /// <summary>Fully-qualified name of the embedded seed database (see .csproj EmbeddedResource).</summary>
-    private const string SeedResourceName = "Morgana.Examples.Data.InventorySeed.db";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -105,8 +89,8 @@ public class InventoryTool : MorganaTool
                 // here instead of silently overwriting whatever the winner just wrote — the lock
                 // above already prevents that within one process, this is the belt-and-braces for
                 // "what if a second process/container did the same thing at the same instant".
-                using Stream seedStream = typeof(InventoryTool).Assembly.GetManifestResourceStream(SeedResourceName)
-                    ?? throw new InvalidOperationException($"Embedded seed database '{SeedResourceName}' not found.");
+                using Stream seedStream = typeof(InventoryTool).Assembly.GetManifestResourceStream("Morgana.Examples.Data.Inventory.db")
+                    ?? throw new InvalidOperationException($"Embedded seed database 'Morgana.Examples.Data.Inventory.db' not found.");
                 using FileStream fileStream = new FileStream(DbPath, FileMode.CreateNew, FileAccess.Write);
                 seedStream.CopyTo(fileStream);
             }
@@ -524,15 +508,6 @@ public class InventoryTool : MorganaTool
     /// (never exposed to the LLM, never spoofable via a context variable) — no sealWord needed
     /// since the caller is, by construction, the same conversation that created them.
     /// </summary>
-    /// <remarks>
-    /// <strong>Deliberately overloaded with <see cref="GetOrders(string)"/>:</strong> both share
-    /// the literal C# method name "GetOrders" on purpose, as a live probe of Morgana's
-    /// reflection-based tool binding (<c>MorganaAgentAdapter.RegisterToolsInAdapter</c> resolves
-    /// a declared tool via <c>Type.GetMethod(name)</c>, the single-argument overload — which
-    /// throws <see cref="AmbiguousMatchException"/> the moment two methods share a name,
-    /// regardless of arity). Only THIS overload is declared in agents.json; the other exists
-    /// purely to break that resolution and see what actually happens at agent creation time.
-    /// </remarks>
     /// <returns>JSON array of this conversation's orders (no sealWord included).</returns>
     public async Task<string> GetOrders()
     {
@@ -577,11 +552,11 @@ public class InventoryTool : MorganaTool
     /// </summary>
     /// <param name="userId">Identifier of the customer whose order history to retrieve (retrieved from shared context).</param>
     /// <returns>JSON array of that customer's orders across every conversation (no sealWord included).</returns>
-    public async Task<string> GetOrders(string userId)
+    public async Task<string> GetOrderHistory(string userId)
     {
         // userId is a shared context variable the LLM itself can write via SetContextVariable —
         // unlike GetOrders()'s ConversationId, it is not a trust boundary, which is exactly why
-        // this overload deliberately stops at a summary (no sealWord, no ability to act on any
+        // this tool deliberately stops at a summary (no sealWord, no ability to act on any
         // of these orders) rather than granting the same access GetOrderStatus/ConfirmOrder do.
         await using SqliteConnection connection = new SqliteConnection(ConnectionString);
         await connection.OpenAsync();
