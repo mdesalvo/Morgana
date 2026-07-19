@@ -42,6 +42,11 @@
 **/*.db-shm
 **/*.db-wal
 
+# Exception: Morgana.Examples ships a committed seed database that is embedded as a
+# resource in the plugin DLL (see EmbeddedResource in Morgana.Examples.csproj), not a
+# runtime-generated conversation/inventory DB — it must survive the *.db exclusion above.
+!Morgana.Examples/Data/Inventory.db
+
 # ==============================================================================
 # ENVIRONMENT & SECRETS
 # ==============================================================================
