@@ -4,11 +4,12 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
+using static Morgana.AI.Records;
 
 namespace Morgana.Examples.Agents;
 
 [HandlesIntent("contract")]
-[RequiresLLMTier(Morgana.AI.Records.LLMTier.Efficiency)]
+[RequiresLLMTier(LLMTier.Efficiency)]
 public class ContractAgent : MorganaAgent
 {
     public ContractAgent(

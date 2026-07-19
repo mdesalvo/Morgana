@@ -1,15 +1,15 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
+using static Morgana.AI.Records;
 
 namespace Morgana.Examples.Agents;
 
 [HandlesIntent("inventory")]
-[RequiresLLMTier(Records.LLMTier.Performance)]
+[RequiresLLMTier(LLMTier.Performance)]
 public class InventoryAgent : MorganaAgent
 {
     public InventoryAgent(
