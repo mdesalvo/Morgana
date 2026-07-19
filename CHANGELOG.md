@@ -14,8 +14,8 @@ A billing FAQ agent runs on the efficient model while a contract-analysis agent 
 - **`[RequiresLLMTier]` attribute** — mandatory on every `MorganaAgent`, declares the `LLMTier` (`Efficiency`/`Performance`) the agent runs on. Resolved once at agent creation.
 - **Per-provider tier catalog** — `Morgana:LLM:{Provider}:Tiers` is a JSON object keyed by tier name, each entry carrying the model/deployment `ModelId` and its own `MagicDust` pricing.
 - **`ILLMTierValidationService`** (default `RequiresLLMTierValidationService`) — new extension point validating at startup that every discovered agent declares `[RequiresLLMTier]` and that its tier exists in the active provider's catalog. No cross-tier fallback: an agent whose declared tier is not configured fails startup, full stop
-- Support **Azure AI Foundry v1** endpoints in AzureOpenAI provider
 - **`InventoryAgent`** (4th example agent in `Morgana.Examples`, `Performance` tier) — the first *dispositive* domain agent (Billing/Contract/Monkeys are read-only informational agents): a greenhouse/nursery inventory backed by its own standalone SQLite database, deployed once from an embedded seed and independent of Morgana's per-conversation persistence, so stock and orders persist across restarts and across conversations.
+- Support **Azure AI Foundry v1** endpoints in AzureOpenAI provider
 
 ### 🔄 Changed
 - **BREAKING — config schema**: `Morgana:LLM:{Provider}` drops the singular `Model`/`DeploymentName` and the provider-level `MagicDust` section in favor of the two-tier `Tiers` map (`Efficiency`/`Performance`) with per-model pricing (existing User Secrets/env deployments must migrate). Local single-model deployments (e.g. Ollama) now declare a single `Efficiency` entry.
