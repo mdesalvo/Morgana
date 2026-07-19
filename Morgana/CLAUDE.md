@@ -95,6 +95,7 @@ ConversationManagerActor          ← entry point, lifecycle, channel metadata p
         └── RouterActor           ← intent→agent routing
               ├── BillingAgent
               ├── ContractAgent
+              ├── InventoryAgent
               └── MonkeyAgent
 ```
 
