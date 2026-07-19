@@ -8,6 +8,16 @@ Morgana is a modern conversational AI framework built on **.NET 10**, **Akka.NET
 
 **Key value proposition**: domain experts model agents declaratively (prompt + tools in JSON, thin C# class), package them as plugin DLLs, and Morgana handles orchestration, streaming, persistence, guard rails, channel adaptation and observability automatically.
 
+## Design Philosophy — agents are prose, not code
+
+Morgana is a stable framework for *impersonating domain agents*; the framework code (Akka pipeline, tool loop, intent routing, channel adaptation) is not where day-to-day work happens. A domain agent *is* its prompt configuration — its entry in `agents.json` (Target/Instructions/Personality/Formatting + tool contracts) read together with the global policies in `morgana.json`. Building or tuning an agent is therefore ~95% authoring **clear, non-contradictory, precise prose**: every sentence is dispositive — an instruction an LLM executes, not documentation.
+
+The characteristic defect is not an exception, it is a **logical contradiction** between two instructions read together — and these are typically **emergent and non-local**: one clause in the agent vs one in the global policies (e.g. the interplay of `#INT#` × ConversationClosure × QuickReplyEscapeOptions × ToolGrounding). Prefer structural fixes over point patches: state a unifying doctrine high in the policy order (low `Priority`, so it renders first among Critical) and let the specific policies read as instances of it — this shrinks the contradiction surface instead of chasing symptoms.
+
+Two things *outside* the prose can still sabotage a correct prompt, and are worth ruling in/out first because they are invisible from `agents.json`:
+- **Model tier** — a dense, layered prompt needs a capable model; the `Efficiency` die (e.g. Haiku) amplifies contradiction-following failures where `Performance` would not.
+- **Rendering / channel code** — e.g. a rich-card leaf rendering raw `**` instead of bold was a Razor bug in Cauldron, unfixable from any prompt.
+
 ## Solution Structure
 
 ```
@@ -238,7 +248,7 @@ Two-layer prompt composition in `MorganaAgentAdapter.ComposeAgentInstructions()`
 2. **Domain layer** (from `agents.json`): Target + Personality + Instructions + Formatting
 
 Framework prompts (`morgana.json`):
-- **Morgana**: base personality, global policies (P0-P5 Critical: ContextHandling, InteractiveToken, ConversationClosure, ToolUsage, ToolGrounding, QuickReplyEscapeOptions; P0-P3 Operational: ToolParameterContextGuidance, ToolParameterRequestGuidance, RichCardUsage, RichCardAndQuickRepliesCombined)
+- **Morgana**: base personality, global policies (P0-P8 Critical: ContextHandling, QuickReplyDoctrine, InteractiveToken, ConversationClosure, SessionContinuation, ToolUsage, ToolGrounding, QuickReplyEscapeOptions, MandatoryTextualResponse; P0-P3 Operational: ToolParameterContextGuidance, ToolParameterRequestGuidance, RichCardUsage, RichCardAndQuickRepliesCombined). The `QuickReplyDoctrine` (P1) is the unifying master rule the other quick-reply policies instantiate — see Design Philosophy
 - **Classifier**: JSON response `{intent, confidence}` with `((formattedIntents))` placeholder
 - **Guard**: JSON response `{compliant, violation}` with ProfanityTerms list
 - **Presentation**: JSON intro message with quickReplies, FallbackMessage, NoAgentsMessage
