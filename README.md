@@ -141,6 +141,7 @@ Agents in Morgana are **domain specialists** that self-register through **declar
 
 ```csharp
 [HandlesIntent("billing")]
+[RequiresLLMTier(LLMTier.Efficiency)]
 public class BillingAgent : MorganaAgent { ... }
 ```
 
@@ -150,12 +151,14 @@ Agents express their capabilities through **tools**, which can be native impleme
 
 ```csharp
 [ProvidesToolForIntent("billing")]
+[RequiresLLMTier(LLMTier.Efficiency)]
 public class BillingTool : MorganaTool 
 {
     public async Task<string> GetInvoices(string userId, int count) { ... }
 }
 
 [HandlesIntent("monkeys")]
+[RequiresLLMTier(LLMTier.Efficiency)]
 [UsesMCPServer("https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/")]
 public class MonkeyAgent : MorganaAgent { ... }  // Acquires tools at runtime!
 ```

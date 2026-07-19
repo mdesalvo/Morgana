@@ -345,7 +345,7 @@
         <span>.NET 10</span>
         <span>Akka.NET</span>
         <span>Microsoft.Agents.AI</span>
-        <span>Model Context Protocol</span>
+        <span>OpenTelemetry</span>
       </div>
     </div>
   
@@ -420,6 +420,7 @@
           <tr><td>IAgentConfigurationService</td><td>JsonAgentConfigurationService</td><td>Agent discovery</td></tr>
           <tr><td>IPromptResolverService</td><td>EmbeddedResourcePromptResolverService</td><td>System &amp; Domain prompt loading</td></tr>
           <tr><td>ISignalRBridgeService</td><td>SignalRBridgeService</td><td>Real-time frontend communication</td></tr>
+          <tr><td>ILLMTierValidationService</td><td>RequiresLLMTierValidationService</td><td>Startup check that every discovered agent declares <code>[RequiresLLMTier]</code> and that the declared die (<code>Efficiency</code>/<code>Performance</code>) exists in the active provider's <code>Tiers</code> map</td></tr>
         </tbody>
       </table>
     
@@ -592,28 +593,31 @@
       <h3>Agent Development Workflow</h3>
       <ul>
         <li><strong>1. Reference</strong> the <code>Morgana.AI</code> NuGet package in your project</li>
-        <li><strong>2. Model</strong> your agents by inheriting <code>MorganaAgent</code> and decorating with <code>[HandlesIntent("...")]</code></li>
+        <li><strong>2. Model</strong> your agents by inheriting <code>MorganaAgent</code> and decorating with <code>[HandlesIntent("...")]</code> <strong>and</strong> <code>[RequiresLLMTier(...)]</code> (mandatory &mdash; declares whether the agent runs on the <code>Efficiency</code> or <code>Performance</code> die; validated at startup against the active provider's <code>Tiers</code> map)</li>
         <li><strong>3. Define tools</strong> by inheriting <code>MorganaTool</code> with <code>[ProvidesToolForIntent("...")]</code>, or point to an MCP server with <code>[UsesMCPServer("...")]</code></li>
         <li><strong>4. Write prompts</strong> in an <code>agents.json</code> file compiled as embedded resource</li>
         <li><strong>5. Build</strong> the DLL and <strong>drop it</strong> into Morgana's <code>plugins/</code> directory</li>
       </ul>
     
       <div class="code-block"><span class="attr">[HandlesIntent("billing")]</span>
+    <span class="attr">[RequiresLLMTier(Records.LLMTier.Efficiency)]</span>
     <span class="keyword">public class</span> BillingAgent : MorganaAgent { ... }
-    
+
     <span class="attr">[ProvidesToolForIntent("billing")]</span>
+    <span class="attr">[RequiresLLMTier(Records.LLMTier.Efficiency)]</span>
     <span class="keyword">public class</span> BillingTool : MorganaTool
     {
         <span class="keyword">public async</span> Task&lt;string&gt; GetInvoices(string userId, int count) { ... }
     }
-    
+
     <span class="comment">// Or acquire tools dynamically from an MCP server:</span>
     <span class="attr">[HandlesIntent("monkeys")]</span>
+    <span class="attr">[RequiresLLMTier(Records.LLMTier.Efficiency)]</span>
     <span class="attr">[UsesMCPServer("https://func-monkeymcp.azurewebsites.net/")]</span>
     <span class="keyword">public class</span> MonkeyAgent : MorganaAgent { ... }</div>
-    
+
       <div class="info-box">
-        <strong>Fail-fast validation:</strong> At startup Morgana validates bidirectional consistency between declared intents and classifier configuration. Mismatches are caught immediately, not in production.
+        <strong>Fail-fast validation:</strong> At startup Morgana validates bidirectional consistency between declared intents and classifier configuration, <strong>and</strong> that every agent's <code>[RequiresLLMTier]</code> declaration matches a tier actually configured for the active LLM provider (via <code>ILLMTierValidationService</code>). Mismatches are caught immediately, not in production.
       </div>
     
       <div class="page-footer">
