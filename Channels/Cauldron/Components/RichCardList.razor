@@ -7,7 +7,7 @@
         <ul class="rich-card-list rich-card-list-bullet">
             @foreach (string item in Component.Items)
             {
-                <li>@item</li>
+                <li>@MarkdownRendererService.ToInlineHtml(item)</li>
             }
         </ul>
         break;
@@ -17,7 +17,7 @@
         <ol class="rich-card-list rich-card-list-numbered">
             @foreach (string item in Component.Items)
             {
-                <li>@item</li>
+                <li>@MarkdownRendererService.ToInlineHtml(item)</li>
             }
         </ol>
         break;
@@ -28,7 +28,7 @@
         <div class="rich-card-list rich-card-list-plain">
             @foreach (string item in Component.Items)
             {
-                <div class="rich-card-list-item">@item</div>
+                <div class="rich-card-list-item">@MarkdownRendererService.ToInlineHtml(item)</div>
             }
         </div>
         break;

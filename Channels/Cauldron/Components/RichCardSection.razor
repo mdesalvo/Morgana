@@ -3,10 +3,10 @@
 <div class="rich-card-section rich-card-section-depth-@Depth">
     @* Section header *@
     <div class="rich-card-section-header">
-        <h4 class="rich-card-section-title">@Component.Title</h4>
+        <h4 class="rich-card-section-title">@MarkdownRendererService.ToInlineHtml(Component.Title)</h4>
         @if (!string.IsNullOrWhiteSpace(Component.Subtitle))
         {
-            <p class="rich-card-section-subtitle">@Component.Subtitle</p>
+            <p class="rich-card-section-subtitle">@MarkdownRendererService.ToInlineHtml(Component.Subtitle)</p>
         }
     </div>
 

@@ -4,8 +4,8 @@
     @foreach (GridItem item in Component.Items)
     {
         <div class="rich-card-grid-item">
-            <div class="rich-card-grid-key">@item.Key</div>
-            <div class="rich-card-grid-value">@item.Value</div>
+            <div class="rich-card-grid-key">@MarkdownRendererService.ToInlineHtml(item.Key)</div>
+            <div class="rich-card-grid-value">@MarkdownRendererService.ToInlineHtml(item.Value)</div>
         </div>
     }
 </div>

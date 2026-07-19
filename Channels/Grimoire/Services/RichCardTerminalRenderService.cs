@@ -36,12 +36,13 @@ namespace Grimoire.Services;
 ///   <item><c>image</c> → <c>[image: alt] (url)</c> plus an optional dim caption (no OSC 8, no
 ///     ASCII art — the frozen low-effort decision).</item>
 /// </list>
-/// As Cauldron's <c>SanitizeRichCard</c> runs every text field through <c>Markdown.ToPlainText</c>
-/// before rendering, this renderer does the same: card fields are plain text, never inline markdown.
+/// A terminal cannot show HTML, so every card text field is flattened through
+/// <c>Markdown.ToPlainText</c> before rendering: card fields become plain text here, never inline
+/// markdown (Cauldron, by contrast, renders that same markdown as real HTML formatting in the browser).
 /// </remarks>
 public static class RichCardTerminalRenderService
 {
-    /// <summary>Shared default pipeline — same configuration Cauldron's <c>MarkdownRendererService</c> uses for <c>ToPlainText</c>.</summary>
+    /// <summary>Shared default pipeline — same base configuration as Cauldron's <c>MarkdownRendererService</c>, here feeding <c>Markdown.ToPlainText</c> to flatten card text for the terminal.</summary>
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().Build();
 
     /// <summary>Body prose foreground — Cauldron's <c>#d0d0d0</c> neutral, distinct from speaker-tinted chat prose.</summary>
@@ -392,7 +393,7 @@ public static class RichCardTerminalRenderService
     private static CardLine Blank()
         => new CardLine([], IsDivider: false);
 
-    /// <summary>Strips inline markdown to plain text (mirroring Cauldron's <c>SanitizeRichCard</c>), resolves
+    /// <summary>Strips inline markdown to plain text (a terminal cannot render it as HTML the way Cauldron does), resolves
     /// emoji shortcodes (<c>:white_check_mark:</c> → ✅) to real glyphs, then normalises emoji presentation so
     /// measured width matches what the terminal draws. Resolving shortcodes here — the single chokepoint every
     /// card builder funnels through — is what keeps them out of the rendered output: <see cref="Markup"/> does

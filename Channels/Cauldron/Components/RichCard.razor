@@ -3,10 +3,10 @@
 <div class="rich-card">
     @* Card header *@
     <div class="rich-card-header">
-        <h3 class="rich-card-title">@Card.Title</h3>
+        <h3 class="rich-card-title">@MarkdownRendererService.ToInlineHtml(Card!.Title)</h3>
         @if (!string.IsNullOrWhiteSpace(Card.Subtitle))
         {
-            <p class="rich-card-subtitle">@Card.Subtitle</p>
+            <p class="rich-card-subtitle">@MarkdownRendererService.ToInlineHtml(Card.Subtitle)</p>
         }
     </div>
 
@@ -21,19 +21,10 @@
 
 @code {
     /// <summary>
-    /// The rich card data to render.
+    /// The rich card data to render. Leaf components render inline Markdown in their text
+    /// fields via <see cref="MarkdownRendererService.ToInlineHtml"/>, so the card is passed
+    /// through untouched — no pre-sanitization step that would strip that Markdown away.
     /// </summary>
     [Parameter]
     public Morgana.Contracts.RichCard? Card { get; set; }
-
-    private bool _sanitized;
-
-    protected override void OnParametersSet()
-    {
-        if (Card != null && !_sanitized)
-        {
-            Card = MarkdownRendererService.SanitizeRichCard(Card);
-            _sanitized = true;
-        }
-    }
 }

@@ -9,7 +9,7 @@
     
     @if (!string.IsNullOrEmpty(Component.Caption))
     {
-        <p class="rich-card-image-caption">@Component.Caption</p>
+        <p class="rich-card-image-caption">@MarkdownRendererService.ToInlineHtml(Component.Caption)</p>
     }
 </div>
 
