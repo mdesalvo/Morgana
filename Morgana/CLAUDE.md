@@ -16,7 +16,7 @@ The characteristic defect is not an exception, it is a **logical contradiction**
 
 Two things *outside* the prose can still sabotage a correct prompt, and are worth ruling in/out first because they are invisible from `agents.json`:
 - **Model tier** — a dense, layered prompt needs a capable model; the `Efficiency` die (e.g. Haiku) amplifies contradiction-following failures where `Performance` would not.
-- **Rendering / channel code** — e.g. a rich-card leaf rendering raw `**` instead of bold was a Razor bug in Cauldron, unfixable from any prompt.
+- **Rendering / channel code** — e.g. a rich-card leaf rendering raw `**` instead of bold is a Razor bug in Cauldron, unfixable from any prompt.
 
 ## Solution Structure
 
