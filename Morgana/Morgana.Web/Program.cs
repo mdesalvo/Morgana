@@ -1,7 +1,6 @@
 using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
-using Microsoft.Extensions.AI;
 using Morgana.AI;
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;

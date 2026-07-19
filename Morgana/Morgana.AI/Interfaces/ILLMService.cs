@@ -1,5 +1,4 @@
 using Microsoft.Extensions.AI;
-using Morgana.AI;
 
 namespace Morgana.AI.Interfaces;
 

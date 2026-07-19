@@ -352,16 +352,17 @@ public static class Records
     /// reads (real cost ~0.1×) and under-count 1h cache writes (~2×). The two weights below
     /// let the limiter track real cache economics; defaults are 1.0 (cache-unaware no-op, so
     /// behaviour is unchanged unless a deployment configures them).</para>
-    /// <para><strong>Calibration of the shipped appsettings.json values:</strong>
-    /// <c>OutputTokensPerDustUnit = Max(realPriceDerived, safetyFloor)</c>, where
-    /// <c>realPriceDerived</c> tracks the tier's actual published per-token price (anchored to
-    /// <c>Efficiency</c>'s own real pricing so the dust currency stays meaningful) and
-    /// <c>safetyFloor = MaxOutputTokens × 10 / BudgetPerConversation</c> guarantees at least 10
-    /// full-length turns before <c>BudgetPerConversation</c> — shared across every tier and
-    /// provider a conversation might touch — runs out. The floor only bites when a tier's real
-    /// price gap over its own <c>Efficiency</c> sibling is extreme (e.g. gpt-4o-mini→gpt-4o is
-    /// ~17×); <c>InputTokensPerDustUnit</c> is that same output value scaled by the provider's
-    /// real input:output price ratio, which is never itself the source of imbalance.</para>
+    /// <para><strong>Calibration of the shipped appsettings.json values:</strong> both axes
+    /// are derived directly from the tier's actual published per-token price (anchored to
+    /// <c>Efficiency</c>'s own real pricing so the dust currency stays meaningful) — no
+    /// artificial floor. There is deliberately no formula here that guarantees a minimum number
+    /// of conversational turns per <c>BudgetPerConversation</c>: how many LLM calls a single
+    /// user-visible turn costs is a property of the AGENT (a tool-heavy, dispositive agent like
+    /// Inventory can chain several calls per turn; a single-shot agent costs one), not of the
+    /// provider/tier this record lives under — so no per-tier constant can safely encode it.
+    /// When calibrating a tier, sanity-check <c>BudgetPerConversation</c> against your heaviest
+    /// tool-calling agent's REAL average calls-per-turn (inspect <c>dust_usage_log</c> on a
+    /// representative conversation), not against a nominal turn count assumed here.</para>
     /// </summary>
     public record MagicDustPricing
     {
