@@ -80,7 +80,7 @@ Four example agents packaged as a plugin DLL (copied to `plugins/` after build).
 - `BillingAgent` + `BillingTool` — telecom billing with invoices, payment history
 - `ContractAgent` + `ContractTool` — contract summarization
 - `MonkeyAgent` — MCP-only agent using external MonkeyMCP server (no native tool)
-- `InventoryAgent` + `InventoryTool` — greenhouse/nursery inventory; the first *dispositive* (stateful) example agent: create/confirm/cancel orders, backed by its own standalone SQLite database
+- `InventoryAgent` + `InventoryTool` — greenhouse/nursery inventory; stateful example agent: consult catalog, create/confirm/cancel orders, backed by its own standalone SQLite database
 - `agents.json` — embedded resource with intents and per-agent prompts/tool definitions
 
 ## Architecture and Message Flow
