@@ -9,7 +9,7 @@ using static Morgana.AI.Records;
 namespace Morgana.Examples.Agents;
 
 [HandlesIntent("inventory")]
-[RequiresLLMTier(LLMTier.Performance)]
+[RequiresLLMTier(LLMTier.Efficiency)]
 public class InventoryAgent : MorganaAgent
 {
     public InventoryAgent(
