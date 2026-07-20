@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.26.0] - UNDER DEVELOPMENT
+
+### ✨ Added
+
+### 🔄 Changed
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+
+
 ## [0.25.0] - 2026-07-19
 ### 🎯 Major Feature: Two-Tier LLM — Efficiency/Performance for Agents
 This release breaks the "one model serves the whole process" constraint: each provider now publishes a **catalog of exactly two models, keyed by die type** (`Efficiency`/`Performance` — modeled on Intel's E-core/P-core split), and every agent **declares the die it binds to** via the new mandatory `[RequiresLLMTier]` attribute. `Efficiency` is the default for Morgana's own framework actors and any agent handling routine work; `Performance` is reserved exclusively for agents whose author declares an existential need for deep reasoning or high expressive power — not a "nicer to have" upgrade.
