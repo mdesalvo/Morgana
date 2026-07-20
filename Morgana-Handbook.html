@@ -604,7 +604,6 @@
     <span class="keyword">public class</span> BillingAgent : MorganaAgent { ... }
 
     <span class="attr">[ProvidesToolForIntent("billing")]</span>
-    <span class="attr">[RequiresLLMTier(Records.LLMTier.Efficiency)]</span>
     <span class="keyword">public class</span> BillingTool : MorganaTool
     {
         <span class="keyword">public async</span> Task&lt;string&gt; GetInvoices(string userId, int count) { ... }
