@@ -151,7 +151,6 @@ Agents express their capabilities through **tools**, which can be native impleme
 
 ```csharp
 [ProvidesToolForIntent("billing")]
-[RequiresLLMTier(LLMTier.Efficiency)]
 public class BillingTool : MorganaTool 
 {
     public async Task<string> GetInvoices(string userId, int count) { ... }
