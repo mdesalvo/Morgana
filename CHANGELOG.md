@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
-- Updated `Microsoft.Agents.AI` dependency to 1.14.0
+- Updated `Microsoft.Agents.AI` dependency to 1.15.0
 
 ### 🐛 Fixed
 
