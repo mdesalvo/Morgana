@@ -137,7 +137,7 @@ public class MorganaTool
     /// </remarks>
     public Task<object> SetQuickReplies(List<QuickReply> quickReplies)
     {
-        if (quickReplies == null || quickReplies.Count == 0)
+        if (quickReplies.Count == 0)
         {
             toolLogger.LogWarning("SetQuickReplies called with no quick replies");
             return Task.FromResult<object>("Warning: No quick replies were set (empty data).");
@@ -152,6 +152,40 @@ public class MorganaTool
         return Task.FromResult<object>(
             $"Quick reply buttons set successfully. The user will see {quickReplies.Count} interactive options. " +
             $"Now provide your text response to the user - the quick reply buttons will appear below your message.");
+    }
+
+    // =========================================================================
+    // CONVERSATION CONTINUATION SYSTEM TOOL
+    // =========================================================================
+
+    /// <summary>
+    /// Declares whether the agent expects the conversation to continue after this turn.
+    /// This is the authoritative, tool-mediated signal the framework reads to decide whether
+    /// the agent stays active for the user's next message.
+    /// </summary>
+    /// <param name="continuation">
+    /// <c>true</c> if you need the user's input to proceed — more information, a courtesy
+    /// invitation to stay, a list of steps or choices to pick from. <c>false</c> (or simply not
+    /// calling this tool at all) means this turn is genuinely final.
+    /// </param>
+    /// <returns>Confirmation message for the LLM.</returns>
+    /// <remarks>
+    /// <para>Regardless of the value passed here, calling <see cref="SetQuickReplies"/> or
+    /// <see cref="SetRichCard"/> in the same turn keeps the conversation active for that turn —
+    /// their presence overrides toward "not yet finished", since both invite a user reaction.</para>
+    /// </remarks>
+    public Task<object> SetConversationContinuation(bool continuation)
+    {
+        ToolContext ctx = getToolContext();
+        ctx.Provider.SetVariable(ctx.Session, "conversation_continuation", continuation);
+
+        toolLogger.LogInformation(
+            "LLM set conversation continuation to {Continuation} via SetConversationContinuation tool", continuation);
+
+        return Task.FromResult<object>(
+            continuation
+                ? "Continuation flag set to true: the conversation will stay active and await the user's next message."
+                : "Continuation flag set to false: unless quick replies or a rich card are also set this turn, the conversation will end here.");
     }
 
     // =========================================================================

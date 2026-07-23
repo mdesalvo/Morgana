@@ -88,7 +88,7 @@ public class MorganaAgent : MorganaActor
     /// <see cref="HandlesIntentAttribute"/> on the concrete subclass.
     /// </summary>
     protected string AgentIntent => GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent
-                                     ?? throw new InvalidOperationException($"Agent {GetType().Name} must be decorated with [HandlesIntent] attribute");
+                                        ?? throw new InvalidOperationException($"Agent {GetType().Name} must be decorated with [HandlesIntent] attribute");
 
     /// <summary>
     /// Stable identifier for this agent within a conversation, formatted as
@@ -281,15 +281,22 @@ public class MorganaAgent : MorganaActor
             }
 
             string llmResponseText = fullResponse.ToString();
-            bool hasInteractiveToken = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
-            bool endsWithQuestion = llmResponseText.EndsWith('?');
 
             #region LLM tools
+            bool? continuationValue = GetConversationContinuationFromContext(aiAgentSession);
+            bool continuationDeclared = continuationValue == true;
+
             List<QuickReply>? quickReplies = GetQuickRepliesFromContext(aiAgentSession);
             bool hasQuickReplies = quickReplies?.Count > 0;
 
             RichCard? richCard = GetRichCardFromContext(aiAgentSession);
             bool hasRichCard = richCard != null;
+
+            if (continuationValue.HasValue)
+            {
+                aiContextProvider.DropVariable(aiAgentSession, "conversation_continuation");
+                agentLogger.LogInformation("Dropped conversation continuation flag ({Value}) from context (ephemeral data)", continuationValue.Value);
+            }
 
             if (hasQuickReplies)
             {
@@ -304,11 +311,12 @@ public class MorganaAgent : MorganaActor
             }
             #endregion
 
-            bool isCompleted = !hasInteractiveToken && !endsWithQuestion && !hasQuickReplies && !hasRichCard;
+            // LLM sets completion of the conversation by not raising any of the ephemeral turn signals
+            bool isCompleted = !continuationDeclared && !hasQuickReplies && !hasRichCard;
 
             agentLogger.LogInformation(
-                $"Agent response analysis: HasINT={hasInteractiveToken}," +
-                $"EndsWithQuestion={endsWithQuestion}," +
+                "Agent response analysis:" +
+                $"ContinuationDeclared={continuationDeclared}," +
                 $"HasQuickReplies={hasQuickReplies}," +
                 $"HasRichCard={hasRichCard}," +
                 $"IsCompleted={isCompleted}");
@@ -331,7 +339,7 @@ public class MorganaAgent : MorganaActor
             ChatMessage? finalAssistantMessage = aiChatHistoryProvider
                 .GetMessages(aiAgentSession)
                 .LastOrDefault(m => m.Role == ChatRole.Assistant
-                                     && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)));
+                                                  && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)));
             if (finalAssistantMessage is not null)
             {
                 finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
@@ -341,14 +349,10 @@ public class MorganaAgent : MorganaActor
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
             agentLogger.LogInformation("Saved conversation state for {AgentIdentifier}", AgentIdentifier);
 
-#if DEBUG
             senderRef.Tell(new Records.AgentResponse(llmResponseText, isCompleted, quickReplies, richCard));
-#else
-            senderRef.Tell(new Records.AgentResponse(llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim(), isCompleted, quickReplies, richCard));
-#endif
         }
         catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
-                                     && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+                                   && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
         {
             agentLogger.LogWarning(ex, "Content filter rejection in {Name} for conversation {ConversationId}", GetType().Name, conversationId);
             agentSpan?.SetStatus(ActivityStatusCode.Error, "content_filter");
@@ -368,17 +372,17 @@ public class MorganaAgent : MorganaActor
         }
         finally
         {
-            // Safety net: ephemeral UI variables (rich card, quick replies) must NEVER leak
-            // to the next turn. The happy path drops them above after reading, but if the LLM
-            // populated them via SetRichCard/SetQuickReplies tool calls and then the stream
-            // or the save threw, the happy-path drop is skipped and the stale values would be
-            // picked up by GetRichCardFromContext/GetQuickRepliesFromContext on the next turn.
-            // DropVariable is idempotent (no-op when the key is absent), so this is safe even
-            // after a successful path.
+            // Safety net: ephemeral turn signals (rich card, quick replies, continuation flag)
+            // must NEVER leak to the next turn. The happy path drops them above after reading,
+            // but if the LLM populated them via SetRichCard/SetQuickReplies/SetConversationContinuation
+            // tool calls and then the stream or the save threw, the happy-path drop is skipped and
+            // the stale values would be picked up on the next turn. DropVariable is idempotent
+            // (no-op when the key is absent), so this is safe even after a successful path.
             if (aiAgentSession is not null)
             {
                 aiContextProvider.DropVariable(aiAgentSession, "rich_card");
                 aiContextProvider.DropVariable(aiAgentSession, "quick_replies");
+                aiContextProvider.DropVariable(aiAgentSession, "conversation_continuation");
             }
         }
     }
@@ -391,7 +395,28 @@ public class MorganaAgent : MorganaActor
         List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>("ErrorAnswers");
         Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
 
-        failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
+        failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred."));
+    }
+
+    /// <summary>
+    /// Reads the <c>conversation_continuation</c> context variable, if the agent set one on the
+    /// current turn via the <c>SetConversationContinuation</c> base tool.
+    /// </summary>
+    /// <param name="session">Active agent session.</param>
+    /// <returns>
+    /// The declared continuation value, or <c>null</c> if the tool was not called this turn.
+    /// The caller is responsible for dropping the variable afterwards (ephemeral, per-turn only).
+    /// </returns>
+    protected bool? GetConversationContinuationFromContext(AgentSession session)
+    {
+        object? ctxContinuation = aiContextProvider.GetVariable(session, "conversation_continuation");
+        return ctxContinuation switch
+        {
+            bool value => value,
+            JsonElement { ValueKind: JsonValueKind.True } => true,
+            JsonElement { ValueKind: JsonValueKind.False } => false,
+            _ => null
+        };
     }
 
     /// <summary>
@@ -448,8 +473,7 @@ public class MorganaAgent : MorganaActor
         {
             try
             {
-                RichCard? richCard = JsonSerializer.Deserialize<RichCard>(
-                    richCardJSON, Records.DefaultJsonSerializerOptions);
+                RichCard? richCard = JsonSerializer.Deserialize<RichCard>(richCardJSON, Records.DefaultJsonSerializerOptions);
                 if (richCard != null)
                 {
                     agentLogger.LogInformation("Retrieved rich card from context");

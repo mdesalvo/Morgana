@@ -549,13 +549,13 @@ public static class Records
         public double BudgetPerConversation { get; set; }
 
         /// <summary>One-shot advisory shown when consumption crosses 70%.</summary>
-        public string Warning70Message { get; set; }
+        public required string Warning70Message { get; set; }
 
         /// <summary>One-shot advisory shown when consumption crosses 90%.</summary>
-        public string Warning90Message { get; set; }
+        public required string Warning90Message { get; set; }
 
         /// <summary>Blocking message shown when the budget is exhausted (100%).</summary>
-        public string ErrorMessage { get; set; }
+        public required string ErrorMessage { get; set; }
     }
 
     // ==========================================================================
@@ -707,7 +707,7 @@ public static class Records
     public record GuardRailResult(
         bool Compliant,
         string? Violation);
-    
+
     /// <summary>
     /// Sent by an agent back to the supervisor when the LLM provider rejects the request
     /// due to a content filter (e.g. Azure OpenAI content_filter).
@@ -771,7 +771,7 @@ public static class Records
     /// Response message from MorganaAgent instances after processing a request.
     /// Indicates the agent's response text, completion status, and optional quick reply buttons.
     /// </summary>
-    /// <param name="Response">Agent's response text (may contain #INT# token for multi-turn interactions)</param>
+    /// <param name="Response">Agent's response text</param>
     /// <param name="IsCompleted">
     /// True if agent has completed its task (conversation returns to idle).
     /// False if agent needs more user input (agent becomes active for follow-up messages).
@@ -1006,7 +1006,7 @@ public static class Records
         {
             return Intents
                 .Where(i => !string.Equals(i.Name, "other", StringComparison.OrdinalIgnoreCase)
-                              && !string.IsNullOrEmpty(i.Label))
+                                            && !string.IsNullOrEmpty(i.Label))
                 .ToList();
         }
     }
@@ -1090,12 +1090,13 @@ public static class Records
         {
             foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
             {
-                if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
+                if (additionalProperties.TryGetValue(additionalPropertyName, out object? value))
                 {
                     JsonElement element = (JsonElement)value;
-                    return element.Deserialize<T>();
+                    return element.Deserialize<T>()!;
                 }
             }
+
             throw new KeyNotFoundException($"AdditionalProperty with key '{additionalPropertyName}' was not found in the prompt with id='{ID}'");
         }
     }
@@ -1104,7 +1105,7 @@ public static class Records
     /// Global policy definition specifying framework-level behavioral rules.
     /// Applied to all agents and actors to enforce consistent behavior.
     /// </summary>
-    /// <param name="Name">Policy name (e.g., "ContextHandling", "InteractiveToken")</param>
+    /// <param name="Name">Policy name (e.g., "ContextHandling", "ConversationContinuationSignal")</param>
     /// <param name="Description">Detailed policy description with enforcement rules</param>
     /// <param name="Type">Policy type ("Critical" or "Operational")</param>
     /// <param name="Priority">Priority level (lower number = higher priority)</param>
