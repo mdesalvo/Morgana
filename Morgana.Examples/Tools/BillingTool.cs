@@ -367,9 +367,9 @@ public class BillingTool : MorganaTool
                         formatted = inv.PaymentMethod.Type switch
                         {
                             "CreditCard" => $"Credit Card ending in {inv.PaymentMethod.LastFourDigits}",
-                            "BankTransfer" => $"Bank Transfer (...{inv.PaymentMethod.LastFourDigits})",
-                            "DirectDebit" => $"Direct Debit (...{inv.PaymentMethod.LastFourDigits})",
-                            _ => $"{inv.PaymentMethod.Type} (...{inv.PaymentMethod.LastFourDigits})"
+                            "BankTransfer" => $"Bank Transfer from account ending in {inv.PaymentMethod.LastFourDigits}",
+                            "DirectDebit" => $"Direct Debit from account ending in {inv.PaymentMethod.LastFourDigits}",
+                            _ => $"{inv.PaymentMethod.Type} ({inv.PaymentMethod.LastFourDigits})"
                         }
                     }
                     : null

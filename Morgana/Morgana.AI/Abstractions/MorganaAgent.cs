@@ -88,7 +88,7 @@ public class MorganaAgent : MorganaActor
     /// <see cref="HandlesIntentAttribute"/> on the concrete subclass.
     /// </summary>
     protected string AgentIntent => GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent
-                                        ?? throw new InvalidOperationException($"Agent {GetType().Name} must be decorated with [HandlesIntent] attribute");
+                                    ?? throw new InvalidOperationException($"Agent {GetType().Name} must be decorated with [HandlesIntent] attribute");
 
     /// <summary>
     /// Stable identifier for this agent within a conversation, formatted as

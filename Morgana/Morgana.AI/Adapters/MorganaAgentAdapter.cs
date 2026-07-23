@@ -144,7 +144,7 @@ public class MorganaAgentAdapter
         // 1) Identity: the [HandlesIntent] attribute is the agent's contract. Its absence
         //    is a wiring bug (a MorganaAgent subclass that forgot the attribute), so fail
         //    loud at creation rather than silently producing an unroutable agent.
-        HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>()
+        HandlesIntentAttribute intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>()
             ?? throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
 
         // 1b) Tier: the agent's fixed, "existential" declaration of which model class it runs
@@ -183,9 +183,9 @@ public class MorganaAgentAdapter
         Func<MorganaTool.ToolContext> toolContextFactory = () =>
         {
             AgentSession session = sessionAccessor()
-                ?? throw new InvalidOperationException(
-                    $"Agent '{intentAttribute.Intent}' has no active session during tool execution. " +
-                    $"Ensure ExecuteAgentAsync sets aiAgentSession before invoking the agent.");
+               ?? throw new InvalidOperationException(
+                   $"Agent '{intentAttribute.Intent}' has no active session during tool execution. " +
+                   $"Ensure ExecuteAgentAsync sets aiAgentSession before invoking the agent.");
 
             return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId);
         };
@@ -262,9 +262,23 @@ public class MorganaAgentAdapter
         // Critical before Operational (Type), then ascending Priority within each type.
         // The LLM reads the system prompt top-to-bottom, so P0 Critical constraints must
         // appear before P0 Operational guidance — the order is load-bearing for compliance.
+        //
+        // The tier header below is the single, structural signal that a group of policies is
+        // non-negotiable vs advisory — individual policy Descriptions do NOT repeat a
+        // "CRITICAL RULE ABOUT..." announcement of their own: that framing is stated exactly
+        // once per tier here, instead of once per policy, so the same signal is not paid for
+        // in tokens on every single one of them.
+        string? lastType = null;
         foreach (Records.GlobalPolicy policy in policies.OrderBy(p => p.Type)
                                                         .ThenBy(p => p.Priority))
         {
+            if (policy.Type != lastType)
+            {
+                sb.AppendLine(policy.Type == "Critical"
+                    ? "## CRITICAL POLICIES — non-negotiable; violating any of these breaks the conversation:"
+                    : "## OPERATIONAL POLICIES — best-practice guidance:");
+                lastType = policy.Type;
+            }
             sb.AppendLine($"{policy.Name}: {policy.Description}");
         }
 
@@ -325,11 +339,14 @@ public class MorganaAgentAdapter
         // wrongly route a per-turn input into first-write-wins shared state. Flatten across
         // all tools and Distinct() because the same logical variable (e.g. "userId") is
         // typically declared on several tools and must register exactly once.
-        List<string> sharedVariables = [.. tools
-            .SelectMany(t => t.Parameters)
-            .Where(p => p.Shared && string.Equals(p.Scope, "context", StringComparison.OrdinalIgnoreCase))
-            .Select(p => p.Name)
-            .Distinct()];
+        List<string> sharedVariables =
+        [
+            .. tools
+                .SelectMany(t => t.Parameters)
+                .Where(p => p.Shared && string.Equals(p.Scope, "context", StringComparison.OrdinalIgnoreCase))
+                .Select(p => p.Name)
+                .Distinct()
+        ];
 
         // Startup-visible diagnostic: the shared set is part of the cross-agent contract,
         // so surface it (or its emptiness) explicitly rather than leaving it implicit.
@@ -401,7 +418,7 @@ public class MorganaAgentAdapter
         // implementation is a WARNING, not fatal: the agent stays usable on its base (and
         // any MCP) tools — degraded, not dead — and the ignored tools are named so the
         // mismatch is diagnosable.
-        Type? toolType = toolRegistryService?.FindToolTypeForIntent(intent);
+        Type? toolType = toolRegistryService.FindToolTypeForIntent(intent);
         if (toolType == null)
         {
             logger.LogWarning(

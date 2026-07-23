@@ -95,7 +95,7 @@ public class MorganaTool
             "{MorganaToolName} ({Name}) MISS variable '{VariableName}' from agent context.", nameof(MorganaTool), GetType().Name, variableName);
 
         return Task.FromResult<object>(
-            $"Information {variableName} not available in context: you need to engage SetContextVariable to set it.");
+            $"Information {variableName} not available in context: ask the user for it, then call SetContextVariable to persist it.");
     }
 
     /// <summary>
