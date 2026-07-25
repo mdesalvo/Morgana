@@ -124,7 +124,12 @@ public sealed class LlmJudge
 
                 return Parse(answer);
             }
-            catch (Exception ex) when (attempt == 1)
+            // Every attempt is caught, the last one included. Filtering on `attempt == 1` let the
+            // second attempt's exception escape into ScenarioRunner, which aborts the whole run —
+            // so an unusable judge answer cost a paid run and was reported as "run aborted", a line
+            // that reads like a broken scenario and is not one. It also made the fallback below
+            // unreachable, which is the opposite of what it exists for.
+            catch (Exception ex)
             {
                 _ = ex;
             }
@@ -149,8 +154,15 @@ public sealed class LlmJudge
 
         using JsonDocument document = JsonDocument.Parse(payload[start..(end + 1)]);
 
+        // TryGetProperty, not GetProperty: a verdict missing 'holds' is an unusable answer to be
+        // retried, not a KeyNotFoundException thrown from the middle of a turn.
+        if (!document.RootElement.TryGetProperty("holds", out JsonElement holds))
+            throw new JsonException($"Judge returned no 'holds' property: {answer}");
+
         return new JudgeVerdict(
-            document.RootElement.GetProperty("holds").GetBoolean(),
-            document.RootElement.TryGetProperty("reason", out JsonElement reason) ? reason.GetString() ?? string.Empty : string.Empty);
+            holds.GetBoolean(),
+            document.RootElement.TryGetProperty("reason", out JsonElement reason)
+                ? reason.GetString() ?? string.Empty
+                : string.Empty);
     }
 }

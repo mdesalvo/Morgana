@@ -152,25 +152,119 @@ dispositive.
 **agents.json prose: 31,119 -> 22,346 characters, −28%.** Combined with A2.1 and A2.2, an
 InventoryAgent turn now carries roughly half the fixed payload it carried at v0.
 
-Eight of eleven scenarios hold. Three do not, and this phase is **not closed**:
+The phase first landed with three scenarios short. Seven of eight now hold; one does not, and it is
+left open **on purpose** — see the framework gap below.
 
-| scenario | v0 | A2.2 | A2.3 | note |
+| scenario | v0 | A2.2 | A2.3 first | A2.3 closed |
 |---|---|---|---|---|
-| `context-cycle-on-miss` | 5/5 | 5/5 | 5/5 | −42% tokens vs v0 |
-| `context-cycle-on-hit` | 5/5 | 5/5 | 5/5 | −38% vs v0 |
-| `behaviour-conversation-closure` | 1/5 ✗ | 4/5 | 4/5 ✓ | −34% vs v0 |
-| `context-no-invented-writes` | 5/5 | — | **4/5 ✗** | −67% tokens, 4.2 calls against 7.0 |
-| `context-closed-vocabulary-monkeys` | 5/5 | 5/5 | **4/5 ✗** | judge disputes "an actual monkey" |
-| `context-cross-agent` | 2/5 ✗ | 5/5 ✓ | **2/5 ✗** | Contract asks for the identifier again |
+| `context-cycle-on-miss` | 5/5 | 5/5 | 5/5 | 5/5 |
+| `context-cycle-on-hit` | 5/5 | 5/5 | 5/5 | 5/5 |
+| `behaviour-conversation-closure` | 1/5 ✗ | 4/5 | 4/5 | 5/5 |
+| `behaviour-turn-continuation-operand` | 4/5 | 5/5 | 4/5 | 5/5 |
+| `behaviour-rich-card` | 5/5 | 5/5 | 5/5 | 5/5 |
+| `context-no-invented-writes` | 5/5 | — | 4/5 ✗ | **5/5** |
+| `context-closed-vocabulary-monkeys` | 5/5 | 5/5 | 4/5 ✗ | **5/5** |
+| `context-cross-agent` | 2/5 ✗ | 5/5 | 2/5 ✗ | **3/5 ✗ (open)** |
 
-`context-cross-agent` is the serious one: it regressed to its v0 value on a phase that never touched
-the context rules, so the cause is in what Billing's or Contract's own prose stopped saying. The
-other two look lighter — one run of `context-no-invented-writes` never reached InventoryAgent at
-all, and the monkeys failure is the judge refusing to call a hand-puppet "an actual monkey" — but
-neither is diagnosed yet, and the blocking group does not accept a shrug.
+**`context-cross-agent` — the diagnosis was not where the phase's diff was.** Turn 1 wrote `userId`
+correctly; ContractAgent simply never called `GetContextVariable` at turn 3 and opened by asking.
+The first repair attempt was to say so louder in `ContextHandling` (P0) — that the store is
+conversation-wide and outlives any single agent. It failed twice over: `context-cross-agent` stayed
+red, and `behaviour-turn-continuation-operand` fell from 4/5 to 2/5, the agent now interrogating the
+user *about the customer code* instead of asking which invoice they meant. Every word was reverted
+and the rule was placed instead where the layer model puts it — in ContractAgent's own
+`Instructions`, as the domain constraint that all three of its tools are keyed to one customer, so
+the first act of any request is to establish whose contract is being read, by checking rather than
+by opening with a question.
+
+That helped and did not settle it: across this phase the scenario measured 2/5, 3/5, 5/5, 3/5, 3/5,
+which is not an unstable 5/5 but a behaviour sitting somewhere near 70-80% **with the domain patch
+already in place**. The same sentence given to BillingAgent, by contrast, took
+`context-cycle-on-miss` from a stable 4/5 — four consecutive measurements, on prose proven
+byte-identical to an earlier 5/5 — back to 5/5, without shortening the blanket on any other Billing
+scenario. One agent's prose can carry the rule; the other's cannot, and that asymmetry is the
+signal. Writing yet more into Contract would be the patch that hides the library's defect, so the
+scenario stays red and becomes the acceptance test for the framework fix described below.
+
+The lesson is the sharpest of the three phases so far: **a P0 policy is the most expensive place in
+Morgana to state anything**, because every agent renders it on every round trip and a sentence
+aimed at one agent's failure re-aims every other agent's attention. When a defect belongs to one
+agent, it is fixed in that agent's prose.
+
+**The blanket.** The two layers are complementary and the model's attention is a fixed budget:
+pull the blanket toward the policies and it comes off the agents, and the reverse. Every repair in
+this phase demonstrated it, and always in the same shape — *the red does not appear where you
+wrote*. A change to a global policy must therefore be measured against the agents, and a change to
+one agent's prose against **every** scenario touching that agent, not only the one being repaired.
+The order of priority between the two is not symmetric, though: the framework and its policies are
+the product and must be rock-solid, because every third party will bring their own domain agents to
+them. Agents are malleable, and a consequential patch there to bring behaviour back into line is
+legitimate. A patch that hides a policy gap is not.
+
+**Where the policy layer is actually thin**, found while repairing this phase and deliberately left
+for the framework phase rather than improvised here. The rule "check the context before asking the
+user" exists twice, and neither copy sits where the failure happens:
+
+- `ToolParameterContextGuidance` is injected beside each context-scoped parameter — nominally the
+  point of decision — but a parameter description is read once the model is already invoking that
+  tool, whereas the failing path is deciding to ask the user *instead of* calling it. The guidance
+  is on a branch the defect never takes.
+- `ContextHandling` (P0) is on a branch the model always reads, but it is furthest from the moment
+  of choice, and strengthening it is exactly what shortened the blanket above.
+- Worse, `FormatGlobalPolicies` renders **every** policy, so `ToolParameterContextGuidance` also
+  appears in the composed system prompt, where its opening words — "BEFORE INVOKING THIS TOOL" —
+  have no referent at all: there is no current tool there. It is an instruction pointing at nothing,
+  and the same ~470 characters are then re-injected once per context-scoped parameter of every tool,
+  on each of a turn's round trips.
+
+That BillingAgent and ContractAgent both had to state the rule in their own `Instructions` is the
+symptom, not the cure: a domain author should inherit that guarantee. The framework phase should
+(a) treat the two `Guidance` policies as injection templates and stop rendering them as policies,
+and (b) give the *tool's own* description a framework-owned line naming its context-scoped
+parameters — the tool description being what the model weighs when choosing whether to call the tool
+at all. **Acceptance test: `context-cross-agent` returns to 5/5, and the identity sentences in
+BillingAgent and ContractAgent become removable without any scenario falling.** If they are still
+needed afterwards, the fix was the wrong one.
+
+**`context-no-invented-writes` — a real defect, and not the one the structure was watching.** No
+context write ever happened; the agent simply *told* the user it had remembered ("I've etched your
+fondness into memory"). The discipline held in action and failed in speech. A first fix enumerating
+the forbidden verbs was routed around within one run — "say the word 'roses' again and I shall tend
+to that wish anew" — which is what a list of words earns against a language model. Restated as a
+principle and moved to `ToolGrounding`, its actual home (claiming a capability you do not have is
+not context handling), it holds: the rule binds claims exactly as it binds offers, and nothing a
+user says about themselves outlives the request unless a tool contract declares it.
+
+**`context-closed-vocabulary-monkeys` — the instrument again.** Two successive judge propositions
+failed on content rather than behaviour: "an actual monkey" had the judge disputing a catalogue
+whose Sebastian is a hand puppet, and "specific details" had it reading Morgana's grimoire metaphors
+as vagueness. The judge was removed. The property is literal — the subject reached the domain tool
+and the registry was never touched — and is now `toolsCalled: [get_monkey]` beside
+`noContextAccess`, which is deterministic, free, and cannot argue.
+
+**What the phase cost on the fixed payload: nothing.** Every repair that reached for the framework
+layer was reverted, and `morgana.json` closes the phase byte-identical to how it entered it — the
+whole cost landed in the domain layer, where it belongs and where it is paid only by the agent that
+needs it. Standing totals: framework fixed payload **35,040 -> 21,289, −39%**; `agents.json`
+**31,119 -> 23,254, −25%**.
 
 ### Changes to the measuring instrument
 
+- **A2.3** — `LlmJudge` had a fallback for a judge that returns an unusable answer, with a comment
+  explaining that a proposition which stops being evaluated is coverage lost without anyone
+  noticing. A `when (attempt == 1)` filter on the catch made that fallback **unreachable**: the
+  second attempt's exception escaped into `ScenarioRunner`, which aborted the whole run and printed
+  `run aborted: KeyNotFoundException` — a line that reads like a broken scenario and is not one. It
+  cost a paid run each time it fired, and it fired at least once inside a measurement that was then
+  read as a prompt regression. `GetProperty("holds")` is now a `TryGetProperty`, and the catch no
+  longer excludes the final attempt. **Rows before A2.3 may understate pass rates by one run.**
+- **A2.3** — `context-cross-agent` turn 1 now asserts `contextWrites: [userId]`. Without it the
+  scenario noticed a missing write only two turns later, at ContractAgent, and reported the wrong
+  agent as guilty. It only adds a way to fail.
+- **A2.3** — `context-no-invented-writes` says "from your greenhouse". Without a domain word the
+  message is a bare preference, the classifier lawfully files it under `other`, and the run never
+  reaches InventoryAgent — measuring routing instead of anti-invention. The temptation under test,
+  the urge to mint a key for "roses", is untouched.
 - **A2.2** — the forbidden-term list was too coarse: bare `context` and `API` produced false
   positives on ordinary prose. It now names the mechanism unambiguously (`context variable`,
   `context store`, `GetContextVariable`, …). Rows before A2.2 were, on this check, slightly stricter
@@ -192,8 +286,15 @@ Recorded here because they make rows comparable, or not:
 
 ## Still open
 
-- **Family-A lists without the escape pair** (`behaviour-conversation-closure`, 2/5). Real, and the
-  Doctrine already says otherwise — a candidate for the next phase that touches it.
-- `behaviour-rich-card` and `context-no-invented-writes` carry no `A2.1` row: both are
-  InventoryAgent, the expensive die, and they will be re-measured at A2.3, which rewrites that
-  agent's prose anyway.
+- **`context-cross-agent` at 3/5**, blocking, and open by decision rather than by omission: its
+  cause is the framework gap described under A2.3, and the next phase is the framework one, with
+  this scenario as its acceptance test.
+- **The prose is now tuned partly against these scenarios**, and that is a debt, not an achievement.
+  The identity rule in BillingAgent and ContractAgent, and InventoryAgent's clause about having
+  nowhere to record what a customer likes, were all written after watching a scenario fail. Each is
+  defensible on its own terms — a real constraint, in the right layer — but a suite is only evidence
+  while the prose is not written to it, so a coming phase should add coverage it has never seen
+  rather than deepen what it already has.
+- **`behaviour-conversation-closure` reached 5/5** at the close of A2.3, so the Family-A-list defect
+  that stood open since A2.1 (a choice list emitted with no escape pair, trapping the user) was not
+  observed again. It was never repaired deliberately, so treat it as unproven rather than fixed.

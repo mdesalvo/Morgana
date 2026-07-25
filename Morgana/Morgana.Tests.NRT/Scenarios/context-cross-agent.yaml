@@ -11,6 +11,10 @@ turns:
     expect:
       agent: BillingAgent
       contextVocabulary: [userId]
+      # Asserted here, not only inferred from turn 3: without the write the third turn cannot
+      # possibly hold, and a scenario that only notices the consequence two turns later reports
+      # the wrong agent as guilty.
+      contextWrites: [userId]
       toolsCalled: [GetInvoices]
       textNotEmpty: true
 

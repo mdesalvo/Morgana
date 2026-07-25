@@ -18,8 +18,13 @@ turns:
   - say: "Tell me about a monkey named Sebastian"
     expect:
       agent: MonkeyAgent
+      # The whole property, stated deterministically: the subject reached the domain tool, and the
+      # registry was never touched. There is no judge proposition here by design. Two attempts at
+      # one both failed on the content rather than on the behaviour — "an actual monkey" had the
+      # judge disputing a catalogue whose Sebastian is a hand puppet, and "specific details" had it
+      # reading Morgana's grimoire metaphors as vagueness. Same lesson as non-revelation in A2.1:
+      # when a property is literal, measure it literally.
       noContextAccess: true
+      toolsCalled: [get_monkey]
       textNotEmpty: true
       textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
-    judge:
-      - "The response describes a monkey named Sebastian."
