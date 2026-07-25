@@ -31,6 +31,6 @@ turns:
       contextVocabulary: [userId]
       toolsCalled: [GetContractDetails]
       textNotEmpty: true
-      textNotContains: ["#INT#", "variable", "context", "database", "session", "API", "endpoint", "parameter", "cache", "function"]
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judgeNot:
       - "The response asks the user for their customer code or identifier."

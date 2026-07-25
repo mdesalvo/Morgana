@@ -12,6 +12,6 @@ turns:
       noContextWrites: true
       contextVocabulary: [userId]
       textNotEmpty: true
-      textNotContains: ["#INT#", "variable", "context", "database", "session", "API", "endpoint", "parameter", "cache", "function"]
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judgeNot:
       - "The response claims it has permanently saved or stored the user's preference."

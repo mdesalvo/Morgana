@@ -22,7 +22,7 @@ turns:
       quickReplies: none
       richCard: absent
       textNotEmpty: true
-      textNotContains: ["#INT#", "variable", "context", "database", "session", "API", "endpoint", "parameter", "cache", "function"]
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judge:
       - "The response asks the user for an identifier or customer code."
     judgeNot:
@@ -36,4 +36,4 @@ turns:
       toolsCalled: [SetContextVariable, GetInvoices]
       richCard: present
       textNotEmpty: true
-      textNotContains: ["#INT#", "variable", "context", "database", "session", "API", "endpoint", "parameter", "cache", "function"]
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]

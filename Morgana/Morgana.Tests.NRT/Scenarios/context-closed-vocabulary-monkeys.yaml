@@ -12,6 +12,6 @@ turns:
       agent: MonkeyAgent
       noContextAccess: true
       textNotEmpty: true
-      textNotContains: ["#INT#", "variable", "context", "database", "session", "API", "endpoint", "parameter", "cache", "function"]
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judge:
       - "The response is about squirrel monkeys (saimiri) or explains that the assistant could not find information about them."

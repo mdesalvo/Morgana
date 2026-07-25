@@ -10,3 +10,4 @@ Per run, averaged — Morgana's own calls only, the judge excluded:
 | phase | recorded | passed | required | llm calls | input | output | cache read |
 |---|---|---:|---:|---:|---:|---:|---:|
 | v0-vanilla | 2026-07-25 | 5/5 | 4 | 9.8 | 208452 | 3125 | 86068 |
+| A2.2 | 2026-07-25 | 5/5 | 4 | 10.4 | 175126 | 3434 | 68349 |

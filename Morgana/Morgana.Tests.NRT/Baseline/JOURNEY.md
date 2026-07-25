@@ -75,7 +75,55 @@ demanded the closure pair on a turn that may lawfully offer the invoices as choi
 a **real defect that survives A2.1**: in 2 runs out of 5 the agent offers a Family-A list with no
 escape pair appended, trapping the user inside it — precisely what the Doctrine prescribes against.
 
+### `A2.2` — cut the base tool descriptions
+
+`SetRichCard` went from 13,394 characters to 4,602 (**−66%**) with its contract intact: all eight
+component types, every property, every enum value. What went was the compositional philosophy, the
+"When NOT to use" blocks (the logical inverse of the "When to use" ones), the selection guide that
+restated the dictionary, and one of three worked examples. `SetQuickReplies` lost the normative half
+that the Doctrine already owns — including a **dead reference to the `ConversationClosure` policy**,
+which A2.1 had folded away — keeping only the payload contract and the ordering detail (call it
+before writing the text). `GetContextVariable` and `SetContextVariable` were not touched: A2.0.
+
+The framework's fixed payload — global policies plus base tool schemas, resent in full on every one
+of a turn's ~8 round trips — is now **20,906 characters against 35,040 at v0: −40%**.
+
+| scenario | v0 | A2.1 | A2.2 | input tokens vs v0 |
+|---|---|---|---|---|
+| `behaviour-conversation-closure` | 1/5 ✗ | 1/5 ✗ | **4/5 ✓** | −27% |
+| `context-cycle-on-miss` | 5/5 | 5/5 | 5/5 | **−42%** |
+| `behaviour-turn-continuation-operand` | 4/5 | 5/5 | 5/5 | **−30%** |
+| `context-cycle-on-hit` | 5/5 | 5/5 | 5/5 | −28% |
+| `behaviour-rich-card` | 5/5 | — | 5/5 | −16% |
+| `context-cross-agent` | 2/5 ✗ | 5/5 ✓ | **4/5 ✗** | −31% |
+| `context-closed-vocabulary-monkeys` | 5/5 | 5/5 | **3/5 ✗** | −49% |
+
+`behaviour-conversation-closure` meets its threshold for the first time. Two scenarios in the
+blocking group do not, and both are worth reading carefully.
+
+**`context-cross-agent` fell to 1/5, was repaired to 4/5, and is still short.** The cause was a real
+hole in the prose that A2.1 had been masking: `ContextHandling` prescribed the cycle as "look before
+asking, write on the answer", which says nothing about the case where the user volunteers the value
+unprompted in their opening message. Billing then passed `userId` straight to its tool without ever
+persisting it, the shared registry stayed empty, and Contract had to ask again three turns later.
+Both `ContextHandling` and `SetContextVariable` now say it explicitly: however you come to learn a
+context-scoped value — asked for or volunteered — you must write it. That moved the scenario from
+1/5 to 4/5; one run in five still asks. The remaining gap is a candidate for
+`ToolParameterContextGuidance`, which is the text injected next to the parameter itself.
+
+**`context-closed-vocabulary-monkeys` fell from 5/5 to 3/5** while shedding half its tokens. Its two
+failures are unlike each other: one run said "database" to the user outright, and one answered that
+"some creature" was not found without ever naming the saimiri. This one is not yet diagnosed and
+must not be waved through: it is the anti-invention scenario, and it is in the blocking group.
+
 ### Changes to the measuring instrument
+
+- **A2.2** — the forbidden-term list was too coarse: bare `context` and `API` produced false
+  positives on ordinary prose. It now names the mechanism unambiguously (`context variable`,
+  `context store`, `GetContextVariable`, …). Rows before A2.2 were, on this check, slightly stricter
+  than they should have been.
+
+#### Earlier instrument changes
 
 Recorded here because they make rows comparable, or not:
 
