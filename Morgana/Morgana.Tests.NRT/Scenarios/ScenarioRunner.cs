@@ -1,6 +1,7 @@
 using System.Text;
 using Morgana.Contracts;
 using Morgana.Tests.NRT.Infrastructure;
+using Xunit;
 
 namespace Morgana.Tests.NRT.Scenarios;
 
@@ -8,7 +9,12 @@ namespace Morgana.Tests.NRT.Scenarios;
 /// <param name="Index">1-based run number.</param>
 /// <param name="Failures">Violated expectations; empty when the run passed.</param>
 /// <param name="Transcript">Per-turn rendering of what happened, attached to failing runs.</param>
-public sealed record RunOutcome(int Index, IReadOnlyList<string> Failures, IReadOnlyList<string> Transcript)
+/// <param name="Tokens">Token usage summed over the run's turns. Judge calls are excluded: they are the harness's cost, not Morgana's.</param>
+public sealed record RunOutcome(
+    int Index,
+    IReadOnlyList<string> Failures,
+    IReadOnlyList<string> Transcript,
+    TokenUsage Tokens)
 {
     /// <summary>Whether every expectation of every turn held.</summary>
     public bool Passed => Failures.Count == 0;
@@ -26,12 +32,31 @@ public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, 
     /// <summary>Whether the scenario met its threshold.</summary>
     public bool Passed => Passes >= Required;
 
+    /// <summary>Token usage summed over every run.</summary>
+    public TokenUsage TotalTokens => Runs.Aggregate(TokenUsage.Zero, (total, run) => total + run.Tokens);
+
+    /// <summary>Mean input tokens per run — the number a prompt revision is expected to move.</summary>
+    public long InputTokensPerRun => Runs.Count == 0 ? 0 : TotalTokens.InputTokens / Runs.Count;
+
+    /// <summary>Mean output tokens per run.</summary>
+    public long OutputTokensPerRun => Runs.Count == 0 ? 0 : TotalTokens.OutputTokens / Runs.Count;
+
+    /// <summary>Mean LLM round trips per run.</summary>
+    public double CallsPerRun => Runs.Count == 0 ? 0 : (double)TotalTokens.Calls / Runs.Count;
+
+    /// <summary>One-line summary, emitted on every run, pass or fail.</summary>
+    public string Summary()
+        => $"'{Scenario.Id}': {Passes}/{Runs.Count} passed (need {Required}) · "
+         + $"per run: {CallsPerRun:F1} LLM calls, in={InputTokensPerRun}, out={OutputTokensPerRun}, "
+         + $"cacheRead={(Runs.Count == 0 ? 0 : TotalTokens.CacheReadTokens / Runs.Count)}";
+
     /// <summary>Human-readable report, printed on failure.</summary>
     public string Report()
     {
         StringBuilder report = new StringBuilder();
         report.AppendLine($"Scenario '{Scenario.Id}': {Passes}/{Runs.Count} runs passed, {Required} required.");
         report.AppendLine(Scenario.Description);
+        report.AppendLine($"Tokens per run: {CallsPerRun:F1} LLM calls, in={InputTokensPerRun}, out={OutputTokensPerRun}, cacheRead={(Runs.Count == 0 ? 0 : TotalTokens.CacheReadTokens / Runs.Count)}");
 
         foreach (RunOutcome run in Runs.Where(run => !run.Passed))
         {
@@ -78,12 +103,16 @@ public sealed class ScenarioRunner
     /// <summary>Harness knobs (defaults for runs, thresholds and timeouts).</summary>
     private readonly NrtOptions options;
 
-    public ScenarioRunner(NrtChannel channel, TurnObserver observer, LlmJudge judge, NrtOptions options)
+    /// <summary>Provider and models under test, recorded in the baseline — a token count without them means nothing.</summary>
+    private readonly string llmDescriptor;
+
+    public ScenarioRunner(NrtChannel channel, TurnObserver observer, LlmJudge judge, NrtOptions options, string llmDescriptor)
     {
         this.channel = channel;
         this.observer = observer;
         this.judge = judge;
         this.options = options;
+        this.llmDescriptor = llmDescriptor;
     }
 
     /// <summary>Loads a scenario by id and runs it.</summary>
@@ -100,7 +129,15 @@ public sealed class ScenarioRunner
         for (int index = 1; index <= runs; index++)
             outcomes.Add(await RunOnceAsync(scenario, index));
 
-        return new ScenarioOutcome(scenario, required, outcomes);
+        ScenarioOutcome outcome = new ScenarioOutcome(scenario, required, outcomes);
+
+        // Deliberately not Console.WriteLine: stdout is teed into the host log capture, and a line
+        // written there would resurface inside the next turn's captured log.
+        TestContext.Current.TestOutputHelper?.WriteLine($"[NRT] {outcome.Summary()}");
+
+        BaselineWriter.Write(outcome, llmDescriptor);
+
+        return outcome;
     }
 
     /// <summary>Plays the scripted conversation once and collects everything that did not hold.</summary>
@@ -108,6 +145,7 @@ public sealed class ScenarioRunner
     {
         List<string> failures = [];
         List<string> transcript = [];
+        TokenUsage tokens = TokenUsage.Zero;
         string? conversationId = null;
 
         try
@@ -123,6 +161,9 @@ public sealed class ScenarioRunner
                 TurnResult turn = await observer.CompleteTurnAsync(scope, turnDefinition.Say, message);
 
                 transcript.Add(turn.Describe());
+
+                // Accumulated before the judge runs, so the measurement stays Morgana's cost only.
+                tokens += turn.Tokens;
 
                 IReadOnlyList<string> structural = turnDefinition.Expect is null
                     ? []
@@ -149,6 +190,6 @@ public sealed class ScenarioRunner
                 await channel.EndConversationAsync(conversationId);
         }
 
-        return new RunOutcome(index, failures, transcript);
+        return new RunOutcome(index, failures, transcript, tokens);
     }
 }

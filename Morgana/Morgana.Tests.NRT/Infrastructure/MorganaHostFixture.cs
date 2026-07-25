@@ -102,7 +102,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         await Channel.StartAsync();
 
         judgeLoggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
-        Runner = new ScenarioRunner(Channel, Observer, LlmJudge.Create(Configuration, judgeLoggerFactory), Options);
+        Runner = new ScenarioRunner(
+            Channel, Observer, LlmJudge.Create(Configuration, judgeLoggerFactory), Options, DescribeLlm());
     }
 
     /// <inheritdoc />
@@ -125,6 +126,21 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         {
             // A database file still held open by the host is not worth failing a run over.
         }
+    }
+
+    /// <summary>
+    /// Renders the provider and the model bound to each tier, e.g.
+    /// <c>Anthropic (Efficiency=claude-haiku-4-5, Performance=claude-sonnet-5)</c>. Recorded in
+    /// every baseline file: a token count is only comparable against the same models.
+    /// </summary>
+    private string DescribeLlm()
+    {
+        string provider = Configuration["Morgana:LLM:Provider"] ?? "(unknown)";
+
+        IEnumerable<string> tiers = Configuration.GetSection($"Morgana:LLM:{provider}:Tiers").GetChildren()
+            .Select(tier => $"{tier.Key}={tier["Options:ModelId"] ?? "(unset)"}");
+
+        return $"{provider} ({string.Join(", ", tiers)})";
     }
 
     /// <summary>

@@ -30,6 +30,7 @@ public sealed record ContextAccess(ContextOperation Operation, string VariableNa
 /// <param name="ToolsInvoked">Tool names in call order, from the <c>agent.tools_invoked</c> span attribute.</param>
 /// <param name="ContextAccesses">Context reads and writes, from the host's own tool log lines.</param>
 /// <param name="AgentName">Agent that handled the turn, from the <c>agent.name</c> span attribute; null when no agent span was seen (e.g. a guard rejection).</param>
+/// <param name="Tokens">Token usage over every LLM call the turn made, including classification.</param>
 /// <param name="LogLines">Raw host log captured for the turn, attached to failures for diagnosis.</param>
 public sealed record TurnResult(
     string ConversationId,
@@ -38,6 +39,7 @@ public sealed record TurnResult(
     IReadOnlyList<string> ToolsInvoked,
     IReadOnlyList<ContextAccess> ContextAccesses,
     string? AgentName,
+    TokenUsage Tokens,
     IReadOnlyList<string> LogLines)
 {
     /// <summary>Names read via <c>GetContextVariable</c>, whether the read hit or missed.</summary>
@@ -60,6 +62,7 @@ public sealed record TurnResult(
             user: {UserMessage}
             agent: {AgentName ?? "(no agent span)"} | completed={Message.AgentCompleted} | quickReplies={QuickReplies.Count} | richCard={(Message.RichCard is null ? "absent" : "present")}
             tools: {(ToolsInvoked.Count == 0 ? "(none)" : string.Join(", ", ToolsInvoked))}
+            tokens: {Tokens}
             context: {(ContextAccesses.Count == 0 ? "(none)" : string.Join(", ", ContextAccesses.Select(a => $"{a.Operation}:{a.VariableName}")))}
             text: {Text}
             """;

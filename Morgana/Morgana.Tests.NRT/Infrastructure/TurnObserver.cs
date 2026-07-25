@@ -30,6 +30,17 @@ public sealed partial class TurnObserver : IDisposable
     /// <summary>Closed <c>morgana.agent</c> spans, per conversation, in completion order.</summary>
     private readonly ConcurrentDictionary<string, List<AgentSpan>> agentSpans = new ConcurrentDictionary<string, List<AgentSpan>>();
 
+    /// <summary>
+    /// Token usage of every closed LLM span, in completion order. Not keyed by conversation: the
+    /// MEAI spans carry <c>gen_ai.*</c> attributes and no conversation id, so they are attributed
+    /// to a turn by position in this list — sound for the same reason the log correlation is, and
+    /// no more.
+    /// </summary>
+    private readonly List<TokenUsage> llmSpans = [];
+
+    /// <summary>Guards <see cref="llmSpans"/>.</summary>
+    private readonly Lock llmGate = new Lock();
+
     /// <summary>Tee on the host's stdout.</summary>
     private readonly HostOutputCapture output;
 
@@ -44,7 +55,9 @@ public sealed partial class TurnObserver : IDisposable
 
         listener = new ActivityListener
         {
-            ShouldListenTo = source => source.Name == "Morgana",
+            // "Morgana" carries the pipeline spans; "Morgana.AI.LLM" is the MEAI decorator every
+            // provider is wrapped in, and is where token usage lives.
+            ShouldListenTo = source => source.Name is "Morgana" or "Morgana.AI.LLM",
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = OnActivityStopped
         };
@@ -54,10 +67,17 @@ public sealed partial class TurnObserver : IDisposable
 
     /// <summary>Opens an observation window for a turn about to be sent.</summary>
     public TurnScope BeginTurn(string conversationId)
-        => new TurnScope(
+    {
+        int llmMark;
+        lock (llmGate)
+            llmMark = llmSpans.Count;
+
+        return new TurnScope(
             conversationId,
             output.Mark(),
-            agentSpans.TryGetValue(conversationId, out List<AgentSpan>? spans) ? spans.Count : 0);
+            agentSpans.TryGetValue(conversationId, out List<AgentSpan>? spans) ? spans.Count : 0,
+            llmMark);
+    }
 
     /// <summary>Closes the window and assembles what was observed alongside the delivered message.</summary>
     public async Task<TurnResult> CompleteTurnAsync(TurnScope scope, string userMessage, ChannelMessage message)
@@ -89,6 +109,10 @@ public sealed partial class TurnObserver : IDisposable
             ? spans[^1]
             : null;
 
+        TokenUsage usage;
+        lock (llmGate)
+            usage = llmSpans.Skip(scope.LlmSpanCount).Aggregate(TokenUsage.Zero, (total, next) => total + next);
+
         return new TurnResult(
             scope.ConversationId,
             userMessage,
@@ -96,15 +120,31 @@ public sealed partial class TurnObserver : IDisposable
             span?.ToolsInvoked ?? [],
             accesses,
             span?.AgentName,
+            usage,
             lines);
     }
 
     /// <inheritdoc />
     public void Dispose() => listener.Dispose();
 
-    /// <summary>Records a closed agent span against its conversation.</summary>
+    /// <summary>Records a closed agent span against its conversation, or an LLM span's token usage.</summary>
     private void OnActivityStopped(Activity activity)
     {
+        if (activity.Source.Name == "Morgana.AI.LLM")
+        {
+            TokenUsage usage = new TokenUsage(
+                ReadTokenTag(activity, "gen_ai.usage.input_tokens"),
+                ReadTokenTag(activity, "gen_ai.usage.output_tokens"),
+                ReadTokenTag(activity, "gen_ai.usage.cache_read.input_tokens"),
+                ReadTokenTag(activity, "gen_ai.usage.cache_write.input_tokens"),
+                Calls: 1);
+
+            lock (llmGate)
+                llmSpans.Add(usage);
+
+            return;
+        }
+
         if (activity.OperationName != "morgana.agent")
             return;
 
@@ -127,8 +167,55 @@ public sealed partial class TurnObserver : IDisposable
         });
     }
 
+    /// <summary>
+    /// Reads a token count that providers report as any integral type, or as a string on some
+    /// paths. Missing or unparseable means zero: a token count is a measurement, never an
+    /// assertion, and it must not be able to fail a scenario.
+    /// </summary>
+    private static long ReadTokenTag(Activity activity, string tag)
+        => activity.GetTagItem(tag) switch
+        {
+            long value => value,
+            int value => value,
+            double value => (long)value,
+            string text when long.TryParse(text, out long parsed) => parsed,
+            _ => 0
+        };
+
     /// <summary>What a closed <c>morgana.agent</c> span contributes to a turn result.</summary>
     private sealed record AgentSpan(string? AgentName, IReadOnlyList<string> ToolsInvoked);
+}
+
+/// <summary>
+/// Token usage aggregated over the LLM calls of a turn — the measurement A2 has to move.
+/// </summary>
+/// <param name="InputTokens">Prompt tokens billed at full rate.</param>
+/// <param name="OutputTokens">Completion tokens.</param>
+/// <param name="CacheReadTokens">Prompt tokens served from the provider's prompt cache.</param>
+/// <param name="CacheWriteTokens">Prompt tokens written into the cache.</param>
+/// <param name="Calls">Number of LLM round trips — the multiplier that makes the fixed payload expensive.</param>
+public sealed record TokenUsage(
+    long InputTokens,
+    long OutputTokens,
+    long CacheReadTokens,
+    long CacheWriteTokens,
+    int Calls)
+{
+    /// <summary>The empty measurement, and the seed of every aggregation.</summary>
+    public static readonly TokenUsage Zero = new TokenUsage(0, 0, 0, 0, 0);
+
+    /// <summary>Sums two measurements.</summary>
+    public static TokenUsage operator +(TokenUsage left, TokenUsage right)
+        => new TokenUsage(
+            left.InputTokens + right.InputTokens,
+            left.OutputTokens + right.OutputTokens,
+            left.CacheReadTokens + right.CacheReadTokens,
+            left.CacheWriteTokens + right.CacheWriteTokens,
+            left.Calls + right.Calls);
+
+    /// <summary>Compact rendering for transcripts and baseline files.</summary>
+    public override string ToString()
+        => $"{Calls} call(s), in={InputTokens}, out={OutputTokens}, cacheRead={CacheReadTokens}, cacheWrite={CacheWriteTokens}";
 }
 
 /// <summary>
@@ -138,4 +225,5 @@ public sealed partial class TurnObserver : IDisposable
 /// <param name="ConversationId">Conversation being observed.</param>
 /// <param name="LogMark">Index into the captured log at the moment the turn was sent.</param>
 /// <param name="SpanCount">Agent spans already recorded for the conversation.</param>
-public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount);
+/// <param name="LlmSpanCount">LLM spans already recorded, process-wide.</param>
+public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int LlmSpanCount);

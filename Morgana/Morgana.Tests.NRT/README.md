@@ -93,6 +93,27 @@ throughout. Keep them out of the tight iteration loop and run them at checkpoint
 Running the rest against `Efficiency` is also a useful stress test in its own right: it is the tier
 that amplifies contradiction-following failures.
 
+## The baseline
+
+Every scenario run writes `Baseline/<id>.md` — pass rate plus the token cost of one run, with the
+provider and the model bound to each tier recorded alongside (a token count without them measures
+nothing). The files live in the source tree, not the output directory, precisely so they can be
+committed and diffed.
+
+They exist because the whole point of the harness is comparison, and a comparison needs a recorded
+"before". A prompt revision has three possible outcomes against a baseline, and only one of them is
+success:
+
+- threshold held, tokens down → the outcome A2 is aiming for;
+- threshold held, tokens up → not a pass. The prose got longer, and the fixed payload is resent on
+  every round trip of every turn, forever;
+- threshold broken → a contradiction between two instructions read together. Fix the text, do not
+  lower the threshold.
+
+`llm calls` is worth reading as carefully as the token counts: it is the multiplier. The composed
+system prompt plus the tool schemas is resent in full on **every** round trip, so a turn that takes
+four tool-loop iterations pays the fixed payload four times.
+
 ## Writing a scenario
 
 One YAML file per flow under `Scenarios/`, named after its `id`.
