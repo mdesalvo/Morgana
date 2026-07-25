@@ -73,9 +73,25 @@ like a prompt regression, because an empty tool list looks the same whether the 
 or the listener heard nothing.
 
 **Cost.** Every turn is a live LLM call, multiplied by the scenario's run count, plus one judge call
-per proposition on structurally-passing turns. The default is 5 runs. Run groups during
-iteration and the whole suite only at checkpoints. Running against the `Efficiency` tier is also a
-useful stress test: it is the tier that amplifies contradiction-following failures.
+per proposition on structurally-passing turns. The default is 5 runs.
+
+**The tier is not the suite's to choose.** Each agent binds to its die through
+`[RequiresLLMTier]`, so a scenario costs whatever the agent it exercises costs — and forcing it
+otherwise would mean measuring a configuration nobody runs. With the example plugin that means:
+
+| Scenario | Agent | Tier |
+|---|---|---|
+| `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Efficiency` |
+| `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
+| `behaviour-rich-card`, `context-no-invented-writes` | Inventory | **`Performance`** |
+
+Everything Morgana runs on its own account — guard, classifier, presenter — plus the judge, always
+goes to the cheapest configured tier. So the two Inventory scenarios dominate the bill: at 5 runs
+each they are a handful of `Performance` turns against a suite that is otherwise `Efficiency`
+throughout. Keep them out of the tight iteration loop and run them at checkpoints.
+
+Running the rest against `Efficiency` is also a useful stress test in its own right: it is the tier
+that amplifies contradiction-following failures.
 
 ## Writing a scenario
 
