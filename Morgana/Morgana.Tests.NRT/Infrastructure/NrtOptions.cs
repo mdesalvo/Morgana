@@ -1,0 +1,49 @@
+using Microsoft.Extensions.Configuration;
+
+namespace Morgana.Tests.NRT.Infrastructure;
+
+/// <summary>
+/// Knobs of the harness itself, read from <c>appsettings.NRT.json</c> (section <c>Nrt</c>).
+/// </summary>
+/// <remarks>
+/// These are deliberately separate from the <c>Morgana:</c> configuration tree: everything under
+/// <c>Morgana:</c> describes the instance under test and is inherited verbatim from
+/// <c>Morgana.Web</c>'s own configuration, while everything here describes how the suite drives it.
+/// </remarks>
+public sealed class NrtOptions
+{
+    /// <summary>
+    /// Whether the guard rail stays enabled on the instance under test. Off by default: no scenario
+    /// asserts moderation behaviour, and every guarded turn costs one extra LLM round trip.
+    /// </summary>
+    public bool EnableGuardrail { get; init; }
+
+    /// <summary>Seconds to wait for the host to answer <c>GET /api/morgana/health</c> before giving up.</summary>
+    public int StartupTimeoutSeconds { get; init; } = 180;
+
+    /// <summary>Seconds to wait for the webhook delivery of a turn's final message.</summary>
+    public int TurnTimeoutSeconds { get; init; } = 180;
+
+    /// <summary>
+    /// Milliseconds to wait after a turn's final message before reading the captured host log.
+    /// The console logger writes on a background queue, so tool log lines can trail the webhook
+    /// delivery by a few milliseconds.
+    /// </summary>
+    public int LogDrainMilliseconds { get; init; } = 400;
+
+    /// <summary>Default number of runs per scenario when the scenario does not override it.</summary>
+    public int DefaultRuns { get; init; } = 5;
+
+    /// <summary>Default number of passing runs required when the scenario does not override it.</summary>
+    public int DefaultMinPasses { get; init; } = 4;
+
+    /// <summary>Whether the host's stdout is echoed to the real console (noisy; useful when diagnosing).</summary>
+    public bool EchoHostOutput { get; init; }
+
+    /// <summary>Minimum level for the <c>Morgana</c> log categories on the host under test.</summary>
+    public string HostLogLevel { get; init; } = "Information";
+
+    /// <summary>Binds the <c>Nrt</c> section, falling back to the defaults above when absent.</summary>
+    public static NrtOptions Load(IConfiguration configuration)
+        => configuration.GetSection("Nrt").Get<NrtOptions>() ?? new NrtOptions();
+}

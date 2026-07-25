@@ -230,6 +230,11 @@ public class MorganaAgent : MorganaActor
             StringBuilder fullResponse = new StringBuilder();
             ChatMessage userMessage = new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow };
 
+            // History length before this turn runs: everything appended past this point belongs to
+            // the turn, which is what agent.tools_invoked must report — the span is per-turn, so
+            // reporting the whole session would attribute every past tool call to this one.
+            int historyBaseline = aiChatHistoryProvider.GetMessages(aiAgentSession).Count;
+
             // Streaming is gated on two independent signals:
             //   1. Global config flag (Morgana:AdaptiveMessaging:EnableStreamingResponse)
             //   2. Channel capability — we don't even attach to the LLM streaming endpoint
@@ -320,7 +325,7 @@ public class MorganaAgent : MorganaActor
             string responsePreview = llmResponseText.Length > 150 ? llmResponseText[..150] : llmResponseText;
             agentSpan?.SetTag(MorganaTelemetry.AgentIsCompleted, isCompleted);
             agentSpan?.SetTag(MorganaTelemetry.AgentHasQuickReplies, hasQuickReplies);
-            agentSpan?.SetTag(MorganaTelemetry.AgentToolsInvoked, GetToolsInvoked(aiAgentSession));
+            agentSpan?.SetTag(MorganaTelemetry.AgentToolsInvoked, GetToolsInvoked(aiAgentSession, historyBaseline));
             agentSpan?.SetTag(MorganaTelemetry.AgentResponsePreview, responsePreview);
             agentSpan?.Dispose();
 
@@ -426,20 +431,21 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>
-    /// Collects the distinct names of the tools invoked over the whole session, for the
+    /// Collects, in call order, the names of the tools invoked during the current turn, for the
     /// <c>agent.tools_invoked</c> span attribute.
     /// </summary>
     /// <param name="session">Active agent session.</param>
-    /// <returns>Comma-separated tool names, or an empty string when no tool was ever called.</returns>
+    /// <param name="historyBaseline">Number of history messages present before the turn ran; everything past it belongs to this turn.</param>
+    /// <returns>Comma-separated tool names in call order — repetitions kept, since a repeated call is itself a signal — or an empty string when the turn called no tool.</returns>
     /// <remarks>
     /// Only the tool NAMES are exposed. Arguments are deliberately left out: span attributes reach
     /// every configured exporter, and tool arguments routinely carry user-supplied values.
     /// </remarks>
-    protected string GetToolsInvoked(AgentSession session)
+    protected string GetToolsInvoked(AgentSession session, int historyBaseline)
         => string.Join(", ", aiChatHistoryProvider.GetMessages(session)
+                                                  .Skip(historyBaseline)
                                                   .SelectMany(m => m.Contents.OfType<FunctionCallContent>())
-                                                  .Select(c => c.Name)
-                                                  .Distinct());
+                                                  .Select(c => c.Name));
 
     /// <summary>
     /// Reads and deserializes the <c>quick_replies</c> context variable, if the agent set one

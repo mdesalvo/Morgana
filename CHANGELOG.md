@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 - **`SetTurnContinuation(bool)` base tool** — turn continuation is now declared **out-of-band**, through a system tool every agent owns, instead of being smuggled inside the response text as the `#INT#` token. The declaration lands in the ephemeral `turn_continuation` context variable, alongside `quick_replies` and `rich_card`, and is dropped at the end of every turn: continuation is stated per-turn and never inherited.
-- **`agent.tools_invoked` span attribute** — names of the tools invoked in the agent's session, on the `morgana.agent` span. Tool *arguments* are deliberately excluded: span attributes reach every configured exporter and arguments routinely carry user-supplied values.
+- **`agent.tools_invoked` span attribute** — names of the tools invoked during the turn, in call order, on the `morgana.agent` span. Tool *arguments* are deliberately excluded: span attributes reach every configured exporter and arguments routinely carry user-supplied values.
+- **`Morgana.Tests.NRT` — non-regression harness** — the first test project in the solution, and the precondition for revising any prompt: it measures *behaviour* rather than code. Boots the real host in-process on an ephemeral Kestrel port and drives it black-box over HTTP as a fourth channel (`channelName: "nrt"`, `deliveryMode: "webhook"`, full capabilities), asserting on two layers — structural signals read from the `morgana.agent` span and the `MorganaTool` log lines, and natural-language propositions judged by an LLM on the cheapest configured tier. Scenarios are YAML, replayed N times against an explicit pass threshold. The harness carries **no secrets of its own**: it shares `Morgana.Web`'s `UserSecretsId`, so it always runs against whatever provider and tiers that instance is wired to.
+- **`nrt` issuer entry** in `Morgana:Authentication:Issuers` — the harness authenticates as its own channel, like Cauldron, Grimoire and Rune. Its key is minted per run and never written to disk.
 
 ### 🔄 Changed
 - Updated `Microsoft.Agents.AI` dependency to 1.15.0

@@ -372,3 +372,13 @@ await app.RunAsync();
 //    - Client calls LeaveConversation(conversationId) and disconnects SignalR
 //
 // ==============================================================================
+
+// ==============================================================================
+// TEST ENTRY POINT VISIBILITY
+// ==============================================================================
+// Top-level statements compile into an implicitly-generated internal Program class.
+// Declaring it partial and public lets the NRT harness (Morgana.Tests.NRT) reach this
+// assembly's entry point and boot the real host in-process on an ephemeral Kestrel port.
+// It has no effect on production behaviour.
+
+public partial class Program;

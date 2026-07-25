@@ -1,0 +1,19 @@
+id: context-closed-vocabulary-monkeys
+description: >-
+  The anti-invention property. MonkeyAgent declares no context-scoped parameter, so its legal
+  vocabulary is empty and any context access at all is an invented name — typically the query
+  subject mistaken for a variable. The subject belongs to the domain tool, not to the registry.
+runs: 5
+minPasses: 5
+
+turns:
+  - say: "Tell me about the saimiri"
+    expect:
+      agent: MonkeyAgent
+      noContextAccess: true
+      textNotEmpty: true
+      textNotContains: ["#INT#"]
+    judge:
+      - "The response is about squirrel monkeys (saimiri) or explains that the assistant could not find information about them."
+    judgeNot:
+      - "The response mentions variables, context, memory, storage or any technical detail of how the assistant works."

@@ -26,6 +26,7 @@ Morgana/
     Morgana.Contracts/     # Zero-dependency wire contracts (NuGet package, foundation for Morgana.AI + channels)
     Morgana.AI/            # Core framework library (NuGet package)
     Morgana.Web/           # ASP.NET Core host (controllers, SignalR hub, DI wiring)
+    Morgana.Tests.NRT/     # Live non-regression harness (xUnit v3) — measures prompt behaviour, not code
     Directory.Build.props  # Shared build settings, version, NuGet dependencies
   Channels/                # Reference channels (clients that talk to Morgana)
     Cauldron/              # Blazor Server frontend — rich-Web reference channel (SignalR)
@@ -82,6 +83,15 @@ Four example agents packaged as a plugin DLL (copied to `plugins/` after build).
 - `MonkeyAgent` — MCP-only agent using external MonkeyMCP server (no native tool)
 - `InventoryAgent` + `InventoryTool` — greenhouse/nursery inventory; stateful example agent: consult catalog, create/confirm/cancel orders, backed by its own standalone SQLite database
 - `agents.json` — embedded resource with intents and per-agent prompts/tool definitions
+
+### Morgana.Tests.NRT (non-regression harness)
+
+Live, black-box, xUnit v3 suite at `Morgana/Morgana.Tests.NRT/` (has its own `README.md`). It measures **prompt behaviour**, not code: since a domain agent *is* its prose, the only way to know a prompt revision did not break anything is to make the model do the thing and look. Nothing is mocked and every turn is a real LLM call, so it is **on-demand only** — never wired into a build or CI gate.
+
+- **Hook**: boots `Morgana.Web`'s entry point in-process on an ephemeral Kestrel port (enabled by the `public partial class Program;` declaration at the bottom of `Program.cs`) and drives it over HTTP as a fourth channel — `channelName: "nrt"`, `deliveryMode: "webhook"`, full capabilities and no length budget, so `MorganaChannelAdapter` short-circuits and scenarios measure undegraded output. In-process buys the two read-only observers a child process could not: an `ActivityListener` on `morgana.agent` (→ `agent.tools_invoked`) and a tee on `Console.Out` (→ the `MorganaTool` HIT/MISS/SET log lines, which is how context **variable names** are observed without ever putting them in a span attribute).
+- **Assertions**: two layers. *Structural* (deterministic, from the message + span + log): completion, quick replies, rich card, tools called and their order, context reads/writes and the closed vocabulary. *LLM-judge* (natural-language propositions on the cheapest configured tier) for what structure cannot reach — the judge sees only what a user would see, never the tool trace.
+- **Scenarios**: YAML under `Scenarios/`, one file per flow, replayed **N times against an explicit pass threshold** — the honest shape when the system under test is a language model. The **context-handling group runs at 5/5 and is blocking**: the cycle, the closed vocabulary and non-revelation are contract, and their failure mode is silent.
+- **Secrets**: none of its own. It declares the same `UserSecretsId` as `Morgana.Web` and republishes the resolved `Morgana:` configuration to the host as environment variables, so the suite always runs against whatever provider and tiers that instance is wired to. Per run it overrides a throwaway `StoragePath`, disables exporters/rate/dust limiting, applies `Nrt:EnableGuardrail`, and mints a random key for the `nrt` issuer.
 
 ## Architecture and Message Flow
 
@@ -327,6 +337,7 @@ At application startup, comprehensive validation is performed:
 - **Target**: .NET 10, C# latest (uses C# 14 features like `extension` blocks)
 - **Build**: `dotnet build` from solution root
 - **Run**: start both `Morgana.Web` (backend, default https://localhost:5001) and `Cauldron` (frontend, default https://localhost:5002)
+- **NRT suite**: `dotnet test Morgana/Morgana.Tests.NRT/Morgana.Tests.NRT.csproj` — live LLM calls, on-demand only. Start from `--filter "FullyQualifiedName~HarnessSmokeTests"` to verify the rig before believing any scenario result
 - **Docker**: `docker compose up` starts Morgana + Cauldron (`Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`); the two TTY channels Grimoire and Rune are profile-gated (`profiles: ["tui"]`) so `up` skips them, and each must be launched interactively in a separate terminal via `docker compose run --rm --service-ports --use-aliases grimoire` (or `… rune`, using `Channels/Grimoire/Grimoire.Dockerfile` / `Channels/Rune/Rune.Dockerfile`), because Spectre.Console needs to own stdin/stdout (only one TTY channel at a time). `compose run` auto-activates the service's profiles so no `--profile` flag is needed. `--use-aliases` is mandatory: `compose run` skips network aliases by default, so without it Morgana's webhook callback to `http://grimoire:5004` (resp. `http://rune:5003`) fails DNS resolution
 
 ## Conventions

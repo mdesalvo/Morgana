@@ -179,8 +179,8 @@ public static class MorganaTelemetry
     public const string AgentHasQuickReplies = "agent.has_quick_replies";
 
     /// <summary>
-    /// Comma-separated names of the tools invoked in this agent's session (names only, never
-    /// arguments — span attributes reach every configured exporter).
+    /// Comma-separated names of the tools invoked during this turn, in call order (names only,
+    /// never arguments — span attributes reach every configured exporter).
     /// </summary>
     public const string AgentToolsInvoked = "agent.tools_invoked";
 

@@ -1,0 +1,42 @@
+id: context-cycle-on-miss
+description: >-
+  The full context cycle when the variable is not there yet: read before asking, ask in bare prose,
+  write on the answer, then use the domain tool. This is the load-bearing scenario of the whole
+  suite — if it regresses, context handling has regressed.
+runs: 5
+minPasses: 5
+
+turns:
+  - say: "Hi, I'd like to see my last 3 invoices"
+    expect:
+      agent: BillingAgent
+      agentCompleted: false
+      # GetContextVariable must come first: asking the user before looking is the regression.
+      toolsCalledFirst: [GetContextVariable]
+      contextReads: [userId]
+      noContextWrites: true
+      contextVocabulary: [userId]
+      toolsCalled: [SetTurnContinuation]
+      toolsNotCalled: [GetInvoices]
+      # Awaiting an operand the user must type: no buttons, no escape options.
+      quickReplies: none
+      richCard: absent
+      textNotEmpty: true
+      textNotContains: ["#INT#"]
+    judge:
+      - "The response asks the user for an identifier or customer code."
+    judgeNot:
+      - "The response mentions variables, context, memory, storage or any technical detail of how the assistant works."
+      - "The response lists predefined options for the user to pick from."
+
+  - say: "P994E"
+    expect:
+      agent: BillingAgent
+      contextWrites: [userId]
+      contextVocabulary: [userId]
+      toolsCalled: [SetContextVariable, GetInvoices]
+      richCard: present
+      textNotEmpty: true
+      textNotContains: ["#INT#"]
+    judgeNot:
+      - "The response mentions variables, context, memory, storage or any technical detail of how the assistant works."

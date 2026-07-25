@@ -1,0 +1,16 @@
+id: behaviour-rich-card
+description: >-
+  Structured tool output is rendered as a rich card, never dumped as raw JSON into the text. Guards
+  the RichCardUsage policy and the per-agent Formatting layer that instantiates it.
+
+turns:
+  - say: "Show me the greenhouse catalog"
+    expect:
+      agent: InventoryAgent
+      toolsCalled: [GetProductCatalog, SetRichCard]
+      richCard: present
+      textNotEmpty: true
+      # A response that leaks the tool's JSON payload into the prose fails here.
+      textNotContains: ['{"', '":', "#INT#"]
+    judgeNot:
+      - "The response contains raw JSON, code blocks or machine-readable data dumps."

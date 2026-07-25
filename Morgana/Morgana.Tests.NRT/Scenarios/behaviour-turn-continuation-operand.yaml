@@ -1,0 +1,21 @@
+id: behaviour-turn-continuation-operand
+description: >-
+  A turn awaiting typed input stays in service through SetTurnContinuation alone, with no buttons of
+  any kind beside it — neither a choice list nor the escape options. This is the interplay of
+  TurnContinuation, QuickReplyDoctrine and QuickReplyEscapeOptions read together.
+
+turns:
+  - say: "I need the details of one of my invoices, my customer code is P994E"
+    expect:
+      agent: BillingAgent
+      agentCompleted: false
+      toolsCalled: [SetTurnContinuation]
+      textNotEmpty: true
+      textNotContains: ["#INT#"]
+      # Either the agent asks for the invoice id in bare prose, or it legitimately lists the known
+      # invoices as choices; what it must never do is ask for typed input AND show escape options.
+      # The judge below separates the two cases; the structural rule that always holds is that a
+      # bare-prose request carries no exit button.
+      noQuickReplyIds: [exit_agent]
+    judgeNot:
+      - "The response mentions variables, context, memory, storage or any technical detail of how the assistant works."

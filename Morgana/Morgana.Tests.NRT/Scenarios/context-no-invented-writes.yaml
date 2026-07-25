@@ -1,0 +1,18 @@
+id: context-no-invented-writes
+description: >-
+  The second face of anti-invention: a user preference is not a context variable. The urge to
+  "remember what the user said" by minting a key must not survive prompt revision.
+runs: 5
+minPasses: 5
+
+turns:
+  - say: "Remember that I prefer roses, I always order those"
+    expect:
+      agent: InventoryAgent
+      noContextWrites: true
+      contextVocabulary: [userId]
+      textNotEmpty: true
+      textNotContains: ["#INT#"]
+    judgeNot:
+      - "The response mentions variables, context, memory, storage or any technical detail of how the assistant works."
+      - "The response claims it has permanently saved or stored the user's preference."

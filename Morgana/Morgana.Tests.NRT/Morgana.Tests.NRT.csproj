@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Title>Morgana.Tests.NRT</Title>
+    <PackageId>Morgana.Tests.NRT</PackageId>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!--
+      Same UserSecretsId as Morgana.Web: the harness deliberately owns no secrets of its own.
+      It reads provider, tiers, API keys and the persistence encryption key from the very store
+      that configures the instance under test, so the suite always runs against whatever LLM
+      Morgana is currently wired to.
+    -->
+    <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ASP.NET Core types are needed for the webhook receiver the harness hosts. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="3.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.*" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
+    <PackageReference Include="YamlDotNet" Version="18.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Morgana.Web is referenced for its entry point: the fixture boots the real host in-process. -->
+    <ProjectReference Include="..\Morgana.Web\Morgana.Web.csproj" />
+
+    <!--
+      The example plugin is built but NOT referenced as an assembly: the harness must see the
+      agents exactly as Morgana sees them — discovered from plugins/ at startup, never as
+      compile-time types. ReferenceOutputAssembly=false keeps the black-box boundary honest.
+    -->
+    <ProjectReference Include="..\..\Morgana.Examples\Morgana.Examples.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The host under test reads its configuration from the harness output directory (content root). -->
+    <Content Include="..\Morgana.Web\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="appsettings.NRT.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Scenarios\**\*.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    PluginLoaderService scans {AppContext.BaseDirectory}/plugins, which under test is the harness
+    output directory — so the example plugin has to land here, not in Morgana.Web's bin.
+  -->
+  <Target Name="CopyExamplePluginToNrt" AfterTargets="Build">
+    <MSBuild Projects="..\..\Morgana.Examples\Morgana.Examples.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="ExamplePluginAssembly" />
+    </MSBuild>
+    <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
+    <Copy SourceFiles="@(ExamplePluginAssembly)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

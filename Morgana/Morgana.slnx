@@ -6,4 +6,5 @@
   <Project Path="Morgana.Contracts\Morgana.Contracts.csproj" />
   <Project Path="Morgana.AI\Morgana.AI.csproj" />
   <Project Path="Morgana.Web\Morgana.Web.csproj" />
+  <Project Path="Morgana.Tests.NRT\Morgana.Tests.NRT.csproj" />
 </Solution>
