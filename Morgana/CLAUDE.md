@@ -12,7 +12,7 @@ Morgana is a modern conversational AI framework built on **.NET 10**, **Akka.NET
 
 Morgana is a stable framework for *impersonating domain agents*; the framework code (Akka pipeline, tool loop, intent routing, channel adaptation) is not where day-to-day work happens. A domain agent *is* its prompt configuration — its entry in `agents.json` (Target/Instructions/Personality/Formatting + tool contracts) read together with the global policies in `morgana.json`. Building or tuning an agent is therefore ~95% authoring **clear, non-contradictory, precise prose**: every sentence is dispositive — an instruction an LLM executes, not documentation.
 
-The characteristic defect is not an exception, it is a **logical contradiction** between two instructions read together — and these are typically **emergent and non-local**: one clause in the agent vs one in the global policies (e.g. the interplay of `#INT#` × ConversationClosure × QuickReplyEscapeOptions × ToolGrounding). Prefer structural fixes over point patches: state a unifying doctrine high in the policy order (low `Priority`, so it renders first among Critical) and let the specific policies read as instances of it — this shrinks the contradiction surface instead of chasing symptoms.
+The characteristic defect is not an exception, it is a **logical contradiction** between two instructions read together — and these are typically **emergent and non-local**: one clause in the agent vs one in the global policies (e.g. the interplay of TurnContinuation × ConversationClosure × QuickReplyEscapeOptions × ToolGrounding). Prefer structural fixes over point patches: state a unifying doctrine high in the policy order (low `Priority`, so it renders first among Critical) and let the specific policies read as instances of it — this shrinks the contradiction surface instead of chasing symptoms.
 
 Two things *outside* the prose can still sabotage a correct prompt, and are worth ruling in/out first because they are invisible from `agents.json`:
 - **Model tier** — a dense, layered prompt needs a capable model; the `Efficiency` die (e.g. Haiku) amplifies contradiction-following failures where `Performance` would not.
@@ -122,7 +122,7 @@ All endpoints authenticate via `AuthenticateRequestAsync` (Bearer JWT validation
 
 ### Multi-turn: active agent tracking
 
-When an agent signals `IsCompleted = false` (detected via `#INT#` token, trailing question mark, quick replies, or rich card), the supervisor remembers it as `activeAgent`. Subsequent messages skip classification and go directly to that agent (after guard check). The agent signals `IsCompleted = true` when done.
+When an agent signals `IsCompleted = false` — declared explicitly via the `SetTurnContinuation` base tool, or implied by quick replies or a rich card — the supervisor remembers it as `activeAgent`. Subsequent messages skip classification and go directly to that agent (after guard check). The agent signals `IsCompleted = true` when done.
 
 ### Inter-agent shared context
 
@@ -208,7 +208,7 @@ public class BillingAgent : MorganaAgent
 
 ## Tool System
 
-Every agent gets **base tools** from `morgana.json` (`GetContextVariable`, `SetContextVariable`, `SetQuickReplies`, `SetRichCard`) plus **domain tools** from `agents.json`. Tool parameters have two scopes:
+Every agent gets **base tools** from `morgana.json` (`GetContextVariable`, `SetContextVariable`, `SetTurnContinuation`, `SetQuickReplies`, `SetRichCard`) plus **domain tools** from `agents.json`. Tool parameters have two scopes:
 - `Scope: "context"` — retrieved from context variables; `MorganaToolAdapter` injects `ToolParameterContextGuidance` description telling the LLM to check `GetContextVariable` first
 - `Scope: "request"` — obtained directly from user; `ToolParameterRequestGuidance` description injected
 
@@ -249,7 +249,7 @@ Two-layer prompt composition in `MorganaAgentAdapter.ComposeAgentInstructions()`
 2. **Domain layer** (from `agents.json`): Target + Personality + Instructions + Formatting
 
 Framework prompts (`morgana.json`):
-- **Morgana**: base personality, global policies (P0-P8 Critical: ContextHandling, QuickReplyDoctrine, InteractiveToken, ConversationClosure, SessionContinuation, ToolUsage, ToolGrounding, QuickReplyEscapeOptions, MandatoryTextualResponse; P0-P3 Operational: ToolParameterContextGuidance, ToolParameterRequestGuidance, RichCardUsage, RichCardAndQuickRepliesCombined). The `QuickReplyDoctrine` (P1) is the unifying master rule the other quick-reply policies instantiate — see Design Philosophy
+- **Morgana**: base personality, global policies (P0-P8 Critical: ContextHandling, QuickReplyDoctrine, TurnContinuation, ConversationClosure, SessionContinuation, ToolUsage, ToolGrounding, QuickReplyEscapeOptions, MandatoryTextualResponse; P0-P3 Operational: ToolParameterContextGuidance, ToolParameterRequestGuidance, RichCardUsage, RichCardAndQuickRepliesCombined). The `QuickReplyDoctrine` (P1) is the unifying master rule the other quick-reply policies instantiate — see Design Philosophy
 - **Classifier**: JSON response `{intent, confidence}` with `((formattedIntents))` placeholder
 - **Guard**: JSON response `{compliant, violation}` with ProfanityTerms list
 - **Presentation**: JSON intro message with quickReplies, FallbackMessage, NoAgentsMessage
@@ -288,7 +288,7 @@ OpenTelemetry distributed tracing with per-turn spans:
 ```
 morgana.turn → morgana.guard → morgana.classifier → morgana.router → morgana.agent
 ```
-Attributes: `conversation.id`, `guard.compliant`, `classification.intent`, `classification.confidence`, `agent.ttft_ms`, `agent.response_preview`, `agent.is_completed`. HTTP Activity context propagated as `ActivityLink` to turn span in supervisor.
+Attributes: `conversation.id`, `guard.compliant`, `classification.intent`, `classification.confidence`, `agent.ttft_ms`, `agent.response_preview`, `agent.is_completed`, `agent.tools_invoked` (tool names only, never arguments). HTTP Activity context propagated as `ActivityLink` to turn span in supervisor.
 
 **Metrics**: `morgana.dust.consumed` counter (unit `dust`) tagged by `dust.llm_role` for per-agent/role attribution; emitted post-commit in `SQLiteDustLimitService.ChargeAsync`. Complements `gen_ai.usage.*` MEAI counters from `MorganaLLM` which break down cache tiers.
 
@@ -337,7 +337,7 @@ At application startup, comprehensive validation is performed:
 - Tool method names must match exactly the `Name` field in JSON tool definitions
 - Prompts are resolved by ID matching (`"Morgana"`, `"Classifier"`, `"Guard"`, `"Presentation"`, `"ChannelAdapter"` for framework; intent name for agents)
 - Rich cards use JSON polymorphic serialization with `type` discriminator (`text_block`, `key_value`, `divider`, `list`, `section`, `grid`, `badge`, `image`)
-- `#INT#` token in LLM responses signals conversation continuation (agent stays active)
+- Conversation continuation (agent stays active) is signalled out-of-band by the `SetTurnContinuation` base tool, never by a token inside the response text
 - Actor naming: `/user/{suffix}-{conversationId}` (e.g. `/user/supervisor-abc123`)
 - Agent identifier format: `{agent_name}-{conversation_id}` (e.g. `billing-abc123`)
 - Channel names normalized to lowercase at ingress

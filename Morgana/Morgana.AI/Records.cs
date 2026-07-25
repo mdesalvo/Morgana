@@ -771,7 +771,7 @@ public static class Records
     /// Response message from MorganaAgent instances after processing a request.
     /// Indicates the agent's response text, completion status, and optional quick reply buttons.
     /// </summary>
-    /// <param name="Response">Agent's response text (may contain #INT# token for multi-turn interactions)</param>
+    /// <param name="Response">Agent's response text</param>
     /// <param name="IsCompleted">
     /// True if agent has completed its task (conversation returns to idle).
     /// False if agent needs more user input (agent becomes active for follow-up messages).

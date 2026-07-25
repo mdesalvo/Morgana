@@ -112,8 +112,38 @@ public class MorganaTool
         ToolContext ctx = getToolContext();
         ctx.Provider.SetVariable(ctx.Session, variableName, variableValue);
 
+        toolLogger.LogInformation(
+            "{MorganaToolName} ({Name}) SET variable '{VariableName}' into agent context. Value is: {Value}", nameof(MorganaTool), GetType().Name, variableName, variableValue);
+
         return Task.FromResult<object>(
             $"Information {variableName} inserted in context with value: {variableValue}");
+    }
+
+    // =========================================================================
+    // TURN CONTINUATION SYSTEM TOOL
+    // =========================================================================
+
+    /// <summary>
+    /// Declares whether the agent expects the user to take another turn with it.
+    /// Replaces the legacy in-band <c>#INT#</c> token with an explicit, out-of-band signal
+    /// that lives where quick replies and rich cards already live: the ephemeral context.
+    /// </summary>
+    /// <param name="turnContinuation">
+    /// <c>true</c> when the agent awaits the user's turn and must stay in service;
+    /// <c>false</c> when the agent has finished and the conversation may return to Morgana.
+    /// </param>
+    /// <returns>Confirmation message for the LLM.</returns>
+    public Task<object> SetTurnContinuation(bool turnContinuation)
+    {
+        ToolContext ctx = getToolContext();
+        ctx.Provider.SetVariable(ctx.Session, "turn_continuation", turnContinuation);
+
+        toolLogger.LogInformation("LLM set turn continuation to {TurnContinuation} via SetTurnContinuation tool", turnContinuation);
+
+        return Task.FromResult<object>(
+            turnContinuation
+                ? "Turn continuation set: you remain in service and await the user's next turn."
+                : "Turn continuation cleared: this turn concludes your handling of the request.");
     }
 
     // =========================================================================

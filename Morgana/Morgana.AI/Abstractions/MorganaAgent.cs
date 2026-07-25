@@ -280,23 +280,25 @@ public class MorganaAgent : MorganaActor
                 MorganaTelemetry.AgentTtftHistogram.Record(ttft);
             }
 
-            string llmResponseText = fullResponse.ToString();
-            bool hasInteractiveToken = llmResponseText.Contains("#INT#", StringComparison.OrdinalIgnoreCase);
-            bool endsWithQuestion = llmResponseText.EndsWith('?');
+            string llmResponseText = fullResponse.ToString().Trim();
 
             #region LLM tools
+            // TurnContinuation
+            bool wantsContinuation = GetTurnContinuationFromContext(aiAgentSession);
+            aiContextProvider.DropVariable(aiAgentSession, "turn_continuation");
+
+            // QuickReplies
             List<QuickReply>? quickReplies = GetQuickRepliesFromContext(aiAgentSession);
             bool hasQuickReplies = quickReplies?.Count > 0;
-
-            RichCard? richCard = GetRichCardFromContext(aiAgentSession);
-            bool hasRichCard = richCard != null;
-
             if (hasQuickReplies)
             {
                 aiContextProvider.DropVariable(aiAgentSession, "quick_replies");
                 agentLogger.LogInformation("Dropped {Count} quick replies from context (ephemeral data)", quickReplies!.Count);
             }
 
+            // RichCard
+            RichCard? richCard = GetRichCardFromContext(aiAgentSession);
+            bool hasRichCard = richCard != null;
             if (hasRichCard)
             {
                 aiContextProvider.DropVariable(aiAgentSession, "rich_card");
@@ -304,11 +306,12 @@ public class MorganaAgent : MorganaActor
             }
             #endregion
 
-            bool isCompleted = !hasInteractiveToken && !endsWithQuestion && !hasQuickReplies && !hasRichCard;
+            // Determine turn continuation strategy, depending on LLM output
+            bool isCompleted = !wantsContinuation && !hasQuickReplies && !hasRichCard;
 
             agentLogger.LogInformation(
-                $"Agent response analysis: HasINT={hasInteractiveToken}," +
-                $"EndsWithQuestion={endsWithQuestion}," +
+                "Agent response analysis:" +
+                $"WantsContinuation={wantsContinuation}," +
                 $"HasQuickReplies={hasQuickReplies}," +
                 $"HasRichCard={hasRichCard}," +
                 $"IsCompleted={isCompleted}");
@@ -317,6 +320,7 @@ public class MorganaAgent : MorganaActor
             string responsePreview = llmResponseText.Length > 150 ? llmResponseText[..150] : llmResponseText;
             agentSpan?.SetTag(MorganaTelemetry.AgentIsCompleted, isCompleted);
             agentSpan?.SetTag(MorganaTelemetry.AgentHasQuickReplies, hasQuickReplies);
+            agentSpan?.SetTag(MorganaTelemetry.AgentToolsInvoked, GetToolsInvoked(aiAgentSession));
             agentSpan?.SetTag(MorganaTelemetry.AgentResponsePreview, responsePreview);
             agentSpan?.Dispose();
 
@@ -341,11 +345,7 @@ public class MorganaAgent : MorganaActor
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
             agentLogger.LogInformation("Saved conversation state for {AgentIdentifier}", AgentIdentifier);
 
-#if DEBUG
             senderRef.Tell(new Records.AgentResponse(llmResponseText, isCompleted, quickReplies, richCard));
-#else
-            senderRef.Tell(new Records.AgentResponse(llmResponseText.Replace("#INT#", "", StringComparison.OrdinalIgnoreCase).Trim(), isCompleted, quickReplies, richCard));
-#endif
         }
         catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
                                      && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
@@ -379,6 +379,7 @@ public class MorganaAgent : MorganaActor
             {
                 aiContextProvider.DropVariable(aiAgentSession, "rich_card");
                 aiContextProvider.DropVariable(aiAgentSession, "quick_replies");
+                aiContextProvider.DropVariable(aiAgentSession, "turn_continuation");
             }
         }
     }
@@ -393,6 +394,52 @@ public class MorganaAgent : MorganaActor
 
         failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
     }
+
+    /// <summary>
+    /// Reads the <c>turn_continuation</c> context variable, set by the <c>SetTurnContinuation</c>
+    /// base tool when the agent declares it is staying in service awaiting the user's next turn.
+    /// </summary>
+    /// <param name="session">Active agent session.</param>
+    /// <returns><c>true</c> if the agent declared continuation on this turn; <c>false</c> if it
+    /// declared completion or made no declaration at all.</returns>
+    /// <remarks>
+    /// <para>The value survives session serialization, so it comes back either as a native
+    /// <see cref="bool"/> (same-turn read, before any round-trip) or as a <see cref="JsonElement"/>
+    /// of kind True/False (after a round-trip). The string form is accepted too because the LLM
+    /// occasionally binds the argument as the literal text "true".</para>
+    /// <para>An absent variable is NOT an error: an agent that has finished simply does not call
+    /// the tool. Anything unrecognizable is read as "no continuation declared", which is the safe
+    /// default — the turn then rests on its structural signals (quick replies, rich card).</para>
+    /// </remarks>
+    protected bool GetTurnContinuationFromContext(AgentSession session)
+    {
+        object? ctxTurnContinuation = aiContextProvider.GetVariable(session, "turn_continuation");
+        return ctxTurnContinuation switch
+        {
+            bool continuation => continuation,
+            JsonElement { ValueKind: JsonValueKind.True } => true,
+            JsonElement { ValueKind: JsonValueKind.False } => false,
+            JsonElement { ValueKind: JsonValueKind.String } element => bool.TryParse(element.GetString(), out bool parsed) && parsed,
+            string text => bool.TryParse(text, out bool parsed) && parsed,
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Collects the distinct names of the tools invoked over the whole session, for the
+    /// <c>agent.tools_invoked</c> span attribute.
+    /// </summary>
+    /// <param name="session">Active agent session.</param>
+    /// <returns>Comma-separated tool names, or an empty string when no tool was ever called.</returns>
+    /// <remarks>
+    /// Only the tool NAMES are exposed. Arguments are deliberately left out: span attributes reach
+    /// every configured exporter, and tool arguments routinely carry user-supplied values.
+    /// </remarks>
+    protected string GetToolsInvoked(AgentSession session)
+        => string.Join(", ", aiChatHistoryProvider.GetMessages(session)
+                                                  .SelectMany(m => m.Contents.OfType<FunctionCallContent>())
+                                                  .Select(c => c.Name)
+                                                  .Distinct());
 
     /// <summary>
     /// Reads and deserializes the <c>quick_replies</c> context variable, if the agent set one

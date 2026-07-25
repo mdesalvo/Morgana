@@ -666,7 +666,7 @@ public sealed class ConsoleUiService
     /// <summary>
     /// Renders <paramref name="message"/> to single-row markups: <c>"Who: Text"</c> char-wrapped
     /// at <paramref name="termWidth"/>, honouring embedded newlines as hard row breaks (an LLM
-    /// reply with <c>...?\n\n#INT#</c> spans three rows even if its char count fits one). The
+    /// reply with <c>...?\n\nAnything else?</c> spans three rows even if its char count fits one). The
     /// leading <c>Who:</c> prefix on the very first row is bold; every row is tinted in the speaker
     /// colour (emerald green for Morgana, light green for specialised agents, white for the user).
     /// </summary>

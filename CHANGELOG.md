@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.26.0] - UNDER DEVELOPMENT
 
 ### ✨ Added
+- **`SetTurnContinuation(bool)` base tool** — turn continuation is now declared **out-of-band**, through a system tool every agent owns, instead of being smuggled inside the response text as the `#INT#` token. The declaration lands in the ephemeral `turn_continuation` context variable, alongside `quick_replies` and `rich_card`, and is dropped at the end of every turn: continuation is stated per-turn and never inherited.
+- **`agent.tools_invoked` span attribute** — names of the tools invoked in the agent's session, on the `morgana.agent` span. Tool *arguments* are deliberately excluded: span attributes reach every configured exporter and arguments routinely carry user-supplied values.
 
 ### 🔄 Changed
 - Updated `Microsoft.Agents.AI` dependency to 1.15.0
