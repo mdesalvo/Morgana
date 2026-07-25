@@ -14,5 +14,5 @@ turns:
       textNotEmpty: true
       textNotContains: ["#INT#"]
     judgeNot:
-      - "The response mentions variables, context, memory, storage or any technical detail of how the assistant works."
+      - "The response exposes technical implementation details of the assistant — variables, a context or memory store, a database, a session, or tool mechanics. Speaking in character about itself (its records, its ledger, its elder sisters, its craft) is persona, not implementation, and does NOT count."
       - "The response claims it has permanently saved or stored the user's preference."

@@ -11,6 +11,10 @@ namespace Morgana.Tests.NRT.Scenarios;
 /// </summary>
 public static class ExpectationChecker
 {
+    /// <summary>The two ids the framework reserves for escaping a flow, declared once in <c>morgana.json</c>.</summary>
+    private static readonly HashSet<string> EscapeOptionIds =
+        new HashSet<string>(["continue_agent", "exit_agent"], StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Returns one message per violated expectation; empty when the turn conforms.</summary>
     public static IReadOnlyList<string> Check(ExpectSpec expect, TurnResult turn)
     {
@@ -75,6 +79,13 @@ public static class ExpectationChecker
             if (quickReplies.Any(reply => string.Equals(reply.Id, id, StringComparison.OrdinalIgnoreCase)))
                 failures.Add($"noQuickReplyIds: '{id}' present but must not be");
         }
+
+        if (expect.NoStandaloneEscapeOptions is true
+            && quickReplies.Count > 0
+            && quickReplies.All(reply => EscapeOptionIds.Contains(reply.Id)))
+            failures.Add(
+                $"noStandaloneEscapeOptions: the turn emitted only the escape pair ({FormatIds(quickReplies)}) "
+              + "with no primary option beside it");
     }
 
     /// <summary>Presence or absence of a rich card.</summary>

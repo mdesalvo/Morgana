@@ -1,21 +1,27 @@
 id: behaviour-turn-continuation-operand
 description: >-
-  A turn awaiting typed input stays in service through SetTurnContinuation alone, with no buttons of
-  any kind beside it — neither a choice list nor the escape options. This is the interplay of
-  TurnContinuation, QuickReplyDoctrine and QuickReplyEscapeOptions read together.
+  A turn that ends awaiting the user declares it through SetTurnContinuation alone, and never gates
+  that wait behind a standalone exit button. This is the interplay of TurnContinuation,
+  QuickReplyDoctrine and QuickReplyEscapeOptions read together.
 
 turns:
+  # Deliberately admits two lawful shapes, and asserts what holds in both.
+  #
+  # Asking for an invoice the user has not identified, with the customer code already given, may
+  # legitimately end either as bare prose ("which invoice?") or as a list of the known invoices
+  # offered as choices — and the latter, per QuickReplyEscapeOptions, correctly carries the escape
+  # pair as an appendix. An earlier version of this scenario asserted the absence of exit_agent
+  # outright and so failed the agent for obeying the policy; what the policy actually forbids is the
+  # escape pair standing alone, with no primary option beside it, on a turn that is waiting.
   - say: "I need the details of one of my invoices, my customer code is P994E"
     expect:
       agent: BillingAgent
       agentCompleted: false
       toolsCalled: [SetTurnContinuation]
+      noStandaloneEscapeOptions: true
       textNotEmpty: true
       textNotContains: ["#INT#"]
-      # Either the agent asks for the invoice id in bare prose, or it legitimately lists the known
-      # invoices as choices; what it must never do is ask for typed input AND show escape options.
-      # The judge below separates the two cases; the structural rule that always holds is that a
-      # bare-prose request carries no exit button.
-      noQuickReplyIds: [exit_agent]
+    judge:
+      - "The response either asks the user which invoice they mean, or presents specific invoices to choose from."
     judgeNot:
-      - "The response mentions variables, context, memory, storage or any technical detail of how the assistant works."
+      - "The response exposes technical implementation details of the assistant — variables, a context or memory store, a database, a session, or tool mechanics. Speaking in character about itself (its records, its ledger, its elder sisters, its craft) is persona, not implementation, and does NOT count."
