@@ -7,11 +7,19 @@ runs: 5
 minPasses: 5
 
 turns:
-  - say: "Tell me about the saimiri"
+  # A proper name the MCP catalogue actually holds, kept inside a phrase that still carries the
+  # domain: a bare "Tell me about Sebastian" gives the classifier no signal and lands on "other",
+  # which moves the failure out of the agent entirely. With the domain word present, the subject is
+  # still the sharpest form of the test: "Sebastian"
+  # is exactly the kind of string a confused model passes to GetContextVariable, so the
+  # anti-invention property is under real pressure here. (An earlier version asked about "the
+  # saimiri", which get_monkey resolves to null — the catalogue is indexed by common name — sending
+  # the agent down a not-found branch and measuring synonym resolution instead.)
+  - say: "Tell me about a monkey named Sebastian"
     expect:
       agent: MonkeyAgent
       noContextAccess: true
       textNotEmpty: true
       textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judge:
-      - "The response is about squirrel monkeys (saimiri) or explains that the assistant could not find information about them."
+      - "The response describes a monkey named Sebastian."

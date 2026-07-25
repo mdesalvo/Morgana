@@ -101,20 +101,37 @@ of a turn's ~8 round trips — is now **20,906 characters against 35,040 at v0: 
 `behaviour-conversation-closure` meets its threshold for the first time. Two scenarios in the
 blocking group do not, and both are worth reading carefully.
 
-**`context-cross-agent` fell to 1/5, was repaired to 4/5, and is still short.** The cause was a real
+**Both blocking reds were repaired; A2.2 closes green.** Final state: `context-cross-agent` 5/5,
+`context-closed-vocabulary-monkeys` 5/5 (63,695 input tokens against 122,727 at v0, −48%).
+
+**`context-cross-agent` fell to 1/5 and was repaired in two steps.** The cause was a real
 hole in the prose that A2.1 had been masking: `ContextHandling` prescribed the cycle as "look before
 asking, write on the answer", which says nothing about the case where the user volunteers the value
 unprompted in their opening message. Billing then passed `userId` straight to its tool without ever
 persisting it, the shared registry stayed empty, and Contract had to ask again three turns later.
 Both `ContextHandling` and `SetContextVariable` now say it explicitly: however you come to learn a
 context-scoped value — asked for or volunteered — you must write it. That moved the scenario from
-1/5 to 4/5; one run in five still asks. The remaining gap is a candidate for
-`ToolParameterContextGuidance`, which is the text injected next to the parameter itself.
+1/5 to 4/5. The last run was closed by putting the same obligation where the decision is actually
+made: `ToolParameterContextGuidance`, the line injected beside every context-scoped parameter, held
+the read half of the cycle ("look before asking") while the write half lived two policies away. It
+now carries both. 5/5.
 
-**`context-closed-vocabulary-monkeys` fell from 5/5 to 3/5** while shedding half its tokens. Its two
-failures are unlike each other: one run said "database" to the user outright, and one answered that
-"some creature" was not found without ever naming the saimiri. This one is not yet diagnosed and
-must not be waved through: it is the anti-invention scenario, and it is in the blocking group.
+**`context-closed-vocabulary-monkeys` fell to 3/5, and the fault was the scenario's.** The MCP
+server was reachable and unbanned — checked directly — but its catalogue is indexed by common name:
+`get_monkey("Saimiri")` returns null, and the genus appears only inside the "Squirrel Monkey"
+record. The scenario was asking about a subject the tool cannot resolve, which sent the agent down a
+not-found branch (where one run volunteered the word "database" to the user) and had an
+anti-invention test measuring synonym resolution instead.
+
+The subject is now a proper name the catalogue holds — Sebastian — which is also the sharper test:
+a proper name is exactly the string a confused model passes to `GetContextVariable`. One detour on
+the way: "Tell me about Sebastian" alone gives the classifier no domain signal at all, lands on
+`other`, and the scenario collapsed to 0/5 with a single LLM call and 286 tokens — the agent was
+never reached. Phrased as "a monkey named Sebastian" it holds 5/5.
+
+The lesson pairs with A2.1's: **a scenario that fails is a claim about the prose only once you have
+ruled out the scenario itself.** Here the tool contract, the classifier and the test wording all had
+to be excluded before the prose could be accused — and it turned out innocent.
 
 ### Changes to the measuring instrument
 
