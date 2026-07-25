@@ -43,6 +43,17 @@ public sealed class NrtOptions
     /// <summary>Minimum level for the <c>Morgana</c> log categories on the host under test.</summary>
     public string HostLogLevel { get; init; } = "Information";
 
+    /// <summary>
+    /// Name of the revision phase this run measures — <c>v0</c> for the original assessment, then
+    /// <c>A2.1</c>, <c>A2.2</c> and so on. It is the row key in every baseline file.
+    /// </summary>
+    /// <remarks>
+    /// Bump it in <c>appsettings.NRT.json</c> when starting a new phase, or override it for a single
+    /// run with <c>Nrt__Phase</c>. Re-running the same phase replaces its row rather than appending
+    /// another: a phase is a state of the prose, not a count of how many times it was measured.
+    /// </remarks>
+    public string Phase { get; init; } = "v0";
+
     /// <summary>Binds the <c>Nrt</c> section, falling back to the defaults above when absent.</summary>
     public static NrtOptions Load(IConfiguration configuration)
         => configuration.GetSection("Nrt").Get<NrtOptions>() ?? new NrtOptions();

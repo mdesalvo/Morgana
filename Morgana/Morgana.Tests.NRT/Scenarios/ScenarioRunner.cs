@@ -135,7 +135,7 @@ public sealed class ScenarioRunner
         // written there would resurface inside the next turn's captured log.
         TestContext.Current.TestOutputHelper?.WriteLine($"[NRT] {outcome.Summary()}");
 
-        BaselineWriter.Write(outcome, llmDescriptor);
+        BaselineWriter.Write(outcome, llmDescriptor, options.Phase);
 
         return outcome;
     }

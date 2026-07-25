@@ -93,15 +93,25 @@ throughout. Keep them out of the tight iteration loop and run them at checkpoint
 Running the rest against `Efficiency` is also a useful stress test in its own right: it is the tier
 that amplifies contradiction-following failures.
 
-## The baseline
+## The journey
 
-Every scenario run writes `Baseline/<id>.md` — pass rate plus the token cost of one run, with the
-provider and the model bound to each tier recorded alongside (a token count without them measures
-nothing). The files live in the source tree, not the output directory, precisely so they can be
-committed and diffed.
+Every scenario run writes `Baseline/<id>.md`: one **row per revision phase**, carrying the pass rate
+and the token cost of a run, with the provider and the model bound to each tier recorded alongside (a
+token count without them measures nothing). `v0-vanilla` is the original assessment — the prose as it
+stood before A2 — and each phase after it shows what the revision bought or cost. `Baseline/JOURNEY.md`
+carries what the movements *mean*, including the regressions and the changes to the measuring
+instrument itself.
 
-They exist because the whole point of the harness is comparison, and a comparison needs a recorded
-"before". A prompt revision has three possible outcomes against a baseline, and only one of them is
+The phase name comes from `Nrt:Phase`; bump it in `appsettings.NRT.json` when starting a new one, or
+override a single run with `Nrt__Phase=A2.3`. **Re-running a phase replaces its row** rather than
+appending another: a phase is a state of the prose, not a count of how many times it was measured.
+
+The files live in the source tree, not the output directory, precisely so they can be committed and
+diffed — but the movement is inside the artefact, not only in the git history, because a reader who
+does not know which commits to compare would otherwise see today's number and no way to tell where it
+came from.
+
+A prompt revision has three possible outcomes against the previous row, and only one of them is
 success:
 
 - threshold held, tokens down → the outcome A2 is aiming for;
