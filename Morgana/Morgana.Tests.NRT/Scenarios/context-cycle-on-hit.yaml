@@ -20,7 +20,6 @@ turns:
       toolsCalled: [GetPaymentHistory]
       noContextWrites: true
       textNotEmpty: true
-      textNotContains: ["#INT#"]
+      textNotContains: ["#INT#", "variable", "context", "database", "session", "API", "endpoint", "parameter", "cache", "function"]
     judgeNot:
       - "The response asks the user for their customer code, identifier or any information the user already provided earlier in the conversation."
-      - "The response exposes technical implementation details of the assistant — variables, a context or memory store, a database, a session, or tool mechanics. Speaking in character about itself (its records, its ledger, its elder sisters, its craft) is persona, not implementation, and does NOT count."

@@ -31,7 +31,6 @@ turns:
       contextVocabulary: [userId]
       toolsCalled: [GetContractDetails]
       textNotEmpty: true
-      textNotContains: ["#INT#"]
+      textNotContains: ["#INT#", "variable", "context", "database", "session", "API", "endpoint", "parameter", "cache", "function"]
     judgeNot:
       - "The response asks the user for their customer code or identifier."
-      - "The response exposes technical implementation details of the assistant — variables, a context or memory store, a database, a session, or tool mechanics. Speaking in character about itself (its records, its ledger, its elder sisters, its craft) is persona, not implementation, and does NOT count."

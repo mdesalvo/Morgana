@@ -22,11 +22,10 @@ turns:
       quickReplies: none
       richCard: absent
       textNotEmpty: true
-      textNotContains: ["#INT#"]
+      textNotContains: ["#INT#", "variable", "context", "database", "session", "API", "endpoint", "parameter", "cache", "function"]
     judge:
       - "The response asks the user for an identifier or customer code."
     judgeNot:
-      - "The response exposes technical implementation details of the assistant — variables, a context or memory store, a database, a session, or tool mechanics. Speaking in character about itself (its records, its ledger, its elder sisters, its craft) is persona, not implementation, and does NOT count."
       - "The response lists predefined options for the user to pick from."
 
   - say: "P994E"
@@ -37,6 +36,4 @@ turns:
       toolsCalled: [SetContextVariable, GetInvoices]
       richCard: present
       textNotEmpty: true
-      textNotContains: ["#INT#"]
-    judgeNot:
-      - "The response exposes technical implementation details of the assistant — variables, a context or memory store, a database, a session, or tool mechanics. Speaking in character about itself (its records, its ledger, its elder sisters, its craft) is persona, not implementation, and does NOT count."
+      textNotContains: ["#INT#", "variable", "context", "database", "session", "API", "endpoint", "parameter", "cache", "function"]

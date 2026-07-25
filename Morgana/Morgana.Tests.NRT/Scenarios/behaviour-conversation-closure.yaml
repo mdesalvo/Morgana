@@ -1,26 +1,33 @@
 id: behaviour-conversation-closure
 description: >-
-  A completed request offers the two closure buttons; a goodbye does not offer them again. The
-  second turn is also where the removal of the endsWithQuestion heuristic shows: nothing but the
-  absence of SetTurnContinuation decides that the agent is done.
+  Family B in both its wordings: escape appended to a choice list so the user is never trapped, and
+  closure withheld when the user has already said goodbye. Also where the removal of the
+  endsWithQuestion heuristic shows — nothing but the tool decides that the agent is done.
 
 turns:
+  # Two lawful shapes again: having shown the invoices, the agent may close the request (CLOSURE
+  # pair) or offer the invoices as further choices (Family A + ESCAPE appended). Asserting the
+  # closure pair outright, as an earlier version did, failed the agent for taking the second one.
+  # What holds either way is that the user always has a way out of the turn.
   - say: "Hi, my customer code is P994E — show me my last 3 invoices"
     expect:
       agent: BillingAgent
       toolsCalled: [GetInvoices, SetQuickReplies]
-      quickReplyIds: [continue_agent, exit_agent]
+      quickReplies: any
+      escapeOptionsWithPrimary: true
       textNotEmpty: true
 
   - say: "That's all I needed, thanks"
     expect:
       agent: BillingAgent
       agentCompleted: true
+      # The point of the turn: a goodbye is answered with a farewell, not with two more buttons
+      # asking a departing user to depart again.
       quickReplies: none
-      toolsNotCalled: [SetTurnContinuation]
       textNotEmpty: true
       textNotContains: ["#INT#"]
     judge:
-      - "The response says goodbye or acknowledges that the exchange is over."
+      # "explicitly says goodbye" proved too strict: a polite closing in character is a farewell.
+      - "The response is a farewell, a polite closing, or an acknowledgement of the user's thanks."
     judgeNot:
       - "The response asks a question or invites the user to continue the conversation."

@@ -78,6 +78,12 @@ public sealed class ExpectSpec
     /// </remarks>
     public bool? NoStandaloneEscapeOptions { get; init; }
 
+    /// <summary>
+    /// The other half of the same rule: whenever the turn emits primary options, the escape pair
+    /// must be appended to them, so the user is never trapped inside a list of choices.
+    /// </summary>
+    public bool? EscapeOptionsWithPrimary { get; init; }
+
     /// <summary>Rich card presence: <c>absent</c> or <c>present</c>.</summary>
     public string? RichCard { get; init; }
 

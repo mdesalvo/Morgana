@@ -86,6 +86,13 @@ public static class ExpectationChecker
             failures.Add(
                 $"noStandaloneEscapeOptions: the turn emitted only the escape pair ({FormatIds(quickReplies)}) "
               + "with no primary option beside it");
+
+        if (expect.EscapeOptionsWithPrimary is true
+            && quickReplies.Any(reply => !EscapeOptionIds.Contains(reply.Id))
+            && !EscapeOptionIds.All(id => quickReplies.Any(reply => string.Equals(reply.Id, id, StringComparison.OrdinalIgnoreCase))))
+            failures.Add(
+                $"escapeOptionsWithPrimary: the turn offered primary options ({FormatIds(quickReplies)}) "
+              + "without appending the escape pair, trapping the user in the list");
     }
 
     /// <summary>Presence or absence of a rich card.</summary>

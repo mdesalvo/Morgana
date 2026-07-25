@@ -20,8 +20,6 @@ turns:
       toolsCalled: [SetTurnContinuation]
       noStandaloneEscapeOptions: true
       textNotEmpty: true
-      textNotContains: ["#INT#"]
+      textNotContains: ["#INT#", "variable", "context", "database", "session", "API", "endpoint", "parameter", "cache", "function"]
     judge:
       - "The response either asks the user which invoice they mean, or presents specific invoices to choose from."
-    judgeNot:
-      - "The response exposes technical implementation details of the assistant — variables, a context or memory store, a database, a session, or tool mechanics. Speaking in character about itself (its records, its ledger, its elder sisters, its craft) is persona, not implementation, and does NOT count."
