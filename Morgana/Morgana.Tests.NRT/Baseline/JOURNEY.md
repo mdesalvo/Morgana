@@ -133,6 +133,42 @@ The lesson pairs with A2.1's: **a scenario that fails is a claim about the prose
 ruled out the scenario itself.** Here the tool contract, the classifier and the test wording all had
 to be excluded before the prose could be accused — and it turned out innocent.
 
+### `A2.3` — retarget the layers in agents.json
+
+InventoryAgent carried the same dispositive sequence twice: as prose in `Instructions` and again as
+six numbered steps inside `Formatting`. The two layers were rebuilt on the model — `Instructions` is
+what you must do and in what order, `Formatting` is how you present it — and the local rewrite of the
+Quick Reply Doctrine was deleted outright, being global since A2.1. Together **12,682 -> 5,526
+characters, −56%**, with the two gates (seal word proves ownership, explicit yes authorises), the
+live-stock rule, the non-existent capabilities and both button payloads all preserved.
+
+Billing and Contract had `Instructions` consisting solely of the shared verbatim that restates
+ToolGrounding; they now carry their actual behavioural constraint, which is that their tools are
+read-only. Presentation directives were removed from every tool description — "YOU MUST present this
+using SetRichCard…" is Formatting, and each agent's Formatting already holds the card shape per
+tool; what stays in a tool description is the data contract and whether it is informative or
+dispositive.
+
+**agents.json prose: 31,119 -> 22,346 characters, −28%.** Combined with A2.1 and A2.2, an
+InventoryAgent turn now carries roughly half the fixed payload it carried at v0.
+
+Eight of eleven scenarios hold. Three do not, and this phase is **not closed**:
+
+| scenario | v0 | A2.2 | A2.3 | note |
+|---|---|---|---|---|
+| `context-cycle-on-miss` | 5/5 | 5/5 | 5/5 | −42% tokens vs v0 |
+| `context-cycle-on-hit` | 5/5 | 5/5 | 5/5 | −38% vs v0 |
+| `behaviour-conversation-closure` | 1/5 ✗ | 4/5 | 4/5 ✓ | −34% vs v0 |
+| `context-no-invented-writes` | 5/5 | — | **4/5 ✗** | −67% tokens, 4.2 calls against 7.0 |
+| `context-closed-vocabulary-monkeys` | 5/5 | 5/5 | **4/5 ✗** | judge disputes "an actual monkey" |
+| `context-cross-agent` | 2/5 ✗ | 5/5 ✓ | **2/5 ✗** | Contract asks for the identifier again |
+
+`context-cross-agent` is the serious one: it regressed to its v0 value on a phase that never touched
+the context rules, so the cause is in what Billing's or Contract's own prose stopped saying. The
+other two look lighter — one run of `context-no-invented-writes` never reached InventoryAgent at
+all, and the monkeys failure is the judge refusing to call a hand-puppet "an actual monkey" — but
+neither is diagnosed yet, and the blocking group does not accept a shrug.
+
 ### Changes to the measuring instrument
 
 - **A2.2** — the forbidden-term list was too coarse: bare `context` and `API` produced false
