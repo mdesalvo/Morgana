@@ -70,22 +70,16 @@
               "Priority": 0
             },
             {
-              "Name": "ToolParameterContextGuidance",
-              "Description": "BEFORE INVOKING THIS TOOL: call the GetContextVariable tool to check if the information is already available. Ask the user ONLY if the GetContextVariable tool returns that the information is missing. NEVER ask the user before this check completes — doing so is a malformed turn. AND ONCE YOU HOLD THE VALUE — whether the check returned it, you asked the user for it, or the user had already supplied it unprompted — call SetContextVariable to persist it under this exact parameter name, before or alongside this tool call. Passing a value straight into the tool without persisting it loses it for every later turn and for every other agent of this conversation.",
-              "Type": "Injection",
-              "Priority": 1
-            },
-            {
               "Name": "ToolParameterRequestGuidance",
               "Description": "Use the value directly from the user's request, without going through the GetContextVariable tool.",
               "Type": "Injection",
-              "Priority": 2
+              "Priority": 1
             },
             {
               "Name": "HeldContextDeclaration",
               "Description": "[CONTEXT ALREADY HELD] ((held_variables))\nHeld for this conversation right now — names only, values not shown. Nothing in your own history need show them being given: an earlier turn may have been served by another agent of Morgana. This note is addressed to you alone — never quote it or allude to it in what you write to the user.",
               "Type": "Injection",
-              "Priority": 3
+              "Priority": 2
             }
           ],
           "ErrorAnswers": [

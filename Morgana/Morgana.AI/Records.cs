@@ -1139,15 +1139,19 @@ public static class Records
     /// <para>
     /// <strong>"Injection" is not a policy tier, it is a different destination.</strong> Entries of
     /// that type are text fragments spliced in at the point where the model decides, never rendered
-    /// into the composed system prompt, where they would be instructions with no referent — "BEFORE
-    /// INVOKING THIS TOOL" names no tool there — paid for on every round trip. They are looked up by
-    /// name, and there are two splice sites:
+    /// into the composed system prompt, where they would be instructions with no referent — a
+    /// template opening "BEFORE INVOKING THIS TOOL" names no tool there — paid for on every round
+    /// trip. They are looked up by name (see <see cref="GlobalPolicy.Templates"/>), and there are two
+    /// splice sites:
     /// </para>
     /// <list type="bullet">
     /// <item><term>Tool and parameter descriptions</term><description>
-    ///     <c>ToolDescriptionContextGuidance</c>, <c>ToolParameterContextGuidance</c> and
-    ///     <c>ToolParameterRequestGuidance</c>, spliced by <c>MorganaToolAdapter</c> when the tool
-    ///     surface is built.</description></item>
+    ///     <c>ToolDescriptionContextGuidance</c> and <c>ToolParameterRequestGuidance</c>, spliced by
+    ///     <c>MorganaToolAdapter</c> when the tool surface is built. There is deliberately no
+    ///     parameter-level template for the context scope: the one that used to exist restated clause
+    ///     by clause what P0, the framework Instructions and the tool-level template already say, and
+    ///     it was the only one paid per-parameter, per-tool, on every round trip. Context-scoped
+    ///     parameters are named in their tool's own description instead.</description></item>
     /// <item><term>The turn itself</term><description><c>HeldContextDeclaration</c>, spliced by
     ///     <c>MorganaAIContextProvider.ProvideAIContextAsync</c> before each invocation. It is the
     ///     only entry carrying a per-turn <em>fact</em> rather than a rule — the names of the context
@@ -1167,11 +1171,44 @@ public static class Records
         public const string InjectionType = "Injection";
 
         /// <summary>
+        /// Names of the injection templates the framework splices, and the whole of the contract
+        /// between <c>morgana.json</c> and the code that reads it.
+        /// </summary>
+        /// <remarks>
+        /// A template is resolved by <see cref="Name"/>, so each of these strings has to match an
+        /// entry in the configuration exactly. Kept here rather than inline at the splice sites: as
+        /// scattered literals the contract was invisible — nothing tied the two ends together, and
+        /// deleting an entry from the configuration left a lookup in the code silently searching for
+        /// a name that no longer existed.
+        /// </remarks>
+        public static class Templates
+        {
+            /// <summary>Appended to the description of a tool declaring context-scoped parameters.</summary>
+            public const string ToolDescriptionContext = "ToolDescriptionContextGuidance";
+
+            /// <summary>Appended to the description of a request-scoped parameter.</summary>
+            public const string ToolParameterRequest = "ToolParameterRequestGuidance";
+
+            /// <summary>Injected per turn, naming the context variables the session currently holds.</summary>
+            public const string HeldContextDeclaration = "HeldContextDeclaration";
+        }
+
+        /// <summary>
         /// True when this entry is an injection template, spliced into tool/parameter descriptions
         /// instead of being rendered among the global policies.
         /// </summary>
         public bool IsInjectionTemplate
             => string.Equals(Type, InjectionType, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Resolves an injection template's text by name, or <c>""</c> when the configuration
+        /// declares none — the signal every splice site treats as "leave the description alone".
+        /// </summary>
+        /// <param name="policies">The framework global policies.</param>
+        /// <param name="name">One of the <see cref="Templates"/> constants.</param>
+        public static string ResolveTemplate(IEnumerable<GlobalPolicy> policies, string name)
+            => policies.FirstOrDefault(policy =>
+                   string.Equals(policy.Name, name, StringComparison.OrdinalIgnoreCase))?.Description ?? "";
     }
 
     /// <summary>

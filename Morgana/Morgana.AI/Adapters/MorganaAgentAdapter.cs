@@ -388,9 +388,8 @@ public class MorganaAgentAdapter
         // hence Type "Injection", like the two tool/parameter guidances. Handed over as a plain
         // string so the provider keeps no prompt-layer dependency. Absent from the configuration,
         // the provider injects nothing.
-        string? heldContextDeclaration = morganaPolicies
-            .FirstOrDefault(p => string.Equals(p.Name, "HeldContextDeclaration", StringComparison.OrdinalIgnoreCase))?
-            .Description;
+        string heldContextDeclaration = Records.GlobalPolicy.ResolveTemplate(
+            morganaPolicies, Records.GlobalPolicy.Templates.HeldContextDeclaration);
 
         // The provider needs the allow-list up front: only writes to a name in this set
         // trigger OnSharedContextUpdate; everything else stays agent-local.
@@ -420,11 +419,10 @@ public class MorganaAgentAdapter
         Records.ToolDefinition[] tools,
         Func<MorganaTool.ToolContext> toolContextFactory)
     {
-        // The adapter needs the framework GlobalPolicies up front: it injects the
-        // P0–P3 parameter guidance (ToolParameterContextGuidance / RequestGuidance) into
-        // each generated AIFunction's parameter descriptions, so the LLM is told to check
-        // context first vs. ask the user. Without them the tools still work but lose that
-        // grounding nudge.
+        // The adapter needs the framework GlobalPolicies up front: it splices the injection
+        // templates into each generated AIFunction's tool and parameter descriptions
+        // (ToolDescriptionContextGuidance, ToolParameterRequestGuidance). Without them the tools
+        // still work but lose that grounding nudge.
         MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(morganaPolicies);
 
         // Split the merged set back into base (morgana.json) vs intent-specific

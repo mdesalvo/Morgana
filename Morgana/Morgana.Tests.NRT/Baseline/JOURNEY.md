@@ -435,6 +435,74 @@ Verified before spending anything: a capturing `IChatClient` confirmed off-line 
 `ChatOptions.Instructions` (in the recency slot, after the domain layer), that an empty session
 injects nothing, and that seeded ephemeral keys are filtered out.
 
+### `A2.5.2` — a cut that turned out to be free, and why
+
+The plan was clean. A2.5.1 supplied the fact five restatements existed to compensate for, so the
+apparatus became testable for removal, and `ToolParameterContextGuidance` was the obvious first
+candidate: it repeats clause for clause — write half included — what P0, the framework `Instructions`
+and `ToolDescriptionContextGuidance` already say, and it is the only one paid **per-parameter,
+per-tool, on every round trip**. 661 characters, 112 words, times three context-scoped parameters on
+Billing and Contract, two on Inventory.
+
+The whole suite was run, all 11 tests, 8 scenarios:
+
+| scenario | A2.5.1 | A2.5.2 |
+|---|---:|---:|
+| `context-cross-agent` | 5/5 | **5/5** |
+| `context-cycle-on-hit` | 5/5 | **5/5** |
+| `context-cycle-on-miss` | 5/5 | **5/5** |
+| `context-no-invented-writes` | 5/5 | **5/5** |
+| `context-closed-vocabulary-monkeys` | — | **5/5** |
+| `behaviour-conversation-closure` | — | **5/5** |
+| `behaviour-rich-card` | — | **5/5** |
+| `behaviour-turn-continuation-operand` | — | **5/5** |
+
+**The token columns refused to cooperate, and that is what gave it away.** `cycle-on-hit`, the tight
+comparison, went **up** 5.1%. `no-invented-writes` up 9.9%, `cross-agent` down 3.6%, `cycle-on-miss`
+down 6.8%. And `monkeys` — which declares no context-scoped parameter and therefore cannot have been
+touched by the cut — moved 4.9%. That is the noise floor at five runs, and it swamps a change of this
+size; but it also left open whether the cut had shipped at all. Checking that, off-line, is what
+opened the real finding.
+
+**Parameter descriptions have never reached the model.** `MorganaToolAdapter` assembles the enriched
+per-parameter descriptions and hands them to `AIFunctionFactoryOptions.AdditionalProperties`, which is
+documented as *"additional values to store on the resulting `AITool.AdditionalProperties` property …
+arbitrary information about the function"* — metadata on the function object, never part of the
+emitted JSON schema. MEAI takes parameter descriptions from the delegate's `[Description]` attributes,
+and no `MorganaTool` method carries one. Driving the real path off-line — real policies, real adapter,
+real `CreateFunction` — emits:
+
+```json
+{"type":"object","properties":{"userId":{"type":"string"},"count":{"type":"integer"}},"required":["userId","count"]}
+```
+
+Bare. It has been so since commit `a116fae`, 2025-12-20, whose title states the belief being
+contradicted: *"Exploit AIFunction.AdditionalProperties to convey tool's parameters with their name,
+description and scope"*. Seven months.
+
+**What this costs, and what it does not.** The model still receives the system prompt entire, the tool
+name, the tool **description** — which is why `ToolDescriptionContextGuidance` works and shows up in
+the probe intact — and every parameter's name, type and required flag. Nothing was flying blind, and
+`userId` is a fairly self-documenting name. What was lost is the authored prose: every parameter
+description in `agents.json`, including A2.5's rewrite of `userId` from mechanical plumbing to *one
+customer, one code*, which this journal recorded as part of that phase and which never shipped. MCP
+tools take the same path, so descriptions authored by a remote server are parsed carefully by
+`MCPToolAdapter` and then dropped too.
+
+**The sharpest consequence is historical.** `ToolDescriptionContextGuidance` is one phase old — A2.5
+created it. Before that, the only place naming which parameters are context-scoped was the
+parenthetical inside P0: *"parameter names declared with 'Scope: context' in your tool contracts (for
+example 'userId')"*. For seven months the entire scope contract travelled on one example inside one
+policy, because the channel built for it did not run. A2.5 argued the promotion from parameter to tool
+on placement grounds; it turns out to have been the only working channel, which is luck, not method.
+
+**So this phase measured nothing about its own hypothesis.** 11/11 says nothing regressed — worth
+having, since the phase also carries the `morganaPolicies` and `GlobalPolicy.Templates` refactors — but
+the cut was a no-op on the wire and the redundancy argument remains unmeasured. **The cut is kept
+anyway**, and for a stronger reason than the one it was made for: when the schema defect is repaired,
+112 words of duplicated rule must not reappear on every context-scoped parameter of every tool. Kept
+cut, the repair ships only the authored descriptions.
+
 ### Changes to the measuring instrument
 
 - **A2.5** — failure reports now persist to `Baseline/failures/{scenario}.log`, written whole on
@@ -521,6 +589,19 @@ Recorded here because they make rows comparable, or not:
   did call the domain tool, and the context read follows only by elimination (empty per-agent history,
   and the injected note carries no values). It should assert `contextReads: [Hit:userId]` outright.
   An instrument-only change, never to be bundled with a prose phase.
+- **Parameter descriptions never reach the model** — see A2.5.2. The repair is known
+  (`AIFunctionFactoryOptions.JsonSchemaCreateOptions`, emitting descriptions into the schema) and it is
+  not a bug fix in the usual sense: it **adds** prompt text the model has never seen, to every tool of
+  every agent, so it is a prose change wearing a code change's clothes and needs its own phase and its
+  own measurement. Two decisions belong to it. First, `ToolParameterRequestGuidance` is currently inert
+  and would come back to life with the repair — it should be re-read before that happens, not after.
+  Second, the `agents.json` parameter descriptions have never been reviewed against a model that could
+  see them; they were authored blind.
+- **The suite cannot see a change of this size.** `monkeys`, whose prompt the A2.5.2 cut could not
+  touch, moved 4.9% on tokens. Five runs resolve pass rates, not payload arithmetic — so a phase whose
+  claim is "this is cheaper" needs either a static measurement of the composed payload (as A2.1–A2.3
+  used) or many more runs. Reading the token columns as evidence of a saving is a mistake this journal
+  nearly made.
 - **Five statements enforce one rule.** "Look a context-scoped value up before asking" is written in
   P0 `ContextHandling`, the framework `Instructions`, `ToolDescriptionContextGuidance`,
   `ToolParameterContextGuidance` and `GetContextVariable`'s own description. Four of the five existed

@@ -124,23 +124,26 @@ public class MorganaToolAdapter
     /// for a value the conversation store already holds — happens one step earlier, when the model
     /// weighs the tool at all. The tool description is what it reads then.
     /// </para>
-    /// <para><strong>Parameter Scope Processing:</strong></para>
+    /// <para><strong>Parameter Scope Processing</strong> — and note first that none of it currently
+    /// reaches the model: the assembled parameter descriptions land on
+    /// <c>AITool.AdditionalProperties</c>, which is metadata on the function object and never enters
+    /// the emitted JSON schema. See the KNOWN DEFECT comment in the method body.</para>
     /// <list type="bullet">
-    /// <item><term>Scope: "context"</term><description>Appends ToolParameterContextGuidance (check GetContextVariable first)</description></item>
     /// <item><term>Scope: "request"</term><description>Appends ToolParameterRequestGuidance (use directly from request)</description></item>
+    /// <item><term>Scope: "context"</term><description>Nothing. The parameter is named in its tool's
+    ///     own description instead — see below</description></item>
     /// <item><term>No scope</term><description>Uses parameter description as-is</description></item>
     /// </list>
-    /// <para><strong>Context Guidance Example:</strong></para>
-    /// <code>
-    /// // Original description from agents.json
-    /// "Alphanumeric identifier of the user"
-    ///
-    /// // After applying ToolParameterContextGuidance
-    /// "Alphanumeric identifier of the user. BEFORE INVOKING THIS TOOL: call GetContextVariable
-    /// to verify if the information is already available. Ask the user ONLY if GetContextVariable
-    /// returns that the information is missing."
-    /// </code>
-    /// <para>This guidance ensures the LLM checks context before asking users for information.</para>
+    /// <para>A template left unconfigured leaves the parameter description untouched rather than
+    /// appending an empty one, which would trail a bare ". " on every such parameter.</para>
+    /// <para><strong>Why the context scope has no parameter-level template.</strong> It used to: a
+    /// fragment reading "BEFORE INVOKING THIS TOOL: call GetContextVariable … Ask the user ONLY if it
+    /// returns missing … ONCE YOU HOLD THE VALUE call SetContextVariable". Every clause of it, the
+    /// write half included, is already carried by policy P0, by the framework Instructions and by
+    /// ToolDescriptionContextGuidance above — and it was the only one of them paid per-parameter,
+    /// per-tool, on every round trip. It was removed once
+    /// <c>MorganaAIContextProvider.ProvideAIContextAsync</c> began stating per turn which variables
+    /// the session actually holds, which is the one thing none of those restatements carried.</para>
     /// </remarks>
     public AIFunction CreateFunction(string toolName)
     {
@@ -149,12 +152,8 @@ public class MorganaToolAdapter
             ? def
             : throw new InvalidOperationException($"Tool definition '{toolName}' not found");
 
-        string descriptionGuidance = globalPolicies.FirstOrDefault(p =>
-            string.Equals(p.Name, "ToolDescriptionContextGuidance", StringComparison.OrdinalIgnoreCase))?.Description ?? "";
-        string contextGuidance = globalPolicies.FirstOrDefault(p =>
-            string.Equals(p.Name, "ToolParameterContextGuidance", StringComparison.OrdinalIgnoreCase))?.Description ?? "";
-        string requestGuidance = globalPolicies.FirstOrDefault(p =>
-            string.Equals(p.Name, "ToolParameterRequestGuidance", StringComparison.OrdinalIgnoreCase))?.Description ?? "";
+        string descriptionGuidance = Records.GlobalPolicy.ResolveTemplate(globalPolicies, Records.GlobalPolicy.Templates.ToolDescriptionContext);
+        string requestGuidance = Records.GlobalPolicy.ResolveTemplate(globalPolicies, Records.GlobalPolicy.Templates.ToolParameterRequest);
 
         // Name the tool's own context-scoped parameters in its description. A tool with none
         // (every presentation tool, every purely request-scoped domain tool) is left untouched:
@@ -168,20 +167,32 @@ public class MorganaToolAdapter
             ? $"{definition.Description}\n\n{descriptionGuidance.Replace(ContextParametersPlaceholder, string.Join(", ", contextParameters))}"
             : definition.Description;
 
-        // Build a name→description map enriched with scope guidance.
-        // AIFunctionFactory.Create reads AdditionalProperties to override the per-parameter
-        // description it would otherwise infer from the delegate's ParameterInfo, so the LLM
-        // sees the full guidance text rather than the raw delegate parameter name.
+        // KNOWN DEFECT — this map does not reach the model, and has never reached it.
+        // AIFunctionFactoryOptions.AdditionalProperties is documented as "additional values to store
+        // on the resulting AITool.AdditionalProperties property … arbitrary information about the
+        // function": metadata hanging off the AIFunction object, NOT an override of the per-parameter
+        // descriptions. Those come from the delegate's own [Description] attributes, which no
+        // MorganaTool method carries, so the emitted JSON schema is bare — {"userId":{"type":"string"}}
+        // — and every parameter description authored in agents.json (MCP servers' own descriptions
+        // included, since MCP tools register through this same adapter) is dropped on the floor.
+        // What the model does receive is the tool NAME, its DESCRIPTION (hence
+        // ToolDescriptionContextGuidance above, which is why that one works), and the parameter names,
+        // types and required flags. Repairing this means generating the descriptions into the schema
+        // (AIFunctionFactoryOptions.JsonSchemaCreateOptions) — a change that ADDS prompt text the model
+        // has never seen, so it belongs to a measured phase of its own, not to a drive-by fix.
+        // The map is still assembled: it is the shape the repair will feed, and it costs one dictionary.
+        //
+        // Only the request scope carries a parameter-level template. A context-scoped parameter is
+        // named in its tool's own description above and gets nothing here, and a template left
+        // unconfigured leaves the description alone rather than trailing a bare ". " on it.
         Dictionary<string, object?> additionalProperties = [];
         foreach (Records.ToolParameter parameter in definition.Parameters)
         {
-            additionalProperties[parameter.Name] =
-                parameter.Scope?.ToLowerInvariant().Trim() switch
-                {
-                    "context" => $"{parameter.Description}. {contextGuidance}",
-                    "request" => $"{parameter.Description}. {requestGuidance}",
-                    _ => parameter.Description
-                };
+            bool isRequestScoped = string.Equals(parameter.Scope?.Trim(), "request", StringComparison.OrdinalIgnoreCase);
+
+            additionalProperties[parameter.Name] = isRequestScoped && requestGuidance.Length > 0
+                ? $"{parameter.Description}. {requestGuidance}"
+                : parameter.Description;
         }
 
         return AIFunctionFactory.Create(implementation,
