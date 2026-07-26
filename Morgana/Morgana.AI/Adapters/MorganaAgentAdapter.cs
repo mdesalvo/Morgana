@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Client;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
@@ -210,12 +211,13 @@ public class MorganaAgentAdapter
             agentTools,
             toolContextFactory);
 
-        // 6b) Layer on tools from every [UsesMCPServer] on the agent: each server is
-        //     discovered through the reconnect-safe path and its tools registered into the
-        //     same adapter. Best-effort by design — a server that is down or misconfigured
-        //     is logged per-server and skipped, never aborting agent creation (an
-        //     MCP-only agent simply ends up with no tools rather than failing to exist).
-        RegisterMCPTools(agentType, morganaToolAdapter);
+        // 6b) Collect the tools of every [UsesMCPServer] on the agent: each server is
+        //     discovered through the reconnect-safe path. Best-effort by design — a server
+        //     that is down or misconfigured is logged per-server and skipped, never aborting
+        //     agent creation (an MCP-only agent simply ends up with no tools rather than
+        //     failing to exist). They stay apart from the native adapter because they need
+        //     nothing from it: each one arrives already an AIFunction.
+        List<AIFunction> mcpTools = RegisterMCPTools(agentType);
 
         // 7) Resolve THIS agent's own tier client/pricing (never the framework-default
         //    client) and wrap it in a per-agent dust meter. The role label
@@ -258,7 +260,7 @@ public class MorganaAgentAdapter
                 ChatOptions = new ChatOptions
                 {
                     Instructions = ComposeAgentInstructions(agentPrompt),
-                    Tools = [.. morganaToolAdapter.CreateAllFunctions()]
+                    Tools = [.. morganaToolAdapter.CreateAllFunctions(), .. mcpTools]
                 }
             });
 
@@ -533,27 +535,26 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Discovers tools from all MCP servers declared on the agent and registers them
-    /// into the agent's tool adapter.
+    /// Discovers the tools of every MCP server declared on the agent, ready to be handed to
+    /// the agent alongside its native ones.
     /// </summary>
     /// <param name="agentType">Agent type to inspect for [UsesMCPServer] attributes</param>
-    /// <param name="morganaToolAdapter">Target adapter to register discovered MCP tools into</param>
+    /// <returns>The discovered tools, empty if the agent declares no server or none answered</returns>
     /// <remarks>
     /// <para><strong>MCP Integration Flow:</strong></para>
     /// <list type="number">
     /// <item>Collect all [UsesMCPServer] attributes on the agent class</item>
     /// <item>If none found, skip (agent doesn't use MCP)</item>
-    /// <item>For each attribute:
-    ///   <list type="bullet">
-    ///   <item>Get or create MCP client connection via IMCPClientRegistryService</item>
-    ///   <item>Discover available tools via DiscoverToolsAsync</item>
-    ///   <item>Convert MCP tools to Morgana format via MCPToolAdapter</item>
-    ///   <item>Register converted tools in MorganaToolAdapter</item>
-    ///   </list>
-    /// </item>
+    /// <item>For each attribute, discover its tools through the reconnect-safe path</item>
     /// </list>
+    /// <para>
+    /// There is no conversion step and no Morgana-side tool registration: an
+    /// <c>McpClientTool</c> is already an <c>AIFunction</c>, so it goes to the agent as it
+    /// comes off the wire. Nothing of the server's own authoring is re-derived, which is what
+    /// keeps parameter descriptions, nested schemas and the true <c>required</c> set intact.
+    /// </para>
     /// </remarks>
-    private void RegisterMCPTools(Type agentType, MorganaToolAdapter morganaToolAdapter)
+    private List<AIFunction> RegisterMCPTools(Type agentType)
     {
         // An agent may declare several [UsesMCPServer] (multiple servers, mixed
         // Http/Stdio) — collect them all, not just the first.
@@ -566,10 +567,12 @@ public class MorganaAgentAdapter
         if (attributes.Length == 0)
         {
             logger.LogDebug("Agent {AgentTypeName} does not use MCP servers", agentType.Name);
-            return;
+            return [];
         }
 
         logger.LogInformation("Agent {AgentTypeName} declares {AttributesLength} MCP server(s)", agentType.Name, attributes.Length);
+
+        List<AIFunction> mcpTools = [];
 
         foreach (UsesMCPServerAttribute attribute in attributes)
         {
@@ -577,35 +580,43 @@ public class MorganaAgentAdapter
             // attempted independently and a failure (unreachable host, bad URI, discovery
             // error) is logged and swallowed so it cannot abort the remaining servers or
             // agent creation. This is what makes MCP registration "best-effort" — a dead
-            // server costs that server's tools, nothing more. RegisterMCPToolsFromServer
+            // server costs that server's tools, nothing more. DiscoverMCPToolsFromServer
             // itself already absorbs a terminated session via the reconnect-safe path; a
             // throw reaching here means a hard, non-transient fault for THAT server only.
             try
             {
-                RegisterMCPToolsFromServer(attribute, morganaToolAdapter);
+                mcpTools.AddRange(DiscoverMCPToolsFromServer(attribute));
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to register MCP tools from server: {AttributeCommand}", attribute.Command);
             }
         }
+
+        return mcpTools;
     }
 
     /// <summary>
-    /// Registers tools from a single MCP server into the MorganaToolAdapter.
-    /// Handles connection, tool discovery, conversion, and registration.
+    /// Discovers the tools of a single MCP server, as the SDK hands them over.
     /// </summary>
     /// <param name="serverAttribute">Attribute declaring the MCP server (transport, command, args)</param>
-    /// <param name="morganaToolAdapter">Target adapter to register discovered tools into</param>
+    /// <returns>The server's tools, already invocable as <c>AIFunction</c>s</returns>
     /// <remarks>
     /// <para><strong>Tool naming:</strong></para>
     /// <para>
-    /// Tools are registered under the names the MCP server itself declares (e.g.
-    /// <c>get_weather</c>). No Morgana-side prefix or namespacing is added, so the LLM
-    /// calls them by their native server name exactly as the server advertises them.
+    /// Tools keep the names the MCP server itself declares (e.g. <c>get_weather</c>). No
+    /// Morgana-side prefix or namespacing is added, so the LLM calls them by their native
+    /// server name exactly as the server advertises them.
     /// </para>
+    /// <para><strong>Why nothing is adapted here.</strong> An <c>McpClientTool</c> is an
+    /// <c>AIFunction</c> already, holding the server's input schema verbatim and invoking the
+    /// tool over the session it was discovered on. Morgana's own prompt policies have no purchase
+    /// on it: <c>ToolDescriptionContextGuidance</c> addresses context-scoped parameters and an MCP
+    /// tool has none by construction, while a parameter-level template cannot be spliced into a
+    /// schema authored elsewhere — nor should it be, since it would state for every remote
+    /// parameter a rule that is trivially true of all of them.</para>
     /// </remarks>
-    private void RegisterMCPToolsFromServer(UsesMCPServerAttribute serverAttribute, MorganaToolAdapter morganaToolAdapter)
+    private IList<McpClientTool> DiscoverMCPToolsFromServer(UsesMCPServerAttribute serverAttribute)
     {
         logger.LogInformation("Registering MCP tools from server: {ServerAttributeCommand}", serverAttribute.Command);
 
@@ -613,8 +624,9 @@ public class MorganaAgentAdapter
         // not survive instance recycling or scale-out can drop the cached client's session
         // between connect and tool listing (the spec-mandated HTTP 404 on a session-bearing
         // request). The wrapper transparently re-initializes and retries once instead of
-        // failing registration outright.
-        IList<ModelContextProtocol.Protocol.Tool> mcpTools = imcpClientRegistryService
+        // failing registration outright — and the tools handed back are bound to whichever
+        // client won, so there is no stale-session reference left to repair afterwards.
+        IList<McpClientTool> mcpTools = imcpClientRegistryService
             .ExecuteWithReconnectAsync(serverAttribute, client => client.DiscoverToolsAsync())
             .GetAwaiter()
             .GetResult();
@@ -625,45 +637,15 @@ public class MorganaAgentAdapter
         if (mcpTools.Count == 0)
         {
             logger.LogWarning("No tools discovered from MCP server: {ServerAttributeCommand}", serverAttribute.Command);
-            return;
+            return [];
         }
 
-        logger.LogInformation("Discovered {McpToolsCount} tools from MCP server: {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);
+        foreach (McpClientTool mcpTool in mcpTools)
+            logger.LogInformation("Registered MCP tool: {McpToolName}", mcpTool.Name);
 
-        // Take the live pooled client AFTER discovery: if the wrapper had to reconnect,
-        // the original client was disposed and the pool now holds the fresh one — the
-        // MCPToolAdapter must bind to that, not a stale reference to the dead session.
-        MCPClient mcpClient = imcpClientRegistryService.GetOrCreateClientAsync(serverAttribute)
-            .GetAwaiter()
-            .GetResult();
+        logger.LogInformation("Successfully registered {McpToolsCount} MCP tools from {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);
 
-        // Bridge each MCP tool into a native Morgana tool: ConvertTools IL-generates a
-        // typed delegate (correct parameter names/types) per remote tool and pairs it with
-        // a ToolDefinition, keyed by the server-declared tool name.
-        MCPToolAdapter mcpToolAdapter = new MCPToolAdapter(mcpClient, logger);
-        Dictionary<string, (Delegate toolDelegate, Records.ToolDefinition toolDefinition)> convertedTools =
-            mcpToolAdapter.ConvertTools(mcpTools.ToList());
-
-        foreach (KeyValuePair<string, (Delegate toolDelegate, Records.ToolDefinition toolDefinition)> kvp in convertedTools)
-        {
-            // Per-tool isolation, mirroring the per-server loop: one malformed/unbindable
-            // tool is logged and skipped so the rest of this server's tools still register.
-            try
-            {
-                // Force the definition's Name to the dictionary key (the canonical
-                // server-declared name) so registration and the LLM-visible name agree
-                // exactly — no prefix, no drift from whatever the source definition carried.
-                Records.ToolDefinition namedToolDefinition = kvp.Value.toolDefinition with { Name = kvp.Key };
-                morganaToolAdapter.AddTool(kvp.Key, kvp.Value.toolDelegate, namedToolDefinition);
-                logger.LogInformation("Registered MCP tool: {KvpKey}", kvp.Key);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to register MCP tool: {KvpKey} from {ServerAttributeCommand}", kvp.Key, serverAttribute.Command);
-            }
-        }
-
-        logger.LogInformation("Successfully registered {ConvertedToolsCount} MCP tools from {ServerAttributeCommand}", convertedTools.Count, serverAttribute.Command);
+        return mcpTools;
     }
 
     private class ToolDefinitionNameComparer : IEqualityComparer<Records.ToolDefinition>

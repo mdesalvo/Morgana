@@ -476,14 +476,13 @@ public class MCPClient : IAsyncDisposable
     /// <summary>
     /// Discovers all tools available on the connected MCP server.
     /// </summary>
-    public async Task<IList<Tool>> DiscoverToolsAsync(CancellationToken cancellationToken = default)
+    public async Task<IList<McpClientTool>> DiscoverToolsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             logger.LogDebug("Discovering tools from: {ServerLabel}", ServerLabel);
 
-            IList<McpClientTool> mcpTools = await mcpClient.ListToolsAsync(cancellationToken: cancellationToken);
-            List<Tool> tools = mcpTools.Select(t => t.ProtocolTool).ToList();
+            IList<McpClientTool> tools = await mcpClient.ListToolsAsync(cancellationToken: cancellationToken);
 
             logger.LogInformation("Discovered {ToolsCount} tools from: {ServerLabel}", tools.Count, ServerLabel);
             return tools;

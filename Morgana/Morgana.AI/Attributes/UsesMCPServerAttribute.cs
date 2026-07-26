@@ -35,8 +35,7 @@ namespace Morgana.AI.Attributes;
 /// <item>Collect all [UsesMCPServer] attributes via reflection</item>
 /// <item>Connect to each declared server via IMCPClientRegistryService</item>
 /// <item>Discover tools from each server via MCPClient</item>
-/// <item>Convert and register tools via MCPToolAdapter</item>
-/// <item>Make tools available to the agent during LLM interactions</item>
+/// <item>Hand them to the agent as they come (IFunction)</item>
 /// </list>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]

@@ -560,6 +560,62 @@ measurement is what settles it, and until the suite is re-run at this phase noth
 **Backport.** The change is one method body in `MorganaToolAdapter`, with no dependency on anything else
 in 0.26 — it cherry-picks onto `main` as it stands.
 
+**This phase has no row of its own.** A2.5.4 landed before a measurement window opened, so the next run
+records both. Their blast radii are disjoint everywhere except `context-closed-vocabulary-monkeys`,
+which is the only scenario touching an MCP tool — read that one against both changes, the rest against
+this one.
+
+### `A2.5.4` — the MCP world, without the IL
+
+A2.5.3 repaired the channel for tools Morgana builds. It could do nothing for tools it *receives*,
+because the receiving path rebuilt them from scratch: `MCPToolAdapter` parsed the remote server's JSON
+schema into `Records.ToolParameter`, mapped each declared type to a CLR type, generated a
+`DynamicMethod` with `DefineParameter` calls, anchored the executor in a static cache because IL cannot
+close over a local, and coerced every argument back on the way out. 423 lines to reconstruct — lossily —
+an object the SDK already hands over complete.
+
+`McpClientTool` **is** an `AIFunction`. It carries the server's input schema verbatim and invokes the
+tool over the session it was discovered on. `MCPClient.DiscoverToolsAsync` was already receiving those
+objects from `ListToolsAsync` and throwing them away, keeping only `t.ProtocolTool`. It now returns
+them, `MorganaAgentAdapter` appends them straight to `ChatOptions.Tools`, and
+`Adapters/MCPToolAdapter.cs` is deleted.
+
+**Measured live against the MonkeyMCP server MonkeyAgent declares** — an MCP `tools/list` and one
+`tools/call`, no LLM involved. Five tools, every one an `AIFunction`, and the delta on `get_monkey`:
+
+```
+"name": { "description": "The name of the monkey to get details for", "type": "string" }   ← now
+"name": { "type": "string" }                                                                ← before
+```
+
+That is A2.5.3's finding again, from the other direction: the remote author's prose was being parsed
+carefully and then discarded. The invocation was exercised too and returned real data over the same
+session.
+
+**Three defects close as a side effect, none of them separately fixed.** Optional parameters are no
+longer advertised as required, because the `required` set is the server's own and is not re-derived
+from a delegate that could carry no defaults. Nested objects and arrays survive, where
+`MapJsonTypeToClrType` used to flatten every parameter to a primitive. And arguments reach the server
+as the model produced them, instead of passing through `ConvertValueForMCP`, which coerced an absent
+value to `"0"`, `false` or `""`.
+
+**Morgana has no authoring surface here, and that is the point.** An MCP tool is acquired at runtime; it
+never appears in `agents.json`, so no domain expert ever wrote a word of it. Its prose belongs to whoever
+wrote the server. The whole doctrine this journal runs on — that an agent *is* its prose, and that tuning
+it means tuning sentences — simply does not reach these tools, and the only honest handling is to carry
+them through untouched. `ToolParameterRequestGuidance` is accordingly no longer spliced onto MCP
+parameters: it could not be, without rewriting a schema authored elsewhere, and it should not be, since
+an MCP tool has no context-scoped parameters by construction and the guidance would repeat on every
+remote parameter what is trivially true of all of them.
+
+**One behaviour is traded, and it is worth naming.** The static `executorCache` was overwritten on
+reconnect, which opportunistically repaired agents built against a since-disposed client — if some other
+agent happened to re-register in the meantime. Tools now bind to whichever client discovery ended on, so
+that repair is gone: an agent whose server recycles mid-conversation keeps failing tools until it is
+recreated. The old healing was luck rather than design, but it was real, and a `DelegatingAIFunction`
+that re-resolves through the registry on a session fault would restore it deliberately. Not done here,
+because the point of this change was to stop maintaining our own machinery.
+
 ### Changes to the measuring instrument
 
 - **A2.5** — failure reports now persist to `Baseline/failures/{scenario}.log`, written whole on
@@ -655,33 +711,16 @@ Recorded here because they make rows comparable, or not:
   merely *duplicating*. Only the third is waste, and the census has to be redone from scratch, because
   a sentence that was first-stating while the parameter channel was dead may be duplication now.
 - **`ToolParameterRequestGuidance` is live again** after seven months inert — 98 characters on every
-  request-scoped parameter of every tool, MCP tools included, since `MCPToolAdapter` scopes all remote
-  parameters `request`. It was re-read before the repair shipped, as this journal required, and kept:
+  request-scoped parameter of every native tool (A2.5.4 took MCP tools out of its reach). It was
+  re-read before the repair shipped, as this journal required, and kept:
   read against the tool-level `ToolDescriptionContextGuidance` that enumerates the *context*-scoped
   names, it draws the same boundary from the other side and at the rung where the model is already
   binding that argument. That is the reinforcement reading; the duplication reading is available too,
   and it is the cheapest single thing to cut if the census says so.
-- **MCP optional parameters are advertised as required.** Found in passing while probing A2.5.3.
-  `MCPToolAdapter.ExtractParametersWithTypes` reads the remote server's `required` array faithfully into
-  `Records.ToolParameter.Required`, but `CreateTypedDelegateWithNamedParameters` builds a `Func<>` whose
-  parameters carry no default values, and the schema's `required` list is generated from the delegate,
-  not from the definition. `ValidateToolDefinition` does not catch it: it checks required-in-definition
-  against optional-in-method, never the converse. Every MCP parameter therefore reaches the model as
-  mandatory — so the model supplies a value the server never asked for, and `ConvertValueForMCP`
-  forwards it, coercing an absent one to `"0"`, `false` or `""`. The symptom belongs to the same family
-  as A2.5.3's: an agent asking for, or inventing, what it should not.
-
-  **The cheap repair is not available, and this was tested rather than assumed.** `DynamicMethod`
-  cannot declare a default value: its `DefineParameter` returns `null` instead of a `ParameterBuilder`,
-  so `SetConstant` cannot be called. Passing `ParameterAttributes.Optional` alone does make
-  `IsOptional` true while `HasDefaultValue` stays false, and `AIFunctionFactory.Create` then throws
-  `JsonException: The JSON value could not be converted to System.Double` while generating the schema —
-  agent creation would fail outright. A correct repair therefore has three parts that must land
-  together: the schema's `required` list (via `AIJsonSchemaCreateOptions.TransformOptions`), the
-  argument binding for an omitted parameter (via `AIFunctionFactoryOptions.ConfigureParameterBinding`),
-  and the executor's argument dictionary, which must omit rather than coerce. Native tools are unaffected
-  — their C# defaults already agree with `agents.json`, and `ValidateToolDefinition` guards the pairing.
-  Unrelated to prose, and outside the A2 arc.
+- **MCP tools no longer bind to a live client for their whole life** — see A2.5.4, the one behaviour
+  traded away there. A `DelegatingAIFunction` re-resolving through `IMCPClientRegistryService` on a
+  session fault would restore it, and would do deliberately what the deleted `executorCache` did by
+  accident. Unrelated to prose, and outside the A2 arc.
 - **The suite cannot see a change of this size.** `monkeys`, whose prompt the A2.5.2 cut could not
   touch, moved 4.9% on tokens. Five runs resolve pass rates, not payload arithmetic — so a phase whose
   claim is "this is cheaper" needs either a static measurement of the composed payload (as A2.1–A2.3

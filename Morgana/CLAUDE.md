@@ -42,7 +42,7 @@ Morgana/
 |---|---|
 | `Abstractions/` | Base classes: `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool` |
 | `Actors/` | Pipeline actors: `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
-| `Adapters/` | `MorganaAgentAdapter` (agent builder), `MorganaToolAdapter` (tool→AIFunction), `MCPToolAdapter` (MCP→native), `MorganaChannelAdapter` (rich→plain degradation) |
+| `Adapters/` | `MorganaAgentAdapter` (agent builder), `MorganaToolAdapter` (tool→AIFunction), `MorganaChannelAdapter` (rich→plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]` |
 | `Extensions/` | `ActorSystemExtensions` — C# 14 `extension(ActorSystem)` syntax for `GetOrCreateActorAsync<T>` and `GetOrCreateAgentAsync(Type)` |
 | `Interfaces/` | All service contracts (see Service layer below) |
@@ -222,7 +222,7 @@ Every agent gets **base tools** from `morgana.json` (`GetContextVariable`, `SetC
 - `Scope: "context"` — retrieved from context variables. This scope carries **no** parameter-level template: the lookup-before-asking rule and its write half both live in P0, in the framework `Instructions` and in `ToolDescriptionContextGuidance`, and a parameter-level restatement is the only form of it paid per-parameter, per-tool, on every round trip. What those restatements cannot carry — which variables the session actually holds — comes from `HeldContextDeclaration` instead. The scope still drives the tool-level template below
 - `Scope: "request"` — obtained directly from user; `ToolParameterRequestGuidance` appended to the parameter description
 
-**Parameter descriptions reach the model through the schema, and only there.** `MorganaToolAdapter.CreateFunction` assembles them and hands them to `AIJsonSchemaCreateOptions.ParameterDescriptionProvider` — MEAI's own hook, invoked once per parameter while the function's JSON schema is generated, whose return value becomes that parameter's `description` keyword. A parameter the map does not cover falls back to the delegate's `[Description]` attributes, which no `MorganaTool` method carries, and is emitted bare (`{"userId":{"type":"string"}}`). The same path serves MCP tools, whose remote server's own descriptions arrive through `MCPToolAdapter` into the identical `Records.ToolParameter` shape; `ParameterInfo.Name` survives the DynamicMethod IL emission, so the provider matches them by name like any other.
+**Parameter descriptions reach the model through the schema, and only there.** `MorganaToolAdapter.CreateFunction` assembles them and hands them to `AIJsonSchemaCreateOptions.ParameterDescriptionProvider` — MEAI's own hook, invoked once per parameter while the function's JSON schema is generated, whose return value becomes that parameter's `description` keyword. A parameter the map does not cover falls back to the delegate's `[Description]` attributes, which no `MorganaTool` method carries, and is emitted bare (`{"userId":{"type":"string"}}`). This covers the native tools only: an MCP tool never passes through `MorganaToolAdapter`, because it arrives from the SDK already carrying its server's schema.
 
 A guidance template is joined to an authored description by a single space, never by inserted punctuation: an authored description is a finished sentence and closes itself, in both configuration layers.
 
@@ -232,7 +232,7 @@ A tool declaring at least one context-scoped parameter gets `ToolDescriptionCont
 
 `MorganaToolAdapter.AddTool` validates delegate vs definition (parameter count, names, required/optional). `CreateFunction` wraps the tool method into an `AIFunction` with enriched tool and parameter descriptions.
 
-**MCP tools** are auto-discovered from servers declared via `[UsesMCPServer]` and bridged through `MCPToolAdapter` using DynamicMethod IL generation (`CreateTypedDelegateWithNamedParameters`) for proper parameter names/types. Static `executorCache` ensures IL-generated delegates are cached.
+**MCP tools** are auto-discovered from servers declared via `[UsesMCPServer]` and handed to the agent exactly as `McpClient.ListToolsAsync` returns them. `McpClientTool` **is** an `AIFunction`: it carries the server's input schema verbatim — parameter descriptions, types, nested objects and the true `required` set — and invokes the tool over the session it was discovered on. Morgana adapts nothing and registers nothing: `MorganaAgentAdapter.DiscoverMCPToolsFromServer` collects them through the reconnect-safe path and appends them to `ChatOptions.Tools` beside the native ones. These tools are acquired at runtime and never appear in `agents.json`, so no domain expert authors them — their prose belongs to whoever wrote the server, and carrying it through untouched is the only handling available. The framework's parameter-level template is accordingly not spliced onto them; an MCP tool has no context-scoped parameters by construction, so the rule would be stated once per remote parameter to say what is trivially true of all of them.
 
 ## Channel Abstraction (multi-channel)
 
