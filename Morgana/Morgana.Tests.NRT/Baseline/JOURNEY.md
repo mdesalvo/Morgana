@@ -503,6 +503,63 @@ anyway**, and for a stronger reason than the one it was made for: when the schem
 112 words of duplicated rule must not reappear on every context-scoped parameter of every tool. Kept
 cut, the repair ships only the authored descriptions.
 
+### `A2.5.3` — the descriptions arrive
+
+The repair A2.5.2 found and deferred. MEAI already owns the hook, so nothing was invented:
+`AIJsonSchemaCreateOptions.ParameterDescriptionProvider` is a `Func<ParameterInfo, string?>` that
+`AIFunctionFactory` calls once per parameter **while it generates the schema**, and whose return value
+becomes that parameter's `description` keyword. `CreateFunction` keeps assembling exactly the same
+per-parameter text it always assembled and hands it there instead of to
+`AIFunctionFactoryOptions.AdditionalProperties`. One method body; no configuration moved, no contract
+changed, no package moved — the hook has existed since `Microsoft.Extensions.AI` 10.4.0 and the repo
+has been on 10.6.0 since before 0.25.
+
+Driven off-line against the real policies and the real adapter, the schema that was bare now reads:
+
+```json
+"userId": { "description": "The customer's own identifying code, whatever they call it — customer
+code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one
+code.", "type": "string" }
+```
+
+That sentence is A2.5's rewrite of `userId`. It was authored precisely against the failure of a model
+casting about between *user code*, *customer code*, *user identifier* — and until this commit it had
+never once been sent.
+
+**Both registration paths were proved, not assumed.** Domain tools register a plain delegate; MCP tools
+register a `DynamicMethod` built by `MCPToolAdapter` with explicit `DefineParameter` calls. The probe
+drives both, and `ParameterInfo.Name` survives IL emission, so the provider matches MCP parameters by
+name like any other — a remote server's own authored descriptions now travel the whole way instead of
+being parsed and dropped.
+
+**One prose defect surfaced the moment anything shipped.** The join was `$"{description}. {guidance}"`,
+which produced `retrieve (1-10).. Use the value directly…` on every request-scoped parameter. The fix
+belongs to the prose contract, not to the code: an authored description is a finished sentence and
+closes itself, so the join is a single space and every request-scoped description in both configuration
+layers was checked to end in terminal punctuation (all 15 do). A helper that inspected the last
+character and supplied the missing full stop was written first and then removed — that is a bonification
+codicil, and it would have let a badly-formed description into the layer by quietly repairing it.
+
+**The payload, measured statically** — the only honest way at this size, per A2.5.2's lesson. Added
+characters per agent, base tools plus domain tools:
+
+| agent | domain params | added chars | ≈ tokens |
+|---|---:|---:|---:|
+| base tools (every agent) | 6 | 1 335 | 333 |
+| `Billing` | 6 | 2 815 | 703 |
+| `Contract` | 5 | 2 614 | 653 |
+| `Monkeys` (MCP) | 0 | 1 335 | 333 |
+| `Inventory` | 12 | 5 359 | 1 339 |
+
+**This is the largest single addition of the whole A2 arc**, and it runs in the opposite direction to
+every phase before it: A2.1–A2.3 and A2.5.2 all cut. The text is authored information rather than
+restated rule, which is the kind that earns its place — but it lands on the blocking context group, and
+`SetQuickReplies` alone contributes a 430-character format example the model has never seen. The
+measurement is what settles it, and until the suite is re-run at this phase nothing here is a result.
+
+**Backport.** The change is one method body in `MorganaToolAdapter`, with no dependency on anything else
+in 0.26 — it cherry-picks onto `main` as it stands.
+
 ### Changes to the measuring instrument
 
 - **A2.5** — failure reports now persist to `Baseline/failures/{scenario}.log`, written whole on
@@ -589,25 +646,53 @@ Recorded here because they make rows comparable, or not:
   did call the domain tool, and the context read follows only by elimination (empty per-agent history,
   and the injected note carries no values). It should assert `contextReads: [Hit:userId]` outright.
   An instrument-only change, never to be bundled with a prose phase.
-- **Parameter descriptions never reach the model** — see A2.5.2. The repair is known
-  (`AIFunctionFactoryOptions.JsonSchemaCreateOptions`, emitting descriptions into the schema) and it is
-  not a bug fix in the usual sense: it **adds** prompt text the model has never seen, to every tool of
-  every agent, so it is a prose change wearing a code change's clothes and needs its own phase and its
-  own measurement. Two decisions belong to it. First, `ToolParameterRequestGuidance` is currently inert
-  and would come back to life with the repair — it should be re-read before that happens, not after.
-  Second, the `agents.json` parameter descriptions have never been reviewed against a model that could
-  see them; they were authored blind.
+- **The parameter descriptions have never been read by a model, and now are.** A2.5.3 repaired the
+  channel; the prose that travels down it was authored blind, across seven months, by people who could
+  not see it land. Every one of them is now due a review it has never had — and the review question is
+  not "is this well written" but **which rung of the ladder is this sentence standing on**. With all
+  three rungs live for the first time, each statement is doing exactly one of three jobs: *first-stating*
+  something nothing else says, *reinforcing* a rule stated higher up at the moment it is acted on, or
+  merely *duplicating*. Only the third is waste, and the census has to be redone from scratch, because
+  a sentence that was first-stating while the parameter channel was dead may be duplication now.
+- **`ToolParameterRequestGuidance` is live again** after seven months inert — 98 characters on every
+  request-scoped parameter of every tool, MCP tools included, since `MCPToolAdapter` scopes all remote
+  parameters `request`. It was re-read before the repair shipped, as this journal required, and kept:
+  read against the tool-level `ToolDescriptionContextGuidance` that enumerates the *context*-scoped
+  names, it draws the same boundary from the other side and at the rung where the model is already
+  binding that argument. That is the reinforcement reading; the duplication reading is available too,
+  and it is the cheapest single thing to cut if the census says so.
+- **MCP optional parameters are advertised as required.** Found in passing while probing A2.5.3.
+  `MCPToolAdapter.ExtractParametersWithTypes` reads the remote server's `required` array faithfully into
+  `Records.ToolParameter.Required`, but `CreateTypedDelegateWithNamedParameters` builds a `Func<>` whose
+  parameters carry no default values, and the schema's `required` list is generated from the delegate,
+  not from the definition. `ValidateToolDefinition` does not catch it: it checks required-in-definition
+  against optional-in-method, never the converse. Every MCP parameter therefore reaches the model as
+  mandatory — so the model supplies a value the server never asked for, and `ConvertValueForMCP`
+  forwards it, coercing an absent one to `"0"`, `false` or `""`. The symptom belongs to the same family
+  as A2.5.3's: an agent asking for, or inventing, what it should not.
+
+  **The cheap repair is not available, and this was tested rather than assumed.** `DynamicMethod`
+  cannot declare a default value: its `DefineParameter` returns `null` instead of a `ParameterBuilder`,
+  so `SetConstant` cannot be called. Passing `ParameterAttributes.Optional` alone does make
+  `IsOptional` true while `HasDefaultValue` stays false, and `AIFunctionFactory.Create` then throws
+  `JsonException: The JSON value could not be converted to System.Double` while generating the schema —
+  agent creation would fail outright. A correct repair therefore has three parts that must land
+  together: the schema's `required` list (via `AIJsonSchemaCreateOptions.TransformOptions`), the
+  argument binding for an omitted parameter (via `AIFunctionFactoryOptions.ConfigureParameterBinding`),
+  and the executor's argument dictionary, which must omit rather than coerce. Native tools are unaffected
+  — their C# defaults already agree with `agents.json`, and `ValidateToolDefinition` guards the pairing.
+  Unrelated to prose, and outside the A2 arc.
 - **The suite cannot see a change of this size.** `monkeys`, whose prompt the A2.5.2 cut could not
   touch, moved 4.9% on tokens. Five runs resolve pass rates, not payload arithmetic — so a phase whose
   claim is "this is cheaper" needs either a static measurement of the composed payload (as A2.1–A2.3
   used) or many more runs. Reading the token columns as evidence of a saving is a mistake this journal
   nearly made.
-- **Five statements enforce one rule.** "Look a context-scoped value up before asking" is written in
-  P0 `ContextHandling`, the framework `Instructions`, `ToolDescriptionContextGuidance`,
-  `ToolParameterContextGuidance` and `GetContextVariable`'s own description. Four of the five existed
-  to compensate for the fact A2.5.1 now supplies, so the redundancy is measurable rather than
-  theoretical. Cut one at a time: the read half is duplicated, the **write** half
-  (`SetContextVariable`, persist what you obtain) is carried by P0 and the tool-level template and
+- **Four statements enforce one rule.** "Look a context-scoped value up before asking" is written in
+  P0 `ContextHandling`, the framework `Instructions`, `ToolDescriptionContextGuidance` and
+  `GetContextVariable`'s own description — `ToolParameterContextGuidance` was the fifth and was cut at
+  A2.5.2. Three of the four existed to compensate for the fact A2.5.1 now supplies, so the redundancy
+  is measurable rather than theoretical. Cut one at a time: the read half is duplicated, the **write**
+  half (`SetContextVariable`, persist what you obtain) is carried by P0 and the tool-level template and
   must survive.
 - **InventoryAgent tells the user what it cannot remember.** *"My memory is fleeting as morning mist
   beyond this very conversation"* — the surface form of a clause in `agents.json` about having
