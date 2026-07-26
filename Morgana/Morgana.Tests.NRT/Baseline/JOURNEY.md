@@ -361,6 +361,80 @@ framework layer takes it off the agents — `turn-continuation-operand` fell fro
 policy change that looked unrelated. It did not happen this time. Token cost is flat within noise,
 and `rich-card` is 8% cheaper on input.
 
+### `A2.5.1` — the fact the prompt never carried
+
+The first phase that is not a prose revision. A2.5 left one red and framed the decision as *restore
+the clause in the domain layer* vs *make the framework's turn order survive first activation*. Both
+options assumed the defect was a **rule** not reaching far enough. It was not: it was a **fact** that
+no layer ever stated.
+
+**The mechanism.** `MorganaAIContextProvider.ProvideAIContextAsync` — the framework's designated
+pre-invocation hook, the one place that runs per turn and can see session state — returned an empty
+`AIContext`, marked *"Reserved for future use"*. Meanwhile `MorganaAgent` hydrates the shared registry
+into that very provider immediately **before** the call. So at the failing turn the framework held
+`userId` and told the model nothing about holding it.
+
+**Why only one scenario ever showed it.** Chat history is per-agent: each `AgentSession` carries its
+own. An agent activated for the first time mid-conversation therefore opens on an **empty transcript**
+and has never seen the value. Everywhere else in the suite the value sits in the agent's own visible
+history, so `GetContextVariable` is redundant and the model passes for the wrong reason. Turn 3 of
+`context-cross-agent` is the **only turn in the whole suite** where the context registry is the sole
+route — one true test, sampled five times, while three phases moved prose that could not touch its
+cause. That is what the 3/5 → 4/5 drift was hiding.
+
+**The fix, and why it is not a sixth restatement.** A fourth `Type: "Injection"` entry,
+`HeldContextDeclaration`, spliced per turn by the provider and resolving `((held_variables))` to the
+names the session holds — minus the framework's ephemeral keys, and injecting **nothing** when it
+holds none. The first objection to answer was duplication: `ToolDescriptionContextGuidance` already
+names `userId` on the very tool, so the model was never guessing blindly. The distinction is
+structural rather than rhetorical, and it is enforced by where the code runs — tool descriptions are
+built **once**, at agent creation, so that template can only ever state the **contract** (*"this tool
+takes a userId"*, true against an empty store); it can never state the **state** (*"userId is held
+right now"*), which nobody knows at build time. It also extends the placement ladder A2.5 climbed one
+rung: a parameter description is read while the tool is already being invoked, a tool description
+while the tool is weighed, and this before **any** tool is weighed — which is precisely where the
+failure happened, the failing runs calling `SetTurnContinuation` alone and never selecting the domain
+tool whose description carried the guidance.
+
+The text carries **zero instructions**, deliberately. "Look a context-scoped value up before asking"
+is already stated five times (P0, the framework `Instructions`, both tool/parameter templates, and
+`GetContextVariable`'s own description); a sixth would add contradiction surface and no information.
+Every clause states a fact, explains why the agent's own history is silent about it, or restricts the
+note itself — *names only, values not shown*, so the model cannot claim a value it never read, and
+*addressed to you alone*, guarding the leak the list itself creates.
+
+| scenario | A2.3 | A2.5 | A2.5.1 |
+|---|---:|---:|---:|
+| `context-cross-agent` | 3/5 | 4/5 | **5/5** |
+| `context-cycle-on-hit` | 5/5 | 5/5 | **5/5** |
+| `context-cycle-on-miss` | 5/5 | 5/5 | **5/5** |
+| `context-no-invented-writes` | 5/5 | 5/5 | **5/5** |
+| `context-closed-vocabulary-monkeys` | 5/5 | 5/5 | *not re-run* |
+
+`monkeys` was excluded by proof rather than by budget: it declares no context-scoped parameter, so it
+can never hold a variable and the injection can never fire there.
+
+**What 5/5 establishes, and what it does not.** Turn 3 asserts `toolsCalled: [GetContractDetails]`
+and `judgeNot: "asks the user for their customer code"`. Five times out of five ContractAgent called
+the domain tool without asking — and it could not have had the code from anywhere else, since its
+history is empty and the injected note carries names, not values. So the context was read in all five
+runs. That is an **inference**, not an assertion: the scenario never checks `contextReads`. Recorded
+below as an instrument gap.
+
+**Cost.** The only tight comparison is `cycle-on-hit`, where the LLM call count is identical at 17.6:
+**+1.3% input tokens**. `cross-agent`'s +10.7% is not overhead — at A2.5 one run in five died at turn
+3 after 5 calls instead of 13 and pulled the average down; now all five do the whole work. The other
+two scenarios fell (−6% and −25%), which on five live runs is variance, not saving.
+
+**What it opens.** The apparatus that existed to compensate for the missing fact is now testable for
+removal — five statements of one rule, the first candidate being `ToolParameterContextGuidance`,
+which near-verbatim repeats the tool-level template and is the only one paid per-parameter, per-tool,
+on every round trip.
+
+Verified before spending anything: a capturing `IChatClient` confirmed off-line that the note reaches
+`ChatOptions.Instructions` (in the recency slot, after the domain layer), that an empty session
+injects nothing, and that seeded ephemeral keys are filtered out.
+
 ### Changes to the measuring instrument
 
 - **A2.5** — failure reports now persist to `Baseline/failures/{scenario}.log`, written whole on
@@ -369,6 +443,10 @@ and `rich-card` is 8% cheaper on input.
   terminal, so a closed window meant a paid run with nothing left to learn from. That is exactly
   what happened once in this phase. The transcript is the expensive part of a run and writing it to
   disk costs nothing.
+- **A2.5.1** — no change to the instrument, and that was the point: the phase moved the framework and
+  nothing else, so its rows are comparable to A2.5's straight across. `monkeys` was skipped from proof
+  (no context-scoped parameter, so the injection cannot fire), not from budget, which is a reading of
+  the scenario rather than an edit to it.
 - **A2.5, reverted** — eight turns across four context scenarios gained one shared `judgeNot`
   against the assistant explaining its own workings. The gap it closes is precise: non-revelation was
   asserted only by the forbidden-substring list, which catches the internal **nouns** (`context
@@ -437,11 +515,19 @@ Recorded here because they make rows comparable, or not:
 
 ## Still open
 
-- **`context-cross-agent` at 4/5**, blocking, and open by decision rather than by omission: its
-  cause is the framework gap described under A2.3, and A2.5 improved it without closing it. The
-  signature is now exact — an agent activated for the first time mid-conversation does not call
-  `GetContextVariable` **at all** before asking, so the turn order that fixed the single-agent case
-  is not reaching it. Whatever phase takes this on has this scenario as its acceptance test.
+- **The context group is green for the first time.** `context-cross-agent` closed at A2.5.1 — see
+  that phase. It was the suite's longest-standing red and it was never a prose defect.
+- **`context-cross-agent` turn 3 infers what it should measure.** It proves the agent did not ask and
+  did call the domain tool, and the context read follows only by elimination (empty per-agent history,
+  and the injected note carries no values). It should assert `contextReads: [Hit:userId]` outright.
+  An instrument-only change, never to be bundled with a prose phase.
+- **Five statements enforce one rule.** "Look a context-scoped value up before asking" is written in
+  P0 `ContextHandling`, the framework `Instructions`, `ToolDescriptionContextGuidance`,
+  `ToolParameterContextGuidance` and `GetContextVariable`'s own description. Four of the five existed
+  to compensate for the fact A2.5.1 now supplies, so the redundancy is measurable rather than
+  theoretical. Cut one at a time: the read half is duplicated, the **write** half
+  (`SetContextVariable`, persist what you obtain) is carried by P0 and the tool-level template and
+  must survive.
 - **InventoryAgent tells the user what it cannot remember.** *"My memory is fleeting as morning mist
   beyond this very conversation"* — the surface form of a clause in `agents.json` about having
   nowhere to record preferences. The clause is load-bearing for `context-no-invented-writes`, so it

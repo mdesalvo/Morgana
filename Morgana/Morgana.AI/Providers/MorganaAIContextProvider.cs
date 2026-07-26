@@ -42,8 +42,30 @@ namespace Morgana.AI.Providers;
 /// </remarks>
 public class MorganaAIContextProvider : AIContextProvider
 {
+    /// <summary>
+    /// Placeholder in the HeldContextDeclaration injection template, resolved per invocation to
+    /// the comma-separated names of the variables this session currently holds.
+    /// </summary>
+    private const string HeldVariablesPlaceholder = "((held_variables))";
+
+    /// <summary>
+    /// Reserved keys the framework writes into the same dictionary to carry a turn's presentation
+    /// decisions (see <c>MorganaTool.SetTurnContinuation/SetQuickReplies/SetRichCard</c>, drained by
+    /// <c>MorganaAgent</c> at the end of every turn). They are never declared to the model: they are
+    /// not inputs to resolve, and naming a stale one would invite the next turn to re-read buttons or
+    /// a card that has already been rendered and consumed.
+    /// </summary>
+    private static readonly ImmutableHashSet<string> EphemeralVariableNames =
+        ["turn_continuation", "quick_replies", "rich_card"];
+
     /// <summary>Logger for provider-level diagnostics.</summary>
     private readonly ILogger logger;
+
+    /// <summary>
+    /// The HeldContextDeclaration template from <c>morgana.json</c>, or <c>null</c> when the prompt
+    /// layer declares none — in which case nothing is injected and behaviour is unchanged.
+    /// </summary>
+    private readonly string? heldContextDeclaration;
 
     /// <summary>
     /// Names of variables subject to cross-agent persistence in the conversation-scoped
@@ -82,13 +104,20 @@ public class MorganaAIContextProvider : AIContextProvider
     /// JSON serialization options for state persistence.
     /// Defaults to <c>AgentAbstractionsJsonUtilities.DefaultOptions</c>.
     /// </param>
+    /// <param name="heldContextDeclaration">
+    /// The HeldContextDeclaration injection template resolved from <c>morgana.json</c>, carrying the
+    /// <c>((held_variables))</c> placeholder. Left null, <see cref="ProvideAIContextAsync"/> injects
+    /// nothing.
+    /// </param>
     public MorganaAIContextProvider(
         ILogger logger,
         IEnumerable<string>? sharedVariableNames = null,
-        JsonSerializerOptions? jsonSerializerOptions = null)
+        JsonSerializerOptions? jsonSerializerOptions = null,
+        string? heldContextDeclaration = null)
     {
         this.logger = logger;
         this.sharedVariableNames = [.. sharedVariableNames ?? []];
+        this.heldContextDeclaration = string.IsNullOrWhiteSpace(heldContextDeclaration) ? null : heldContextDeclaration;
 
         sessionState = new ProviderSessionState<MorganaContextState>(
             stateInitializer: _ => new MorganaContextState(),
@@ -189,14 +218,65 @@ public class MorganaAIContextProvider : AIContextProvider
     // =========================================================================
 
     /// <summary>
-    /// Called BEFORE each agent invocation.
+    /// Called BEFORE each agent invocation. Declares to the model, by name only, which context
+    /// variables this session already holds.
     /// </summary>
+    /// <remarks>
+    /// <para>The rule "look a context-scoped value up before asking for it" is stated five times over
+    /// (policy P0, the framework Instructions, both tool/parameter injection templates and the
+    /// <c>GetContextVariable</c> description), and <c>ToolDescriptionContextGuidance</c> even names the
+    /// parameters — so the model is never guessing a name. What no layer states is the <em>fact</em>:
+    /// whether anything is held right now. Those templates cannot state it, and not by omission: tool
+    /// descriptions are built once, at agent creation, so they can only ever carry the <em>contract</em>
+    /// ("this tool takes a userId", true against an empty store), never the <em>state</em>. Only this
+    /// hook runs per turn.</para>
+    ///
+    /// <para>The turn that needs it is an agent activated for the first time mid-conversation. Chat
+    /// history is per-agent (each <see cref="AgentSession"/> carries its own), so such an agent opens on
+    /// an empty transcript and has never seen the value — while <c>MorganaAgent</c> has just hydrated it
+    /// into this very provider from the <c>shared_context</c> registry. Everywhere else the value is
+    /// visible in the agent's own history and the lookup is merely redundant; there it is the only
+    /// route, and the empty history reads as positive evidence that looking up is pointless. It is also
+    /// the one rung of the placement ladder the tool-level guidance cannot reach: the observed failures
+    /// called <c>SetTurnContinuation</c> alone and never selected the domain tool at all, so text living
+    /// in that tool's description was never weighed.</para>
+    ///
+    /// <para>Three properties of what is injected, each deliberate:</para>
+    /// <list type="bullet">
+    /// <item><term>Names, never values</term><description>Values in the prompt would make
+    ///     <c>GetContextVariable</c> pointless — collapsing the HIT/MISS trace the suite asserts on —
+    ///     and would invite the model to claim a value it never read.</description></item>
+    /// <item><term>Silent when empty</term><description>A session holding nothing injects nothing, so
+    ///     the ask-the-user branch reaches the model exactly as before.</description></item>
+    /// <item><term>Ordinal-sorted</term><description>A stable string across turns, so the system prompt
+    ///     stays prompt-cacheable and a baseline stays comparable.</description></item>
+    /// </list>
+    /// </remarks>
     protected override ValueTask<AIContext> ProvideAIContextAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
-        // Reserved for future use: inject transient system prompt additions based on current context state.
-        return ValueTask.FromResult(new AIContext());
+        if (heldContextDeclaration is null)
+            return ValueTask.FromResult(new AIContext());
+
+        MorganaContextState contextState = sessionState.GetOrInitializeState(context.Session);
+
+        string[] heldVariables = [.. contextState.Variables.Keys
+            .Where(name => !EphemeralVariableNames.Contains(name))
+            .Order(StringComparer.Ordinal)];
+
+        if (heldVariables.Length == 0)
+            return ValueTask.FromResult(new AIContext());
+
+        string names = string.Join(", ", heldVariables);
+
+        logger.LogInformation(
+            "{MorganaAiContextProviderName} DECLARED '{VariableNames}'", nameof(MorganaAIContextProvider), names);
+
+        return ValueTask.FromResult(new AIContext
+        {
+            Instructions = heldContextDeclaration.Replace(HeldVariablesPlaceholder, names)
+        });
     }
 
     /// <summary>

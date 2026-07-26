@@ -81,6 +81,18 @@ public class MorganaAgentAdapter
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
+    /// The framework global policies, unpacked once from <see cref="morganaPrompt"/>.
+    /// </summary>
+    /// <remarks>
+    /// Read from three places that each need a different slice of the same list — the rendered
+    /// Critical block in <c>ComposeAgentInstructions</c>, the tool/parameter injection templates
+    /// handed to <c>MorganaToolAdapter</c>, and the per-turn <c>HeldContextDeclaration</c> handed to
+    /// <c>MorganaAIContextProvider</c> — so it is resolved with the prompt rather than re-unpacked
+    /// per agent creation.
+    /// </remarks>
+    protected readonly List<Records.GlobalPolicy> morganaPolicies;
+
+    /// <summary>
     /// Initializes a new instance of the MorganaAgentAdapter.
     /// Loads the Morgana framework prompt for later composition with domain prompts.
     /// </summary>
@@ -109,6 +121,7 @@ public class MorganaAgentAdapter
         this.logger = logger;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
+        morganaPolicies = morganaPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
     }
 
     /// <summary>
@@ -304,7 +317,6 @@ public class MorganaAgentAdapter
 
     private string ComposeAgentInstructions(Records.Prompt agentPrompt)
     {
-        List<Records.GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
         string policiesHeader = morganaPrompt.GetAdditionalPropertyOrDefault("GlobalPoliciesHeader", "");
         string policiesFooter = morganaPrompt.GetAdditionalPropertyOrDefault("GlobalPoliciesFooter", "");
         StringBuilder sb = new StringBuilder();
@@ -314,7 +326,7 @@ public class MorganaAgentAdapter
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Personality);
         sb.AppendLine();
-        sb.AppendLine(FormatGlobalPolicies(globalPolicies, policiesHeader, policiesFooter));
+        sb.AppendLine(FormatGlobalPolicies(morganaPolicies, policiesHeader, policiesFooter));
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Instructions);
         sb.AppendLine();
@@ -371,9 +383,19 @@ public class MorganaAgentAdapter
                 ? $"Agent '{agentName}' has {sharedVariables.Count} shared variables: {string.Join(", ", sharedVariables)}"
                 : $"Agent '{agentName}' has NO shared variables");
 
+        // The HeldContextDeclaration template is prose and lives with the rest of it in
+        // morgana.json, spliced per invocation rather than rendered into the system prompt —
+        // hence Type "Injection", like the two tool/parameter guidances. Handed over as a plain
+        // string so the provider keeps no prompt-layer dependency. Absent from the configuration,
+        // the provider injects nothing.
+        string? heldContextDeclaration = morganaPolicies
+            .FirstOrDefault(p => string.Equals(p.Name, "HeldContextDeclaration", StringComparison.OrdinalIgnoreCase))?
+            .Description;
+
         // The provider needs the allow-list up front: only writes to a name in this set
         // trigger OnSharedContextUpdate; everything else stays agent-local.
-        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables);
+        MorganaAIContextProvider aiContextProvider =
+            new MorganaAIContextProvider(logger, sharedVariables, heldContextDeclaration: heldContextDeclaration);
 
         // Wire persistence only when a callback was supplied. Left null (e.g. an agent
         // created outside the actor path) shared writes still update local state but are
@@ -403,8 +425,7 @@ public class MorganaAgentAdapter
         // each generated AIFunction's parameter descriptions, so the LLM is told to check
         // context first vs. ask the user. Without them the tools still work but lose that
         // grounding nudge.
-        List<Records.GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
-        MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(globalPolicies);
+        MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(morganaPolicies);
 
         // Split the merged set back into base (morgana.json) vs intent-specific
         // (agents.json). Compare by Name only: the incoming `tools` array was produced by

@@ -1138,13 +1138,22 @@ public static class Records
     /// </para>
     /// <para>
     /// <strong>"Injection" is not a policy tier, it is a different destination.</strong> Entries of
-    /// that type are text fragments the <c>MorganaToolAdapter</c> splices into a tool's or a
-    /// parameter's description at the point where the model decides; they are looked up by name
-    /// (<c>ToolDescriptionContextGuidance</c>, <c>ToolParameterContextGuidance</c>,
-    /// <c>ToolParameterRequestGuidance</c>) and are NOT rendered into the composed system prompt,
-    /// where they would be instructions with no referent — "BEFORE INVOKING THIS TOOL" names no
-    /// tool there — paid for on every round trip.
+    /// that type are text fragments spliced in at the point where the model decides, never rendered
+    /// into the composed system prompt, where they would be instructions with no referent — "BEFORE
+    /// INVOKING THIS TOOL" names no tool there — paid for on every round trip. They are looked up by
+    /// name, and there are two splice sites:
     /// </para>
+    /// <list type="bullet">
+    /// <item><term>Tool and parameter descriptions</term><description>
+    ///     <c>ToolDescriptionContextGuidance</c>, <c>ToolParameterContextGuidance</c> and
+    ///     <c>ToolParameterRequestGuidance</c>, spliced by <c>MorganaToolAdapter</c> when the tool
+    ///     surface is built.</description></item>
+    /// <item><term>The turn itself</term><description><c>HeldContextDeclaration</c>, spliced by
+    ///     <c>MorganaAIContextProvider.ProvideAIContextAsync</c> before each invocation. It is the
+    ///     only entry carrying a per-turn <em>fact</em> rather than a rule — the names of the context
+    ///     variables the session holds right now — which is why it cannot be a static policy: there is
+    ///     nothing to say until there is something held.</description></item>
+    /// </list>
     /// </remarks>
     public record GlobalPolicy(
         string Name,
