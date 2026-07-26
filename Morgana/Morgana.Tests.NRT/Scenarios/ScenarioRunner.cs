@@ -136,6 +136,7 @@ public sealed class ScenarioRunner
         TestContext.Current.TestOutputHelper?.WriteLine($"[NRT] {outcome.Summary()}");
 
         BaselineWriter.Write(outcome, llmDescriptor, options.Phase);
+        FailureLog.Write(outcome, options.Phase);
 
         return outcome;
     }

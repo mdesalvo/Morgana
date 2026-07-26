@@ -1098,21 +1098,72 @@ public static class Records
             }
             throw new KeyNotFoundException($"AdditionalProperty with key '{additionalPropertyName}' was not found in the prompt with id='{ID}'");
         }
+
+        /// <summary>
+        /// Gets an additional property, or <paramref name="defaultValue"/> when the prompt does not
+        /// declare it. For optional configuration whose absence is a legitimate authoring choice
+        /// rather than a defect — where <see cref="GetAdditionalProperty{T}"/> would rightly throw.
+        /// </summary>
+        /// <typeparam name="T">Type to deserialize the property value into</typeparam>
+        /// <param name="additionalPropertyName">Name of the property to retrieve</param>
+        /// <param name="defaultValue">Value returned when the property is absent</param>
+        public T GetAdditionalPropertyOrDefault<T>(string additionalPropertyName, T defaultValue)
+        {
+            foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
+            {
+                if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
+                {
+                    JsonElement element = (JsonElement)value;
+                    return element.Deserialize<T>() ?? defaultValue;
+                }
+            }
+            return defaultValue;
+        }
     }
 
     /// <summary>
     /// Global policy definition specifying framework-level behavioral rules.
     /// Applied to all agents and actors to enforce consistent behavior.
     /// </summary>
-    /// <param name="Name">Policy name (e.g., "ContextHandling", "InteractiveToken")</param>
+    /// <param name="Name">Policy name (e.g., "ContextHandling", "QuickReplyDoctrine")</param>
     /// <param name="Description">Detailed policy description with enforcement rules</param>
-    /// <param name="Type">Policy type ("Critical" or "Operational")</param>
+    /// <param name="Type">Policy type: "Critical" (rendered into the system prompt) or "Injection"</param>
     /// <param name="Priority">Priority level (lower number = higher priority)</param>
+    /// <remarks>
+    /// <para>
+    /// The shipped policies are all <c>Critical</c>: the former <c>Operational</c> tier emptied out
+    /// when the two parameter templates were reclassified as injections, and the one rule left in it
+    /// (rich-card usage) was in no way secondary. <c>MorganaAgentAdapter</c> still orders by
+    /// <c>Type</c> before <c>Priority</c>, so a downstream author may add a tier of their own.
+    /// </para>
+    /// <para>
+    /// <strong>"Injection" is not a policy tier, it is a different destination.</strong> Entries of
+    /// that type are text fragments the <c>MorganaToolAdapter</c> splices into a tool's or a
+    /// parameter's description at the point where the model decides; they are looked up by name
+    /// (<c>ToolDescriptionContextGuidance</c>, <c>ToolParameterContextGuidance</c>,
+    /// <c>ToolParameterRequestGuidance</c>) and are NOT rendered into the composed system prompt,
+    /// where they would be instructions with no referent — "BEFORE INVOKING THIS TOOL" names no
+    /// tool there — paid for on every round trip.
+    /// </para>
+    /// </remarks>
     public record GlobalPolicy(
         string Name,
         string Description,
         string Type,
-        int Priority);
+        int Priority)
+    {
+        /// <summary>
+        /// <see cref="Type"/> value marking an injection template rather than a rendered policy.
+        /// </summary>
+        public const string InjectionType = "Injection";
+
+        /// <summary>
+        /// True when this entry is an injection template, spliced into tool/parameter descriptions
+        /// instead of being rendered among the global policies.
+        /// </summary>
+        public bool IsInjectionTemplate
+            => string.Equals(Type, InjectionType, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Error message template with named identifier.

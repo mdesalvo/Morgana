@@ -1,0 +1,84 @@
+phase: A2.5
+recorded: 2026-07-26 11:08:07Z
+
+Scenario 'context-cross-agent': 2/5 runs passed, 5 required.
+A shared variable established by one agent is available to another that was never active before. Also covers the exit path: the closure button is what hands control back to Morgana, so a second intent can be classified at all.
+Tokens per run: 24,2 LLM calls, in=190830, out=4435, cacheRead=77372
+
+--- run 2 ---
+  ✗ turn 3: toolsCalled: 'GetContractDetails' was not invoked (got SetTurnContinuation)
+
+user: Hi, my customer code is P994E — show me my last 3 invoices
+agent: BillingAgent | completed=False | quickReplies=5 | richCard=present
+tools: SetContextVariable, GetInvoices, SetRichCard, SetQuickReplies, SetTurnContinuation
+tokens: 11 call(s), in=74359, out=1896, cacheRead=32128, cacheWrite=0
+context: Set:userId
+text: As I gaze into my magical ledger, I find your three most recent invoices. One bears an urgent mark — your October invoice has grown 223 days overdue.Would you like me to show you the full details of any of these invoices?
+
+user: We're done, thanks
+agent: BillingAgent | completed=True | quickReplies=0 | richCard=absent
+tools: (none)
+tokens: 2 call(s), in=19876, out=30, cacheRead=8032, cacheWrite=0
+context: (none)
+text: Farewell, and may your ledgers balance soon.
+
+user: Now show me the details of my contract
+agent: ContractAgent | completed=False | quickReplies=0 | richCard=absent
+tools: SetTurnContinuation
+tokens: 5 call(s), in=34168, out=188, cacheRead=16170, cacheWrite=0
+context: (none)
+text: I need to know your user identification so I can retrieve your contract details. What is your user ID?
+
+--- run 4 ---
+  ✗ turn 1: judgeNot: "The response makes a claim about the assistant's own memory or machinery: that it keeps, stores, remembers or has on file something about the user; that it must first check whether it already holds such a detail; or what its records can and cannot retain. Narrating the arrival of an answer is NOT an instance in any register — 'as I gaze into my ledger, your invoices appear' claims nothing about what is kept and is simply the assistant's voice. What is judged is whether the user is told something about how the assistant works or what it retains, never whether the wording is figurative." held but must not — The response claims the assistant has a 'magical ledger' containing invoices, explicitly stating it 'finds three invoices' and describing their payment status, which asserts the assistant stores and retains this information about the user.
+
+user: Hi, my customer code is P994E — show me my last 3 invoices
+agent: BillingAgent | completed=False | quickReplies=5 | richCard=present
+tools: SetContextVariable, GetInvoices, SetRichCard, SetQuickReplies, SetTurnContinuation
+tokens: 11 call(s), in=74679, out=2136, cacheRead=32128, cacheWrite=0
+context: Set:userId
+text: As I gaze into my magical ledger, I find three invoices on your scroll. One is long overdue, while the other two have been settled.Would you like to examine the full details of any invoice, or do you need something else?
+
+user: We're done, thanks
+agent: BillingAgent | completed=True | quickReplies=0 | richCard=absent
+tools: (none)
+tokens: 2 call(s), in=20038, out=34, cacheRead=8032, cacheWrite=0
+context: (none)
+text: Farewell, and may your accounts always balance. ✨
+
+user: Now show me the details of my contract
+agent: ContractAgent | completed=False | quickReplies=6 | richCard=present
+tools: GetContextVariable, GetContractDetails, SetRichCard, SetQuickReplies, SetTurnContinuation
+tokens: 13 call(s), in=116974, out=3024, cacheRead=48510, cacheWrite=0
+context: Hit:userId
+text: I'll retrieve your contract details for you.Now let me gaze into the crystal sphere and retrieve your contract scroll.As I gaze into the crystal sphere, your contract scroll reveals itself in all its detail.Your contract is active and will run through the end of this year. The spirits reveal a robust business plan with 100 Mbps fiber connectivity, 250 GB of monthly data, and a strong service level guarantee of 99.5% uptime. You have five services in your portfolio—the internet access being the required foundation, with four optional add-ons that bring your total to €150 per month.
+
+One detail worth noting: your contract has auto-renewal enabled, and you'll need to provide written notice 60 days before 31 December if you wish to prevent automatic renewal into 2026.
+
+Would you like me to show you a specific contract clause, explain the termination procedure, or explore any other aspect of your agreement?The most frequently consulted clauses are shown above—or speak the name of any clause you wish to explore.
+
+--- run 5 ---
+  ✗ turn 1: judgeNot: "The response makes a claim about the assistant's own memory or machinery: that it keeps, stores, remembers or has on file something about the user; that it must first check whether it already holds such a detail; or what its records can and cannot retain. Narrating the arrival of an answer is NOT an instance in any register — 'as I gaze into my ledger, your invoices appear' claims nothing about what is kept and is simply the assistant's voice. What is judged is whether the user is told something about how the assistant works or what it retains, never whether the wording is figurative." held but must not — The response claims the assistant can 'see' and access stored invoice data ('your three most recent invoices'), explicitly stating it has a 'magical ledger' that contains and retains information about the user's invoices, which is a claim about what the assistant keeps on file.
+
+user: Hi, my customer code is P994E — show me my last 3 invoices
+agent: BillingAgent | completed=False | quickReplies=5 | richCard=present
+tools: SetContextVariable, GetInvoices, SetRichCard, SetQuickReplies, SetTurnContinuation
+tokens: 11 call(s), in=74455, out=1972, cacheRead=32128, cacheWrite=0
+context: Set:userId
+text: As I gaze into my magical ledger, I can see your three most recent invoices. Two have been honoured, but one awaits your attention.Shall I illuminate the details of any of these invoices?
+
+user: We're done, thanks
+agent: BillingAgent | completed=True | quickReplies=0 | richCard=absent
+tools: (none)
+tokens: 2 call(s), in=19920, out=38, cacheRead=8032, cacheWrite=0
+context: (none)
+text: Farewell, and may your accounts flow ever smoothly. ✨
+
+user: Now show me the details of my contract
+agent: ContractAgent | completed=False | quickReplies=9 | richCard=present
+tools: GetContextVariable, GetContractDetails, SetRichCard, SetQuickReplies, SetTurnContinuation
+tokens: 13 call(s), in=116888, out=2912, cacheRead=48510, cacheWrite=0
+context: Hit:userId
+text: I'll need to retrieve your contract details first. Let me check your account.Now let me gaze into the crystal sphere and retrieve your contract...As the contract scroll unfolds before me, I see the full tapestry of your business service agreement. Let me present what the crystal sphere reveals:Your contract is a Premium Business plan with a robust feature set. The agreement runs through the end of 2025 and carries automatic renewal unless you provide notice by November 1st. Your service includes the base internet access, static IP, router rental, and our priority support—all bundled into your €150 monthly fee.
+
+Would you like to explore any of the contract clauses in detail, or do you have questions about termination, renewal, or your services?Now I'll await your question. Which clause would you like to explore, or is there something else I can help you with?

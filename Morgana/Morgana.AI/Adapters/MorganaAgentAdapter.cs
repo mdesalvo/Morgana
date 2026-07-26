@@ -255,17 +255,48 @@ public class MorganaAgentAdapter
         return (aiAgent, morganaAIContextProvider, chatHistoryProvider);
     }
 
-    private string FormatGlobalPolicies(List<Records.GlobalPolicy> policies)
+    private string FormatGlobalPolicies(List<Records.GlobalPolicy> policies, string header, string footer)
     {
         StringBuilder sb = new StringBuilder();
 
-        // Critical before Operational (Type), then ascending Priority within each type.
-        // The LLM reads the system prompt top-to-bottom, so P0 Critical constraints must
-        // appear before P0 Operational guidance — the order is load-bearing for compliance.
-        foreach (Records.GlobalPolicy policy in policies.OrderBy(p => p.Type)
+        // The header states once what every policy used to open with ("CRITICAL RULE ABOUT …").
+        // Repeated eight times that prefix discriminated nothing — every rendered policy is
+        // critical — and restated the Name the line already carries. Stated once above the list,
+        // the emphasis survives and the repetition does not.
+        //
+        // The footer is not decoration: it is what the per-policy prefixes had for free. Each of
+        // those marked exactly its own rule and ended with it, whereas an opening claim about
+        // what follows has no end — and what follows the list is the framework's Instructions and
+        // Formatting, then the whole domain layer, none of which is binding in that sense. The
+        // header also gives "the critical rules" (cited in the Morgana Instructions) an
+        // antecedent; the footer is what stops that antecedent from swallowing the rest.
+        if (!string.IsNullOrWhiteSpace(header))
+        {
+            sb.AppendLine(header);
+        }
+
+        // Injection templates are excluded: they are not policies but fragments spliced by
+        // MorganaToolAdapter into the description of the tool (or parameter) they govern, at
+        // the point where the model decides. Rendered here as well they would be instructions
+        // pointing at nothing — "BEFORE INVOKING THIS TOOL" names no tool in a system prompt —
+        // and the framework would pay for them on every round trip of every turn.
+        //
+        // Ordered by Type, then ascending Priority within each type. The LLM reads the system
+        // prompt top-to-bottom and the order is load-bearing for compliance, so a policy's
+        // Priority states where it must be read, not merely how it was filed. Every rendered
+        // policy is Critical today: once the two parameter templates became injections, the
+        // Operational tier held a single rule that was in no way secondary, so it was promoted
+        // rather than left alone in a tier that no longer meant anything.
+        foreach (Records.GlobalPolicy policy in policies.Where(p => !p.IsInjectionTemplate)
+                                                        .OrderBy(p => p.Type)
                                                         .ThenBy(p => p.Priority))
         {
             sb.AppendLine($"{policy.Name}: {policy.Description}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(footer))
+        {
+            sb.AppendLine(footer);
         }
 
         return sb.ToString().TrimEnd();
@@ -274,6 +305,8 @@ public class MorganaAgentAdapter
     private string ComposeAgentInstructions(Records.Prompt agentPrompt)
     {
         List<Records.GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
+        string policiesHeader = morganaPrompt.GetAdditionalPropertyOrDefault("GlobalPoliciesHeader", "");
+        string policiesFooter = morganaPrompt.GetAdditionalPropertyOrDefault("GlobalPoliciesFooter", "");
         StringBuilder sb = new StringBuilder();
 
         // Morgana framework layers
@@ -281,7 +314,7 @@ public class MorganaAgentAdapter
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Personality);
         sb.AppendLine();
-        sb.AppendLine(FormatGlobalPolicies(globalPolicies));
+        sb.AppendLine(FormatGlobalPolicies(globalPolicies, policiesHeader, policiesFooter));
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Instructions);
         sb.AppendLine();

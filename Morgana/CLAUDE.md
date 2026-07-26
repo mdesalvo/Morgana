@@ -218,11 +218,13 @@ public class BillingAgent : MorganaAgent
 
 ## Tool System
 
-Every agent gets **base tools** from `morgana.json` (`GetContextVariable`, `SetContextVariable`, `SetTurnContinuation`, `SetQuickReplies`, `SetRichCard`) plus **domain tools** from `agents.json`. Tool parameters have two scopes:
+Every agent gets **base tools** from `morgana.json` (`GetContextVariable`, `SetContextVariable`, `SetTurnContinuation`, `SetQuickReplies`, `SetRichCard`) plus **domain tools** from `agents.json`. A tool parameter that resolves an *input* declares a scope; a parameter carrying a value the model itself authors (`quickReplies`, `richCard`, `turnContinuation`) declares none:
 - `Scope: "context"` — retrieved from context variables; `MorganaToolAdapter` injects `ToolParameterContextGuidance` description telling the LLM to check `GetContextVariable` first
 - `Scope: "request"` — obtained directly from user; `ToolParameterRequestGuidance` description injected
 
-`MorganaToolAdapter.AddTool` validates delegate vs definition (parameter count, names, required/optional). `CreateFunction` wraps the tool method into an `AIFunction` with enriched parameter descriptions.
+A tool declaring at least one context-scoped parameter also gets `ToolDescriptionContextGuidance` appended to **its own description**, with `((context_parameters))` resolved to those parameter names. The placement is the point: a parameter description is read once the model is already invoking the tool, whereas the failure it guards — opening by asking the user for a value the conversation store already holds — happens one step earlier, when the model weighs the tool at all.
+
+`MorganaToolAdapter.AddTool` validates delegate vs definition (parameter count, names, required/optional). `CreateFunction` wraps the tool method into an `AIFunction` with enriched tool and parameter descriptions.
 
 **MCP tools** are auto-discovered from servers declared via `[UsesMCPServer]` and bridged through `MCPToolAdapter` using DynamicMethod IL generation (`CreateTypedDelegateWithNamedParameters`) for proper parameter names/types. Static `executorCache` ensures IL-generated delegates are cached.
 
@@ -259,7 +261,9 @@ Two-layer prompt composition in `MorganaAgentAdapter.ComposeAgentInstructions()`
 2. **Domain layer** (from `agents.json`): Target + Personality + Instructions + Formatting
 
 Framework prompts (`morgana.json`):
-- **Morgana**: base personality, global policies (P0-P8 Critical: ContextHandling, QuickReplyDoctrine, TurnContinuation, ConversationClosure, SessionContinuation, ToolUsage, ToolGrounding, QuickReplyEscapeOptions, MandatoryTextualResponse; P0-P3 Operational: ToolParameterContextGuidance, ToolParameterRequestGuidance, RichCardUsage, RichCardAndQuickRepliesCombined). The `QuickReplyDoctrine` (P1) is the unifying master rule the other quick-reply policies instantiate — see Design Philosophy
+- **Morgana**: base personality, global policies — P0-P7, all `Critical`: ContextHandling, QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage, ToolGrounding, MandatoryTextualResponse, RichCardUsage. The `QuickReplyDoctrine` (P1) is the unifying master rule the other quick-reply policies instantiate — see Design Philosophy. `GlobalPoliciesHeader` states once, above the list, the "these are binding" emphasis each policy used to repeat in its own opening words; `GlobalPoliciesFooter` closes the block, because an opening claim about what follows otherwise scopes over the framework's own Instructions and Formatting and the whole domain layer beneath them.
+  Its `Target` is the composed prompt's **preamble, not a role description**: it names the two layers, says this one governs how a turn is formed while the domain layer governs what the conversation is about, and settles precedence. It deliberately promises no capability — the previous "solve problems through the support scenarios you can handle" sat in the primacy slot as an unbacked claim that `ToolGrounding` then spent a clause defending against. Its `Instructions` carry the **order of a turn** (resolve inputs → call the domain tool → decide presentation → write the text once), which no single policy states: each policy governs one aspect, and the observed defects are overwhelmingly sequencing failures
+  Three further entries in the same array carry `Type: "Injection"`: `ToolDescriptionContextGuidance`, `ToolParameterContextGuidance`, `ToolParameterRequestGuidance`. They are **not policies but templates** — `FormatGlobalPolicies` skips them and `MorganaToolAdapter` splices them into tool/parameter descriptions instead. Rendered in the system prompt they would be instructions with no referent ("BEFORE INVOKING THIS TOOL" names no tool there), re-paid on every round trip
 - **Classifier**: JSON response `{intent, confidence}` with `((formattedIntents))` placeholder
 - **Guard**: JSON response `{compliant, violation}` with ProfanityTerms list
 - **Presentation**: JSON intro message with quickReplies, FallbackMessage, NoAgentsMessage

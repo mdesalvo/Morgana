@@ -248,8 +248,159 @@ whole cost landed in the domain layer, where it belongs and where it is paid onl
 needs it. Standing totals: framework fixed payload **35,040 -> 21,289, −39%**; `agents.json`
 **31,119 -> 23,254, −25%**.
 
+### `A2.5` — the framework prompt
+
+The first revision of the `Morgana` prompt itself. Four blocks moved, all in `morgana.json`:
+
+**`Target`** stopped being a role description and became the composed prompt's **preamble**. It had
+been the didactic boilerplate of every agentic tutorial — "you are a digital assistant" — sitting in
+the primacy slot and promising a capability (*"solve problems through the support scenarios you can
+handle"*) that `ToolGrounding` then spent a clause defending against. It now names the two layers,
+says this one governs how a turn is formed and the domain one governs what the conversation is
+about, and settles precedence. It promises nothing.
+
+**`Instructions`** carried the **order of a turn**: resolve inputs → call the domain tool → decide
+presentation → write the text once. This is the load-bearing change of the phase, and it was
+predicted before it was measured. `context-cycle-on-miss` had been the blocking red since A2.1, and
+the diagnosis was that ask-before-looking is not a **missing rule** — the rule already existed in
+three places — but a **sequencing** failure: no policy states the order, because each governs one
+aspect of a turn. The clause that closes it says why the order is not stylistic: the whole turn
+reaches the user as one message, so a question composed early and a tool result that lands later
+arrive side by side, and the user reads a demand for something the assistant already had.
+
+**`Personality`** was defining the character *by a procedure* — "uses her magic tomes to formulate
+potions and spells" — so P6's counter-clause was fighting the persona rather than the model. The
+magic now "reaches the user as a result and never as a procedure they are made to watch". Youth also
+stopped licensing hedging: it shows as warmth and modesty, never as disclaiming.
+
+**`MandatoryTextualResponse` (P6)** was rewritten whole. It had contained both the prohibition and
+its own licence — *"if you have nothing new to add, briefly say what you just did"* was literally
+generating "let me see if I have your userId… oh yes" — and it handed the model the framework's
+internal vocabulary through a tool taxonomy (presentation / context / domain / MCP tools). Both are
+gone. What replaced them draws the distinction the phase turns on: **the rule is about the subject,
+never the register.** Morgana is a witch and will always speak figuratively; a metaphor *about her
+own machinery* is still machinery, disclosed in better clothes.
+
+`Formatting` lost an empty opening line. The rest was defended as scar tissue.
+
+**The policy block also changed shape, and that part is code.** Each policy used to open with its
+own "CRITICAL RULE ABOUT …" prefix — repeated eight times it discriminated nothing, since every
+rendered policy is critical, and it restated the `Name` the line already carried. It is now said
+once in `GlobalPoliciesHeader`, above the list. The matching `GlobalPoliciesFooter` is not
+symmetry: the per-policy prefixes each ended with their own rule, whereas an opening claim about
+what follows has no end, and what follows the list is the framework's own Instructions and
+Formatting and then the whole domain layer — none of it binding in that sense. The header also
+gives "the critical rules", cited inside the Morgana Instructions, an antecedent; the footer is
+what stops that antecedent from swallowing everything after it.
+
+At the same time the three tool-guidance entries were reclassified `Type: "Injection"` and are no
+longer rendered at all. They were never policies: `MorganaToolAdapter` splices them into the
+description of the tool or parameter they govern, at the point where the model decides. Printed in
+a system prompt they are instructions with no referent — "BEFORE INVOKING THIS TOOL" names no tool
+there — and the framework paid for them on every round trip of every turn. `ToolDescriptionContext‑
+Guidance` is new, and its placement is the point: a *parameter* description is read once the model
+is already invoking the tool, whereas the failure it guards — opening by asking the user for a
+value the store already holds — happens one step earlier, when the model weighs the tool at all.
+That emptied the `Operational` tier, whose last inhabitant (`RichCardUsage`) was in no way
+secondary and was promoted rather than left alone in a tier that no longer meant anything.
+
+| scenario | A2.3 | A2.5 |
+|---|---:|---:|
+| `context-cycle-on-miss` | 5/5 | **5/5** |
+| `context-cycle-on-hit` | 5/5 | **5/5** |
+| `context-closed-vocabulary-monkeys` | 5/5 | **5/5** |
+| `context-no-invented-writes` | 5/5 | **5/5** |
+| `context-cross-agent` | 3/5 | **4/5** |
+
+**The blocking red closed.** `cycle-on-miss` holds at 5/5 on the stated mechanism, and the payload
+grew to buy it: composed framework layer **14,210 -> 14,909 chars, +4.9%** — the first phase since
+v0 to add rather than cut, deliberately, because what was missing was a sequence no cut could supply.
+
+**The domain layer paid for it.** Once the framework states the order of a turn, the per-agent
+restatement of it is a duplicate, so BillingAgent and ContractAgent lost the clause *"your first act
+on any request is to establish whose invoices you are reading — by checking, never by opening with a
+question"*. That is the structural move this journal keeps arguing for: one rule, stated once, at
+the layer that owns it. The `userId` parameter descriptions were rewritten in the same pass, from
+the mechanical *"Unique alphanumeric identifier … Retrieved from conversation context"* — which
+described the plumbing to a reader who must not think about plumbing — to what the customer would
+call it, plus the fact that keys every tool in the book: *one customer, one code*. That also
+retires part of the tuning debt recorded under **Still open**: the identity rule was written after
+watching a scenario fail, and it is now gone rather than deepened.
+
+**What `context-cross-agent` still costs, and it is the price of that trade.** One run in five,
+ContractAgent answers *"I need to know your user identification so I can retrieve your contract
+details"* on a conversation where BillingAgent has already written `userId` to the shared registry —
+and the trace shows `context: (none)`: `GetContextVariable` was **not called at all**. The lookup
+did not fail, it did not happen.
+
+The two facts belong together. The framework rule replaced the agent rule, and it holds where the
+agent is the one the conversation started with — `cycle-on-miss` went from the suite's oldest red to
+5/5 on exactly that. It does not hold as reliably for an agent activated for the first time mid-
+conversation, which is the one case the deleted clause used to cover locally. So the residual 4/5 is
+not the mysterious framework gap named under A2.3: it is a duplicate that was removed on purpose,
+paying off in four scenarios and coming due in one. Whether the answer is to restore the clause in
+the domain layer, or to make the framework's turn order survive an agent's first activation, is the
+decision the next phase has to make — and it should be made on that framing, not by patching the
+symptom.
+
+**The instrument mistake, and what it cost.** This phase also added a new `judgeNot` proposition to
+the blocking group — against the assistant explaining its own workings — *in the same measurement as
+the prose change*. That was an error of method, and it is recorded below rather than here because
+the proposition has been **reverted**: it never produced a comparable number and does not belong to
+this phase's result. The table above is read from the structural signals of the final run, where
+exactly one of fifteen runs failed structurally. The A2.5 rows in the three affected scenario files
+were **corrected by hand** to that reading: as written by the harness they said 1/5, 2/5 and 3/5,
+counting failures against an assertion that no longer exists. Token columns are untouched — those
+were measured.
+
+**The behavioural group was re-run, and did not move.** `behaviour-conversation-closure`,
+`behaviour-rich-card` and `behaviour-turn-continuation-operand` all hold at 5/5, exactly as at A2.3.
+This was the phase's one real exposure: `Personality` and P6 are global, they were rewritten after
+that group's last measurement, and A2.1 had already shown once that pulling the blanket toward the
+framework layer takes it off the agents — `turn-continuation-operand` fell from 4/5 to 2/5 on a
+policy change that looked unrelated. It did not happen this time. Token cost is flat within noise,
+and `rich-card` is 8% cheaper on input.
+
 ### Changes to the measuring instrument
 
+- **A2.5** — failure reports now persist to `Baseline/failures/{scenario}.log`, written whole on
+  every failing run and deleted when the scenario passes. A journey row records *that* a scenario
+  went 2/5, never *why*; until now the only legible diagnosis was the assertion message on a
+  terminal, so a closed window meant a paid run with nothing left to learn from. That is exactly
+  what happened once in this phase. The transcript is the expensive part of a run and writing it to
+  disk costs nothing.
+- **A2.5, reverted** — eight turns across four context scenarios gained one shared `judgeNot`
+  against the assistant explaining its own workings. The gap it closes is precise: non-revelation was
+  asserted only by the forbidden-substring list, which catches the internal **nouns** (`context
+  variable`, `GetContextVariable`, …) and nothing else, so a turn saying "let me see whether I
+  already have your code… ah yes, I do" names none of them and passed. We were measuring the
+  vocabulary and not the behaviour. Six of the eight turns had no natural-language assertion of any
+  kind before this. **The gap is real and remains open; the proposition was reverted, and the
+  scenarios are byte-identical to their A2.3 state.**
+
+  It was reverted for two reasons, and both are worth more than the assertion was. The first is
+  method: it entered a **blocking** group in the same measurement as a prose change, so every red
+  after it was unreadable as a signal about the prose, because the ruler had moved. Prose and
+  instrument are two axes and only one may move per measurement — a rule that was being applied to
+  the prose axis alone, without noticing the other existed.
+
+  The second is that the proposition could not have worked at any wording. It went through three,
+  each rewritten after watching it misfire, and the last one fired on the very example it names as
+  exempt: *"as they appear in my ledger"*, delivering invoices, judged as a claim about what the
+  assistant retains. The axis was wrong, not the words. **The domain data genuinely is a ledger** —
+  invoices really are records the system keeps — so "voice" and "machinery", the two sides of the
+  intended distinction, use the same noun and no phrasing separates them. The axis that would work
+  is *the customer's own data vs the assistant's own memory*: that Morgana can fetch your invoices
+  is something the user is supposed to know; that she is checking whether she already holds your
+  code is not. Rebuilding it belongs to A2.6, validated offline against the captured corpus in
+  `failures/` before it is allowed to fail anything.
+
+  It did earn its keep before being pulled. Two of its eight fires were genuine, and one of them is
+  InventoryAgent telling a user her memory is *"fleeting as morning mist beyond this very
+  conversation"* — the `agents.json` leak listed under **Still open**, found by the instrument
+  rather than by reading. `context-closed-vocabulary-monkeys` was always out: its single turn is
+  judge-free by an earlier decision recorded in the file itself, and its property is already
+  asserted literally by `noContextAccess`.
 - **A2.3** — `LlmJudge` had a fallback for a judge that returns an unusable answer, with a comment
   explaining that a proposition which stops being evaluated is coverage lost without anyone
   noticing. A `when (attempt == 1)` filter on the catch made that fallback **unreachable**: the
@@ -286,15 +437,74 @@ Recorded here because they make rows comparable, or not:
 
 ## Still open
 
-- **`context-cross-agent` at 3/5**, blocking, and open by decision rather than by omission: its
-  cause is the framework gap described under A2.3, and the next phase is the framework one, with
-  this scenario as its acceptance test.
+- **`context-cross-agent` at 4/5**, blocking, and open by decision rather than by omission: its
+  cause is the framework gap described under A2.3, and A2.5 improved it without closing it. The
+  signature is now exact — an agent activated for the first time mid-conversation does not call
+  `GetContextVariable` **at all** before asking, so the turn order that fixed the single-agent case
+  is not reaching it. Whatever phase takes this on has this scenario as its acceptance test.
+- **InventoryAgent tells the user what it cannot remember.** *"My memory is fleeting as morning mist
+  beyond this very conversation"* — the surface form of a clause in `agents.json` about having
+  nowhere to record preferences. The clause is load-bearing for `context-no-invented-writes`, so it
+  cannot simply be cut: it has to be restated as a limit on **what she does** rather than on **what
+  she keeps**. Deferred with its own measurement.
 - **The prose is now tuned partly against these scenarios**, and that is a debt, not an achievement.
   The identity rule in BillingAgent and ContractAgent, and InventoryAgent's clause about having
   nowhere to record what a customer likes, were all written after watching a scenario fail. Each is
   defensible on its own terms — a real constraint, in the right layer — but a suite is only evidence
   while the prose is not written to it, so a coming phase should add coverage it has never seen
-  rather than deepen what it already has.
+  rather than deepen what it already has. **A2.5 paid down the first half**: the identity rule was
+  deleted from both agents once the framework carried the turn order, and the residual
+  `context-cross-agent` failure is the honest invoice for it. The InventoryAgent clause stands.
 - **`behaviour-conversation-closure` reached 5/5** at the close of A2.3, so the Family-A-list defect
   that stood open since A2.1 (a choice list emitted with no escape pair, trapping the user) was not
   observed again. It was never repaired deliberately, so treat it as unproven rather than fixed.
+
+## Planned
+
+Phases named but not yet run. Each is recorded here with the one thing that has to be settled before
+it is worth spending a measurement on it — in both cases below, that thing is the same: the suite
+cannot currently see the prose the phase would revise.
+
+### `A2.6` — the four actor prompts
+
+`morgana.json` carries five prompts and only one of them, `Morgana`, has ever been revised. `Guard`,
+`Classifier`, `Presentation` and `ChannelAdapter` stand as first written. Each has at least one
+defect visible by reading, before any measurement:
+
+- **Guard** is asked for `violation` as "reason or null", with no guidance on voice, language or
+  person — but that string is user-visible: `GuardAnswer` splices it ahead of a line in Morgana's
+  voice, so the product emits an analytic fragment glued to a witch. Its Target also lists categories
+  (violence, offensive content) with nothing separating a user *behaving* badly from a user *talking
+  about* a subject, and unlike the LLM error path the classification itself fails closed. Adjacent
+  and not a prose matter: the pre-LLM profanity scan is `message.Contains(term)`, so `stupid` matches
+  `stupidity` and blocks before any model reads the sentence.
+- **Classifier** is asked for a calibrated `confidence` on every turn that nothing reads —
+  `LLMClassifierService` logs it, the supervisor tags a span with it, no code branches on it. Either
+  it gates something (a low score is a clarifying turn, not a guess) or it stops being asked.
+- **ChannelAdapter** spends a paragraph generalising to capability properties "whose names you have
+  never seen before". `ChannelCapabilities` is a fixed record; that prose guards nothing, on the one
+  prompt that runs per message on exactly the channels that cannot afford it.
+- **Presentation** is the only place quick replies are emitted outside the Quick Reply Doctrine, and
+  rightly so — the front door has no Family B. Nothing says so, so a later editor will "fix" it into
+  compliance.
+
+**What must be settled first: none of the four is measurable today.** `Nrt:EnableGuardrail` is
+false, so the Guard never runs. Every scenario uses the `nrt` channel with `MaxMessageLength=null`,
+so `MorganaChannelAdapter` short-circuits and the ChannelAdapter never runs at all. No scenario
+asserts on the welcome message. The Classifier is covered only in reflection — if it misroutes, the
+wrong agent answers. Revising these four before the suite can see them is writing blind, so the
+phase opens on the instrument: a degraded-channel scenario on the Rune capability profile and a
+guardrail-on scenario, or an explicit, recorded decision to review by reading only.
+
+### `A2.7` — the summarization prompt
+
+`Morgana:HistoryReducer:SummarizationPrompt` rewrites the history every later turn reasons over, so
+its failures are the expensive kind: unrecoverable, because the next agent cannot ask a tool for a
+value it was never handed. It already carries real scar tissue — the reference-data list held
+outside the prose budget, an order id kept on one line with its seal word, each credential labelled
+with the entity it belongs to. What it has never had is a measurement.
+
+**What must be settled first: it does not fire.** Reduction triggers above
+`SummarizationTargetCount + SummarizationThreshold` = 20 messages, and the longest scenario is five
+turns. Judging this prompt needs a scenario built for it: establish a value early, cross the
+reduction boundary, then require that value again on the far side.

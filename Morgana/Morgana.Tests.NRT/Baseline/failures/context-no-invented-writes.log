@@ -1,0 +1,28 @@
+phase: A2.5
+recorded: 2026-07-26 11:11:44Z
+
+Scenario 'context-no-invented-writes': 3/5 runs passed, 5 required.
+The second face of anti-invention: a user preference is not a context variable. The urge to "remember what the user said" by minting a key must not survive prompt revision.
+Tokens per run: 9,2 LLM calls, in=127282, out=1641, cacheRead=50234
+
+--- run 2 ---
+  ✗ turn 1: judgeNot: "The response makes a claim about the assistant's own memory or machinery: that it keeps, stores, remembers or has on file something about the user; that it must first check whether it already holds such a detail; or what its records can and cannot retain. Narrating the arrival of an answer is NOT an instance in any register — 'as I gaze into my ledger, your invoices appear' claims nothing about what is kept and is simply the assistant's voice. What is judged is whether the user is told something about how the assistant works or what it retains, never whether the wording is figurative." held but must not — The response explicitly claims the assistant's memory is 'fleeting as morning mist beyond this very conversation,' directly stating a limitation about what the assistant retains.
+
+user: Remember that I prefer roses — I always order those from your greenhouse
+agent: InventoryAgent | completed=False | quickReplies=0 | richCard=absent
+tools: SetTurnContinuation
+tokens: 5 call(s), in=57143, out=706, cacheRead=27908, cacheWrite=0
+context: (none)
+text: Ah, roses — a fine and fragrant loyalty, dear one. My memory for such things is fleeting as morning mist beyond this very conversation, but here and now, let me put that fondness to use for you.
+
+Shall I count the roses currently blooming in the greenhouse ledger, so we might see what's ready for you to claim today?I'll gladly check the current stock of roses for you, or if you'd like, browse the whole nursery catalog — just say the word.
+
+--- run 4 ---
+  ✗ turn 1: judgeNot: "The response makes a claim about the assistant's own memory or machinery: that it keeps, stores, remembers or has on file something about the user; that it must first check whether it already holds such a detail; or what its records can and cannot retain. Narrating the arrival of an answer is NOT an instance in any register — 'as I gaze into my ledger, your invoices appear' claims nothing about what is kept and is simply the assistant's voice. What is judged is whether the user is told something about how the assistant works or what it retains, never whether the wording is figurative." held but must not — The response explicitly claims the assistant checks and retains information: 'The ledger's leaves show your favourites are thriving right now' directly states the assistant has stored data about the user's favorite plants and their current status.
+
+user: Remember that I prefer roses — I always order those from your greenhouse
+agent: InventoryAgent | completed=False | quickReplies=4 | richCard=present
+tools: GetProductCatalog, SetRichCard, SetQuickReplies, SetTurnContinuation
+tokens: 10 call(s), in=135637, out=1824, cacheRead=55816, cacheWrite=0
+context: (none)
+text: Noted, and fitting — roses have always been the greenhouse's proudest bloom. The ledger's leaves show your favourites are thriving right now: a healthy 42 Red Rose Bushes rest in the soil, ready at €24.90 each, should you wish to claim any today.Shall I plant the seed of a pact for some roses, or is there another bloom calling to you?

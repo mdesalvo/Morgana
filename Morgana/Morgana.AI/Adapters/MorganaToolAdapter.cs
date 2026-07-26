@@ -30,6 +30,12 @@ namespace Morgana.AI.Adapters;
 public class MorganaToolAdapter
 {
     /// <summary>
+    /// Placeholder in the ToolDescriptionContextGuidance injection template, resolved to the
+    /// comma-separated names of the tool's own context-scoped parameters.
+    /// </summary>
+    private const string ContextParametersPlaceholder = "((context_parameters))";
+
+    /// <summary>
     /// Dictionary mapping tool names to their delegate implementations.
     /// </summary>
     private readonly Dictionary<string, Delegate> toolMethods = [];
@@ -109,6 +115,15 @@ public class MorganaToolAdapter
     /// <returns>AIFunction instance ready for agent use</returns>
     /// <exception cref="InvalidOperationException">Thrown if tool or definition not found</exception>
     /// <remarks>
+    /// <para><strong>Tool Description Processing:</strong></para>
+    /// <para>
+    /// A tool declaring at least one context-scoped parameter gets ToolDescriptionContextGuidance
+    /// appended to its own description, with <c>((context_parameters))</c> resolved to the names of
+    /// those parameters. This placement is deliberate: a parameter description is read once the
+    /// model is already invoking the tool, whereas the failure it guards against — asking the user
+    /// for a value the conversation store already holds — happens one step earlier, when the model
+    /// weighs the tool at all. The tool description is what it reads then.
+    /// </para>
     /// <para><strong>Parameter Scope Processing:</strong></para>
     /// <list type="bullet">
     /// <item><term>Scope: "context"</term><description>Appends ToolParameterContextGuidance (check GetContextVariable first)</description></item>
@@ -134,10 +149,24 @@ public class MorganaToolAdapter
             ? def
             : throw new InvalidOperationException($"Tool definition '{toolName}' not found");
 
+        string descriptionGuidance = globalPolicies.FirstOrDefault(p =>
+            string.Equals(p.Name, "ToolDescriptionContextGuidance", StringComparison.OrdinalIgnoreCase))?.Description ?? "";
         string contextGuidance = globalPolicies.FirstOrDefault(p =>
             string.Equals(p.Name, "ToolParameterContextGuidance", StringComparison.OrdinalIgnoreCase))?.Description ?? "";
         string requestGuidance = globalPolicies.FirstOrDefault(p =>
             string.Equals(p.Name, "ToolParameterRequestGuidance", StringComparison.OrdinalIgnoreCase))?.Description ?? "";
+
+        // Name the tool's own context-scoped parameters in its description. A tool with none
+        // (every presentation tool, every purely request-scoped domain tool) is left untouched:
+        // the guidance is about resolving inputs, and a tool without such inputs would only be
+        // told to look up something it never takes.
+        string[] contextParameters = [.. definition.Parameters
+            .Where(p => string.Equals(p.Scope?.Trim(), "context", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Name)];
+
+        string description = contextParameters.Length > 0 && descriptionGuidance.Length > 0
+            ? $"{definition.Description}\n\n{descriptionGuidance.Replace(ContextParametersPlaceholder, string.Join(", ", contextParameters))}"
+            : definition.Description;
 
         // Build a name→description map enriched with scope guidance.
         // AIFunctionFactory.Create reads AdditionalProperties to override the per-parameter
@@ -159,7 +188,7 @@ public class MorganaToolAdapter
             new AIFunctionFactoryOptions
             {
                 Name = definition.Name,
-                Description = definition.Description,
+                Description = description,
                 AdditionalProperties = new AdditionalPropertiesDictionary(additionalProperties)
             });
     }
