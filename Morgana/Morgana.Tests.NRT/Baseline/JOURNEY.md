@@ -649,7 +649,65 @@ intended and the C1 controls are rare bytes that tokenize poorly, but that is an
 measurement, and this journal already records that five runs resolve pass rates and not payload
 arithmetic.
 
+**The sweep this phase paid for was really A2.5.3's.** A2.5.2 was the last full baseline; A2.5.3,
+A2.5.4 and A2.5.5 all landed unmeasured, and A2.5.3 dominates that gap — the parameter descriptions
+reaching a model for the first time, the largest addition of the arc. Eight scenarios, five runs, 14
+minutes. **Six held, two did not**, and the two are not the same kind of thing:
+
+| scenario | A2.5.2 | A2.5.5 | required | input |
+|---|---|---|---:|---:|
+| `context-cycle-on-miss` | 5/5 | **4/5 ✗** | 5 | +7.2% |
+| `context-cross-agent` | 5/5 | **4/5 ✗** | 5 | +6.0% |
+| `behaviour-conversation-closure` | 5/5 | 4/5 | 4 | +16.1% |
+| `behaviour-rich-card` | 5/5 | 5/5 | 4 | +8.8% |
+| `behaviour-turn-continuation-operand` | 5/5 | 5/5 | 4 | +6.4% |
+| `context-closed-vocabulary-monkeys` | 5/5 | 5/5 | 5 | −6.1% |
+| `context-cycle-on-hit` | 5/5 | 5/5 | 5 | −3.1% |
+| `context-no-invented-writes` | 5/5 | 5/5 | 5 | +10.1% |
+
+**`context-cycle-on-miss` is a real regression, and it is the oldest red returning.** One run in five
+opened the turn with `SetTurnContinuation` and asked for the customer code without ever calling
+`GetContextVariable` — the exact defect A2.5 closed by stating the order of a turn.
+
+The mechanism proposed, before anything is changed: `GetInvoices` declares `userId` (context) and
+`count` (request). A2.5.2 deliberately cut `ToolParameterContextGuidance`, so `userId` carries no
+parameter-level sentence at all. `count` carries `ToolParameterRequestGuidance`, live since A2.5.3
+after seven months inert: *"Use the value directly from the user's request, without going through the
+GetContextVariable tool."* So the only parameter-level sentence in that tool naming
+`GetContextVariable` names it to forbid it — and the failing message, *"I'd like to see my last 3
+invoices"*, is precisely one that binds `count` from the user's words. The scoping is positional,
+a `description` on one property of a JSON schema, against the failure mode this project is built
+around. It remains a hypothesis: one failure in five, not five in five.
+
+This inverts what this journal expected twice over. `ToolParameterRequestGuidance` was kept at A2.5.3
+on the reinforcement reading and named as *"the cheapest single thing to cut if the census says so"*;
+the census then said the opposite, that on Inventory the template was the survivor and the authored
+clauses the duplicates. Here it is neither: on Billing it is a candidate *cause*.
+
+**`context-cross-agent` is not a prose failure at all** — see the instrument note below. Its subject
+passed five times out of five: ContractAgent read `Hit:userId` and never asked.
+
+**The awareness side was not measured, as predicted before the run.** Seven scenarios of eight moved
+up on input tokens, which is A2.5.3 arriving. Whether the arriving text bought anything is not
+visible here and could not have been: the suite was 8/8 green, so it has no headroom, and the tools
+carrying the densest new parameter prose — Inventory's whole order lifecycle — are called by no
+scenario at all.
+
 ### Changes to the measuring instrument
+
+- **A2.5.5** — `context-cross-agent`'s farewell proposition was the strict wording A2.1 had already
+  retired. Two scenarios assert the same behaviour (a user closes, the agent farewells, completed,
+  no buttons): `behaviour-conversation-closure` asks for *"a farewell, a polite closing, or an
+  acknowledgement of the user's thanks"*, carrying a comment that `"explicitly says goodbye" proved
+  too strict`; `context-cross-agent` still asked whether the response *"says goodbye or acknowledges
+  that the exchange is over"*. **A2.1's repair was applied to one file and missed in the other**, and
+  this is what it cost: *"A pleasure to serve you. May your ledgers balance swiftly."* judged not a
+  goodbye, one red on a blocking scenario, in a sweep whose subject was something else entirely.
+  The proven wording is now in both. No calibration run was bought and none was owed — this is not a
+  new proposition needing validation but one already green across many phases on the identical
+  behaviour, and the change only ever removes a way to fail. It is also a second live instance of the
+  defect A2.6 already owns: **the judge runs on the cheapest tier**, whose own cost is rounding error
+  next to a wrong verdict.
 
 - **A2.5** — failure reports now persist to `Baseline/failures/{scenario}.log`, written whole on
   every failing run and deleted when the scenario passes. A journey row records *that* a scenario
