@@ -616,6 +616,39 @@ recreated. The old healing was luck rather than design, but it was real, and a `
 that re-resolves through the registry on a session fault would restore it deliberately. Not done here,
 because the point of this change was to stop maintaining our own machinery.
 
+### `A2.5.5` — twenty characters the arc itself broke
+
+Not a prose phase. A byte repair, found while starting the parameter-description census and landed
+alone because it is not a decision about wording at all.
+
+`morgana.json` carried **20 double-encoded sequences**, all of them inside `SetRichCard`'s
+description and nowhere else in the corpus: nine em-dashes stored as `â` + U+0080 + U+0094, and
+eleven middle dots stored as `Â·`. The file is read as UTF-8, so those are the code points that
+reached the model — the separator between each of the eight component types and its definition was
+an `â` followed by **two invisible C1 control characters**, eight times over, on the longest single
+description the framework ships and one resent on every round trip of every agent.
+
+`git bisect` on the count of C1 code points names the culprit exactly: `52cb941` (A2.1) is clean,
+`e5a48fa` — **"A2.2 — cut the base tool descriptions"** — is not. The rewrite that shortened
+`SetRichCard` by 60% corrupted it in the same stroke, and it has ridden along in every commit and
+**every measurement of the A2 arc since**.
+
+The repair is a targeted replacement on the raw text, not a `json.load`/`dump` round trip, which
+would have reformatted the whole file and buried the change. It was gated on three assertions: no
+suspicious code point survives, the parsed JSON is identical to the original modulo those two
+sequences, and the length delta is exactly `2×9 + 11 = 29`. All three held.
+
+**What this does to comparability, stated rather than glossed.** Every `behaviour-rich-card` row from
+A2.2 onward was measured *with* the corruption, so rows across this repair are not comparable on that
+scenario. Nothing was re-run to establish a new baseline: the next measurement that touches rich-card
+behaviour carries the repaired text and starts the comparison there. Reading a future rich-card
+movement as a prose effect without accounting for this would be a mistake.
+
+No claim is made here about tokens. The corrupted sequences are three characters where one was
+intended and the C1 controls are rare bytes that tokenize poorly, but that is an argument, not a
+measurement, and this journal already records that five runs resolve pass rates and not payload
+arithmetic.
+
 ### Changes to the measuring instrument
 
 - **A2.5** — failure reports now persist to `Baseline/failures/{scenario}.log`, written whole on
@@ -710,13 +743,50 @@ Recorded here because they make rows comparable, or not:
   something nothing else says, *reinforcing* a rule stated higher up at the moment it is acted on, or
   merely *duplicating*. Only the third is waste, and the census has to be redone from scratch, because
   a sentence that was first-stating while the parameter channel was dead may be duplication now.
+
+  **The census was taken at A2.5.5 and is recorded here; none of it has been landed.** ~4,600
+  characters of parameter prose across the domain layer, of which roughly 1,100–1,300 (≈25%) read as
+  duplication now that the ladder is live:
+
+  - **The five `orderId`/`sealWord` parameters of InventoryAgent** (1,939 characters between them) each
+    say some version of *"this is not a stored context value, track it from the conversation, never
+    invent it"* — which is precisely what `ToolParameterRequestGuidance` now appends to every one of
+    them. The template was inert when those sentences were authored; they were first-stating then and
+    are the same claim twice now. **What must survive the cut is the domain fact the template cannot
+    carry**: a customer may have several orders in flight, so there is one seal word *per order*. That
+    is why the parameter cannot be a single stored value, and nothing else in the corpus says it.
+  - **`CreatePurchaseOrder.userId`** ends with *"Retrieved from conversation context."* — stated by P0,
+    by the tool-level template, and by the per-turn `HeldContextDeclaration`. Pure waste, all three
+    rungs above it.
+  - **`GetOrderHistory.userId`** is half and half: *"already bound in conversation context, retrieve it
+    from context"* duplicates the same three rungs, while *"it is NOT a selector for choosing whose
+    history to read"* is first-stating and belongs to this one tool — the only one that reads across
+    every session, and therefore the only one where mistaking the parameter for a selector is an
+    impersonation rather than an error.
+  - **The five `userId` parameters of Billing and Contract** (173 characters each) are **kept**: they
+    carry the synonym set a customer may use for their own code ("customer code, account number, client
+    id") and *one customer, one code*. Nothing else says either. This is the identity rule A2.5 deleted
+    from the two agents' `Instructions`, surviving in the layer it belonged in all along.
+  - **Two sentences point at a policy gap rather than a parameter defect.** `reason` in
+    `Contract.GetTerminationProcedure` and in `Inventory.CancelOrder` say near-verbatim *"ask the user
+    if they'd like to provide one, but make it clear it's optional"*, and the three selectors
+    `invoiceId` / `clauseNumber` / `sku` share a fainter version of the same idiom for a missing choice.
+    Two agents needing the same sentence is a gap in the policy layer, not a successful repair — and
+    there is no policy about optional parameters at all. It is also a layer violation on its own terms:
+    a behavioural instruction living in a data contract.
+  - **A small incoherence, noted and not worth a phase.** `count` is `Required: true` with no C# default
+    yet its description says *"Defaults to 3-4"*; `months` is optional with `= 6` and says *"Defaults to
+    6"*. The same word means *the tool will supply this* on one parameter and *you should pick this* on
+    the one beside it.
 - **`ToolParameterRequestGuidance` is live again** after seven months inert — 98 characters on every
   request-scoped parameter of every native tool (A2.5.4 took MCP tools out of its reach). It was
   re-read before the repair shipped, as this journal required, and kept:
   read against the tool-level `ToolDescriptionContextGuidance` that enumerates the *context*-scoped
   names, it draws the same boundary from the other side and at the rung where the model is already
   binding that argument. That is the reinforcement reading; the duplication reading is available too,
-  and it is the cheapest single thing to cut if the census says so.
+  and it is the cheapest single thing to cut if the census says so. **The census above did not say so**:
+  on InventoryAgent's request-scoped parameters the template turned out to be the *survivor* and the
+  hand-written clauses the duplicates, which is the opposite of what this entry anticipated.
 - **MCP tools no longer bind to a live client for their whole life** — see A2.5.4, the one behaviour
   traded away there. A `DelegatingAIFunction` re-resolving through `IMCPClientRegistryService` on a
   session fault would restore it, and would do deliberately what the deleted `executorCache` did by
