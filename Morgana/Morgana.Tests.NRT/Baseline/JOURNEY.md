@@ -693,6 +693,71 @@ visible here and could not have been: the suite was 8/8 green, so it has no head
 carrying the densest new parameter prose — Inventory's whole order lifecycle — are called by no
 scenario at all.
 
+### `A2.6` — a cut with a stated mechanism, and the mechanism was wrong
+
+`ToolParameterRequestGuidance` was cut: the entry, the `Templates` constant and the splice, matching
+what A2.5.2 did with the context-scoped sibling. The prediction, recorded in the commit before the
+run, was that it would close `context-cycle-on-miss` — the only parameter-level sentence in
+`GetInvoices` naming `GetContextVariable` named it to forbid it, one parameter away from the
+parameter that requires it.
+
+**It did not.** `context-cycle-on-miss` came back 4/5 against a threshold of 5, and the failing run
+is byte-for-byte the same shape as A2.5.5's: turn 1 opens with `SetTurnContinuation` alone and asks
+for the customer code without ever calling `GetContextVariable`. The hypothesis is refuted, not
+merely unproven.
+
+| scenario | A2.5.5 | A2.6 | required |
+|---|---|---|---:|
+| `behaviour-conversation-closure` | 4/5 | **5/5** | 4 |
+| `context-cycle-on-miss` | 4/5 ✗ | 4/5 ✗ | 5 |
+| `context-cross-agent` | 4/5 ✗ | 4/5 ✗ | 5 |
+| the other five | 5/5 | 5/5 | |
+
+`closure` recovered its margin and nothing regressed, but five runs do not attribute that to the
+cut. The cut stands anyway, on the A2.5.5 census rather than on this result: it duplicated
+hand-written clauses on all five of InventoryAgent's `orderId`/`sealWord` parameters, and stated
+what is trivially true on Billing and Contract.
+
+Tokens are **−24.7% against `v0-vanilla`**, where A2.5.5 was −28.2%. The difference is almost
+entirely *call count*, not payload — `context-no-invented-writes` went from 8.0 to 10.0 LLM calls
+per run and `context-cycle-on-hit` from 16.8 to 18.0. Reading a text cut as having raised the
+payload would be the mistake this journal keeps warning about.
+
+**What the run actually bought was the diagnosis.** A2.5.5's judge repair worked — the farewell
+proposition no longer misfires — and underneath it `context-cross-agent` failed on something new
+and far more legible. Run 5, turn 3, ContractAgent, `context: Hit:userId`:
+
+> *"I'll need your customer identification code to retrieve your contract details. Could you provide
+> that for me?* **Ah, I already have what I need.** *Let me gaze into the crystal sphere..."*
+
+It wrote the question, then resolved the value, then contradicted itself — and because a turn
+reaches the user as a single message, all three arrived together. `judgeNot` fired correctly: the
+response does ask for the customer code, in its first sentence.
+
+**That is the same defect as `cycle-on-miss`, from the other side.** One turn never resolves and
+asks; the other resolves too late and asks anyway. Both write text before the inputs are resolved —
+which is precisely the order the framework `Instructions` state, in a sentence that describes this
+exact failure: *"ask a question your own next tool call is about to answer, and the user reads the
+question and its answer side by side, as a demand for something you already had."*
+
+So the rule is not missing. It is stated **three times** — in P0 `ContextHandling`, in the framework
+`Instructions`, and as the `PRECONDITION` opening `SetTurnContinuation`'s own description, which is
+the very tool the failing turn calls first. Three statements, one defect, one run in five. A fourth
+statement is the contradiction-surface trap this project is built around avoiding, so the next move
+is structural rather than another sentence.
+
+**The structural candidate, and the correlation behind it.** `HeldContextDeclaration` injects
+nothing when the session holds no context variables — deliberate at A2.5.1, and documented there as
+letting "the ask-the-user branch reach the model exactly as before". Set that against the results:
+
+- `context-cycle-on-hit` — the injection fires — **5/5**, every phase.
+- `context-cycle-on-miss` — the injection is silent — **the red**.
+
+The turn where the model receives no per-turn signal at all is the turn where it falls back to
+asking. Silence is indistinguishable from *there is no context system here*. It explains
+`cycle-on-miss`; it does not explain `cross-agent`, which is a pure sequencing inversion with the
+injection present and the lookup performed.
+
 ### Changes to the measuring instrument
 
 - **A2.5.5** — `context-cross-agent`'s farewell proposition was the strict wording A2.1 had already

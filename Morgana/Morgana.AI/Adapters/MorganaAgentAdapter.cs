@@ -385,18 +385,25 @@ public class MorganaAgentAdapter
                 ? $"Agent '{agentName}' has {sharedVariables.Count} shared variables: {string.Join(", ", sharedVariables)}"
                 : $"Agent '{agentName}' has NO shared variables");
 
-        // The HeldContextDeclaration template is prose and lives with the rest of it in
-        // morgana.json, spliced per invocation rather than rendered into the system prompt —
-        // hence Type "Injection", like the two tool/parameter guidances. Handed over as a plain
-        // string so the provider keeps no prompt-layer dependency. Absent from the configuration,
-        // the provider injects nothing.
+        // The per-turn declarations are prose and live with the rest of it in morgana.json, spliced
+        // per invocation rather than rendered into the system prompt — hence Type "Injection", like
+        // the tool-level guidance. Handed over as plain strings so the provider keeps no prompt-layer
+        // dependency. Absent from the configuration, the provider injects nothing. The two are
+        // exclusive per turn: one names what the session holds, the other states that it holds
+        // nothing, and the empty case is as much a fact worth declaring as the full one.
         string heldContextDeclaration = Records.GlobalPolicy.ResolveTemplate(
             morganaPolicies, Records.GlobalPolicy.Templates.HeldContextDeclaration);
 
+        string emptyContextDeclaration = Records.GlobalPolicy.ResolveTemplate(
+            morganaPolicies, Records.GlobalPolicy.Templates.EmptyContextDeclaration);
+
         // The provider needs the allow-list up front: only writes to a name in this set
         // trigger OnSharedContextUpdate; everything else stays agent-local.
-        MorganaAIContextProvider aiContextProvider =
-            new MorganaAIContextProvider(logger, sharedVariables, heldContextDeclaration: heldContextDeclaration);
+        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(
+            logger,
+            sharedVariables,
+            heldContextDeclaration: heldContextDeclaration,
+            emptyContextDeclaration: emptyContextDeclaration);
 
         // Wire persistence only when a callback was supplied. Left null (e.g. an agent
         // created outside the actor path) shared writes still update local state but are

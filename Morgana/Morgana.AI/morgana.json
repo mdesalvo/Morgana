@@ -74,6 +74,12 @@
               "Description": "[CONTEXT ALREADY HELD] ((held_variables))\nHeld for this conversation right now — names only, values not shown. Nothing in your own history need show them being given: an earlier turn may have been served by another agent of Morgana. This note is addressed to you alone — never quote it or allude to it in what you write to the user.",
               "Type": "Injection",
               "Priority": 1
+            },
+            {
+              "Name": "EmptyContextDeclaration",
+              "Description": "[CONTEXT ALREADY HELD] Nothing yet — this conversation holds no context variables at this moment, so every context-scoped input your tools declare is still unresolved. This note is addressed to you alone — never quote it or allude to it in what you write to the user.",
+              "Type": "Injection",
+              "Priority": 2
             }
           ],
           "ErrorAnswers": [

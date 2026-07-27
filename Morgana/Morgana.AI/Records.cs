@@ -1190,6 +1190,13 @@ public static class Records
 
             /// <summary>Injected per turn, naming the context variables the session currently holds.</summary>
             public const string HeldContextDeclaration = "HeldContextDeclaration";
+
+            /// <summary>
+            /// Injected per turn in place of the above when the session holds none. The empty state
+            /// is a fact worth stating: silence reads as "there is no context here", which is the
+            /// branch the model was observed falling back to asking on.
+            /// </summary>
+            public const string EmptyContextDeclaration = "EmptyContextDeclaration";
         }
 
         /// <summary>
