@@ -849,13 +849,42 @@ the guarantee is now known to be real rather than assumed.
 
 Against `v0-vanilla` these four are −28.0%, −26.3%, −29.4% and −16.3% on input tokens.
 
-**Four scenarios of eight were measured**, chosen as the risk surface of the change: the two standing
-reds, the agent whose guardrail was deliberately removed, and the only scenario exercising the
-`Formatting` blocks that were cut. `behaviour-conversation-closure`, `behaviour-turn-continuation-operand`,
-`context-cycle-on-hit` and `context-no-invented-writes` all saw the fence and three of them saw a
-slimmed agent, and none of them has an A2.6.2 row. The suite has never yet been 8/8 in a single
-phase; establishing whether it is now is the next measurement, and it is a checkpoint rather than a
-hypothesis.
+The remaining four were then run at the same phase label, so the checkpoint reads as one block.
+
+**The suite is 8/8 for the first time in its history** — it was never fully green, not at
+`v0-vanilla` and not at any phase since.
+
+| scenario | `v0-vanilla` | **A2.6.2** | required | input |
+|---|---|---|---:|---:|
+| `behaviour-conversation-closure` | 1/5 ✗ | **5/5 ✓** | 4 | −38.8% |
+| `behaviour-rich-card` | 5/5 | **5/5 ✓** | 4 | −16.3% |
+| `behaviour-turn-continuation-operand` | 4/5 | **5/5 ✓** | 4 | −33.5% |
+| `context-closed-vocabulary-monkeys` | 5/5 | **5/5 ✓** | 5 | −29.4% |
+| `context-cross-agent` | 2/5 ✗ | **5/5 ✓** | 5 | −26.3% |
+| `context-cycle-on-hit` | 5/5 | **5/5 ✓** | 5 | −39.7% |
+| `context-cycle-on-miss` | 5/5 | **5/5 ✓** | 5 | −28.0% |
+| `context-no-invented-writes` | 5/5 | **5/5 ✓** | 5 | −33.2% |
+| **total input per run** | 1,423,714 | **995,972** | | **−30.0%** |
+
+Three scenarios improved on `v0-vanilla`, five held, **none is below it**. That was the standing
+condition for the release claim and on this instrument it is now met. `context-no-invented-writes`
+held at 5/5 despite InventoryAgent losing 420 characters of `Formatting`, which was the most exposed
+of the four — the clause that carries it lives in `Instructions`, untouched, and that turns out to be
+where it actually lives rather than where it appeared to.
+
+Four caveats, none of which the number above should be allowed to bury:
+
+- **The pass-rate column is not a clean comparison and the token column is.** The instrument moved
+  four or five times across the arc; `v0-vanilla`'s 1/5 and 2/5 are probably understated. The
+  improvements are real, the size of them is not measured.
+- **One measurement, five runs each.** The defects closed here surfaced at one run in five. A clean
+  sweep is evidence, not proof, and the honest expectation is that some of these will flicker again.
+- **−30.0% is short of the plan's −40/−50%.** It is also the best the arc has recorded: A2.5.5 was
+  −28.2% and A2.6 −24.7%, so the slimming recovered the ground A2.5.3 had taken and a little more.
+- **This is a development checkpoint, not the release evidence.** That remains the final instrument
+  run against 0.25 and the 0.26 candidate, on the same ruler, on the same day.
+
+### Changes to the measuring instrument
 
 ### Changes to the measuring instrument
 
