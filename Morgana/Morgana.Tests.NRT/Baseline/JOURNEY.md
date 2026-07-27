@@ -758,6 +758,54 @@ asking. Silence is indistinguishable from *there is no context system here*. It 
 `cycle-on-miss`; it does not explain `cross-agent`, which is a pure sequencing inversion with the
 injection present and the lookup performed.
 
+### `A2.6.1`, reverted — a fact can make a rule moot, and that is a third way to fail
+
+The structural candidate above was landed and measured on the two open reds alone. It went the
+opposite way on both.
+
+| scenario | A2.6 | A2.6.1 | required |
+|---|---|---|---:|
+| `context-cycle-on-miss` | 4/5 | **1/5** | 5 |
+| `context-cross-agent` | 4/5 | **5/5** | 5 |
+
+**`cycle-on-miss` was made systematically worse.** Four of the five runs failed, every one with the
+same trace — turn 1 calling `SetTurnContinuation` alone and asking for the customer code, never
+calling `GetContextVariable`. Four identical failures is not a black box having a moment; it is a
+change doing something.
+
+The mechanism, legible only afterwards. The injection opened *"Nothing yet — this conversation holds
+no context variables at this moment"*, and the clause meant to carry the intent — *so every
+context-scoped input your tools declare is still unresolved* — lost to the two words in front of it.
+It was written to mean **so you still have to look it up** and it read as **so there is nothing to
+look up**. Declaring the store empty answers the very question `GetContextVariable` exists to ask,
+and once the answer is in the prompt the call has no reason to happen.
+
+That is the precise inverse of why A2.5.1 works, and the symmetry is the lesson. Naming what **is**
+held helps because it says a value exists to be fetched. Naming that **nothing** is held hurts
+because it says there is nothing to fetch — so asking the user stops being the fallback and becomes
+the obvious move.
+
+**It also refutes the argument the change was built on**, which is the part worth carrying forward.
+The change was justified with *"it states a fact, not a rule, and facts do not contradict"* — the
+same reasoning that justified A2.5.1. The reasoning is wrong, or at least badly incomplete: a fact
+does not contradict a rule, but it can make the rule **moot**. Up to here this journal has tracked
+exactly one way for added prose to make behaviour worse — a fourth statement of a rule growing the
+contradiction surface. This is a second, and it is not the same shape: nothing here contradicts
+anything, the model was simply handed a shortcut around a step it was supposed to take. Both belong
+on the list from now on.
+
+**`cross-agent` reaching 5/5 in the same run is not claimed.** `EmptyContextDeclaration` barely
+fires in it: turn 3 runs against a full store and turn 1 gets the code in the user's own message.
+Attributing that green to this change would be the same asymmetry that made the prediction wrong in
+the first place — doubting the result that was not predicted while accepting the one that was.
+
+**Reverted at `0c59e85`; the rows and the failing transcripts stay.** The prose is back to A2.6, and
+`context-cycle-on-miss` is back to its standing 4/5 red, unexplained. Two hypotheses have now been
+stated in advance and refuted by measurement — `ToolParameterRequestGuidance` at A2.6, the silent
+empty branch here. Both were built by reading a single failing transcript, which is the common
+factor and probably the actual error: against a nondeterministic system one transcript is a lead,
+not evidence, and a mechanism deserves more than one case before it is worth spending a run on.
+
 ### Changes to the measuring instrument
 
 - **A2.5.5** — `context-cross-agent`'s farewell proposition was the strict wording A2.1 had already
