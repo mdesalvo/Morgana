@@ -266,6 +266,23 @@ Two-layer prompt composition in `MorganaAgentAdapter.ComposeAgentInstructions()`
 1. **Framework layer** (from `morgana.json`): Target + Personality + GlobalPolicies + Instructions + Formatting
 2. **Domain layer** (from `agents.json`): Target + Personality + Instructions + Formatting
 
+**The two layers are fenced, and the fences are load-bearing.** Both carry the same four section
+labels, so an unfenced composition shows `[TARGET]`, `[PERSONALITY]`, `[INSTRUCTIONS]` and
+`[FORMATTING]` twice with nothing marking which is which — the framework asserts precedence over "the
+layer below" while giving the model no way to locate where below begins. `FrameworkLayerHeader` /
+`FrameworkLayerFooter` name and close the framework block; `DomainLayerHeader` opens the domain block
+by **stating its own subordination** — it specialises the framework with domain knowledge and nothing
+else, never contradicts it, and yields to it wherever the two appear to differ. All three are prose
+and live in `morgana.json` beside `GlobalPoliciesHeader`/`Footer`; unconfigured they resolve to `""`
+and the composition renders as it did before they existed.
+
+The subordination is **total and unconditional**, and that is what makes the domain layer cheap: an
+agent restating a framework rule is not reinforcement, it is a second voice claiming the same
+authority, and it undercuts the layer above precisely by repeating it. A domain agent says the least
+possible and the most specific possible — its purpose, its domain constraints, its voice, how it
+presents its own tools' output. Anything it says that a global policy already says belongs deleted;
+if two agents need the same sentence, that is a policy gap to be filled above, never a repair below.
+
 Framework prompts (`morgana.json`):
 - **Morgana**: base personality, global policies — P0-P7, all `Critical`: ContextHandling, QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage, ToolGrounding, MandatoryTextualResponse, RichCardUsage. The `QuickReplyDoctrine` (P1) is the unifying master rule the other quick-reply policies instantiate — see Design Philosophy. `GlobalPoliciesHeader` states the "these are binding" emphasis once, above the list, rather than each policy repeating it in its own opening words; `GlobalPoliciesFooter` closes the block, because an opening claim about what follows otherwise scopes over the framework's own Instructions and Formatting and the whole domain layer beneath them.
   Its `Target` is the composed prompt's **preamble, not a role description**: it names the two layers, says this one governs how a turn is formed while the domain layer governs what the conversation is about, and settles precedence. It deliberately promises no capability: a claim like "solve problems through the support scenarios you can handle" sits in the primacy slot unbacked, and `ToolGrounding` then has to spend a clause defending against it. Its `Instructions` carry the **order of a turn** (resolve inputs → call the domain tool → decide presentation → write the text once), which no single policy states: each policy governs one aspect, and the observed defects are overwhelmingly sequencing failures

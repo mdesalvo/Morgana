@@ -808,8 +808,23 @@ not evidence, and a mechanism deserves more than one case before it is worth spe
 
 ### `A2.6.2` — mark the boundary, then let the agents stop restating the law
 
-Two halves of one intervention, measured together. The attribution cost is stated up front and is
-real: this phase cannot say which half did the work.
+Two halves of one intervention, measured together — and although that was expected to cost the
+attribution, most of it is recoverable from *which files changed where*.
+
+**The fence bought the behaviour; the slimming bought the tokens.** The failure being chased was the
+order of a turn, which is governed by the framework `[INSTRUCTIONS]`. Of BillingAgent, the slimming
+touched only `Formatting` — card shapes — and left `Instructions` untouched, so it cannot have
+closed `context-cycle-on-miss`. MonkeyAgent was already 5/5 before its cut. The only thing that
+changed in the relationship between the framework's turn order and the agent prose beneath it is the
+fence. The token column runs the other way: −24.7% at A2.6, −30.0% here, and the 1,762 characters
+came out in the slimming.
+
+**What the fence actually cured, in Marco's words, is a schizophrenia.** The composed prompt carried
+two blocks with identical section labels, one of them claiming authority over the other, and nothing
+telling them apart — a single prompt with two personalities, one of which asserted precedence it had
+no way to demonstrate. The fences make the subordination of the domain layer **total and
+unconditional**, and stated where it applies. It was not that before: it was a claim made four
+thousand characters above the thing it governed, competing with recency and an identical heading.
 
 **The fence.** `ComposeAgentInstructions` concatenated the framework and domain layers, and both
 carry the same four section labels — so the composed prompt showed `[TARGET]`, `[PERSONALITY]`,
@@ -884,7 +899,34 @@ Four caveats, none of which the number above should be allowed to bury:
 - **This is a development checkpoint, not the release evidence.** That remains the final instrument
   run against 0.25 and the 0.26 candidate, on the same ruler, on the same day.
 
-### Changes to the measuring instrument
+## The A2 arc, closed
+
+`v0-vanilla` → `A2.6.2`: **8/8 green for the first time in the suite's history**, and **−30.0%** on
+input tokens per run. Three scenarios improved, five held, none fell below where they started.
+
+What the arc turned out to be about, in the order the evidence arrived:
+
+1. **Consolidation** (A2.1–A2.3) — thirteen policies to ten, the base tool descriptions cut, the
+   domain layers retargeted. Most of the token saving lives here.
+2. **The framework was missing facts, not rules** (A2.5, A2.5.1) — the oldest red closed by stating
+   the *order* of a turn, and the longest-standing one by supplying, per turn, which context
+   variables the session actually holds. Neither was a new rule.
+3. **A channel had been dead for seven months** (A2.5.2–A2.5.4) — authored parameter descriptions
+   never reached the model, and the MCP path rebuilt lossily what the SDK already handed over whole.
+4. **The layers were competing, not composing** (A2.6.2) — the last defect, and the one that took
+   two refuted hypotheses to find. The framework claimed precedence, in prose, over a boundary the
+   model had no way to see.
+
+The lesson those two refutations paid for: a defect visible in one run out of five is a *lead* in one
+transcript and a *finding* only in the structure. A2.6's cut and A2.6.1's declaration were both
+theorised from a single failing turn; both were wrong, and the second was actively harmful, taking
+`context-cycle-on-miss` from 4/5 to 1/5. What finally worked came from reading the composed prompt
+rather than a failure.
+
+**This closes A2. It does not close 0.26.** The release claim rests on the final instrument run
+against 0.25 and the 0.26 candidate; everything here is a development diary measured with a ruler
+that moved four or five times along the way. Next is `A3.1` — industrialising the harness — and with
+it the version-neutral assertion profile the 0.25 side will need.
 
 ### Changes to the measuring instrument
 
