@@ -68,12 +68,6 @@ public class MorganaAIContextProvider : AIContextProvider
     private readonly string? heldContextDeclaration;
 
     /// <summary>
-    /// The EmptyContextDeclaration template, injected in place of the above when the session holds
-    /// no context variables. Null leaves the empty branch silent, as it was before A2.6.1.
-    /// </summary>
-    private readonly string? emptyContextDeclaration;
-
-    /// <summary>
     /// Names of variables subject to cross-agent persistence in the conversation-scoped
     /// <c>shared_context</c> registry. Derived from tool definitions (Scope="context",
     /// Shared=true) at construction time.
@@ -119,13 +113,11 @@ public class MorganaAIContextProvider : AIContextProvider
         ILogger logger,
         IEnumerable<string>? sharedVariableNames = null,
         JsonSerializerOptions? jsonSerializerOptions = null,
-        string? heldContextDeclaration = null,
-        string? emptyContextDeclaration = null)
+        string? heldContextDeclaration = null)
     {
         this.logger = logger;
         this.sharedVariableNames = [.. sharedVariableNames ?? []];
         this.heldContextDeclaration = string.IsNullOrWhiteSpace(heldContextDeclaration) ? null : heldContextDeclaration;
-        this.emptyContextDeclaration = string.IsNullOrWhiteSpace(emptyContextDeclaration) ? null : emptyContextDeclaration;
 
         sessionState = new ProviderSessionState<MorganaContextState>(
             stateInitializer: _ => new MorganaContextState(),
@@ -254,17 +246,8 @@ public class MorganaAIContextProvider : AIContextProvider
     /// <item><term>Names, never values</term><description>Values in the prompt would make
     ///     <c>GetContextVariable</c> pointless — collapsing the HIT/MISS trace the suite asserts on —
     ///     and would invite the model to claim a value it never read.</description></item>
-    /// <item><term>The empty state is declared too</term><description>Silence was the original
-    ///     design and it was wrong. Injecting nothing when the session holds nothing leaves the model
-    ///     with no per-turn signal at all on precisely the turn that has to decide whether to look a
-    ///     value up — and silence there is indistinguishable from <em>this agent has no context to
-    ///     consult</em>. The suite showed the split cleanly: <c>context-cycle-on-hit</c>, where the
-    ///     declaration fires, held 5/5 through every phase, while <c>context-cycle-on-miss</c>, where
-    ///     it was silent, failed one run in five across A2.5.5 and A2.6 by asking the user without
-    ///     ever calling <c>GetContextVariable</c>. <c>EmptyContextDeclaration</c> now states the empty
-    ///     state as a <em>fact</em> — never as a fourth restatement of the lookup rule, which P0, the
-    ///     framework Instructions and <c>SetTurnContinuation</c>'s own precondition already carry
-    ///     three times over.</description></item>
+    /// <item><term>Silent when empty</term><description>A session holding nothing injects nothing, so
+    ///     the ask-the-user branch reaches the model exactly as before.</description></item>
     /// <item><term>Ordinal-sorted</term><description>A stable string across turns, so the system prompt
     ///     stays prompt-cacheable and a baseline stays comparable.</description></item>
     /// </list>
@@ -273,7 +256,7 @@ public class MorganaAIContextProvider : AIContextProvider
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
-        if (heldContextDeclaration is null && emptyContextDeclaration is null)
+        if (heldContextDeclaration is null)
             return ValueTask.FromResult(new AIContext());
 
         MorganaContextState contextState = sessionState.GetOrInitializeState(context.Session);
@@ -282,21 +265,7 @@ public class MorganaAIContextProvider : AIContextProvider
             .Where(name => !EphemeralVariableNames.Contains(name))
             .Order(StringComparer.Ordinal)];
 
-        // The empty state is declared rather than passed over in silence. See the remarks above:
-        // silence is indistinguishable from "this agent has no context to consult", and that is the
-        // branch the failing runs took — asking the user without ever looking the value up.
         if (heldVariables.Length == 0)
-        {
-            if (emptyContextDeclaration is null)
-                return ValueTask.FromResult(new AIContext());
-
-            logger.LogInformation(
-                "{MorganaAiContextProviderName} DECLARED EMPTY", nameof(MorganaAIContextProvider));
-
-            return ValueTask.FromResult(new AIContext { Instructions = emptyContextDeclaration });
-        }
-
-        if (heldContextDeclaration is null)
             return ValueTask.FromResult(new AIContext());
 
         string names = string.Join(", ", heldVariables);
