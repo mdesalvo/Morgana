@@ -56,7 +56,7 @@
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.6.0" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.6.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />
-    <PackageReference Include="ModelContextProtocol.Core" Version="1.4.1" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.0.0-rc.1" />
     <PackageReference Include="OllamaSharp" Version="5.4.26" />
     <!-- Services -->
     <PackageReference Include="Markdig" Version="1.3.*" />
