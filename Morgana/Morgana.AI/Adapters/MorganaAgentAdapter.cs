@@ -321,9 +321,22 @@ public class MorganaAgentAdapter
     {
         string policiesHeader = morganaPrompt.GetAdditionalPropertyOrDefault("GlobalPoliciesHeader", "");
         string policiesFooter = morganaPrompt.GetAdditionalPropertyOrDefault("GlobalPoliciesFooter", "");
+
+        // The two layers are fenced. Both carry the same four section labels ([TARGET],
+        // [PERSONALITY], [INSTRUCTIONS], [FORMATTING]), so without a delimiter the composed prompt
+        // shows each of them twice with nothing marking which is which — and the framework's claim
+        // to precedence, made in its own Target, names a boundary the model cannot locate. The
+        // domain fence carries the subordination rule itself rather than only separating: it is read
+        // at the exact point where the layer it governs begins. Unconfigured, every fence resolves
+        // to "" and the composition renders exactly as it did before.
+        string frameworkHeader = morganaPrompt.GetAdditionalPropertyOrDefault("FrameworkLayerHeader", "");
+        string frameworkFooter = morganaPrompt.GetAdditionalPropertyOrDefault("FrameworkLayerFooter", "");
+        string domainHeader = morganaPrompt.GetAdditionalPropertyOrDefault("DomainLayerHeader", "");
+
         StringBuilder sb = new StringBuilder();
 
         // Morgana framework layers
+        AppendFence(sb, frameworkHeader);
         sb.AppendLine(morganaPrompt.Target);
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Personality);
@@ -334,8 +347,10 @@ public class MorganaAgentAdapter
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Formatting);
         sb.AppendLine();
+        AppendFence(sb, frameworkFooter);
 
         // Domain layers
+        AppendFence(sb, domainHeader);
         sb.AppendLine(agentPrompt.Target);
         sb.AppendLine();
         sb.AppendLine(agentPrompt.Personality);
@@ -346,6 +361,19 @@ public class MorganaAgentAdapter
         sb.AppendLine();
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Appends a layer fence and the blank line after it, or nothing at all when the prompt layer
+    /// declares none — so an unconfigured deployment composes byte-identically to before fences existed.
+    /// </summary>
+    private static void AppendFence(StringBuilder sb, string fence)
+    {
+        if (string.IsNullOrWhiteSpace(fence))
+            return;
+
+        sb.AppendLine(fence);
+        sb.AppendLine();
     }
 
     /// <summary>

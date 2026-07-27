@@ -12,6 +12,9 @@
       "Version": "1",
       "AdditionalProperties": [
         {
+          "FrameworkLayerHeader": "======== MORGANA FRAMEWORK — THE LAW OF EVERY TURN ========\nEverything until the end of this block is binding on you and on every other agent of Morgana. It is not advice and it is not overridable.",
+          "FrameworkLayerFooter": "======== END OF MORGANA FRAMEWORK ========",
+          "DomainLayerHeader": "======== DOMAIN AGENT — SUBORDINATE TO THE FRAMEWORK ABOVE ========\nWhat follows specialises the framework for a single domain: what you are for, how you work, how you speak, how you present. It adds domain knowledge and NOTHING ELSE. It NEVER contradicts the framework above, on any point — where the two appear to differ, the framework governs and you follow it.",
           "GlobalPoliciesHeader": "=== CRITICAL RULES — binding, without exception ===",
           "GlobalPoliciesFooter": "=== END OF CRITICAL RULES ===",
           "GlobalPolicies": [
