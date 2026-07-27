@@ -1,25 +1,79 @@
-phase: A2.6
-recorded: 2026-07-27 18:44:38Z
+phase: A2.6.1
+recorded: 2026-07-27 19:09:18Z
 verdict: FAILED — below threshold
 
-Scenario 'context-cycle-on-miss': 4/5 runs passed, 5 required.
+Scenario 'context-cycle-on-miss': 1/5 runs passed, 5 required.
 The full context cycle when the variable is not there yet: read before asking, ask in bare prose, write on the answer, then use the domain tool. This is the load-bearing scenario of the whole suite — if it regresses, context handling has regressed.
-Tokens per run: 15,6 LLM calls, in=109658, out=2318, cacheRead=49746
+Tokens per run: 14,4 LLM calls, in=98988, out=2206, cacheRead=44917
 
---- run 1 ---
+--- run 2 ---
   ✗ turn 1: toolsCalledFirst: expected the turn to open with GetContextVariable, got SetTurnContinuation
   ✗ turn 1: contextReads: 'userId' was never read (got none)
 
 user: Hi, I'd like to see my last 3 invoices
 agent: BillingAgent | completed=False | quickReplies=0 | richCard=absent
 tools: SetTurnContinuation
-tokens: 5 call(s), in=36168, out=190, cacheRead=17154, cacheWrite=0
+tokens: 5 call(s), in=36420, out=194, cacheRead=17276, cacheWrite=0
 context: (none)
-text: I'll need your account identifier to retrieve your invoices. Could you provide your customer code or account number?
+text: I'll need your customer identification code to retrieve your invoices. What code or account number do you use with us?
 
 user: P994E
 agent: BillingAgent | completed=False | quickReplies=5 | richCard=present
 tools: SetContextVariable, GetInvoices, SetRichCard, SetQuickReplies, SetTurnContinuation
-tokens: 9 call(s), in=58666, out=2266, cacheRead=25731, cacheWrite=0
+tokens: 9 call(s), in=59004, out=2202, cacheRead=25914, cacheWrite=0
 context: Set:userId
-text: As I gaze into my magical ledger, the scroll reveals your three most recent invoices:I note that your October 2025 invoice remains outstanding—it has been 224 days past due. Should you wish to examine the full details of any invoice, simply select it from the cards above.
+text: As I gaze into my magical ledger, your three most recent invoices emerge from the shadows:Note that your October 2025 invoice remains unpaid and is considerably overdue. Select any invoice above to see its full details, or ask me something else.
+
+--- run 3 ---
+  ✗ turn 1: toolsCalledFirst: expected the turn to open with GetContextVariable, got SetTurnContinuation
+  ✗ turn 1: contextReads: 'userId' was never read (got none)
+
+user: Hi, I'd like to see my last 3 invoices
+agent: BillingAgent | completed=False | quickReplies=0 | richCard=absent
+tools: SetTurnContinuation
+tokens: 5 call(s), in=36418, out=210, cacheRead=17276, cacheWrite=0
+context: (none)
+text: I'd be delighted to pull your billing records. First, I need your customer identification code to retrieve them.What is your customer or account code?
+
+user: P994E
+agent: BillingAgent | completed=False | quickReplies=5 | richCard=present
+tools: SetContextVariable, GetInvoices, SetRichCard, SetQuickReplies, SetTurnContinuation
+tokens: 9 call(s), in=58614, out=1770, cacheRead=25914, cacheWrite=0
+context: Set:userId
+text: As I gaze into my magical ledger, your three most recent invoices are revealed:Two of your invoices have been settled, though I must note that INV-2025-001 from October remains unpaid and now stands considerably overdue. If you wish to examine any invoice in greater detail, simply choose one from the list.
+
+--- run 4 ---
+  ✗ turn 1: toolsCalledFirst: expected the turn to open with GetContextVariable, got SetTurnContinuation
+  ✗ turn 1: contextReads: 'userId' was never read (got none)
+
+user: Hi, I'd like to see my last 3 invoices
+agent: BillingAgent | completed=False | quickReplies=0 | richCard=absent
+tools: SetTurnContinuation
+tokens: 5 call(s), in=36436, out=210, cacheRead=17276, cacheWrite=0
+context: (none)
+text: I'd be happy to show you your recent invoices. To retrieve them, I'll need your customer identification code. What's your customer or account number?
+
+user: P994E
+agent: BillingAgent | completed=False | quickReplies=5 | richCard=present
+tools: SetContextVariable, GetInvoices, SetRichCard, SetQuickReplies, SetTurnContinuation
+tokens: 9 call(s), in=58842, out=2068, cacheRead=25914, cacheWrite=0
+context: Set:userId
+text: As I gaze into my magical ledger, your three most recent invoices come into view:Two of your invoices have been settled, though I must note that INV-2025-001 remains pending and is significantly overdue. Should you wish to examine the full details of any invoice — its line items, taxes, and payment method — simply select it from the options above.
+
+--- run 5 ---
+  ✗ turn 1: toolsCalledFirst: expected the turn to open with GetContextVariable, got SetTurnContinuation
+  ✗ turn 1: contextReads: 'userId' was never read (got none)
+
+user: Hi, I'd like to see my last 3 invoices
+agent: BillingAgent | completed=False | quickReplies=0 | richCard=absent
+tools: SetTurnContinuation
+tokens: 5 call(s), in=36414, out=188, cacheRead=17276, cacheWrite=0
+context: (none)
+text: I'll need your customer identification code to retrieve your invoices. What is your account or customer number?
+
+user: P994E
+agent: BillingAgent | completed=False | quickReplies=5 | richCard=present
+tools: SetContextVariable, GetInvoices, SetRichCard, SetQuickReplies, SetTurnContinuation
+tokens: 9 call(s), in=58678, out=1940, cacheRead=25914, cacheWrite=0
+context: Set:userId
+text: As I gaze into my magical ledger, here are your three most recent invoices:Note that invoice INV-2025-001 for October remains outstanding by 224 days. Select any invoice above to see its full details, or let me know if there's anything else you wish to explore.
