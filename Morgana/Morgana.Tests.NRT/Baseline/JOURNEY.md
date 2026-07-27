@@ -806,6 +806,57 @@ empty branch here. Both were built by reading a single failing transcript, which
 factor and probably the actual error: against a nondeterministic system one transcript is a lead,
 not evidence, and a mechanism deserves more than one case before it is worth spending a run on.
 
+### `A2.6.2` — mark the boundary, then let the agents stop restating the law
+
+Two halves of one intervention, measured together. The attribution cost is stated up front and is
+real: this phase cannot say which half did the work.
+
+**The fence.** `ComposeAgentInstructions` concatenated the framework and domain layers, and both
+carry the same four section labels — so the composed prompt showed `[TARGET]`, `[PERSONALITY]`,
+`[INSTRUCTIONS]` and `[FORMATTING]` twice with nothing marking which was which. The framework
+`Target` has always claimed precedence over "the layer BELOW"; the rendering gave the model no way
+to find where below began. Three fences now, declared in `morgana.json` beside the policy
+header/footer because they are prose. The domain fence is not only a separator: it states the
+subordination rule at the exact point the layer it governs starts.
+
+**The slimming.** With the boundary marked, the domain layer was cut back to what only it knows.
+1,762 characters out, ~300 into P7. Everything removed was already carried above — markdown vs card
+(the one genuine gap, added to P7 here), raw tool output (P6), when to offer quick replies (P1), and
+a query subject is not a variable name (P0).
+
+| scenario | `v0-vanilla` | A2.6 | A2.6.1 | **A2.6.2** | required |
+|---|---|---|---|---|---:|
+| `context-cycle-on-miss` | 5/5 | 4/5 ✗ | 1/5 ✗ | **5/5 ✓** | 5 |
+| `context-cross-agent` | 2/5 ✗ | 4/5 ✗ | 5/5 | **5/5 ✓** | 5 |
+| `context-closed-vocabulary-monkeys` | 5/5 | 5/5 | — | **5/5 ✓** | 5 |
+| `behaviour-rich-card` | 5/5 | 5/5 | — | **5/5 ✓** | 4 |
+
+**`context-cycle-on-miss` is closed** — the first 5/5 since `v0-vanilla`, after standing red through
+A2.5.5, A2.6 and A2.6.1. Held with the honest caveat that one measurement does not retire a defect
+that survived three: it appeared in one run out of five, so a clean five is evidence and not proof.
+Note also that closing it **costs tokens** — 109,658 to 123,264 input per run, 15.6 to 16.4 calls,
+because the turn now does the lookup it was skipping. That is the correct behaviour being paid for,
+and the right direction for the trade.
+
+**The MonkeyAgent cut is the finding worth keeping.** It was a pre-registered test, not a repair:
+MonkeyAgent's `Instructions` restated P0 almost clause for clause — down to reusing P0's own example,
+"a species" — and this journal has carried an open question about exactly that shape. When a
+framework guarantee holds only because an example agent's prose states it, vanilla Morgana is not
+delivering that guarantee and the framework-layer scenario is passing on borrowed strength. The
+restatement was removed and `context-closed-vocabulary-monkeys` held 5/5. **P0 carries the closed
+vocabulary on its own.** Had it broken, that would have been worth more than a green; it did not, and
+the guarantee is now known to be real rather than assumed.
+
+Against `v0-vanilla` these four are −28.0%, −26.3%, −29.4% and −16.3% on input tokens.
+
+**Four scenarios of eight were measured**, chosen as the risk surface of the change: the two standing
+reds, the agent whose guardrail was deliberately removed, and the only scenario exercising the
+`Formatting` blocks that were cut. `behaviour-conversation-closure`, `behaviour-turn-continuation-operand`,
+`context-cycle-on-hit` and `context-no-invented-writes` all saw the fence and three of them saw a
+slimmed agent, and none of them has an A2.6.2 row. The suite has never yet been 8/8 in a single
+phase; establishing whether it is now is the next measurement, and it is a checkpoint rather than a
+hypothesis.
+
 ### Changes to the measuring instrument
 
 - **A2.5.5** — `context-cross-agent`'s farewell proposition was the strict wording A2.1 had already
