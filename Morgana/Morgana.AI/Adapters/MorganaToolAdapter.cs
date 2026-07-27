@@ -128,12 +128,12 @@ public class MorganaToolAdapter
     /// <c>AIJsonSchemaCreateOptions.ParameterDescriptionProvider</c>, which emits each one as the
     /// <c>description</c> keyword of its parameter in the function's JSON schema — the only place the
     /// model reads a parameter description at all.</para>
-    /// <list type="bullet">
-    /// <item><term>Scope: "request"</term><description>Appends ToolParameterRequestGuidance (use directly from request)</description></item>
-    /// <item><term>Scope: "context"</term><description>Nothing. The parameter is named in its tool's
-    ///     own description instead — see below</description></item>
-    /// <item><term>No scope</term><description>Uses parameter description as-is</description></item>
-    /// </list>
+    /// <para>No scope adds anything to a parameter description any more — every parameter is emitted
+    /// with its authored prose and nothing else. The context scope lost its template at A2.5.2 and the
+    /// request scope at A2.5.5; both restated, per-parameter and on every round trip, a rule already
+    /// carried by P0, by the framework Instructions, by the tool-level template spliced below, and by
+    /// the per-turn HeldContextDeclaration. Scope still decides which parameter names are named in the
+    /// <em>tool's</em> description — see below.</para>
     /// <para>A template left unconfigured leaves the parameter description untouched rather than
     /// appending an empty one, which would trail a stray space on every such parameter.</para>
     /// <para><strong>Why the context scope has no parameter-level template.</strong> It used to: a
@@ -153,7 +153,6 @@ public class MorganaToolAdapter
             : throw new InvalidOperationException($"Tool definition '{toolName}' not found");
 
         string descriptionGuidance = Records.GlobalPolicy.ResolveTemplate(globalPolicies, Records.GlobalPolicy.Templates.ToolDescriptionContext);
-        string requestGuidance = Records.GlobalPolicy.ResolveTemplate(globalPolicies, Records.GlobalPolicy.Templates.ToolParameterRequest);
 
         // Name the tool's own context-scoped parameters in its description. A tool with none
         // (every presentation tool, every purely request-scoped domain tool) is left untouched:
@@ -167,20 +166,14 @@ public class MorganaToolAdapter
             ? $"{definition.Description}\n\n{descriptionGuidance.Replace(ContextParametersPlaceholder, string.Join(", ", contextParameters))}"
             : definition.Description;
 
-        // Only the request scope carries a parameter-level template. A context-scoped parameter is
-        // named in its tool's own description above and gets nothing here, and a template left
-        // unconfigured leaves the description alone rather than trailing a stray space on it.
-        // Guidance is joined by a single space: an authored description is a finished sentence and
-        // closes itself, here as everywhere else in the two configuration layers.
-        Dictionary<string, string> parameterDescriptions = [];
-        foreach (Records.ToolParameter parameter in definition.Parameters)
-        {
-            bool isRequestScoped = string.Equals(parameter.Scope?.Trim(), "request", StringComparison.OrdinalIgnoreCase);
-
-            parameterDescriptions[parameter.Name] = isRequestScoped && requestGuidance.Length > 0
-                ? $"{parameter.Description} {requestGuidance}"
-                : parameter.Description;
-        }
+        // No scope carries a parameter-level template any more. The context scope lost its one at
+        // A2.5.2 and the request scope at A2.5.5: a parameter description is read once the model is
+        // already invoking the tool, which is the wrong rung for a rule, and the rules themselves
+        // are carried above — by P0, by the tool-level template spliced just above, and by the
+        // per-turn HeldContextDeclaration. What reaches the model here is the authored prose and
+        // nothing else.
+        Dictionary<string, string> parameterDescriptions =
+            definition.Parameters.ToDictionary(p => p.Name, p => p.Description);
 
         // ParameterDescriptionProvider is the one hook that puts these descriptions where the model
         // reads them: AIFunctionFactory calls it once per parameter while generating the schema, and

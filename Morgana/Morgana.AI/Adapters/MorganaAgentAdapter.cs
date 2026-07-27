@@ -421,10 +421,11 @@ public class MorganaAgentAdapter
         Records.ToolDefinition[] tools,
         Func<MorganaTool.ToolContext> toolContextFactory)
     {
-        // The adapter needs the framework GlobalPolicies up front: it splices the injection
-        // templates into each generated AIFunction's tool and parameter descriptions
-        // (ToolDescriptionContextGuidance, ToolParameterRequestGuidance). Without them the tools
-        // still work but lose that grounding nudge.
+        // The adapter needs the framework GlobalPolicies up front: it splices
+        // ToolDescriptionContextGuidance into the description of each generated AIFunction that
+        // declares context-scoped parameters. Without it the tools still work but lose that
+        // grounding nudge. Parameter descriptions carry no framework template at all — see
+        // MorganaToolAdapter.CreateFunction.
         MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(morganaPolicies);
 
         // Split the merged set back into base (morgana.json) vs intent-specific

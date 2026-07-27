@@ -1145,13 +1145,15 @@ public static class Records
     /// splice sites:
     /// </para>
     /// <list type="bullet">
-    /// <item><term>Tool and parameter descriptions</term><description>
-    ///     <c>ToolDescriptionContextGuidance</c> and <c>ToolParameterRequestGuidance</c>, spliced by
-    ///     <c>MorganaToolAdapter</c> when the tool surface is built. There is deliberately no
-    ///     parameter-level template for the context scope: the one that used to exist restated clause
-    ///     by clause what P0, the framework Instructions and the tool-level template already say, and
-    ///     it was the only one paid per-parameter, per-tool, on every round trip. Context-scoped
-    ///     parameters are named in their tool's own description instead.</description></item>
+    /// <item><term>Tool descriptions</term><description>
+    ///     <c>ToolDescriptionContextGuidance</c>, spliced by <c>MorganaToolAdapter</c> when the tool
+    ///     surface is built. There is deliberately no <em>parameter</em>-level template left at all:
+    ///     the context scope lost its at A2.5.2 and the request scope at A2.5.5. Both restated, per
+    ///     parameter and on every round trip, a rule already carried by P0, by the framework
+    ///     Instructions, by this tool-level template and by the per-turn declaration below — and the
+    ///     request one paid for that by naming <c>GetContextVariable</c> negatively, one parameter
+    ///     away from a context-scoped parameter that requires it. Scope now decides only which names
+    ///     this template enumerates in the tool's own description.</description></item>
     /// <item><term>The turn itself</term><description><c>HeldContextDeclaration</c>, spliced by
     ///     <c>MorganaAIContextProvider.ProvideAIContextAsync</c> before each invocation. It is the
     ///     only entry carrying a per-turn <em>fact</em> rather than a rule — the names of the context
@@ -1185,9 +1187,6 @@ public static class Records
         {
             /// <summary>Appended to the description of a tool declaring context-scoped parameters.</summary>
             public const string ToolDescriptionContext = "ToolDescriptionContextGuidance";
-
-            /// <summary>Appended to the description of a request-scoped parameter.</summary>
-            public const string ToolParameterRequest = "ToolParameterRequestGuidance";
 
             /// <summary>Injected per turn, naming the context variables the session currently holds.</summary>
             public const string HeldContextDeclaration = "HeldContextDeclaration";
