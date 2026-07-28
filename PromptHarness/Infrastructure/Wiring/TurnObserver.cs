@@ -68,10 +68,16 @@ public sealed partial class TurnObserver : IDisposable
     /// <summary>Opens an observation window for a turn about to be sent.</summary>
     public TurnScope BeginTurn(string conversationId)
     {
+        // Snapshot the count, not a reference into the list: the list keeps growing as this turn's
+        // LLM calls complete, so "how many entries existed before this turn" has to be captured now
+        // and compared against later, in CompleteTurnAsync, rather than watched live.
         int llmMark;
         lock (llmGate)
             llmMark = llmSpans.Count;
 
+        // Three independent marks — log line count, agent-span count for this conversation, and
+        // global LLM-span count — each a watermark that CompleteTurnAsync will read everything
+        // *past* to isolate what happened during this one turn specifically.
         return new TurnScope(
             conversationId,
             output.Mark(),
@@ -86,8 +92,13 @@ public sealed partial class TurnObserver : IDisposable
         // still be in flight when the webhook has already been delivered.
         await Task.Delay(logDrainMilliseconds);
 
+        // Everything logged since BeginTurn's mark — this is the raw material both the context-
+        // access parsing below and, unparsed, TurnResult.LogLines (used for failure diagnosis) work from.
         IReadOnlyList<string> lines = output.Since(scope.LogMark);
 
+        // Parse every context-tool log line in this window into a structured access. Lines that
+        // don't match the pattern (ordinary framework noise) are silently skipped rather than
+        // treated as an error — this parser only cares about the subset it recognises.
         List<ContextAccess> accesses = [];
         foreach (string line in lines)
         {
@@ -105,10 +116,16 @@ public sealed partial class TurnObserver : IDisposable
             accesses.Add(new ContextAccess(operation, match.Groups["name"].Value));
         }
 
+        // The most recent agent span recorded for this conversation since the turn began, if any —
+        // spans.Count > scope.SpanCount is what filters out spans from earlier turns of the same
+        // conversation; [^1] takes the latest of whatever new ones landed during this turn.
         AgentSpan? span = agentSpans.TryGetValue(scope.ConversationId, out List<AgentSpan>? spans) && spans.Count > scope.SpanCount
             ? spans[^1]
             : null;
 
+        // LLM spans are process-wide, not per-conversation (see the field's own remarks on why),
+        // so isolating this turn's usage means skipping every span that existed before BeginTurn's
+        // mark and summing whatever landed after — sound only because the suite runs serially.
         TokenUsage usage;
         lock (llmGate)
             usage = llmSpans.Skip(scope.LlmSpanCount).Aggregate(TokenUsage.Zero, (total, next) => total + next);
@@ -130,8 +147,14 @@ public sealed partial class TurnObserver : IDisposable
     /// <summary>Records a closed agent span against its conversation, or an LLM span's token usage.</summary>
     private void OnActivityStopped(Activity activity)
     {
+        // This callback fires for every activity from either listened-to source (see the
+        // constructor), so the first job is figuring out which kind just closed and routing
+        // accordingly — the two branches below populate entirely different collections.
         if (activity.Source.Name == "Morgana.AI.LLM")
         {
+            // One MEAI-decorated LLM call just completed; its gen_ai.* tags carry token usage per
+            // the OpenTelemetry semantic conventions. Recorded with Calls: 1 so that summing a
+            // list of these later also yields the call count, not just token totals.
             TokenUsage usage = new TokenUsage(
                 ReadTokenTag(activity, "gen_ai.usage.input_tokens"),
                 ReadTokenTag(activity, "gen_ai.usage.output_tokens"),
@@ -145,19 +168,28 @@ public sealed partial class TurnObserver : IDisposable
             return;
         }
 
+        // Any other activity on the "Morgana" source that isn't the one turn-level span this
+        // observer cares about (e.g. a finer-grained internal span) is simply not relevant here.
         if (activity.OperationName != "morgana.agent")
             return;
 
-        string? conversationId = activity.GetTagItem("conversation.id") as string;
-        if (conversationId is null)
+        // No conversation id tag means this span cannot be attributed to any conversation's
+        // history — nothing useful to record, so it's dropped rather than filed under a null key.
+        if (activity.GetTagItem("conversation.id") is not string conversationId)
             return;
 
+        // agent.tools_invoked is a single comma-joined string tag (spans can't carry arrays), so
+        // it has to be split back into an ordered list here — order matters, since
+        // ExpectationChecker's toolsCalledFirst assertion depends on invocation order.
         string toolsInvoked = activity.GetTagItem("agent.tools_invoked") as string ?? string.Empty;
 
         AgentSpan span = new AgentSpan(
             activity.GetTagItem("agent.name") as string,
             [.. toolsInvoked.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]);
 
+        // AddOrUpdate rather than a plain append: this is the first agent span for the
+        // conversation on the "add" path, or one more span appended to an existing per-conversation
+        // list (e.g. a later turn of the same conversation) on the "update" path.
         agentSpans.AddOrUpdate(conversationId, _ => [span], (_, existing) =>
         {
             lock (existing)

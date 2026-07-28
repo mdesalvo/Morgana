@@ -47,6 +47,8 @@ public static class BaselineWriter
             string directory = ResolveDirectory(baselineDirectory);
             System.IO.Directory.CreateDirectory(directory);
 
+            // Composes one Markdown table row: phase, date, pass fraction, threshold, and the
+            // per-run cost figures — averaged, since a scenario replays several times per phase.
             string path = Path.Combine(directory, $"{outcome.Scenario.Id}.md");
             string row =
                 $"| {phase} "
@@ -58,6 +60,8 @@ public static class BaselineWriter
               + $"| {outcome.OutputTokensPerRun} "
               + $"| {Average(outcome.TotalTokens.CacheReadTokens, outcome.Runs.Count)} |";
 
+            // First measurement of this scenario ever (no file yet) creates a fresh journey with
+            // its header and description; every subsequent run merges its row into the existing one.
             File.WriteAllText(path, File.Exists(path)
                 ? Merge(File.ReadAllText(path), phase, row, llmDescriptor)
                 : Create(outcome, llmDescriptor, row));
@@ -97,6 +101,9 @@ public static class BaselineWriter
     {
         string[] lines = existing.TrimEnd('\n').Split('\n');
 
+        // Single pass over the file: refreshes the "- llm:" summary line in place (the model bound
+        // to a tier can change between phases even when the phase name doesn't) while looking for
+        // an existing row for this same phase to replace.
         for (int index = 0; index < lines.Length; index++)
         {
             if (lines[index].StartsWith("- llm:", StringComparison.Ordinal))
@@ -105,12 +112,16 @@ public static class BaselineWriter
             Match match = RowPattern.Match(lines[index]);
             if (match.Success && match.Groups["phase"].Value == phase)
             {
+                // Found this phase's row already in the table — replace it in place and return
+                // immediately, rather than falling through to the append path below.
                 lines[index] = row;
 
                 return string.Join('\n', lines) + "\n";
             }
         }
 
+        // No existing row for this phase was found — it's a new phase, so the row is appended as
+        // the new last line of the table.
         return string.Join('\n', lines) + "\n" + row + "\n";
     }
 

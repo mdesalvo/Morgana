@@ -20,13 +20,18 @@ public static class ExpectationChecker
     {
         List<string> failures = [];
 
-        if (expect.AgentCompleted is bool expectedCompleted && turn.Message.AgentCompleted != expectedCompleted)
+        // Every check below follows the same shape: a property being null/unset means "the
+        // scenario doesn't care about this", so nothing is added to failures; only an explicitly
+        // stated expectation that does not match observed reality produces a message.
+        if (expect.AgentCompleted is { } expectedCompleted && turn.Message.AgentCompleted != expectedCompleted)
             failures.Add($"agentCompleted: expected {expectedCompleted}, got {turn.Message.AgentCompleted}");
 
         if (expect.Agent is { Length: > 0 } expectedAgent
             && !string.Equals(turn.AgentName, expectedAgent, StringComparison.OrdinalIgnoreCase))
             failures.Add($"agent: expected {expectedAgent}, got {turn.AgentName ?? "(none)"}");
 
+        // Delegated to specialised methods below, one per concern, so a scenario touching several
+        // of these still produces every relevant failure in one pass rather than stopping at the first.
         CheckQuickReplies(expect, turn, failures);
         CheckRichCard(expect, turn, failures);
         CheckTools(expect, turn, failures);
@@ -41,6 +46,8 @@ public static class ExpectationChecker
     {
         IReadOnlyList<QuickReply> quickReplies = turn.QuickReplies;
 
+        // Cardinality is a small mini-language in the YAML ("none", "any", "count:N", "min:N"),
+        // split on the first colon so "count:3" separates into a verb and an operand.
         if (expect.QuickReplies is { Length: > 0 } cardinality)
         {
             string[] parts = cardinality.Split(':', 2);
@@ -68,6 +75,8 @@ public static class ExpectationChecker
             }
         }
 
+        // Presence/absence of specific ids — independent of the cardinality check above, so a
+        // scenario can combine e.g. "min:2" with "must include this specific id" in one turn.
         foreach (string id in expect.QuickReplyIds ?? [])
         {
             if (!quickReplies.Any(reply => string.Equals(reply.Id, id, StringComparison.OrdinalIgnoreCase)))
@@ -80,6 +89,10 @@ public static class ExpectationChecker
                 failures.Add($"noQuickReplyIds: '{id}' present but must not be");
         }
 
+        // The two escape-pair rules are complementary halves of one policy (QuickReplyEscapeOptions
+        // in the framework's own prose): this one fails when the escape pair is emitted alone, with
+        // no primary option beside it — "must not stand alone" — see the property's own <remarks>
+        // for why it's opt-in rather than always checked.
         if (expect.NoStandaloneEscapeOptions is true
             && quickReplies.Count > 0
             && quickReplies.All(reply => EscapeOptionIds.Contains(reply.Id)))
@@ -87,6 +100,9 @@ public static class ExpectationChecker
                 $"noStandaloneEscapeOptions: the turn emitted only the escape pair ({FormatIds(quickReplies)}) "
               + "with no primary option beside it");
 
+        // The other half: whenever there's at least one non-escape (primary) option, both escape
+        // ids must also be present — "must always be appended to a choice list" — checked by
+        // negating EscapeOptionIds.All, i.e. failing when the pair is *not* complete.
         if (expect.EscapeOptionsWithPrimary is true
             && quickReplies.Any(reply => !EscapeOptionIds.Contains(reply.Id))
             && !EscapeOptionIds.All(id => quickReplies.Any(reply => string.Equals(reply.Id, id, StringComparison.OrdinalIgnoreCase))))
@@ -131,6 +147,9 @@ public static class ExpectationChecker
                 failures.Add($"toolsNotCalled: '{tool}' was invoked (got {FormatList(invoked)})");
         }
 
+        // A prefix check, not an exact-match one: the turn may invoke more tools after the
+        // required opening sequence, so invoked only has to be at least as long as prefix and
+        // agree position-by-position for that leading portion.
         List<string> prefix = expect.ToolsCalledFirst ?? [];
         if (prefix.Count > 0)
         {
@@ -163,6 +182,9 @@ public static class ExpectationChecker
         if (expect.NoContextAccess is true && turn.ContextAccesses.Count > 0)
             failures.Add($"noContextAccess: expected the turn to touch no context variable, got {string.Join(", ", turn.ContextAccesses.Select(access => $"{access.Operation}:{access.VariableName}"))}");
 
+        // The anti-invention check: every name the turn actually touched (read or write) must
+        // appear in the scenario's declared vocabulary. One failure per offending access, not just
+        // the first, so a turn that invents several names in one go doesn't hide the rest.
         if (expect.ContextVocabulary is { Count: > 0 } vocabulary)
         {
             foreach (ContextAccess access in turn.ContextAccesses)

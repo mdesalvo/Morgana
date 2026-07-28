@@ -57,6 +57,8 @@ public sealed record TurnResult(
     public IReadOnlyList<QuickReply> QuickReplies => Message.QuickReplies ?? [];
 
     /// <summary>A compact rendering of the turn, used in assertion failure messages.</summary>
+    // One line per structural signal the harness can see, so a failure message shows everything
+    // ExpectationChecker could have checked against, not just the one property that failed.
     public string Describe()
         => $"""
             user: {UserMessage}

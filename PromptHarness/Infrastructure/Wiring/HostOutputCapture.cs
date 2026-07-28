@@ -49,6 +49,9 @@ public sealed class HostOutputCapture : TextWriter
     /// <summary>Replaces <see cref="Console.Out"/> with a tee and returns it.</summary>
     public static HostOutputCapture Install(bool echo)
     {
+        // Wrap whatever Console.Out currently is (so echo can still forward to the real console)
+        // before replacing it; TextWriter.Synchronized wraps the capture itself so writes from the
+        // host's own multithreaded logging pipeline don't tear a line in half mid-write.
         HostOutputCapture capture = new HostOutputCapture(Console.Out, echo);
         Console.SetOut(TextWriter.Synchronized(capture));
         return capture;
@@ -60,10 +63,15 @@ public sealed class HostOutputCapture : TextWriter
         if (echo)
             inner.Write(value);
 
+        // Everything TextWriter offers ultimately funnels through this one overload (see the
+        // string overload below), so the line-accumulation logic only has to live in one place.
         lock (gate)
         {
             if (value == '\n')
             {
+                // TrimEnd('\r') handles the host's line endings being \r\n: the \r arrives as its
+                // own character right before this \n and would otherwise be captured as part of
+                // the line, which the regex-based parsing downstream does not expect.
                 lines.Add(pending.ToString().TrimEnd('\r'));
                 pending.Clear();
             }
@@ -80,6 +88,8 @@ public sealed class HostOutputCapture : TextWriter
         if (value is null)
             return;
 
+        // Delegates character-by-character to the overload above rather than duplicating the
+        // line-splitting logic — slower, but this is diagnostic output, not a hot path.
         foreach (char character in value)
             Write(character);
     }
@@ -87,6 +97,8 @@ public sealed class HostOutputCapture : TextWriter
     /// <summary>Index of the next line to be captured; the harness marks it before a turn and reads the tail after.</summary>
     public int Mark()
     {
+        // The count itself is the mark: Since(mark) below simply skips everything before this
+        // index once more lines have been appended, so no separate cursor object is needed.
         lock (gate)
             return lines.Count;
     }
@@ -94,6 +106,9 @@ public sealed class HostOutputCapture : TextWriter
     /// <summary>Returns the lines captured since <paramref name="mark"/>.</summary>
     public IReadOnlyList<string> Since(int mark)
     {
+        // Guards against a mark taken before the buffer had grown to that size — cannot normally
+        // happen (marks only ever come from this same growing list), but returning empty rather
+        // than throwing on an out-of-range slice keeps a defensive caller from crashing on it.
         lock (gate)
             return mark >= lines.Count ? [] : lines[mark..];
     }

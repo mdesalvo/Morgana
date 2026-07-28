@@ -4,7 +4,6 @@ using System.Reflection;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using PromptHarness.Infrastructure;
 using PromptHarness.Infrastructure.Engine;
 using Xunit;
 
@@ -74,26 +73,38 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <inheritdoc />
     public async ValueTask InitializeAsync()
     {
+        // Step 1: resolve configuration and harness knobs before anything else needs them.
         Configuration = BuildHarnessConfiguration();
         Options = HarnessOptions.Load(Configuration);
 
+        // Step 2: mint per-run, disposable identity — a fresh JWT signing key (never written to
+        // disk) and a scratch directory for the SQLite databases this run's conversations create.
         IssuerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         storagePath = Path.Combine(Path.GetTempPath(), "morgana-harness", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(storagePath);
 
+        // Step 3: claim the port the host will bind to. Reserved up front (not left to Kestrel's
+        // own ":0" auto-pick) because the harness needs the number *before* starting the host, to
+        // build its own channel and health-check URLs against it.
         int port = ReserveEphemeralPort();
         BaseAddress = $"http://127.0.0.1:{port}";
 
+        // Step 4: publish the resolved configuration (plus the harness's own overrides) as
+        // environment variables, which is how the child host process picks it up.
         ApplyHostEnvironment();
 
         // The tee must be in place before the host constructs its logging stack, because the
         // console logger latches Console.Out once, when its provider is created.
         Output = HostOutputCapture.Install(Options.EchoHostOutput);
 
+        // Step 5: launch the real Morgana.Web entry point on a background thread and block here
+        // until it answers its health endpoint (or fails fast — see WaitForHealthyAsync).
         StartHost();
 
         await WaitForHealthyAsync();
 
+        // Step 6: now that the host is up, wire the read-only observers (spans + log tee) and the
+        // harness's own channel (a live webhook receiver + REST client) against it.
         Observer = new TurnObserver(Output, Options.LogDrainMilliseconds);
 
         Channel = new HarnessChannel(
@@ -102,14 +113,19 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             Configuration["Morgana:Authentication:Audience"] ?? "morgana.ai");
         await Channel.StartAsync();
 
+        // Step 7: assemble the scenario engine last, since it depends on everything above —
+        // the channel to drive conversations, the observer to read signals, and a judge built
+        // over the same LLM configuration the instance under test uses.
         judgeLoggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
         Runner = new ScenarioRunner(
-            Channel, Observer, LlmJudge.Create(Configuration, judgeLoggerFactory), Options, DescribeLlm());
+            Channel, Observer, LLMJudge.Create(Configuration, judgeLoggerFactory), Options, DescribeLlm());
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        // Tear down in reverse order of acquisition: stop accepting webhook callbacks first, then
+        // release the span/log listeners, then the judge's (otherwise silent) logger factory.
         if (Channel is not null)
             await Channel.DisposeAsync();
 
@@ -138,6 +154,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     {
         string provider = Configuration["Morgana:LLM:Provider"] ?? "(unknown)";
 
+        // Walk every tier configured under the active provider (e.g. Efficiency, Performance) and
+        // read the model id bound to each — the same shape ScenarioRunner reports per-scenario cost
+        // against, so a baseline row is always legible without cross-referencing appsettings.
         IEnumerable<string> tiers = Configuration.GetSection($"Morgana:LLM:{provider}:Tiers").GetChildren()
             .Select(tier => $"{tier.Key}={tier["Options:ModelId"] ?? "(unset)"}");
 
@@ -150,6 +169,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// environment.
     /// </summary>
     private static IConfiguration BuildHarnessConfiguration()
+        // Layered in precedence order, each provider overriding the previous: the host's own
+        // appsettings.json (linked into this project's output by the .csproj), then the harness's
+        // own knobs, then the shared user-secrets store (the actual provider/keys/tiers), then
+        // whatever the environment already carries — so a CI runner's env vars still win last.
         => new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: false)
@@ -164,6 +187,11 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// </summary>
     private void ApplyHostEnvironment()
     {
+        // Republish every resolved "Morgana:" key verbatim, translating IConfiguration's colon
+        // section separator into the double-underscore form the environment-variable configuration
+        // provider expects (ASP.NET Core's own convention). This is what makes the child host see
+        // the exact same provider/keys/tiers the harness itself resolved, without re-reading the
+        // secrets store a second time.
         foreach (KeyValuePair<string, string?> entry in Configuration.AsEnumerable())
         {
             if (entry.Value is null || !entry.Key.StartsWith("Morgana:", StringComparison.Ordinal))
@@ -172,6 +200,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             Environment.SetEnvironmentVariable(entry.Key.Replace(":", "__"), entry.Value);
         }
 
+        // From here on, each line is a harness-specific override layered on top of the inherited
+        // configuration above — never something the instance under test would run with unattended.
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
         Environment.SetEnvironmentVariable("Morgana__ConversationPersistence__StoragePath", storagePath);
         Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableGuardrail", Options.EnableGuardrail ? "true" : "false");
@@ -179,11 +209,15 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Morgana__DustLimiting__Enabled", "false");
 
         // Telemetry stays on as an ActivitySource — the in-process listener is what reads it — but
-        // no exporter is wanted: OTLP would spam a collector that may not be listening.
+        // no exporter is wanted: OTLP would spam a collector that may not be listening. The
+        // exporter list is variable-length, so every configured entry is walked and switched off
+        // by its own index rather than assuming how many there are.
         int exporterIndex = 0;
         foreach (IConfigurationSection _ in Configuration.GetSection("Morgana:OpenTelemetry:Exporters").GetChildren())
             Environment.SetEnvironmentVariable($"Morgana__OpenTelemetry__Exporters__{exporterIndex++}__Enabled", "false");
 
+        // The freshly-minted per-run key replaces whatever "harness" issuer key sits in the shared
+        // secrets store, so this run's credentials are never anything durable enough to leak.
         Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ResolveHarnessIssuerIndex()}__SymmetricKey", IssuerKey);
 
         // Framework categories at Information, everything else quiet: the tool log lines the turn
@@ -199,12 +233,18 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <exception cref="InvalidOperationException">Thrown when the host declares no <c>harness</c> issuer.</exception>
     private int ResolveHarnessIssuerIndex()
     {
+        // Issuers is a JSON array, so IConfiguration exposes each element as a child section whose
+        // own Key is its array index as a string ("0", "1", ...) — that index is exactly the
+        // fragment ApplyHostEnvironment needs to target this one entry's SymmetricKey.
         foreach (IConfigurationSection issuer in Configuration.GetSection("Morgana:Authentication:Issuers").GetChildren())
         {
             if (string.Equals(issuer["Name"], HarnessChannel.IssuerName, StringComparison.OrdinalIgnoreCase))
                 return int.Parse(issuer.Key);
         }
 
+        // Fail fast, before the host even starts: proceeding would let the fixture boot a host
+        // that can never authenticate the harness's own channel, turning a config gap into a
+        // confusing timeout many steps later instead of a clear error now.
         throw new InvalidOperationException(
             $"Morgana:Authentication:Issuers contains no '{HarnessChannel.IssuerName}' entry. The harness authenticates as its own " +
             "channel and cannot run against an instance that does not declare it.");
@@ -216,6 +256,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// </summary>
     private static int ReserveEphemeralPort()
     {
+        // Binding to port 0 asks the OS kernel to allocate the next free ephemeral port; reading it
+        // back from LocalEndpoint and immediately stopping the listener frees it again for Kestrel
+        // to bind moments later — a brief, practically-safe race, not a true reservation.
         TcpListener listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         int port = ((IPEndPoint)listener.LocalEndpoint).Port;
@@ -231,6 +274,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// </summary>
     private void StartHost()
     {
+        // typeof(Program) resolves against whichever assembly the compiler sees a global-namespace
+        // "Program" type in first; the guard right below exists precisely because that resolution
+        // is implicit, not because this line itself can fail.
         Assembly hostAssembly = typeof(Program).Assembly;
 
         // Program is a global-namespace type, so a same-named type appearing in this assembly would
@@ -242,6 +288,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         MethodInfo entryPoint = hostAssembly.EntryPoint
             ?? throw new InvalidOperationException("Morgana.Web exposes no entry point.");
 
+        // Reconstruct the same command-line arguments `dotnet run` would pass, since the entry
+        // point is being invoked directly rather than through a process boundary that would
+        // otherwise supply them.
         string[] arguments =
         [
             "--urls", BaseAddress,
@@ -255,6 +304,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             "--applicationName", hostAssembly.GetName().Name!
         ];
 
+        // The host must run on its own thread: InitializeAsync needs to return control so the test
+        // process can poll the health endpoint, and top-level Main here would otherwise block
+        // until Kestrel shuts down (i.e. never, until the whole process exits).
         Thread hostThread = new Thread(() =>
         {
             try
@@ -267,6 +319,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             }
             catch (TargetInvocationException ex)
             {
+                // Reflection wraps whatever the invoked method threw; unwrap it so
+                // WaitForHealthyAsync reports the host's real startup error, not a generic
+                // "invocation failed" wrapper with the useful part buried in InnerException.
                 hostFailure = ex.InnerException ?? ex;
             }
             catch (Exception ex)
@@ -288,13 +343,21 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <exception cref="InvalidOperationException">Thrown when the host failed to start, with its own startup error as the inner exception.</exception>
     private async Task WaitForHealthyAsync()
     {
-        using HttpClient httpClient = new HttpClient { BaseAddress = new Uri(BaseAddress), Timeout = TimeSpan.FromSeconds(5) };
+        using HttpClient httpClient = new HttpClient();
+        httpClient.BaseAddress = new Uri(BaseAddress);
+        httpClient.Timeout = TimeSpan.FromSeconds(5);
 
         string lastProbe = "never answered";
 
+        // Poll on a fixed cadence until either the host answers or the configured startup budget
+        // runs out — Kestrel's own startup (plugin scan, agent registry, LLM tier validation) has
+        // no synchronous "ready" signal this process can await directly.
         DateTime deadline = DateTime.UtcNow.AddSeconds(Options.StartupTimeoutSeconds);
         while (DateTime.UtcNow < deadline)
         {
+            // Checked every iteration, not just once: the host can crash after already having
+            // answered a transient probe failure, and a fail-fast startup error is worth surfacing
+            // immediately rather than waiting out the rest of the timeout for nothing.
             if (hostFailure is not null)
                 throw new InvalidOperationException(
                     "Morgana failed to start. Startup validation is fail-fast: check the LLM provider, its Tiers map and " +
@@ -306,10 +369,15 @@ public sealed class MorganaHostFixture : IAsyncLifetime
                 if (response.IsSuccessStatusCode)
                     return;
 
+                // Not a success but not an exception either — the host is up and answering, just
+                // not yet healthy (e.g. still validating startup). Keep the response body around so
+                // a timeout, if it comes to that, shows the last thing the host actually said.
                 lastProbe = $"HTTP {(int)response.StatusCode} — {await response.Content.ReadAsStringAsync()}";
             }
             catch (HttpRequestException ex)
             {
+                // Expected during the window before Kestrel has bound the port at all — connection
+                // refused, not a real failure yet.
                 lastProbe = $"{ex.GetType().Name}: {ex.Message}";
             }
             catch (TaskCanceledException)
@@ -332,10 +400,14 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// </summary>
     private string FormatHostOutput()
     {
+        // Since(0) reads the tee's entire buffer from the start of this run — not a per-turn
+        // window like the observer uses — because a startup failure has no turn to scope it to.
         IReadOnlyList<string> lines = Output.Since(0);
         if (lines.Count == 0)
             return "\n\nThe host produced no output at all — its entry point may never have run.";
 
+        // Capped at the last 60 lines: enough to see the actual startup error without dumping an
+        // entire noisy boot sequence into every timeout message.
         return $"\n\n--- host output (last {Math.Min(lines.Count, 60)} of {lines.Count} lines) ---\n"
              + string.Join("\n", lines.TakeLast(60));
     }

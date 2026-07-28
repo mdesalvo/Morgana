@@ -1,6 +1,5 @@
 using System.Text;
 using Morgana.Contracts;
-using PromptHarness.Infrastructure;
 using PromptHarness.Infrastructure.Reporting;
 using PromptHarness.Infrastructure.Wiring;
 using Xunit;
@@ -60,6 +59,9 @@ public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, 
         report.AppendLine(Scenario.Description);
         report.AppendLine($"Tokens per run: {CallsPerRun:F1} LLM calls, in={InputTokensPerRun}, out={OutputTokensPerRun}, cacheRead={(Runs.Count == 0 ? 0 : TotalTokens.CacheReadTokens / Runs.Count)}");
 
+        // Only the failing runs get a section — a scenario that cleared its threshold with, say,
+        // 4/5 still has one failing run worth reading (see FailureLog's own reasoning for why),
+        // while the passing runs add nothing a reader needs to diagnose what went wrong.
         foreach (RunOutcome run in Runs.Where(run => !run.Passed))
         {
             report.AppendLine();
@@ -67,6 +69,8 @@ public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, 
             foreach (string failure in run.Failures)
                 report.AppendLine($"  ✗ {failure}");
 
+            // The full per-turn transcript follows the failure list, so the reader sees not just
+            // *what* was violated but the entire conversation that produced it.
             foreach (string turn in run.Transcript)
             {
                 report.AppendLine();
@@ -100,7 +104,7 @@ public sealed class ScenarioRunner
     private readonly TurnObserver observer;
 
     /// <summary>Judge for the natural-language propositions.</summary>
-    private readonly LlmJudge judge;
+    private readonly LLMJudge judge;
 
     /// <summary>Harness knobs (defaults for runs, thresholds and timeouts).</summary>
     private readonly HarnessOptions options;
@@ -108,7 +112,7 @@ public sealed class ScenarioRunner
     /// <summary>Provider and models under test, recorded in the baseline — a token count without them means nothing.</summary>
     private readonly string llmDescriptor;
 
-    public ScenarioRunner(HarnessChannel channel, TurnObserver observer, LlmJudge judge, HarnessOptions options, string llmDescriptor)
+    public ScenarioRunner(HarnessChannel channel, TurnObserver observer, LLMJudge judge, HarnessOptions options, string llmDescriptor)
     {
         this.channel = channel;
         this.observer = observer;
@@ -125,8 +129,12 @@ public sealed class ScenarioRunner
     public async Task<ScenarioOutcome> RunAsync(ScenarioDefinition scenario)
     {
         int runs = scenario.Runs ?? options.DefaultRuns;
+        // Clamped to the actual run count: a scenario cannot require more passes than it has runs,
+        // which would make it permanently unpassable if MinPasses were ever misconfigured above Runs.
         int required = Math.Min(scenario.MinPasses ?? options.DefaultMinPasses, runs);
 
+        // Sequential, not parallel — see AssemblyInfo.cs: the log-based context-access correlation
+        // is time-window based and only sound while one turn is in flight at a time.
         List<RunOutcome> outcomes = [];
         for (int index = 1; index <= runs; index++)
             outcomes.Add(await RunOnceAsync(scenario, index));
@@ -137,6 +145,9 @@ public sealed class ScenarioRunner
         // written there would resurface inside the next turn's captured log.
         TestContext.Current.TestOutputHelper?.WriteLine($"[Harness] {outcome.Summary()}");
 
+        // Both writers run regardless of pass/fail — the journey row is written every time (a
+        // phase's history includes its failures), and the failure log self-manages whether to
+        // write or delete based on whether every run held.
         BaselineWriter.Write(outcome, llmDescriptor, options.Phase, options.BaselineDirectory);
         FailureLog.Write(outcome, options.Phase, options.BaselineDirectory);
 
@@ -153,12 +164,16 @@ public sealed class ScenarioRunner
 
         try
         {
+            // A brand-new conversation per run: fresh session, fresh context, fresh shared_context
+            // registry — nothing from a previous run's turns can leak into this one's assertions.
             TimeSpan timeout = TimeSpan.FromSeconds(options.TurnTimeoutSeconds);
             (string opened, ChannelMessage _) = await channel.StartConversationAsync(timeout);
             conversationId = opened;
 
             foreach (TurnDefinition turnDefinition in scenario.Turns)
             {
+                // Mark, send, then close the window: BeginTurn/CompleteTurnAsync bracket exactly
+                // the observation period this one turn's send-and-reply spans.
                 TurnScope scope = observer.BeginTurn(conversationId);
                 ChannelMessage message = await channel.SendAsync(conversationId, turnDefinition.Say, timeout);
                 TurnResult turn = await observer.CompleteTurnAsync(scope, turnDefinition.Say, message);
@@ -168,6 +183,8 @@ public sealed class ScenarioRunner
                 // Accumulated before the judge runs, so the measurement stays Morgana's cost only.
                 tokens += turn.Tokens;
 
+                // The structural layer runs first and is deterministic — no Expect block at all
+                // means nothing is checked and the turn cannot fail structurally.
                 IReadOnlyList<string> structural = turnDefinition.Expect is null
                     ? []
                     : ExpectationChecker.Check(turnDefinition.Expect, turn);
@@ -185,10 +202,15 @@ public sealed class ScenarioRunner
         }
         catch (Exception ex)
         {
+            // Anything unhandled — a timeout, a dropped connection, a malformed response — turns
+            // into a single failure entry rather than propagating and aborting every remaining run
+            // of the scenario; the loop in RunAsync keeps going for the runs after this one.
             failures.Add($"run aborted: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
+            // Runs even when StartConversationAsync itself threw (conversationId stays null in
+            // that case, so there is nothing to end) or when a later turn aborted mid-conversation.
             if (conversationId is not null)
                 await channel.EndConversationAsync(conversationId);
         }

@@ -25,7 +25,7 @@ public sealed record JudgeVerdict(bool Holds, string Reason);
 /// was rendered. Feeding it the tool trace would let it justify a verdict from evidence the user
 /// never had, which is exactly the class of judgement the structural layer already owns.</para>
 /// </remarks>
-public sealed class LlmJudge
+public sealed class LLMJudge
 {
     /// <summary>Instruction fixing the judge's output shape and its bias toward the response's own words.</summary>
     private const string SystemPrompt =
@@ -46,15 +46,18 @@ public sealed class LlmJudge
     /// <summary>LLM used for judging, on the cheapest configured tier.</summary>
     private readonly ILLMService llmService;
 
-    private LlmJudge(ILLMService llmService) => this.llmService = llmService;
+    private LLMJudge(ILLMService llmService) => this.llmService = llmService;
 
     /// <summary>
     /// Builds a judge over the same provider and credentials the instance under test uses, mirroring
     /// the provider switch in <c>Morgana.Web/Program.cs</c>.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when the configured provider is unknown.</exception>
-    public static LlmJudge Create(IConfiguration configuration, ILoggerFactory loggerFactory)
+    public static LLMJudge Create(IConfiguration configuration, ILoggerFactory loggerFactory)
     {
+        // These two exist only to satisfy the LLM classes' constructors — the judge never resolves
+        // an agent's own prompt, so a minimal, standalone chain is enough here rather than the
+        // full agent-configuration stack the host itself builds.
         IAgentConfigurationService agentConfigurationService =
             new EmbeddedAgentConfigurationService(loggerFactory.CreateLogger("Harness.Judge"));
         IPromptResolverService promptResolverService =
@@ -63,6 +66,8 @@ public sealed class LlmJudge
         string provider = configuration["Morgana:LLM:Provider"]
             ?? throw new InvalidOperationException("Morgana:LLM:Provider is not configured.");
 
+        // Mirrors the provider switch in Morgana.Web/Program.cs by hand — there is no shared
+        // factory to call into, so a new provider added there has to be added here too.
         ILLMService llmService = provider.ToLowerInvariant() switch
         {
             "anthropic" => new Morgana.AI.Abstractions.LLMs.Anthropic(configuration, promptResolverService, loggerFactory),
@@ -72,7 +77,7 @@ public sealed class LlmJudge
             _ => throw new InvalidOperationException($"LLM Provider '{provider}' not supported by the harness judge.")
         };
 
-        return new LlmJudge(llmService);
+        return new LLMJudge(llmService);
     }
 
     /// <summary>
@@ -83,6 +88,7 @@ public sealed class LlmJudge
     {
         List<string> failures = [];
 
+        // "judge:" propositions must all hold — a failure is any one the judge found false.
         foreach (string proposition in turnDefinition.Judge ?? [])
         {
             JudgeVerdict verdict = await EvaluateAsync(proposition, turn);
@@ -90,6 +96,8 @@ public sealed class LlmJudge
                 failures.Add($"judge: \"{proposition}\" did not hold — {verdict.Reason}");
         }
 
+        // "judgeNot:" propositions must all fail to hold — the polarity is inverted from above:
+        // here it's the judge finding TRUE that produces a failure message.
         foreach (string proposition in turnDefinition.JudgeNot ?? [])
         {
             JudgeVerdict verdict = await EvaluateAsync(proposition, turn);
@@ -103,6 +111,9 @@ public sealed class LlmJudge
     /// <summary>Judges a single proposition, retrying once before giving up.</summary>
     private async Task<JudgeVerdict> EvaluateAsync(string proposition, TurnResult turn)
     {
+        // Deliberately only what a user would see: text, button labels, and whether a card was
+        // shown (with its title, not its full JSON payload) — never the tool trace, the context
+        // accesses, or anything else only the structural layer is allowed to reach.
         string userPrompt =
             $"""
              RESPONSE TEXT:
@@ -115,6 +126,9 @@ public sealed class LlmJudge
              {proposition}
              """;
 
+        // Two attempts total: a real LLM occasionally answers with something Parse cannot make
+        // sense of (extra prose, malformed JSON) even under a strict system prompt, and a single
+        // retry recovers most of those without masking a genuinely broken judge.
         for (int attempt = 1; attempt <= 2; attempt++)
         {
             try
@@ -144,9 +158,15 @@ public sealed class LlmJudge
     private static JudgeVerdict Parse(string answer)
     {
         string payload = answer.Trim();
+        // The system prompt asks for "no code fences", but some models wrap the JSON in a
+        // ```json ... ``` block anyway; this strips the fence markers and a leading "json" hint
+        // word character-by-character rather than depending on the fence being well-formed.
         if (payload.StartsWith("```", StringComparison.Ordinal))
             payload = payload.Trim('`', ' ', '\n', '\r').TrimStart('j', 's', 'o', 'n').Trim();
 
+        // Slices out the outermost { ... } rather than assuming the whole trimmed string is valid
+        // JSON — tolerant of a stray leading/trailing sentence some models still add despite the
+        // "no prose" instruction.
         int start = payload.IndexOf('{');
         int end = payload.LastIndexOf('}');
         if (start < 0 || end <= start)

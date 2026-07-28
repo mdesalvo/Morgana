@@ -21,6 +21,9 @@ public sealed class BehaviourTests
     [InlineData("behaviour-rich-card")]
     public async Task Behavioural_scenario_holds(string scenarioId)
     {
+        // Same shape as the context-handling group's test, but this group runs at the harness's
+        // default threshold rather than a mandatory 5/5 — see the class remarks for why that split
+        // is deliberate rather than an oversight.
         ScenarioOutcome outcome = await fixture.Runner.RunAsync(scenarioId);
 
         Assert.True(outcome.Passed, outcome.Report());

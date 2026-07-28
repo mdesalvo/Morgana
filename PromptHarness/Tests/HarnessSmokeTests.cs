@@ -19,6 +19,9 @@ public sealed class HarnessSmokeTests
     [Fact]
     public async Task Conversation_opens_and_Morgana_presents_itself()
     {
+        // StartConversationAsync itself drains the presentation message off the webhook — this is
+        // the whole handshake path (start call, webhook delivery, presentation drain) exercised
+        // with no scenario logic layered on top, the smallest possible proof the rig is alive.
         (string conversationId, ChannelMessage presentation) =
             await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(fixture.Options.TurnTimeoutSeconds));
 
@@ -41,6 +44,9 @@ public sealed class HarnessSmokeTests
 
         try
         {
+            // Exercises the exact same BeginTurn/send/CompleteTurnAsync sequence ScenarioRunner
+            // uses for every scripted turn — proving the span and log observers actually see a
+            // turn happen, independent of any scenario's own assertions.
             TurnScope scope = fixture.Observer.BeginTurn(conversationId);
             ChannelMessage message = await fixture.Channel.SendAsync(conversationId, "I'd like to see my invoices", timeout);
             TurnResult turn = await fixture.Observer.CompleteTurnAsync(scope, "I'd like to see my invoices", message);
@@ -64,6 +70,9 @@ public sealed class HarnessSmokeTests
     [Fact]
     public void Every_scenario_file_parses()
     {
+        // Only a parse-and-shape check — this never talks to the host or runs a single turn, so it
+        // catches a malformed YAML file (or a missing/mismatched id) at effectively zero cost,
+        // well before a scenario would otherwise fail expensively and confusingly at run time.
         string[] files = Directory.GetFiles(ScenarioLoader.Directory, "*.yaml");
         Assert.NotEmpty(files);
 

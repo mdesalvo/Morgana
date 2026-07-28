@@ -37,6 +37,9 @@ public static class FailureLog
     {
         try
         {
+            // Shares BaselineWriter's directory resolution (same configured root, "failures"
+            // subfolder) so the two artefacts always sit next to each other regardless of where
+            // BaselineDirectory points.
             string directory = Path.Combine(BaselineWriter.ResolveDirectory(baselineDirectory), "failures");
             string path = Path.Combine(directory, $"{outcome.Scenario.Id}.log");
 
@@ -53,6 +56,9 @@ public static class FailureLog
                 ? $"verdict: passed at threshold — {outcome.Runs.Count - outcome.Passes} run(s) failed, no margin left\n"
                 : "verdict: FAILED — below threshold\n";
 
+            // Rewritten whole every time, not appended to: a failure report describes the most
+            // recent measurement only, so an old report from a previous phase must not survive
+            // mixed in with the current one.
             System.IO.Directory.CreateDirectory(directory);
             File.WriteAllText(path,
                 $"phase: {phase}\n"

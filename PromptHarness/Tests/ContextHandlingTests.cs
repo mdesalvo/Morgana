@@ -30,6 +30,9 @@ public sealed class ContextHandlingTests
     [InlineData("context-no-invented-writes")]
     public async Task Context_handling_scenario_holds(string scenarioId)
     {
+        // The scenario's own runs/minPasses (5/5 for this blocking group, by convention — see the
+        // class remarks) decide the threshold; this test only asks whether the aggregate outcome
+        // cleared it, and prints the full per-run transcript on the assertion message when it didn't.
         ScenarioOutcome outcome = await fixture.Runner.RunAsync(scenarioId);
 
         Assert.True(outcome.Passed, outcome.Report());

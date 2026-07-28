@@ -67,5 +67,8 @@ public sealed class HarnessOptions
 
     /// <summary>Binds the <c>Harness</c> section, falling back to the defaults above when absent.</summary>
     public static HarnessOptions Load(IConfiguration configuration)
+        // GetSection never returns null, but Get<T>() does when the section has no children at
+        // all (e.g. appsettings.Harness.json is missing the "Harness" object entirely) — the
+        // null-coalesce is what makes every property default rather than throwing on first use.
         => configuration.GetSection("Harness").Get<HarnessOptions>() ?? new HarnessOptions();
 }

@@ -146,12 +146,18 @@ public static class ScenarioLoader
     /// <summary>Loads one scenario by id (file name without extension).</summary>
     public static ScenarioDefinition Load(string id)
     {
+        // The id is also the file name — enforced here rather than only by convention, so a typo
+        // in an [InlineData("...")] test attribute fails with a clear "not found" instead of a
+        // silent mismatch discovered only when the scenario runs against the wrong expectations.
         string path = Path.Combine(Directory, $"{id}.yaml");
         if (!File.Exists(path))
             throw new FileNotFoundException($"Scenario '{id}' not found at {path}.", path);
 
         ScenarioDefinition scenario = Deserializer.Deserialize<ScenarioDefinition>(File.ReadAllText(path));
 
+        // A YAML file that parses but never sets "id:" would otherwise silently produce a
+        // ScenarioDefinition whose Id doesn't round-trip back to the file it came from — every
+        // failure message and baseline row keys off Id, so this catches the gap at load time.
         return string.IsNullOrWhiteSpace(scenario.Id) ? throw new InvalidOperationException($"Scenario file {path} declares no id.") : scenario;
     }
 }

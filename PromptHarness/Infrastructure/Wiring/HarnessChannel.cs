@@ -77,6 +77,9 @@ public sealed class HarnessChannel : IAsyncDisposable
         this.morganaBaseAddress = morganaBaseAddress;
         this.audience = audience;
 
+        // The signing key here must be byte-identical to the one MorganaHostFixture pushed into
+        // the host's Morgana:Authentication:Issuers:*:SymmetricKey — the two are minted from the
+        // same value, this class just wraps it as HMAC-SHA256 credentials for token generation.
         credentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(issuerKey)), SecurityAlgorithms.HmacSha256);
 
@@ -86,12 +89,17 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// <summary>Starts the callback receiver on an ephemeral port.</summary>
     public async Task StartAsync()
     {
+        // A second, tiny Kestrel instance, separate from the Morgana host itself — this is the
+        // "webhook" side of the channel: Morgana pushes messages here rather than the harness
+        // polling for them. Port 0 lets the OS pick a free ephemeral port, read back below.
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
 
         receiver = builder.Build();
 
+        // Final delivery of a turn's response. Keyed into a per-conversation channel so multiple
+        // conversations (and, if ever run concurrently, multiple in-flight turns) never cross wires.
         receiver.MapPost("/harness-hook", async (HttpContext context) =>
         {
             ChannelMessage? message = await context.Request.ReadFromJsonAsync<ChannelMessage>();
@@ -104,6 +112,9 @@ public sealed class HarnessChannel : IAsyncDisposable
             return Results.Ok();
         });
 
+        // Streaming chunks arrive as Morgana composes its answer, ahead of the final message above.
+        // Collected only for diagnostics — no scenario assertion reads them — so they are appended
+        // to a plain list rather than routed through the same completion-signalling channel.
         receiver.MapPost("/harness-hook/chunk", async (HttpContext context) =>
         {
             StreamChunkRequest? chunk = await context.Request.ReadFromJsonAsync<StreamChunkRequest>();
@@ -117,6 +128,8 @@ public sealed class HarnessChannel : IAsyncDisposable
 
         await receiver.StartAsync();
 
+        // Now that Kestrel has actually bound the ephemeral port, read back the concrete address —
+        // this is the URL handed to Morgana at conversation-start time as the webhook callback.
         string address = receiver.Services.GetRequiredService<IServer>()
                                  .Features.Get<IServerAddressesFeature>()!
                                  .Addresses.First();
@@ -131,6 +144,9 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// <returns>The conversation id, and the presentation message that was drained.</returns>
     public async Task<(string ConversationId, ChannelMessage Presentation)> StartConversationAsync(TimeSpan timeout)
     {
+        // The conversation id is minted here, client-side, and handed to Morgana on the start
+        // call — the queue for it must exist before the request is sent, since the presentation
+        // message can arrive over the webhook before this method reaches ReceiveAsync below.
         string conversationId = Guid.NewGuid().ToString("N");
         inbox[conversationId] = Channel.CreateUnbounded<ChannelMessage>();
 
@@ -142,6 +158,9 @@ public sealed class HarnessChannel : IAsyncDisposable
         using HttpResponseMessage response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
+        // Every conversation opens with an unsolicited presentation message, pushed over the same
+        // webhook a reply would use. Draining it here means the caller's first SendAsync genuinely
+        // corresponds to the first user turn, not to whatever the presentation happened to be.
         ChannelMessage presentation = await ReceiveAsync(conversationId, timeout);
 
         return (conversationId, presentation);
@@ -164,6 +183,8 @@ public sealed class HarnessChannel : IAsyncDisposable
     {
         try
         {
+            // Response is neither awaited for content nor checked for success — this call is a
+            // courtesy notification to the host, not something a scenario's outcome depends on.
             using HttpRequestMessage request = Authorized(HttpMethod.Post, $"/api/morgana/conversation/{conversationId}/end");
             using HttpResponseMessage response = await httpClient.SendAsync(request);
         }
@@ -173,6 +194,8 @@ public sealed class HarnessChannel : IAsyncDisposable
         }
         finally
         {
+            // Runs whether the end call succeeded or not: a run that fails mid-conversation still
+            // needs its queues released, or they leak for the lifetime of the whole test assembly.
             inbox.TryRemove(conversationId, out _);
             chunks.TryRemove(conversationId, out _);
         }
@@ -194,15 +217,23 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// <summary>Dequeues the next inbound message for a conversation, or throws on timeout.</summary>
     private async Task<ChannelMessage> ReceiveAsync(string conversationId, TimeSpan timeout)
     {
+        // GetOrAdd rather than a plain lookup: the webhook handler in StartAsync above may have
+        // already created (and possibly already written to) this conversation's queue by the time
+        // execution reaches here, since the two run on independent async paths.
         Channel<ChannelMessage> queue = inbox.GetOrAdd(conversationId, _ => Channel.CreateUnbounded<ChannelMessage>());
 
         using CancellationTokenSource cancellation = new CancellationTokenSource(timeout);
         try
         {
+            // Blocks until the webhook handler writes a message for this conversation, or the
+            // timeout fires — this is the actual wait for Morgana's asynchronous, out-of-band reply.
             return await queue.Reader.ReadAsync(cancellation.Token);
         }
         catch (OperationCanceledException)
         {
+            // Re-thrown as a plain TimeoutException with the callback URL attached: an
+            // OperationCanceledException alone would not say whether the host hung, never called
+            // back at all, or called back to the wrong address.
             throw new TimeoutException(
                 $"No webhook delivery for conversation {conversationId} within {timeout.TotalSeconds:F0}s at {callbackUrl}.");
         }
@@ -220,6 +251,9 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// <summary>Mints an HMAC-SHA256 JWT valid for five minutes, mirroring what every channel does.</summary>
     private string GenerateToken()
     {
+        // Minted fresh per request rather than cached: the five-minute expiry is generous for a
+        // single HTTP round trip, so there is no real cost to always issuing a brand-new token and
+        // no need to track or refresh one that might have gone stale mid-run.
         SecurityTokenDescriptor descriptor = new SecurityTokenDescriptor
         {
             Issuer = IssuerName,
