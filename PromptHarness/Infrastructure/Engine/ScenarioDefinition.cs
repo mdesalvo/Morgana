@@ -1,7 +1,7 @@
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace PromptHarness.Scenarios;
+namespace PromptHarness.Infrastructure.Engine;
 
 /// <summary>
 /// One non-regression scenario: a scripted conversation plus what must hold at each turn.

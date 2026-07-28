@@ -1,6 +1,6 @@
 using Morgana.Contracts;
 
-namespace PromptHarness.Infrastructure;
+namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>How a turn touched one context variable.</summary>
 public enum ContextOperation

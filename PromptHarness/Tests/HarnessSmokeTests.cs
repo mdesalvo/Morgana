@@ -1,9 +1,9 @@
 using Morgana.Contracts;
-using PromptHarness.Infrastructure;
-using PromptHarness.Scenarios;
+using PromptHarness.Infrastructure.Engine;
+using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 
-namespace PromptHarness;
+namespace PromptHarness.Tests;
 
 /// <summary>
 /// Checks the rig itself before any scenario is believed: host up, handshake accepted, webhook

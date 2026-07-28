@@ -15,7 +15,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Morgana.Contracts;
 
-namespace PromptHarness.Infrastructure;
+namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
 /// The harness's own Morgana channel: a webhook receiver plus a REST client, self-issuing JWTs as

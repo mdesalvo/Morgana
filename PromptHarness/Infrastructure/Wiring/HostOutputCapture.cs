@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace PromptHarness.Infrastructure;
+namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
 /// Tees <see cref="Console.Out"/> into an in-memory ring of lines so the harness can read the

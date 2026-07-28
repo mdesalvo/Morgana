@@ -1,8 +1,8 @@
-using PromptHarness.Infrastructure;
-using PromptHarness.Scenarios;
+using PromptHarness.Infrastructure.Engine;
+using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 
-namespace PromptHarness;
+namespace PromptHarness.Tests;
 
 /// <summary>
 /// The blocking group: the properties of <c>GetContextVariable</c> / <c>SetContextVariable</c> that

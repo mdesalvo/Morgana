@@ -135,10 +135,12 @@ The phase name comes from `Harness:Phase`; bump it in `appsettings.Harness.json`
 override a single run with `Harness__Phase=A2.3`. **Re-running a phase replaces its row** rather than
 appending another: a phase is a state of the prose, not a count of how many times it was measured.
 
-The files live in the source tree, not the output directory, precisely so they can be committed and
-diffed — but the movement is inside the artefact, not only in the git history, because a reader who
-does not know which commits to compare would otherwise see today's number and no way to tell where it
-came from.
+`Baseline/` is a local measurement log, not a repository artefact — it is not versioned. Every run is
+billed, and a token-count diff is not useful pull-request noise; the movement lives inside the
+artefact itself (one row per phase), so it stays comparable whether or not anyone diffs commits. The
+directory is `Harness:BaselineDirectory` in `appsettings.Harness.json` (default `Baseline`, resolved
+against the project directory unless given an absolute path) — point it outside the checkout if
+several people run the suite and should not overwrite each other's rows.
 
 A prompt revision has three possible outcomes against the previous row, and only one of them is
 success:

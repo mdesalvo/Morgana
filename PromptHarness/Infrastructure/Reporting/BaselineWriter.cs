@@ -2,19 +2,19 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using PromptHarness.Infrastructure.Engine;
 
-namespace PromptHarness.Scenarios;
+namespace PromptHarness.Infrastructure.Reporting;
 
 /// <summary>
-/// Keeps each scenario's journey: one versioned file per scenario, one row per revision phase,
-/// carrying the pass rate and the token cost of a run.
+/// Keeps each scenario's journey: one local file per scenario, one row per revision phase, carrying
+/// the pass rate and the token cost of a run.
 /// </summary>
 /// <remarks>
 /// <para><strong>Why a journey and not a snapshot.</strong> The point of the harness is comparison,
 /// and a file that is overwritten on every run answers "where is it now" while losing "where it came
-/// from". The history is in git, but only for a reader who knows which commits to diff — the
-/// artefact itself said nothing. Here the movement is inside the file: <c>v0</c> is the original
-/// assessment, and every phase after it shows what the revision bought or cost.</para>
+/// from". Here the movement is inside the file: <c>v0</c> is the original assessment, and every
+/// phase after it shows what the revision bought or cost.</para>
 ///
 /// <para>Re-running a phase replaces its row rather than appending a second one. A phase is a state
 /// of the prose, not a count of how many times it was measured: the three runs it took to settle
@@ -23,6 +23,11 @@ namespace PromptHarness.Scenarios;
 /// <para>A row is deliberately naked — numbers only. What a movement <em>means</em>, and which of
 /// them were regressions worth reverting, belongs to <c>JOURNEY.md</c> next to these files, written
 /// by hand.</para>
+///
+/// <para><strong>Not versioned.</strong> The directory is a local measurement log
+/// (<see cref="HarnessOptions.BaselineDirectory"/>), not a repository artefact: every run is billed,
+/// and reviewing token-count diffs as pull-request noise buys nothing. Comparison across phases
+/// still works — it just happens on whoever's disk is running the suite, not in git history.</para>
 /// </remarks>
 public static class BaselineWriter
 {
@@ -34,17 +39,15 @@ public static class BaselineWriter
     /// <summary>Matches a table row and captures its phase, so a re-run of the same phase replaces it.</summary>
     private static readonly Regex RowPattern = new Regex(@"^\| *(?<phase>[^|]+?) *\|", RegexOptions.Multiline);
 
-    /// <summary>Directory holding the journey files, resolved from this file's own compile-time path.</summary>
-    public static string Directory => Path.Combine(ProjectDirectory(), "Baseline");
-
     /// <summary>Appends (or replaces) this phase's row in the scenario's journey.</summary>
-    public static void Write(ScenarioOutcome outcome, string llmDescriptor, string phase)
+    public static void Write(ScenarioOutcome outcome, string llmDescriptor, string phase, string baselineDirectory)
     {
         try
         {
-            System.IO.Directory.CreateDirectory(Directory);
+            string directory = ResolveDirectory(baselineDirectory);
+            System.IO.Directory.CreateDirectory(directory);
 
-            string path = Path.Combine(Directory, $"{outcome.Scenario.Id}.md");
+            string path = Path.Combine(directory, $"{outcome.Scenario.Id}.md");
             string row =
                 $"| {phase} "
               + $"| {DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} "
@@ -115,10 +118,13 @@ public static class BaselineWriter
     private static long Average(long total, int count) => count == 0 ? 0 : total / count;
 
     /// <summary>
-    /// This project's directory, taken from the compile-time path of this very file. The output
-    /// directory would be the obvious place to write to and the wrong one: nothing there is
-    /// versioned, and an unversioned journey is not a journey.
+    /// Resolves <see cref="HarnessOptions.BaselineDirectory"/>: an absolute path is used as-is; a
+    /// relative one resolves against the project directory (taken from this file's own compile-time
+    /// path), not the build output — a location that shifts with the build configuration is not a
+    /// stable place to point a relative path at.
     /// </summary>
-    private static string ProjectDirectory([CallerFilePath] string sourceFilePath = "")
-        => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFilePath)!, ".."));
+    internal static string ResolveDirectory(string configured, [CallerFilePath] string sourceFilePath = "")
+        => Path.IsPathRooted(configured)
+            ? configured
+            : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFilePath)!, "..", configured));
 }

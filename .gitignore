@@ -432,9 +432,10 @@ FodyWeavers.xsd
 /Morgana/.claude/settings.local.json
 /Cauldron/.claude/settings.local.json
 
-# NRT failure reports are the diagnosis of a paid run: each one is the transcript of a scenario
-# that did not hold, and the calibration corpus for any future judge proposition. They are written
-# by PromptHarness/Scenarios/FailureLog.cs and deleted automatically when the scenario passes,
-# so the set stays small and always describes the current state. Exempt from the *.log rule above:
-# losing them to a clean means buying them again.
-!PromptHarness/Baseline/failures/*.log
+# PromptHarness's baseline: the per-scenario journey rows (PromptHarness/Infrastructure/
+# BaselineWriter.cs), the failure transcripts (PromptHarness/Infrastructure/FailureLog.cs), and
+# JOURNEY.md are a local measurement log, not a repository artefact — every run is billed, and a
+# token-count diff is not useful pull-request noise. The default location lives inside the project
+# tree for zero-friction local use; Harness:BaselineDirectory in appsettings.Harness.json can point
+# it anywhere else (e.g. a shared results folder) without touching this rule.
+PromptHarness/Baseline/

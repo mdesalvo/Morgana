@@ -54,6 +54,17 @@ public sealed class HarnessOptions
     /// </remarks>
     public string Phase { get; init; } = "v0";
 
+    /// <summary>
+    /// Where the journey files and failure reports are written. An absolute path is used as-is; a
+    /// relative one resolves against the project directory, not the build output.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not the repository: the baseline is a local measurement log, not a build
+    /// artefact meant for review. Point it outside the checkout (a shared drive, a per-machine
+    /// results folder) if several people run the suite and should not overwrite each other's rows.
+    /// </remarks>
+    public string BaselineDirectory { get; init; } = "Baseline";
+
     /// <summary>Binds the <c>Harness</c> section, falling back to the defaults above when absent.</summary>
     public static HarnessOptions Load(IConfiguration configuration)
         => configuration.GetSection("Harness").Get<HarnessOptions>() ?? new HarnessOptions();

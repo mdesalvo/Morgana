@@ -1,6 +1,7 @@
 using System.Globalization;
+using PromptHarness.Infrastructure.Engine;
 
-namespace PromptHarness.Scenarios;
+namespace PromptHarness.Infrastructure.Reporting;
 
 /// <summary>
 /// Persists the transcript of every run that did not hold, next to the scenario's journey file —
@@ -28,18 +29,16 @@ namespace PromptHarness.Scenarios;
 /// </remarks>
 public static class FailureLog
 {
-    /// <summary>Directory holding the failure reports, a subfolder of the journey directory.</summary>
-    public static string Directory => Path.Combine(BaselineWriter.Directory, "failures");
-
     /// <summary>
     /// Writes the transcript of every run that failed, or removes a previous report once every
     /// run of the scenario held. A scenario that passes *at* its threshold still leaves a report.
     /// </summary>
-    public static void Write(ScenarioOutcome outcome, string phase)
+    public static void Write(ScenarioOutcome outcome, string phase, string baselineDirectory)
     {
         try
         {
-            string path = Path.Combine(Directory, $"{outcome.Scenario.Id}.log");
+            string directory = Path.Combine(BaselineWriter.ResolveDirectory(baselineDirectory), "failures");
+            string path = Path.Combine(directory, $"{outcome.Scenario.Id}.log");
 
             // Not outcome.Passed: a scenario can clear its threshold with a failing run inside it,
             // and that run is the one worth reading. Delete only when there is nothing to report.
@@ -54,7 +53,7 @@ public static class FailureLog
                 ? $"verdict: passed at threshold — {outcome.Runs.Count - outcome.Passes} run(s) failed, no margin left\n"
                 : "verdict: FAILED — below threshold\n";
 
-            System.IO.Directory.CreateDirectory(Directory);
+            System.IO.Directory.CreateDirectory(directory);
             File.WriteAllText(path,
                 $"phase: {phase}\n"
               + $"recorded: {DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}Z\n"

@@ -1,8 +1,8 @@
 using System.Globalization;
 using Morgana.Contracts;
-using PromptHarness.Infrastructure;
+using PromptHarness.Infrastructure.Wiring;
 
-namespace PromptHarness.Scenarios;
+namespace PromptHarness.Infrastructure.Engine;
 
 /// <summary>
 /// Evaluates a turn's structural expectations. Deterministic by construction: everything it reads

@@ -1,4 +1,4 @@
-using PromptHarness.Infrastructure;
+using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 
 // One Morgana host for the whole assembly: startup is expensive (plugin scan, agent registry,

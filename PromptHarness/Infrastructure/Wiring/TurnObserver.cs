@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Morgana.Contracts;
 
-namespace PromptHarness.Infrastructure;
+namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
 /// Reads the two structural signals a turn leaves behind inside the host process: the

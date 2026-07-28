@@ -1,12 +1,11 @@
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Morgana.AI.Abstractions.LLMs;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
-using PromptHarness.Scenarios;
+using PromptHarness.Infrastructure.Wiring;
 
-namespace PromptHarness.Infrastructure;
+namespace PromptHarness.Infrastructure.Engine;
 
 /// <summary>Outcome of one judged proposition.</summary>
 /// <param name="Holds">Whether the judge found the proposition true of the response.</param>
@@ -67,8 +66,8 @@ public sealed class LlmJudge
         ILLMService llmService = provider.ToLowerInvariant() switch
         {
             "anthropic" => new Morgana.AI.Abstractions.LLMs.Anthropic(configuration, promptResolverService, loggerFactory),
-            "azureopenai" => new AzureOpenAI(configuration, promptResolverService, loggerFactory),
-            "ollama" => new Ollama(configuration, promptResolverService, loggerFactory),
+            "azureopenai" => new Morgana.AI.Abstractions.LLMs.AzureOpenAI(configuration, promptResolverService, loggerFactory),
+            "ollama" => new Morgana.AI.Abstractions.LLMs.Ollama(configuration, promptResolverService, loggerFactory),
             "openai" => new Morgana.AI.Abstractions.LLMs.OpenAI(configuration, promptResolverService, loggerFactory),
             _ => throw new InvalidOperationException($"LLM Provider '{provider}' not supported by the harness judge.")
         };

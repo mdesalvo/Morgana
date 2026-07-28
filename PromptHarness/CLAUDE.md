@@ -52,11 +52,16 @@ don't re-run a measurement that's already recorded for the current phase.
 
 ```
 PromptHarness (xUnit v3 test process, IsTestProject + OutputType=Exe)
-  ├── MorganaHostFixture ──► boots Morgana.Web's entry point in-process, real Kestrel, ephemeral port
-  ├── HarnessChannel     ──► its own channel: REST out (JWT, issuer "harness"), webhook in
-  ├── TurnObserver       ──► ActivityListener on morgana.agent spans + Console.Out tee on tool logs
-  ├── LlmJudge            ──► ILLMService on the cheapest configured tier, natural-language propositions
-  └── ScenarioRunner      ──► replays a YAML scenario N times, reports pass rate against a threshold
+  Infrastructure/Wiring/    — talks to and observes the live host
+    ├── MorganaHostFixture ──► boots Morgana.Web's entry point in-process, real Kestrel, ephemeral port
+    ├── HarnessChannel     ──► its own channel: REST out (JWT, issuer "harness"), webhook in
+    └── TurnObserver       ──► ActivityListener on morgana.agent spans + Console.Out tee on tool logs
+  Infrastructure/Engine/    — runs and grades a scenario
+    ├── ScenarioRunner      ──► replays a YAML scenario N times, reports pass rate against a threshold
+    └── LlmJudge            ──► ILLMService on the cheapest configured tier, natural-language propositions
+  Infrastructure/Reporting/ — records the outcome
+    ├── BaselineWriter      ──► per-scenario journey row, keyed by Harness:Phase
+    └── FailureLog          ──► transcript of the last failing run, deleted once clean
 ```
 
 **In-process but black-box.** The host runs inside the test process, but the suite only ever talks
@@ -74,7 +79,7 @@ off), and a random per-run symmetric key for the `harness` JWT issuer. The repo 
 `harness` entry under `Morgana.Web/appsettings.json` → `Morgana:Authentication:Issuers`, or the
 fixture refuses to start by design.
 
-**Two-layer assertions** (`Scenarios/ScenarioDefinition.cs`, `ExpectationChecker.cs`, `LlmJudge.cs`).
+**Two-layer assertions** (`Infrastructure/Engine/ScenarioDefinition.cs`, `ExpectationChecker.cs`, `LlmJudge.cs`).
 Structural checks are deterministic, read only span/log/message data (`expect:` block: tools called,
 context reads/writes, quick replies, rich card presence…). The judge layer is LLM-graded natural
 language propositions (`judge:` / `judgeNot:`) and sees only what a user would see — text, buttons,
@@ -91,12 +96,15 @@ The judge is skipped once a turn already fails structurally (saves a live call).
   visible presentation: button emission, card rendering, conversation closure.
 
 **The baseline is the point of the suite.** Every `ScenarioRunner.RunAsync` call writes a row to
-`Baseline/<scenario-id>.md` via `BaselineWriter` — one row per revision phase, with pass rate, token
+`<scenario-id>.md` via `BaselineWriter` — one row per revision phase, with pass rate, token
 cost, and the provider+model bound to each tier (a token count without the model is meaningless).
 The phase name comes from `Harness:Phase` in `appsettings.Harness.json` (or `Harness__Phase` env
 override); re-running the same phase **replaces** its row, it never appends — a phase is a state of
-the prose, not a count of measurements. `Baseline/JOURNEY.md` narrates what the movements mean.
-Read `README.md`'s "The journey" section before writing to these files by hand.
+the prose, not a count of measurements. `JOURNEY.md` narrates what the movements mean, written by
+hand. The directory is `Harness:BaselineDirectory` (default `Baseline`, resolved against the project
+directory unless absolute) — deliberately **not versioned** (see `.gitignore`): every run is billed,
+and a token-count diff is not useful pull-request noise. Read `README.md`'s "The journey" section
+before writing to these files by hand.
 
 A prompt revision has exactly three outcomes against the previous baseline row, and only one is a
 pass: threshold held + tokens down (the win); threshold held + tokens up (not a pass — the fixed
@@ -104,7 +112,7 @@ payload is resent on every round trip, forever); threshold broken (a contradicti
 instructions read together — fix the text, never lower the threshold).
 
 **Writing a scenario.** One YAML file per flow under `Scenarios/`, file name == `id`. See the
-`ExpectSpec` fields in `Scenarios/ScenarioDefinition.cs` for the full structural vocabulary, and the
+`ExpectSpec` fields in `Infrastructure/Engine/ScenarioDefinition.cs` for the full structural vocabulary, and the
 "Writing a scenario" section of `README.md` for the annotated example. `HarnessSmokeTests.
 Every_scenario_file_parses` is the only guard that every `.yaml` under `Scenarios/` is well-formed —
 it does not run the scenario, just loads it.

@@ -4,10 +4,11 @@ using System.Reflection;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using PromptHarness.Scenarios;
+using PromptHarness.Infrastructure;
+using PromptHarness.Infrastructure.Engine;
 using Xunit;
 
-namespace PromptHarness.Infrastructure;
+namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
 /// Boots the real Morgana host in-process on an ephemeral Kestrel port and keeps it alive for the

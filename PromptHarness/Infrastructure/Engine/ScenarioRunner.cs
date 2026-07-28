@@ -1,9 +1,11 @@
 using System.Text;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure;
+using PromptHarness.Infrastructure.Reporting;
+using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 
-namespace PromptHarness.Scenarios;
+namespace PromptHarness.Infrastructure.Engine;
 
 /// <summary>Outcome of a single replay of a scenario.</summary>
 /// <param name="Index">1-based run number.</param>
@@ -135,8 +137,8 @@ public sealed class ScenarioRunner
         // written there would resurface inside the next turn's captured log.
         TestContext.Current.TestOutputHelper?.WriteLine($"[Harness] {outcome.Summary()}");
 
-        BaselineWriter.Write(outcome, llmDescriptor, options.Phase);
-        FailureLog.Write(outcome, options.Phase);
+        BaselineWriter.Write(outcome, llmDescriptor, options.Phase, options.BaselineDirectory);
+        FailureLog.Write(outcome, options.Phase, options.BaselineDirectory);
 
         return outcome;
     }

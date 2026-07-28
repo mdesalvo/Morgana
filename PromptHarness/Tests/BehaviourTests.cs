@@ -1,8 +1,8 @@
-using PromptHarness.Infrastructure;
-using PromptHarness.Scenarios;
+using PromptHarness.Infrastructure.Engine;
+using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 
-namespace PromptHarness;
+namespace PromptHarness.Tests;
 
 /// <summary>
 /// The behavioural group: how a turn presents itself once it has decided what to do — whether it
