@@ -27,9 +27,7 @@ turns:
       quickReplies: none
       textNotEmpty: true
     judge:
-      # Same wording as behaviour-conversation-closure, which tests this same behaviour. A2.1
-      # relaxed it there — "explicitly says goodbye" proved too strict, a polite closing in
-      # character is a farewell — and missed this copy, which kept failing on exactly that.
+      # Same wording as behaviour-conversation-closure, which tests this same behaviour.
       - "The response is a farewell, a polite closing, or an acknowledgement of the user's thanks."
 
   - say: "Now show me the details of my contract"

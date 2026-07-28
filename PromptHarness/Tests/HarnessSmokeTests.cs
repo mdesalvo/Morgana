@@ -6,14 +6,9 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// Checks the rig itself before any scenario is believed: host up, handshake accepted, webhook
+/// Checks the wiring itself before any scenario is believed: host up, handshake accepted, webhook
 /// delivered, span and log observers wired.
 /// </summary>
-/// <remarks>
-/// Worth its own class because a broken observer fails scenarios in a way that reads exactly like a
-/// prompt regression — an empty tool list looks the same whether the agent called nothing or the
-/// listener heard nothing. Run this first when the suite starts failing wholesale.
-/// </remarks>
 public sealed class HarnessSmokeTests
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>

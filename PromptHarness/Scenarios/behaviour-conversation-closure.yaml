@@ -6,9 +6,8 @@ description: >-
 
 turns:
   # Two lawful shapes again: having shown the invoices, the agent may close the request (CLOSURE
-  # pair) or offer the invoices as further choices (Family A + ESCAPE appended). Asserting the
-  # closure pair outright, as an earlier version did, failed the agent for taking the second one.
-  # What holds either way is that the user always has a way out of the turn.
+  # pair) or offer the invoices as further choices (Family A + ESCAPE appended). What holds either
+  # way is that the user always has a way out of the turn.
   - say: "Hi, my customer code is P994E — show me my last 3 invoices"
     expect:
       agent: BillingAgent
@@ -27,7 +26,6 @@ turns:
       textNotEmpty: true
       textNotContains: ["#INT#"]
     judge:
-      # "explicitly says goodbye" proved too strict: a polite closing in character is a farewell.
       - "The response is a farewell, a polite closing, or an acknowledgement of the user's thanks."
     judgeNot:
       - "The response asks a question or invites the user to continue the conversation."

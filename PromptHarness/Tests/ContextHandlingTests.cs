@@ -14,10 +14,6 @@ namespace PromptHarness.Tests;
 /// <strong>closed vocabulary</strong> (only declared context-scoped parameter names are legal, and
 /// none may be minted from the user's words), and <strong>non-revelation</strong> (the user never
 /// learns the context exists).</para>
-///
-/// <para>Every scenario here runs at a 5/5 threshold, unlike the behavioural group. A property that
-/// holds four times out of five is not a property — and these are the ones whose failure mode is
-/// silent: an agent that asks again for something it already knows still looks like it works.</para>
 /// </remarks>
 public sealed class ContextHandlingTests
 {

@@ -10,9 +10,8 @@ turns:
   # Asking for an invoice the user has not identified, with the customer code already given, may
   # legitimately end either as bare prose ("which invoice?") or as a list of the known invoices
   # offered as choices — and the latter, per QuickReplyEscapeOptions, correctly carries the escape
-  # pair as an appendix. An earlier version of this scenario asserted the absence of exit_agent
-  # outright and so failed the agent for obeying the policy; what the policy actually forbids is the
-  # escape pair standing alone, with no primary option beside it, on a turn that is waiting.
+  # pair as an appendix. What the policy actually forbids is the escape pair standing alone, with no
+  # primary option beside it, on a turn that is waiting.
   - say: "I need the details of one of my invoices, my customer code is P994E"
     expect:
       agent: BillingAgent

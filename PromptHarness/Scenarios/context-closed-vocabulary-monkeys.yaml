@@ -10,20 +10,13 @@ turns:
   # A proper name the MCP catalogue actually holds, kept inside a phrase that still carries the
   # domain: a bare "Tell me about Sebastian" gives the classifier no signal and lands on "other",
   # which moves the failure out of the agent entirely. With the domain word present, the subject is
-  # still the sharpest form of the test: "Sebastian"
-  # is exactly the kind of string a confused model passes to GetContextVariable, so the
-  # anti-invention property is under real pressure here. (An earlier version asked about "the
-  # saimiri", which get_monkey resolves to null — the catalogue is indexed by common name — sending
-  # the agent down a not-found branch and measuring synonym resolution instead.)
+  # still the sharpest form of the test: "Sebastian" is exactly the kind of string a confused model
+  # passes to GetContextVariable, so the anti-invention property is under real pressure here.
   - say: "Tell me about a monkey named Sebastian"
     expect:
       agent: MonkeyAgent
       # The whole property, stated deterministically: the subject reached the domain tool, and the
-      # registry was never touched. There is no judge proposition here by design. Two attempts at
-      # one both failed on the content rather than on the behaviour — "an actual monkey" had the
-      # judge disputing a catalogue whose Sebastian is a hand puppet, and "specific details" had it
-      # reading Morgana's grimoire metaphors as vagueness. Same lesson as non-revelation in A2.1:
-      # when a property is literal, measure it literally.
+      # registry was never touched. There is no judge proposition here by design.
       noContextAccess: true
       toolsCalled: [get_monkey]
       textNotEmpty: true
