@@ -29,7 +29,7 @@ namespace Morgana.AI.Services;
 /// │   └── (actors code, no agents.json)
 /// ├── Morgana.Agents/
 /// │   └── morgana.json (framework prompts)
-/// └── Morgana.Examples/
+/// └── Examples/
 ///     ├── agents.json (domain configuration)
 ///     ├── BillingAgent.cs
 ///     ├── ContractAgent.cs
@@ -37,9 +37,9 @@ namespace Morgana.AI.Services;
 ///     └── InventoryAgent.cs
 ///
 /// At runtime:
-/// 1. PluginLoaderService loads Morgana.Examples.dll
+/// 1. PluginLoaderService loads Examples.dll
 /// 2. EmbeddedAgentConfigurationService scans all assemblies
-/// 3. Finds agents.json in Morgana.Examples.dll
+/// 3. Finds agents.json in Examples.dll
 /// 4. Loads intents and agent prompts from it
 /// </code>
 /// <para><strong>Graceful Degradation:</strong></para>
@@ -110,7 +110,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     /// <code>
     /// // Success case
     /// Searching for agents.json in loaded assemblies...
-    /// ✅ Found agents.json in assembly: Morgana.Examples
+    /// ✅ Found agents.json in assembly: Examples
     /// ✅ Loaded 4 intents and 4 agent prompts from agents.json
     ///    📋 Intent: billing - requests to view invoices...
     ///    📋 Intent: contract - requests to summarize contract...

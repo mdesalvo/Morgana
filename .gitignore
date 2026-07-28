@@ -434,7 +434,7 @@ FodyWeavers.xsd
 
 # NRT failure reports are the diagnosis of a paid run: each one is the transcript of a scenario
 # that did not hold, and the calibration corpus for any future judge proposition. They are written
-# by Morgana.Tests.NRT/Scenarios/FailureLog.cs and deleted automatically when the scenario passes,
+# by PromptHarness/Scenarios/FailureLog.cs and deleted automatically when the scenario passes,
 # so the set stays small and always describes the current state. Exempt from the *.log rule above:
 # losing them to a clean means buying them again.
-!Morgana.Tests.NRT/Baseline/failures/*.log
+!PromptHarness/Baseline/failures/*.log

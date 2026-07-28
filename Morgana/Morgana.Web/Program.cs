@@ -377,7 +377,7 @@ await app.RunAsync();
 // TEST ENTRY POINT VISIBILITY
 // ==============================================================================
 // Top-level statements compile into an implicitly-generated internal Program class.
-// Declaring it partial and public lets the NRT harness (Morgana.Tests.NRT) reach this
+// Declaring it partial and public lets the prompt harness (PromptHarness) reach this
 // assembly's entry point and boot the real host in-process on an ephemeral Kestrel port.
 // It has no effect on production behaviour.
 

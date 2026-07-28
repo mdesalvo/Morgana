@@ -31,13 +31,13 @@ Morgana/
     Cauldron/              # Blazor Server frontend — rich-Web reference channel (SignalR)
     Grimoire/              # Spectre.Console CLI — rich-TTY reference channel (webhook)
     Rune/                  # Spectre.Console CLI — basic-TTY reference channel (webhook)
-  Morgana.Examples/        # Example plugin with BillingAgent, ContractAgent, MonkeyAgent, InventoryAgent
-  Morgana.Tests.NRT/       # Live non-regression harness (xUnit v3) — measures prompt behaviour, not code
+  Examples/                # Example plugin with BillingAgent, ContractAgent, MonkeyAgent, InventoryAgent
+  PromptHarness/           # Live non-regression harness (xUnit v3) — measures prompt behaviour, not code
   CHANGELOG.md
 ```
 
 Six solutions, one per unit: `Morgana.slnx` (the framework — Contracts, AI, Web), one per channel,
-`Morgana.Examples.slnx` and `Morgana.Tests.NRT.slnx`. Only the framework's own projects live in
+`Examples.slnx` and `PromptHarness.slnx`. Only the framework's own projects live in
 `Morgana.slnx`; the plugin, the channels and the harness each stand alone and reach it by project
 reference. That is what keeps every one of them replaceable by a customer's own.
 
@@ -80,7 +80,7 @@ Spectre.Console CLI at `Channels/Grimoire/` (separate solution, has its own `CLA
 
 Spectre.Console CLI at `Channels/Rune/` (separate solution, has its own `CLAUDE.md`). Second reference channel, complementary to Cauldron: Kestrel-hosted console app that exercises the webhook delivery path (`deliveryMode=webhook`) and the "poor but honest" capability profile (all rich features off, `MaxMessageLength=500`) — the contract surface `MorganaChannelAdapter` is supposed to degrade toward. Self-issues JWT tokens for authentication (`iss=rune`). Consumes the shared wire DTOs from `Morgana.Contracts` via project reference (no DTO duplication).
 
-### Morgana.Examples (plugin)
+### Examples (plugin)
 
 Four example agents packaged as a plugin DLL (copied to `plugins/` after build). References `Morgana.AI` via **project reference** (`..\Morgana\Morgana.AI`, bringing `Morgana.Contracts` transitively) — not the NuGet package — so the in-repo/Docker build is deterministic; an out-of-tree plugin would instead reference the `Morgana.AI` NuGet package:
 - `BillingAgent` + `BillingTool` — telecom billing with invoices, payment history
@@ -89,15 +89,15 @@ Four example agents packaged as a plugin DLL (copied to `plugins/` after build).
 - `InventoryAgent` + `InventoryTool` — greenhouse/nursery inventory; stateful example agent: consult catalog, create/confirm/cancel orders, backed by its own standalone SQLite database
 - `agents.json` — embedded resource with intents and per-agent prompts/tool definitions
 
-### Morgana.Tests.NRT (non-regression harness)
+### PromptHarness (non-regression harness)
 
-Live, black-box, xUnit v3 suite at `Morgana.Tests.NRT/` (repo root, own solution, has its own `README.md`). It measures **prompt behaviour**, not code: since a domain agent *is* its prose, the only way to know a prompt revision did not break anything is to make the model do the thing and look. Nothing is mocked and every turn is a real LLM call, so it is **on-demand only** — never wired into a build or CI gate.
+Live, black-box, xUnit v3 suite at `PromptHarness/` (repo root, own solution, has its own `README.md`). It measures **prompt behaviour**, not code: since a domain agent *is* its prose, the only way to know a prompt revision did not break anything is to make the model do the thing and look. Nothing is mocked and every turn is a real LLM call, so it is **on-demand only** — never wired into a build or CI gate.
 
-- **Standalone by construction**: sibling of `Morgana/` and `Morgana.Examples/`, not a project inside `Morgana.slnx` — the harness is an instrument pointed *at* a Morgana instance, and must be able to run against one it did not ship with (an older tag, or a customer's). It has no `Directory.Build.props` above it, so every build setting lives in its own `.csproj` and survives a move. Two project references reach the tree: `Morgana.Web` (for the entry point) and `Morgana.Examples` with **`ReferenceOutputAssembly=false`** — built into `plugins/` but never referenced as an assembly, which makes the black-box boundary structural: the harness compiles without ever seeing an agent type.
-- **Hook**: boots `Morgana.Web`'s entry point in-process on an ephemeral Kestrel port (enabled by the `public partial class Program;` declaration at the bottom of `Program.cs`) and drives it over HTTP as a fourth channel — `channelName: "nrt"`, `deliveryMode: "webhook"`, full capabilities and no length budget, so `MorganaChannelAdapter` short-circuits and scenarios measure undegraded output. In-process buys the two read-only observers a child process could not: an `ActivityListener` on `morgana.agent` (→ `agent.tools_invoked`) and a tee on `Console.Out` (→ the `MorganaTool` HIT/MISS/SET log lines, which is how context **variable names** are observed without ever putting them in a span attribute).
+- **Standalone by construction**: sibling of `Morgana/` and `Examples/`, not a project inside `Morgana.slnx` — the harness is an instrument pointed *at* a Morgana instance, and must be able to run against one it did not ship with (an older tag, or a customer's). It has no `Directory.Build.props` above it, so every build setting lives in its own `.csproj` and survives a move. Two project references reach the tree: `Morgana.Web` (for the entry point) and `Examples` with **`ReferenceOutputAssembly=false`** — built into `plugins/` but never referenced as an assembly, which makes the black-box boundary structural: the harness compiles without ever seeing an agent type.
+- **Hook**: boots `Morgana.Web`'s entry point in-process on an ephemeral Kestrel port (enabled by the `public partial class Program;` declaration at the bottom of `Program.cs`) and drives it over HTTP as a fourth channel — `channelName: "harness"`, `deliveryMode: "webhook"`, full capabilities and no length budget, so `MorganaChannelAdapter` short-circuits and scenarios measure undegraded output. In-process buys the two read-only observers a child process could not: an `ActivityListener` on `morgana.agent` (→ `agent.tools_invoked`) and a tee on `Console.Out` (→ the `MorganaTool` HIT/MISS/SET log lines, which is how context **variable names** are observed without ever putting them in a span attribute).
 - **Assertions**: two layers. *Structural* (deterministic, from the message + span + log): completion, quick replies, rich card, tools called and their order, context reads/writes and the closed vocabulary. *LLM-judge* (natural-language propositions on the cheapest configured tier) for what structure cannot reach — the judge sees only what a user would see, never the tool trace.
 - **Scenarios**: YAML under `Scenarios/`, one file per flow, replayed **N times against an explicit pass threshold** — the honest shape when the system under test is a language model. The **context-handling group runs at 5/5 and is blocking**: the cycle, the closed vocabulary and non-revelation are contract, and their failure mode is silent.
-- **Secrets**: none of its own. It declares the same `UserSecretsId` as `Morgana.Web` and republishes the resolved `Morgana:` configuration to the host as environment variables, so the suite always runs against whatever provider and tiers that instance is wired to. Per run it overrides a throwaway `StoragePath`, disables exporters/rate/dust limiting, applies `Nrt:EnableGuardrail`, and mints a random key for the `nrt` issuer.
+- **Secrets**: none of its own. It declares the same `UserSecretsId` as `Morgana.Web` and republishes the resolved `Morgana:` configuration to the host as environment variables, so the suite always runs against whatever provider and tiers that instance is wired to. Per run it overrides a throwaway `StoragePath`, disables exporters/rate/dust limiting, applies `Harness:EnableGuardrail`, and mints a random key for the `harness` issuer.
 
 ## Architecture and Message Flow
 
@@ -370,7 +370,7 @@ At application startup, comprehensive validation is performed:
 - **Target**: .NET 10, C# latest (uses C# 14 features like `extension` blocks)
 - **Build**: `dotnet build` from solution root
 - **Run**: start both `Morgana.Web` (backend, default https://localhost:5001) and `Cauldron` (frontend, default https://localhost:5002)
-- **NRT suite**: `dotnet test Morgana.Tests.NRT/Morgana.Tests.NRT.csproj` (from the repo root — it is its own solution, outside `Morgana.slnx`) — live LLM calls, on-demand only. Start from `--filter "FullyQualifiedName~HarnessSmokeTests"` to verify the rig before believing any scenario result
+- **PromptHarness suite**: `dotnet test PromptHarness/PromptHarness.csproj` (from the repo root — it is its own solution, outside `Morgana.slnx`) — live LLM calls, on-demand only. Start from `--filter "FullyQualifiedName~HarnessSmokeTests"` to verify the rig before believing any scenario result
 - **Docker**: `docker compose up` starts Morgana + Cauldron (`Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`); the two TTY channels Grimoire and Rune are profile-gated (`profiles: ["tui"]`) so `up` skips them, and each must be launched interactively in a separate terminal via `docker compose run --rm --service-ports --use-aliases grimoire` (or `… rune`, using `Channels/Grimoire/Grimoire.Dockerfile` / `Channels/Rune/Rune.Dockerfile`), because Spectre.Console needs to own stdin/stdout (only one TTY channel at a time). `compose run` auto-activates the service's profiles so no `--profile` flag is needed. `--use-aliases` is mandatory: `compose run` skips network aliases by default, so without it Morgana's webhook callback to `http://grimoire:5004` (resp. `http://rune:5003`) fails DNS resolution
 
 ## Conventions

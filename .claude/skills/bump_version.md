@@ -37,7 +37,8 @@ For production hotfixes, activated when the user says:
    - `/home/marco/RiderProjects/Morgana/Channels/Cauldron/Directory.Build.props`
    - `/home/marco/RiderProjects/Morgana/Channels/Rune/Directory.Build.props`
    - `/home/marco/RiderProjects/Morgana/Channels/Grimoire/Directory.Build.props`
-   - `/home/marco/RiderProjects/Morgana/Morgana.Examples/Morgana.Examples.csproj`
+   - `/home/marco/RiderProjects/Morgana/Examples/Examples.csproj`
+   - `/home/marco/RiderProjects/Morgana/PromptHarness/PromptHarness.csproj`
 
 4. **Add new section in CHANGELOG.md**
    - Read `/home/marco/RiderProjects/Morgana/CHANGELOG.md`

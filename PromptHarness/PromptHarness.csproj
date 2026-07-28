@@ -1,0 +1,106 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Standalone project with its own solution, sibling of Morgana/ and Examples/ rather than a
+    member of Morgana.slnx. The harness is an instrument pointed AT a Morgana instance, not a part of
+    one: it must be able to build and run against a Morgana it did not ship with — a customer's, or an
+    older tag of this one — and a project living inside the framework's own solution quietly assumes
+    it never will. One consequence is visible right below: there is no Directory.Build.props above
+    this file, so every build setting the Morgana tree used to supply is stated here.
+  -->
+
+  <PropertyGroup>
+
+    <!-- Common Build Settings -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Version Information -->
+    <Version>0.26.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+
+    <!-- Package Metadata -->
+    <Title>PromptHarness</Title>
+    <PackageId>PromptHarness</PackageId>
+    <Authors>Marco De Salvo</Authors>
+    <Company>Marco De Salvo</Company>
+    <Copyright>Marco De Salvo</Copyright>
+    <Product>Morgana</Product>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
+
+    <Description>
+    PromptHarness is the non-regression harness for Morgana's prompts. A domain agent in Morgana
+    *is* its prose, and prose has no compiler: the only way to know a prompt revision did not break
+    anything is to make the model do the thing and look. The harness boots a real Morgana host, drives
+    it black-box over HTTP as an ordinary channel, and replays YAML scenarios N times against an
+    explicit pass threshold — asserting on two layers, structural signals read from spans and tool
+    logs, and natural-language propositions judged by an LLM. Nothing is mocked and every turn is a
+    live LLM call, so the suite is on-demand only and never a build or CI gate.
+    </Description>
+
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!--
+      Same UserSecretsId as Morgana.Web: the harness deliberately owns no secrets of its own.
+      It reads provider, tiers, API keys and the persistence encryption key from the very store
+      that configures the instance under test, so the suite always runs against whatever LLM
+      Morgana is currently wired to.
+    -->
+    <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
+
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ASP.NET Core types are needed for the webhook receiver the harness hosts. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="3.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.*" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
+    <PackageReference Include="YamlDotNet" Version="18.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Morgana.Web is referenced for its entry point: the fixture boots the real host in-process. -->
+    <ProjectReference Include="..\Morgana\Morgana.Web\Morgana.Web.csproj" />
+
+    <!--
+      The example plugin is built but NOT referenced as an assembly: the harness must see the
+      agents exactly as Morgana sees them — discovered from plugins/ at startup, never as
+      compile-time types. ReferenceOutputAssembly=false keeps the black-box boundary honest.
+    -->
+    <ProjectReference Include="..\Examples\Examples.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The host under test reads its configuration from the harness output directory (content root). -->
+    <Content Include="..\Morgana\Morgana.Web\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="appsettings.Harness.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Scenarios\**\*.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    PluginLoaderService scans {AppContext.BaseDirectory}/plugins, which under test is the harness
+    output directory — so the example plugin has to land here, not in Morgana.Web's bin.
+  -->
+  <Target Name="CopyExamplePluginToHarness" AfterTargets="Build">
+    <MSBuild Projects="..\Examples\Examples.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="ExamplePluginAssembly" />
+    </MSBuild>
+    <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
+    <Copy SourceFiles="@(ExamplePluginAssembly)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
