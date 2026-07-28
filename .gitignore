@@ -437,4 +437,4 @@ FodyWeavers.xsd
 # by Morgana.Tests.NRT/Scenarios/FailureLog.cs and deleted automatically when the scenario passes,
 # so the set stays small and always describes the current state. Exempt from the *.log rule above:
 # losing them to a clean means buying them again.
-!Morgana/Morgana.Tests.NRT/Baseline/failures/*.log
+!Morgana.Tests.NRT/Baseline/failures/*.log

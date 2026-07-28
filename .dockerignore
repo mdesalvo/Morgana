@@ -76,6 +76,10 @@
 **/*Tests/
 **/*.Tests/
 
+# The NRT harness is a standalone solution beside the framework, never part of an image: it boots its
+# own Morgana host in-process and every turn it drives is a live LLM call.
+Morgana.Tests.NRT/
+
 # ==============================================================================
 # LOGS
 # ==============================================================================

@@ -7,6 +7,35 @@ assertion here answers one question: *does the model still do the thing the prom
 It is not a unit-test project and will never become one. Nothing is mocked, the LLM is real, and a
 run costs real tokens.
 
+## Where it lives
+
+Its own solution (`Morgana.Tests.NRT.slnx`), sibling of `Morgana/` and `Morgana.Examples/` at the
+repository root — not a project inside `Morgana.slnx`. The harness is an instrument pointed **at** a
+Morgana instance, not a part of one, and the distinction is operational rather than tidy: the suite
+has to be able to run against a Morgana it did not ship with — an older tag of this one, or someone
+else's — and a project living inside the framework's solution quietly assumes it never will.
+
+```
+Morgana/                    the framework (Morgana.slnx)
+Morgana.Examples/           the example plugin (Morgana.Examples.slnx)
+Morgana.Tests.NRT/          this harness (Morgana.Tests.NRT.slnx)
+```
+
+Everything it needs from the framework arrives by project reference, and there are exactly two:
+
+| Reference | Why | Assembly referenced |
+|---|---|---|
+| `..\Morgana\Morgana.Web` | the fixture boots its entry point in-process | yes |
+| `..\Morgana.Examples` | the specimens under test, built into `plugins/` | **no** (`ReferenceOutputAssembly=false`) |
+
+The second is the black-box boundary made structural: the harness compiles without ever seeing an
+agent type, exactly as Morgana sees them — discovered from `plugins/` at startup.
+
+To point the suite at a **different** Morgana, redirect those two references (or drop the second and
+copy your own plugin into the output's `plugins/`) and give it scenarios that name your agents. There
+is no `Directory.Build.props` above this project: every build setting is stated in the `.csproj`, so
+it carries across a move.
+
 ## How it hangs together
 
 ```
@@ -56,7 +85,7 @@ as its own channel and will not run against an instance that has not declared it
 
 ```bash
 # everything (live LLM calls — see the cost note)
-dotnet test Morgana/Morgana.Tests.NRT/Morgana.Tests.NRT.csproj
+dotnet test Morgana.Tests.NRT/Morgana.Tests.NRT.csproj
 
 # just the rig, before believing any scenario result
 dotnet test … --filter "FullyQualifiedName~HarnessSmokeTests"
