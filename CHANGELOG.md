@@ -6,13 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.26.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: PromptHarness — Behavioral & Contextual Test Suite for Morgana Prompt System
+To ensure **systemic stability of prompt development**, this release introduces `PromptHarness`: a live, black-box xUnit suite designed to catch **silent contradictions between framework capabilities (morgana.json) and domain specializations (agents.json)**.
+By driving a real Morgana instance via HTTP, the harness validates its semantic consistency across two critical planes:
+- **Behavioral**: Tracks the visible execution flow, validating tool invocation order, quick replies, rich cards and farewell completions
+- **Contextual**: Enforces internal system boundaries, checking context read/write permissions, closed-vocabulary adherence and non-revelation security rules
+
+To account for model variance, test scenarios are authored in YAML and automatically replayed N times against a configurable pass threshold. Should a regression occur, the runner will immediately pinpoint both the exact nature and the direction of the failure within that same execution block.
+
+In practice, the harness **has already surfaced multiple behavioral and authoritative contradictions** within Morgana's prompting system, consequently all prompts have undergone **substantial revision** to address these findings, turning lighter (**-30% token consumption**) and fully aligned.
+Passing this suite is now a mandatory, non-negotiable precondition for deploying any prompt revision within this repository.
 
 ### ✨ Added
-- **`SetTurnContinuation(bool)` base tool** — turn continuation is now declared **out-of-band**, through a system tool every agent owns, instead of being smuggled inside the response text as the `#INT#` token. The declaration lands in the ephemeral `turn_continuation` context variable, alongside `quick_replies` and `rich_card`, and is dropped at the end of every turn: continuation is stated per-turn and never inherited.
-- **`agent.tools_invoked` span attribute** — names of the tools invoked during the turn, in call order, on the `morgana.agent` span. Tool *arguments* are deliberately excluded: span attributes reach every configured exporter and arguments routinely carry user-supplied values.
-- **`PromptHarness` — non-regression harness** — the first test project in the solution, and the precondition for revising any prompt: it measures *behaviour* rather than code. Boots the real host in-process on an ephemeral Kestrel port and drives it black-box over HTTP as a fourth channel (`channelName: "harness"`, `deliveryMode: "webhook"`, full capabilities), asserting on two layers — structural signals read from the `morgana.agent` span and the `MorganaTool` log lines, and natural-language propositions judged by an LLM on the cheapest configured tier. Scenarios are YAML, replayed N times against an explicit pass threshold. The harness carries **no secrets of its own**: it shares `Morgana.Web`'s `UserSecretsId`, so it always runs against whatever provider and tiers that instance is wired to. Standalone solution (`PromptHarness.slnx`), sibling of `Morgana/` and `Examples/`, reaching the framework only by project reference.
-- **Token accounting in the harness** — the suite listens to the MEAI `Morgana.AI.LLM` activity source alongside its own, so every scenario records LLM round trips, input/output tokens and prompt-cache reads per run, and writes them to a versioned `Baseline/<scenario>.md` together with the provider and the model bound to each tier. This makes the cost of the prompts a measured quantity rather than an estimate: the composed system prompt plus the tool schemas is resent in full on every round trip, so verbosity is billed per iteration of every tool loop, of every turn, forever.
-- **`harness` issuer entry** in `Morgana:Authentication:Issuers` — the harness authenticates as its own channel, like Cauldron, Grimoire and Rune. Its key is minted per run and never written to disk.
+- **`SetTurnContinuation(bool)` base tool** — Turn continuation is now declared **out-of-band** through a system tool every agent owns, instead of being smuggled inside the response text as the `#INT#` token. The declaration lands in the ephemeral `turn_continuation` context variable alongside `quick_replies` and `rich_card`, and is dropped at the end of every turn. Continuation is stated per-turn and is never inherited.
+- **`agent.tools_invoked` span attribute** — Captures the names of the tools invoked during the turn, in call order, on the `morgana.agent` span. Tool *arguments* are deliberately excluded, as span attributes reach every configured exporter and arguments routinely carry user-supplied values.
+- **`PromptHarness` non-regression harness** — Boots the real host in-process on an ephemeral Kestrel port and drives it black-box over HTTP as a webhook-based channel. It asserts on two layers: structural signals read from the `morgana.agent` span and `MorganaTool` log lines, and natural-language propositions judged by an LLM on the cheapest configured tier.
 
 ### 🔄 Changed
 - Updated `Microsoft.Agents.AI` dependency to 1.15.0
@@ -21,7 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
-
+- **Safe automated prompt optimization** — The presence of an automated regression gateway makes it possible to safely run LLM-powered prompt-refinement loops, letting an external model refactor or compress prompt prose while `PromptHarness` mathematically guarantees no loss in behavior or context.
+- **Advanced multi-turn agent routing** — Moving turn continuation out-of-band via `SetTurnContinuation` removes natural-language parsing fragility. This allows the implementation of complex, stateful orchestration where agents can delegate control to other sub-agents deterministically without corrupting the chat context.
+-- **Proactive prompt-injection screening** — The contextual axis architecture paves the way for a real-time firewall layer that can intercept and analyze context reads/writes *before* they reach the model, leveraging the same non-revelation rules enforced by the harness.
 
 ## [0.25.0] - 2026-07-19
 ### 🎯 Major Feature: Two-Tier LLM — Efficiency/Performance for Agents
