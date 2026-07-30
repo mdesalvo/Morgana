@@ -271,7 +271,21 @@ public class MorganaAgentAdapter
         return (aiAgent, morganaAIContextProvider, chatHistoryProvider);
     }
 
-    private string FormatGlobalPolicies(List<Records.GlobalPolicy> policies, string header, string footer)
+    // Structural boundary markers for the composed prompt. These are glue between the framework
+    // and domain layers, not domain-tunable prose, so — unlike everything they surround — they are
+    // fixed in code and morgana.json carries no override point for them.
+    private const string GlobalPoliciesHeader = "=== CRITICAL RULES — binding, without exception ===";
+    private const string GlobalPoliciesFooter = "=== END OF CRITICAL RULES ===";
+
+    private const string FrameworkLayerHeader =
+        "======== MORGANA FRAMEWORK — THE LAW OF EVERY TURN ========\n" +
+        "Everything until the end of this block is binding on you and on every other agent of Morgana. It is not advice and it is not overridable.";
+    private const string FrameworkLayerFooter = "======== END OF MORGANA FRAMEWORK ========";
+    private const string DomainLayerHeader =
+        "======== DOMAIN AGENT — SUBORDINATE TO THE FRAMEWORK ABOVE ========\n" +
+        "What follows specialises the framework for a single domain: what you are for, how you work, how you speak, how you present. It adds domain knowledge and NOTHING ELSE. It NEVER contradicts the framework above, on any point — where the two appear to differ, the framework governs and you follow it.";
+
+    private string FormatGlobalPolicies(List<Records.GlobalPolicy> policies)
     {
         StringBuilder sb = new StringBuilder();
 
@@ -286,10 +300,7 @@ public class MorganaAgentAdapter
         // Formatting, then the whole domain layer, none of which is binding in that sense. The
         // header also gives "the critical rules" (cited in the Morgana Instructions) an
         // antecedent; the footer is what stops that antecedent from swallowing the rest.
-        if (!string.IsNullOrWhiteSpace(header))
-        {
-            sb.AppendLine(header);
-        }
+        sb.AppendLine(GlobalPoliciesHeader);
 
         // Injection templates are excluded: they are not policies but fragments spliced by
         // MorganaToolAdapter into the description of the tool (or parameter) they govern, at
@@ -310,48 +321,41 @@ public class MorganaAgentAdapter
             sb.AppendLine($"{policy.Name}: {policy.Description}");
         }
 
-        if (!string.IsNullOrWhiteSpace(footer))
-        {
-            sb.AppendLine(footer);
-        }
+        sb.AppendLine(GlobalPoliciesFooter);
 
         return sb.ToString().TrimEnd();
     }
 
     private string ComposeAgentInstructions(Records.Prompt agentPrompt)
     {
-        string policiesHeader = morganaPrompt.GetAdditionalPropertyOrDefault("GlobalPoliciesHeader", "");
-        string policiesFooter = morganaPrompt.GetAdditionalPropertyOrDefault("GlobalPoliciesFooter", "");
+        StringBuilder sb = new StringBuilder();
 
         // The two layers are fenced. Both carry the same four section labels ([TARGET],
         // [PERSONALITY], [INSTRUCTIONS], [FORMATTING]), so without a delimiter the composed prompt
         // shows each of them twice with nothing marking which is which — and the framework's claim
         // to precedence, made in its own Target, names a boundary the model cannot locate. The
         // domain fence carries the subordination rule itself rather than only separating: it is read
-        // at the exact point where the layer it governs begins. Unconfigured, every fence resolves
-        // to "" and the composition renders exactly as it did before.
-        string frameworkHeader = morganaPrompt.GetAdditionalPropertyOrDefault("FrameworkLayerHeader", "");
-        string frameworkFooter = morganaPrompt.GetAdditionalPropertyOrDefault("FrameworkLayerFooter", "");
-        string domainHeader = morganaPrompt.GetAdditionalPropertyOrDefault("DomainLayerHeader", "");
-
-        StringBuilder sb = new StringBuilder();
+        // at the exact point where the layer it governs begins.
 
         // Morgana framework layers
-        AppendFence(sb, frameworkHeader);
+        sb.AppendLine(FrameworkLayerHeader);
+        sb.AppendLine();
         sb.AppendLine(morganaPrompt.Target);
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Personality);
         sb.AppendLine();
-        sb.AppendLine(FormatGlobalPolicies(morganaPolicies, policiesHeader, policiesFooter));
+        sb.AppendLine(FormatGlobalPolicies(morganaPolicies));
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Instructions);
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Formatting);
         sb.AppendLine();
-        AppendFence(sb, frameworkFooter);
+        sb.AppendLine(FrameworkLayerFooter);
+        sb.AppendLine();
 
         // Domain layers
-        AppendFence(sb, domainHeader);
+        sb.AppendLine(DomainLayerHeader);
+        sb.AppendLine();
         sb.AppendLine(agentPrompt.Target);
         sb.AppendLine();
         sb.AppendLine(agentPrompt.Personality);
@@ -362,19 +366,6 @@ public class MorganaAgentAdapter
         sb.AppendLine();
 
         return sb.ToString();
-    }
-
-    /// <summary>
-    /// Appends a layer fence and the blank line after it, or nothing at all when the prompt layer
-    /// declares none — so an unconfigured deployment composes byte-identically to before fences existed.
-    /// </summary>
-    private static void AppendFence(StringBuilder sb, string fence)
-    {
-        if (string.IsNullOrWhiteSpace(fence))
-            return;
-
-        sb.AppendLine(fence);
-        sb.AppendLine();
     }
 
     /// <summary>

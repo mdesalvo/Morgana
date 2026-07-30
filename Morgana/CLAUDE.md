@@ -279,9 +279,10 @@ labels, so an unfenced composition shows `[TARGET]`, `[PERSONALITY]`, `[INSTRUCT
 layer below" while giving the model no way to locate where below begins. `FrameworkLayerHeader` /
 `FrameworkLayerFooter` name and close the framework block; `DomainLayerHeader` opens the domain block
 by **stating its own subordination** — it specialises the framework with domain knowledge and nothing
-else, never contradicts it, and yields to it wherever the two appear to differ. All three are prose
-and live in `morgana.json` beside `GlobalPoliciesHeader`/`Footer`; unconfigured they resolve to `""`
-and the composition renders as it did before they existed.
+else, never contradicts it, and yields to it wherever the two appear to differ. These, and
+`GlobalPoliciesHeader`/`Footer`, are structural glue rather than domain-tunable prose: they are
+`const string` fields in `MorganaAgentAdapter`, not `morgana.json` entries — there is deliberately no
+configuration point for them.
 
 The subordination is **total and unconditional**, and that is what makes the domain layer cheap: an
 agent restating a framework rule is not reinforcement, it is a second voice claiming the same

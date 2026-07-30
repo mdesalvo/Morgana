@@ -310,12 +310,9 @@ public class MorganaLLM : ILLMService
         }
         catch (Exception ex)
         {
-            // Return user-friendly error message from Morgana prompts
+            // Return user-friendly error message from Morgana prompt
             List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>("ErrorAnswers");
-            Records.ErrorAnswer? llmError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "LLMServiceError", StringComparison.OrdinalIgnoreCase));
-
-            return llmError?.Content.Replace("((llm_error))", ex.Message)
-                          ?? $"LLM service error: {ex.Message}";
+            return errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "LLMServiceError", StringComparison.OrdinalIgnoreCase))!.Content;
         }
     }
 }
