@@ -116,7 +116,7 @@ public interface IPromptResolverService
     /// // Returns: Core Morgana system prompt with personality, policies, context tools
     ///
     /// Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
-    /// // Returns: Content moderation prompt with profanity terms and policy checks
+    /// // Returns: Content moderation prompt with policy checks
     ///
     /// // Domain prompt resolution
     /// Prompt billingPrompt = await promptResolverService.ResolveAsync("billing");

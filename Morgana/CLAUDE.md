@@ -132,7 +132,7 @@ All endpoints authenticate via `AuthenticateRequestAsync` (Bearer JWT validation
 ### Turn Pipeline (FSM states in ConversationSupervisorActor)
 
 1. **Idle** — waits for `UserMessage`
-2. **AwaitingGuardCheck** — `GuardActor` checks compliance (two-level: profanity + LLM policy). Fail → rejection message, stay idle. Pass → next step
+2. **AwaitingGuardCheck** — `GuardActor` checks compliance (LLM policy check). Fail → rejection message, stay idle. Pass → next step
 3. **AwaitingClassification** — `ClassifierActor` classifies intent (LLM-based). On failure, falls back to `"other"` intent. *Skipped if an active agent exists (follow-up flow)*
 4. **AwaitingAgentResponse / AwaitingFollowUpResponse** — `RouterActor` dispatches to the target `MorganaAgent`. Agent runs LLM with tools, streams chunks back, sends final `AgentResponse`
 5. Back to **Idle** — response forwarded via `ConversationManagerActor` → `IChannelService` → SignalR → Cauldron
@@ -152,7 +152,7 @@ Tools with `Shared: true` parameters route their values into a conversation-scop
 | Service | Interface | Purpose |
 |---|---|---|
 | `LLMClassifierService` | `IClassifierService` | LLM-based intent classification with formatted intents from `agents.json`. Falls back to `"other"` with confidence 0.0 on any error |
-| `LLMGuardRailService` | `IGuardRailService` | Two-level moderation: (1) fast sync profanity scan from `ProfanityTerms` list, (2) async LLM policy check. Fails open on LLM error |
+| `LLMGuardRailService` | `IGuardRailService` | Async LLM policy check against the Guard prompt. Fails open on LLM error |
 | `LLMPresenterService` | `IPresenterService` | LLM-generated welcome message + quick replies. Falls back to `FallbackMessage` + intent-derived buttons on LLM failure. Never throws |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json` (embedded in Morgana.AI) + domain prompts from `agents.json` (via `IAgentConfigurationService`). Case-insensitive lookup |
 | `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Scans all loaded assemblies for `agents.json` embedded resources. Graceful degradation if none found (agentless mode) |
@@ -295,7 +295,7 @@ Framework prompts (`morgana.json`):
   Its `Target` is the composed prompt's **preamble, not a role description**: it names the two layers, says this one governs how a turn is formed while the domain layer governs what the conversation is about, and settles precedence. It deliberately promises no capability: a claim like "solve problems through the support scenarios you can handle" sits in the primacy slot unbacked, and `ToolGrounding` then has to spend a clause defending against it. Its `Instructions` carry the **order of a turn** (resolve inputs → call the domain tool → decide presentation → write the text once), which no single policy states: each policy governs one aspect, and the observed defects are overwhelmingly sequencing failures
   Three further entries in the same array carry `Type: "Injection"`. They are **not policies but templates** — `FormatGlobalPolicies` skips them all — and they have two splice sites. `ToolDescriptionContextGuidance` and `ToolParameterRequestGuidance` are spliced by `MorganaToolAdapter` into tool/parameter descriptions; rendered in the system prompt they would be instructions with no referent ("BEFORE INVOKING THIS TOOL" names no tool there), re-paid on every round trip. `HeldContextDeclaration` is spliced per turn by `MorganaAIContextProvider.ProvideAIContextAsync`, which resolves `((held_variables))` to the **names** (never the values) of the context variables the session currently holds, minus the framework's ephemeral keys, and injects nothing when the session holds none. It is the only entry carrying a *fact* rather than a rule, and the only one that can: tool descriptions are built once at agent creation, so `((context_parameters))` can only ever state the **contract** ("this tool takes a `userId`"), true even against an empty store — never the **state** ("`userId` is held right now"), which nobody knows at build time. That distinction is what the third splice site buys, and it extends the placement ladder one rung: a parameter description is read once the model is already invoking the tool, a tool description when it weighs the tool, and the per-turn injection before any tool is weighed at all — which is where an agent activated first time mid-conversation fails, deciding to ask on an empty (per-agent) history without ever selecting the domain tool whose description carries the guidance
 - **Classifier**: JSON response `{intent, confidence}` with `((formattedIntents))` placeholder
-- **Guard**: JSON response `{compliant, violation}` with ProfanityTerms list
+- **Guard**: JSON response `{compliant, violation}`
 - **Presentation**: JSON intro message with quickReplies, FallbackMessage, NoAgentsMessage
 - **ChannelAdapter**: rewrites rich messages for limited channels (richCards→prose, quickReplies→inline, markdown strip, maxMessageLength)
 

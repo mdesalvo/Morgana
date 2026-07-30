@@ -49,13 +49,13 @@
     <PackageReference Include="Akka.DependencyInjection" Version="1.5.*" />
     <!-- Agents -->
     <PackageReference Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.15.0" />
-    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.15.0" />
-    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.15.0-preview.260722.1" />
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.15.0" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.6.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.6.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.16.0" />
+    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.16.0" />
+    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.16.0-preview.260730.1" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.16.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.7.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.7.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
     <PackageReference Include="ModelContextProtocol.Core" Version="2.0.0-rc.1" />
     <PackageReference Include="OllamaSharp" Version="5.4.26" />
     <!-- Services -->

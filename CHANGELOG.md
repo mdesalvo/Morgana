@@ -23,7 +23,8 @@ Passing this suite is now a mandatory, non-negotiable precondition for deploying
 - **`PromptHarness` non-regression harness** — Boots the real host in-process on an ephemeral Kestrel port and drives it black-box over HTTP as a webhook-based channel. It asserts on two layers: structural signals read from the `morgana.agent` span and `MorganaTool` log lines, and natural-language propositions judged by an LLM on the cheapest configured tier.
 
 ### 🔄 Changed
-- Updated `Microsoft.Agents.AI` dependency to 1.15.0
+- Updated `Microsoft.Agents.AI` dependency to 1.16.0
+- Updated `Microsoft.Extensions.AI` dependency to 10.7.0
 - Updated `ModelContextProtocol.Core` dependency to 2.0.0-rc.1
 
 ### 🐛 Fixed
@@ -31,7 +32,7 @@ Passing this suite is now a mandatory, non-negotiable precondition for deploying
 ### 🚀 Future Enablement
 - **Safe automated prompt optimization** — The presence of an automated regression gateway makes it possible to safely run LLM-powered prompt-refinement loops, letting an external model refactor or compress prompt prose while `PromptHarness` mathematically guarantees no loss in behavior or context.
 - **Advanced multi-turn agent routing** — Moving turn continuation out-of-band via `SetTurnContinuation` removes natural-language parsing fragility. This allows the implementation of complex, stateful orchestration where agents can delegate control to other sub-agents deterministically without corrupting the chat context.
--- **Proactive prompt-injection screening** — The contextual axis architecture paves the way for a real-time firewall layer that can intercept and analyze context reads/writes *before* they reach the model, leveraging the same non-revelation rules enforced by the harness.
+- **Proactive prompt-injection screening** — The contextual axis architecture paves the way for a real-time firewall layer that can intercept and analyze context reads/writes *before* they reach the model, leveraging the same non-revelation rules enforced by the harness.
 
 ## [0.25.0] - 2026-07-19
 ### 🎯 Major Feature: Two-Tier LLM — Efficiency/Performance for Agents

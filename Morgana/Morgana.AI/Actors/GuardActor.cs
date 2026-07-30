@@ -13,9 +13,7 @@ namespace Morgana.AI.Actors;
 /// <para>
 /// This actor is intentionally thin: all moderation logic is delegated to
 /// <see cref="IGuardRailService"/>, which is resolved from DI and can be swapped
-/// without touching the actor system. The default implementation
-/// (<see cref="Services.LLMGuardRailService"/>) reproduces the two-level strategy
-/// (fast profanity check + async LLM policy check) that was previously embedded here.
+/// without touching the actor system.
 /// </para>
 ///
 /// <para><strong>Tell Pattern:</strong></para>

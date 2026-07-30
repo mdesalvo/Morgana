@@ -11,9 +11,9 @@ namespace Morgana.AI.Interfaces;
 /// delegates entirely to this service and is agnostic of the underlying implementation strategy.</para>
 ///
 /// <para><strong>Default Implementation:</strong></para>
-/// <para><see cref="Services.LLMGuardRailService"/> provides a two-level check:
-/// a fast synchronous profanity filter followed by an asynchronous LLM-based policy evaluation.
-/// Swap it in DI to adopt any alternative moderation backend without touching the actor system.</para>
+/// <para><see cref="Services.LLMGuardRailService"/> provides an asynchronous LLM-based policy
+/// evaluation. Swap it in DI to adopt any alternative moderation backend without touching the
+/// actor system.</para>
 ///
 /// <para><strong>Fail-Open Contract:</strong></para>
 /// <para>Implementations are expected to fail open on transient errors (i.e. return a compliant result

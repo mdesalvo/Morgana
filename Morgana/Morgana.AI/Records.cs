@@ -671,7 +671,7 @@ public static class Records
 
     /// <summary>
     /// Request for content moderation check on a user message.
-    /// Sent to GuardActor for two-level filtering (profanity + LLM policy check).
+    /// Sent to GuardActor for LLM-based policy checking.
     /// </summary>
     /// <param name="ConversationId">Unique identifier of the conversation</param>
     /// <param name="Message">User message to check for policy violations</param>
@@ -1069,7 +1069,6 @@ public static class Records
         /// <item><term>Tools</term><description>List&lt;ToolDefinition&gt; - Tool configurations for agents</description></item>
         /// <item><term>GlobalPolicies</term><description>List&lt;GlobalPolicy&gt; - Framework-level behavioral policies</description></item>
         /// <item><term>ErrorAnswers</term><description>List&lt;ErrorAnswer&gt; - Error message templates</description></item>
-        /// <item><term>ProfanityTerms</term><description>List&lt;string&gt; - Terms for content moderation</description></item>
         /// <item><term>FallbackMessage</term><description>string - Default presentation message</description></item>
         /// </list>
         /// <para><strong>Usage Examples:</strong></para>

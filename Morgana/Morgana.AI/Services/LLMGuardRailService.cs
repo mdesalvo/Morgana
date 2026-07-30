@@ -4,16 +4,9 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="IGuardRailService"/> implementation providing two-level moderation strategy:
-/// <list type="number">
-///   <item><term>Fast synchronous profanity check</term>
-///     <description>Scans the message against a configurable list of terms loaded from
-///     <c>morgana.json → Guard → ProfanityTerms</c>. Rejects immediately on first match,
-///     avoiding an unnecessary LLM round-trip.</description></item>
-///   <item><term>Async LLM policy check</term>
-///     <description>Delegates to <see cref="ILLMService"/> with the Guard system prompt for
-///     nuanced detection of spam, phishing, violence, and other policy violations.</description></item>
-/// </list>
+/// Default <see cref="IGuardRailService"/> implementation. Delegates to <see cref="ILLMService"/>
+/// with the Guard system prompt for detection of spam, phishing, violence, profanity and other
+/// policy violations.
 /// </summary>
 /// <remarks>
 /// <para><strong>Fail-Open Behaviour:</strong></para>
@@ -47,26 +40,7 @@ public class LLMGuardRailService : IGuardRailService
     {
         Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
 
-        // ── Level 1: fast synchronous profanity check ─────────────────────────────
-        foreach (string term in guardPrompt.GetAdditionalProperty<List<string>>("ProfanityTerms"))
-        {
-            if (message.Contains(term, StringComparison.OrdinalIgnoreCase))
-            {
-                logger.LogInformation(
-                    "LLMGuardRailService: profanity term '{Term}' detected in conversation {ConversationId}",
-                    term, conversationId);
-
-                return new Records.GuardRailResult(
-                    Compliant: false,
-                    Violation: guardPrompt.GetAdditionalProperty<string>("LanguageViolation"));
-            }
-        }
-
-        logger.LogInformation(
-            "LLMGuardRailService: profanity check passed for conversation {ConversationId}, proceeding to LLM policy check",
-            conversationId);
-
-        // ── Level 2: async LLM-based policy check ─────────────────────────────────
+        // ── Async LLM-based policy check ───────────────────────────────────────────
         try
         {
             string response = await llmService.CompleteWithSystemPromptAsync(
