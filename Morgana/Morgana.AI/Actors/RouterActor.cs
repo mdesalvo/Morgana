@@ -20,9 +20,12 @@ public class RouterActor : MorganaActor
 {
     /// <summary>
     /// Dictionary mapping intent names to their corresponding agent actor references.
-    /// Populated lazily on first use of each agent.
+    /// Populated lazily on first use of each agent. Case-insensitive to match
+    /// <see cref="IAgentRegistryService.ResolveAgentFromIntent"/>, whose own registry is keyed the
+    /// same way — a classifier response that varies in case from the configured intent must resolve
+    /// to the same cached agent, not a duplicate cache miss.
     /// </summary>
-    private readonly Dictionary<string, IActorRef> agents = [];
+    private readonly Dictionary<string, IActorRef> agents = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Dictionary mapping agent references to their original senders for streaming chunk forwarding.
