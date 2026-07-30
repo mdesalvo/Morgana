@@ -124,10 +124,10 @@ that amplifies contradiction-following failures.
 
 ## The journey
 
-Every scenario run writes `Baseline/<id>.md`: one **row per revision phase**, carrying the pass rate
+Every scenario run writes `Harness/<id>.md`: one **row per revision phase**, carrying the pass rate
 and the token cost of a run, with the provider and the model bound to each tier recorded alongside (a
 token count without them measures nothing). `v0-vanilla` is the original assessment — the prose as it
-stood before A2 — and each phase after it shows what the revision bought or cost. `Baseline/JOURNEY.md`
+stood before A2 — and each phase after it shows what the revision bought or cost. `Harness/JOURNEY.md`
 carries what the movements *mean*, including the regressions and the changes to the measuring
 instrument itself.
 
@@ -135,10 +135,10 @@ The phase name comes from `Harness:Phase`; bump it in `appsettings.Harness.json`
 override a single run with `Harness__Phase=A2.3`. **Re-running a phase replaces its row** rather than
 appending another: a phase is a state of the prose, not a count of how many times it was measured.
 
-`Baseline/` is a local measurement log, not a repository artefact — it is not versioned. Every run is
+`Harness/` is a local measurement log, not a repository artefact — it is not versioned. Every run is
 billed, and a token-count diff is not useful pull-request noise; the movement lives inside the
 artefact itself (one row per phase), so it stays comparable whether or not anyone diffs commits. The
-directory is `Harness:BaselineDirectory` in `appsettings.Harness.json` (default `Baseline`, resolved
+directory is `Harness:HarnessDirectory` in `appsettings.Harness.json` (default `Harness`, resolved
 against the project directory unless given an absolute path) — point it outside the checkout if
 several people run the suite and should not overwrite each other's rows.
 

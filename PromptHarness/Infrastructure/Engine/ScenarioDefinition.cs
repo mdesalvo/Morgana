@@ -157,7 +157,7 @@ public static class ScenarioLoader
 
         // A YAML file that parses but never sets "id:" would otherwise silently produce a
         // ScenarioDefinition whose Id doesn't round-trip back to the file it came from — every
-        // failure message and baseline row keys off Id, so this catches the gap at load time.
+        // failure message and harness row keys off Id, so this catches the gap at load time.
         return string.IsNullOrWhiteSpace(scenario.Id) ? throw new InvalidOperationException($"Scenario file {path} declares no id.") : scenario;
     }
 }

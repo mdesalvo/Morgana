@@ -45,7 +45,7 @@ or the listener heard nothing.
 (`behaviour-rich-card`, `context-no-invented-writes`) run on the `Performance` tier, not
 `Efficiency` — an agent's `[RequiresLLMTier]` decides its cost, the suite doesn't get to choose it.
 Keep those out of the tight iteration loop; run them at checkpoints. Before running anything, check
-whether the answer is already visible in `Baseline/JOURNEY.md` or a prior `Baseline/<id>.md` row —
+whether the answer is already visible in `Harness/JOURNEY.md` or a prior `Harness/<id>.md` row —
 don't re-run a measurement that's already recorded for the current phase.
 
 ## Architecture
@@ -60,7 +60,7 @@ PromptHarness (xUnit v3 test process, IsTestProject + OutputType=Exe)
     ├── ScenarioRunner      ──► replays a YAML scenario N times, reports pass rate against a threshold
     └── LlmJudge            ──► ILLMService on the cheapest configured tier, natural-language propositions
   Infrastructure/Reporting/ — records the outcome
-    ├── BaselineWriter      ──► per-scenario journey row, keyed by Harness:Phase
+    ├── HarnessWriter       ──► per-scenario journey row, keyed by Harness:Phase
     └── FailureLog          ──► transcript of the last failing run, deleted once clean
 ```
 
@@ -95,18 +95,18 @@ The judge is skipped once a turn already fails structurally (saves a live call).
 - `BehaviourTests` — default threshold (`Harness:DefaultRuns`/`DefaultMinPasses`, 5/4). Protects
   visible presentation: button emission, card rendering, conversation closure.
 
-**The baseline is the point of the suite.** Every `ScenarioRunner.RunAsync` call writes a row to
-`<scenario-id>.md` via `BaselineWriter` — one row per revision phase, with pass rate, token
+**The journey is the point of the suite.** Every `ScenarioRunner.RunAsync` call writes a row to
+`<scenario-id>.md` via `HarnessWriter` — one row per revision phase, with pass rate, token
 cost, and the provider+model bound to each tier (a token count without the model is meaningless).
 The phase name comes from `Harness:Phase` in `appsettings.Harness.json` (or `Harness__Phase` env
 override); re-running the same phase **replaces** its row, it never appends — a phase is a state of
 the prose, not a count of measurements. `JOURNEY.md` narrates what the movements mean, written by
-hand. The directory is `Harness:BaselineDirectory` (default `Baseline`, resolved against the project
+hand. The directory is `Harness:HarnessDirectory` (default `Harness`, resolved against the project
 directory unless absolute) — deliberately **not versioned** (see `.gitignore`): every run is billed,
 and a token-count diff is not useful pull-request noise. Read `README.md`'s "The journey" section
 before writing to these files by hand.
 
-A prompt revision has exactly three outcomes against the previous baseline row, and only one is a
+A prompt revision has exactly three outcomes against the previous journey row, and only one is a
 pass: threshold held + tokens down (the win); threshold held + tokens up (not a pass — the fixed
 payload is resent on every round trip, forever); threshold broken (a contradiction between two
 instructions read together — fix the text, never lower the threshold).

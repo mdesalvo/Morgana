@@ -245,7 +245,7 @@ public sealed record TokenUsage(
             left.CacheWriteTokens + right.CacheWriteTokens,
             left.Calls + right.Calls);
 
-    /// <summary>Compact rendering for transcripts and baseline files.</summary>
+    /// <summary>Compact rendering for transcripts and harness files.</summary>
     public override string ToString()
         => $"{Calls} call(s), in={InputTokens}, out={OutputTokens}, cacheRead={CacheReadTokens}, cacheWrite={CacheWriteTokens}";
 }

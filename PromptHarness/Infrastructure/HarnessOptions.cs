@@ -45,7 +45,7 @@ public sealed class HarnessOptions
 
     /// <summary>
     /// Name of the revision phase this run measures — <c>v0</c> for the original assessment, then
-    /// <c>A2.1</c>, <c>A2.2</c> and so on. It is the row key in every baseline file.
+    /// <c>A2.1</c>, <c>A2.2</c> and so on. It is the row key in every harness file.
     /// </summary>
     /// <remarks>
     /// Bump it in <c>appsettings.Harness.json</c> when starting a new phase, or override it for a single
@@ -59,11 +59,11 @@ public sealed class HarnessOptions
     /// relative one resolves against the project directory, not the build output.
     /// </summary>
     /// <remarks>
-    /// Deliberately not the repository: the baseline is a local measurement log, not a build
+    /// Deliberately not the repository: the harness is a local measurement log, not a build
     /// artefact meant for review. Point it outside the checkout (a shared drive, a per-machine
     /// results folder) if several people run the suite and should not overwrite each other's rows.
     /// </remarks>
-    public string BaselineDirectory { get; init; } = "Harness";
+    public string HarnessDirectory { get; init; } = "Harness";
 
     /// <summary>Binds the <c>Harness</c> section, falling back to the defaults above when absent.</summary>
     public static HarnessOptions Load(IConfiguration configuration)

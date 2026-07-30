@@ -25,11 +25,11 @@ namespace PromptHarness.Infrastructure.Reporting;
 /// by hand.</para>
 ///
 /// <para><strong>Not versioned.</strong> The directory is a local measurement log
-/// (<see cref="HarnessOptions.BaselineDirectory"/>), not a repository artefact: every run is billed,
+/// (<see cref="HarnessOptions.HarnessDirectory"/>), not a repository artefact: every run is billed,
 /// and reviewing token-count diffs as pull-request noise buys nothing. Comparison across phases
 /// still works — it just happens on whoever's disk is running the suite, not in git history.</para>
 /// </remarks>
-public static class BaselineWriter
+public static class HarnessWriter
 {
     /// <summary>Header of the journey table, rewritten whenever a file is created.</summary>
     private const string TableHeader =
@@ -40,11 +40,11 @@ public static class BaselineWriter
     private static readonly Regex RowPattern = new Regex(@"^\| *(?<phase>[^|]+?) *\|", RegexOptions.Multiline);
 
     /// <summary>Appends (or replaces) this phase's row in the scenario's journey.</summary>
-    public static void Write(ScenarioOutcome outcome, string llmDescriptor, string phase, string baselineDirectory)
+    public static void Write(ScenarioOutcome outcome, string llmDescriptor, string phase, string harnessDirectory)
     {
         try
         {
-            string directory = ResolveDirectory(baselineDirectory);
+            string directory = ResolveDirectory(harnessDirectory);
             System.IO.Directory.CreateDirectory(directory);
 
             // Composes one Markdown table row: phase, date, pass fraction, threshold, and the
@@ -129,7 +129,7 @@ public static class BaselineWriter
     private static long Average(long total, int count) => count == 0 ? 0 : total / count;
 
     /// <summary>
-    /// Resolves <see cref="HarnessOptions.BaselineDirectory"/>: an absolute path is used as-is; a
+    /// Resolves <see cref="HarnessOptions.HarnessDirectory"/>: an absolute path is used as-is; a
     /// relative one resolves against the project directory (taken from this file's own compile-time
     /// path), not the build output — a location that shifts with the build configuration is not a
     /// stable place to point a relative path at.

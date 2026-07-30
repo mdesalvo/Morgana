@@ -109,7 +109,7 @@ public sealed class ScenarioRunner
     /// <summary>Harness knobs (defaults for runs, thresholds and timeouts).</summary>
     private readonly HarnessOptions options;
 
-    /// <summary>Provider and models under test, recorded in the baseline — a token count without them means nothing.</summary>
+    /// <summary>Provider and models under test, recorded in the harness — a token count without them means nothing.</summary>
     private readonly string llmDescriptor;
 
     public ScenarioRunner(HarnessChannel channel, TurnObserver observer, LLMJudge judge, HarnessOptions options, string llmDescriptor)
@@ -148,8 +148,8 @@ public sealed class ScenarioRunner
         // Both writers run regardless of pass/fail — the journey row is written every time (a
         // phase's history includes its failures), and the failure log self-manages whether to
         // write or delete based on whether every run held.
-        BaselineWriter.Write(outcome, llmDescriptor, options.Phase, options.BaselineDirectory);
-        FailureLog.Write(outcome, options.Phase, options.BaselineDirectory);
+        HarnessWriter.Write(outcome, llmDescriptor, options.Phase, options.HarnessDirectory);
+        FailureLog.Write(outcome, options.Phase, options.HarnessDirectory);
 
         return outcome;
     }

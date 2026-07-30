@@ -33,14 +33,14 @@ public static class FailureLog
     /// Writes the transcript of every run that failed, or removes a previous report once every
     /// run of the scenario held. A scenario that passes *at* its threshold still leaves a report.
     /// </summary>
-    public static void Write(ScenarioOutcome outcome, string phase, string baselineDirectory)
+    public static void Write(ScenarioOutcome outcome, string phase, string harnessDirectory)
     {
         try
         {
-            // Shares BaselineWriter's directory resolution (same configured root, "failures"
+            // Shares HarnessWriter's directory resolution (same configured root, "failures"
             // subfolder) so the two artefacts always sit next to each other regardless of where
-            // BaselineDirectory points.
-            string directory = Path.Combine(BaselineWriter.ResolveDirectory(baselineDirectory), "failures");
+            // HarnessDirectory points.
+            string directory = Path.Combine(HarnessWriter.ResolveDirectory(harnessDirectory), "failures");
             string path = Path.Combine(directory, $"{outcome.Scenario.Id}.log");
 
             // Not outcome.Passed: a scenario can clear its threshold with a failing run inside it,
