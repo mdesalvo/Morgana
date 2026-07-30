@@ -507,7 +507,7 @@ public static class Records
     {
         /// <summary>
         /// Materializes this census into a real <see cref="ChatOptions"/>, ready to be merged
-        /// (field-by-field, fill-if-absent — see <see cref="Abstractions.TierDefaultsChatClient"/>)
+        /// (field-by-field, fill-if-absent — see <see cref="ChatClients.TierDefaultsChatClient"/>)
         /// into every per-turn call on this tier.
         /// </summary>
         public ChatOptions ToChatOptions() => new()

@@ -4,7 +4,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Morgana.AI.Abstractions.LLMs;
+namespace Morgana.AI.ChatClients;
 
 /// <summary>
 /// Defensive decorator over the AnthropicClient <see cref="IChatClient"/> that diagnoses and, when
@@ -227,7 +227,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
     ///     avoid duplicating the prefix in the API request. This is the heavy path: the
     ///     agent's system prompt is several thousand tokens.</item>
     ///   <item><strong>Leading system <see cref="ChatMessage"/> path</strong> (used by
-    ///     <see cref="MorganaLLM.CompleteWithSystemPromptAsync"/> and any other caller that
+    ///     <see cref="Abstractions.MorganaLLM.CompleteWithSystemPromptAsync"/> and any other caller that
     ///     puts the system prompt directly in the message chatMessages, e.g. Guard, Classifier,
     ///     Presenter, ChannelAdapter). When path 1 doesn't apply, we mark the LAST
     ///     <see cref="TextContent"/> of the LAST leading System message instead.</item>

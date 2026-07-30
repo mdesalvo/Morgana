@@ -1,6 +1,6 @@
 using Microsoft.Extensions.AI;
 
-namespace Morgana.AI.Abstractions;
+namespace Morgana.AI.ChatClients;
 
 /// <summary>
 /// A <see cref="DelegatingChatClient"/> that fills in a fixed set of tier-level

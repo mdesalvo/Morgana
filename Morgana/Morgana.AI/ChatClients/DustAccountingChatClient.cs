@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Morgana.AI.Interfaces;
 
-namespace Morgana.AI.Abstractions;
+namespace Morgana.AI.ChatClients;
 
 /// <summary>
 /// A <see cref="DelegatingChatClient"/> that meters token consumption ("magic dust") for
@@ -10,11 +10,11 @@ namespace Morgana.AI.Abstractions;
 /// </summary>
 /// <remarks>
 /// <para><strong>Why an instance carries its own llmRole.</strong> There is no singleton dust
-/// wrapper on <see cref="MorganaLLM"/>'s chat client. Instead this client is constructed at
+/// wrapper on <see cref="Abstractions.MorganaLLM"/>'s chat client. Instead this client is constructed at
 /// exactly two points, each stamping its own <c>llmRole</c> at construction time — so we never
 /// need a separate llmRole-stamping decorator, and the same call is never charged twice:</para>
 /// <list type="bullet">
-///   <item><see cref="MorganaLLM.CompleteWithSystemPromptAsync"/> wraps per call with llmRole
+///   <item><see cref="Abstractions.MorganaLLM.CompleteWithSystemPromptAsync"/> wraps per call with llmRole
 ///   <c>"Morgana"</c> (framework actors: guard, classifier, presenter, channel adapter).</item>
 ///   <item><see cref="Adapters.MorganaAgentAdapter"/> wraps per agent with llmRole
 ///   <c>"Morgana (Intent)"</c> (domain agents and their history reducer).</item>

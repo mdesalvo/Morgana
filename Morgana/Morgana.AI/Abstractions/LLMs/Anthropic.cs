@@ -3,6 +3,7 @@ using Anthropic.Core;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Abstractions.LLMs;

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Telemetry;
 
@@ -20,7 +21,7 @@ namespace Morgana.AI.Abstractions;
 ///   │     ├── AzureOpenAI.cs  (Azure OpenAI GPT models)
 ///   │     ├── Ollama.cs       (Ollama local models)
 ///   │     └── OpenAI.cs       (OpenAI GPT models)
-///   └── Abstractions/ChatClients/
+///   └── ChatClients/
 ///         ├── TierDefaultsChatClient.cs   (per-tier ChatOptions defaults)
 ///         ├── DustAccountingChatClient.cs (Magic Dust metering)
 ///         └── MorganaAnthropicClient.cs   (Anthropic no-prefill guard + cache marker)

@@ -77,9 +77,7 @@
       agents exactly as Morgana sees them — discovered from plugins/ at startup, never as
       compile-time types. ReferenceOutputAssembly=false keeps the black-box boundary honest.
     -->
-    <ProjectReference Include="..\Examples\Examples.csproj"
-                      ReferenceOutputAssembly="false"
-                      Private="false" />
+    <ProjectReference Include="..\Examples\Examples.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
   <ItemGroup>

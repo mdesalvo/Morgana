@@ -63,7 +63,7 @@ public sealed class HarnessOptions
     /// artefact meant for review. Point it outside the checkout (a shared drive, a per-machine
     /// results folder) if several people run the suite and should not overwrite each other's rows.
     /// </remarks>
-    public string BaselineDirectory { get; init; } = "Baseline";
+    public string BaselineDirectory { get; init; } = "Harness";
 
     /// <summary>Binds the <c>Harness</c> section, falling back to the defaults above when absent.</summary>
     public static HarnessOptions Load(IConfiguration configuration)
