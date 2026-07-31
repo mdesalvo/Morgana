@@ -167,7 +167,13 @@ public sealed class ScenarioRunner
             // A brand-new conversation per run: fresh session, fresh context, fresh shared_context
             // registry — nothing from a previous run's turns can leak into this one's assertions.
             TimeSpan timeout = TimeSpan.FromSeconds(options.TurnTimeoutSeconds);
-            (string opened, ChannelMessage _) = await channel.StartConversationAsync(timeout);
+
+            // Only the one scenario group that means to exercise MorganaChannelAdapter opts into
+            // the degraded profile; every other scenario keeps opening on the default full-capability
+            // channel, unchanged from before this branch existed.
+            (string opened, ChannelMessage _) = scenario.DegradedChannel is true
+                ? await channel.StartConversationAsync(timeout, HarnessChannel.DegradedCapabilities, HarnessChannel.DegradedChannelName)
+                : await channel.StartConversationAsync(timeout);
             conversationId = opened;
 
             foreach (TurnDefinition turnDefinition in scenario.Turns)

@@ -22,10 +22,12 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// issuer <c>harness</c>.
 /// </summary>
 /// <remarks>
-/// <para>It declares the <strong>full</strong> capability profile with no length budget, so
-/// <c>MorganaChannelAdapter</c> short-circuits and every scenario measures Morgana's undegraded
-/// output. Degradation is Rune's quadrant of the channel matrix and is deliberately not exercised
-/// here — a suite that asserted on adapted text would be measuring the adapter, not the prompts.</para>
+/// <para>By default it declares the <strong>full</strong> capability profile with no length budget,
+/// so <c>MorganaChannelAdapter</c> short-circuits and most scenarios measure Morgana's undegraded
+/// output — a suite that asserted on adapted text by default would be measuring the adapter, not
+/// the prompts. <see cref="StartConversationAsync"/> accepts an optional capability/channel-name
+/// override for the one scenario group that deliberately wants the opposite: exercising
+/// <c>MorganaChannelAdapter</c> itself (see <see cref="DegradedCapabilities"/>).</para>
 ///
 /// <para>Delivery is <c>webhook</c> rather than <c>signalr</c> for the same reason Rune and Grimoire
 /// use it: it needs no hub client, and the callback is an ordinary HTTP endpoint the harness can
@@ -38,6 +40,29 @@ public sealed class HarnessChannel : IAsyncDisposable
 
     /// <inheritdoc cref="ChannelName" />
     public const string IssuerName = ChannelName;
+
+    /// <summary>
+    /// Channel name for the one scenario group that opts into a degraded capability profile.
+    /// Deliberately distinct from <see cref="ChannelName"/>: <c>LLMPresenterService</c> caches its
+    /// presentation result process-wide, keyed only by channel name, so a degraded conversation
+    /// reusing <c>"harness"</c> would race that cache against every other test in the assembly,
+    /// depending on non-deterministic xUnit test ordering. <see cref="IssuerName"/> stays a
+    /// separate compile-time constant, so varying this never touches JWT authentication.
+    /// </summary>
+    public const string DegradedChannelName = "harness-degraded";
+
+    /// <summary>
+    /// Mirrors Rune's "poor but honest" profile — no rich cards, no quick replies, no streaming, no
+    /// markdown, 500-character budget — the contract surface <c>MorganaChannelAdapter</c> degrades
+    /// toward, and the canonical capability set to actually engage its LLM rewrite path.
+    /// </summary>
+    public static readonly ChannelCapabilities DegradedCapabilities =
+        new ChannelCapabilities(
+            SupportsRichCards: false,
+            SupportsQuickReplies: false,
+            SupportsStreaming: false,
+            SupportsMarkdown: false,
+            MaxMessageLength: 500);
 
     /// <summary>Base address of the Morgana instance under test.</summary>
     private readonly string morganaBaseAddress;
@@ -141,8 +166,19 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// Opens a conversation and consumes the presentation message Morgana pushes on start, so the
     /// first asserted turn is genuinely the first user turn.
     /// </summary>
+    /// <param name="timeout">How long to wait for the presentation to arrive.</param>
+    /// <param name="capabilities">
+    /// Capability profile to announce; defaults to the full profile. Pass
+    /// <see cref="DegradedCapabilities"/> to exercise <c>MorganaChannelAdapter</c>'s rewrite path.
+    /// </param>
+    /// <param name="channelName">
+    /// Channel name to announce; defaults to <see cref="ChannelName"/>. Must be
+    /// <see cref="DegradedChannelName"/> (or another distinct name) whenever <paramref name="capabilities"/>
+    /// is overridden — see <see cref="DegradedChannelName"/>'s own remarks for why.
+    /// </param>
     /// <returns>The conversation id, and the presentation message that was drained.</returns>
-    public async Task<(string ConversationId, ChannelMessage Presentation)> StartConversationAsync(TimeSpan timeout)
+    public async Task<(string ConversationId, ChannelMessage Presentation)> StartConversationAsync(
+        TimeSpan timeout, ChannelCapabilities? capabilities = null, string? channelName = null)
     {
         // The conversation id is minted here, client-side, and handed to Morgana on the start
         // call — the queue for it must exist before the request is sent, since the presentation
@@ -153,7 +189,7 @@ public sealed class HarnessChannel : IAsyncDisposable
         using HttpRequestMessage request = Authorized(HttpMethod.Post, "/api/morgana/conversation/start");
         request.Content = JsonContent.Create(new StartConversationRequest(
             ConversationId: conversationId,
-            ChannelMetadata: BuildMetadata(callbackUrl)));
+            ChannelMetadata: BuildMetadata(callbackUrl, capabilities, channelName)));
 
         using HttpResponseMessage response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
@@ -270,16 +306,16 @@ public sealed class HarnessChannel : IAsyncDisposable
         return tokenHandler.CreateToken(descriptor);
     }
 
-    /// <summary>The handshake: full capabilities, no length budget, webhook delivery.</summary>
-    private static ChannelMetadata BuildMetadata(string callbackUrl) => new ChannelMetadata
+    /// <summary>The handshake: full capabilities and no length budget by default, webhook delivery.</summary>
+    private static ChannelMetadata BuildMetadata(string callbackUrl, ChannelCapabilities? capabilities = null, string? channelName = null) => new ChannelMetadata
     {
         Coordinates = new ChannelCoordinates
         {
-            ChannelName = ChannelName,
+            ChannelName = channelName ?? ChannelName,
             DeliveryMode = "webhook",
             CallbackUrl = callbackUrl
         },
-        Capabilities = new ChannelCapabilities(
+        Capabilities = capabilities ?? new ChannelCapabilities(
             SupportsRichCards: true,
             SupportsQuickReplies: true,
             SupportsStreaming: true,

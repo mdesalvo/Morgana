@@ -32,6 +32,12 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTes
 # the behavioural group (default threshold)
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~BehaviourTests"
 
+# the guard group — requires the boot-time guardrail flag, off by default
+Harness__EnableGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~GuardTests"
+
+# the rest of the actors group — classifier, channel adaptation, presentation
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ActorTests"
+
 # one scenario by id — the scenario id is a Theory InlineData argument, so match on DisplayName, not FQN
 dotnet test PromptHarness.csproj --filter "DisplayName~behaviour-rich-card"
 ```
@@ -94,6 +100,18 @@ The judge is skipped once a turn already fails structurally (saves a live call).
   reverts the prose rather than lowering the threshold.
 - `BehaviourTests` — default threshold (`Harness:DefaultRuns`/`DefaultMinPasses`, 5/4). Protects
   visible presentation: button emission, card rendering, conversation closure.
+- `GuardTests` / `ActorTests` — the **actors** group, aimed at the four framework prompts none of
+  the above meaningfully exercise: Guard, Classifier, ChannelAdapter, Presentation. Three production
+  mechanisms stood in the way of a straightforward scenario, and each got its own workaround rather
+  than a shared one: `MorganaHostFixture`'s `Harness:EnableGuardrail` is a whole-process boot flag
+  with no per-scenario override, so Guard gets its own test class (`GuardTests`, 5/5 — a moderation
+  false negative/positive is safety-adjacent, closer to `ContextHandlingTests`' "failure is silent"
+  reasoning than to `BehaviourTests`'); `LLMPresenterService` caches its result process-wide keyed by
+  channel name, so Presentation gets a one-shot check in `ActorTests`, never a 5-run scenario;
+  `MorganaChannelAdapter` short-circuits on the harness's own full-capability channel, so the one
+  scenario meaning to exercise it opts in via `ScenarioDefinition.DegradedChannel`, which opens the
+  conversation on `HarnessChannel.DegradedCapabilities`/`DegradedChannelName` instead — a distinct
+  channel name, not just different capabilities, to avoid racing the Presentation cache above.
 
 **The journey is the point of the suite.** Every `ScenarioRunner.RunAsync` call writes a row to
 `<scenario-id>.md` via `HarnessWriter` — one row per revision phase, with pass rate, token

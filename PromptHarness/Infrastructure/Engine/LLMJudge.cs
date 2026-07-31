@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
+using Morgana.Contracts;
 using PromptHarness.Infrastructure.Wiring;
 
 namespace PromptHarness.Infrastructure.Engine;
@@ -85,22 +86,35 @@ public sealed class LLMJudge
     /// come out as the scenario requires.
     /// </summary>
     public async Task<IReadOnlyList<string>> EvaluateAsync(TurnDefinition turnDefinition, TurnResult turn)
+        => await EvaluateAsync(turnDefinition.Judge, turnDefinition.JudgeNot, turn.Text, turn.QuickReplies, turn.Message.RichCard);
+
+    /// <summary>
+    /// Judges propositions about a bare <see cref="ChannelMessage"/> that never went through a
+    /// scripted turn — Presentation has no <see cref="TurnResult"/> behind it, since no
+    /// <c>ScenarioRunner</c> turn ever ran to produce one.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> EvaluateAsync(IReadOnlyList<string>? judge, IReadOnlyList<string>? judgeNot, ChannelMessage message)
+        => await EvaluateAsync(judge, judgeNot, message.Text ?? string.Empty, message.QuickReplies ?? [], message.RichCard);
+
+    /// <summary>Judges every proposition against the same three user-visible facets, whatever produced them.</summary>
+    private async Task<IReadOnlyList<string>> EvaluateAsync(
+        IReadOnlyList<string>? judge, IReadOnlyList<string>? judgeNot, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard)
     {
         List<string> failures = [];
 
         // "judge:" propositions must all hold — a failure is any one the judge found false.
-        foreach (string proposition in turnDefinition.Judge ?? [])
+        foreach (string proposition in judge ?? [])
         {
-            JudgeVerdict verdict = await EvaluateAsync(proposition, turn);
+            JudgeVerdict verdict = await EvaluateAsync(proposition, text, quickReplies, richCard);
             if (!verdict.Holds)
                 failures.Add($"judge: \"{proposition}\" did not hold — {verdict.Reason}");
         }
 
         // "judgeNot:" propositions must all fail to hold — the polarity is inverted from above:
         // here it's the judge finding TRUE that produces a failure message.
-        foreach (string proposition in turnDefinition.JudgeNot ?? [])
+        foreach (string proposition in judgeNot ?? [])
         {
-            JudgeVerdict verdict = await EvaluateAsync(proposition, turn);
+            JudgeVerdict verdict = await EvaluateAsync(proposition, text, quickReplies, richCard);
             if (verdict.Holds)
                 failures.Add($"judgeNot: \"{proposition}\" held but must not — {verdict.Reason}");
         }
@@ -109,7 +123,7 @@ public sealed class LLMJudge
     }
 
     /// <summary>Judges a single proposition, retrying once before giving up.</summary>
-    private async Task<JudgeVerdict> EvaluateAsync(string proposition, TurnResult turn)
+    private async Task<JudgeVerdict> EvaluateAsync(string proposition, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard)
     {
         // Deliberately only what a user would see: text, button labels, and whether a card was
         // shown (with its title, not its full JSON payload) — never the tool trace, the context
@@ -117,10 +131,10 @@ public sealed class LLMJudge
         string userPrompt =
             $"""
              RESPONSE TEXT:
-             {turn.Text}
+             {text}
 
-             QUICK REPLY BUTTONS SHOWN: {(turn.QuickReplies.Count == 0 ? "none" : string.Join(" | ", turn.QuickReplies.Select(reply => reply.Label)))}
-             RICH CARD SHOWN: {(turn.Message.RichCard is null ? "no" : $"yes, titled \"{turn.Message.RichCard.Title}\"")}
+             QUICK REPLY BUTTONS SHOWN: {(quickReplies.Count == 0 ? "none" : string.Join(" | ", quickReplies.Select(reply => reply.Label)))}
+             RICH CARD SHOWN: {(richCard is null ? "no" : $"yes, titled \"{richCard.Title}\"")}
 
              PROPOSITION:
              {proposition}

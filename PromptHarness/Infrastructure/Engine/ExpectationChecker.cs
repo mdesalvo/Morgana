@@ -1,4 +1,7 @@
 using System.Globalization;
+using Markdig;
+using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure.Wiring;
 
@@ -37,8 +40,29 @@ public static class ExpectationChecker
         CheckTools(expect, turn, failures);
         CheckContext(expect, turn, failures);
         CheckText(expect, turn, failures);
+        CheckGuard(expect, turn, failures);
+        CheckClassifier(expect, turn, failures);
 
         return failures;
+    }
+
+    /// <summary>Verdict of the <c>morgana.guard</c> span.</summary>
+    private static void CheckGuard(ExpectSpec expect, TurnResult turn, List<string> failures)
+    {
+        if (expect.GuardCompliant is { } expectedCompliant && turn.GuardCompliant != expectedCompliant)
+            failures.Add($"guardCompliant: expected {expectedCompliant}, got {turn.GuardCompliant?.ToString() ?? "(no guard span — is Harness:EnableGuardrail on?)"}");
+    }
+
+    /// <summary>Intent and confidence of the <c>morgana.classifier</c> span.</summary>
+    private static void CheckClassifier(ExpectSpec expect, TurnResult turn, List<string> failures)
+    {
+        if (expect.ClassifierIntent is { Length: > 0 } expectedIntent
+            && !string.Equals(turn.ClassifierIntent, expectedIntent, StringComparison.OrdinalIgnoreCase))
+            failures.Add($"classifierIntent: expected {expectedIntent}, got {turn.ClassifierIntent ?? "(none — was this a follow-up turn?)"}");
+
+        if (expect.ClassifierMinConfidence is { } minimumConfidence
+            && (turn.ClassifierConfidence is not { } actualConfidence || actualConfidence < minimumConfidence))
+            failures.Add($"classifierMinConfidence: expected at least {minimumConfidence:F2}, got {turn.ClassifierConfidence?.ToString("F2") ?? "(none)"}");
     }
 
     /// <summary>Cardinality and identity of the quick replies delivered with the message.</summary>
@@ -206,6 +230,29 @@ public static class ExpectationChecker
             if (turn.Text.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
                 failures.Add($"textNotContains: response contains '{forbidden}'");
         }
+
+        if (expect.TextMaxLength is { } maxLength && turn.Text.Length > maxLength)
+            failures.Add($"textMaxLength: expected at most {maxLength} characters, got {turn.Text.Length}");
+
+        if (expect.TextNotMarkdown is true && ContainsMarkdownSyntax(turn.Text))
+            failures.Add($"textNotMarkdown: response still carries Markdown syntax: {turn.Text}");
+    }
+
+    /// <summary>
+    /// Detects Markdown syntax in delivered text, re-derived locally from the parsed document
+    /// rather than by calling into <c>MorganaChannelAdapter</c>'s own private detector — the harness
+    /// judges the delivered text on its own terms, keeping the black-box boundary structural.
+    /// </summary>
+    private static bool ContainsMarkdownSyntax(string text)
+    {
+        MarkdownDocument document = Markdown.Parse(text);
+        foreach (MarkdownObject node in document.Descendants())
+        {
+            if (node is not ParagraphBlock && node is not LiteralInline)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>Renders quick-reply ids for a failure message.</summary>

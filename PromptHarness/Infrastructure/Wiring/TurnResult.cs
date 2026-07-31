@@ -32,6 +32,10 @@ public sealed record ContextAccess(ContextOperation Operation, string VariableNa
 /// <param name="AgentName">Agent that handled the turn, from the <c>agent.name</c> span attribute; null when no agent span was seen (e.g. a guard rejection).</param>
 /// <param name="Tokens">Token usage over every LLM call the turn made, including classification.</param>
 /// <param name="LogLines">Raw host log captured for the turn, attached to failures for diagnosis.</param>
+/// <param name="GuardCompliant">Verdict from the <c>morgana.guard</c> span; null when the guard rail is disabled or no guard span was seen.</param>
+/// <param name="GuardViolation">Violation text from the same span when <paramref name="GuardCompliant"/> is false.</param>
+/// <param name="ClassifierIntent">Intent from the <c>morgana.classifier</c> span; null on a follow-up turn, which skips classification entirely.</param>
+/// <param name="ClassifierConfidence">Confidence from the same span, parsed from its string tag.</param>
 public sealed record TurnResult(
     string ConversationId,
     string UserMessage,
@@ -40,7 +44,11 @@ public sealed record TurnResult(
     IReadOnlyList<ContextAccess> ContextAccesses,
     string? AgentName,
     TokenUsage Tokens,
-    IReadOnlyList<string> LogLines)
+    IReadOnlyList<string> LogLines,
+    bool? GuardCompliant = null,
+    string? GuardViolation = null,
+    string? ClassifierIntent = null,
+    double? ClassifierConfidence = null)
 {
     /// <summary>Names read via <c>GetContextVariable</c>, whether the read hit or missed.</summary>
     public IReadOnlyList<string> ContextReads
@@ -62,7 +70,7 @@ public sealed record TurnResult(
     public string Describe()
         => $"""
             user: {UserMessage}
-            agent: {AgentName ?? "(no agent span)"} | completed={Message.AgentCompleted} | quickReplies={QuickReplies.Count} | richCard={(Message.RichCard is null ? "absent" : "present")}
+            {(GuardCompliant is null ? "" : $"guard: compliant={GuardCompliant} | violation={GuardViolation ?? "(none)"}\n            ")}{(ClassifierIntent is null ? "" : $"classifier: intent={ClassifierIntent} | confidence={ClassifierConfidence?.ToString("F2") ?? "(unknown)"}\n            ")}agent: {AgentName ?? "(no agent span)"} | completed={Message.AgentCompleted} | quickReplies={QuickReplies.Count} | richCard={(Message.RichCard is null ? "absent" : "present")}
             tools: {(ToolsInvoked.Count == 0 ? "(none)" : string.Join(", ", ToolsInvoked))}
             tokens: {Tokens}
             context: {(ContextAccesses.Count == 0 ? "(none)" : string.Join(", ", ContextAccesses.Select(a => $"{a.Operation}:{a.VariableName}")))}

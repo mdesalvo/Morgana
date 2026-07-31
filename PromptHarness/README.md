@@ -55,9 +55,11 @@ things a child process could not — an `ActivityListener` that reads spans with
 loop, and a tee on stdout that reads tool log lines. Both are read-only observers of instrumentation
 that already exists for production reasons.
 
-The harness channel declares the **full** capability profile with no length budget, so
-`MorganaChannelAdapter` short-circuits and scenarios measure undegraded output. Degradation stays
-Rune's quadrant of the channel matrix.
+The harness channel declares the **full** capability profile with no length budget by default, so
+`MorganaChannelAdapter` short-circuits and most scenarios measure undegraded output. One scenario
+opts into a degraded profile instead (`ScenarioDefinition.DegradedChannel`, mirroring Rune's "poor
+but honest" capabilities under a distinct channel name) specifically to exercise the adapter's
+rewrite path — see `channeladapter-degrades-invoice-card` and `GuardTests`/`ActorTests` below.
 
 ## Configuration and secrets
 
@@ -93,6 +95,12 @@ dotnet test … --filter "FullyQualifiedName~HarnessSmokeTests"
 # the blocking group
 dotnet test … --filter "FullyQualifiedName~ContextHandlingTests"
 
+# the guard group — requires the boot-time guardrail flag, off by default
+Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
+
+# the rest of the actors group — classifier, channel adaptation, presentation
+dotnet test … --filter "FullyQualifiedName~ActorTests"
+
 # one scenario — by DisplayName: the scenario id is a theory argument, not part of the FQN
 dotnet test … --filter "DisplayName~behaviour-rich-card"
 ```
@@ -112,6 +120,7 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 |---|---|---|
 | `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Efficiency` |
 | `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
+| `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card` | Billing | `Efficiency` |
 | `behaviour-rich-card`, `context-no-invented-writes` | Inventory | **`Performance`** |
 
 Everything Morgana runs on its own account — guard, classifier, presenter — plus the judge, always

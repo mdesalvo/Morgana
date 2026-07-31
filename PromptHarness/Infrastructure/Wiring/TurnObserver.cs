@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Morgana.Contracts;
+using Morgana.AI.Telemetry;
 
 namespace PromptHarness.Infrastructure.Wiring;
 
@@ -29,6 +31,12 @@ public sealed partial class TurnObserver : IDisposable
 
     /// <summary>Closed <c>morgana.agent</c> spans, per conversation, in completion order.</summary>
     private readonly ConcurrentDictionary<string, List<AgentSpan>> agentSpans = new ConcurrentDictionary<string, List<AgentSpan>>();
+
+    /// <summary>Closed <c>morgana.guard</c> spans, per conversation, in completion order.</summary>
+    private readonly ConcurrentDictionary<string, List<GuardSpan>> guardSpans = new ConcurrentDictionary<string, List<GuardSpan>>();
+
+    /// <summary>Closed <c>morgana.classifier</c> spans, per conversation, in completion order.</summary>
+    private readonly ConcurrentDictionary<string, List<ClassifierSpan>> classifierSpans = new ConcurrentDictionary<string, List<ClassifierSpan>>();
 
     /// <summary>
     /// Token usage of every closed LLM span, in completion order. Not keyed by conversation: the
@@ -75,13 +83,15 @@ public sealed partial class TurnObserver : IDisposable
         lock (llmGate)
             llmMark = llmSpans.Count;
 
-        // Three independent marks — log line count, agent-span count for this conversation, and
-        // global LLM-span count — each a watermark that CompleteTurnAsync will read everything
-        // *past* to isolate what happened during this one turn specifically.
+        // Five independent marks — log line count, agent/guard/classifier span counts for this
+        // conversation, and global LLM-span count — each a watermark that CompleteTurnAsync will
+        // read everything *past* to isolate what happened during this one turn specifically.
         return new TurnScope(
             conversationId,
             output.Mark(),
             agentSpans.TryGetValue(conversationId, out List<AgentSpan>? spans) ? spans.Count : 0,
+            guardSpans.TryGetValue(conversationId, out List<GuardSpan>? guards) ? guards.Count : 0,
+            classifierSpans.TryGetValue(conversationId, out List<ClassifierSpan>? classifiers) ? classifiers.Count : 0,
             llmMark);
     }
 
@@ -123,6 +133,17 @@ public sealed partial class TurnObserver : IDisposable
             ? spans[^1]
             : null;
 
+        // Same "count > mark, take the latest" read as the agent span above, applied to the guard
+        // and classifier dictionaries — both are null on any turn that skipped that step (e.g. a
+        // follow-up turn skips classification, a guard-disabled run never produces a guard span).
+        GuardSpan? guard = guardSpans.TryGetValue(scope.ConversationId, out List<GuardSpan>? guards) && guards.Count > scope.GuardSpanCount
+            ? guards[^1]
+            : null;
+
+        ClassifierSpan? classifier = classifierSpans.TryGetValue(scope.ConversationId, out List<ClassifierSpan>? classifiers) && classifiers.Count > scope.ClassifierSpanCount
+            ? classifiers[^1]
+            : null;
+
         // LLM spans are process-wide, not per-conversation (see the field's own remarks on why),
         // so isolating this turn's usage means skipping every span that existed before BeginTurn's
         // mark and summing whatever landed after — sound only because the suite runs serially.
@@ -138,7 +159,11 @@ public sealed partial class TurnObserver : IDisposable
             accesses,
             span?.AgentName,
             usage,
-            lines);
+            lines,
+            guard?.Compliant,
+            guard?.Violation,
+            classifier?.Intent,
+            classifier?.Confidence);
     }
 
     /// <inheritdoc />
@@ -168,36 +193,61 @@ public sealed partial class TurnObserver : IDisposable
             return;
         }
 
-        // Any other activity on the "Morgana" source that isn't the one turn-level span this
-        // observer cares about (e.g. a finer-grained internal span) is simply not relevant here.
-        if (activity.OperationName != "morgana.agent")
-            return;
-
         // No conversation id tag means this span cannot be attributed to any conversation's
         // history — nothing useful to record, so it's dropped rather than filed under a null key.
-        if (activity.GetTagItem("conversation.id") is not string conversationId)
+        if (activity.GetTagItem(MorganaTelemetry.ConversationId) is not string conversationId)
             return;
 
-        // agent.tools_invoked is a single comma-joined string tag (spans can't carry arrays), so
-        // it has to be split back into an ordered list here — order matters, since
-        // ExpectationChecker's toolsCalledFirst assertion depends on invocation order.
-        string toolsInvoked = activity.GetTagItem("agent.tools_invoked") as string ?? string.Empty;
+        switch (activity.OperationName)
+        {
+            case MorganaTelemetry.AgentActivity:
+                // agent.tools_invoked is a single comma-joined string tag (spans can't carry
+                // arrays), so it has to be split back into an ordered list here — order matters,
+                // since ExpectationChecker's toolsCalledFirst assertion depends on invocation order.
+                string toolsInvoked = activity.GetTagItem(MorganaTelemetry.AgentToolsInvoked) as string ?? string.Empty;
 
-        AgentSpan span = new AgentSpan(
-            activity.GetTagItem("agent.name") as string,
-            [.. toolsInvoked.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]);
+                Append(agentSpans, conversationId, new AgentSpan(
+                    activity.GetTagItem(MorganaTelemetry.AgentName) as string,
+                    [.. toolsInvoked.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]));
+                break;
 
-        // AddOrUpdate rather than a plain append: this is the first agent span for the
-        // conversation on the "add" path, or one more span appended to an existing per-conversation
-        // list (e.g. a later turn of the same conversation) on the "update" path.
-        agentSpans.AddOrUpdate(conversationId, _ => [span], (_, existing) =>
+            case MorganaTelemetry.GuardActivity:
+                Append(guardSpans, conversationId, new GuardSpan(
+                    activity.GetTagItem(MorganaTelemetry.GuardCompliant) as bool?,
+                    activity.GetTagItem(MorganaTelemetry.GuardViolation) as string));
+                break;
+
+            case MorganaTelemetry.ClassifierActivity:
+                // classification.confidence is stored as a string tag (ConversationSupervisorActor
+                // sets it from a Dictionary<string,string>), so it's parsed tolerantly here rather
+                // than cast — an unparseable value becomes "unknown", not a listener crash.
+                double? confidence = activity.GetTagItem(MorganaTelemetry.ClassificationConfidence) is string raw
+                    && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed)
+                        ? parsed
+                        : null;
+
+                Append(classifierSpans, conversationId, new ClassifierSpan(
+                    activity.GetTagItem(MorganaTelemetry.ClassificationIntent) as string,
+                    confidence));
+                break;
+
+            // Any other activity on the "Morgana" source that isn't one of the three turn-level
+            // spans this observer cares about (e.g. a finer-grained internal span) is not relevant.
+        }
+    }
+
+    /// <summary>
+    /// Appends one closed span to its conversation's list, creating the list on first contact.
+    /// Shared by all three span kinds above — each just supplies its own dictionary and record.
+    /// </summary>
+    private static void Append<T>(ConcurrentDictionary<string, List<T>> spans, string conversationId, T span)
+        => spans.AddOrUpdate(conversationId, _ => [span], (_, existing) =>
         {
             lock (existing)
                 existing.Add(span);
 
             return existing;
         });
-    }
 
     /// <summary>
     /// Reads a token count that providers report as any integral type, or as a string on some
@@ -216,6 +266,12 @@ public sealed partial class TurnObserver : IDisposable
 
     /// <summary>What a closed <c>morgana.agent</c> span contributes to a turn result.</summary>
     private sealed record AgentSpan(string? AgentName, IReadOnlyList<string> ToolsInvoked);
+
+    /// <summary>What a closed <c>morgana.guard</c> span contributes to a turn result.</summary>
+    private sealed record GuardSpan(bool? Compliant, string? Violation);
+
+    /// <summary>What a closed <c>morgana.classifier</c> span contributes to a turn result.</summary>
+    private sealed record ClassifierSpan(string? Intent, double? Confidence);
 }
 
 /// <summary>
@@ -251,11 +307,13 @@ public sealed record TokenUsage(
 }
 
 /// <summary>
-/// Marks the start of a turn's observation window: where the log stood, and how many agent spans
-/// the conversation had already produced.
+/// Marks the start of a turn's observation window: where the log stood, and how many agent, guard
+/// and classifier spans the conversation had already produced.
 /// </summary>
 /// <param name="ConversationId">Conversation being observed.</param>
 /// <param name="LogMark">Index into the captured log at the moment the turn was sent.</param>
 /// <param name="SpanCount">Agent spans already recorded for the conversation.</param>
+/// <param name="GuardSpanCount">Guard spans already recorded for the conversation.</param>
+/// <param name="ClassifierSpanCount">Classifier spans already recorded for the conversation.</param>
 /// <param name="LlmSpanCount">LLM spans already recorded, process-wide.</param>
-public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int LlmSpanCount);
+public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount);

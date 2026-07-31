@@ -61,6 +61,12 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>Scenario engine bound to this host.</summary>
     public ScenarioRunner Runner { get; private set; } = null!;
 
+    /// <summary>
+    /// The judge <see cref="Runner"/> was built over, exposed for the one caller that judges a bare
+    /// <see cref="Morgana.Contracts.ChannelMessage"/> outside any scripted turn (Presentation).
+    /// </summary>
+    public LLMJudge Judge { get; private set; } = null!;
+
     /// <summary>Logger factory handed to the judge's LLM client; deliberately silent.</summary>
     private ILoggerFactory? judgeLoggerFactory;
 
@@ -117,8 +123,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // the channel to drive conversations, the observer to read signals, and a judge built
         // over the same LLM configuration the instance under test uses.
         judgeLoggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
-        Runner = new ScenarioRunner(
-            Channel, Observer, LLMJudge.Create(Configuration, judgeLoggerFactory), Options, DescribeLlm());
+        Judge = LLMJudge.Create(Configuration, judgeLoggerFactory);
+        Runner = new ScenarioRunner(Channel, Observer, Judge, Options, DescribeLlm());
     }
 
     /// <inheritdoc />

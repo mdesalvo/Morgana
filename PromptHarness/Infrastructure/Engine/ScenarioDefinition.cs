@@ -30,6 +30,13 @@ public sealed class ScenarioDefinition
 
     /// <summary>The turns, in order.</summary>
     public List<TurnDefinition> Turns { get; init; } = [];
+
+    /// <summary>
+    /// Opens the conversation under <c>HarnessChannel.DegradedCapabilities</c> /
+    /// <c>DegradedChannelName</c> instead of the harness's default full-capability channel — the
+    /// opt-in for the one scenario that means to exercise <c>MorganaChannelAdapter</c>'s rewrite path.
+    /// </summary>
+    public bool? DegradedChannel { get; init; }
 }
 
 /// <summary>A single user turn and its expectations.</summary>
@@ -129,6 +136,21 @@ public sealed class ExpectSpec
 
     /// <summary>Expected agent class name, e.g. <c>BillingAgent</c>.</summary>
     public string? Agent { get; init; }
+
+    /// <summary>Expected <c>guard.compliant</c> verdict from the <c>morgana.guard</c> span.</summary>
+    public bool? GuardCompliant { get; init; }
+
+    /// <summary>Expected intent from the <c>morgana.classifier</c> span.</summary>
+    public string? ClassifierIntent { get; init; }
+
+    /// <summary>Minimum acceptable confidence from the same span.</summary>
+    public double? ClassifierMinConfidence { get; init; }
+
+    /// <summary>Maximum allowed length of the delivered text, in characters.</summary>
+    public int? TextMaxLength { get; init; }
+
+    /// <summary>Assert that the delivered text carries no Markdown syntax.</summary>
+    public bool? TextNotMarkdown { get; init; }
 }
 
 /// <summary>Loads scenario files from the harness output directory.</summary>

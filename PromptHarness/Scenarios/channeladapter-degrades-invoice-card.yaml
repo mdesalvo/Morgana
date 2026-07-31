@@ -1,0 +1,22 @@
+id: channeladapter-degrades-invoice-card
+description: >-
+  Under a degraded channel profile (no rich cards, no quick replies, no markdown, 500-char budget) the
+  invoice flow's rich card and buttons are rewritten into plain, length-capped prose — exercising
+  MorganaChannelAdapter.AdaptAsync, which the harness's own default full-capability channel otherwise
+  always short-circuits.
+degradedChannel: true
+
+turns:
+  - say: "Hi, my customer code is P994E — show me my last 3 invoices"
+    expect:
+      agent: BillingAgent
+      toolsCalled: [GetInvoices]
+      richCard: absent
+      quickReplies: none
+      textMaxLength: 500
+      textNotMarkdown: true
+      textNotEmpty: true
+    judge:
+      - "The response conveys at least one concrete invoice detail (an amount, a date or a status) in plain prose."
+    judgeNot:
+      - "The response reads as a bare mechanical list of raw option labels rather than natural prose."
