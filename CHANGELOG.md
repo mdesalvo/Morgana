@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.26.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: PromptHarness — Behavioral & Contextual Test Suite for Morgana Prompt System
-To ensure **systemic stability of prompt development**, this release introduces `PromptHarness`: a live, black-box xUnit suite designed to catch **silent contradictions between framework capabilities (morgana.json) and domain specializations (agents.json)**.
+To ensure **stability of prompt development**, this release introduces `PromptHarness`: a live, black-box xUnit suite designed to catch **silent contradictions between framework capabilities (morgana.json) and domain specializations (agents.json)**.
 By driving a real Morgana instance via HTTP, the harness validates its semantic consistency across two critical planes:
 - **Behavioral**: Tracks the visible execution flow, validating tool invocation order, quick replies, rich cards and farewell completions
 - **Contextual**: Enforces internal system boundaries, checking context read/write permissions, closed-vocabulary adherence and non-revelation security rules
@@ -23,11 +23,15 @@ Passing this suite is now a mandatory, non-negotiable precondition for deploying
 - **`PromptHarness` non-regression harness** — Boots the real host in-process on an ephemeral Kestrel port and drives it black-box over HTTP as a webhook-based channel. It asserts on two layers: structural signals read from the `morgana.agent` span and `MorganaTool` log lines, and natural-language propositions judged by an LLM on the cheapest configured tier.
 
 ### 🔄 Changed
+- Removed the keyword-based anti-profanity filter in favor of the complete AI-based guardrail
 - Updated `Microsoft.Agents.AI` dependency to 1.16.0
 - Updated `Microsoft.Extensions.AI` dependency to 10.7.0
 - Updated `ModelContextProtocol.Core` dependency to 2.0.0-rc.1
 
 ### 🐛 Fixed
+- Tool parameters were never described to the model, which had no way to know their meaning and had to guess from their name alone
+- MCP tool schemas were rebuilt lossily on discovery: optional parameters appeared required, nested objects and arrays were flattened, and argument values could be silently corrupted
+- The router's per-agent cache was case-sensitive, so an intent whose casing didn't exactly match the classifier's output could spawn a duplicate agent instead of reusing the correct one
 
 ### 🚀 Future Enablement
 - **Safe automated prompt optimization** — The presence of an automated regression gateway makes it possible to safely run LLM-powered prompt-refinement loops, letting an external model refactor or compress prompt prose while `PromptHarness` mathematically guarantees no loss in behavior or context.
