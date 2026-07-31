@@ -226,10 +226,24 @@ public static partial class ExpectationChecker
     /// <summary>Context reads, writes and the closed vocabulary.</summary>
     private static void CheckContext(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
-        foreach (string variable in expect.ContextReads ?? [])
+        foreach (string entry in expect.ContextReads ?? [])
         {
-            if (!turn.ContextReads.Contains(variable, StringComparer.OrdinalIgnoreCase))
-                failures.Add($"contextReads: '{variable}' was never read (got {FormatList(turn.ContextReads)})");
+            (string? operation, string variable) = ParseContextReadEntry(entry);
+
+            bool found = operation is null
+                ? turn.ContextReads.Contains(variable, StringComparer.OrdinalIgnoreCase)
+                : turn.ContextAccesses.Any(access =>
+                    access.Operation != ContextOperation.Set
+                    && string.Equals(access.Operation.ToString(), operation, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(access.VariableName, variable, StringComparison.OrdinalIgnoreCase));
+
+            if (!found)
+            {
+                string got = string.Join(", ", turn.ContextAccesses
+                    .Where(access => access.Operation != ContextOperation.Set)
+                    .Select(access => $"{access.Operation}:{access.VariableName}"));
+                failures.Add($"contextReads: '{entry}' was never read (got [{got}])");
+            }
         }
 
         foreach (string variable in expect.ContextWrites ?? [])
@@ -300,4 +314,14 @@ public static partial class ExpectationChecker
     /// <summary>Renders a list for a failure message.</summary>
     private static string FormatList(IReadOnlyCollection<string> values)
         => values.Count == 0 ? "none" : string.Join(", ", values);
+
+    /// <summary>
+    /// Splits a <c>contextReads</c> entry into its optional outcome prefix and variable name —
+    /// <c>"Hit:userId"</c> → <c>("Hit", "userId")</c>, <c>"userId"</c> → <c>(null, "userId")</c>.
+    /// </summary>
+    private static (string? Operation, string Variable) ParseContextReadEntry(string entry)
+    {
+        int colon = entry.IndexOf(':');
+        return colon < 0 ? (null, entry) : (entry[..colon], entry[(colon + 1)..]);
+    }
 }
