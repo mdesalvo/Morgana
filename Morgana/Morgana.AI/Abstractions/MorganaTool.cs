@@ -180,8 +180,7 @@ public class MorganaTool
         toolLogger.LogInformation("LLM set {Count} quick reply buttons via SetQuickReplies tool", quickReplies.Count);
 
         return Task.FromResult<object>(
-            $"Quick reply buttons set successfully. The user will see {quickReplies.Count} interactive options. " +
-            $"Now provide your text response to the user - the quick reply buttons will appear below your message.");
+            $"Quick reply buttons set successfully. The user will see {quickReplies.Count} interactive options. Now provide your text response to the user - the quick reply buttons will appear below your message.");
     }
 
     // =========================================================================
@@ -221,8 +220,7 @@ public class MorganaTool
             {
                 toolLogger.LogWarning("SetRichCard called with excessive nesting depth: {Depth} (max 3)", depth);
                 return Task.FromResult<object>(
-                    $"Error: Rich card exceeds maximum nesting depth of 3 (found: {depth}). " +
-                    $"Please simplify the card structure.");
+                    $"Error: Rich card exceeds maximum nesting depth of 3 (found: {depth}). Please simplify the card structure.");
             }
 
             int totalComponents = CountComponents(parsedRichCard.Components);
@@ -230,20 +228,18 @@ public class MorganaTool
             {
                 toolLogger.LogWarning("SetRichCard called with too many components: {TotalComponents} (max 50)", totalComponents);
                 return Task.FromResult<object>(
-                    $"Error: Rich card has too many components: {totalComponents} (max 50). " +
-                    $"Please create a more focused card.");
+                    $"Error: Rich card has too many components: {totalComponents} (max 50). Please create a more focused card.");
             }
 
             ToolContext ctx = getToolContext();
             ctx.Provider.SetVariable(ctx.Session, "rich_card", richCard);
 
             toolLogger.LogInformation(
-                $"LLM set rich card '{parsedRichCard.Title}' with {totalComponents} components " +
-                $"(depth: {depth}) via SetRichCard tool");
+                "LLM set rich card '{Title}' with {TotalComponents} components (depth: {Depth}) via SetRichCard tool",
+                parsedRichCard.Title, totalComponents, depth);
 
             return Task.FromResult<object>(
-                $"Rich card set successfully. The user will see a structured visual card titled '{parsedRichCard.Title}'. " +
-                $"You can now provide additional context or explanation in text if needed.");
+                $"Rich card set successfully. The user will see a structured visual card titled '{parsedRichCard.Title}'. You can now provide additional context or explanation in text if needed.");
         }
         catch (JsonException ex)
         {
