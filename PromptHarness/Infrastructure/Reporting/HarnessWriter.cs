@@ -135,7 +135,10 @@ public static class HarnessWriter
     /// stable place to point a relative path at.
     /// </summary>
     internal static string ResolveDirectory(string configured, [CallerFilePath] string sourceFilePath = "")
+        // sourceFilePath is this file's own compile-time path, two levels below the project root
+        // (PromptHarness/Infrastructure/Reporting/HarnessWriter.cs) — ".." twice to climb out of
+        // Reporting/ and Infrastructure/ and land on PromptHarness/ itself, not just Infrastructure/.
         => Path.IsPathRooted(configured)
             ? configured
-            : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFilePath)!, "..", configured));
+            : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFilePath)!, "..", "..", configured));
 }

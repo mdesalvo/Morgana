@@ -432,10 +432,10 @@ FodyWeavers.xsd
 /Morgana/.claude/settings.local.json
 /Cauldron/.claude/settings.local.json
 
-# PromptHarness's baseline: the per-scenario journey rows (PromptHarness/Infrastructure/
-# BaselineWriter.cs), the failure transcripts (PromptHarness/Infrastructure/FailureLog.cs), and
-# JOURNEY.md are a local measurement log, not a repository artefact — every run is billed, and a
+# PromptHarness's journey: the per-scenario journey rows (PromptHarness/Infrastructure/Reporting/
+# HarnessWriter.cs), the failure transcripts (PromptHarness/Infrastructure/Reporting/FailureLog.cs),
+# and JOURNEY.md are a local measurement log, not a repository artefact — every run is billed, and a
 # token-count diff is not useful pull-request noise. The default location lives inside the project
-# tree for zero-friction local use; Harness:BaselineDirectory in appsettings.Harness.json can point
+# tree for zero-friction local use; Harness:HarnessDirectory in appsettings.Harness.json can point
 # it anywhere else (e.g. a shared results folder) without touching this rule.
-PromptHarness/Baseline/
+PromptHarness/Harness/
