@@ -151,6 +151,15 @@ public sealed class ExpectSpec
 
     /// <summary>Assert that the delivered text carries no Markdown syntax.</summary>
     public bool? TextNotMarkdown { get; init; }
+
+    /// <summary>
+    /// Assert that the chat-history reducer actually shrank the conversation before this turn ran —
+    /// read from <c>MorganaChatHistoryProvider</c>'s own log line, the only signal there is (no span
+    /// exists for this). Requires a scenario run under <c>SummarizationTests</c>, whose lowered
+    /// <c>Harness:SummarizationThreshold</c>/<c>SummarizationTargetCount</c> are what make a
+    /// scripted-length conversation actually cross the trigger.
+    /// </summary>
+    public bool? SummarizationOccurred { get; init; }
 }
 
 /// <summary>Loads scenario files from the harness output directory.</summary>

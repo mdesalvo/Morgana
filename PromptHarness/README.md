@@ -101,6 +101,9 @@ Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~Guard
 # the rest of the actors group — classifier, channel adaptation, presentation
 dotnet test … --filter "FullyQualifiedName~ActorTests"
 
+# the summarization group — requires a lowered boot-time reducer trigger, unset by default
+Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
+
 # one scenario — by DisplayName: the scenario id is a theory argument, not part of the FQN
 dotnet test … --filter "DisplayName~behaviour-rich-card"
 ```
@@ -120,7 +123,7 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 |---|---|---|
 | `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Efficiency` |
 | `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
-| `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card` | Billing | `Efficiency` |
+| `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
 | `behaviour-rich-card`, `context-no-invented-writes` | Inventory | **`Performance`** |
 
 Everything Morgana runs on its own account — guard, classifier, presenter — plus the judge, always

@@ -38,6 +38,9 @@ Harness__EnableGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQu
 # the rest of the actors group — classifier, channel adaptation, presentation
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ActorTests"
 
+# the summarization group — requires a lowered boot-time reducer trigger, unset by default
+Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"
+
 # one scenario by id — the scenario id is a Theory InlineData argument, so match on DisplayName, not FQN
 dotnet test PromptHarness.csproj --filter "DisplayName~behaviour-rich-card"
 ```
@@ -112,6 +115,14 @@ The judge is skipped once a turn already fails structurally (saves a live call).
   scenario meaning to exercise it opts in via `ScenarioDefinition.DegradedChannel`, which opens the
   conversation on `HarnessChannel.DegradedCapabilities`/`DegradedChannelName` instead — a distinct
   channel name, not just different capabilities, to avoid racing the Presentation cache above.
+- `SummarizationTests` — the reducer's default trigger (21 non-system messages: `SummarizationTargetCount`
+  8 + `SummarizationThreshold` 12) sits far above any scripted conversation's reach, so nothing has
+  ever exercised the summarization prompt. Same process-wide-config problem as Guard, same fix: its
+  own class, its own filtered run, with `Harness__SummarizationThreshold`/`SummarizationTargetCount`
+  lowered just for that invocation. `ExpectSpec.SummarizationOccurred` reads
+  `MorganaChatHistoryProvider`'s per-turn log line (the only signal — no span exists) and compares
+  the before/after message counts it reports, since the line itself fires every turn a reducer is
+  configured, whether or not anything actually shrank.
 
 **The journey is the point of the suite.** Every `ScenarioRunner.RunAsync` call writes a row to
 `<scenario-id>.md` via `HarnessWriter` — one row per revision phase, with pass rate, token

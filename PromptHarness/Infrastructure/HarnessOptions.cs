@@ -55,6 +55,19 @@ public sealed class HarnessOptions
     public string Phase { get; init; } = "v0";
 
     /// <summary>
+    /// Overrides <c>Morgana:HistoryReducer:SummarizationThreshold</c> at boot, when set. The default
+    /// (12, summing with <see cref="SummarizationTargetCount"/>'s default of 8 to a 21-message
+    /// trigger) is far above what any scripted scenario reaches — deliberately unset here, so every
+    /// class except <c>SummarizationTests</c> runs against the inherited, unmodified value. Lowering
+    /// it is process-wide for the whole shared host, exactly like <see cref="EnableGuardrail"/>: run
+    /// it in its own filtered <c>dotnet test</c> invocation, never alongside the rest of the suite.
+    /// </summary>
+    public int? SummarizationThreshold { get; init; }
+
+    /// <summary>Overrides <c>Morgana:HistoryReducer:SummarizationTargetCount</c> at boot, when set. See <see cref="SummarizationThreshold"/>.</summary>
+    public int? SummarizationTargetCount { get; init; }
+
+    /// <summary>
     /// Where the journey files and failure reports are written. An absolute path is used as-is; a
     /// relative one resolves against the project directory, not the build output.
     /// </summary>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Markdig;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
@@ -12,11 +13,19 @@ namespace PromptHarness.Infrastructure.Engine;
 /// is either on the delivered <see cref="ChannelMessage"/> or on the span and log signals the
 /// <see cref="TurnObserver"/> collected — never on the wording of the response.
 /// </summary>
-public static class ExpectationChecker
+public static partial class ExpectationChecker
 {
     /// <summary>The two ids the framework reserves for escaping a flow, declared once in <c>morgana.json</c>.</summary>
     private static readonly HashSet<string> EscapeOptionIds =
         new HashSet<string>(["continue_agent", "exit_agent"], StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Matches <c>MorganaChatHistoryProvider</c>'s per-turn log line, which fires every turn a
+    /// reducer is configured regardless of whether it actually shrank anything this time — the two
+    /// counts are what distinguish "reducer present" from "reduction happened".
+    /// </summary>
+    [GeneratedRegex(@"PROVIDING reduced view \((?<full>\d+) → (?<reduced>\d+) messages\)", RegexOptions.CultureInvariant)]
+    private static partial Regex SummarizationLogPattern { get; }
 
     /// <summary>Returns one message per violated expectation; empty when the turn conforms.</summary>
     public static IReadOnlyList<string> Check(ExpectSpec expect, TurnResult turn)
@@ -42,6 +51,7 @@ public static class ExpectationChecker
         CheckText(expect, turn, failures);
         CheckGuard(expect, turn, failures);
         CheckClassifier(expect, turn, failures);
+        CheckSummarization(expect, turn, failures);
 
         return failures;
     }
@@ -63,6 +73,34 @@ public static class ExpectationChecker
         if (expect.ClassifierMinConfidence is { } minimumConfidence
             && (turn.ClassifierConfidence is not { } actualConfidence || actualConfidence < minimumConfidence))
             failures.Add($"classifierMinConfidence: expected at least {minimumConfidence:F2}, got {turn.ClassifierConfidence?.ToString("F2") ?? "(none)"}");
+    }
+
+    /// <summary>
+    /// Whether <c>MorganaChatHistoryProvider</c>'s reducer actually shrank the conversation before
+    /// this turn — the log line fires every turn a reducer is configured, so "occurred" means the
+    /// two counts in the last such line for this turn differ, not merely that the line exists.
+    /// </summary>
+    private static void CheckSummarization(ExpectSpec expect, TurnResult turn, List<string> failures)
+    {
+        if (expect.SummarizationOccurred is not { } expectedOccurred)
+            return;
+
+        // Take the last match, not the first: a turn can carry the line more than once if the
+        // agent's own tool-loop causes ProvideChatHistoryAsync to be called via a nested path — the
+        // most recent read is the one that decided what the LLM actually saw this turn.
+        Match? match = null;
+        foreach (string line in turn.LogLines)
+        {
+            Match candidate = SummarizationLogPattern.Match(line);
+            if (candidate.Success)
+                match = candidate;
+        }
+
+        bool occurred = match is not null
+            && int.Parse(match.Groups["full"].Value, CultureInfo.InvariantCulture) > int.Parse(match.Groups["reduced"].Value, CultureInfo.InvariantCulture);
+
+        if (occurred != expectedOccurred)
+            failures.Add($"summarizationOccurred: expected {expectedOccurred}, got {occurred}" + (match is null ? " (no reducer log line seen — is a reducer configured?)" : $" ({match.Groups["full"].Value} → {match.Groups["reduced"].Value} messages)"));
     }
 
     /// <summary>Cardinality and identity of the quick replies delivered with the message.</summary>

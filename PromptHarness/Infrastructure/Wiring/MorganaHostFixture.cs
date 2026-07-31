@@ -214,6 +214,14 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Morgana__RateLimiting__Enabled", "false");
         Environment.SetEnvironmentVariable("Morgana__DustLimiting__Enabled", "false");
 
+        // Unset by default (see HarnessOptions.SummarizationThreshold's own remarks): only
+        // SummarizationTests sets these, in its own filtered dotnet test invocation, so the rest of
+        // the suite always runs against the inherited, unmodified reducer configuration.
+        if (Options.SummarizationThreshold is { } summarizationThreshold)
+            Environment.SetEnvironmentVariable("Morgana__HistoryReducer__SummarizationThreshold", summarizationThreshold.ToString());
+        if (Options.SummarizationTargetCount is { } summarizationTargetCount)
+            Environment.SetEnvironmentVariable("Morgana__HistoryReducer__SummarizationTargetCount", summarizationTargetCount.ToString());
+
         // Telemetry stays on as an ActivitySource — the in-process listener is what reads it — but
         // no exporter is wanted: OTLP would spam a collector that may not be listening. The
         // exporter list is variable-length, so every configured entry is walked and switched off
