@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Text.Json;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -146,6 +148,10 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         }
     }
 
+    /// <inheritdoc/>
+    public AIFunction WrapResilientTool(McpClientTool discoveredTool, UsesMCPServerAttribute serverAttribute)
+        => new ReconnectingMCPTool(discoveredTool, serverAttribute, this);
+
     /// <summary>
     /// Recovers from a terminated session for the given server, exactly once across all
     /// concurrent callers that observed it. Holds a per-pool-key gate so the reconnect is
@@ -242,6 +248,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// detected on the HTTP status alone, with no coupling to any server's error string or
     /// implementation-defined JSON-RPC code. Server-agnostic by construction: it recovers
     /// any MCP host whose session store does not survive instance recycling or scale-out.
+    /// Private: <see cref="ReconnectingMCPTool"/> needs the exact same classification and reads it
+    /// directly as a nested class, no visibility bump required for a signal that belongs entirely
+    /// to this file.
     /// </summary>
     private static bool IsSessionTerminated(Exception? ex)
     {
@@ -344,6 +353,106 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         {
             await DisconnectAllAsync();
             disposed = true;
+        }
+    }
+
+    /// <summary>
+    /// An MCP tool that keeps working after the server drops its session mid-conversation, instead
+    /// of staying bound forever to whichever <see cref="McpClientTool"/> it was discovered on.
+    /// </summary>
+    /// <remarks>
+    /// <para>An agent is a long-lived Akka actor — it survives every turn of a conversation until
+    /// the idle timeout — but a bare <c>McpClientTool</c> invokes over the exact session it was
+    /// discovered on, and that discovery happens once, in the agent's constructor. If the server
+    /// drops that session mid-conversation (the MCP Streamable HTTP spec's own "session terminated"
+    /// signal; routine, not exotic, for a server hosted on infrastructure that recycles instances or
+    /// scales out — e.g. an Azure Functions Consumption-plan endpoint like the one
+    /// <c>MonkeyAgent</c>'s example points at), every tool call on that already-bound agent keeps
+    /// failing until it is recreated. Nested here rather than reached from outside: only
+    /// <see cref="WrapResilientTool"/> ever constructs one, and the outer class's own
+    /// <see cref="IsSessionTerminated"/> is exactly the classification it needs — no visibility bump,
+    /// no risk of the two drifting apart on what is a single spec-mandated signal.</para>
+    /// <para><strong>The fast path costs nothing extra.</strong> The tool discovered at construction
+    /// is cached and called directly — exactly one round trip, exactly as a bare
+    /// <c>McpClientTool</c> would. Only when that call fails with the session-terminated signal does
+    /// this re-discover through the reconnect-safe path, cache the fresh tool, and retry once. A
+    /// server that never drops a session is never asked to re-list its tools; the cost of resilience
+    /// is paid only by the conversation that actually needed it.</para>
+    /// </remarks>
+    private sealed class ReconnectingMCPTool : AIFunction
+    {
+        private readonly MCPClientRegistryService registry;
+        private readonly UsesMCPServerAttribute serverAttribute;
+        private readonly string toolName;
+
+        /// <summary>
+        /// The tool this instance currently calls through. Read and replaced without a lock: a race
+        /// between two concurrent tool calls both observing a dead session is benign — both fall
+        /// through to the refresh below, the registry's own single-flight reconnect gate
+        /// (<see cref="ReconnectAsync"/>) collapses the redundant work, and whichever refreshed
+        /// reference is written last is the one every following call observes.
+        /// </summary>
+        private McpClientTool currentTool;
+
+        /// <summary>
+        /// Wraps a freshly-discovered <see cref="McpClientTool"/>, capturing its schema once and its
+        /// invocation as a cache that only refreshes itself on a session-terminated failure.
+        /// </summary>
+        public ReconnectingMCPTool(McpClientTool discoveredTool, UsesMCPServerAttribute serverAttribute, MCPClientRegistryService registry)
+        {
+            this.registry = registry;
+            this.serverAttribute = serverAttribute;
+            toolName = discoveredTool.Name;
+            currentTool = discoveredTool;
+
+            Name = discoveredTool.Name;
+            Description = discoveredTool.Description;
+            JsonSchema = discoveredTool.JsonSchema;
+            ReturnJsonSchema = discoveredTool.ReturnJsonSchema;
+        }
+
+        /// <inheritdoc/>
+        public override string Name { get; }
+
+        /// <inheritdoc/>
+        public override string Description { get; }
+
+        /// <inheritdoc/>
+        public override JsonElement JsonSchema { get; }
+
+        /// <inheritdoc/>
+        public override JsonElement? ReturnJsonSchema { get; }
+
+        /// <summary>
+        /// Calls the cached tool directly. Only on the MCP session-terminated signal does it
+        /// re-discover through the reconnect-safe path and retry once — any other failure (bad
+        /// arguments, a genuine server error) propagates immediately, exactly as it would from a
+        /// bare <c>McpClientTool</c>.
+        /// </summary>
+        protected override async ValueTask<object?> InvokeCoreAsync(
+            AIFunctionArguments arguments,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await currentTool.InvokeAsync(arguments, cancellationToken);
+            }
+            catch (Exception ex) when (IsSessionTerminated(ex))
+            {
+                // Falls through to the refresh below — the cached tool is dead, not the request.
+            }
+
+            McpClientTool refreshedTool = await registry.ExecuteWithReconnectAsync(
+                serverAttribute,
+                async client =>
+                {
+                    IList<McpClientTool> tools = await client.DiscoverToolsAsync(cancellationToken);
+                    return tools.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal))
+                        ?? throw new InvalidOperationException($"MCP server '{serverAttribute.Command}' no longer advertises tool '{toolName}'.");
+                });
+
+            currentTool = refreshedTool;
+            return await refreshedTool.InvokeAsync(arguments, cancellationToken);
         }
     }
 }

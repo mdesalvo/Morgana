@@ -1,3 +1,5 @@
+using Microsoft.Extensions.AI;
+using ModelContextProtocol.Client;
 using Morgana.AI.Attributes;
 using Morgana.AI.Services;
 
@@ -37,6 +39,17 @@ public interface IMCPClientRegistryService : IDisposable, IAsyncDisposable
     Task<T> ExecuteWithReconnectAsync<T>(
         UsesMCPServerAttribute serverAttribute,
         Func<MCPClient, Task<T>> operation);
+
+    /// <summary>
+    /// Wraps a freshly-discovered MCP tool so every future invocation re-resolves a live session
+    /// through this registry instead of staying bound to the session it was discovered on — the
+    /// fix for an agent (a long-lived actor) whose server drops that session mid-conversation, long
+    /// after the one-time discovery that happened in its constructor.
+    /// </summary>
+    /// <param name="discoveredTool">The tool as first discovered — source of the schema snapshot.</param>
+    /// <param name="serverAttribute">The server declaration, used to re-resolve the live client.</param>
+    /// <returns>An <see cref="AIFunction"/> safe to hand to <c>ChatOptions.Tools</c> for the life of the agent.</returns>
+    AIFunction WrapResilientTool(McpClientTool discoveredTool, UsesMCPServerAttribute serverAttribute);
 
     /// <summary>
     /// Disconnects and removes a specific MCP client from the pool.

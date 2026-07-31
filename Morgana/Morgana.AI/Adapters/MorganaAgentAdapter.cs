@@ -618,7 +618,8 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Discovers the tools of a single MCP server, as the SDK hands them over.
+    /// Discovers the tools of a single MCP server and wraps each through
+    /// <see cref="IMCPClientRegistryService.WrapResilientTool"/>.
     /// </summary>
     /// <param name="serverAttribute">Attribute declaring the MCP server (transport, command, args)</param>
     /// <returns>The server's tools, already invocable as <c>AIFunction</c>s</returns>
@@ -629,15 +630,17 @@ public class MorganaAgentAdapter
     /// Morgana-side prefix or namespacing is added, so the LLM calls them by their native
     /// server name exactly as the server advertises them.
     /// </para>
-    /// <para><strong>Why nothing is adapted here.</strong> An <c>McpClientTool</c> is an
-    /// <c>AIFunction</c> already, holding the server's input schema verbatim and invoking the
-    /// tool over the session it was discovered on. Morgana's own prompt policies have no purchase
-    /// on it: <c>ToolDescriptionContextGuidance</c> addresses context-scoped parameters and an MCP
-    /// tool has none by construction, while a parameter-level template cannot be spliced into a
-    /// schema authored elsewhere — nor should it be, since it would state for every remote
-    /// parameter a rule that is trivially true of all of them.</para>
+    /// <para><strong>Why the schema is untouched, but the binding is not.</strong> An
+    /// <c>McpClientTool</c> is an <c>AIFunction</c> already, holding the server's input schema
+    /// verbatim — Morgana's own prompt policies have no purchase on it: <c>ToolDescriptionContextGuidance</c>
+    /// addresses context-scoped parameters and an MCP tool has none by construction, while a
+    /// parameter-level template cannot be spliced into a schema authored elsewhere. What <em>is</em>
+    /// wrapped is invocation: a bare <c>McpClientTool</c> calls back over the exact session it was
+    /// discovered on, which is fine for a short-lived caller but not for an agent that lives for the
+    /// whole conversation — the registry's own <c>ReconnectingMCPTool</c> heals itself the one time a
+    /// session actually drops, at no extra cost the rest of the time.</para>
     /// </remarks>
-    private IList<McpClientTool> DiscoverMCPToolsFromServer(UsesMCPServerAttribute serverAttribute)
+    private IList<AIFunction> DiscoverMCPToolsFromServer(UsesMCPServerAttribute serverAttribute)
     {
         logger.LogInformation("Registering MCP tools from server: {ServerAttributeCommand}", serverAttribute.Command);
 
@@ -645,8 +648,7 @@ public class MorganaAgentAdapter
         // not survive instance recycling or scale-out can drop the cached client's session
         // between connect and tool listing (the spec-mandated HTTP 404 on a session-bearing
         // request). The wrapper transparently re-initializes and retries once instead of
-        // failing registration outright — and the tools handed back are bound to whichever
-        // client won, so there is no stale-session reference left to repair afterwards.
+        // failing registration outright.
         IList<McpClientTool> mcpTools = imcpClientRegistryService
             .ExecuteWithReconnectAsync(serverAttribute, client => client.DiscoverToolsAsync())
             .GetAwaiter()
@@ -666,7 +668,16 @@ public class MorganaAgentAdapter
 
         logger.LogInformation("Successfully registered {McpToolsCount} MCP tools from {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);
 
-        return mcpTools;
+        // Wrapped here, not left as the raw McpClientTool list: this is the one and only
+        // discovery this agent will ever perform (RegisterMCPTools runs once, in the
+        // constructor), so binding the agent to these exact instances is binding it to
+        // whichever session happened to be live at creation time, for the rest of the
+        // conversation. WrapResilientTool keeps the schema (captured here, from these same
+        // instances) and replaces only the invocation path.
+        return
+        [
+            .. mcpTools.Select(mcpTool => imcpClientRegistryService.WrapResilientTool(mcpTool, serverAttribute))
+        ];
     }
 
     private class ToolDefinitionNameComparer : IEqualityComparer<Records.ToolDefinition>
