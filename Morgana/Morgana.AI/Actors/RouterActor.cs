@@ -134,24 +134,15 @@ public class RouterActor : MorganaActor
         // so late stream chunks (see HandleAgentStreamChunk fallback) can still be routed to it.
         supervisorRef ??= originalSender;
 
-        Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
-
-        // Validate classification exists
-        if (req.Classification == null)
-        {
-            originalSender.Tell(new Records.AgentResponse(
-                classifierPrompt.GetAdditionalProperty<string>("MissingClassificationError"), true));
-            return;
-        }
-
         // Get or create agent for this intent
-        IActorRef? selectedAgent = await GetOrCreateAgentForIntent(req.Classification.Intent);
+        IActorRef? selectedAgent = await GetOrCreateAgentForIntent(req.Classification!.Intent);
 
         // Validate agent exists for this intent
         if (selectedAgent == null)
         {
-            originalSender.Tell(new Records.AgentResponse(
-                classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), true));
+            Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
+            string unrecognizedIntentError = classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError");
+            originalSender.Tell(new Records.AgentResponse(unrecognizedIntentError, true));
             return;
         }
 
