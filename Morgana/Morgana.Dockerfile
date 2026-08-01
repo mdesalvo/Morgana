@@ -5,7 +5,7 @@
 # - Morgana.Web (API + SignalR Hub)
 # - Morgana.AI (AI framework)
 # - Morgana.Contracts (zero-dependency wire contracts, referenced by Morgana.AI)
-# - Morgana.Examples (showcase plugins with 3 agents)
+# - Examples (showcase plugins with 4 agents)
 # ==============================================================================
 
 # ==============================================================================
@@ -22,22 +22,22 @@ WORKDIR /src
 # Copy project files for all required projects (layer caching optimization). The repo
 # layout is mirrored under /src so every ProjectReference resolves identically to the
 # host: Morgana.Web/AI/Contracts reference each other as siblings under Morgana/, and
-# Morgana.Examples (which lives outside Morgana/) references ..\Morgana\Morgana.AI.
+# Examples (which lives outside Morgana/) references ..\Morgana\Morgana.AI.
 COPY ["Morgana/Morgana.Web/Morgana.Web.csproj", "Morgana/Morgana.Web/"]
 COPY ["Morgana/Morgana.AI/Morgana.AI.csproj", "Morgana/Morgana.AI/"]
 COPY ["Morgana/Morgana.Contracts/Morgana.Contracts.csproj", "Morgana/Morgana.Contracts/"]
-COPY ["Morgana.Examples/Morgana.Examples.csproj", "Morgana.Examples/"]
+COPY ["Examples/Examples.csproj", "Examples/"]
 COPY ["Morgana/Directory.Build.props", "Morgana/"]
 
 # Restore NuGet dependencies (host app + the separately-published plugin project)
 RUN dotnet restore "Morgana/Morgana.Web/Morgana.Web.csproj" && \
-    dotnet restore "Morgana.Examples/Morgana.Examples.csproj"
+    dotnet restore "Examples/Examples.csproj"
 
 # Copy all source code from all projects
 COPY Morgana/Morgana.Web/ Morgana/Morgana.Web/
 COPY Morgana/Morgana.AI/ Morgana/Morgana.AI/
 COPY Morgana/Morgana.Contracts/ Morgana/Morgana.Contracts/
-COPY Morgana.Examples/ Morgana.Examples/
+COPY Examples/ Examples/
 
 # Build main project — InsideDockerBuild skips Directory.Build.targets'
 # host-side .env.versions generation, which can't see sibling projects here.
@@ -53,9 +53,9 @@ FROM build AS publish
 WORKDIR "/src/Morgana/Morgana.Web"
 RUN dotnet publish "Morgana.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false /p:InsideDockerBuild=true
 
-# Publish Morgana.Examples to plugins/ directory
-WORKDIR "/src/Morgana.Examples"
-RUN dotnet publish "Morgana.Examples.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false /p:InsideDockerBuild=true
+# Publish Examples to plugins/ directory
+WORKDIR "/src/Examples"
+RUN dotnet publish "Examples.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false /p:InsideDockerBuild=true
 
 # ==============================================================================
 # STAGE 3: RUNTIME (FINAL IMAGE)
@@ -84,10 +84,10 @@ COPY --from=publish /app/publish .
 # Create directory for SQLite databases (conversation persistence)
 RUN mkdir -p /app/data
 
-# Verify plugins directory exists and contains Morgana.Examples.dll
+# Verify plugins directory exists and contains Examples.dll
 RUN ls -la /app/plugins/ && \
-    test -f /app/plugins/Morgana.Examples.dll || \
-    (echo "ERROR: Morgana.Examples.dll not found in plugins/" && exit 1)
+    test -f /app/plugins/Examples.dll || \
+    (echo "ERROR: Examples.dll not found in plugins/" && exit 1)
 
 # Configure ASP.NET Core environment variables
 ENV ASPNETCORE_URLS=http://+:5001

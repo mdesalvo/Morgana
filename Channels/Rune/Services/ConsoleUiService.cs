@@ -9,23 +9,10 @@ using Spectre.Console.Rendering;
 namespace Rune.Services;
 
 /// <summary>
-/// Terminal UI for Rune built on Spectre.Console's <see cref="LiveDisplay"/>: a sticky
-/// header pinned at the top shows the conversation id and the current speaker
-/// (<c>Morgana</c> → emerald green; <c>Morgana (Agent)</c> → light green), a scrolling body
-/// prints the chat history colored by speaker (the user is white), and the
-/// bottom-most line hosts the input buffer with a blinking cursor. Incoming webhook
-/// messages are drained from a channel and trigger a refresh; user keystrokes are
-/// captured via <see cref="Console.ReadKey(bool)"/> on a pool thread.
+/// Terminal UI on Spectre.Console LiveDisplay: sticky header (conversation id + speaker),
+/// scrolling body (chat history), input buffer at bottom. Webhook messages refresh the UI;
+/// keystrokes captured via Console.ReadKey. Input gated during Morgana's turn (Escape exits).
 /// </summary>
-/// <remarks>
-/// Input is gated across Morgana's turn: once the user commits a line (Enter), the
-/// bottom line flips to a <c>"{speaker} is thinking…"</c> hint and all subsequent
-/// keystrokes — except <see cref="ConsoleKey.Escape"/>, which always exits — are
-/// silently swallowed until the next webhook delivery lands and flips the gate back.
-/// The initial state is also gated so nothing can be typed while waiting for the
-/// presentation message, matching Cauldron's typing-indicator semantics. Send
-/// failures release the gate so the user can retry.
-/// </remarks>
 public sealed class ConsoleUiService
 {
     /// <summary>Color for base Morgana turns: Emerald green.</summary>
@@ -666,7 +653,7 @@ public sealed class ConsoleUiService
     /// <summary>
     /// Renders <paramref name="message"/> to single-row markups: <c>"Who: Text"</c> char-wrapped
     /// at <paramref name="termWidth"/>, honouring embedded newlines as hard row breaks (an LLM
-    /// reply with <c>...?\n\n#INT#</c> spans three rows even if its char count fits one). The
+    /// reply with <c>...?\n\nAnything else?</c> spans three rows even if its char count fits one). The
     /// leading <c>Who:</c> prefix on the very first row is bold; every row is tinted in the speaker
     /// colour (emerald green for Morgana, light green for specialised agents, white for the user).
     /// </summary>

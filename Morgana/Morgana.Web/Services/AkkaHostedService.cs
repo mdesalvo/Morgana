@@ -3,24 +3,10 @@ using Akka.Actor;
 namespace Morgana.Web.Services;
 
 /// <summary>
-/// ASP.NET Core hosted service for managing the Akka.NET actor system lifecycle.
-/// Ensures graceful shutdown of the actor system when the application stops.
+/// ASP.NET Core hosted service that manages Akka.NET actor system lifecycle.
+/// Actor system initialized in DI container at startup (no action needed here).
+/// StartAsync: no-op (actor system already up). StopAsync: gracefully terminates actors for cleanup.
 /// </summary>
-/// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>Integrates the Akka.NET actor system with ASP.NET Core's application lifetime management.
-/// The actor system is initialized in the DI container before this service starts, and this service
-/// ensures proper termination during application shutdown.</para>
-/// <para><strong>Lifecycle:</strong></para>
-/// <list type="bullet">
-/// <item><term>Startup</term><description>Actor system already initialized via DI, no action needed</description></item>
-/// <item><term>Shutdown</term><description>Gracefully terminates actor system, allowing actors to clean up</description></item>
-/// </list>
-/// <para><strong>Registration:</strong></para>
-/// <code>
-/// services.AddHostedService&lt;AkkaHostedService&gt;();
-/// </code>
-/// </remarks>
 public class AkkaHostedService : IHostedService
 {
     private readonly ActorSystem _actorSystem;

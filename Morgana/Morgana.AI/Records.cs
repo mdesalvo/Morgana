@@ -9,18 +9,10 @@ using Morgana.Contracts;
 namespace Morgana.AI;
 
 /// <summary>
-/// Central repository of immutable record types (DTOs) used throughout the Morgana framework.
-/// Records are organized by functional area: agent communication, classification, prompts, tools and presentation.
+/// Immutable record types (DTOs) for actor messages, configuration, and serialization.
+/// Organized by functional area: conversation lifecycle, classification, prompts, tools, presentation, LLM providers.
+/// Immutability ensures thread-safety; explicit types prevent routing errors in actor system.
 /// </summary>
-/// <remarks>
-/// <para><strong>Design Philosophy:</strong></para>
-/// <list type="bullet">
-/// <item>Immutable records for thread-safety in actor message passing</item>
-/// <item>Explicit types prevent message routing errors in actor system</item>
-/// <item>JSON serialization support for LLM interactions and configuration loading</item>
-/// <item>Context wrappers preserve sender references across async operations (PipeTo pattern)</item>
-/// </list>
-/// </remarks>
 public static class Records
 {
     /// <summary>
@@ -39,17 +31,9 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Final response message sent from ConversationSupervisorActor to ConversationManagerActor after processing a user message.
-    /// Contains the AI response, metadata, agent information, and optional quick reply buttons.
+    /// Supervisor → Manager final response: text, classification, metadata, agent info, optional quick replies/rich card.
+    /// AgentName: agent identifier (e.g., "Morgana (Billing)"). AgentCompleted: flags multi-turn completion.
     /// </summary>
-    /// <param name="Response">AI-generated response text</param>
-    /// <param name="Classification">Intent classification result (e.g., "billing", "contract")</param>
-    /// <param name="Metadata">Additional metadata from classification (confidence, error codes, etc.)</param>
-    /// <param name="AgentName">Name of the agent that generated the response (e.g., "Morgana", "Morgana (Billing)")</param>
-    /// <param name="AgentCompleted">Flag indicating if the agent completed its multi-turn interaction</param>
-    /// <param name="QuickReplies">Optional list of quick reply buttons for guided user interactions</param>
-    /// <param name="OriginalTimestamp">Optional timestamp of the message when created at UI level</param>
-    /// <param name="RichCard">Optional rich card for structured data visualization</param>
     public record ConversationResponse(
         string Response,
         string? Classification,
@@ -86,30 +70,10 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Configuration options for conversation persistence.
+    /// Configuration for SQLite conversation persistence with AES-256 encryption.
+    /// StoragePath: directory for conversation databases (auto-created if missing).
+    /// EncryptionKey: base64-encoded 256-bit key (CRITICAL: keep secure, never commit).
     /// </summary>
-    /// <remarks>
-    /// <para><strong>Configuration Example:</strong></para>
-    /// <code>
-    /// {
-    ///   "Morgana": {
-    ///     "ConversationPersistence": {
-    ///       "StoragePath": "C:/MorganaData",
-    ///       "EncryptionKey": "your-base64-encoded-256-bit-key"
-    ///     }
-    ///   }
-    /// }
-    /// </code>
-    /// <para><strong>Generating an Encryption Key:</strong></para>
-    /// <code>
-    /// // C# code to generate a secure 256-bit key
-    /// using System.Security.Cryptography;
-    /// byte[] key = new byte[32];
-    /// RandomNumberGenerator.Fill(key);
-    /// string base64Key = Convert.ToBase64String(key);
-    /// Console.WriteLine(base64Key);
-    /// </code>
-    /// </remarks>
     public record ConversationPersistenceOptions
     {
         /// <summary>
@@ -244,27 +208,9 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Configuration options for conversation rate limiting.
+    /// Conversation rate limiting config: Enabled toggle, per-minute/hour/day limits, per-window error messages.
+    /// Set Enabled=false for development. Sliding window algorithm enforced via SQLiteRateLimitService.
     /// </summary>
-    /// <remarks>
-    /// <para><strong>Configuration Example:</strong></para>
-    /// <code>
-    /// {
-    ///   "Morgana": {
-    ///     "RateLimiting": {
-    ///       "Enabled": true,
-    ///       "MaxMessagesPerMinute": 5,
-    ///       "MaxMessagesPerHour": 30,
-    ///       "MaxMessagesPerDay": 80,
-    ///       "ErrorMessagePerMinute": "✋ Whoa there! You're casting spells too quickly...",
-    ///       "ErrorMessagePerHour": "⏰ You've reached your hourly spell quota...",
-    ///       "ErrorMessagePerDay": "🌙 You've exhausted today's magical energy...",
-    ///       "ErrorMessageDefault": "⚠️ You're sending messages too quickly..."
-    ///     }
-    ///   }
-    /// }
-    /// </code>
-    /// </remarks>
     public record RateLimitOptions
     {
         /// <summary>
@@ -342,27 +288,12 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Per-tier pricing: how many tokens of each direction equal one dust unit, plus
-    /// cache cost-weights. Lives under <c>Morgana:LLM:{Provider}:Tiers:{Tier}:MagicDust</c>
-    /// because cost is a property of the concrete model behind that tier. Zero on either axis
-    /// means that direction does not consume dust (e.g. Ollama local models, set both to 0
-    /// for "free").
-    /// <para>The MEAI Anthropic adapter reports <c>InputTokenCount</c> as the <em>total</em>
-    /// prompt (fresh + cache-read + cache-write). Charging it flat would over-count cache
-    /// reads (real cost ~0.1×) and under-count 1h cache writes (~2×). The two weights below
-    /// let the limiter track real cache economics; defaults are 1.0 (cache-unaware no-op, so
-    /// behaviour is unchanged unless a deployment configures them).</para>
-    /// <para><strong>Calibration of the shipped appsettings.json values:</strong> both axes
-    /// are derived directly from the tier's actual published per-token price (anchored to
-    /// <c>Efficiency</c>'s own real pricing so the dust currency stays meaningful) — no
-    /// artificial floor. There is deliberately no formula here that guarantees a minimum number
-    /// of conversational turns per <c>BudgetPerConversation</c>: how many LLM calls a single
-    /// user-visible turn costs is a property of the AGENT (a tool-heavy, dispositive agent like
-    /// Inventory can chain several calls per turn; a single-shot agent costs one), not of the
-    /// provider/tier this record lives under — so no per-tier constant can safely encode it.
-    /// When calibrating a tier, sanity-check <c>BudgetPerConversation</c> against your heaviest
-    /// tool-calling agent's REAL average calls-per-turn (inspect <c>dust_usage_log</c> on a
-    /// representative conversation), not against a nominal turn count assumed here.</para>
+    /// Per-tier pricing: tokens-per-dust and cache cost-weights for accurate token-budget tracking.
+    /// Live cost = (InputTokens × CachedInputWeight) + (CacheWriteTokens × CacheCreationWeight).
+    /// Zero on either axis means that direction is free. Defaults calibrated for Haiku 4.5/Sonnet 5
+    /// or gpt-4o-mini/gpt-4o; recalibrate when pointing a tier at a different model.
+    /// Sanity-check BudgetPerConversation against your heaviest agent's actual calls-per-turn
+    /// by inspecting dust_usage_log, not against nominal turn counts.
     /// </summary>
     public record MagicDustPricing
     {
@@ -421,93 +352,29 @@ public static class Records
     }
 
     /// <summary>
-    /// A single provider die (E-core or P-core, per <see cref="LLMTier"/>), with its own dust
-    /// pricing. There is no standalone "model" concept in Morgana's config surface — a tier
-    /// IS the unit a deployer configures and an agent binds to via
-    /// <see cref="Attributes.RequiresLLMTierAttribute"/>; the underlying model/deployment
-    /// identifier is just one field of it (<see cref="TierConfiguration.ModelId"/>). Lives under
-    /// <c>Morgana:LLM:{Provider}:Tiers</c> — a JSON object keyed by tier name
-    /// (<c>"Efficiency"</c>/<c>"Performance"</c>), not an array: .NET's configuration binder
-    /// merges JSON objects across layered sources (appsettings.json, User Secrets, environment
-    /// variables) by key, so an override file only needs to repeat the tiers it actually
-    /// overrides — the tier name is unambiguous regardless of how many entries are present in
-    /// each layer or in what order they're written. An array keyed by ordinal index instead
-    /// would merge positionally, silently pairing an override's N-th entry with the base
-    /// config's N-th entry even when they name different tiers.
+    /// Single provider die (E-core/P-core) with own dust pricing. Tier IS the unit deployer configures + agent binds to.
+    /// Lives under Morgana:LLM:{Provider}:Tiers as JSON object (keyed by name) not array: allows per-layer overrides to merge
+    /// by key. TierConfiguration is deliberate ChatOptions subset (ModelId, MaxOutputTokens only); MagicDust is tier-specific.
     /// </summary>
-    /// <param name="Options">
-    /// Deliberately narrow, JSON-bindable mirror of the handful of <see cref="ChatOptions"/>
-    /// fields Morgana lets a deployer default per tier — see <see cref="TierConfiguration"/> for
-    /// the census rationale (why these three fields and no others).
-    /// </param>
-    /// <param name="MagicDust">Dust pricing for this specific tier — not shared across tiers, since cost is a property of the concrete die, not the provider as a whole.</param>
     public record TierDefinition(
         TierConfiguration Options,
         MagicDustPricing MagicDust);
 
     /// <summary>
-    /// The deliberately small subset of <see cref="ChatOptions"/> a deployer can default per
-    /// tier, mirrored here as a plain JSON-bindable DTO rather than binding
-    /// <see cref="ChatOptions"/> itself (which carries polymorphic/delegate members —
-    /// <c>Tools</c>, <c>ResponseFormat</c>, <c>RawRepresentationFactory</c> — that have no sane
-    /// JSON shape and are, deliberately, never sourced from tier config anyway).
+    /// Deliberately minimal JSON-bindable DTO of tier-configurable ChatOptions subset.
+    /// Excludes sampling knobs, Reasoning, StopSequences, and per-call parameters.
+    /// Contains only ModelId (provider-specific identifier, e.g. "claude-haiku-4-5") and
+    /// MaxOutputTokens (per-tier ceiling). Left null, MaxOutputTokens defers to provider SDK
+    /// defaults, which are NOT uniform: Anthropic caps at 1024, while OpenAI/AzureOpenAI/Ollama
+    /// leave uncapped up to the model's context window.
     /// </summary>
-    /// <remarks>
-    /// <para><strong>Why only these two fields.</strong> Every other <see cref="ChatOptions"/>
-    /// member was considered and rejected for a specific reason, not omitted by oversight:</para>
-    /// <list type="bullet">
-    ///   <item><c>Temperature</c>, <c>TopP</c>, <c>TopK</c>, <c>FrequencyPenalty</c>,
-    ///   <c>PresencePenalty</c> — sampling knobs a domain expert authoring an agent prompt has no
-    ///   principled way to tune, and which risk destabilizing both the crafted personality
-    ///   (<c>morgana.json</c>/<c>agents.json</c> prompts) and tool-call reliability.</item>
-    ///   <item><c>Reasoning</c> — deliberately NOT exposed as a per-tier JSON knob. Reasoning
-    ///   effort is a property of which die an agent is authored against, not an independent
-    ///   dial a deployer can turn: a JSON-configurable field would let someone set
-    ///   <c>ExtraHigh</c> reasoning on the <c>Efficiency</c> tier, silently defeating the
-    ///   entire point of the E-core/P-core split. Each provider's <c>Efficiency</c>/<c>Performance</c>
-    ///   connector code owns its own fixed reasoning behavior instead (see the per-provider
-    ///   <c>Abstractions.LLMs.*</c> classes).</item>
-    ///   <item><c>StopSequences</c> — a mis-set stop sequence reproduces the exact truncation
-    ///   failure mode <c>MaxOutputTokens</c> exists to fix, except with
-    ///   <c>FinishReason.Stop</c> instead of <c>.Length</c> — indistinguishable from a normal
-    ///   completion, defeating the diagnostic signal <see cref="Abstractions.MorganaAgent"/> logs.</item>
-    ///   <item><c>Instructions</c>, <c>ConversationId</c>, <c>Tools</c> — inherently per-call, set
-    ///   fresh every turn by <c>Microsoft.Agents.AI</c> (agent path) or
-    ///   <see cref="Abstractions.MorganaLLM.CompleteWithSystemPromptAsync"/> (framework-actor
-    ///   path); a static tier default would either be a no-op or, worse, a source of drift from
-    ///   the actual composed prompt/tool set.</item>
-    ///   <item><c>ToolMode</c>, <c>ResponseFormat</c>, <c>Tools</c> — risk silently overriding the
-    ///   mandatory tool-usage contracts several agent prompts impose (e.g. "you MUST call
-    ///   SetRichCard").</item>
-    ///   <item><c>Seed</c> — reproducibility knob with no uniform support across the four
-    ///   providers; useful for eval/testing scenarios Morgana doesn't yet have, not for
-    ///   production tiers.</item>
-    ///   <item><c>AllowMultipleToolCalls</c>, <c>AllowBackgroundResponses</c>,
-    ///   <c>ContinuationToken</c>, <c>RawRepresentationFactory</c>, <c>AdditionalProperties</c> —
-    ///   either not applicable to Morgana's synchronous/streaming actor-driven turn model, or a
-    ///   genuine vendor-raw escape hatch meant to stay a code-level extension point, not a JSON field.</item>
-    /// </list>
-    /// </remarks>
-    /// <param name="ModelId">
-    /// Provider-specific model/deployment identifier (e.g. "claude-haiku-4-5") this die actually
-    /// runs. Required — named after <see cref="ChatOptions.ModelId"/> itself so the shape stays
-    /// traceable to the real MEAI type, rather than inventing a Morgana-specific name for it.
-    /// </param>
-    /// <param name="MaxOutputTokens">
-    /// Default output token ceiling applied to every call on this tier whose caller did not
-    /// already set <see cref="ChatOptions.MaxOutputTokens"/>. Left <c>null</c>, no default is
-    /// enforced and each provider SDK's own behavior applies — which is NOT uniform: the
-    /// Anthropic SDK silently falls back to a hardcoded 1024-token cap (truncating agents that
-    /// compose rich cards under tool calling, observed in practice on both tiers), while
-    /// OpenAI/AzureOpenAI/Ollama leave the request uncapped up to the model's own context window.
-    /// </param>
     public record TierConfiguration(
         string ModelId,
         int? MaxOutputTokens = null)
     {
         /// <summary>
         /// Materializes this census into a real <see cref="ChatOptions"/>, ready to be merged
-        /// (field-by-field, fill-if-absent — see <see cref="Abstractions.TierDefaultsChatClient"/>)
+        /// (field-by-field, fill-if-absent — see <see cref="ChatClients.TierDefaultsChatClient"/>)
         /// into every per-turn call on this tier.
         /// </summary>
         public ChatOptions ToChatOptions() => new()
@@ -530,15 +397,9 @@ public static class Records
     internal static readonly string[] OverridePlaceholders = ["_SECURE_OVERRIDE_", "_FUNCTIONAL_OVERRIDE_"];
 
     /// <summary>
-    /// Policy for the per-conversation lifetime dust budget — a token-consumption guard
-    /// orthogonal to <see cref="RateLimitOptions"/>. The budget is a lifetime resource: no
-    /// sliding window, no reset. Once exhausted the conversation is done; the only way
-    /// forward is a brand-new conversation.
-    /// <para>Message templates are framework-neutral English defaults; deployments override
-    /// them in <c>Morgana:DustLimiting</c> with their own copy and personality, exactly like
-    /// <see cref="RateLimitOptions"/>. The warning templates support one placeholder,
-    /// <c>{percent}</c> (remaining budget as a 0–100 integer — fuel-gauge semantics, the
-    /// same number the gauge shows; users reason in "how much is left", not dust units).</para>
+    /// Per-conversation lifetime dust budget (no sliding window, no reset). Orthogonal to RateLimitOptions.
+    /// Message templates are English defaults; deployments override in Morgana:DustLimiting with own personality.
+    /// Percent placeholder: fuel-gauge semantics (remaining as 0–100 integer, not dust units).
     /// </summary>
     public record DustLimitingOptions
     {
@@ -563,38 +424,10 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Configuration options for the Morgana authentication service.
+    /// Per-issuer trust model: each channel declares own IssuerOptions entry with own signing key (compromise isolation).
+    /// Tokens with undeclared iss claim are rejected. Onboarding new channel: add IssuerOptions where Name=iss claim,
+    /// SymmetricKey=channel's signing secret. Rejected at first request if not declared or key mismatch.
     /// </summary>
-    /// <remarks>
-    /// <para><strong>Per-Issuer Trust Model:</strong></para>
-    /// <para>Each accepted channel is declared as its own <see cref="IssuerOptions"/> entry
-    /// with its own signing key. A token is validated against the key of the issuer
-    /// declared in its <c>iss</c> claim — so compromise of one channel's key does not
-    /// impact the others. Tokens whose <c>iss</c> is not declared here are fail-closed.</para>
-    ///
-    /// <para><strong>Onboarding a New Channel:</strong></para>
-    /// <para>Any channel beyond the reference one (Cauldron) must be registered as an
-    /// <see cref="IssuerOptions"/> entry on the destination Morgana instance. Its
-    /// <see cref="IssuerOptions.Name"/> must equal the <c>iss</c> claim the channel mints,
-    /// and its <see cref="IssuerOptions.SymmetricKey"/> must match the secret the channel
-    /// uses to sign tokens. A channel not declared here — or using a different key — is
-    /// rejected at the very first request.</para>
-    ///
-    /// <para><strong>Configuration Example:</strong></para>
-    /// <code>
-    /// // appsettings.json
-    /// {
-    ///   "Morgana": {
-    ///     "Authentication": {
-    ///       "Audience": "morgana.ai",
-    ///       "Issuers": [
-    ///         { "Name": "cauldron", "SymmetricKey": "your-256-bit-secret-key-here" }
-    ///       ]
-    ///     }
-    ///   }
-    /// }
-    /// </code>
-    /// </remarks>
     public record AuthenticationOptions
     {
         /// <summary>
@@ -671,7 +504,7 @@ public static class Records
 
     /// <summary>
     /// Request for content moderation check on a user message.
-    /// Sent to GuardActor for two-level filtering (profanity + LLM policy check).
+    /// Sent to GuardActor for LLM-based policy checking.
     /// </summary>
     /// <param name="ConversationId">Unique identifier of the conversation</param>
     /// <param name="Message">User message to check for policy violations</param>
@@ -689,21 +522,9 @@ public static class Records
         [property: JsonPropertyName("violation")] string? Violation);
 
     /// <summary>
-    /// Result returned by <see cref="Interfaces.IGuardRailService"/> after evaluating
-    /// a user message against content and policy rules.
+    /// IGuardRailService result: Compliant (true=passes all checks, false=violated). Violation: human-readable
+    /// description of violated rule. Public contract, intentionally decoupled from GuardCheckResponse (internal LLM wire-format DTO).
     /// </summary>
-    /// <param name="Compliant">
-    /// <c>true</c> if the message passes all guard-rail checks; <c>false</c> if it violates a rule.
-    /// </param>
-    /// <param name="Violation">
-    /// Human-readable description of the violated rule when <paramref name="Compliant"/> is <c>false</c>;
-    /// <c>null</c> otherwise.
-    /// </param>
-    /// <remarks>
-    /// This record is the public contract of <see cref="Interfaces.IGuardRailService"/> and is
-    /// intentionally decoupled from <see cref="GuardCheckResponse"/>, which is an LLM wire-format DTO
-    /// used only by <see cref="Services.LLMGuardRailService"/> internally.
-    /// </remarks>
     public record GuardRailResult(
         bool Compliant,
         string? Violation);
@@ -747,19 +568,9 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Request message sent to MorganaAgent instances for processing user input.
-    /// Contains the user's message and optional classification result from ClassifierActor.
+    /// Request to agent: ConversationId, user message Content (null for tool-only), optional Classification
+    /// (null for follow-up to active agents), TurnContext for OTel span, channel Capabilities (null→full capability).
     /// </summary>
-    /// <param name="ConversationId">Unique identifier of the conversation</param>
-    /// <param name="Content">User message text to process (null for tool-only interactions)</param>
-    /// <param name="Classification">Optional intent classification result (null for follow-up messages to active agents)</param>
-    /// <param name="TurnContext">OpenTelemetry activity context for the current turn span.</param>
-    /// <param name="Capabilities">
-    /// Expressive capabilities advertised by the outbound channel serving this turn. Agents
-    /// consult these to avoid engaging features the channel cannot render — most notably,
-    /// skipping LLM streaming entirely when <see cref="ChannelCapabilities.SupportsStreaming"/>
-    /// is false. When null, agents assume full capabilities (legacy/test paths).
-    /// </param>
     public record AgentRequest(
         string ConversationId,
         string? Content,
@@ -768,24 +579,9 @@ public static class Records
         ChannelCapabilities? Capabilities = null);
 
     /// <summary>
-    /// Response message from MorganaAgent instances after processing a request.
-    /// Indicates the agent's response text, completion status, and optional quick reply buttons.
+    /// Agent response: text, IsCompleted flag (true→idle, false→agent stays active),
+    /// optional QuickReplies, optional RichCard for structured UX (e.g., contract terms, invoice details).
     /// </summary>
-    /// <param name="Response">Agent's response text (may contain #INT# token for multi-turn interactions)</param>
-    /// <param name="IsCompleted">
-    /// True if agent has completed its task (conversation returns to idle).
-    /// False if agent needs more user input (agent becomes active for follow-up messages).
-    /// </param>
-    /// <param name="QuickReplies">
-    /// Optional list of quick reply buttons to display to the user.
-    /// Agents can provide guided choices for better UX (e.g., contract sections, invoice selection).
-    /// If null, no quick replies are shown.
-    /// </param>
-    /// <param name="RichCard">
-    /// Optional rich card to display to the user.
-    /// Agents can provide structured contents for more engaging UX (e.g., contract terms,  invoice details).
-    /// If null, no rich cards are shown.
-    /// </param>
     public record AgentResponse(
         string Response,
         bool IsCompleted = true,
@@ -961,47 +757,18 @@ public static class Records
         }
 
         /// <summary>
-        /// Converts intents to a dictionary mapping intent names to descriptions.
-        /// Used by ClassifierActor to format intents for LLM classification prompt.
+        /// Converts intents to name→description dictionary for ClassifierActor LLM prompt formatting.
+        /// Format: "billing (description)|contract (description)". Returns new dictionary each call.
         /// </summary>
-        /// <returns>Dictionary with intent name as key and description as value</returns>
-        /// <remarks>
-        /// <para><strong>Usage in ClassifierActor:</strong></para>
-        /// <code>
-        /// IntentCollection intentCollection = new IntentCollection(intents);
-        /// Dictionary&lt;string, string&gt; intentDict = intentCollection.AsDictionary();
-        ///
-        /// // Format for LLM: "billing (requests to view invoices)|contract (requests to summarize contract)"
-        /// string formattedIntents = string.Join("|", intentDict.Select(kvp => $"{kvp.Key} ({kvp.Value})"));
-        /// </code>
-        /// </remarks>
         public Dictionary<string, string> AsDictionary()
         {
             return Intents.ToDictionary(i => i.Name, i => i.Description);
         }
 
         /// <summary>
-        /// Gets intents that should be displayed in presentation quick replies.
-        /// Excludes the "other" fallback intent and intents without labels.
+        /// Returns intents for presentation quick replies, excluding "other" fallback and intents
+        /// without labels. Filters per UI displayability rules (non-user-selectable excluded).
         /// </summary>
-        /// <returns>List of displayable intent definitions</returns>
-        /// <remarks>
-        /// <para><strong>Filtering Rules:</strong></para>
-        /// <list type="bullet">
-        /// <item>Exclude "other" intent (special fallback, not user-selectable)</item>
-        /// <item>Exclude intents without Label property (not meant for UI display)</item>
-        /// </list>
-        /// <para><strong>Usage in Presentation:</strong></para>
-        /// <code>
-        /// IntentCollection intentCollection = new IntentCollection(allIntents);
-        /// List&lt;IntentDefinition&gt; displayable = intentCollection.GetDisplayableIntents();
-        ///
-        /// // Convert to quick replies for SignalR
-        /// List&lt;QuickReply&gt; quickReplies = displayable
-        ///     .Select(i => new QuickReply(i.Name, i.Label, i.DefaultValue))
-        ///     .ToList();
-        /// </code>
-        /// </remarks>
         public List<IntentDefinition> GetDisplayableIntents()
         {
             return Intents
@@ -1024,25 +791,19 @@ public static class Records
         Prompt[] Prompts);
 
     /// <summary>
-    /// Prompt definition containing instructions, personality, and metadata for agents and actors.
-    /// Loaded from morgana.json (framework prompts) or agents.json (domain prompts).
+    /// Complete prompt definition (Target, Instructions, Personality, Formatting) with metadata and structured properties.
+    /// Loaded from morgana.json (framework) or agents.json (domain, intent-keyed).
     /// </summary>
-    /// <param name="ID">
-    /// Unique prompt identifier.
-    /// Framework: "Morgana", "Classifier", "Guard", "Presentation"
-    /// Domain: Intent names like "billing", "contract", "monkeys"
-    /// </param>
-    /// <param name="Type">Prompt type (e.g., "SYSTEM", "INTENT")</param>
+    /// <param name="ID">Prompt identifier: framework="Morgana"/"Classifier"/"Guard"/"Presentation", domain=intent name</param>
+    /// <param name="Type">Prompt type category (e.g., "SYSTEM", "INTENT")</param>
     /// <param name="SubType">Prompt subtype (e.g., "AGENT", "ACTOR", "PRESENTATION")</param>
-    /// <param name="Target">Core prompt text defining role and capabilities</param>
-    /// <param name="Instructions">Behavioral rules and guidelines</param>
-    /// <param name="Formatting">Output formatting rules (markdown, length limits, etc.)</param>
-    /// <param name="Personality">Optional tone and character traits</param>
-    /// <param name="Language">Language code (e.g., "en-US", "it-IT")</param>
-    /// <param name="Version">Prompt version for tracking changes</param>
-    /// <param name="AdditionalProperties">
-    /// List of dictionaries containing additional data like GlobalPolicies, Tools, ErrorAnswers, etc.
-    /// </param>
+    /// <param name="Target">Core prompt text: role definition, capabilities statement, operational boundaries</param>
+    /// <param name="Instructions">Behavioral rules, operational order, response constraints, tool-usage doctrine</param>
+    /// <param name="Formatting">Output formatting rules: markdown usage, quick reply format, rich card rendering</param>
+    /// <param name="Personality">Optional tone/character: formality, voice, domain-specific persona traits</param>
+    /// <param name="Language">BCP 47 language code (e.g., "en-US", "it-IT")</param>
+    /// <param name="Version">Prompt version string for tracking iteration history and regression detection</param>
+    /// <param name="AdditionalProperties">List of structured properties: Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc</param>
     public record Prompt(
         string ID,
         string Type,
@@ -1056,36 +817,9 @@ public static class Records
         List<Dictionary<string, object>> AdditionalProperties)
     {
         /// <summary>
-        /// Gets a strongly-typed additional property from the prompt configuration.
-        /// Searches all AdditionalProperties dictionaries for the specified key.
+        /// Gets additional property value (Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc).
+        /// Throws KeyNotFoundException if property not found. Deserializes JsonElement to type T.
         /// </summary>
-        /// <typeparam name="T">Type to deserialize the property value into</typeparam>
-        /// <param name="additionalPropertyName">Name of the property to retrieve (e.g., "Tools", "GlobalPolicies")</param>
-        /// <returns>Deserialized property value</returns>
-        /// <exception cref="KeyNotFoundException">Thrown if property not found in any AdditionalProperties dictionary</exception>
-        /// <remarks>
-        /// <para><strong>Common Additional Properties:</strong></para>
-        /// <list type="bullet">
-        /// <item><term>Tools</term><description>List&lt;ToolDefinition&gt; - Tool configurations for agents</description></item>
-        /// <item><term>GlobalPolicies</term><description>List&lt;GlobalPolicy&gt; - Framework-level behavioral policies</description></item>
-        /// <item><term>ErrorAnswers</term><description>List&lt;ErrorAnswer&gt; - Error message templates</description></item>
-        /// <item><term>ProfanityTerms</term><description>List&lt;string&gt; - Terms for content moderation</description></item>
-        /// <item><term>FallbackMessage</term><description>string - Default presentation message</description></item>
-        /// </list>
-        /// <para><strong>Usage Examples:</strong></para>
-        /// <code>
-        /// Prompt morganaPrompt = await promptResolver.ResolveAsync("Morgana");
-        ///
-        /// // Get global policies
-        /// List&lt;GlobalPolicy&gt; policies = morganaPrompt.GetAdditionalProperty&lt;List&lt;GlobalPolicy&gt;&gt;("GlobalPolicies");
-        ///
-        /// // Get tools
-        /// ToolDefinition[] tools = morganaPrompt.GetAdditionalProperty&lt;ToolDefinition[]&gt;("Tools");
-        ///
-        /// // Get error messages
-        /// List&lt;ErrorAnswer&gt; errors = morganaPrompt.GetAdditionalProperty&lt;List&lt;ErrorAnswer&gt;&gt;("ErrorAnswers");
-        /// </code>
-        /// </remarks>
         public T GetAdditionalProperty<T>(string additionalPropertyName)
         {
             foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
@@ -1098,21 +832,73 @@ public static class Records
             }
             throw new KeyNotFoundException($"AdditionalProperty with key '{additionalPropertyName}' was not found in the prompt with id='{ID}'");
         }
+
+        /// <summary>
+        /// Gets an additional property, or <paramref name="defaultValue"/> when the prompt does not
+        /// declare it. For optional configuration whose absence is a legitimate authoring choice
+        /// rather than a defect — where <see cref="GetAdditionalProperty{T}"/> would rightly throw.
+        /// </summary>
+        /// <typeparam name="T">Type to deserialize the property value into</typeparam>
+        /// <param name="additionalPropertyName">Name of the property to retrieve</param>
+        /// <param name="defaultValue">Value returned when the property is absent</param>
+        public T GetAdditionalPropertyOrDefault<T>(string additionalPropertyName, T defaultValue)
+        {
+            foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
+            {
+                if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
+                {
+                    JsonElement element = (JsonElement)value;
+                    return element.Deserialize<T>() ?? defaultValue;
+                }
+            }
+            return defaultValue;
+        }
     }
 
     /// <summary>
-    /// Global policy definition specifying framework-level behavioral rules.
-    /// Applied to all agents and actors to enforce consistent behavior.
+    /// Framework-level behavioral rule: Name, Description, Type (Critical or Injection), Priority (lower=higher).
+    /// Critical policies render into system prompt. Injection templates splice into tool/parameter descriptions
+    /// or per-turn context declaration (see Templates.ToolDescriptionContextGuidance, HeldContextDeclaration).
+    /// MorganaAgentAdapter orders by Type then Priority.
     /// </summary>
-    /// <param name="Name">Policy name (e.g., "ContextHandling", "InteractiveToken")</param>
-    /// <param name="Description">Detailed policy description with enforcement rules</param>
-    /// <param name="Type">Policy type ("Critical" or "Operational")</param>
-    /// <param name="Priority">Priority level (lower number = higher priority)</param>
     public record GlobalPolicy(
         string Name,
         string Description,
         string Type,
-        int Priority);
+        int Priority)
+    {
+        /// <summary>
+        /// <see cref="Type"/> value marking an injection template rather than a rendered policy.
+        /// </summary>
+        public const string InjectionType = "Injection";
+
+        /// <summary>
+        /// Injection template names: ToolDescriptionContextGuidance, HeldContextDeclaration.
+        /// Contract between morgana.json and code. Resolved by Name — must match configuration exactly.
+        /// </summary>
+        public static class Templates
+        {
+            /// <summary>Appended to the description of a tool declaring context-scoped parameters.</summary>
+            public const string ToolDescriptionContext = "ToolDescriptionContextGuidance";
+
+            /// <summary>Injected per turn, naming the context variables the session currently holds.</summary>
+            public const string HeldContextDeclaration = "HeldContextDeclaration";
+        }
+
+        /// <summary>
+        /// True when this entry is an injection template, spliced into tool/parameter descriptions
+        /// instead of being rendered among the global policies.
+        /// </summary>
+        public bool IsInjectionTemplate
+            => string.Equals(Type, InjectionType, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Resolves template text by name from policies; returns empty string if not found (signals splice sites to skip).
+        /// </summary>
+        public static string ResolveTemplate(IEnumerable<GlobalPolicy> policies, string name)
+            => policies.FirstOrDefault(policy =>
+                   string.Equals(policy.Name, name, StringComparison.OrdinalIgnoreCase))?.Description ?? "";
+    }
 
     /// <summary>
     /// Error message template with named identifier.
@@ -1141,20 +927,10 @@ public static class Records
         IReadOnlyList<ToolParameter> Parameters);
 
     /// <summary>
-    /// Tool parameter definition specifying parameter name, description, and behavior.
-    /// Controls whether parameter comes from context or request, and if it's shared across agents.
+    /// Tool parameter: name (must match method param), description, Required flag. Scope: "context" (GetContextVariable)
+    /// or "request" (user input). Shared: whether to persist in conversation-scoped shared_context registry for
+    /// cross-agent hydration. Only applies when Scope="context". Default: false.
     /// </summary>
-    /// <param name="Name">Parameter name (must match method parameter name)</param>
-    /// <param name="Description">Parameter description for LLM understanding</param>
-    /// <param name="Required">Whether the parameter is required (true) or optional (false)</param>
-    /// <param name="Scope">
-    /// Parameter scope: "context" (retrieve via GetContextVariable) or "request" (use directly from user input)
-    /// </param>
-    /// <param name="Shared">
-    /// Whether this context variable should be persisted in the conversation-scoped
-    /// <c>shared_context</c> registry so other agents of the same conversation can hydrate it
-    /// at the start of their next turn. Only applies when Scope="context". Default: false.
-    /// </param>
     public record ToolParameter(
         string Name,
         string Description,

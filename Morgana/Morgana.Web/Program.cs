@@ -12,23 +12,9 @@ using Morgana.Web.Services;
 // ==============================================================================
 // MORGANA - AI CONVERSATION FRAMEWORK
 // ==============================================================================
-// This is the main entry point for the Morgana application.
-// Morgana is an actor-based AI conversation framework that routes user requests
-// to specialized agents based on intent classification.
-//
-// Architecture Overview:
-// - ASP.NET Core Web API for REST endpoints
-// - SignalR for real-time bi-directional communication
-// - Akka.NET actor system for conversation orchestration
-// - Plugin-based extensibility for custom agents
-// - LLM abstraction supporting multiple providers (Anthropic, Azure OpenAI)
-//
-// Key Components:
-// 1. Controllers: REST API for conversation lifecycle management
-// 2. Hubs: SignalR real-time messaging
-// 3. Actors: Conversation orchestration pipeline (Guard → Classifier → Router → Agents)
-// 4. Services: Infrastructure services (SignalR bridge, LLM, configuration)
-// 5. Plugins: Dynamically loaded domain-specific agents
+// Actor-based AI conversation framework routing requests to specialized agents by intent.
+// Stack: ASP.NET Core REST + SignalR real-time + Akka.NET orchestration + plugin-based agents.
+// LLM providers: Anthropic, Azure OpenAI, OpenAI, Ollama. Pipeline: Guard → Classifier → Router → Agents.
 // ==============================================================================
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -44,37 +30,13 @@ builder.Services.AddEndpointsApiExplorer();
 // ==============================================================================
 // SECTION 2: Outbound Channel
 // ==============================================================================
-// Wires the outbound channel through which actors deliver messages to the end user.
-// IChannelService is the abstraction; concrete implementations carry the transport; an
-// IChannelServiceFactory picks the right transport per-conversation based on the deliveryMode
-// declared at the handshake.
-//
-// - IChannelService: resolved as AdaptingChannelService — the top-level service every producer
-//                    binds to. Responsible for (1) degrading the outbound payload to the
-//                    capabilities advertised by the originating channel via MorganaChannelAdapter,
-//                    and (2) dispatching the adapted payload to the concrete transport selected
-//                    by IChannelServiceFactory using the conversation's deliveryMode. Producers
-//                    keep calling channelService.SendMessageAsync(...) unchanged.
-// - IChannelServiceFactory: populated from ChannelServiceRegistration entries registered here,
-//                           one per concrete transport. Resolves the right IChannelService for
-//                           a given deliveryMode and exposes IsRegistered for the
-//                           start-conversation gate to reject unknown keys with a 400.
-// - SignalRChannelService: concrete transport backing the Cauldron web UI with full expressive
-//                          capabilities, registered under deliveryMode "signalr". AddSignalR()
-//                          is its transport-level dependency.
-// - WebhookChannelService: concrete transport for push-style clients (Rune CLI, third-party
-//                          integrators), registered under deliveryMode "webhook". POSTs the
-//                          outbound ChannelMessage as JSON to the absolute callbackUrl declared
-//                          by the channel on its ChannelCoordinates at the handshake — the
-//                          coordinate is validated by the start-conversation gate and persisted
-//                          by ConversationManagerActor, so the service just looks it up per send.
-//                          Uses IHttpClientFactory via the named client "Morgana.Webhook" to
-//                          preserve handler rotation despite being a singleton. Morgana does
-//                          NOT sign the outbound POST (asymmetric trust model, same shape as
-//                          GitHub/Stripe/Twilio webhook conventions).
-//
-// When additional channels are introduced, their concrete IChannelService is registered below
-// alongside its own ChannelServiceRegistration entry — no other file in the framework needs to move.
+// Outbound channel abstraction (IChannelService → AdaptingChannelService) that degrades rich messages
+// via MorganaChannelAdapter, then routes to concrete transport (SignalR, Webhook, etc.) based on
+// deliveryMode declared at conversation start. IChannelServiceFactory holds registrations; IsRegistered
+// gates invalid deliveryModes at the start-conversation endpoint (400 rejection). Each concrete transport
+// (SignalRChannelService for "signalr", WebhookChannelService for "webhook") is registered with its own
+// ChannelServiceRegistration entry. Webhook uses IHttpClientFactory for handler rotation; does NOT sign
+// POSTs (asymmetric trust model). Adding new channels requires registration here only; framework unchanged.
 
 builder.Services.AddSingleton<IChannelMetadataStore, ChannelMetadataStore>();
 
@@ -119,22 +81,9 @@ builder.Services.AddCors(options =>
 // ==============================================================================
 // SECTION 4.1: OpenTelemetry
 // ==============================================================================
-// Distributed tracing for conversation-level observability.
-// Produces a trace per conversation with child spans for each turn, guard check,
-// intent classification, agent routing, and agent execution.
-//
-// Trace structure:
-//   morgana.conversation     ← lifetime of a conversation
-//     morgana.turn           ← one per user message
-//       morgana.guard        ← content moderation result
-//       morgana.classifier   ← intent + confidence
-//       morgana.router       ← selected agent path
-//       morgana.agent        ← LLM execution, TTFT, response preview
-//
-// Configuration: appsettings.json → Morgana:OpenTelemetry
-//   Enabled:       true/false
-//   ServiceName:   "Morgana"
-//   Exporter:      "otlp" | "console"
+// Distributed tracing per conversation with child spans for each turn (guard check,
+// classifier intent+confidence, router agent selection, agent LLM execution with TTFT).
+// Configured via appsettings.json → Morgana:OpenTelemetry (Enabled, ServiceName, Exporter: "otlp"/"console").
 
 builder.Services.AddMorganaOpenTelemetry(builder.Configuration);
 
@@ -372,3 +321,13 @@ await app.RunAsync();
 //    - Client calls LeaveConversation(conversationId) and disconnects SignalR
 //
 // ==============================================================================
+
+// ==============================================================================
+// TEST ENTRY POINT VISIBILITY
+// ==============================================================================
+// Top-level statements compile into an implicitly-generated internal Program class.
+// Declaring it partial and public lets the prompt harness (PromptHarness) reach this
+// assembly's entry point and boot the real host in-process on an ephemeral Kestrel port.
+// It has no effect on production behaviour.
+
+public partial class Program;

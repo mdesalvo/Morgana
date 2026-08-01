@@ -14,43 +14,10 @@ using static Morgana.AI.Records;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// SQLite-based conversation persistence service with AES-256 encryption.
-/// Stores each conversation in a separate database file: "morgana-{conversationId}.db"
-/// Each database contains a single table "morgana" with one row per agent.
+/// SQLite-based persistence with AES-256 encryption, one database per conversation.
+/// Stores agent sessions per agent with primary key agent_identifier; single-threaded (one active agent).
+/// IV prepended to ciphertext; StoragePath + EncryptionKey (base64, 256-bit) configured in appsettings.json.
 /// </summary>
-/// <remarks>
-/// <para><strong>Storage Model:</strong></para>
-/// <code>
-/// Database per conversation:
-///   {StoragePath}/morgana-conv12345.db
-///
-/// Table structure (morgana):
-///   - agent_identifier: TEXT PRIMARY KEY (e.g., "billing-conv12345")
-///   - agent_name: TEXT UNIQUE (e.g., "billing")
-///   - agent_session: BLOB (AES-256-CBC encrypted AgentSession JSON)
-///   - creation_date: TEXT (ISO 8601: "yyyy-MM-ddTHH:mm:ss.fffZ")
-///   - last_update: TEXT (ISO 8601: "yyyy-MM-ddTHH:mm:ss.fffZ")
-///   - is_active: INTEGER (0 or 1)
-/// </code>
-/// <para><strong>Concurrency Model:</strong></para>
-/// <para>Only ONE agent is active at a time per conversation. No concurrent writes occur.
-/// This allows for simplified SQLite configuration without WAL mode or complex locking.</para>
-/// <para><strong>Encryption:</strong></para>
-/// <para>Agent session data is encrypted using AES-256-CBC with PKCS7 padding.
-/// IV is prepended to ciphertext. Encryption key from appsettings.json.</para>
-/// <para><strong>Configuration:</strong></para>
-/// <code>
-/// // appsettings.json
-/// {
-///   "Morgana": {
-///     "ConversationPersistence": {
-///       "StoragePath": "C:/MorganaData",
-///       "EncryptionKey": "your-base64-encoded-256-bit-key"
-///     }
-///   }
-/// }
-/// </code>
-/// </remarks>
 public class SQLiteConversationPersistenceService : IConversationPersistenceService
 {
     private readonly ILogger logger;

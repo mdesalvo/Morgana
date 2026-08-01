@@ -10,25 +10,12 @@ namespace Morgana.AI.Actors;
 /// Intent classification actor that analyses user messages and determines their underlying intent.
 /// </summary>
 /// <remarks>
-/// <para>
-/// This actor is intentionally thin: all classification logic is delegated to
-/// <see cref="IClassifierService"/>, which is resolved from DI and can be swapped
-/// without touching the actor system. The default implementation
-/// (<see cref="Services.LLMClassifierService"/>) reproduces the LLM-based strategy
-/// (intent definitions + classifier prompt) that was previously embedded here.
-/// </para>
-///
-/// <para><strong>Tell Pattern:</strong></para>
-/// <para>Captures the sender reference before the async call and replies directly via
-/// <c>originalSender.Tell()</c>, avoiding temporary Ask actors and the associated
-/// lifecycle overhead.</para>
-///
-/// <para><strong>Error Handling:</strong></para>
-/// <para><see cref="IClassifierService"/> implementations are expected to fail safe on
-/// transient errors, returning a fallback <c>"other"</c> intent (see interface contract).
-/// Should the service itself throw an unhandled exception, this actor propagates a
-/// <see cref="Status.Failure"/> to the supervisor, which will apply its own
-/// <c>"other"</c>-intent fallback.</para>
+/// Thin orchestration actor that delegates all classification logic to IClassifierService,
+/// making the strategy swappable via DI. Default implementation (LLMClassifierService) uses
+/// LLM-based classification with intent definitions and classifier prompt. Uses Tell pattern
+/// (captures sender, replies via originalSender.Tell) to avoid Ask actor overhead.
+/// IClassifierService implementations fail safe by returning "other" intent on transient errors;
+/// unhandled exceptions propagate Status.Failure to supervisor for its fallback handling.
 /// </remarks>
 public class ClassifierActor : MorganaActor
 {

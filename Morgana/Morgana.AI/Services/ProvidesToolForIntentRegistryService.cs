@@ -7,60 +7,10 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Implementation of IToolRegistryService that discovers tools via reflection.
-/// Scans all loaded assemblies for MorganaTool classes marked with [ProvidesToolForIntent] attribute.
-/// Performs comprehensive validation and provides detailed diagnostic output.
+/// Discovers tools via [ProvidesToolForIntent] attribute scanning of all loaded assemblies.
+/// Validates tool↔agent mappings; warns on duplicate registrations, orphaned tools, tools-less agents.
+/// Console + logger diagnostic output for visibility; builds case-insensitive intent→tool registry.
 /// </summary>
-/// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>This service enables automatic tool discovery for agent capabilities without hardcoded mappings.
-/// It scans all loaded assemblies (including plugins) and builds a registry of tools, then validates
-/// that tools and agents are properly coordinated.</para>
-/// <para><strong>Discovery and Validation Flow:</strong></para>
-/// <code>
-/// 1. Application Startup
-/// 2. PluginLoaderService loads domain assemblies
-/// 3. ProvidesToolForIntentRegistryService initializes
-/// 4. Scans all assemblies for MorganaTool-derived classes
-/// 5. Filters for classes with [ProvidesToolForIntent] attribute
-/// 6. Builds intent → Type registry (case-insensitive)
-/// 7. Checks for duplicate tool registrations (same intent)
-/// 8. Discovers all agents with [HandlesIntent] attribute
-/// 9. Performs bidirectional validation:
-///    - Agents without tools (warning: agent has no capabilities)
-///    - Tools without agents (warning: orphaned tool)
-///    - Successful mappings (info: proper coordination)
-/// 10. Displays comprehensive diagnostic report
-/// </code>
-/// <para><strong>Console Output Example:</strong></para>
-/// <code>
-/// 🔍 Scanning assemblies for MorganaTool implementations...
-///   📦 Registered tool: BillingTool for intent 'billing'
-///   📦 Registered tool: ContractTool for intent 'contract'
-/// ✅ Tool registry initialized with 2 tool(s)
-///
-/// ========================================
-/// Tool Registry Validation
-/// ========================================
-/// ✅ Tool Registry: Agent 'billing' → Tool 'BillingTool'
-/// ✅ Tool Registry: Agent 'contract' → Tool 'ContractTool'
-/// ========================================
-/// </code>
-/// <para><strong>Validation Scenarios:</strong></para>
-/// <code>
-/// // Warning: Agent without tool
-/// ℹ️  Agent 'billing' (BillingAgent) has no native tool registered!
-/// // This agent will only have framework tools (GetContextVariable, SetContextVariable)
-///
-/// // Warning: Tool without agent
-/// ⚠️  Tool 'BillingTool' provides intent 'billing' but no agent handles this intent.
-/// // This tool will never be instantiated
-///
-/// // Error: Duplicate tool registration
-/// ❌ Duplicate tool registration for intent 'billing': BillingTool and AlternateBillingTool
-/// // Only one tool can provide functionality for each intent
-/// </code>
-/// </remarks>
 public class ProvidesToolForIntentRegistryService : IToolRegistryService
 {
     private readonly ILogger logger;
@@ -85,38 +35,10 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     }
 
     /// <summary>
-    /// Initializes the tool registry by scanning assemblies and performing validation.
-    /// Outputs comprehensive diagnostic information to console and logger.
+    /// Scans assemblies for MorganaTool classes with [ProvidesToolForIntent] attribute.
+    /// Validates tool↔agent coordination; checks for duplicates/orphans; outputs diagnostics.
     /// </summary>
-    /// <returns>Dictionary mapping intent names to tool types</returns>
-    /// <remarks>
-    /// <para><strong>Discovery Process:</strong></para>
-    /// <list type="number">
-    /// <item>Get all assemblies from AppDomain (excluding dynamic assemblies)</item>
-    /// <item>Get all types from each assembly (handle ReflectionTypeLoadException)</item>
-    /// <item>Filter for concrete MorganaTool-derived classes</item>
-    /// <item>Filter for classes with [ProvidesToolForIntent] attribute</item>
-    /// <item>Extract intent from attribute</item>
-    /// <item>Check for duplicate registrations (error if found)</item>
-    /// <item>Build intent → Type dictionary (case-insensitive)</item>
-    /// </list>
-    /// <para><strong>Validation Process:</strong></para>
-    /// <list type="number">
-    /// <item>Discover all agents with [HandlesIntent] attribute</item>
-    /// <item>Build set of agent intents</item>
-    /// <item>Build set of tool intents</item>
-    /// <item>Find agents without tools (warning: limited capabilities)</item>
-    /// <item>Find tools without agents (warning: orphaned tools)</item>
-    /// <item>Display successful agent → tool mappings</item>
-    /// <item>Display any duplicate registration errors</item>
-    /// </list>
-    /// <para><strong>Error Handling:</strong></para>
-    /// <para>ReflectionTypeLoadException is caught during type scanning to handle partially-loaded
-    /// assemblies gracefully. Errors are logged but don't stop the discovery process.</para>
-    /// <para><strong>Console vs Logger:</strong></para>
-    /// <para>Diagnostic output goes to Console for visibility during startup, and major errors
-    /// are also logged via ILogger for production diagnostics.</para>
-    /// </remarks>
+    /// <returns>Dictionary mapping intent names to tool types (case-insensitive)</returns>
     private Dictionary<string, Type> InitializeRegistry()
     {
         Console.WriteLine("🔍 Scanning assemblies for MorganaTool implementations...");

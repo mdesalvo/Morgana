@@ -1,0 +1,23 @@
+id: context-closed-vocabulary-monkeys
+description: >-
+  The anti-invention property. MonkeyAgent declares no context-scoped parameter, so its legal
+  vocabulary is empty and any context access at all is an invented name — typically the query
+  subject mistaken for a variable. The subject belongs to the domain tool, not to the registry.
+runs: 5
+minPasses: 5
+
+turns:
+  # A proper name the MCP catalogue actually holds, kept inside a phrase that still carries the
+  # domain: a bare "Tell me about Sebastian" gives the classifier no signal and lands on "other",
+  # which moves the failure out of the agent entirely. With the domain word present, the subject is
+  # still the sharpest form of the test: "Sebastian" is exactly the kind of string a confused model
+  # passes to GetContextVariable, so the anti-invention property is under real pressure here.
+  - say: "Tell me about a monkey named Sebastian"
+    expect:
+      agent: MonkeyAgent
+      # The whole property, stated deterministically: the subject reached the domain tool, and the
+      # registry was never touched. There is no judge proposition here by design.
+      noContextAccess: true
+      toolsCalled: [get_monkey]
+      textNotEmpty: true
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]

@@ -1,0 +1,25 @@
+id: context-cycle-on-hit
+description: >-
+  The other half of the cycle: once a context variable is known, the agent uses it and does not ask
+  again. Hesitation here is as much a regression as an invented name.
+runs: 5
+minPasses: 5
+
+turns:
+  - say: "Hi, my customer code is P994E — show me my last 3 invoices"
+    expect:
+      agent: BillingAgent
+      contextVocabulary: [userId]
+      toolsCalled: [GetInvoices]
+      textNotEmpty: true
+
+  - say: "Now show me my payment history for the last 6 months"
+    expect:
+      agent: BillingAgent
+      contextVocabulary: [userId]
+      toolsCalled: [GetPaymentHistory]
+      noContextWrites: true
+      textNotEmpty: true
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+    judgeNot:
+      - "The response asks the user for their customer code, identifier or any information the user already provided earlier in the conversation."

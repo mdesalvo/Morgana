@@ -7,39 +7,11 @@ using static Morgana.AI.Records;
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Service for persisting and loading conversation state (AgentSession) across application restarts.
-/// Enables resuming conversations from where they left off by serializing session state to durable storage.
+/// Persistence abstraction for AgentSession state: SaveAgentConversationAsync saves session (message history, context variables);
+/// LoadAgentConversationAsync loads and restores a previously saved session (null if not found, indicating new conversation).
+/// SaveAgentConversationAsync handles serialization/encryption;
+/// LoadAgentConversationAsync handles deserialization/decryption plus reconnection of AI context providers.
 /// </summary>
-/// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>This service abstracts the persistence layer for conversation state, allowing different implementations
-/// such as file-based storage, database storage, or cloud blob storage. Each conversation is uniquely identified
-/// by conversationId and contains the complete state needed to resume the conversation.</para>
-/// <para><strong>Persisted State:</strong></para>
-/// <list type="bullet">
-/// <item><term>Message History</term><description>All user and assistant messages in the conversation</description></item>
-/// <item><term>Context Variables</term><description>Agent context variables (userId, invoiceId, etc.)</description></item>
-/// <item><term>Shared Variable Names</term><description>Configuration of which variables are shared across agents</description></item>
-/// </list>
-/// <para><strong>Usage Pattern:</strong></para>
-/// <code>
-/// // Save conversation after each turn
-/// await persistenceService.SaveAgentConversationAsync(conversationId, AgentSession);
-///
-/// // Load conversation on subsequent requests
-/// AgentSession? restored = await persistenceService.LoadAgentConversationAsync(conversationId, morganaAgent);
-/// if (restored != null)
-/// {
-///     // Continue conversation with restored state
-///     await aiAgent.RunAsync(userMessage, restored);
-/// }
-/// </code>
-/// <para><strong>Implementation Examples:</strong></para>
-/// <list type="bullet">
-/// <item><term>SqlConversationPersistenceService</term><description>Stores conversations in SQL database</description></item>
-/// <item><term>CosmosDbConversationPersistenceService</term><description>Stores conversations in Azure Cosmos DB (future)</description></item>
-/// </list>
-/// </remarks>
 public interface IConversationPersistenceService
 {
     /// <summary>
@@ -172,28 +144,10 @@ public interface IConversationPersistenceService
     Task<ChannelMetadata?> LoadChannelMetadataAsync(string conversationId);
 
     /// <summary>
-    /// Persists a shared context variable into the conversation-scoped <c>shared_context</c>
-    /// registry. When an agent calls <see cref="MorganaAIContextProvider"/>.<c>SetVariable</c>
-    /// for a variable declared as shared in its tool contracts, the value is written here so
-    /// that any agent in the conversation — whether currently alive, dormant,
-    /// dead-and-rehydrated, or never yet activated — can pick it up at the start of its next
-    /// turn via <see cref="LoadSharedVariablesAsync(string)"/>.
+    /// Persists shared context variable into conversation-scoped shared_context registry for cross-agent access.
+    /// First-write-wins: implementations MUST ignore subsequent upserts with different values (SQLite: INSERT OR IGNORE).
+    /// May be invoked before agent's first save; implementations MUST call EnsureDatabaseInitializedAsync internally.
     /// </summary>
-    /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
-    /// <param name="variableName">Shared variable name (e.g. <c>userId</c>).</param>
-    /// <param name="variableValue">Variable value to persist (typically a string).</param>
-    /// <param name="sourceAgentIntent">Intent of the agent that originated the write (audit/debug only).</param>
-    /// <remarks>
-    /// <para><strong>First-write-wins:</strong> implementations MUST honour first-write semantics
-    /// at the storage level — once a variable name has a value in this registry, subsequent
-    /// upserts with a different value MUST be ignored, mirroring the merge rule that
-    /// <see cref="MorganaAIContextProvider.MergeSharedContext"/> applies on the read side. The
-    /// SQLite implementation uses <c>INSERT OR IGNORE</c> on a primary-key column to achieve this.</para>
-    /// <para><strong>First-writer pattern:</strong> this method may be invoked early in a fresh
-    /// conversation (before the agent has saved its first session). Implementations MUST call
-    /// <see cref="EnsureDatabaseInitializedAsync(string)"/> internally to guarantee the schema
-    /// exists.</para>
-    /// </remarks>
     Task UpsertSharedVariableAsync(string conversationId, string variableName, object variableValue, string sourceAgentIntent);
 
     /// <summary>
@@ -217,14 +171,9 @@ public interface IConversationPersistenceService
     Task<Dictionary<string, object>> LoadSharedVariablesAsync(string conversationId);
 
     /// <summary>
-    /// Reports whether the given conversation is known to the underlying store. Used by the
-    /// restore path to distinguish a genuine existing conversation (possibly on an older
-    /// schema) from a stale client-side identifier pointing to a conversation that was never
-    /// materialised — so the caller can reject the restore instead of fabricating empty state
-    /// on its behalf. Implementations decide what "exists" means in their backend: the SQLite
-    /// implementation checks for the per-conversation database file, a SQL Server or
-    /// PostgreSQL implementation would probe a conversations table, a blob-store
-    /// implementation would probe the corresponding object.
+    /// Reports whether conversation exists in store. Restore path uses this to distinguish
+    /// genuine existing conversations from stale identifiers never materialized.
+    /// Backend-agnostic: SQLite checks DB file, SQL/PostgreSQL probe table, blob-store probes object.
     /// </summary>
     /// <param name="conversationId">Conversation identifier.</param>
     /// <returns><c>true</c> if the conversation is present in the store, <c>false</c> otherwise.</returns>

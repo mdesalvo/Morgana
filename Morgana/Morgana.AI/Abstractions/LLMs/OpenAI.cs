@@ -12,29 +12,11 @@ namespace Morgana.AI.Abstractions.LLMs;
 /// Supports GPT models via OpenAI Service (gpt-4o, gpt-4o-mini, ...)
 /// </summary>
 /// <remarks>
-/// <para><strong>Configuration (appsettings.json):</strong></para>
-/// <code>
-/// {
-///   "Morgana: {
-///     "LLM": {
-///       "Provider": "openai",
-///       "OpenAI": {
-///         "ApiKey": "your-api-key",
-///         "Tiers": {
-///           "Efficiency": { "Options": { "ModelId": "gpt-4o-mini", "MaxOutputTokens": 4096 }, "MagicDust": { ... } },
-///           "Performance": { "Options": { "ModelId": "gpt-4o", "MaxOutputTokens": 8192 }, "MagicDust": { ... } }
-///         }
-///       }
-///     }
-///   }
-/// }
-/// </code>
-/// <para><strong>MagicDust:</strong> <c>Efficiency</c> matches gpt-4o-mini's real pricing
-/// exactly; <c>Performance</c> doesn't — gpt-4o-mini→gpt-4o is a real ~17× price jump, too steep
-/// for the shared, per-conversation <c>BudgetPerConversation</c> to absorb literally, so it's
-/// floored instead (see <see cref="Records.MagicDustPricing"/> remarks for the formula).
-/// Recalibrate both tiers whenever you change <c>ModelId</c> — OpenAI's lineup runs from "mini"
-/// variants to flagship models with no fixed price relationship between them.</para>
+/// OpenAI provider implementation. Configuration under Morgana:LLM:OpenAI with ApiKey and Tiers map
+/// (Efficiency/Performance). MagicDust pricing: Efficiency tier matches gpt-4o-mini's real per-token cost exactly;
+/// Performance tier is floored (gpt-4o costs ~17× more per token, too steep for per-conversation budget,
+/// so it's reduced proportionally). When you change either tier's ModelId, recalibrate InputTokensPerDustUnit
+/// and OutputTokensPerDustUnit for that model's actual pricing.
 /// </remarks>
 public class OpenAI : MorganaLLM
 {

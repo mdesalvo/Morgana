@@ -12,25 +12,10 @@ using Morgana.Contracts;
 namespace Morgana.Web.Controllers;
 
 /// <summary>
-/// REST API controller for managing Morgana conversation lifecycle and message routing.
-/// Provides endpoints for starting/ending conversations and sending messages to the actor system.
-/// Works in conjunction with SignalR for real-time bi-directional communication.
+/// REST API for conversation lifecycle (start/end/resume/message/history) and message routing to actor system.
+/// Integrates with SignalR for real-time bidirectional communication; OTel turn Activity boundary.
+/// Validates channel metadata, authentication, rate limits, dust budget at every request gate.
 /// </summary>
-/// <remarks>
-/// <para><strong>Architecture Overview:</strong></para>
-/// <list type="bullet">
-/// <item><term>HTTP endpoints</term><description>Handle conversation management (start/end) and message submission</description></item>
-/// <item><term>Actor system integration</term><description>Creates and communicates with ConversationManagerActor instances</description></item>
-/// <item><term>SignalR coordination</term><description>Messages are sent via HTTP, responses arrive via SignalR Hub</description></item>
-/// </list>
-/// <para><strong>Message Flow:</strong></para>
-/// <para>Client → HTTP POST → Controller → ConversationManagerActor → Actor Pipeline → SignalR Hub → Client</para>
-/// <para><strong>OpenTelemetry:</strong></para>
-/// <para>The controller is the OTel boundary. On each SendMessage it opens a morgana.turn Activity
-/// and propagates its context into the actor system via UserMessage.TurnContext, so that guard,
-/// classifier, router, and agent actors can open correctly-parented child spans despite Akka.NET
-/// breaking ambient Activity.Current across thread pool boundaries.</para>
-/// </remarks>
 [ApiController]
 [Route("api/morgana")]
 public class MorganaController : ControllerBase
@@ -46,20 +31,10 @@ public class MorganaController : ControllerBase
     private readonly IDustLimitService dustLimitService;
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
-    // ==============================================================================
     /// <summary>
-    /// Initializes a new instance of the MorganaController.
+    /// Initializes controller with actor system, authentication, rate/dust limits, and channel factory.
+    /// Validates channel metadata handshake and delivery mode at conversation start.
     /// </summary>
-    /// <param name="actorSystem">Akka.NET actor system for conversation management</param>
-    /// <param name="logger">Logger instance for diagnostic information</param>
-    /// <param name="channelService">Outbound channel used to deliver system-level messages (e.g. rate-limit warnings) to the user</param>
-    /// <param name="channelServiceFactory">Factory consulted at the start-conversation gate to reject handshakes whose declared deliveryMode has no concrete transport registered</param>
-    /// <param name="conversationPersistenceService">Service for recovering an existing conversation</param>
-    /// <param name="authenticationService">Service for authenticating incoming requests</param>
-    /// <param name="rateLimitService">Service for rate limiting an existing conversation</param>
-    /// <param name="rateLimitOptions">Options for configuration of the rate limiting service</param>
-    /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
-    /// <param name="dustLimitingOptions">Dust-limiting policy and message templates</param>
     public MorganaController(
         ActorSystem actorSystem,
         ILogger logger,

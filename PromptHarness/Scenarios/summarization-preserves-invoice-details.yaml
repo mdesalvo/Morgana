@@ -1,0 +1,35 @@
+id: summarization-preserves-invoice-details
+description: >-
+  Forces the history reducer to actually fire (never observed by any other scenario — the default
+  21-message trigger is far above what a scripted flow reaches) and then tests the summarization
+  prompt's own promise: reference data (an exact invoice amount, seen only in a tool result, never
+  in the separately-persisted context-variable store) must survive verbatim and answer a later turn
+  without re-calling the tool. Requires Harness:SummarizationThreshold=4/SummarizationTargetCount=4
+  — run via SummarizationTests.
+runs: 3
+minPasses: 2
+
+turns:
+  - say: "Mi fai vedere la mia fattura più recente?"
+    expect:
+      agent: BillingAgent
+      toolsNotCalled: [GetInvoices]
+      textNotEmpty: true
+
+  - say: "Eccolo: P99"
+    expect:
+      agent: BillingAgent
+      contextWrites: [userId]
+      toolsCalled: [SetContextVariable, GetInvoices]
+      textNotEmpty: true
+
+  - say: "Quant'era l'importo esatto di quella fattura?"
+    expect:
+      agent: BillingAgent
+      summarizationOccurred: true
+      toolsNotCalled: [GetInvoices]
+      textNotEmpty: true
+    judge:
+      - "The response states the invoice amount as 130 (in any currency formatting, e.g. €130, 130.00, 130 euro)."
+    judgeNot:
+      - "The response says it no longer has this information, asks the user to repeat the amount, or offers to look it up again instead of just answering."

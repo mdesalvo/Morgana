@@ -45,7 +45,7 @@
     NOTE: framework/runtime PackageReferences live in Morgana.AI.csproj, NOT here.
     This props file is imported by every project in the tree (including the
     zero-dependency Morgana.Contracts), so it must carry only common build
-    settings and package metadata. Morgana.Web and Morgana.Examples obtain the
+    settings and package metadata. Morgana.Web and Examples obtain the
     heavy dependencies transitively through their reference to Morgana.AI.
   -->
 

@@ -8,23 +8,10 @@ using Spectre.Console.Rendering;
 namespace Grimoire.Services;
 
 /// <summary>
-/// Terminal UI for Grimoire built on Spectre.Console's <see cref="LiveDisplay"/>: a sticky
-/// header pinned at the top shows the conversation id and the current speaker
-/// (<c>Morgana</c> → purple; <c>Morgana (Agent)</c> → pink), a scrolling body
-/// prints the chat history colored by speaker (the user is white), and the
-/// bottom-most line hosts the input buffer with a blinking cursor. Incoming webhook
-/// messages are drained from a channel and trigger a refresh; user keystrokes are
-/// captured via <see cref="Console.ReadKey(bool)"/> on a pool thread.
+/// Terminal UI on Spectre.Console LiveDisplay: sticky header (conversation id + speaker),
+/// scrolling body (chat history), input buffer at bottom. Webhook messages refresh the UI;
+/// keystrokes captured via Console.ReadKey. Input gated during Morgana's turn (Escape exits).
 /// </summary>
-/// <remarks>
-/// Input is gated across Morgana's turn: once the user commits a line (Enter), the
-/// bottom line flips to a <c>"{speaker} is thinking…"</c> hint and all subsequent
-/// keystrokes — except <see cref="ConsoleKey.Escape"/>, which always exits — are
-/// silently swallowed until the next webhook delivery lands and flips the gate back.
-/// The initial state is also gated so nothing can be typed while waiting for the
-/// presentation message, matching Cauldron's typing-indicator semantics. Send
-/// failures release the gate so the user can retry.
-/// </remarks>
 public sealed class ConsoleUiService
 {
     /// <summary>Color for base Morgana turns. Matches Cauldron's <c>--primary-color #8b5cf6</c>.</summary>

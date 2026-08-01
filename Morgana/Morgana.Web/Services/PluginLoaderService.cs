@@ -4,46 +4,11 @@ using Morgana.AI.Abstractions;
 namespace Morgana.Web.Services;
 
 /// <summary>
-/// Service for dynamically loading plugin assemblies containing custom Morgana agents from filesystem.
-/// Enables true plugin architecture by loading assemblies from specified directories at runtime.
+/// Dynamically loads plugin assemblies from filesystem directories at startup (enables plugin architecture).
+/// Configuration: Morgana:Plugins:Directories in appsettings.json (relative/absolute paths supported).
+/// Always scans "plugins" directory first. Plugins must contain MorganaAgent subclasses decorated with [HandlesIntent].
+/// Security warning: loads assemblies without signature verification — only from trusted sources to prevent code execution.
 /// </summary>
-/// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>Allows developers to extend Morgana with custom agents without modifying the core system
-/// or adding assembly references. Plugins are discovered and loaded from filesystem directories.</para>
-/// <para><strong>Configuration:</strong></para>
-/// <para>Plugin directories are specified in appsettings.json:</para>
-/// <code>
-/// {
-///   "Plugins": {
-///     "Directories": [
-///       "custom-plugins",       // Additional directories (optional)
-///       "C:/Shared/Plugins"     // Absolute paths also supported
-///     ]
-///   }
-/// }
-/// </code>
-/// <para><strong>Default Behavior:</strong></para>
-/// <para>The "plugins" directory is ALWAYS scanned first, even if not configured.
-/// If no configuration is provided, only "plugins" is scanned.
-/// If "plugins" appears in the configuration, it won't be scanned twice.</para>
-/// <para><strong>Path Resolution:</strong></para>
-/// <para>Relative paths are resolved against AppDomain.CurrentDomain.BaseDirectory.
-/// For a published app in C:\MyApp\, the path "plugins" resolves to C:\MyApp\plugins\</para>
-/// <para><strong>Security Warning:</strong></para>
-/// <para>⚠️ This approach loads assemblies from filesystem without signature verification.
-/// Only load plugins from trusted sources to prevent arbitrary code execution.</para>
-/// <para><strong>Plugin Requirements:</strong></para>
-/// <list type="bullet">
-/// <item>Assembly must contain at least one class derived from MorganaAgent</item>
-/// <item>Assembly must be a valid .NET assembly (.dll file)</item>
-/// <item>Agents must be properly decorated with [HandlesIntent] attribute for routing</item>
-/// <item>All dependencies must be present in plugin directory or GAC</item>
-/// </list>
-/// <para><strong>Usage:</strong></para>
-/// <para>Call LoadPluginAssemblies() during application startup (typically in Program.cs)
-/// before the actor system is used.</para>
-/// </remarks>
 public class PluginLoaderService
 {
     private readonly IConfiguration configuration;
@@ -61,42 +26,10 @@ public class PluginLoaderService
     }
 
     /// <summary>
-    /// Loads all plugin assemblies from configured directories.
-    /// Scans each directory for .dll files and validates they contain MorganaAgent subclasses.
-    /// The "plugins" directory is always searched first, regardless of configuration.
+    /// Loads all plugin assemblies from configured directories (Morgana:Plugins:Directories), validating each
+    /// contains MorganaAgent-derived classes. Defaults to ["plugins"]. Always scans "plugins" first; no duplicates.
+    /// Handles errors: DirectoryNotFound, BadImageFormat, no agents found, other loading errors. Logs success/failure.
     /// </summary>
-    /// <remarks>
-    /// <para><strong>Loading Process:</strong></para>
-    /// <list type="number">
-    /// <item>Read plugin directories from configuration (Morgana:Plugins:Directories section)</item>
-    /// <item>Ensure "plugins" is always the first directory to scan</item>
-    /// <item>Scan each directory for .dll files</item>
-    /// <item>Load each assembly using Assembly.LoadFrom (from filesystem path)</item>
-    /// <item>Validate assembly contains MorganaAgent-derived classes</item>
-    /// <item>Log success/failure for each assembly</item>
-    /// </list>
-    /// <para><strong>Default Behavior:</strong></para>
-    /// <para>If no directories are configured, defaults to ["plugins"].</para>
-    /// <para><strong>Priority:</strong></para>
-    /// <para>"plugins" is always searched first. If configured directories include "plugins",
-    /// it won't be scanned twice.</para>
-    /// <para><strong>Error Handling:</strong></para>
-    /// <list type="bullet">
-    /// <item><term>DirectoryNotFoundException</term><description>Plugin directory does not exist</description></item>
-    /// <item><term>BadImageFormatException</term><description>File is not a valid .NET assembly</description></item>
-    /// <item><term>No agents found</term><description>Assembly loaded but contains no valid MorganaAgent classes</description></item>
-    /// <item><term>General exceptions</term><description>Other loading errors (permissions, dependencies, etc.)</description></item>
-    /// </list>
-    /// <para><strong>Logging Output Examples:</strong></para>
-    /// <code>
-    /// 📁 Scanning plugin directory: ./plugins
-    /// ✅ Loaded plugin assembly with 4 Morgana agents: "Morgana.Examples.dll"
-    /// ⚠️  Skipped assembly CustomLib.dll: no MorganaAgent subclasses found
-    /// ❌ Failed to load invalid.dll: not a valid assembly
-    /// </code>
-    /// <para><strong>Best Practice:</strong> Call this method early in application startup,
-    /// after DI configuration but before any actor system usage.</para>
-    /// </remarks>
     public void LoadPluginAssemblies()
     {
         string[]? configuredDirectories = configuration.GetSection("Morgana:Plugins:Directories").Get<string[]>();

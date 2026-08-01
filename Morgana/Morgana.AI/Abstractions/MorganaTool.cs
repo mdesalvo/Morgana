@@ -7,30 +7,11 @@ using Morgana.Contracts;
 namespace Morgana.AI.Abstractions;
 
 /// <summary>
-/// Base class for agent tools. Provides built-in context variable access (Get/Set/Drop)
-/// and UI output tools (quick replies, rich cards). Domain-specific tools extend this class.
+/// Base class for agent tools. Provides context variable access (Get/Set/Drop) and UI output tools
+/// (quick replies, rich cards). Domain agents extend this class. Uses ToolContext factory
+/// (lazy-evaluated per tool invocation) to access in-flight AgentSession without exposing
+/// it to LLM schema inspection (session never appears in method signatures).
 /// </summary>
-/// <remarks>
-/// <para>Tools access the session's conversation context through a <see cref="ToolContext"/> instance
-/// returned by the <c>getToolContext</c> factory supplied at construction. The factory is evaluated
-/// lazily on each invocation so it always captures the in-flight <see cref="AgentSession"/>
-/// from <see cref="MorganaAgent.CurrentSession"/>.</para>
-///
-/// <para>Keeping <see cref="AgentSession"/> out of tool method signatures is intentional:
-/// tool methods are inspected by <c>AIFunctionFactory</c> via reflection to generate LLM tool schemas.
-/// Session must not appear as a parameter or it would be exposed to the LLM.</para>
-///
-/// <para><strong>Integration overview:</strong></para>
-/// <code>
-/// MorganaTool (base — context + UI tools)
-///   └── BillingTool / ContractTool / ... (domain-specific tools)
-///
-/// Wiring in concrete agent constructor:
-///   new BillingTool(
-///       logger,
-///       () => new ToolContext(aiContextProvider, CurrentSession!, conversationId));
-/// </code>
-/// </remarks>
 public class MorganaTool
 {
     /// <summary>Logger for tool-level diagnostics.</summary>
@@ -70,14 +51,8 @@ public class MorganaTool
     /// </summary>
     /// <param name="variableName">Name of the variable to retrieve (e.g. "userId", "invoiceId").</param>
     /// <returns>
-    /// The variable value if found, or an instructional message directing the LLM
-    /// to call <see cref="SetContextVariable"/> or ask the user.
+    /// The variable value if found, or an instructional message directing the LLM to call <see cref="SetContextVariable"/> or ask the user.
     /// </returns>
-    /// <remarks>
-    /// <para><strong>Skill rule:</strong> Before asking for ANY information from the user,
-    /// ALWAYS attempt to retrieve it from context using <see cref="GetContextVariable"/>.
-    /// Ask the user only if this tool indicates the information is missing.</para>
-    /// </remarks>
     public Task<object> GetContextVariable(string variableName)
     {
         ToolContext ctx = getToolContext();
@@ -112,8 +87,38 @@ public class MorganaTool
         ToolContext ctx = getToolContext();
         ctx.Provider.SetVariable(ctx.Session, variableName, variableValue);
 
+        toolLogger.LogInformation(
+            "{MorganaToolName} ({Name}) SET variable '{VariableName}' into agent context. Value is: {Value}", nameof(MorganaTool), GetType().Name, variableName, variableValue);
+
         return Task.FromResult<object>(
             $"Information {variableName} inserted in context with value: {variableValue}");
+    }
+
+    // =========================================================================
+    // TURN CONTINUATION SYSTEM TOOL
+    // =========================================================================
+
+    /// <summary>
+    /// Declares whether the agent expects the user to take another turn with it.
+    /// Replaces the legacy in-band <c>#INT#</c> token with an explicit, out-of-band signal
+    /// that lives where quick replies and rich cards already live: the ephemeral context.
+    /// </summary>
+    /// <param name="turnContinuation">
+    /// <c>true</c> when the agent awaits the user's turn and must stay in service;
+    /// <c>false</c> when the agent has finished and the conversation may return to Morgana.
+    /// </param>
+    /// <returns>Confirmation message for the LLM.</returns>
+    public Task<object> SetTurnContinuation(bool turnContinuation)
+    {
+        ToolContext ctx = getToolContext();
+        ctx.Provider.SetVariable(ctx.Session, "turn_continuation", turnContinuation);
+
+        toolLogger.LogInformation("LLM set turn continuation to {TurnContinuation} via SetTurnContinuation tool", turnContinuation);
+
+        return Task.FromResult<object>(
+            turnContinuation
+                ? "Turn continuation set: you remain in service and await the user's next turn."
+                : "Turn continuation cleared: this turn concludes your handling of the request.");
     }
 
     // =========================================================================
@@ -137,12 +142,14 @@ public class MorganaTool
     /// </remarks>
     public Task<object> SetQuickReplies(List<QuickReply> quickReplies)
     {
+        // Validate input — empty list is a no-op
         if (quickReplies == null || quickReplies.Count == 0)
         {
             toolLogger.LogWarning("SetQuickReplies called with no quick replies");
             return Task.FromResult<object>("Warning: No quick replies were set (empty data).");
         }
 
+        // Store serialized quick replies in ephemeral context; agents retrieve them via ExecuteAgentAsync before sending response
         ToolContext ctx = getToolContext();
         ctx.Provider.SetVariable(ctx.Session, "quick_replies",
             JsonSerializer.Serialize(quickReplies, Records.DefaultJsonSerializerOptions));
@@ -150,8 +157,7 @@ public class MorganaTool
         toolLogger.LogInformation("LLM set {Count} quick reply buttons via SetQuickReplies tool", quickReplies.Count);
 
         return Task.FromResult<object>(
-            $"Quick reply buttons set successfully. The user will see {quickReplies.Count} interactive options. " +
-            $"Now provide your text response to the user - the quick reply buttons will appear below your message.");
+            $"Quick reply buttons set successfully. The user will see {quickReplies.Count} interactive options. Now provide your text response to the user - the quick reply buttons will appear below your message.");
     }
 
     // =========================================================================
@@ -178,6 +184,7 @@ public class MorganaTool
     {
         try
         {
+            // Parse JSON string into strongly-typed RichCard structure; gracefully reject invalid JSON
             RichCard? parsedRichCard = JsonSerializer.Deserialize<RichCard>(
                 richCard, Records.DefaultJsonSerializerOptions);
             if (parsedRichCard == null)
@@ -186,37 +193,38 @@ public class MorganaTool
                 return Task.FromResult<object>("Error: Rich card JSON structure is invalid.");
             }
 
+            // Enforce depth constraint (max 3 levels: card → section → nested content)
             int depth = CalculateMaxDepth(parsedRichCard.Components, 1);
             if (depth > 3)
             {
                 toolLogger.LogWarning("SetRichCard called with excessive nesting depth: {Depth} (max 3)", depth);
                 return Task.FromResult<object>(
-                    $"Error: Rich card exceeds maximum nesting depth of 3 (found: {depth}). " +
-                    $"Please simplify the card structure.");
+                    $"Error: Rich card exceeds maximum nesting depth of 3 (found: {depth}). Please simplify the card structure.");
             }
 
+            // Enforce component limit (max 50 total, including nested components in sections)
             int totalComponents = CountComponents(parsedRichCard.Components);
             if (totalComponents > 50)
             {
                 toolLogger.LogWarning("SetRichCard called with too many components: {TotalComponents} (max 50)", totalComponents);
                 return Task.FromResult<object>(
-                    $"Error: Rich card has too many components: {totalComponents} (max 50). " +
-                    $"Please create a more focused card.");
+                    $"Error: Rich card has too many components: {totalComponents} (max 50). Please create a more focused card.");
             }
 
+            // Store original JSON string (not the parsed object) in ephemeral context; agents retrieve it via ExecuteAgentAsync
             ToolContext ctx = getToolContext();
             ctx.Provider.SetVariable(ctx.Session, "rich_card", richCard);
 
             toolLogger.LogInformation(
-                $"LLM set rich card '{parsedRichCard.Title}' with {totalComponents} components " +
-                $"(depth: {depth}) via SetRichCard tool");
+                "LLM set rich card '{Title}' with {TotalComponents} components (depth: {Depth}) via SetRichCard tool",
+                parsedRichCard.Title, totalComponents, depth);
 
             return Task.FromResult<object>(
-                $"Rich card set successfully. The user will see a structured visual card titled '{parsedRichCard.Title}'. " +
-                $"You can now provide additional context or explanation in text if needed.");
+                $"Rich card set successfully. The user will see a structured visual card titled '{parsedRichCard.Title}'. You can now provide additional context or explanation in text if needed.");
         }
         catch (JsonException ex)
         {
+            // JSON parsing failed; return error message the LLM can act on
             toolLogger.LogError(ex, "Failed to parse rich card JSON in SetRichCard");
             return Task.FromResult<object>(
                 "Error: Rich card JSON format is invalid. Please check the structure and try again.");

@@ -178,6 +178,12 @@ public static class MorganaTelemetry
     /// <summary>True if the agent returned quick replies to the user.</summary>
     public const string AgentHasQuickReplies = "agent.has_quick_replies";
 
+    /// <summary>
+    /// Comma-separated names of the tools invoked during this turn, in call order (names only,
+    /// never arguments — span attributes reach every configured exporter).
+    /// </summary>
+    public const string AgentToolsInvoked = "agent.tools_invoked";
+
     /// <summary>First 150 characters of the agent response, for non-IT readability.</summary>
     public const string AgentResponsePreview = "agent.response_preview";
 

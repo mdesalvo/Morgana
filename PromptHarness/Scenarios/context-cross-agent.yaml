@@ -1,0 +1,45 @@
+id: context-cross-agent
+description: >-
+  A shared variable established by one agent is available to another that was never active before.
+  Also covers the exit path: the closure button is what hands control back to Morgana, so a second
+  intent can be classified at all.
+runs: 5
+minPasses: 5
+
+turns:
+  - say: "Hi, my customer code is P994E — show me my last 3 invoices"
+    expect:
+      agent: BillingAgent
+      contextVocabulary: [userId]
+      # Asserted here, not only inferred from turn 3: without the write the third turn cannot
+      # possibly hold, and a scenario that only notices the consequence two turns later reports
+      # the wrong agent as guilty.
+      contextWrites: [userId]
+      toolsCalled: [GetInvoices]
+      textNotEmpty: true
+
+  # What the exit_agent quick reply sends. It releases the active agent so the next message goes
+  # back through classification.
+  - say: "We're done, thanks"
+    expect:
+      agent: BillingAgent
+      agentCompleted: true
+      quickReplies: none
+      textNotEmpty: true
+    judge:
+      # Same wording as behaviour-conversation-closure, which tests this same behaviour.
+      - "The response is a farewell, a polite closing, or an acknowledgement of the user's thanks."
+
+  - say: "Now show me the details of my contract"
+    expect:
+      agent: ContractAgent
+      contextVocabulary: [userId]
+      # A hit, specifically — not just any read. ContractAgent has never run before this turn, so
+      # this is the one place the scenario can prove the shared variable actually hydrated instead
+      # of only inferring it from the absence of a re-ask two turns downstream.
+      contextReads: [Hit:userId]
+      toolsCalled: [GetContractDetails]
+      textNotEmpty: true
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+    judgeNot:
+      - "The response asks the user for their customer code or identifier."

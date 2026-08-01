@@ -8,27 +8,20 @@ namespace Morgana.AI.Adapters;
 /// Bridges between Morgana tool definitions (from configuration) and Microsoft.Extensions.AI AIFunction system.
 /// </summary>
 /// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>The MorganaToolAdapter manages the registration of tool methods (delegates) and their corresponding definitions,
-/// then converts them into AIFunction instances that can be used by AI agents for tool calling during LLM interactions.</para>
-/// <para><strong>Key Responsibilities:</strong></para>
-/// <list type="bullet">
-/// <item><term>Tool Registration</term><description>Associates tool names with delegate implementations and definitions</description></item>
-/// <item><term>Parameter Validation</term><description>Ensures delegate signatures match tool definitions</description></item>
-/// <item><term>AIFunction Creation</term><description>Converts registered tools into AIFunction instances</description></item>
-/// <item><term>Policy Application</term><description>Applies global policies to tool parameter descriptions (e.g., context vs request guidance)</description></item>
-/// </list>
-/// <para><strong>Workflow:</strong></para>
-/// <code>
-/// 1. Create MorganaToolAdapter with global policies
-/// 2. AddTool(name, delegate, definition) for each tool
-/// 3. CreateAllFunctions() to generate AIFunction[]
-/// 4. Pass AIFunction[] to AIAgent creation
-/// 5. Agent uses tools during LLM interactions via tool calling
-/// </code>
+/// Bridges between Morgana tool definitions (from agents.json) and Microsoft.Extensions.AI AIFunction system.
+/// Manages registration of tool method delegates against their definitions, validates delegate signatures,
+/// converts them to AIFunction instances for LLM tool calling, and applies global policies
+/// (context vs request guidance) to parameter descriptions. Workflow: Create adapter → AddTool for each →
+/// CreateAllFunctions to generate AIFunction[] → pass to AIAgent.
 /// </remarks>
 public class MorganaToolAdapter
 {
+    /// <summary>
+    /// Placeholder in the ToolDescriptionContextGuidance injection template, resolved to the
+    /// comma-separated names of the tool's own context-scoped parameters.
+    /// </summary>
+    private const string ContextParametersPlaceholder = "((context_parameters))";
+
     /// <summary>
     /// Dictionary mapping tool names to their delegate implementations.
     /// </summary>
@@ -55,30 +48,13 @@ public class MorganaToolAdapter
     }
 
     /// <summary>
-    /// Registers a tool with its implementation delegate and configuration definition.
-    /// Validates that the delegate signature matches the tool definition.
+    /// Registers a tool implementation with validation and fluent chaining support.
+    /// Validates delegate signature matches tool definition (parameter count, names, required flags).
     /// </summary>
-    /// <param name="toolName">Unique name of the tool (e.g., "GetInvoices", "RunDiagnostics")</param>
-    /// <param name="toolMethod">Delegate implementing the tool logic</param>
-    /// <param name="definition">Tool definition from configuration with parameters and metadata</param>
-    /// <returns>The MorganaToolAdapter instance for fluent chaining</returns>
-    /// <exception cref="InvalidOperationException">Thrown if tool name is already registered</exception>
-    /// <exception cref="ArgumentException">Thrown if delegate signature doesn't match definition</exception>
-    /// <remarks>
-    /// <para><strong>Validation Checks:</strong></para>
-    /// <list type="bullet">
-    /// <item>Tool name uniqueness (no duplicate registrations)</item>
-    /// <item>Parameter count match between delegate and definition</item>
-    /// <item>Parameter names match between delegate and definition</item>
-    /// <item>Required parameters are not optional in the delegate</item>
-    /// </list>
-    /// <para><strong>Example Usage:</strong></para>
-    /// <code>
-    /// toolAdapter
-    ///     .AddTool("GetInvoices", getInvoicesDelegate, getInvoicesDef)
-    ///     .AddTool("GetInvoiceDetails", getDetailsDelegate, getDetailsDef);
-    /// </code>
-    /// </remarks>
+    /// <param name="toolName">Unique tool name</param>
+    /// <param name="toolMethod">Delegate implementing the tool</param>
+    /// <param name="definition">Tool definition with parameters and metadata</param>
+    /// <returns>This adapter for method chaining</returns>
     public MorganaToolAdapter AddTool(string toolName, Delegate toolMethod, Records.ToolDefinition definition)
     {
         if (!toolMethods.TryAdd(toolName, toolMethod))
@@ -102,31 +78,13 @@ public class MorganaToolAdapter
             : throw new InvalidOperationException($"Tool '{toolName}' not registered");
 
     /// <summary>
-    /// Creates an AIFunction instance for a registered tool.
-    /// Applies global policies to parameter descriptions based on parameter scope (context vs request).
+    /// Creates an AIFunction instance for a registered tool with resolved descriptions.
+    /// Applies global policies and resolves context-parameter placeholders in tool descriptions.
+    /// Converts the tool delegate into a JSON schema-ready AIFunction for the LLM.
     /// </summary>
     /// <param name="toolName">Name of the tool to create function for</param>
     /// <returns>AIFunction instance ready for agent use</returns>
     /// <exception cref="InvalidOperationException">Thrown if tool or definition not found</exception>
-    /// <remarks>
-    /// <para><strong>Parameter Scope Processing:</strong></para>
-    /// <list type="bullet">
-    /// <item><term>Scope: "context"</term><description>Appends ToolParameterContextGuidance (check GetContextVariable first)</description></item>
-    /// <item><term>Scope: "request"</term><description>Appends ToolParameterRequestGuidance (use directly from request)</description></item>
-    /// <item><term>No scope</term><description>Uses parameter description as-is</description></item>
-    /// </list>
-    /// <para><strong>Context Guidance Example:</strong></para>
-    /// <code>
-    /// // Original description from agents.json
-    /// "Alphanumeric identifier of the user"
-    ///
-    /// // After applying ToolParameterContextGuidance
-    /// "Alphanumeric identifier of the user. BEFORE INVOKING THIS TOOL: call GetContextVariable
-    /// to verify if the information is already available. Ask the user ONLY if GetContextVariable
-    /// returns that the information is missing."
-    /// </code>
-    /// <para>This guidance ensures the LLM checks context before asking users for information.</para>
-    /// </remarks>
     public AIFunction CreateFunction(string toolName)
     {
         Delegate implementation = ResolveTool(toolName);
@@ -134,33 +92,37 @@ public class MorganaToolAdapter
             ? def
             : throw new InvalidOperationException($"Tool definition '{toolName}' not found");
 
-        string contextGuidance = globalPolicies.FirstOrDefault(p =>
-            string.Equals(p.Name, "ToolParameterContextGuidance", StringComparison.OrdinalIgnoreCase))?.Description ?? "";
-        string requestGuidance = globalPolicies.FirstOrDefault(p =>
-            string.Equals(p.Name, "ToolParameterRequestGuidance", StringComparison.OrdinalIgnoreCase))?.Description ?? "";
+        string descriptionGuidance = Records.GlobalPolicy.ResolveTemplate(globalPolicies, Records.GlobalPolicy.Templates.ToolDescriptionContext);
 
-        // Build a name→description map enriched with scope guidance.
-        // AIFunctionFactory.Create reads AdditionalProperties to override the per-parameter
-        // description it would otherwise infer from the delegate's ParameterInfo, so the LLM
-        // sees the full guidance text rather than the raw delegate parameter name.
-        Dictionary<string, object?> additionalProperties = [];
-        foreach (Records.ToolParameter parameter in definition.Parameters)
-        {
-            additionalProperties[parameter.Name] =
-                parameter.Scope?.ToLowerInvariant().Trim() switch
-                {
-                    "context" => $"{parameter.Description}. {contextGuidance}",
-                    "request" => $"{parameter.Description}. {requestGuidance}",
-                    _ => parameter.Description
-                };
-        }
+        // Extract context-scoped parameter names; if present and guidance template exists, splice names into guidance text
+        string[] contextParameters = [.. definition.Parameters
+            .Where(p => string.Equals(p.Scope?.Trim(), "context", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Name)];
 
+        string description = contextParameters.Length > 0 && descriptionGuidance.Length > 0
+            ? $"{definition.Description}\n\n{descriptionGuidance.Replace(ContextParametersPlaceholder, string.Join(", ", contextParameters))}"
+            : definition.Description;
+
+        // Build parameter name → description map; fed to AIFunctionFactory's ParameterDescriptionProvider hook,
+        // which resolves each parameter's description keyword in the generated JSON schema
+        Dictionary<string, string> parameterDescriptions =
+            definition.Parameters.ToDictionary(p => p.Name, p => p.Description);
+
+        // Create AIFunction with custom ParameterDescriptionProvider that looks up each parameter's description
+        // from the map; unknown parameters fall back to null, which lets AIFunctionFactory use [Description] attributes (none here)
         return AIFunctionFactory.Create(implementation,
             new AIFunctionFactoryOptions
             {
                 Name = definition.Name,
-                Description = definition.Description,
-                AdditionalProperties = new AdditionalPropertiesDictionary(additionalProperties)
+                Description = description,
+                JsonSchemaCreateOptions = AIJsonSchemaCreateOptions.Default with
+                {
+                    ParameterDescriptionProvider = parameter =>
+                        parameter.Name is not null
+                        && parameterDescriptions.TryGetValue(parameter.Name, out string? parameterDescription)
+                            ? parameterDescription
+                            : null
+                }
             });
     }
 
@@ -182,26 +144,11 @@ public class MorganaToolAdapter
         => toolMethods.Keys.Select(CreateFunction);
 
     /// <summary>
-    /// Validates that a delegate implementation matches its tool definition.
-    /// Ensures parameter counts, names, and optionality are consistent.
+    /// Validates delegate implementation matches tool definition.
+    /// Checks parameter count, names, and required-vs-optional consistency.
     /// </summary>
     /// <param name="implementation">Delegate to validate</param>
     /// <param name="definition">Tool definition to validate against</param>
-    /// <exception cref="ArgumentException">Thrown on validation failure</exception>
-    /// <remarks>
-    /// <para><strong>Validation Rules:</strong></para>
-    /// <list type="number">
-    /// <item>Parameter count must match exactly</item>
-    /// <item>Each definition parameter must have a matching method parameter by name</item>
-    /// <item>Required parameters in definition cannot be optional in method</item>
-    /// </list>
-    /// <para><strong>Example Mismatch:</strong></para>
-    /// <code>
-    /// // Definition says: userId (Required: true)
-    /// public Task&lt;Result&gt; GetInvoices(string userId = "default")
-    /// // ERROR: Parameter 'userId' is required in definition but optional in method
-    /// </code>
-    /// </remarks>
     private static void ValidateToolDefinition(Delegate implementation, Records.ToolDefinition definition)
     {
         ParameterInfo[] methodParams = implementation.Method.GetParameters();

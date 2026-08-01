@@ -12,7 +12,7 @@ Morgana is a modern conversational AI framework built on **.NET 10**, **Akka.NET
 
 Morgana is a stable framework for *impersonating domain agents*; the framework code (Akka pipeline, tool loop, intent routing, channel adaptation) is not where day-to-day work happens. A domain agent *is* its prompt configuration — its entry in `agents.json` (Target/Instructions/Personality/Formatting + tool contracts) read together with the global policies in `morgana.json`. Building or tuning an agent is therefore ~95% authoring **clear, non-contradictory, precise prose**: every sentence is dispositive — an instruction an LLM executes, not documentation.
 
-The characteristic defect is not an exception, it is a **logical contradiction** between two instructions read together — and these are typically **emergent and non-local**: one clause in the agent vs one in the global policies (e.g. the interplay of `#INT#` × ConversationClosure × QuickReplyEscapeOptions × ToolGrounding). Prefer structural fixes over point patches: state a unifying doctrine high in the policy order (low `Priority`, so it renders first among Critical) and let the specific policies read as instances of it — this shrinks the contradiction surface instead of chasing symptoms.
+The characteristic defect is not an exception, it is a **logical contradiction** between two instructions read together — and these are typically **emergent and non-local**: one clause in the agent vs one in the global policies (e.g. the interplay of TurnContinuation × ConversationClosure × QuickReplyEscapeOptions × ToolGrounding). Prefer structural fixes over point patches: state a unifying doctrine high in the policy order (low `Priority`, so it renders first among Critical) and let the specific policies read as instances of it — this shrinks the contradiction surface instead of chasing symptoms.
 
 Two things *outside* the prose can still sabotage a correct prompt, and are worth ruling in/out first because they are invisible from `agents.json`:
 - **Model tier** — a dense, layered prompt needs a capable model; the `Efficiency` die (e.g. Haiku) amplifies contradiction-following failures where `Performance` would not.
@@ -31,9 +31,15 @@ Morgana/
     Cauldron/              # Blazor Server frontend — rich-Web reference channel (SignalR)
     Grimoire/              # Spectre.Console CLI — rich-TTY reference channel (webhook)
     Rune/                  # Spectre.Console CLI — basic-TTY reference channel (webhook)
-  Morgana.Examples/        # Example plugin with BillingAgent, ContractAgent, MonkeyAgent, InventoryAgent
+  Examples/                # Example plugin with BillingAgent, ContractAgent, MonkeyAgent, InventoryAgent
+  PromptHarness/           # Live non-regression harness (xUnit v3) — measures prompt behaviour, not code
   CHANGELOG.md
 ```
+
+Six solutions, one per unit: `Morgana.slnx` (the framework — Contracts, AI, Web), one per channel,
+`Examples.slnx` and `PromptHarness.slnx`. Only the framework's own projects live in
+`Morgana.slnx`; the plugin, the channels and the harness each stand alone and reach it by project
+reference. That is what keeps every one of them replaceable by a customer's own.
 
 ### Morgana.AI (core library)
 
@@ -41,8 +47,9 @@ Morgana/
 |---|---|
 | `Abstractions/` | Base classes: `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool` |
 | `Actors/` | Pipeline actors: `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
-| `Adapters/` | `MorganaAgentAdapter` (agent builder), `MorganaToolAdapter` (tool→AIFunction), `MCPToolAdapter` (MCP→native), `MorganaChannelAdapter` (rich→plain degradation) |
+| `Adapters/` | `MorganaAgentAdapter` (agent builder), `MorganaToolAdapter` (tool→AIFunction), `MorganaChannelAdapter` (rich→plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]` |
+| `ChatClients/` | `IChatClient` decorator chain: `TierDefaultsChatClient` (per-tier `ChatOptions` defaults), `DustAccountingChatClient` (Magic Dust metering), `MorganaAnthropicClient` (Anthropic no-prefill guard + cache marker) |
 | `Extensions/` | `ActorSystemExtensions` — C# 14 `extension(ActorSystem)` syntax for `GetOrCreateActorAsync<T>` and `GetOrCreateAgentAsync(Type)` |
 | `Interfaces/` | All service contracts (see Service layer below) |
 | `Providers/` | `MorganaAIContextProvider` (per-agent context variables, with cross-agent shared variables persisted in the conversation-scoped `shared_context` registry), `MorganaChatHistoryProvider` (chat history with optional summarizing reducer) |
@@ -74,7 +81,7 @@ Spectre.Console CLI at `Channels/Grimoire/` (separate solution, has its own `CLA
 
 Spectre.Console CLI at `Channels/Rune/` (separate solution, has its own `CLAUDE.md`). Second reference channel, complementary to Cauldron: Kestrel-hosted console app that exercises the webhook delivery path (`deliveryMode=webhook`) and the "poor but honest" capability profile (all rich features off, `MaxMessageLength=500`) — the contract surface `MorganaChannelAdapter` is supposed to degrade toward. Self-issues JWT tokens for authentication (`iss=rune`). Consumes the shared wire DTOs from `Morgana.Contracts` via project reference (no DTO duplication).
 
-### Morgana.Examples (plugin)
+### Examples (plugin)
 
 Four example agents packaged as a plugin DLL (copied to `plugins/` after build). References `Morgana.AI` via **project reference** (`..\Morgana\Morgana.AI`, bringing `Morgana.Contracts` transitively) — not the NuGet package — so the in-repo/Docker build is deterministic; an out-of-tree plugin would instead reference the `Morgana.AI` NuGet package:
 - `BillingAgent` + `BillingTool` — telecom billing with invoices, payment history
@@ -82,6 +89,16 @@ Four example agents packaged as a plugin DLL (copied to `plugins/` after build).
 - `MonkeyAgent` — MCP-only agent using external MonkeyMCP server (no native tool)
 - `InventoryAgent` + `InventoryTool` — greenhouse/nursery inventory; stateful example agent: consult catalog, create/confirm/cancel orders, backed by its own standalone SQLite database
 - `agents.json` — embedded resource with intents and per-agent prompts/tool definitions
+
+### PromptHarness (non-regression harness)
+
+Live, black-box, xUnit v3 suite at `PromptHarness/` (repo root, own solution, has its own `README.md`). It measures **prompt behaviour**, not code: since a domain agent *is* its prose, the only way to know a prompt revision did not break anything is to make the model do the thing and look. Nothing is mocked and every turn is a real LLM call, so it is **on-demand only** — never wired into a build or CI gate.
+
+- **Standalone by construction**: sibling of `Morgana/` and `Examples/`, not a project inside `Morgana.slnx` — the harness is an instrument pointed *at* a Morgana instance, and must be able to run against one it did not ship with (an older tag, or a customer's). It has no `Directory.Build.props` above it, so every build setting lives in its own `.csproj` and survives a move. Two project references reach the tree: `Morgana.Web` (for the entry point) and `Examples` with **`ReferenceOutputAssembly=false`** — built into `plugins/` but never referenced as an assembly, which makes the black-box boundary structural: the harness compiles without ever seeing an agent type.
+- **Hook**: boots `Morgana.Web`'s entry point in-process on an ephemeral Kestrel port (enabled by the `public partial class Program;` declaration at the bottom of `Program.cs`) and drives it over HTTP as a fourth channel — `channelName: "harness"`, `deliveryMode: "webhook"`, full capabilities and no length budget, so `MorganaChannelAdapter` short-circuits and scenarios measure undegraded output. In-process buys the two read-only observers a child process could not: an `ActivityListener` on `morgana.agent` (→ `agent.tools_invoked`) and a tee on `Console.Out` (→ the `MorganaTool` HIT/MISS/SET log lines, which is how context **variable names** are observed without ever putting them in a span attribute).
+- **Assertions**: two layers. *Structural* (deterministic, from the message + span + log): completion, quick replies, rich card, tools called and their order, context reads/writes and the closed vocabulary. *LLM-judge* (natural-language propositions on the cheapest configured tier) for what structure cannot reach — the judge sees only what a user would see, never the tool trace.
+- **Scenarios**: YAML under `Scenarios/`, one file per flow, replayed **N times against an explicit pass threshold** — the honest shape when the system under test is a language model. The **context-handling group runs at 5/5 and is blocking**: the cycle, the closed vocabulary and non-revelation are contract, and their failure mode is silent.
+- **Secrets**: none of its own. It declares the same `UserSecretsId` as `Morgana.Web` and republishes the resolved `Morgana:` configuration to the host as environment variables, so the suite always runs against whatever provider and tiers that instance is wired to. Per run it overrides a throwaway `StoragePath`, disables exporters/rate/dust limiting, applies `Harness:EnableGuardrail`, and mints a random key for the `harness` issuer.
 
 ## Architecture and Message Flow
 
@@ -115,14 +132,14 @@ All endpoints authenticate via `AuthenticateRequestAsync` (Bearer JWT validation
 ### Turn Pipeline (FSM states in ConversationSupervisorActor)
 
 1. **Idle** — waits for `UserMessage`
-2. **AwaitingGuardCheck** — `GuardActor` checks compliance (two-level: profanity + LLM policy). Fail → rejection message, stay idle. Pass → next step
+2. **AwaitingGuardCheck** — `GuardActor` checks compliance (LLM policy check). Fail → rejection message, stay idle. Pass → next step
 3. **AwaitingClassification** — `ClassifierActor` classifies intent (LLM-based). On failure, falls back to `"other"` intent. *Skipped if an active agent exists (follow-up flow)*
 4. **AwaitingAgentResponse / AwaitingFollowUpResponse** — `RouterActor` dispatches to the target `MorganaAgent`. Agent runs LLM with tools, streams chunks back, sends final `AgentResponse`
 5. Back to **Idle** — response forwarded via `ConversationManagerActor` → `IChannelService` → SignalR → Cauldron
 
 ### Multi-turn: active agent tracking
 
-When an agent signals `IsCompleted = false` (detected via `#INT#` token, trailing question mark, quick replies, or rich card), the supervisor remembers it as `activeAgent`. Subsequent messages skip classification and go directly to that agent (after guard check). The agent signals `IsCompleted = true` when done.
+When an agent signals `IsCompleted = false` — declared explicitly via the `SetTurnContinuation` base tool, or implied by quick replies or a rich card — the supervisor remembers it as `activeAgent`. Subsequent messages skip classification and go directly to that agent (after guard check). The agent signals `IsCompleted = true` when done.
 
 ### Inter-agent shared context
 
@@ -135,7 +152,7 @@ Tools with `Shared: true` parameters route their values into a conversation-scop
 | Service | Interface | Purpose |
 |---|---|---|
 | `LLMClassifierService` | `IClassifierService` | LLM-based intent classification with formatted intents from `agents.json`. Falls back to `"other"` with confidence 0.0 on any error |
-| `LLMGuardRailService` | `IGuardRailService` | Two-level moderation: (1) fast sync profanity scan from `ProfanityTerms` list, (2) async LLM policy check. Fails open on LLM error |
+| `LLMGuardRailService` | `IGuardRailService` | Async LLM policy check against the Guard prompt. Fails open on LLM error |
 | `LLMPresenterService` | `IPresenterService` | LLM-generated welcome message + quick replies. Falls back to `FallbackMessage` + intent-derived buttons on LLM failure. Never throws |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json` (embedded in Morgana.AI) + domain prompts from `agents.json` (via `IAgentConfigurationService`). Case-insensitive lookup |
 | `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Scans all loaded assemblies for `agents.json` embedded resources. Graceful degradation if none found (agentless mode) |
@@ -168,7 +185,7 @@ Tools with `Shared: true` parameters route their values into a conversation-scop
 
 All wrap into `Microsoft.Extensions.AI.IChatClient`. Provider selected by `Morgana:LLM:Provider` setting.
 
-**Two-tier models (Efficiency/Performance)**: each provider configures a `Tiers` map keyed by `LLMTier` — exactly two dies, `Efficiency` and `Performance`, modeled on Intel's E-core/P-core split. `Efficiency` is the default for Morgana's own framework actors (Guard, Classifier, Presenter, ChannelAdapter) and for any agent handling routine work; `Performance` is reserved exclusively for agents whose domain author declares an existential need for deep reasoning or high expressive power — not a "nicer to have" upgrade. There is no cross-tier fallback: a local single-model deployment (Ollama being the canonical case) simply declares a single `Efficiency` entry, and any agent requiring `Performance` fails startup until a second entry is added. Each `Tiers` entry carries an `Options` object (`Records.TierConfiguration`) and its own `MagicDust` pricing. `Options` is a deliberately narrow, JSON-bindable mirror of `Microsoft.Extensions.AI.ChatOptions` — only `ModelId` (the model/deployment identifier, replacing the old top-level `Name` field) and `MaxOutputTokens` are exposed; every other `ChatOptions` field (Temperature, TopP, StopSequences, Reasoning, Tools, ...) was deliberately excluded — see `Records.TierConfiguration` remarks for the full census and rationale. The map is a JSON **object keyed by tier name** (not an array) so User Secrets/env var overrides merge per-tier instead of positionally. A `ModelId` left on its `_SECURE_OVERRIDE_`/`_FUNCTIONAL_OVERRIDE_` placeholder fails startup (`MorganaLLM.RegisterTierClient`). At runtime, `Options.ToChatOptions()` is materialized once per tier and merged field-by-field — fill-if-absent, never overriding an explicit per-call value — into every request on that tier via `TierDefaultsChatClient`, mirroring the same merge pattern `Microsoft.Agents.AI.ChatClientAgent` already uses one layer up for agent-level defaults.
+**Two-tier models (Efficiency/Performance)**: each provider configures a `Tiers` map keyed by `LLMTier` — exactly two dies, `Efficiency` and `Performance`, modeled on Intel's E-core/P-core split. `Efficiency` is the default for Morgana's own framework actors (Guard, Classifier, Presenter, ChannelAdapter) and for any agent handling routine work; `Performance` is reserved exclusively for agents whose domain author declares an existential need for deep reasoning or high expressive power — not a "nicer to have" upgrade. There is no cross-tier fallback: a local single-model deployment (Ollama being the canonical case) simply declares a single `Efficiency` entry, and any agent requiring `Performance` fails startup until a second entry is added. Each `Tiers` entry carries an `Options` object (`Records.TierConfiguration`) and its own `MagicDust` pricing. `Options` is a deliberately narrow, JSON-bindable mirror of `Microsoft.Extensions.AI.ChatOptions` — it exposes only `ModelId` (the model/deployment identifier) and `MaxOutputTokens`, and deliberately excludes every other `ChatOptions` field (Temperature, TopP, StopSequences, Reasoning, Tools, ...) — see `Records.TierConfiguration` remarks for the full census and rationale. The map is a JSON **object keyed by tier name** (not an array) so User Secrets/env var overrides merge per-tier instead of positionally. A `ModelId` left on its `_SECURE_OVERRIDE_`/`_FUNCTIONAL_OVERRIDE_` placeholder fails startup (`MorganaLLM.RegisterTierClient`). At runtime, `Options.ToChatOptions()` is materialized once per tier and merged field-by-field — fill-if-absent, never overriding an explicit per-call value — into every request on that tier via `TierDefaultsChatClient`, mirroring the same merge pattern `Microsoft.Agents.AI.ChatClientAgent` already uses one layer up for agent-level defaults.
 
 Two consumption modes:
 - `CompleteWithSystemPromptAsync(conversationId, systemPrompt, message)` — stateless, for guard/classifier/presenter/channel-adapter; always runs on the **cheapest configured tier**
@@ -208,13 +225,21 @@ public class BillingAgent : MorganaAgent
 
 ## Tool System
 
-Every agent gets **base tools** from `morgana.json` (`GetContextVariable`, `SetContextVariable`, `SetQuickReplies`, `SetRichCard`) plus **domain tools** from `agents.json`. Tool parameters have two scopes:
-- `Scope: "context"` — retrieved from context variables; `MorganaToolAdapter` injects `ToolParameterContextGuidance` description telling the LLM to check `GetContextVariable` first
-- `Scope: "request"` — obtained directly from user; `ToolParameterRequestGuidance` description injected
+Every agent gets **base tools** from `morgana.json` (`GetContextVariable`, `SetContextVariable`, `SetTurnContinuation`, `SetQuickReplies`, `SetRichCard`) plus **domain tools** from `agents.json`. A tool parameter that resolves an *input* declares a scope; a parameter carrying a value the model itself authors (`quickReplies`, `richCard`, `turnContinuation`) declares none:
+- `Scope: "context"` — retrieved from context variables. This scope carries **no** parameter-level template: the lookup-before-asking rule and its write half both live in P0, in the framework `Instructions` and in `ToolDescriptionContextGuidance`, and a parameter-level restatement is the only form of it paid per-parameter, per-tool, on every round trip. What those restatements cannot carry — which variables the session actually holds — comes from `HeldContextDeclaration` instead. The scope still drives the tool-level template below
+- `Scope: "request"` — obtained directly from user; `ToolParameterRequestGuidance` appended to the parameter description
 
-`MorganaToolAdapter.AddTool` validates delegate vs definition (parameter count, names, required/optional). `CreateFunction` wraps the tool method into an `AIFunction` with enriched parameter descriptions.
+**Parameter descriptions reach the model through the schema, and only there.** `MorganaToolAdapter.CreateFunction` assembles them and hands them to `AIJsonSchemaCreateOptions.ParameterDescriptionProvider` — MEAI's own hook, invoked once per parameter while the function's JSON schema is generated, whose return value becomes that parameter's `description` keyword. A parameter the map does not cover falls back to the delegate's `[Description]` attributes, which no `MorganaTool` method carries, and is emitted bare (`{"userId":{"type":"string"}}`). This covers the native tools only: an MCP tool never passes through `MorganaToolAdapter`, because it arrives from the SDK already carrying its server's schema.
 
-**MCP tools** are auto-discovered from servers declared via `[UsesMCPServer]` and bridged through `MCPToolAdapter` using DynamicMethod IL generation (`CreateTypedDelegateWithNamedParameters`) for proper parameter names/types. Static `executorCache` ensures IL-generated delegates are cached.
+A guidance template is joined to an authored description by a single space, never by inserted punctuation: an authored description is a finished sentence and closes itself, in both configuration layers.
+
+The template names are the contract between `morgana.json` and the code that splices them, and they live in one place — `Records.GlobalPolicy.Templates` — resolved through `GlobalPolicy.ResolveTemplate`, which returns `""` for an unconfigured template (every splice site reads that as "leave the description alone").
+
+A tool declaring at least one context-scoped parameter gets `ToolDescriptionContextGuidance` appended to **its own description**, with `((context_parameters))` resolved to those parameter names. The placement is the point, and it is a ladder: a parameter description is read once the model is already invoking the tool, a tool description when it weighs the tool at all, and the per-turn `HeldContextDeclaration` before any tool is weighed.
+
+`MorganaToolAdapter.AddTool` validates delegate vs definition (parameter count, names, required/optional). `CreateFunction` wraps the tool method into an `AIFunction` with enriched tool and parameter descriptions.
+
+**MCP tools** are auto-discovered from servers declared via `[UsesMCPServer]` and handed to the agent exactly as `McpClient.ListToolsAsync` returns them. `McpClientTool` **is** an `AIFunction`: it carries the server's input schema verbatim — parameter descriptions, types, nested objects and the true `required` set — and invokes the tool over the session it was discovered on. Morgana adapts nothing and registers nothing: `MorganaAgentAdapter.DiscoverMCPToolsFromServer` collects them through the reconnect-safe path and appends them to `ChatOptions.Tools` beside the native ones. These tools are acquired at runtime and never appear in `agents.json`, so no domain expert authors them — their prose belongs to whoever wrote the server, and carrying it through untouched is the only handling available. The framework's parameter-level template is accordingly not spliced onto them; an MCP tool has no context-scoped parameters by construction, so the rule would be stated once per remote parameter to say what is trivially true of all of them.
 
 ## Channel Abstraction (multi-channel)
 
@@ -248,10 +273,30 @@ Two-layer prompt composition in `MorganaAgentAdapter.ComposeAgentInstructions()`
 1. **Framework layer** (from `morgana.json`): Target + Personality + GlobalPolicies + Instructions + Formatting
 2. **Domain layer** (from `agents.json`): Target + Personality + Instructions + Formatting
 
+**The two layers are fenced, and the fences are load-bearing.** Both carry the same four section
+labels, so an unfenced composition shows `[TARGET]`, `[PERSONALITY]`, `[INSTRUCTIONS]` and
+`[FORMATTING]` twice with nothing marking which is which — the framework asserts precedence over "the
+layer below" while giving the model no way to locate where below begins. `FrameworkLayerHeader` /
+`FrameworkLayerFooter` name and close the framework block; `DomainLayerHeader` opens the domain block
+by **stating its own subordination** — it specialises the framework with domain knowledge and nothing
+else, never contradicts it, and yields to it wherever the two appear to differ. These, and
+`GlobalPoliciesHeader`/`Footer`, are structural glue rather than domain-tunable prose: they are
+`const string` fields in `MorganaAgentAdapter`, not `morgana.json` entries — there is deliberately no
+configuration point for them.
+
+The subordination is **total and unconditional**, and that is what makes the domain layer cheap: an
+agent restating a framework rule is not reinforcement, it is a second voice claiming the same
+authority, and it undercuts the layer above precisely by repeating it. A domain agent says the least
+possible and the most specific possible — its purpose, its domain constraints, its voice, how it
+presents its own tools' output. Anything it says that a global policy already says belongs deleted;
+if two agents need the same sentence, that is a policy gap to be filled above, never a repair below.
+
 Framework prompts (`morgana.json`):
-- **Morgana**: base personality, global policies (P0-P8 Critical: ContextHandling, QuickReplyDoctrine, InteractiveToken, ConversationClosure, SessionContinuation, ToolUsage, ToolGrounding, QuickReplyEscapeOptions, MandatoryTextualResponse; P0-P3 Operational: ToolParameterContextGuidance, ToolParameterRequestGuidance, RichCardUsage, RichCardAndQuickRepliesCombined). The `QuickReplyDoctrine` (P1) is the unifying master rule the other quick-reply policies instantiate — see Design Philosophy
+- **Morgana**: base personality, global policies — P0-P7, all `Critical`: ContextHandling, QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage, ToolGrounding, MandatoryTextualResponse, RichCardUsage. The `QuickReplyDoctrine` (P1) is the unifying master rule the other quick-reply policies instantiate — see Design Philosophy. `GlobalPoliciesHeader` states the "these are binding" emphasis once, above the list, rather than each policy repeating it in its own opening words; `GlobalPoliciesFooter` closes the block, because an opening claim about what follows otherwise scopes over the framework's own Instructions and Formatting and the whole domain layer beneath them.
+  Its `Target` is the composed prompt's **preamble, not a role description**: it names the two layers, says this one governs how a turn is formed while the domain layer governs what the conversation is about, and settles precedence. It deliberately promises no capability: a claim like "solve problems through the support scenarios you can handle" sits in the primacy slot unbacked, and `ToolGrounding` then has to spend a clause defending against it. Its `Instructions` carry the **order of a turn** (resolve inputs → call the domain tool → decide presentation → write the text once), which no single policy states: each policy governs one aspect, and the observed defects are overwhelmingly sequencing failures
+  Three further entries in the same array carry `Type: "Injection"`. They are **not policies but templates** — `FormatGlobalPolicies` skips them all — and they have two splice sites. `ToolDescriptionContextGuidance` and `ToolParameterRequestGuidance` are spliced by `MorganaToolAdapter` into tool/parameter descriptions; rendered in the system prompt they would be instructions with no referent ("BEFORE INVOKING THIS TOOL" names no tool there), re-paid on every round trip. `HeldContextDeclaration` is spliced per turn by `MorganaAIContextProvider.ProvideAIContextAsync`, which resolves `((held_variables))` to the **names** (never the values) of the context variables the session currently holds, minus the framework's ephemeral keys, and injects nothing when the session holds none. It is the only entry carrying a *fact* rather than a rule, and the only one that can: tool descriptions are built once at agent creation, so `((context_parameters))` can only ever state the **contract** ("this tool takes a `userId`"), true even against an empty store — never the **state** ("`userId` is held right now"), which nobody knows at build time. That distinction is what the third splice site buys, and it extends the placement ladder one rung: a parameter description is read once the model is already invoking the tool, a tool description when it weighs the tool, and the per-turn injection before any tool is weighed at all — which is where an agent activated first time mid-conversation fails, deciding to ask on an empty (per-agent) history without ever selecting the domain tool whose description carries the guidance
 - **Classifier**: JSON response `{intent, confidence}` with `((formattedIntents))` placeholder
-- **Guard**: JSON response `{compliant, violation}` with ProfanityTerms list
+- **Guard**: JSON response `{compliant, violation}`
 - **Presentation**: JSON intro message with quickReplies, FallbackMessage, NoAgentsMessage
 - **ChannelAdapter**: rewrites rich messages for limited channels (richCards→prose, quickReplies→inline, markdown strip, maxMessageLength)
 
@@ -288,7 +333,7 @@ OpenTelemetry distributed tracing with per-turn spans:
 ```
 morgana.turn → morgana.guard → morgana.classifier → morgana.router → morgana.agent
 ```
-Attributes: `conversation.id`, `guard.compliant`, `classification.intent`, `classification.confidence`, `agent.ttft_ms`, `agent.response_preview`, `agent.is_completed`. HTTP Activity context propagated as `ActivityLink` to turn span in supervisor.
+Attributes: `conversation.id`, `guard.compliant`, `classification.intent`, `classification.confidence`, `agent.ttft_ms`, `agent.response_preview`, `agent.is_completed`, `agent.tools_invoked` (tool names only, never arguments). HTTP Activity context propagated as `ActivityLink` to turn span in supervisor.
 
 **Metrics**: `morgana.dust.consumed` counter (unit `dust`) tagged by `dust.llm_role` for per-agent/role attribution; emitted post-commit in `SQLiteDustLimitService.ChargeAsync`. Complements `gen_ai.usage.*` MEAI counters from `MorganaLLM` which break down cache tiers.
 
@@ -327,6 +372,7 @@ At application startup, comprehensive validation is performed:
 - **Target**: .NET 10, C# latest (uses C# 14 features like `extension` blocks)
 - **Build**: `dotnet build` from solution root
 - **Run**: start both `Morgana.Web` (backend, default https://localhost:5001) and `Cauldron` (frontend, default https://localhost:5002)
+- **PromptHarness suite**: `dotnet test PromptHarness/PromptHarness.csproj` (from the repo root — it is its own solution, outside `Morgana.slnx`) — live LLM calls, on-demand only. Start from `--filter "FullyQualifiedName~HarnessSmokeTests"` to verify the rig before believing any scenario result
 - **Docker**: `docker compose up` starts Morgana + Cauldron (`Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`); the two TTY channels Grimoire and Rune are profile-gated (`profiles: ["tui"]`) so `up` skips them, and each must be launched interactively in a separate terminal via `docker compose run --rm --service-ports --use-aliases grimoire` (or `… rune`, using `Channels/Grimoire/Grimoire.Dockerfile` / `Channels/Rune/Rune.Dockerfile`), because Spectre.Console needs to own stdin/stdout (only one TTY channel at a time). `compose run` auto-activates the service's profiles so no `--profile` flag is needed. `--use-aliases` is mandatory: `compose run` skips network aliases by default, so without it Morgana's webhook callback to `http://grimoire:5004` (resp. `http://rune:5003`) fails DNS resolution
 
 ## Conventions
@@ -337,7 +383,7 @@ At application startup, comprehensive validation is performed:
 - Tool method names must match exactly the `Name` field in JSON tool definitions
 - Prompts are resolved by ID matching (`"Morgana"`, `"Classifier"`, `"Guard"`, `"Presentation"`, `"ChannelAdapter"` for framework; intent name for agents)
 - Rich cards use JSON polymorphic serialization with `type` discriminator (`text_block`, `key_value`, `divider`, `list`, `section`, `grid`, `badge`, `image`)
-- `#INT#` token in LLM responses signals conversation continuation (agent stays active)
+- Conversation continuation (agent stays active) is signalled out-of-band by the `SetTurnContinuation` base tool, never by a token inside the response text
 - Actor naming: `/user/{suffix}-{conversationId}` (e.g. `/user/supervisor-abc123`)
 - Agent identifier format: `{agent_name}-{conversation_id}` (e.g. `billing-abc123`)
 - Channel names normalized to lowercase at ingress

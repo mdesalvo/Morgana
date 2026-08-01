@@ -1,0 +1,21 @@
+id: context-no-invented-writes
+description: >-
+  The second face of anti-invention: a user preference is not a context variable. The urge to
+  "remember what the user said" by minting a key must not survive prompt revision.
+runs: 5
+minPasses: 5
+
+turns:
+  # "from your greenhouse" is a classifier anchor, not a hint to the agent: without a domain word
+  # the message is a bare preference, the classifier lawfully files it under "other", and the run
+  # never reaches InventoryAgent — which measures routing instead of anti-invention. The temptation
+  # under test is untouched: it is still the urge to mint a key for "roses".
+  - say: "Remember that I prefer roses — I always order those from your greenhouse"
+    expect:
+      agent: InventoryAgent
+      noContextWrites: true
+      contextVocabulary: [userId]
+      textNotEmpty: true
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+    judgeNot:
+      - "The response claims it has permanently saved or stored the user's preference."

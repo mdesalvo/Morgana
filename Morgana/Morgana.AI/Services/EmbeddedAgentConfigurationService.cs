@@ -6,54 +6,10 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Implementation of IAgentConfigurationService that loads agent configuration from agents.json embedded resource.
-/// Scans all loaded assemblies to find agents.json and provides graceful fallback if not found.
+/// Loads agent configuration from agents.json embedded resource in any loaded assembly.
+/// Enables plugin-based domain configuration; graceful fallback (empty config) if none found.
+/// Scans all AppDomain assemblies (except dynamic); returns on first successful load.
 /// </summary>
-/// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>This service enables plugin-based domain configuration by scanning all loaded assemblies
-/// (including dynamically loaded plugins) for an embedded agents.json resource. This allows
-/// domain-specific configuration to live alongside domain code in plugin assemblies.</para>
-/// <para><strong>Discovery Strategy:</strong></para>
-/// <list type="number">
-/// <item>Enumerate all loaded assemblies in AppDomain</item>
-/// <item>Skip dynamic assemblies (cannot contain embedded resources)</item>
-/// <item>Search manifest resources for any ending with ".agents.json"</item>
-/// <item>Load and deserialize first agents.json found</item>
-/// <item>Return graceful fallback (empty config) if none found</item>
-/// </list>
-/// <para><strong>Typical Deployment:</strong></para>
-/// <code>
-/// Solution Structure:
-/// ├── Morgana.Actors/
-/// │   └── (actors code, no agents.json)
-/// ├── Morgana.Agents/
-/// │   └── morgana.json (framework prompts)
-/// └── Morgana.Examples/
-///     ├── agents.json (domain configuration)
-///     ├── BillingAgent.cs
-///     ├── ContractAgent.cs
-///     ├── MonkeysAgent.cs
-///     └── InventoryAgent.cs
-///
-/// At runtime:
-/// 1. PluginLoaderService loads Morgana.Examples.dll
-/// 2. EmbeddedAgentConfigurationService scans all assemblies
-/// 3. Finds agents.json in Morgana.Examples.dll
-/// 4. Loads intents and agent prompts from it
-/// </code>
-/// <para><strong>Graceful Degradation:</strong></para>
-/// <para>If no agents.json is found, the service returns empty configuration rather than throwing.
-/// This allows the framework to operate in presentation-only mode (no domain agents, only "other" intent).</para>
-/// <para><strong>Alternative Implementations:</strong></para>
-/// <para>This embedded resource approach is the default. Alternative implementations could load from:</para>
-/// <list type="bullet">
-/// <item>File system (appsettings.json or standalone agents.json file)</item>
-/// <item>Database (SQL, MongoDB, etc.)</item>
-/// <item>External API or configuration service</item>
-/// <item>Azure Blob Storage or AWS S3</item>
-/// </list>
-/// </remarks>
 public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 {
     private readonly Lazy<AgentConfiguration> agentConfiguration;
@@ -90,49 +46,11 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     }
 
     /// <summary>
-    /// Loads agent configuration by scanning all loaded assemblies for agents.json embedded resource.
-    /// Returns empty configuration if no agents.json found (graceful degradation).
+    /// Scans assemblies for agents.json embedded resource; returns on first successful load.
+    /// Logs configuration found (intents + agent prompts); returns empty on not found.
+    /// Deserialization errors logged per-assembly; searching continues to next assembly.
     /// </summary>
-    /// <returns>
-    /// AgentConfiguration with loaded intents and prompts, or empty configuration if not found.
-    /// </returns>
-    /// <remarks>
-    /// <para><strong>Assembly Scanning Process:</strong></para>
-    /// <list type="number">
-    /// <item>Get all assemblies from AppDomain.CurrentDomain</item>
-    /// <item>Filter out dynamic assemblies (cannot have embedded resources)</item>
-    /// <item>For each assembly, get manifest resource names</item>
-    /// <item>Find first resource ending with ".agents.json" (case-insensitive)</item>
-    /// <item>Open resource stream and deserialize JSON</item>
-    /// <item>Validate and log loaded configuration</item>
-    /// </list>
-    /// <para><strong>Logging Output Examples:</strong></para>
-    /// <code>
-    /// // Success case
-    /// Searching for agents.json in loaded assemblies...
-    /// ✅ Found agents.json in assembly: Morgana.Examples
-    /// ✅ Loaded 4 intents and 4 agent prompts from agents.json
-    ///    📋 Intent: billing - requests to view invoices...
-    ///    📋 Intent: contract - requests to summarize contract...
-    ///    📋 Intent: monkeys - requests to show a list of monkeys (MCP)...
-    ///    📋 Intent: inventory - requests to browse the greenhouse catalog and place/confirm orders...
-    ///
-    /// // No configuration found
-    /// Searching for agents.json in loaded assemblies...
-    /// ⚠️  No agents.json found in any loaded assembly.
-    /// Classifier and presentation will have no intents available.
-    /// Add agents.json as embedded resource to your domain project.
-    /// </code>
-    /// <para><strong>Error Handling:</strong></para>
-    /// <list type="bullet">
-    /// <item><term>Resource not found</term><description>Returns empty config with warning log</description></item>
-    /// <item><term>Deserialization error</term><description>Logs error, continues searching other assemblies</description></item>
-    /// <item><term>Stream open failure</term><description>Logs warning, continues searching</description></item>
-    /// </list>
-    /// <para><strong>First-Match Strategy:</strong></para>
-    /// <para>Returns immediately after finding and successfully loading the first agents.json.
-    /// If multiple assemblies contain agents.json, only the first one found is used.</para>
-    /// </remarks>
+    /// <returns>AgentConfiguration (non-empty if found, empty if not)</returns>
     private AgentConfiguration LoadAgentConfiguration()
     {
         logger.LogInformation("Searching for agents.json in loaded assemblies...");

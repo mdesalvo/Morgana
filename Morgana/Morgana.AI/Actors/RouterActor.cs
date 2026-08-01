@@ -20,9 +20,12 @@ public class RouterActor : MorganaActor
 {
     /// <summary>
     /// Dictionary mapping intent names to their corresponding agent actor references.
-    /// Populated lazily on first use of each agent.
+    /// Populated lazily on first use of each agent. Case-insensitive to match
+    /// <see cref="IAgentRegistryService.ResolveAgentFromIntent"/>, whose own registry is keyed the
+    /// same way — a classifier response that varies in case from the configured intent must resolve
+    /// to the same cached agent, not a duplicate cache miss.
     /// </summary>
-    private readonly Dictionary<string, IActorRef> agents = [];
+    private readonly Dictionary<string, IActorRef> agents = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Dictionary mapping agent references to their original senders for streaming chunk forwarding.
@@ -131,24 +134,15 @@ public class RouterActor : MorganaActor
         // so late stream chunks (see HandleAgentStreamChunk fallback) can still be routed to it.
         supervisorRef ??= originalSender;
 
-        Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
-
-        // Validate classification exists
-        if (req.Classification == null)
-        {
-            originalSender.Tell(new Records.AgentResponse(
-                classifierPrompt.GetAdditionalProperty<string>("MissingClassificationError"), true));
-            return;
-        }
-
         // Get or create agent for this intent
-        IActorRef? selectedAgent = await GetOrCreateAgentForIntent(req.Classification.Intent);
+        IActorRef? selectedAgent = await GetOrCreateAgentForIntent(req.Classification!.Intent);
 
         // Validate agent exists for this intent
         if (selectedAgent == null)
         {
-            originalSender.Tell(new Records.AgentResponse(
-                classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError"), true));
+            Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
+            string unrecognizedIntentError = classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError");
+            originalSender.Tell(new Records.AgentResponse(unrecognizedIntentError, true));
             return;
         }
 

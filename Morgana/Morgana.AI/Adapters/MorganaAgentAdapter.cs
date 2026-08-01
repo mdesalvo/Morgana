@@ -3,8 +3,10 @@ using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Client;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
+using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
@@ -17,20 +19,10 @@ namespace Morgana.AI.Adapters;
 #pragma warning disable MEAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
 
 /// <summary>
-/// Creates and configures <see cref="AIAgent"/> instances from Morgana agent definitions.
-/// Handles instruction composition, tool registration, provider setup and MCP integration.
+/// Creates and configures AIAgent instances from Morgana agent definitions.
+/// Handles instruction composition, tool/MCP registration, provider setup.
+/// Uses session accessor pattern: MorganaAIContextProvider + Func&lt;ToolContext&gt; factory.
 /// </summary>
-/// <remarks>
-/// <para><strong>Session accessor pattern:</strong> <see cref="MorganaAIContextProvider"/> is a singleton
-/// and all context state lives in <see cref="AgentSession"/>. Every provider call (GetVariable, SetVariable,
-/// DropVariable) requires the active session. Tools receive both provider and session via a
-/// <c>Func&lt;MorganaTool.ToolContext&gt;</c> factory evaluated lazily at tool-call time.</para>
-///
-/// <para><see cref="MorganaAgentAdapter"/> does not hold a reference to the Akka agent actor, so the
-/// active session is supplied by the concrete agent via a <c>Func&lt;AgentSession?&gt; sessionAccessor</c>
-/// parameter on <see cref="CreateAgent"/>. The accessor captures <see cref="MorganaAgent.CurrentSession"/>,
-/// which is always non-null during tool execution (Akka single-thread guarantee).</para>
-/// </remarks>
 public class MorganaAgentAdapter
 {
     /// <summary>
@@ -81,6 +73,12 @@ public class MorganaAgentAdapter
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
+    /// Framework global policies unpacked once from morganaPrompt.
+    /// Shared across instruction composition, tool registration, and context provider.
+    /// </summary>
+    protected readonly List<Records.GlobalPolicy> morganaPolicies;
+
+    /// <summary>
     /// Initializes a new instance of the MorganaAgentAdapter.
     /// Loads the Morgana framework prompt for later composition with domain prompts.
     /// </summary>
@@ -109,6 +107,7 @@ public class MorganaAgentAdapter
         this.logger = logger;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
+        morganaPolicies = morganaPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
     }
 
     /// <summary>
@@ -197,12 +196,13 @@ public class MorganaAgentAdapter
             agentTools,
             toolContextFactory);
 
-        // 6b) Layer on tools from every [UsesMCPServer] on the agent: each server is
-        //     discovered through the reconnect-safe path and its tools registered into the
-        //     same adapter. Best-effort by design — a server that is down or misconfigured
-        //     is logged per-server and skipped, never aborting agent creation (an
-        //     MCP-only agent simply ends up with no tools rather than failing to exist).
-        RegisterMCPTools(agentType, morganaToolAdapter);
+        // 6b) Collect the tools of every [UsesMCPServer] on the agent: each server is
+        //     discovered through the reconnect-safe path. Best-effort by design — a server
+        //     that is down or misconfigured is logged per-server and skipped, never aborting
+        //     agent creation (an MCP-only agent simply ends up with no tools rather than
+        //     failing to exist). They stay apart from the native adapter because they need
+        //     nothing from it: each one arrives already an AIFunction.
+        List<AIFunction> mcpTools = RegisterMCPTools(agentType);
 
         // 7) Resolve THIS agent's own tier client/pricing (never the framework-default
         //    client) and wrap it in a per-agent dust meter. The role label
@@ -245,7 +245,7 @@ public class MorganaAgentAdapter
                 ChatOptions = new ChatOptions
                 {
                     Instructions = ComposeAgentInstructions(agentPrompt),
-                    Tools = [.. morganaToolAdapter.CreateAllFunctions()]
+                    Tools = [.. morganaToolAdapter.CreateAllFunctions(), .. mcpTools]
                 }
             });
 
@@ -255,40 +255,74 @@ public class MorganaAgentAdapter
         return (aiAgent, morganaAIContextProvider, chatHistoryProvider);
     }
 
+    // Structural boundary markers for the composed prompt. These are glue between the framework
+    // and domain layers, not domain-tunable prose, so — unlike everything they surround — they are
+    // fixed in code and morgana.json carries no override point for them.
+    private const string GlobalPoliciesHeader = "=== CRITICAL RULES — binding, without exception ===";
+    private const string GlobalPoliciesFooter = "=== END OF CRITICAL RULES ===";
+    private const string FrameworkLayerHeader =
+        "======== MORGANA FRAMEWORK — THE LAW OF EVERY TURN ========\n" +
+        "Everything until the end of this block is binding on you and on every other agent of Morgana. It is not advice and it is not overridable.";
+    private const string FrameworkLayerFooter = "======== END OF MORGANA FRAMEWORK ========";
+    private const string DomainLayerHeader =
+        "======== DOMAIN AGENT — SUBORDINATE TO THE FRAMEWORK ABOVE ========\n" +
+        "What follows specialises the framework for a single domain: what you are for, how you work, how you speak, how you present. It adds domain knowledge and NOTHING ELSE. It NEVER contradicts the framework above, on any point — where the two appear to differ, the framework governs and you follow it.";
+
     private string FormatGlobalPolicies(List<Records.GlobalPolicy> policies)
     {
         StringBuilder sb = new StringBuilder();
 
-        // Critical before Operational (Type), then ascending Priority within each type.
-        // The LLM reads the system prompt top-to-bottom, so P0 Critical constraints must
-        // appear before P0 Operational guidance — the order is load-bearing for compliance.
-        foreach (Records.GlobalPolicy policy in policies.OrderBy(p => p.Type)
+        sb.AppendLine(GlobalPoliciesHeader);
+
+        // Injection templates are excluded: they are not policies but fragments spliced by
+        // MorganaToolAdapter into the description of the tool (or parameter) they govern, at
+        // the point where the model decides.
+        //
+        // Ordered by Type, then ascending Priority within each type. The LLM reads the system
+        // prompt top-to-bottom and the order is load-bearing for compliance, so a policy's
+        // Priority states where it must be read, not merely how it was filed.
+        foreach (Records.GlobalPolicy policy in policies.Where(p => !p.IsInjectionTemplate)
+                                                        .OrderBy(p => p.Type)
                                                         .ThenBy(p => p.Priority))
         {
             sb.AppendLine($"{policy.Name}: {policy.Description}");
         }
+
+        sb.AppendLine(GlobalPoliciesFooter);
 
         return sb.ToString().TrimEnd();
     }
 
     private string ComposeAgentInstructions(Records.Prompt agentPrompt)
     {
-        List<Records.GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
         StringBuilder sb = new StringBuilder();
 
-        // Morgana framework layers
+        // The two layers are fenced. Both carry the same four section labels ([TARGET],
+        // [PERSONALITY], [INSTRUCTIONS], [FORMATTING]), so without a delimiter the composed prompt
+        // shows each of them twice with nothing marking which is which — and the framework's claim
+        // to precedence, made in its own Target, names a boundary the model cannot locate. The
+        // domain fence carries the subordination rule itself rather than only separating: it is read
+        // at the exact point where the layer it governs begins.
+
+        // Morgana layers
+        sb.AppendLine(FrameworkLayerHeader);
+        sb.AppendLine();
         sb.AppendLine(morganaPrompt.Target);
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Personality);
         sb.AppendLine();
-        sb.AppendLine(FormatGlobalPolicies(globalPolicies));
+        sb.AppendLine(FormatGlobalPolicies(morganaPolicies));
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Instructions);
         sb.AppendLine();
         sb.AppendLine(morganaPrompt.Formatting);
         sb.AppendLine();
+        sb.AppendLine(FrameworkLayerFooter);
+        sb.AppendLine();
 
-        // Domain layers
+        // Agent layers
+        sb.AppendLine(DomainLayerHeader);
+        sb.AppendLine();
         sb.AppendLine(agentPrompt.Target);
         sb.AppendLine();
         sb.AppendLine(agentPrompt.Personality);
@@ -326,10 +360,10 @@ public class MorganaAgentAdapter
         // all tools and Distinct() because the same logical variable (e.g. "userId") is
         // typically declared on several tools and must register exactly once.
         List<string> sharedVariables = [.. tools
-            .SelectMany(t => t.Parameters)
-            .Where(p => p.Shared && string.Equals(p.Scope, "context", StringComparison.OrdinalIgnoreCase))
-            .Select(p => p.Name)
-            .Distinct()];
+             .SelectMany(t => t.Parameters)
+             .Where(p => p.Shared && string.Equals(p.Scope, "context", StringComparison.OrdinalIgnoreCase))
+             .Select(p => p.Name)
+             .Distinct()];
 
         // Startup-visible diagnostic: the shared set is part of the cross-agent contract,
         // so surface it (or its emptiness) explicitly rather than leaving it implicit.
@@ -338,9 +372,18 @@ public class MorganaAgentAdapter
                 ? $"Agent '{agentName}' has {sharedVariables.Count} shared variables: {string.Join(", ", sharedVariables)}"
                 : $"Agent '{agentName}' has NO shared variables");
 
+        // The HeldContextDeclaration template is prose and lives with the rest of it in
+        // morgana.json, spliced per invocation rather than rendered into the system prompt —
+        // hence Type "Injection", like the two tool/parameter guidances. Handed over as a plain
+        // string so the provider keeps no prompt-layer dependency. Absent from the configuration,
+        // the provider injects nothing.
+        string heldContextDeclaration = Records.GlobalPolicy.ResolveTemplate(
+            morganaPolicies, Records.GlobalPolicy.Templates.HeldContextDeclaration);
+
         // The provider needs the allow-list up front: only writes to a name in this set
         // trigger OnSharedContextUpdate; everything else stays agent-local.
-        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables);
+        MorganaAIContextProvider aiContextProvider =
+            new MorganaAIContextProvider(logger, sharedVariables, heldContextDeclaration: heldContextDeclaration);
 
         // Wire persistence only when a callback was supplied. Left null (e.g. an agent
         // created outside the actor path) shared writes still update local state but are
@@ -365,13 +408,12 @@ public class MorganaAgentAdapter
         Records.ToolDefinition[] tools,
         Func<MorganaTool.ToolContext> toolContextFactory)
     {
-        // The adapter needs the framework GlobalPolicies up front: it injects the
-        // P0–P3 parameter guidance (ToolParameterContextGuidance / RequestGuidance) into
-        // each generated AIFunction's parameter descriptions, so the LLM is told to check
-        // context first vs. ask the user. Without them the tools still work but lose that
-        // grounding nudge.
-        List<Records.GlobalPolicy> globalPolicies = morganaPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
-        MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(globalPolicies);
+        // The adapter needs the framework GlobalPolicies up front: it splices
+        // ToolDescriptionContextGuidance into the description of each generated AIFunction that
+        // declares context-scoped parameters. Without it the tools still work but lose that
+        // grounding nudge. Parameter descriptions carry no framework template at all — see
+        // MorganaToolAdapter.CreateFunction.
+        MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(morganaPolicies);
 
         // Split the merged set back into base (morgana.json) vs intent-specific
         // (agents.json). Compare by Name only: the incoming `tools` array was produced by
@@ -379,7 +421,7 @@ public class MorganaAgentAdapter
         // tool, so reference/value equality would wrongly classify a base tool as
         // intent-specific. Name is the stable identity (tool method names are unique).
         Records.ToolDefinition[] baseTools = morganaPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools");
-        Records.ToolDefinition[] intentSpecificTools = tools.Except(baseTools, new ToolDefinitionNameComparer()).ToArray();
+        Records.ToolDefinition[] intentSpecificTools = [.. tools.Except(baseTools, new ToolDefinitionNameComparer())];
 
         // ALWAYS register base tools (GetContextVariable, SetContextVariable,
         // SetQuickReplies, SetRichCard). They are implemented by the MorganaTool BASE
@@ -481,27 +523,13 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Discovers tools from all MCP servers declared on the agent and registers them
-    /// into the agent's tool adapter.
+    /// Discovers tools from every MCP server declared on the agent.
+    /// Collects [UsesMCPServer] attributes, discovers tools through reconnect-safe path.
+    /// McpClientTool instances are already AIFunctions; no schema conversion applied.
     /// </summary>
     /// <param name="agentType">Agent type to inspect for [UsesMCPServer] attributes</param>
-    /// <param name="morganaToolAdapter">Target adapter to register discovered MCP tools into</param>
-    /// <remarks>
-    /// <para><strong>MCP Integration Flow:</strong></para>
-    /// <list type="number">
-    /// <item>Collect all [UsesMCPServer] attributes on the agent class</item>
-    /// <item>If none found, skip (agent doesn't use MCP)</item>
-    /// <item>For each attribute:
-    ///   <list type="bullet">
-    ///   <item>Get or create MCP client connection via IMCPClientRegistryService</item>
-    ///   <item>Discover available tools via DiscoverToolsAsync</item>
-    ///   <item>Convert MCP tools to Morgana format via MCPToolAdapter</item>
-    ///   <item>Register converted tools in MorganaToolAdapter</item>
-    ///   </list>
-    /// </item>
-    /// </list>
-    /// </remarks>
-    private void RegisterMCPTools(Type agentType, MorganaToolAdapter morganaToolAdapter)
+    /// <returns>Discovered tools as AIFunctions, empty if no servers declared</returns>
+    private List<AIFunction> RegisterMCPTools(Type agentType)
     {
         // An agent may declare several [UsesMCPServer] (multiple servers, mixed
         // Http/Stdio) — collect them all, not just the first.
@@ -514,10 +542,12 @@ public class MorganaAgentAdapter
         if (attributes.Length == 0)
         {
             logger.LogDebug("Agent {AgentTypeName} does not use MCP servers", agentType.Name);
-            return;
+            return [];
         }
 
         logger.LogInformation("Agent {AgentTypeName} declares {AttributesLength} MCP server(s)", agentType.Name, attributes.Length);
+
+        List<AIFunction> mcpTools = [];
 
         foreach (UsesMCPServerAttribute attribute in attributes)
         {
@@ -525,35 +555,30 @@ public class MorganaAgentAdapter
             // attempted independently and a failure (unreachable host, bad URI, discovery
             // error) is logged and swallowed so it cannot abort the remaining servers or
             // agent creation. This is what makes MCP registration "best-effort" — a dead
-            // server costs that server's tools, nothing more. RegisterMCPToolsFromServer
+            // server costs that server's tools, nothing more. DiscoverMCPToolsFromServer
             // itself already absorbs a terminated session via the reconnect-safe path; a
             // throw reaching here means a hard, non-transient fault for THAT server only.
             try
             {
-                RegisterMCPToolsFromServer(attribute, morganaToolAdapter);
+                mcpTools.AddRange(DiscoverMCPToolsFromServer(attribute));
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to register MCP tools from server: {AttributeCommand}", attribute.Command);
             }
         }
+
+        return mcpTools;
     }
 
     /// <summary>
-    /// Registers tools from a single MCP server into the MorganaToolAdapter.
-    /// Handles connection, tool discovery, conversion, and registration.
+    /// Discovers tools from a single MCP server and wraps each with resilient reconnection.
+    /// Tools retain server-declared names; schema is untouched but invocation is wrapped
+    /// for session recovery (via ReconnectingMCPTool).
     /// </summary>
     /// <param name="serverAttribute">Attribute declaring the MCP server (transport, command, args)</param>
-    /// <param name="morganaToolAdapter">Target adapter to register discovered tools into</param>
-    /// <remarks>
-    /// <para><strong>Tool naming:</strong></para>
-    /// <para>
-    /// Tools are registered under the names the MCP server itself declares (e.g.
-    /// <c>get_weather</c>). No Morgana-side prefix or namespacing is added, so the LLM
-    /// calls them by their native server name exactly as the server advertises them.
-    /// </para>
-    /// </remarks>
-    private void RegisterMCPToolsFromServer(UsesMCPServerAttribute serverAttribute, MorganaToolAdapter morganaToolAdapter)
+    /// <returns>Server's tools as AIFunctions with resilient wrapping</returns>
+    private IList<AIFunction> DiscoverMCPToolsFromServer(UsesMCPServerAttribute serverAttribute)
     {
         logger.LogInformation("Registering MCP tools from server: {ServerAttributeCommand}", serverAttribute.Command);
 
@@ -562,7 +587,7 @@ public class MorganaAgentAdapter
         // between connect and tool listing (the spec-mandated HTTP 404 on a session-bearing
         // request). The wrapper transparently re-initializes and retries once instead of
         // failing registration outright.
-        IList<ModelContextProtocol.Protocol.Tool> mcpTools = imcpClientRegistryService
+        IList<McpClientTool> mcpTools = imcpClientRegistryService
             .ExecuteWithReconnectAsync(serverAttribute, client => client.DiscoverToolsAsync())
             .GetAwaiter()
             .GetResult();
@@ -573,45 +598,24 @@ public class MorganaAgentAdapter
         if (mcpTools.Count == 0)
         {
             logger.LogWarning("No tools discovered from MCP server: {ServerAttributeCommand}", serverAttribute.Command);
-            return;
+            return [];
         }
 
-        logger.LogInformation("Discovered {McpToolsCount} tools from MCP server: {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);
+        foreach (McpClientTool mcpTool in mcpTools)
+            logger.LogInformation("Registered MCP tool: {McpToolName}", mcpTool.Name);
 
-        // Take the live pooled client AFTER discovery: if the wrapper had to reconnect,
-        // the original client was disposed and the pool now holds the fresh one — the
-        // MCPToolAdapter must bind to that, not a stale reference to the dead session.
-        MCPClient mcpClient = imcpClientRegistryService.GetOrCreateClientAsync(serverAttribute)
-            .GetAwaiter()
-            .GetResult();
+        logger.LogInformation("Successfully registered {McpToolsCount} MCP tools from {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);
 
-        // Bridge each MCP tool into a native Morgana tool: ConvertTools IL-generates a
-        // typed delegate (correct parameter names/types) per remote tool and pairs it with
-        // a ToolDefinition, keyed by the server-declared tool name.
-        MCPToolAdapter mcpToolAdapter = new MCPToolAdapter(mcpClient, logger);
-        Dictionary<string, (Delegate toolDelegate, Records.ToolDefinition toolDefinition)> convertedTools =
-            mcpToolAdapter.ConvertTools(mcpTools.ToList());
-
-        foreach (KeyValuePair<string, (Delegate toolDelegate, Records.ToolDefinition toolDefinition)> kvp in convertedTools)
-        {
-            // Per-tool isolation, mirroring the per-server loop: one malformed/unbindable
-            // tool is logged and skipped so the rest of this server's tools still register.
-            try
-            {
-                // Force the definition's Name to the dictionary key (the canonical
-                // server-declared name) so registration and the LLM-visible name agree
-                // exactly — no prefix, no drift from whatever the source definition carried.
-                Records.ToolDefinition namedToolDefinition = kvp.Value.toolDefinition with { Name = kvp.Key };
-                morganaToolAdapter.AddTool(kvp.Key, kvp.Value.toolDelegate, namedToolDefinition);
-                logger.LogInformation("Registered MCP tool: {KvpKey}", kvp.Key);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to register MCP tool: {KvpKey} from {ServerAttributeCommand}", kvp.Key, serverAttribute.Command);
-            }
-        }
-
-        logger.LogInformation("Successfully registered {ConvertedToolsCount} MCP tools from {ServerAttributeCommand}", convertedTools.Count, serverAttribute.Command);
+        // Wrapped here, not left as the raw McpClientTool list: this is the one and only
+        // discovery this agent will ever perform (RegisterMCPTools runs once, in the
+        // constructor), so binding the agent to these exact instances is binding it to
+        // whichever session happened to be live at creation time, for the rest of the
+        // conversation. WrapResilientTool keeps the schema (captured here, from these same
+        // instances) and replaces only the invocation path.
+        return
+        [
+            .. mcpTools.Select(mcpTool => imcpClientRegistryService.WrapResilientTool(mcpTool, serverAttribute))
+        ];
     }
 
     private class ToolDefinitionNameComparer : IEqualityComparer<Records.ToolDefinition>

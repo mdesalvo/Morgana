@@ -7,43 +7,36 @@ using Microsoft.Extensions.Logging;
 namespace Morgana.AI.Providers;
 
 /// <summary>
-/// Manages per-session conversation context variables for a Morgana agent.
-/// Cross-agent variable sharing is delegated to the conversation-scoped <c>shared_context</c>
-/// registry on the persistence layer (see <see cref="OnSharedContextUpdate"/>).
+/// Per-agent singleton managing session-level conversation variables. Shared variables trigger OnSharedContextUpdate
+/// callback for cross-agent persistence in conversation-scoped shared_context registry (first-write-wins merge).
+/// Storage: ProviderSessionState&lt;MorganaContextState&gt; → AgentSession (auto-serialized by framework).
 /// </summary>
-/// <remarks>
-/// <para>One instance is created per agent intent and shared across all sessions of that agent.
-/// Session-specific state (the variable dictionary) lives in <see cref="AgentSession"/> via
-/// <see cref="ProviderSessionState{T}"/> and is serialized automatically by the framework.</para>
-///
-/// <para><strong>Key behaviours:</strong></para>
-/// <list type="bullet">
-/// <item><term>Variable storage</term><description>Per-session dictionary persisted inside AgentSession.</description></item>
-/// <item><term>Shared variables</term><description>Variables declared as shared raise the <see cref="OnSharedContextUpdate"/>
-///     callback, which MorganaAgent wires to a write into the conversation-scoped <c>shared_context</c>
-///     registry on the persistence layer.</description></item>
-/// <item><term>Merge strategy</term><description>First-write-wins: incoming shared values are ignored if the variable is already set locally.</description></item>
-/// </list>
-///
-/// <para><strong>Integration overview:</strong></para>
-/// <code>
-/// MorganaAgent (one per intent)
-///   └── MorganaAIContextProvider (singleton, attached to AIAgent)
-///         ├── ProviderSessionState&lt;MorganaContextState&gt; → AgentSession (per-session)
-///         ├── SharedVariableNames (derived from tool definitions at startup)
-///         └── OnSharedContextUpdate → IConversationPersistenceService.UpsertSharedVariableAsync
-///                                      (writes into per-conversation shared_context table)
-///
-/// MorganaTool
-///   ├── GetContextVariable → MorganaAIContextProvider.GetVariable(session, name)
-///   └── SetContextVariable → MorganaAIContextProvider.SetVariable(session, name, value)
-///                                └── if Shared → fires OnSharedContextUpdate → DB write
-/// </code>
-/// </remarks>
 public class MorganaAIContextProvider : AIContextProvider
 {
+    /// <summary>
+    /// Placeholder in the HeldContextDeclaration injection template, resolved per invocation to
+    /// the comma-separated names of the variables this session currently holds.
+    /// </summary>
+    private const string HeldVariablesPlaceholder = "((held_variables))";
+
+    /// <summary>
+    /// Reserved keys the framework writes into the same dictionary to carry a turn's presentation
+    /// decisions (see <c>MorganaTool.SetTurnContinuation/SetQuickReplies/SetRichCard</c>, drained by
+    /// <c>MorganaAgent</c> at the end of every turn). They are never declared to the model: they are
+    /// not inputs to resolve, and naming a stale one would invite the next turn to re-read buttons or
+    /// a card that has already been rendered and consumed.
+    /// </summary>
+    private static readonly ImmutableHashSet<string> EphemeralVariableNames =
+        ["turn_continuation", "quick_replies", "rich_card"];
+
     /// <summary>Logger for provider-level diagnostics.</summary>
     private readonly ILogger logger;
+
+    /// <summary>
+    /// The HeldContextDeclaration template from <c>morgana.json</c>, or <c>null</c> when the prompt
+    /// layer declares none — in which case nothing is injected and behaviour is unchanged.
+    /// </summary>
+    private readonly string? heldContextDeclaration;
 
     /// <summary>
     /// Names of variables subject to cross-agent persistence in the conversation-scoped
@@ -82,13 +75,20 @@ public class MorganaAIContextProvider : AIContextProvider
     /// JSON serialization options for state persistence.
     /// Defaults to <c>AgentAbstractionsJsonUtilities.DefaultOptions</c>.
     /// </param>
+    /// <param name="heldContextDeclaration">
+    /// The HeldContextDeclaration injection template resolved from <c>morgana.json</c>, carrying the
+    /// <c>((held_variables))</c> placeholder. Left null, <see cref="ProvideAIContextAsync"/> injects
+    /// nothing.
+    /// </param>
     public MorganaAIContextProvider(
         ILogger logger,
         IEnumerable<string>? sharedVariableNames = null,
-        JsonSerializerOptions? jsonSerializerOptions = null)
+        JsonSerializerOptions? jsonSerializerOptions = null,
+        string? heldContextDeclaration = null)
     {
         this.logger = logger;
         this.sharedVariableNames = [.. sharedVariableNames ?? []];
+        this.heldContextDeclaration = string.IsNullOrWhiteSpace(heldContextDeclaration) ? null : heldContextDeclaration;
 
         sessionState = new ProviderSessionState<MorganaContextState>(
             stateInitializer: _ => new MorganaContextState(),
@@ -189,14 +189,35 @@ public class MorganaAIContextProvider : AIContextProvider
     // =========================================================================
 
     /// <summary>
-    /// Called BEFORE each agent invocation.
+    /// Per-turn injection: declares by name only which context variables session holds (names only, never values,
+    /// silent when empty, ordinal-sorted for cache stability). Critical for agents activated mid-conversation
+    /// on empty per-agent history: hydrated shared variables from registry are invisible in history.
     /// </summary>
     protected override ValueTask<AIContext> ProvideAIContextAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
-        // Reserved for future use: inject transient system prompt additions based on current context state.
-        return ValueTask.FromResult(new AIContext());
+        if (heldContextDeclaration is null)
+            return ValueTask.FromResult(new AIContext());
+
+        MorganaContextState contextState = sessionState.GetOrInitializeState(context.Session);
+
+        string[] heldVariables = [.. contextState.Variables.Keys
+            .Where(name => !EphemeralVariableNames.Contains(name))
+            .Order(StringComparer.Ordinal)];
+
+        if (heldVariables.Length == 0)
+            return ValueTask.FromResult(new AIContext());
+
+        string names = string.Join(", ", heldVariables);
+
+        logger.LogInformation(
+            "{MorganaAiContextProviderName} DECLARED '{VariableNames}'", nameof(MorganaAIContextProvider), names);
+
+        return ValueTask.FromResult(new AIContext
+        {
+            Instructions = heldContextDeclaration.Replace(HeldVariablesPlaceholder, names)
+        });
     }
 
     /// <summary>

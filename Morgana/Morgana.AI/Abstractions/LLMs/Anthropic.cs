@@ -3,6 +3,7 @@ using Anthropic.Core;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Abstractions.LLMs;
@@ -12,28 +13,11 @@ namespace Morgana.AI.Abstractions.LLMs;
 /// Supports Claude models (claude-fable-5, claude-sonnet-5, ...)
 /// </summary>
 /// <remarks>
-/// <para><strong>Configuration (appsettings.json):</strong></para>
-/// <code>
-/// {
-///   "Morgana": {
-///     "LLM": {
-///       "Provider": "anthropic",
-///       "Anthropic": {
-///         "ApiKey": "sk-ant-...",
-///         "Tiers": {
-///           "Efficiency": { "Options": { "ModelId": "claude-haiku-4-5", "MaxOutputTokens": 4096 }, "MagicDust": { ... } },
-///           "Performance": { "Options": { "ModelId": "claude-sonnet-5", "MaxOutputTokens": 8192 }, "MagicDust": { ... } }
-///         }
-///       }
-///     }
-///   }
-/// }
-/// </code>
-/// <para><strong>MagicDust defaults are calibrated to the claude-haiku-4-5/claude-sonnet-5 pair
-/// shown above — recalibrate if you point a tier at a different model</strong> (e.g. Opus-tier
-/// on <c>Performance</c>), since <c>InputTokensPerDustUnit</c>/<c>OutputTokensPerDustUnit</c>
-/// are derived from that specific model's published per-token pricing, not a property of the
-/// tier name itself.</para>
+/// Anthropic provider implementation. Configuration under Morgana:LLM:Anthropic with ApiKey
+/// and Tiers map (Efficiency/Performance). MagicDust pricing defaults are calibrated to the
+/// claude-haiku-4-5 and claude-sonnet-5 model pair. If you point either tier to a different
+/// model, recalibrate InputTokensPerDustUnit and OutputTokensPerDustUnit per that model's
+/// actual published per-token pricing.
 /// </remarks>
 public class Anthropic : MorganaLLM
 {
