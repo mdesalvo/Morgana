@@ -429,6 +429,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+/.claude/settings.local.json
 /Morgana/.claude/settings.local.json
 /Cauldron/.claude/settings.local.json
 
