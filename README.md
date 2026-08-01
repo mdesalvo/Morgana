@@ -223,31 +223,16 @@ For example, BillingAgent might be "a pragmatic and concrete witch" while Contra
 
 Prompts also define **Global Policies** (critical rules like context handling, interaction tokens) that are automatically composed into agent instructions, ensuring system-wide behavioral consistency without repetition.
 
+Because prompt quality can't be verified by a compiler, Morgana ships **PromptHarness**, a dedicated automated test suite that runs real conversations against live LLM calls and checks how agents actually behave—not just that the configuration is well-formed. This turns changing a global policy or an agent's personality into an ordinary, checkable engineering step instead of a leap of faith, keeping one of the most delicate parts of an AI application easy to maintain over time.
+
 ### 💾 Morgana Context System
-*Distributed memory with encrypted persistence and first-write-wins shared registry*
+*Private by default, self-synchronizing where it matters*
 
-Morgana extends **Microsoft.Agents.AI** framework with a sophisticated context management layer that balances isolation, sharing and persistence. Each agent maintains its own **isolated context** through `MorganaAIContextProvider`, a custom implementation that manages both conversation history and stateful variables.
+Every agent in Morgana keeps its own **secure, isolated context**: memories, variables and conversation state that no other agent can see or touch by default. This is what lets a dozen specialized agents work side by side without stepping on each other's toes.
 
-**Context isolation** ensures agents operate independently—their memories, variables, and state remain private by default. However, the system enables selective **shared context** synchronization for variables declared in configuration:
+Some information, though, is meant to travel. A customer code given to BillingAgent shouldn't have to be asked again the moment ContractAgent takes over. Morgana handles this with **self-synchronizing shared variables**: information explicitly marked as shared is transparently picked up by any agent that needs it, the instant it needs it: no re-asking the user, no manual wiring between agents.
 
-```json
-{
-  "Name": "userId",
-  "Scope": "context",
-  "Shared": true
-}
-```
-
-When one agent writes a shared variable (e.g., `userId`), the value is persisted into a conversation-scoped `shared_context` SQLite table with **first-write-wins** semantics. At the start of each turn, every agent loads the registry and merges incoming shared variables into its local context (again using first-write-wins: existing local values are never overwritten). This eliminates redundant user interactions—information provided once becomes available everywhere, creating a seamless multi-agent experience while remaining resilient to actor lifecycle changes.
-
-**Conversation persistence** is handled through the `IConversationPersistenceService` abstraction, with a default SQLite implementation providing enterprise-grade security. The schema includes both per-agent `AgentSession` BLOBs (encrypted with AES-256-CBC) and a `shared_context` table for cross-agent variables. Sessions can resume across application restarts without losing context or requiring all actors to remain in memory.
-
-The persistence layer supports **multi-agent history reconciliation**: while agents maintain isolated threads, Morgana reconstructs a unified timeline for UI presentation, giving users an uninterrupted conversational experience regardless of which agents participated behind the scenes.
-
-This architecture delivers 3 critical benefits—all configurable through declarative JSON rather than coding:
-- **data security** through encryption and isolation
-- **intelligent context sharing** via persistent, first-write-wins registry
-- **resilient conversations** that survive actor decommission and system restarts
+Conversations survive restarts and agent handoffs without losing this context, and users always see one coherent conversation—even when several specialized agents quietly took turns behind the scenes.
 
 ---
 ## 🚀 Quick Start (Docker Hub)

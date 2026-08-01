@@ -618,7 +618,11 @@
       <div class="info-box">
         <strong>Fail-fast validation:</strong> At startup Morgana validates bidirectional consistency between declared intents and classifier configuration, <strong>and</strong> that every agent's <code>[RequiresLLMTier]</code> declaration matches a tier actually configured for the active LLM provider (via <code>ILLMTierValidationService</code>). Mismatches are caught immediately, not in production.
       </div>
-    
+
+      <div class="info-box">
+        <strong>Automated behavioral testing:</strong> Morgana ships <strong>PromptHarness</strong>, a dedicated test suite that runs real conversations against live LLM calls and checks how agents actually behave&mdash;not just that the code compiles. Changing a prompt, a policy, or a personality becomes an ordinary, verifiable step instead of a guess, keeping one of the most delicate parts of an AI application easy to maintain over time.
+      </div>
+
       <div class="page-footer">
         <span>Morgana Handbook</span>
         <span>5</span>
@@ -691,6 +695,7 @@
           <tr><td>Docker Hub (Cauldron)</td><td>hub.docker.com/r/mdesalvo/cauldron</td></tr>
           <tr><td>Docker Hub (Grimoire)</td><td>hub.docker.com/r/mdesalvo/grimoire</td></tr>
           <tr><td>Docker Hub (Rune)</td><td>hub.docker.com/r/mdesalvo/rune</td></tr>
+          <tr><td>Automated prompt tests</td><td>PromptHarness/ in repository root</td></tr>
           <tr><td>Changelog</td><td>CHANGELOG.md in repository root</td></tr>
         </tbody>
       </table>
