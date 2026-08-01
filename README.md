@@ -221,7 +221,7 @@ A unique characteristic of Morgana is its **Layered Personality System**. Every 
 
 For example, BillingAgent might be "a pragmatic and concrete witch" while ContractAgent is "a patient and empathetic witch"—both remain recognizably "Morgana" while adapting to domain-specific user needs. This creates vertical consistency across conversations with horizontal variation per expertise area, delivering a **unified brand experience that feels naturally specialized**.
 
-Prompts also define **Global Policies** (critical rules like context handling, interaction tokens) that are automatically composed into agent instructions, ensuring system-wide behavioral consistency without repetition.
+Prompts also define **Global Policies** that are automatically composed into agent instructions, ensuring system-wide behavioral consistency without repetition.
 
 Because prompt quality can't be verified by a compiler, Morgana ships **PromptHarness**, a dedicated automated test suite that runs real conversations against live LLM calls and checks how agents actually behave—not just that the configuration is well-formed. This turns changing a global policy or an agent's personality into an ordinary, checkable engineering step instead of a leap of faith, keeping one of the most delicate parts of an AI application easy to maintain over time.
 
