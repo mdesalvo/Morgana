@@ -98,7 +98,7 @@ graph LR
   %% Channels (reference clients, out-of-the-box)
   subgraph Channels["Channels"]
     CLD@{shape: rounded, label: "🌐 Cauldron"}
-    RUN@{shape: rounded, label: "📟 Grimoire"}
+    RUN@{shape: rounded, label: "📟 Grimoire/Rune"}
   end
 
   %% Backend boundary
@@ -175,7 +175,7 @@ graph LR
   %% Channels (reference clients, out-of-the-box)
   subgraph Channels["Channels"]
     CLD@{shape: rounded, label: "🌐 Cauldron"}
-    RUN@{shape: rounded, label: "📟 Grimoire"}
+    RUN@{shape: rounded, label: "📟 Grimoire/Rune"}
   end
 
   %% Backend boundary
