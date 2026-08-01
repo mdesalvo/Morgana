@@ -13,26 +13,11 @@ namespace Morgana.AI.Abstractions;
 /// Microsoft.Extensions.AI abstraction.
 /// </summary>
 /// <remarks>
-/// <para><strong>Architecture:</strong></para>
-/// <code>
-/// MorganaLLM (abstract base, this file)
-///   ├── Abstractions/LLMs/
-///   │     ├── Anthropic.cs    (Anthropic Claude models)
-///   │     ├── AzureOpenAI.cs  (Azure OpenAI GPT models)
-///   │     ├── Ollama.cs       (Ollama local models)
-///   │     └── OpenAI.cs       (OpenAI GPT models)
-///   └── ChatClients/
-///         ├── TierDefaultsChatClient.cs   (per-tier ChatOptions defaults)
-///         ├── DustAccountingChatClient.cs (Magic Dust metering)
-///         └── MorganaAnthropicClient.cs   (Anthropic no-prefill guard + cache marker)
-/// </code>
-/// <para><strong>Key Features:</strong></para>
-/// <list type="bullet">
-/// <item><term>Conversation Management</term><description>Tracks conversation history per conversationId</description></item>
-/// <item><term>Error Handling</term><description>Returns user-friendly error messages from Morgana prompts</description></item>
-/// <item><term>JSON Cleanup</term><description>Strips markdown code fences from LLM responses</description></item>
-/// <item><term>System Prompt Support</term><description>Explicit system prompt injection for actors</description></item>
-/// </list>
+/// Abstract base for four LLM provider implementations: Anthropic, AzureOpenAI, Ollama, OpenAI.
+/// Wraps with ChatClient decorators: TierDefaultsChatClient (per-tier ChatOptions defaults),
+/// DustAccountingChatClient (token budget metering), MorganaAnthropicClient (Claude 4.6+ no-prefill guard).
+/// Features: multi-turn conversation history, error handling with user-friendly fallbacks,
+/// JSON response cleanup, system prompt injection for framework actors.
 /// </remarks>
 public class MorganaLLM : ILLMService
 {

@@ -5,43 +5,11 @@ using Morgana.Contracts;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Top-level <see cref="IChannelService"/> that every actor and service binds to. Responsible
-/// for two orthogonal concerns on every outbound send: (1) adapting the payload to the
-/// capabilities advertised by the originating channel via <see cref="MorganaChannelAdapter"/>,
-/// and (2) dispatching the adapted payload to the concrete transport registered for the
-/// conversation's <c>deliveryMode</c> via <see cref="IChannelServiceFactory"/>.
+/// Decorator IChannelService applying two concerns per send: (1) adapt via MorganaChannelAdapter to channel capabilities,
+/// (2) dispatch via IChannelServiceFactory to concrete transport (by deliveryMode). Per-conversation metadata (name + mode +
+/// budget) owned by leaf singleton IChannelMetadataStore (deliberate DI choice: breaks cycle if folded into decorator).
+/// SendStreamChunkAsync skips adapter (chunks partial, not structured) but still dispatches. AdaptAsync never throws.
 /// </summary>
-/// <remarks>
-/// <para><strong>Per-conversation metadata:</strong></para>
-/// <para>The per-conversation metadata (name + delivery mode + capability budget) is owned by a
-/// separate leaf singleton (<see cref="IChannelMetadataStore"/>) which this service reads on
-/// every send. Keeping the store out of this type's identity is a deliberate DI decision:
-/// concrete transports like <c>WebhookChannelService</c> need the store to resolve their
-/// addressing, and folding it back into the decorator would close a cycle
-/// (<c>IChannelServiceFactory → WebhookChannelService → IChannelMetadataStore → this → IChannelServiceFactory</c>)
-/// that the container cannot break. A missing entry at send-time is always an invariant
-/// violation — the start-conversation gate and the manager's registration step guarantee the
-/// entry is in place before any producer emits.</para>
-///
-/// <para><strong>Why adapt + dispatch in one place:</strong></para>
-/// <para>Producers (presenter, supervisor, manager, controller, agents) keep calling
-/// <see cref="IChannelService.SendMessageAsync"/> exactly as before: DI hands them this
-/// instance, so the degradation gate and the transport selection are both applied uniformly.
-/// Any new channel implementation inherits the gate for free just by being registered with its
-/// own <c>deliveryMode</c> key via <see cref="ChannelServiceRegistration"/>.</para>
-///
-/// <para><strong>Streaming:</strong></para>
-/// <para><see cref="SendStreamChunkAsync"/> skips the adapter (chunks are partial, not structured)
-/// but still dispatches through the factory so the chunk reaches the right transport. Streaming
-/// is gated upstream in <c>MorganaAgent</c> / <c>ConversationManagerActor</c> (no streaming
-/// connection is ever opened toward a non-streaming channel), so a dispatch here only happens
-/// when the concrete transport can carry chunks.</para>
-///
-/// <para><strong>Reliability:</strong></para>
-/// <para><see cref="MorganaChannelAdapter.AdaptAsync"/> never throws — worst case it returns
-/// a template-based plain rendering — so the adaptation step adds no new failure modes on the
-/// send path. Dispatch failures surface from the concrete transport.</para>
-/// </remarks>
 public class AdaptingChannelService : IChannelService
 {
     /// <summary>

@@ -10,36 +10,10 @@ using Morgana.Contracts;
 namespace Morgana.AI.Adapters;
 
 /// <summary>
-/// Transcodes a fully-featured <see cref="ChannelMessage"/> into a form that
-/// conforms to the expressive capabilities of the target channel. Invoked by producers
-/// (presenter, supervisor, manager, controller) right before handing the message to
-/// <see cref="IChannelService.SendMessageAsync"/>.
+/// Adapts fully-featured ChannelMessage to target channel capabilities. Three-path strategy: short-circuit hot path
+/// if message fits; LLM rewrite via ChannelDowngrade prompt for semantic plain rendering; template fallback (markdown
+/// strip, inline quick replies, drop rich cards) if LLM fails. Never throws; best-effort with semantic fidelity.
 /// </summary>
-/// <remarks>
-/// <para><strong>Decision flow:</strong></para>
-/// <list type="number">
-///   <item><term>Short-circuit</term>
-///     <description>If every feature in the message is supported by the channel, the input
-///     is returned unchanged without touching the LLM. This is the hot path for rich
-///     channels (e.g. Cauldron) and must stay free of I/O.</description></item>
-///   <item><term>LLM-guided rewrite</term>
-///     <description>Invokes <see cref="ILLMService"/> with the ChannelDowngrade prompt to
-///     produce a semantically-equivalent plain rendering when the channel lacks rich
-///     features. Morgana prompts actively push the LLM toward rich cards and quick replies,
-///     so a purely syntactic strip is rarely adequate.</description></item>
-///   <item><term>Template fallback</term>
-///     <description>If the LLM call fails or is cancelled, falls back to a deterministic
-///     in-process rewrite (strip markdown, inline quick replies, flatten rich card to
-///     title + subtitle). Better ugly than silent.</description></item>
-/// </list>
-/// <para><strong>Scope:</strong></para>
-/// <para>Whole messages only. Streaming chunks are gated upstream in <c>MorganaAgent</c>
-/// (no streaming connection is ever opened toward a non-streaming channel), so this adapter
-/// never sees partial chunks.</para>
-/// <para><strong>Reliability contract:</strong></para>
-/// <para>This service never throws. The worst case is an unstyled but semantically
-/// faithful message.</para>
-/// </remarks>
 public class MorganaChannelAdapter
 {
     /// <summary>
@@ -80,14 +54,13 @@ public class MorganaChannelAdapter
     }
 
     /// <summary>
-    /// Produces a <see cref="ChannelMessage"/> whose features fit inside
-    /// <paramref name="channelCapabilities"/>. Returns <paramref name="channelMessage"/> unchanged when no
-    /// degradation is needed.
+    /// Adapts a message to channel capabilities: returns unchanged if it fits,
+    /// otherwise rewrites via LLM or template fallback. Never null, never throws.
     /// </summary>
-    /// <param name="channelMessage">The fully-featured outbound message as produced by the engine.</param>
-    /// <param name="channelCapabilities">Expressive budget advertised by the target channel.</param>
-    /// <param name="cancellationToken">Cancellation token for the async operation.</param>
-    /// <returns>A channel-conformant message. Never null, never throws.</returns>
+    /// <param name="channelMessage">Fully-featured outbound message</param>
+    /// <param name="channelCapabilities">Expressive budget of the target channel</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Channel-conformant message</returns>
     public async Task<ChannelMessage> AdaptAsync(
         ChannelMessage channelMessage,
         ChannelCapabilities channelCapabilities,
@@ -196,26 +169,13 @@ public class MorganaChannelAdapter
         return true;
     }
 
-    /// <summary>
-    /// Sums the visual cost of the whole outbound message (text + rich card + quick replies)
-    /// so that <see cref="ChannelCapabilities.MaxMessageLength"/> governs the entire
-    /// rendered payload, not only the free-form text field. Keeping the three contributions
-    /// in a single budget keeps the check symmetric and prevents silent asymmetries
-    /// (a 3 KB card slipping past a 500-char cap because only Text was measured).
-    /// Per-component weighing is delegated to the records themselves (<c>EstimateCost</c>).
-    /// </summary>
+    // Sums visual cost of all message components (text, rich card, quick replies).
     private static int EstimateVisualCost(ChannelMessage channelMessage) =>
         channelMessage.Text.Length
       + (channelMessage.RichCard?.EstimateCost() ?? 0)
       + (channelMessage.QuickReplies?.Sum(quickReply => quickReply.EstimateCost()) ?? 0);
 
-    /// <summary>
-    /// Detects whether <paramref name="text"/> carries any markdown structure by delegating
-    /// the decision to Markdig's CommonMark parser. A plain-text string parses into a single
-    /// <see cref="ParagraphBlock"/> containing only <see cref="LiteralInline"/> children;
-    /// any other descendant type (heading, emphasis, code, link, list, blockquote, ...)
-    /// signals the presence of real markdown syntax.
-    /// </summary>
+    // Detects markdown via Markdig parser: plain text = ParagraphBlock + LiteralInline only.
     private static bool ContainsMarkdown(string text)
     {
         MarkdownDocument document = Markdown.Parse(text);
@@ -227,13 +187,7 @@ public class MorganaChannelAdapter
         return false;
     }
 
-    /// <summary>
-    /// Enforces <see cref="ChannelCapabilities.MaxMessageLength"/> on <paramref name="text"/>.
-    /// If the text overflows, markdown is stripped first (cheaper, often enough to fit); any
-    /// residual overflow is then truncated with an ellipsis, guaranteeing the cut lands on
-    /// plain prose and never leaves dangling markdown syntax (<c>**text…</c>, <c>[label…</c>).
-    /// Returns <paramref name="text"/> unchanged when no limit is declared or it already fits.
-    /// </summary>
+    // Enforces MaxMessageLength: strip markdown first (cheaper); truncate with ellipsis if still over.
     private static string EnforceLengthBudget(string text, ChannelCapabilities channelCapabilities)
     {
         if (channelCapabilities.MaxMessageLength is not { } max || max <= 0 || text.Length <= max)
@@ -294,28 +248,16 @@ public class MorganaChannelAdapter
         };
     }
 
-    /// <summary>
-    /// Produces a plain-text rendering of <paramref name="text"/> by walking the Markdig
-    /// parse tree and collecting only the literal content of each node. Block structure
-    /// (paragraphs, headings, list items, blockquotes, code blocks) is preserved as line
-    /// breaks; inline syntax (emphasis, code, links) is flattened to its visible text,
-    /// dropping URLs and fence delimiters.
-    /// </summary>
+    // Walks Markdig parse tree, collects literal text, preserves block structure as line breaks.
     private static string StripMarkdown(string text)
     {
-        MarkdownDocument markdownDocument = Markdown.Parse(text);
         StringBuilder sb = new StringBuilder();
-        RenderContainerBlock(markdownDocument, sb);
+        RenderContainerBlock(Markdown.Parse(text), sb);
         return sb.ToString().TrimEnd();
     }
 
-    /// <summary>
-    /// Walks a Markdig <see cref="ContainerBlock"/> (the document root or any nested block
-    /// container) and appends its visible text to <paramref name="sb"/>. Paragraphs and
-    /// headings are flattened through <see cref="RenderContainerInline"/> and separated by a
-    /// blank line; code blocks are emitted verbatim line by line; any other container block
-    /// (lists, blockquotes, ...) is recursed into so its leaf content still surfaces.
-    /// </summary>
+    // Walks Markdig ContainerBlock (document or nested): paragraphs/headings flattened via RenderContainerInline,
+    // code blocks emitted verbatim, other containers recursed. Results separated by blank lines.
     private static void RenderContainerBlock(ContainerBlock containerBlock, StringBuilder sb)
     {
         foreach (Block block in containerBlock)
@@ -345,15 +287,7 @@ public class MorganaChannelAdapter
         }
     }
 
-    /// <summary>
-    /// Walks a Markdig <see cref="ContainerInline"/> and appends the visible text of its
-    /// children to <paramref name="sb"/>. Literals and inline code are emitted as-is, line
-    /// breaks become newlines, autolinks collapse to their URL, and links/other container
-    /// inlines are recursed into — dropping the surrounding markdown syntax (emphasis
-    /// markers, fence delimiters, link targets) while preserving the reader-visible content.
-    /// Returns immediately if <paramref name="containerInline"/> is null, so callers can pass
-    /// <c>ParagraphBlock.Inline</c> without a prior null check.
-    /// </summary>
+    // Walks Markdig ContainerInline: literals/code as-is, line breaks→newlines, links/containers recursed.
     private static void RenderContainerInline(ContainerInline? containerInline, StringBuilder sb)
     {
         if (containerInline == null) return;

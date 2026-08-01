@@ -7,33 +7,10 @@ using Spectre.Console;
 namespace Grimoire.Services;
 
 /// <summary>
-/// Turns Morgana's full (non-degraded) markdown into a flat stream of single-row
-/// Spectre <see cref="Markup"/>s — the terminal-side counterpart of Cauldron's
-/// <c>MarkdownRendererService.ToHtml</c>. Where Cauldron hands the markdown to the
-/// browser's HTML+CSS engine (which lays out and wraps for free), Grimoire has no
-/// layout engine: <see cref="ConsoleUiService.BuildBody"/> does its own row budgeting
-/// on the strict contract "one <see cref="Markup"/> = exactly one terminal row". This
-/// renderer therefore <b>flattens markdown to inline-styled lines</b> rather than to
-/// arbitrary multi-row <c>IRenderable</c>s: headings, bold/italic, code, lists, links,
-/// blockquotes and horizontal rules all collapse into styled text rows. The genuinely
-/// block-level widgets (Panel, Table, Rule) are reserved for the rich-card mapper
-/// (step 4), where measured multi-row layout is justified.
+/// Markdown-to-terminal renderer: flattens markdown into inline-styled lines (one Markup = one row).
+/// Markdig parses source→AST, Render walks it into RenderedLines with StyledSpans, Wrap breaks at
+/// terminal width. Block-level widgets (Panel, Table, Rule) reserved for rich-card mapper.
 /// </summary>
-/// <remarks>
-/// The two-stage pipeline mirrors the model the rest of the UI already relies on:
-/// <list type="number">
-///   <item>Markdig parses the source into an AST; <see cref="Render"/> walks it into a
-///     list of <see cref="RenderedLine"/>s, each a sequence of <see cref="StyledSpan"/>s
-///     carrying <b>visible</b> text plus its Spectre style tokens (the markup tags
-///     themselves occupy zero columns).</item>
-///   <item><see cref="Wrap"/> breaks those logical lines at the terminal width counting
-///     visible columns only, preserving span boundaries, and emits one balanced
-///     <see cref="Markup"/> per visual row.</item>
-/// </list>
-/// Because soft line breaks collapse to spaces and blank lines separate blocks — exactly
-/// as CommonMark/Markdig render to HTML — the on-screen result matches Cauldron's bubble
-/// for the same payload.
-/// </remarks>
 public static class MarkdownTerminalRenderService
 {
     /// <summary>Shared default pipeline — same configuration Cauldron's renderer uses.</summary>

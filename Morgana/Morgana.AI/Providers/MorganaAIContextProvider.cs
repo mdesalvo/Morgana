@@ -7,39 +7,10 @@ using Microsoft.Extensions.Logging;
 namespace Morgana.AI.Providers;
 
 /// <summary>
-/// Manages per-session conversation context variables for a Morgana agent.
-/// Cross-agent variable sharing is delegated to the conversation-scoped <c>shared_context</c>
-/// registry on the persistence layer (see <see cref="OnSharedContextUpdate"/>).
+/// Per-agent singleton managing session-level conversation variables. Shared variables trigger OnSharedContextUpdate
+/// callback for cross-agent persistence in conversation-scoped shared_context registry (first-write-wins merge).
+/// Storage: ProviderSessionState&lt;MorganaContextState&gt; → AgentSession (auto-serialized by framework).
 /// </summary>
-/// <remarks>
-/// <para>One instance is created per agent intent and shared across all sessions of that agent.
-/// Session-specific state (the variable dictionary) lives in <see cref="AgentSession"/> via
-/// <see cref="ProviderSessionState{T}"/> and is serialized automatically by the framework.</para>
-///
-/// <para><strong>Key behaviours:</strong></para>
-/// <list type="bullet">
-/// <item><term>Variable storage</term><description>Per-session dictionary persisted inside AgentSession.</description></item>
-/// <item><term>Shared variables</term><description>Variables declared as shared raise the <see cref="OnSharedContextUpdate"/>
-///     callback, which MorganaAgent wires to a write into the conversation-scoped <c>shared_context</c>
-///     registry on the persistence layer.</description></item>
-/// <item><term>Merge strategy</term><description>First-write-wins: incoming shared values are ignored if the variable is already set locally.</description></item>
-/// </list>
-///
-/// <para><strong>Integration overview:</strong></para>
-/// <code>
-/// MorganaAgent (one per intent)
-///   └── MorganaAIContextProvider (singleton, attached to AIAgent)
-///         ├── ProviderSessionState&lt;MorganaContextState&gt; → AgentSession (per-session)
-///         ├── SharedVariableNames (derived from tool definitions at startup)
-///         └── OnSharedContextUpdate → IConversationPersistenceService.UpsertSharedVariableAsync
-///                                      (writes into per-conversation shared_context table)
-///
-/// MorganaTool
-///   ├── GetContextVariable → MorganaAIContextProvider.GetVariable(session, name)
-///   └── SetContextVariable → MorganaAIContextProvider.SetVariable(session, name, value)
-///                                └── if Shared → fires OnSharedContextUpdate → DB write
-/// </code>
-/// </remarks>
 public class MorganaAIContextProvider : AIContextProvider
 {
     /// <summary>
@@ -218,40 +189,10 @@ public class MorganaAIContextProvider : AIContextProvider
     // =========================================================================
 
     /// <summary>
-    /// Called BEFORE each agent invocation. Declares to the model, by name only, which context
-    /// variables this session already holds.
+    /// Per-turn injection: declares by name only which context variables session holds (names only, never values,
+    /// silent when empty, ordinal-sorted for cache stability). Critical for agents activated mid-conversation
+    /// on empty per-agent history: hydrated shared variables from registry are invisible in history.
     /// </summary>
-    /// <remarks>
-    /// <para>The rule "look a context-scoped value up before asking for it" is stated five times over
-    /// (policy P0, the framework Instructions, both tool/parameter injection templates and the
-    /// <c>GetContextVariable</c> description), and <c>ToolDescriptionContextGuidance</c> even names the
-    /// parameters — so the model is never guessing a name. What no layer states is the <em>fact</em>:
-    /// whether anything is held right now. Those templates cannot state it, and not by omission: tool
-    /// descriptions are built once, at agent creation, so they can only ever carry the <em>contract</em>
-    /// ("this tool takes a userId", true against an empty store), never the <em>state</em>. Only this
-    /// hook runs per turn.</para>
-    ///
-    /// <para>The turn that needs it is an agent activated for the first time mid-conversation. Chat
-    /// history is per-agent (each <see cref="AgentSession"/> carries its own), so such an agent opens on
-    /// an empty transcript and has never seen the value — while <c>MorganaAgent</c> has just hydrated it
-    /// into this very provider from the <c>shared_context</c> registry. Everywhere else the value is
-    /// visible in the agent's own history and the lookup is merely redundant; there it is the only
-    /// route, and the empty history reads as positive evidence that looking up is pointless. It is also
-    /// the one rung of the placement ladder the tool-level guidance cannot reach: the observed failures
-    /// called <c>SetTurnContinuation</c> alone and never selected the domain tool at all, so text living
-    /// in that tool's description was never weighed.</para>
-    ///
-    /// <para>Three properties of what is injected, each deliberate:</para>
-    /// <list type="bullet">
-    /// <item><term>Names, never values</term><description>Values in the prompt would make
-    ///     <c>GetContextVariable</c> pointless — collapsing the HIT/MISS trace the suite asserts on —
-    ///     and would invite the model to claim a value it never read.</description></item>
-    /// <item><term>Silent when empty</term><description>A session holding nothing injects nothing, so
-    ///     the ask-the-user branch reaches the model exactly as before.</description></item>
-    /// <item><term>Ordinal-sorted</term><description>A stable string across turns, so the system prompt
-    ///     stays prompt-cacheable and a baseline stays comparable.</description></item>
-    /// </list>
-    /// </remarks>
     protected override ValueTask<AIContext> ProvideAIContextAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)

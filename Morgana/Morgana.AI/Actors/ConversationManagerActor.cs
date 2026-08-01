@@ -164,15 +164,9 @@ public class ConversationManagerActor : MorganaActor
     }
 
     /// <summary>
-    /// Determines the effective channel metadata for the conversation:
-    /// <list type="bullet">
-    /// <item>Fresh start → the controller gate guarantees metadata is present; persist it
-    /// (lowercased channel name) and return it.</item>
-    /// <item>Restore → the <c>ConversationExists</c> gate guarantees the DB exists; load and
-    /// return the persisted metadata. No fallback: a restore that reaches here without a
-    /// persisted row is a conversation that predates the channel handshake (or whose row was
-    /// lost) and we refuse to invent an identity on its behalf.</item>
-    /// </list>
+    /// Resolves channel metadata: fresh start persists metadata from controller gate (lowercased);
+    /// restore loads from DB. No fallback on restore — pre-handshake conversations or lost rows
+    /// are refused to prevent inventing an identity.
     /// </summary>
     private async Task<ChannelMetadata> ResolveChannelMetadataAsync(Records.CreateConversation msg)
     {
@@ -227,17 +221,10 @@ public class ConversationManagerActor : MorganaActor
     }
 
     /// <summary>
-    /// Normalises incoming <see cref="ChannelCapabilities"/> so clearly incoherent
-    /// declarations are reconciled at the ingress, not carried all the way to the adapter.
-    /// A channel whose hard per-message cap falls below
-    /// <c>Morgana:AdaptiveMessaging:RichFeaturesMinLength</c> is treated as primitive:
-    /// rich cards and quick replies cannot fit inside such a small budget alongside the
-    /// textual body, so the flags are cleared regardless of what the client announced.
-    /// Streaming is intentionally not touched here — it is a property of the transport
-    /// (connection-oriented vs store-and-forward), orthogonal to the length cap. A channel
-    /// that advertises streaming with a small cap is trusted until the client corrects it.
-    /// Setting the threshold to <c>null</c> or a non-positive value disables the heuristic
-    /// and restores full trust of the declaration.
+    /// Normalises incoherent ChannelCapabilities at ingress. Channels with MaxMessageLength
+    /// below RichFeaturesMinLength threshold are treated as primitive (clear rich cards/quick replies).
+    /// Streaming is untouched — transport property orthogonal to length cap. Null/non-positive
+    /// threshold disables heuristic and restores full trust of declarations.
     /// </summary>
     private ChannelCapabilities NormaliseCapabilities(ChannelCapabilities declaredCapabilities)
     {

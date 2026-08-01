@@ -30,24 +30,17 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     private readonly ILogger logger;
 
     /// <summary>
-    /// The connection pool: one connected <see cref="MCPClient"/> per pool key
-    /// (see <see cref="PoolKey"/>), shared across every conversation/agent that targets
-    /// the same MCP server. <see cref="ConcurrentDictionary{TKey,TValue}"/> so the
-    /// lock-free cold-acquire race in <see cref="GetOrCreateClientAsync"/> and the gated
-    /// reconnect in <see cref="ReconnectAsync"/> stay correct under concurrent callers:
-    /// atomic <c>TryAdd</c>/<c>TryRemove</c> guarantee a single live client per key with
-    /// no double-dispose and no orphaned (undisposed) instance.
+    /// Connection pool: one MCPClient per pool key, shared across conversations/agents
+    /// targeting the same server. ConcurrentDictionary ensures lock-free acquire and
+    /// reconnect stay correct: atomic TryAdd/TryRemove guarantee single live client
+    /// per key with no double-dispose.
     /// </summary>
     private readonly ConcurrentDictionary<string, MCPClient> mcpClients;
 
     /// <summary>
-    /// Per-pool-key reconnect mutex. Collapses a thundering herd of concurrent
-    /// session-terminated failures (N conversations sharing one pooled client) into a
-    /// single reconnect: the first caller through the gate re-establishes the session;
-    /// the rest, queued behind it, observe the already-replaced client and adopt it
-    /// instead of each firing their own redundant <c>initialize</c> handshake. Keyed by
-    /// pool key, which is a small static set (one entry per declared MCP server), so the
-    /// dictionary is effectively bounded and never needs eviction.
+    /// Per-pool-key reconnect mutex. Collapses thundering-herd failures (N conversations
+    /// sharing one pooled client) into single reconnect: first caller gates and re-establishes;
+    /// others observe already-replaced client and adopt it. Keyed by pool key (small static set).
     /// </summary>
     private readonly ConcurrentDictionary<string, SemaphoreSlim> reconnectGates;
 
@@ -153,14 +146,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         => new ReconnectingMCPTool(discoveredTool, serverAttribute, this);
 
     /// <summary>
-    /// Recovers from a terminated session for the given server, exactly once across all
-    /// concurrent callers that observed it. Holds a per-pool-key gate so the reconnect is
-    /// single-flight, and replaces the pooled client only if it is still the very instance
-    /// the caller saw fail (reference identity). A caller that queued on the gate while a
-    /// peer already reconnected — or a late straggler whose 404 came from an
-    /// already-replaced session — adopts the current healthy client instead of evicting
-    /// it, which would otherwise strand the conversations using it and trigger a
-    /// reconnect storm.
+    /// Recovers from terminated session: holds per-pool-key gate for single-flight reconnect,
+    /// replaces pooled client only if still the exact instance the caller saw fail.
+    /// Late stragglers adopt already-recovered client instead of evicting, preventing strand/storm.
     /// </summary>
     /// <param name="serverAttribute">The server whose session was terminated.</param>
     /// <param name="staleMCPClient">The exact client instance the caller observed failing.</param>
@@ -239,18 +227,10 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     }
 
     /// <summary>
-    /// True when the exception (or any inner exception) is the MCP-standard "session was
-    /// terminated, re-initialize" signal. Per the Streamable HTTP transport spec, a server
-    /// that has terminated or expired a session MUST answer any request carrying that
-    /// <c>Mcp-Session-Id</c> with HTTP <c>404 Not Found</c>, and the client MUST then start
-    /// a fresh session. The SDK only sends session-bearing requests after a successful
-    /// <c>initialize</c>, so a 404 surfacing here is exactly that spec-mandated signal —
-    /// detected on the HTTP status alone, with no coupling to any server's error string or
-    /// implementation-defined JSON-RPC code. Server-agnostic by construction: it recovers
-    /// any MCP host whose session store does not survive instance recycling or scale-out.
-    /// Private: <see cref="ReconnectingMCPTool"/> needs the exact same classification and reads it
-    /// directly as a nested class, no visibility bump required for a signal that belongs entirely
-    /// to this file.
+    /// True when exception (or inner) is MCP's "session terminated, re-initialize" signal:
+    /// HTTP 404 NotFound per Streamable HTTP spec. Server-agnostic recovery for any MCP host
+    /// whose session store doesn't survive recycling/scale-out. Private: ReconnectingMCPTool
+    /// reads it directly as nested class.
     /// </summary>
     private static bool IsSessionTerminated(Exception? ex)
     {
@@ -263,17 +243,12 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         return false;
     }
 
-    /// <summary>
-    /// Disconnects and removes a specific MCP client from the pool.
-    /// </summary>
+    /// <summary>Disconnects and removes a specific MCP client from pool.</summary>
     public async Task DisconnectClientAsync(UsesMCPServerAttribute serverAttribute)
     {
         string poolKey = PoolKey(serverAttribute);
 
-        // Atomic remove-then-dispose: TryRemove yields the client to exactly one caller,
-        // so concurrent disconnects can't double-dispose the same instance, and a key
-        // that is absent (never created, or already removed by a peer / the reconnect
-        // path) is a benign no-op rather than an error.
+        // Atomic TryRemove ensures single caller disposes each client; absent keys are benign no-ops
         if (mcpClients.TryRemove(poolKey, out MCPClient? disconnectedMCPClient))
         {
             try
@@ -288,17 +263,12 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         }
     }
 
-    /// <summary>
-    /// Disconnects all MCP clients and clears the pool.
-    /// Called during application shutdown or service disposal.
-    /// </summary>
+    /// <summary>Disconnects all MCP clients and clears the pool (idempotent).</summary>
     public async Task DisconnectAllAsync()
     {
         logger.LogInformation("Disconnecting {McpClientsCount} MCP clients...", mcpClients.Count);
 
-        // Disconnect all clients in parallel: each may involve network I/O (FIN/RST handshake
-        // for Http, stdin close for Stdio). Sequential teardown would serialize that latency.
-        // Failures are caught per-client so one broken connection does not block the others.
+        // Disconnect in parallel (network I/O may block); failures caught per-client to avoid cascading
         List<Task> disconnectTasks = [];
         disconnectTasks.AddRange(
             mcpClients.Select(kvp => Task.Run(async () =>
@@ -327,14 +297,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
 
     // IDisposable / IAsyncDisposable
 
-    /// <summary>
-    /// Synchronously disconnects all pooled MCP clients. Idempotent.
-    /// </summary>
-    /// <remarks>
-    /// Sync-over-async via <c>GetAwaiter().GetResult()</c> is intentional: the <c>IDisposable</c>
-    /// contract is synchronous and this path is only reached during host shutdown, where blocking
-    /// briefly on connection teardown is acceptable.
-    /// </remarks>
+    /// <summary>Synchronously disconnects all pooled clients via sync-over-async (idempotent).</summary>
     public void Dispose()
     {
         if (!disposed)
@@ -357,28 +320,10 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     }
 
     /// <summary>
-    /// An MCP tool that keeps working after the server drops its session mid-conversation, instead
-    /// of staying bound forever to whichever <see cref="McpClientTool"/> it was discovered on.
+    /// MCP tool wrapper that survives server session drops mid-conversation. Long-lived agent actor calls through
+    /// cached tool; on session-terminated (HTTP 404), reconnects via registry's single-flight gate and retries once.
+    /// Fast path zero-cost when session never drops. Only WrapResilientTool constructs; nested for IsSessionTerminated visibility.
     /// </summary>
-    /// <remarks>
-    /// <para>An agent is a long-lived Akka actor — it survives every turn of a conversation until
-    /// the idle timeout — but a bare <c>McpClientTool</c> invokes over the exact session it was
-    /// discovered on, and that discovery happens once, in the agent's constructor. If the server
-    /// drops that session mid-conversation (the MCP Streamable HTTP spec's own "session terminated"
-    /// signal; routine, not exotic, for a server hosted on infrastructure that recycles instances or
-    /// scales out — e.g. an Azure Functions Consumption-plan endpoint like the one
-    /// <c>MonkeyAgent</c>'s example points at), every tool call on that already-bound agent keeps
-    /// failing until it is recreated. Nested here rather than reached from outside: only
-    /// <see cref="WrapResilientTool"/> ever constructs one, and the outer class's own
-    /// <see cref="IsSessionTerminated"/> is exactly the classification it needs — no visibility bump,
-    /// no risk of the two drifting apart on what is a single spec-mandated signal.</para>
-    /// <para><strong>The fast path costs nothing extra.</strong> The tool discovered at construction
-    /// is cached and called directly — exactly one round trip, exactly as a bare
-    /// <c>McpClientTool</c> would. Only when that call fails with the session-terminated signal does
-    /// this re-discover through the reconnect-safe path, cache the fresh tool, and retry once. A
-    /// server that never drops a session is never asked to re-list its tools; the cost of resilience
-    /// is paid only by the conversation that actually needed it.</para>
-    /// </remarks>
     private sealed class ReconnectingMCPTool : AIFunction
     {
         private readonly MCPClientRegistryService registry;
@@ -458,26 +403,10 @@ public class MCPClientRegistryService : IMCPClientRegistryService
 }
 
 /// <summary>
-/// Thin wrapper over the ModelContextProtocol SDK's <see cref="McpClient"/> for one
-/// connected MCP server (one transport + one live session). It adds nothing to the
-/// protocol — it only owns the SDK client, tags every operation/log line with a stable
-/// <see cref="ServerLabel"/>, and normalises construction (transport selection) and
-/// teardown.
+/// Wrapper over SDK's McpClient for one connected MCP server (transport + live session). Private constructor; instances
+/// created only via ConnectAsync. Owned/pooled by MCPClientRegistryService (per-key, shared across conversations/agents).
+/// On session termination (HTTP 404), registry discards and reconnects; no retry here.
 /// </summary>
-/// <remarks>
-/// <para>Instances are created exclusively through the <see cref="ConnectAsync"/> factory
-/// (the constructor is private) and are meant to be owned and pooled by
-/// <see cref="MCPClientRegistryService"/> — one wrapper per pool key, shared across every
-/// conversation/agent targeting that server. Do not new this up or dispose it directly:
-/// the registry manages its lifetime (pool eviction, single-flight reconnect, teardown).</para>
-/// <para><strong>Session lifetime:</strong> the SDK session is established once during
-/// <see cref="ConnectAsync"/> and used by every subsequent <see cref="DiscoverToolsAsync"/>
-/// / <see cref="CallToolAsync"/>. Those are the session-bearing calls that can hit the MCP
-/// spec's "session terminated" HTTP 404 if the server drops the session; this wrapper does
-/// not retry — recovery is the registry's job via
-/// <see cref="MCPClientRegistryService.ExecuteWithReconnectAsync{T}"/>, which discards the
-/// dead wrapper and connects a fresh one.</para>
-/// </remarks>
 public class MCPClient : IAsyncDisposable
 {
     /// <summary>The underlying SDK client holding the transport and the live MCP session.</summary>

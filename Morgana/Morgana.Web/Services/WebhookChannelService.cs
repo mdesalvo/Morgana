@@ -4,38 +4,11 @@ using Morgana.Contracts;
 namespace Morgana.Web.Services;
 
 /// <summary>
-/// HTTP webhook implementation of <see cref="IChannelService"/>. POSTs outbound
-/// <see cref="ChannelMessage"/>s to the absolute <c>callbackUrl</c> the channel declared on its
-/// <see cref="ChannelCoordinates"/> at the conversation-start handshake. Serves the
-/// <c>deliveryMode=webhook</c> dispatch key.
+/// Webhook implementation of IChannelService: POSTs ChannelMessages to callbackUrl declared in ChannelCoordinates
+/// at conversation-start (deliveryMode=webhook). Callback URL loaded per-send from IChannelMetadataStore persisted data.
+/// Does NOT sign POSTs (asymmetric trust: channel signs toward Morgana, not vice versa; mirrors GitHub/Stripe/Twilio conventions).
+/// SendStreamChunkAsync POSTs to {callbackUrl}/chunk with minimal body. HTTP failures logged and swallowed (no agent fault).
 /// </summary>
-/// <remarks>
-/// <para><strong>Addressing:</strong></para>
-/// <para>Morgana does not hold per-channel addressing state outside <see cref="IChannelMetadataStore"/>:
-/// the callback URL lives on the persisted <see cref="ChannelCoordinates"/>, so this service
-/// looks it up per send. A missing URL at dispatch time is an invariant violation — the
-/// start-conversation gate rejects webhook handshakes without an absolute callbackUrl.</para>
-///
-/// <para><strong>Trust model (outbound):</strong></para>
-/// <para>Morgana does NOT sign the POST it sends to the channel. Authentication is asymmetric by
-/// design: the channel signs toward Morgana (per-issuer JWT), not the other way around. A webhook
-/// client that wants to be sure the request came from its Morgana instance is expected to rely on
-/// network-level trust (mTLS, private VPC, IP allowlist) and/or a shared header secret configured
-/// on its own side — Morgana's position here mirrors GitHub/Stripe/Twilio webhook conventions.</para>
-///
-/// <para><strong>Streaming:</strong></para>
-/// <para><see cref="SendStreamChunkAsync"/> POSTs each chunk to <c>{callbackUrl}/chunk</c> with a
-/// minimal body (<c>{ conversationId, chunkText }</c>) mirroring SignalR's
-/// <c>ReceiveStreamChunk</c> contract. The endpoint suffix is a convention: a channel that
-/// declares <see cref="ChannelCapabilities.SupportsStreaming"/> = <see langword="true"/> over
-/// webhook is expected to expose it. Channels that opt out simply declare streaming off and the
-/// supervisor never invokes this method.</para>
-///
-/// <para><strong>Reliability:</strong></para>
-/// <para>HTTP failures are logged and swallowed so a misbehaving callback target can't fault the
-/// agent turn. The concrete transport is free to time out or return non-success; the conversation
-/// keeps running.</para>
-/// </remarks>
 public class WebhookChannelService : IChannelService
 {
     /// <summary>

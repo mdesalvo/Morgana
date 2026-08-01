@@ -10,26 +10,9 @@ namespace Morgana.AI.Abstractions;
 /// Provides conversation ID tracking, LLM service access, prompt resolution, logging, and automatic timeout handling.
 /// </summary>
 /// <remarks>
-/// <para><strong>Inheritance Hierarchy:</strong></para>
-/// <code>
-/// ReceiveActor (Akka.NET)
-///   └── MorganaActor (base infrastructure)
-///         ├── ConversationManagerActor
-///         ├── ConversationSupervisorActor
-///         ├── GuardActor
-///         ├── ClassifierActor
-///         ├── RouterActor
-///         └── MorganaAgent (agent base class)
-///               └── Custom domain agents (BillingAgent, ContractAgent, etc.)
-/// </code>
-/// <para><strong>Key Features:</strong></para>
-/// <list type="bullet">
-/// <item>Conversation-scoped: Each actor instance is tied to a specific conversation ID</item>
-/// <item>LLM access: Direct access to ILLMService for AI completions</item>
-/// <item>Prompt resolution: Access to IPromptResolverService for loading templates</item>
-/// <item>Logging: Pre-configured ILoggingAdapter for actor-specific logging</item>
-/// <item>Timeout handling: Global receive timeout (N seconds) with virtual handler for override</item>
-/// </list>
+/// Inheritance: ReceiveActor → MorganaActor (base) → specialized actors (Manager, Supervisor,
+/// Guard, Classifier, Router) + MorganaAgent. Features: conversation-scoped, LLM access,
+/// prompt resolution, logging, automatic timeout handling.
 /// </remarks>
 public class MorganaActor : ReceiveActor
 {

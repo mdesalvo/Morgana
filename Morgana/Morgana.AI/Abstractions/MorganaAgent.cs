@@ -22,20 +22,10 @@ namespace Morgana.AI.Abstractions;
 /// conversation context and inter-agent communication.
 /// </summary>
 /// <remarks>
-/// <para>Each concrete agent subclass handles one intent. Providers (<see cref="MorganaAIContextProvider"/>,
-/// <see cref="MorganaChatHistoryProvider"/>) are singletons attached to the <see cref="AIAgent"/> instance
-/// and shared across all sessions. All per-session state lives inside <see cref="AgentSession"/>
-/// and is serialized automatically by the framework.</para>
-///
-/// <para><see cref="CurrentSession"/> is set at the start of each <see cref="ExecuteAgentAsync"/> turn
-/// and is the session passed to all provider calls within that turn, including tool invocations.
-/// Because <see cref="MorganaAgent"/> is an Akka actor (single-thread message processing),
-/// there is no concurrent access to <see cref="CurrentSession"/>.</para>
-///
-/// <para><strong>OpenTelemetry:</strong> <see cref="ExecuteAgentAsync"/> opens a <c>morgana.agent</c>
-/// Activity as child of <c>AgentRequest.TurnContext</c>, emits a <c>first_chunk</c> event on TTFT,
-/// and tags the span with <c>agent.ttft_ms</c>, <c>agent.response_preview</c>,
-/// <c>agent.is_completed</c>, and <c>agent.has_quick_replies</c>.</para>
+/// Providers (MorganaAIContextProvider, MorganaChatHistoryProvider) are singletons on AIAgent,
+/// shared across sessions. Per-session state in AgentSession (serialized by framework).
+/// CurrentSession set per-turn, single-threaded. OTel: morgana.agent span as child of TurnContext,
+/// TTFT event, tags: agent.ttft_ms, agent.response_preview, agent.is_completed.
 /// </remarks>
 public class MorganaAgent : MorganaActor
 {
@@ -373,13 +363,7 @@ public class MorganaAgent : MorganaActor
         }
         finally
         {
-            // Safety net: ephemeral UI variables (rich card, quick replies) must NEVER leak
-            // to the next turn. The happy path drops them above after reading, but if the LLM
-            // populated them via SetRichCard/SetQuickReplies tool calls and then the stream
-            // or the save threw, the happy-path drop is skipped and the stale values would be
-            // picked up by GetRichCardFromContext/GetQuickRepliesFromContext on the next turn.
-            // DropVariable is idempotent (no-op when the key is absent), so this is safe even
-            // after a successful path.
+            // Safety net: ephemeral UI variables (rich card, quick replies) must NEVER leak to the next turn.
             if (aiAgentSession is not null)
             {
                 aiContextProvider.DropVariable(aiAgentSession, "rich_card");
@@ -401,21 +385,24 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>
+    /// Collects, in call order, the names of the tools invoked during the current turn, for the <c>agent.tools_invoked</c> span attribute.
+    /// </summary>
+    /// <param name="session">Active agent session.</param>
+    /// <param name="historyBaseline">Number of history messages present before the turn ran; everything past it belongs to this turn.</param>
+    /// <returns>Comma-separated tool names in call order — repetitions kept, since a repeated call is itself a signal — or an empty string when the turn called no tool.</returns>
+    protected string GetToolsInvoked(AgentSession session, int historyBaseline)
+        => string.Join(", ", aiChatHistoryProvider.GetMessages(session)
+            .Skip(historyBaseline)
+            .SelectMany(m => m.Contents.OfType<FunctionCallContent>())
+            .Select(c => c.Name));
+
+    /// <summary>
     /// Reads the <c>turn_continuation</c> context variable, set by the <c>SetTurnContinuation</c>
     /// base tool when the agent declares it is staying in service awaiting the user's next turn.
     /// </summary>
     /// <param name="session">Active agent session.</param>
     /// <returns><c>true</c> if the agent declared continuation on this turn; <c>false</c> if it
     /// declared completion or made no declaration at all.</returns>
-    /// <remarks>
-    /// <para>The value survives session serialization, so it comes back either as a native
-    /// <see cref="bool"/> (same-turn read, before any round-trip) or as a <see cref="JsonElement"/>
-    /// of kind True/False (after a round-trip). The string form is accepted too because the LLM
-    /// occasionally binds the argument as the literal text "true".</para>
-    /// <para>An absent variable is NOT an error: an agent that has finished simply does not call
-    /// the tool. Anything unrecognizable is read as "no continuation declared", which is the safe
-    /// default — the turn then rests on its structural signals (quick replies, rich card).</para>
-    /// </remarks>
     protected bool GetTurnContinuationFromContext(AgentSession session)
     {
         object? ctxTurnContinuation = aiContextProvider.GetVariable(session, "turn_continuation");
@@ -429,23 +416,6 @@ public class MorganaAgent : MorganaActor
             _ => false
         };
     }
-
-    /// <summary>
-    /// Collects, in call order, the names of the tools invoked during the current turn, for the
-    /// <c>agent.tools_invoked</c> span attribute.
-    /// </summary>
-    /// <param name="session">Active agent session.</param>
-    /// <param name="historyBaseline">Number of history messages present before the turn ran; everything past it belongs to this turn.</param>
-    /// <returns>Comma-separated tool names in call order — repetitions kept, since a repeated call is itself a signal — or an empty string when the turn called no tool.</returns>
-    /// <remarks>
-    /// Only the tool NAMES are exposed. Arguments are deliberately left out: span attributes reach
-    /// every configured exporter, and tool arguments routinely carry user-supplied values.
-    /// </remarks>
-    protected string GetToolsInvoked(AgentSession session, int historyBaseline)
-        => string.Join(", ", aiChatHistoryProvider.GetMessages(session)
-                                                  .Skip(historyBaseline)
-                                                  .SelectMany(m => m.Contents.OfType<FunctionCallContent>())
-                                                  .Select(c => c.Name));
 
     /// <summary>
     /// Reads and deserializes the <c>quick_replies</c> context variable, if the agent set one

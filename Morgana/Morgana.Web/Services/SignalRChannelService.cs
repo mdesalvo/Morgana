@@ -6,21 +6,10 @@ using Morgana.Web.Hubs;
 namespace Morgana.Web.Services;
 
 /// <summary>
-/// SignalR-backed implementation of <see cref="IChannelService"/>. This is the reference
-/// channel powering the Cauldron web UI and advertises the full expressive capability
-/// set (rich cards, quick replies, streaming, markdown).
+/// SignalR implementation of IChannelService for Cauldron web UI with full expressive capabilities
+/// (rich cards, quick replies, streaming, markdown). Routes messages to SignalR groups by conversation ID
+/// via "ReceiveMessage" and "ReceiveStreamChunk" events, enabling multi-user scenarios (monitoring, collaboration).
 /// </summary>
-/// <remarks>
-/// <para><strong>Architecture Role:</strong></para>
-/// <para>This service is injected into actors (particularly ConversationManagerActor) to enable them to send
-/// messages to clients without direct coupling to SignalR infrastructure.</para>
-/// <para><strong>Message Protocol:</strong></para>
-/// <para>All messages sent via SignalR use the "ReceiveMessage" event with a structured JSON payload containing:
-/// conversationId, text, timestamp, messageType, quickReplies, errorReason, agentName, agentCompleted</para>
-/// <para><strong>Group-based Routing:</strong></para>
-/// <para>Messages are sent to SignalR groups named by conversation ID. All clients in a group receive the message,
-/// enabling multi-user scenarios (monitoring, collaboration, customer + agent viewing the same conversation).</para>
-/// </remarks>
 public class SignalRChannelService : IChannelService
 {
     /// <summary>

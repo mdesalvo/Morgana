@@ -7,36 +7,11 @@ namespace Morgana.AI.Attributes;
 /// Apply multiple times to declare multiple servers.
 /// </summary>
 /// <remarks>
-/// <para><strong>Usage — HTTP/HTTPS server:</strong></para>
-/// <code>
-/// [HandlesIntent("monkeys")]
-/// [UsesMCPServer("https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/")]
-/// public class MonkeyAgent : MorganaAgent { }
-/// </code>
-///
-/// <para><strong>Usage — stdio server:</strong></para>
-/// <code>
-/// [HandlesIntent("filesystem")]
-/// [UsesMCPServer(MCPTransport.Stdio, "/usr/local/bin/mcp-filesystem", "--root", "/data")]
-/// public class FilesystemAgent : MorganaAgent { }
-/// </code>
-///
-/// <para><strong>Usage — mixed:</strong></para>
-/// <code>
-/// [HandlesIntent("filesystem")]
-/// [UsesMCPServer("https://my-remote-mcp.azurewebsites.net/")]
-/// [UsesMCPServer(MCPTransport.Stdio, "/usr/local/bin/mcp-filesystem", "--root", "/data")]
-/// public class FilesystemAgent : MorganaAgent { }
-/// </code>
-///
-/// <para><strong>Behavior:</strong></para>
-/// <para>During agent creation, MorganaAgentAdapter will:</para>
-/// <list type="number">
-/// <item>Collect all [UsesMCPServer] attributes via reflection</item>
-/// <item>Connect to each declared server via IMCPClientRegistryService</item>
-/// <item>Discover tools from each server via MCPClient</item>
-/// <item>Hand them to the agent as they come (IFunction)</item>
-/// </list>
+/// Declares MCP server dependency for an agent. Apply multiple times for multiple servers.
+/// Usage: [UsesMCPServer("https://...")] for HTTP/HTTPS or
+/// [UsesMCPServer(MCPTransport.Stdio, "path/to/cmd", args)] for local stdio.
+/// MorganaAgentAdapter collects attributes via reflection, connects to each server,
+/// discovers tools, and hands them to the agent.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class UsesMCPServerAttribute : Attribute

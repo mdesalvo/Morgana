@@ -11,35 +11,11 @@ namespace Morgana.AI.Abstractions.LLMs;
 /// Supports local models via Ollama interface (gpt-oss:20b, phi4-mini ...).
 /// </summary>
 /// <remarks>
-/// <para><strong>Configuration (appsettings.json):</strong></para>
-/// <code>
-/// {
-///   "Morgana": {
-///     "LLM": {
-///       "Provider": "ollama",
-///       "Ollama": {
-///         "Endpoint": "http://localhost:11434/",
-///         "Tiers": {
-///           "Efficiency": { "Options": { "ModelId": "phi4-mini" }, "MagicDust": { "InputTokensPerDustUnit": 0, "OutputTokensPerDustUnit": 0, "CachedInputWeight": 1.0, "CacheCreationWeight": 1.0 } }
-///         }
-///       }
-///     }
-///   }
-/// }
-/// </code>
-/// <para><strong>Important Notes:</strong></para>
-/// <para>- Morgana is an AI orchestrator which relies heavily on tool calling (context variables, quick replies, rich cards).
-/// For best result, please choose a model with solid function calling support (e.g: gpt-oss:20b, phi4-mini).</para>
-/// <para>- Before starting Morgana, check with "ollama ps" that your model is already loaded into memory!</para>
-/// <para><strong>On tiers:</strong> unlike the cloud providers, each configured tier here is a
-/// physically distinct local model that must fit in your machine's RAM/VRAM — there is no
-/// "just call a different API" shortcut. The typical single-model dev setup declares only the
-/// <see cref="Records.LLMTier.Efficiency"/> entry (as shown above): every routine agent and
-/// Morgana's own framework actors resolve against it. An agent authored against
-/// <see cref="Records.LLMTier.Performance"/> fails startup against this config — deliberately,
-/// there is no cross-tier fallback (see <see cref="Attributes.RequiresLLMTierAttribute"/>
-/// remarks) — so add a real <c>Performance</c> entry too only if you actually keep two distinct
-/// models (E-core + P-core) loaded.</para>
+/// Ollama provider for local models. Configuration under Morgana:LLM:Ollama with Endpoint (e.g., http://localhost:11434)
+/// and Tiers map. Choose a model with solid function calling support (e.g., gpt-oss:20b, phi4-mini) because Morgana
+/// relies heavily on tool calling. Before starting Morgana, verify your model is already loaded via "ollama ps".
+/// Typical dev setup: declare only Efficiency tier (all agents use it). If your agent requires Performance tier,
+/// you must load a distinct second model (no cross-tier fallback available).
 /// </remarks>
 public class Ollama : MorganaLLM
 {

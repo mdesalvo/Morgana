@@ -15,46 +15,11 @@ namespace Morgana.AI.Abstractions.LLMs;
 /// Azure AI Foundry projects exposing the unified OpenAI-compatible v1 API (gpt-5.x, ...)
 /// </summary>
 /// <remarks>
-/// <para><strong>Configuration (appsettings.json) - classic Azure OpenAI:</strong></para>
-/// <code>
-/// {
-///   "Morgana: {
-///     "LLM": {
-///       "Provider": "azureopenai",
-///       "AzureOpenAI": {
-///         "Endpoint": "https://your-resource.openai.azure.com/",
-///         "ApiKey": "your-api-key",
-///         "Tiers": {
-///           "Efficiency": { "Options": { "ModelId": "gpt-4o-mini", "MaxOutputTokens": 8192 }, "MagicDust": { ... } }
-///         }
-///       }
-///     }
-///   }
-/// }
-/// </code>
-/// <para><strong>Configuration (appsettings.json) - Azure AI Foundry v1 API:</strong></para>
-/// <code>
-/// {
-///   "Morgana: {
-///     "LLM": {
-///       "Provider": "azureopenai",
-///       "AzureOpenAI": {
-///         "Endpoint": "https://your-resource.services.ai.azure.com/api/projects/your-project/openai/v1",
-///         "ApiKey": "your-api-key",
-///         "Tiers": {
-///           "Efficiency": { "Options": { "ModelId": "your-efficiency-tier-deployment-name", "MaxOutputTokens": 4096 }, "MagicDust": { ... } }
-///         }
-///       }
-///     }
-///   }
-/// }
-/// </code>
-/// <para><strong>MagicDust:</strong> uses the same values as the <see cref="OpenAI"/> provider
-/// (gpt-4o-mini/gpt-4o reference pricing on <c>Efficiency</c>, floored on <c>Performance</c> —
-/// see <see cref="Records.MagicDustPricing"/> remarks for the formula). A Foundry deployment
-/// name carries no pricing information Morgana can introspect, and Azure deployments run from
-/// "mini" variants to flagship models with no fixed price relationship between them —
-/// recalibrate whenever a tier's <c>ModelId</c> changes.</para>
+/// Azure OpenAI / Azure AI Foundry provider. Configuration under Morgana:LLM:AzureOpenAI with Endpoint,
+/// ApiKey, and Tiers map. Supports both classic Azure OpenAI endpoints (e.g., https://resource.openai.azure.com)
+/// and Azure AI Foundry v1 API endpoints (e.g., https://resource.services.ai.azure.com/api/projects/X/openai/v1).
+/// MagicDust defaults use gpt-4o-mini/gpt-4o reference pricing. When you change a tier's ModelId
+/// to a different model, recalibrate InputTokensPerDustUnit and OutputTokensPerDustUnit.
 /// </remarks>
 public class AzureOpenAI : MorganaLLM
 {

@@ -11,44 +11,11 @@ namespace Morgana.AI.ChatClients;
 /// strictly necessary, normalizes the message list immediately before the HTTP call.
 /// </summary>
 /// <remarks>
-/// <para><strong>Why it exists:</strong> Claude 4.6+ (Sonnet 4.6, Opus 4.6/4.7, ...)
-/// reject any request whose final message has role <c>assistant</c> with the error
-/// <c>"This model does not support assistant message prefill. The conversation must end with a
-/// user message."</c> Sonnet 4.5 still accepts the old prefill pattern, so the constraint is
-/// strictly Anthropic-side and version-dependent.</para>
-///
-/// <para><strong>Behaviour:</strong></para>
-/// <list type="number">
-///   <item>Always emits a <c>Debug</c> log with the trailing role sequence (last 8 messages).
-///     This is the diagnostic channel: enabling <c>Debug</c> on this category lets us see exactly
-///     what Microsoft.Agents.AI is handing to the Anthropic SDK on the call that fails.</item>
-///   <item>If the final message is <see cref="ChatRole.User"/> or <see cref="ChatRole.Tool"/>,
-///     the list is forwarded untouched. Tool-role messages translate to a
-///     <c>user</c>-role message containing a <c>tool_result</c> block in the Anthropic API
-///     format, so they are accepted as the trailing message.</item>
-///   <item>If the final message is <see cref="ChatRole.System"/>, the role is rewritten to
-///     <see cref="ChatRole.User"/> in place — the content is preserved verbatim. This is the
-///     pattern produced by <c>SummarizingChatReducer</c>, which appends its summarization
-///     prompt as a trailing system message; the MEAI→Anthropic adapter only hoists *leading*
-///     system messages to the top-level <c>system</c> parameter, so a trailing system message
-///     would otherwise be lost or misinterpreted as a prefill. Demoting it to user preserves
-///     the instruction (the model treats it as a user turn) and leaves the request well-formed.</item>
-///   <item>If the final message is <see cref="ChatRole.Assistant"/>, the guard mirrors the
-///     same role-rewrite trick on a per-content basis. <see cref="TextContent"/> blocks carry
-///     semantic information the model emitted previously and must be preserved: they are kept
-///     and the message role is rewritten to <see cref="ChatRole.User"/>. The model reads its
-///     own prior text as a user turn — slightly unusual, but no context is lost. Non-text
-///     blocks (typically <c>FunctionCallContent</c> from a tool-only turn whose results are
-///     missing) are not valid under the user role and would be the prefill artifact in
-///     disguise: if a trailing assistant has no <see cref="TextContent"/> at all, the whole
-///     message is stripped instead. Both branches log at <c>Warning</c> level so the artifact
-///     is captured for post-mortem analysis.</item>
-/// </list>
-///
-/// <para>This mirrors the strategy the Anthropic SDK already applies to <see cref="ChatRole.Tool"/>
-/// messages (translated into a <c>user</c> message containing <c>tool_result</c> blocks): the
-/// role is rewritten to satisfy the API constraint while the payload is preserved verbatim.
-/// Strip is reserved for messages that carry no semantic payload at all.</para>
+/// Claude 4.6+ enforces constraint: requests must end with user message, not assistant (no "prefill").
+/// This guard normalizes message sequences: User/Tool roles→forward unchanged; System→rewrite to User
+/// (preserves summarization prompts appended as trailing system messages); Assistant with TextContent→rewrite
+/// to User (preserves model's own prior text); Assistant without TextContent→strip (no semantic payload).
+/// Mirrors the strategy Anthropic SDK already uses for Tool messages (translates to user role with tool_result).
 /// </remarks>
 internal sealed class MorganaAnthropicClient : DelegatingChatClient
 {

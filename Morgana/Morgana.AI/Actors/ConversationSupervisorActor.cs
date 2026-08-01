@@ -12,33 +12,11 @@ using Status = Akka.Actor.Status;
 namespace Morgana.AI.Actors;
 
 /// <summary>
-/// <para>
-/// Main orchestration actor that supervises the conversation flow through a finite state machine.
-/// Coordinates guard checks, intent classification, agent routing and follow-up handling.
-/// Manages presentation generation and tracks active agent state for multi-turn conversations.
-/// </para>
-/// <para>
-/// Every UserMessage (new request or follow-up) passes through GuardActor first.
-/// Guard check failure keeps FSM in current state, allowing user to retry without state change.
-/// </para>
+/// Main FSM orchestration actor: supervises conversation flow through guard check, classification,
+/// agent routing, and follow-up handling. Tracks active agent for multi-turn conversations.
+/// 5 states: Idle, AwaitingGuardCheck, AwaitingClassification, AwaitingAgentResponse,
+/// AwaitingFollowUpResponse. Manages OpenTelemetry context hierarchy via TurnContext.
 /// </summary>
-/// <remarks>
-/// <para><strong>State Machine:</strong></para>
-/// <list type="bullet">
-/// <item><term>Idle</term><description>Waiting for user messages. All messages are routed to guard check first.</description></item>
-/// <item><term>AwaitingGuardCheck</term><description>Waiting for content moderation result from GuardActor. Can transition to Classification or FollowUp based on activeAgent state.</description></item>
-/// <item><term>AwaitingClassification</term><description>Waiting for intent classification result from ClassifierActor (only for new requests).</description></item>
-/// <item><term>AwaitingAgentResponse</term><description>Waiting for specialized agent to process the request.</description></item>
-/// <item><term>AwaitingFollowUpResponse</term><description>Waiting for active agent to process follow-up message.</description></item>
-/// </list>
-/// <para><strong>Active Agent Tracking:</strong></para>
-/// <para>When an agent signals incomplete processing (IsCompleted = false), the supervisor remembers the active agent
-/// and routes subsequent messages directly to it (after guard check) until the agent signals completion.</para>
-/// <para><strong>OpenTelemetry:</strong></para>
-/// <para>The supervisor opens child spans (morgana.guard, morgana.classifier) using the TurnContext carried
-/// inside ProcessingContext. The TurnContext for the agent span is passed via AgentRequest.TurnContext
-/// so that MorganaAgent can open morgana.agent as a child of the correct turn span.</para>
-/// </remarks>
 public class ConversationSupervisorActor : MorganaActor
 {
     private readonly IChannelService channelService;

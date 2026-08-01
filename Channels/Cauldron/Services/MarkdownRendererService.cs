@@ -5,21 +5,9 @@ using Microsoft.AspNetCore.Components;
 namespace Cauldron.Services;
 
 /// <summary>
-/// Centralised Markdown-to-HTML service used by chat message rendering and rich card
-/// components.  Two rendering modes are exposed:
-/// <list type="bullet">
-///   <item><term><see cref="ToHtml"/></term>
-///     <description>Block-level rendering (paragraphs, headings, lists, code blocks).
-///     Suitable for full chat messages.</description></item>
-///   <item><term><see cref="ToInlineHtml"/></term>
-///     <description>Inline-only rendering (bold, italic, code, links) without the
-///     outer &lt;p&gt; wrapper. Suitable for rich card fields where the surrounding
-///     component already provides block-level structure.</description></item>
-/// </list>
-/// Rich card leaf components (list items, text blocks, key/value pairs, badges, grid cells,
-/// section titles, captions) render their own text through <see cref="ToInlineHtml"/>, so a
-/// card's Markdown surfaces as real formatting (e.g. <c>**bold**</c> → <c>&lt;strong&gt;</c>)
-/// rather than being stripped away or leaking as raw <c>**</c> markers.
+/// Markdown-to-HTML service: ToHtml for block-level (chat messages), ToInlineHtml for
+/// inline-only without &lt;p&gt; wrapper (rich card fields). Rich card components render
+/// through ToInlineHtml so Markdown surfaces as formatting, not raw markers.
 /// </summary>
 public static class MarkdownRendererService
 {

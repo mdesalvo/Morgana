@@ -10,22 +10,11 @@ namespace Morgana.AI.Actors;
 /// Content moderation actor that enforces guard-rail policies on every incoming user message.
 /// </summary>
 /// <remarks>
-/// <para>
-/// This actor is intentionally thin: all moderation logic is delegated to
-/// <see cref="IGuardRailService"/>, which is resolved from DI and can be swapped
-/// without touching the actor system.
-/// </para>
-///
-/// <para><strong>Tell Pattern:</strong></para>
-/// <para>Captures the sender reference before the async call and replies directly via
-/// <c>originalSender.Tell()</c>, avoiding temporary Ask actors and the associated
-/// lifecycle overhead.</para>
-///
-/// <para><strong>Error Handling:</strong></para>
-/// <para><see cref="IGuardRailService"/> implementations are expected to fail open on
-/// transient errors (see interface contract). Should the service itself throw an unhandled
-/// exception, this actor propagates a <see cref="Status.Failure"/> to the supervisor so
-/// it can apply its own fail-open fallback.</para>
+/// Thin orchestration actor that delegates all content moderation logic to IGuardRailService,
+/// making the policy strategy swappable via DI. Uses Tell pattern (captures sender, replies via
+/// originalSender.Tell) to avoid Ask actor overhead. IGuardRailService implementations are expected
+/// to fail open on transient errors (see interface contract). Unhandled exceptions propagate
+/// Status.Failure to supervisor for its own fail-open fallback handling.
 /// </remarks>
 public class GuardActor : MorganaActor
 {

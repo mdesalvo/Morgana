@@ -9,32 +9,12 @@ using Morgana.Contracts;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="IPresenterService"/> implementation providing presentation generation strategy:
-/// <list type="number">
-///   <item><term>LLM generation</term>
-///     <description>Invokes the LLM with the Presentation system prompt and the formatted
-///     intent list to produce a personalised welcome message and quick reply buttons.</description></item>
-///   <item><term>Internal fallback</term>
-///     <description>If the LLM call fails or returns an unparseable response, falls back to the
-///     <c>FallbackMessage</c> from the Presentation prompt configuration and derives quick reply
-///     buttons directly from the provided intent definitions — no further LLM call is made.</description></item>
-/// </list>
+/// IPresenterService implementation: generates presentation via LLM or falls back to config.
+/// Caches per-channel deterministically (same intents + capabilities = same outcome) via
+/// Lazy&lt;Task&lt;&gt;&gt; and adapts via MorganaChannelAdapter. Never throws — LLM failures
+/// route to deterministic fallback (FallbackMessage + intent-derived quick replies).
+/// Channel resolution is internal via IChannelMetadataStore; callers pass only conversationId.
 /// </summary>
-/// <remarks>
-/// <para><strong>Reliability Contract:</strong></para>
-/// <para>This service never throws on operational failures (LLM error, parse error, missing
-/// configuration property): all such errors are caught internally, logged, and resolved through
-/// the deterministic fallback path so <see cref="ConversationSupervisorActor"/> always receives a
-/// valid <see cref="Records.PresentationResult"/>. The single exception is an invariant violation
-/// at the channel-metadata lookup, which is surfaced as <see cref="InvalidOperationException"/>
-/// </para>
-/// <para><strong>Per-channel caching:</strong></para>
-/// <para>The presentation that a channel receives is deterministic — same intents, same
-/// capability budget, same answer — so the build (LLM generation + capability-driven
-/// adaptation) is materialised once per channel and replayed thereafter. Channel resolution
-/// happens internally via <see cref="IChannelMetadataStore"/>: callers pass only the
-/// <c>conversationId</c> and stay completely agnostic of channel concepts.</para>
-/// </remarks>
 public class LLMPresenterService : IPresenterService
 {
     private readonly ILLMService llmService;
@@ -44,20 +24,10 @@ public class LLMPresenterService : IPresenterService
     private readonly ILogger logger;
 
     /// <summary>
-    /// Per-channel presentation cache. The value type is intentionally
-    /// <see cref="Lazy{T}"/> of <see cref="Task{TResult}"/>, not the materialised result, because
-    /// the composition of two standard primitives gives us "compute at most once per key under
-    /// concurrent first-callers" without a single explicit lock:
-    /// <list type="bullet">
-    ///   <item><see cref="ConcurrentDictionary{TKey,TValue}.GetOrAdd(TKey, System.Func{TKey, TValue})"/>
-    ///     may run its factory more than once under contention, but persists exactly one
-    ///     <see cref="Lazy{T}"/> per key — losing instances are inert (their factory hasn't run yet)
-    ///     and are GC'd, so no wasted LLM calls.</item>
-    ///   <item><see cref="Lazy{T}"/> in default <c>ExecutionAndPublication</c> mode runs its
-    ///     factory exactly once per instance, so the winning <see cref="Lazy{T}"/> spawns exactly
-    ///     one build <see cref="Task{TResult}"/>; concurrent callers <c>await</c> the same task and
-    ///     observe the same result.</item>
-    /// </list>
+    /// Per-channel presentation cache: Lazy&lt;Task&lt;PresentationResult&gt;&gt; per key.
+    /// ConcurrentDictionary.GetOrAdd + Lazy ensures compute-once per channel under concurrent
+    /// first-callers without explicit locks: GetOrAdd runs factory multiple times but persists
+    /// one Lazy; Lazy runs its factory exactly once; concurrent callers await the same task.
     /// </summary>
     private readonly ConcurrentDictionary<string, Lazy<Task<Records.PresentationResult>>> cache = new();
 

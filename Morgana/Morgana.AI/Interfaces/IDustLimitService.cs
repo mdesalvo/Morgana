@@ -1,16 +1,10 @@
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Enforces the per-conversation lifetime dust budget — a token-consumption guard
-/// orthogonal to <see cref="IRateLimitService"/>.
-/// <para>
-/// The rate limiter controls message <em>frequency</em>; the dust limiter controls token
-/// <em>consumption</em>. A conversation is born with a fixed dust budget; every LLM call
-/// burns some. The budget is a lifetime resource — no sliding window, no reset. When it is
-/// exhausted the conversation is terminal: the next user turn is rejected with a narrative
-/// error and the only way forward is a brand-new conversation.
-/// </para>
-/// <para>All methods fail open: a storage fault must never block the user.</para>
+/// Enforces per-conversation lifetime token budget (orthogonal to rate limiter).
+/// Rate limiter controls message frequency; dust limiter controls token consumption.
+/// Fixed budget per conversation; exhaustion is terminal (next turn blocked). All methods
+/// fail open — storage faults never block the user.
 /// </summary>
 public interface IDustLimitService
 {

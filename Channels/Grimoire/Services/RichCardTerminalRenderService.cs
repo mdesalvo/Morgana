@@ -6,40 +6,10 @@ using Spectre.Console;
 namespace Grimoire.Services;
 
 /// <summary>
-/// Spectrizes Morgana's <see cref="RichCard"/> into a flat stream of
-/// single-row Spectre <see cref="Markup"/>s — the terminal-side counterpart of Cauldron's
-/// <c>RichCard.razor</c> component tree. Where Cauldron hands each component to a Razor
-/// partial that the browser lays out with CSS (flex, grid, borders), Grimoire has no layout
-/// engine: <see cref="ConsoleUiService.BuildBody"/> budgets the viewport on the strict
-/// contract "one <see cref="Markup"/> = exactly one terminal row". This renderer therefore
-/// hand-draws the card as a bordered box of pre-wrapped rows rather than emitting variable-height
-/// <c>IRenderable</c>s (Panel/Table/Rule): the frozen mapping table describes the <i>visual
-/// intent</i> of each component, and that intent is reproduced here within the single-row model
-/// the rest of the UI depends on (caching, head-drop at row granularity, the sacred input row).
+/// Terminal renderer: Spectrizes RichCard into single-row Markups. Hand-draws bordered box
+/// instead of variable-height IRenderables. Card text fields flattened through Markdown.ToPlainText
+/// (no inline markdown in terminal, unlike Cauldron's browser HTML formatting).
 /// </summary>
-/// <remarks>
-/// Parity with Cauldron, component by component:
-/// <list type="bullet">
-///   <item><c>text_block</c> → styled prose rows (Normal/Bold/Muted/Small map to grey ramps —
-///     a TTY can't shrink the glyph, so Small dims like Muted).</item>
-///   <item><c>key_value</c> → a left key + right-aligned value on one row when it fits, else the
-///     key over a wrapped (not truncated) value; <c>Emphasize</c> bolds both (mirrors Cauldron's
-///     highlighted row).</item>
-///   <item><c>divider</c> → an inner dim rule spanning the content width.</item>
-///   <item><c>list</c> → <c>✦</c> bullets (Cauldron's marker), <c>n.</c> ordinals or plain rows,
-///     with hanging-indent continuations.</item>
-///   <item><c>section</c> → a bold sub-title plus its children indented two columns (nested
-///     sections indent further), echoing Cauldron's left-accent nesting.</item>
-///   <item><c>grid</c> → fixed-width columns: a dim keys row above a bold values row per group
-///     of <c>Columns</c> cells.</item>
-///   <item><c>badge</c> → an upper-cased chip on a variant-coloured background.</item>
-///   <item><c>image</c> → <c>[image: alt] (url)</c> plus an optional dim caption (no OSC 8, no
-///     ASCII art — the frozen low-effort decision).</item>
-/// </list>
-/// A terminal cannot show HTML, so every card text field is flattened through
-/// <c>Markdown.ToPlainText</c> before rendering: card fields become plain text here, never inline
-/// markdown (Cauldron, by contrast, renders that same markdown as real HTML formatting in the browser).
-/// </remarks>
 public static class RichCardTerminalRenderService
 {
     /// <summary>Shared default pipeline — same base configuration as Cauldron's <c>MarkdownRendererService</c>, here feeding <c>Markdown.ToPlainText</c> to flatten card text for the terminal.</summary>
