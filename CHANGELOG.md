@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.26.0] - UNDER DEVELOPMENT
+## [0.26.0] - 2026-08-01
 ### 🎯 Major Feature: PromptHarness — Behavioral & Contextual Test Suite for Morgana Prompt System
 To ensure **stability of prompt development**, this release introduces `PromptHarness`: a live, black-box xUnit suite designed to catch **silent contradictions between framework capabilities (morgana.json) and domain specializations (agents.json)**.
 By driving a real Morgana instance via HTTP, the harness validates its semantic consistency across two critical planes:
@@ -15,7 +15,7 @@ By driving a real Morgana instance via HTTP, the harness validates its semantic 
 To account for model variance, test scenarios are authored in YAML and automatically replayed N times against a configurable pass threshold. Should a regression occur, the runner will immediately pinpoint both the exact nature and the direction of the failure within that same execution block.
 
 In practice, the harness **has already surfaced multiple behavioral and authoritative contradictions** within Morgana's prompting system, consequently all prompts have undergone **substantial revision** to address these findings, turning lighter (**-30% token consumption**) and fully aligned.
-Passing this suite is now a mandatory, non-negotiable precondition for deploying any prompt revision within this repository.
+**Passing this suite on `Anthropic` and `OpenAI` is now a mandatory, non-negotiable precondition for deploying any prompt revision within this repository.**
 
 ### ✨ Added
 - **`SetTurnContinuation(bool)` base tool** — Turn continuation is now declared **out-of-band** through a system tool every agent owns, instead of being smuggled inside the response text as the `#INT#` token. The declaration lands in the ephemeral `turn_continuation` context variable alongside `quick_replies` and `rich_card`, and is dropped at the end of every turn. Continuation is stated per-turn and is never inherited.
