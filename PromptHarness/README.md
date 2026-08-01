@@ -95,6 +95,9 @@ dotnet test … --filter "FullyQualifiedName~HarnessSmokeTests"
 # the blocking group
 dotnet test … --filter "FullyQualifiedName~ContextHandlingTests"
 
+# the behavioural group — turn presentation (continuation, closure, rich cards), default threshold
+dotnet test … --filter "FullyQualifiedName~BehaviourTests"
+
 # the guard group — requires the boot-time guardrail flag, off by default
 Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
 
