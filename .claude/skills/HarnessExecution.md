@@ -10,7 +10,7 @@ the two questions below being answered first.
 Activated when the user says things like:
 - "run the harness"
 - "execute the prompt harness"
-- "lancia la harness" / "esegui la harness"
+- "launch the harness"
 - Any request to run PromptHarness scenarios against the current provider
 
 ## Procedure
