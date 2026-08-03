@@ -142,12 +142,12 @@ public class LLMPresenterService : IPresenterService
                 displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
 
             // Compose the system prompt by interpolating the formatted list into the template.
-            string systemPrompt =
-                $"{presentationPrompt.Target}\n\n{presentationPrompt.Instructions}".Replace("((intents))", formattedIntents);
+            string presentationSystemPrompt =
+                $"{presentationPrompt.Target}\n\n{presentationPrompt.Instructions}\n\n{presentationPrompt.Formatting}".Replace("((intents))", formattedIntents);
 
             // The fixed user message acts as a trigger; the real instructions live in the system prompt.
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(
-                "presentation", systemPrompt, "Generate the presentation");
+                "presentation", presentationSystemPrompt, "Generate the presentation");
 
             // The LLM is asked to return strict JSON; a null result indicates either an unparseable
             // payload or an empty body — both treated as failure and routed to the fallback.

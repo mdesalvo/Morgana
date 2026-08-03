@@ -222,7 +222,7 @@ public class ConversationSupervisorActor : MorganaActor
         Context.SetReceiveTimeout(TimeSpan.FromSeconds(
             Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
 
-        ReceiveAsync<Records.GuardCheckResponse>(async response => {
+        Receive<Records.GuardCheckResponse>(response => {
             Context.SetReceiveTimeout(null);
 
             // Close the guard span opened before Tell — now captures full check duration
@@ -238,16 +238,11 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 actorLogger.Warning($"Message rejected by guard: {response.Violation}");
 
-                Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
-                string guardAnswer = guardPrompt.GetAdditionalProperty<string>("GuardAnswer")
-                    .Replace("((violation))", response.Violation ?? "Content policy violation");
-
-                string currentAgentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
-                    guardAnswer,
+                    response.Violation!,
                     ctx.Classification?.Intent,
                     null,
-                    currentAgentName,
+                    activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana",
                     false,
                     null,
                     null,
@@ -714,17 +709,15 @@ public class ConversationSupervisorActor : MorganaActor
 
     /// <summary>
     /// Handles a content filter rejection from an agent as if it were a guard rejection.
-    /// Uses the same GuardAnswer template and increments the guard rejection counter.
+    /// Uses the same rejection shape and increments the guard rejection counter.
     /// </summary>
-    private async Task HandleContentFilterRejectionAsync(IActorRef originalSender)
+    private Task HandleContentFilterRejectionAsync(IActorRef originalSender)
     {
         Context.SetReceiveTimeout(null);
 
         actorLogger.Warning("Content filter rejection received from agent, treating as guard rejection");
 
-        Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
-        string guardAnswer = guardPrompt.GetAdditionalProperty<string>("GuardAnswer")
-            .Replace("((violation))", "Content policy violation");
+        string guardAnswer = "Content policy violation";
 
         string currentAgentName = activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana";
         originalSender.Tell(new Records.ConversationResponse(
@@ -740,6 +733,8 @@ public class ConversationSupervisorActor : MorganaActor
         MorganaTelemetry.GuardRejectionCounter.Add(1);
         CloseTurnSpan(intent: activeAgentIntent, completed: false);
         Become(Idle);
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

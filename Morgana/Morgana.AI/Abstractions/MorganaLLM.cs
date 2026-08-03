@@ -293,7 +293,17 @@ public class MorganaLLM : ILLMService
                 .Replace("```json", string.Empty)
                 .Replace("```", string.Empty);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
+                                     && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+        {
+            // A provider-level content filter rejection (e.g. Azure Prompt Shields) is not a
+            // transient service error — swallowing it into the generic fallback text below would
+            // hide a genuine signal from callers equipped to act on it (see LLMGuardRailService,
+            // which treats this as compliant:false rather than fail-open). Classifier/Presenter/
+            // ChannelAdapter have their own broad catch-all fallbacks and handle it there instead.
+            throw;
+        }
+        catch (Exception)
         {
             // Return user-friendly error message from Morgana prompt
             List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>("ErrorAnswers");
