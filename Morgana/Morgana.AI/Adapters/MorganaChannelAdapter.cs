@@ -91,7 +91,7 @@ public class MorganaChannelAdapter
             string capabilitiesJson = JsonSerializer.Serialize(
                 channelCapabilities, Records.DefaultJsonSerializerOptions);
 
-            string systemPrompt = $"{adapterPrompt.Target}\n\n{adapterPrompt.Instructions}"
+            string systemPrompt = $"{adapterPrompt.Target}\n\n{adapterPrompt.Instructions}\n\n{adapterPrompt.Formatting}"
                 .Replace("((channel_capabilities))", capabilitiesJson);
 
             string userPrompt = JsonSerializer.Serialize(channelMessage, Records.DefaultJsonSerializerOptions);

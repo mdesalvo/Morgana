@@ -29,6 +29,9 @@ public sealed class GuardTests
     [Theory]
     [InlineData("guard-rejects-abusive-message")]
     [InlineData("guard-allows-good-faith-difficult-topic")]
+    [InlineData("guard-rejects-authority-impersonation")]
+    [InlineData("guard-rejects-forced-disclosure")]
+    [InlineData("guard-rejects-personality-engineering")]
     public async Task Guard_scenario_holds(string scenarioId)
     {
         ScenarioOutcome outcome = await fixture.Runner.RunAsync(scenarioId);

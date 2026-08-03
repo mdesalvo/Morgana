@@ -10,8 +10,8 @@ produced them.
 Activated when the user says things like:
 - "act as an external judge on this release"
 - "judge the trajectory of this iteration"
-- "fai un giudice esterno su questa release"
-- "cosa hanno fatto i devs in questa iterazione, e perché"
+- "what did the devs do this iteration, and why"
+- "give me a third-party assessment of this release"
 - Any request for a third-party, arms-length evaluation of a finished (or finishing) dev cycle
 
 ## Procedure

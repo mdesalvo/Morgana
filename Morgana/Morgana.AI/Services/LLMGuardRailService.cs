@@ -8,19 +8,19 @@ namespace Morgana.AI.Services;
 /// with the Guard system prompt for detection of spam, phishing, violence, profanity and other
 /// policy violations.
 /// </summary>
-/// <remarks>
-/// <para><strong>Fail-Open Behaviour:</strong></para>
-/// <para>If the LLM call throws, the service logs the error and returns a compliant result
-/// so legitimate traffic is never blocked by transient infrastructure failures.</para>
-/// </remarks>
 public class LLMGuardRailService : IGuardRailService
 {
     private readonly ILLMService llmService;
-    private readonly IPromptResolverService promptResolverService;
     private readonly ILogger logger;
 
     /// <summary>
+    /// Pre-computed Guard system prompt.
+    /// </summary>
+    private readonly string guardSystemPrompt;
+
+    /// <summary>
     /// Initialises a new instance of <see cref="LLMGuardRailService"/>.
+    /// Loads and builds the Guard system prompt eagerly.
     /// </summary>
     /// <param name="llmService">LLM service used for the async policy check.</param>
     /// <param name="promptResolverService">Prompt resolver used to load Guard configuration.</param>
@@ -31,21 +31,22 @@ public class LLMGuardRailService : IGuardRailService
         ILogger logger)
     {
         this.llmService = llmService;
-        this.promptResolverService = promptResolverService;
         this.logger = logger;
+
+        Records.Prompt guardPrompt =
+            promptResolverService.ResolveAsync("Guard").GetAwaiter().GetResult();
+
+        guardSystemPrompt = $"{guardPrompt.Target}\n{guardPrompt.Instructions}\n{guardPrompt.Formatting}";
     }
 
     /// <inheritdoc/>
     public async Task<Records.GuardRailResult> CheckAsync(string conversationId, string message)
     {
-        Records.Prompt guardPrompt = await promptResolverService.ResolveAsync("Guard");
-
-        // ── Async LLM-based policy check ───────────────────────────────────────────
         try
         {
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
-                $"{guardPrompt.Target}\n{guardPrompt.Instructions}",
+                guardSystemPrompt,
                 message);
 
             Records.GuardCheckResponse? llmResult =
@@ -60,6 +61,19 @@ public class LLMGuardRailService : IGuardRailService
             return llmResult != null
                 ? new Records.GuardRailResult(llmResult.Compliant, llmResult.Violation)
                 : new Records.GuardRailResult(Compliant: true, Violation: null);
+        }
+        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
+                                     && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+        {
+            // The provider's own content filter (e.g. Azure Prompt Shields) blocked the prompt before
+            // any judgment could run — a genuine violation signal, never fail-open.
+            logger.LogWarning(ex,
+                "LLMGuardRailService: provider-level content filter rejected the prompt for conversation {ConversationId} — treating as a compliance violation",
+                conversationId);
+
+            return new Records.GuardRailResult(
+                Compliant: false,
+                Violation: "That is a path closed to you, and no phrasing will reopen it.");
         }
         catch (Exception ex)
         {

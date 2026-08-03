@@ -22,10 +22,9 @@ public class LLMClassifierService : IClassifierService
     private readonly ILogger logger;
 
     /// <summary>
-    /// Pre-computed classifier system prompt (intents + instructions).
-    /// Built once at construction time for performance.
+    /// Pre-computed classifier system prompt
     /// </summary>
-    private readonly string classifierPromptTarget;
+    private readonly string classifierSystemPrompt;
 
     /// <summary>
     /// Fallback result returned when classification fails.
@@ -72,8 +71,8 @@ public class LLMClassifierService : IClassifierService
         Records.Prompt classifierPrompt =
             promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
 
-        classifierPromptTarget =
-            $"{classifierPrompt.Target.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}";
+        classifierSystemPrompt =
+            $"{classifierPrompt.Target.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}\n{classifierPrompt.Formatting}";
     }
 
     /// <inheritdoc/>
@@ -87,7 +86,7 @@ public class LLMClassifierService : IClassifierService
         {
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
-                classifierPromptTarget,
+                classifierSystemPrompt,
                 message);
 
             Records.ClassificationResponse? classificationResponse =
