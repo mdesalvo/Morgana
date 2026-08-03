@@ -44,10 +44,19 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         Console.WriteLine("🔍 Scanning assemblies for MorganaTool implementations...");
 
         Dictionary<string, Type> registry = new(StringComparer.OrdinalIgnoreCase);
+        // Collected rather than thrown immediately (see the "Check for duplicate tool
+        // registrations" branch below): unlike HandlesIntentAgentRegistryService's intent↔agent
+        // validation, a duplicate tool registration here is reported loudly but does NOT abort
+        // startup — the first-seen tool simply keeps winning that intent. Tools are an agent's own
+        // capability, not the framework's routing table, so a plugin author shipping a conflicting
+        // tool is treated as a configuration warning to fix, not a hard boot failure.
         List<string> registrationErrors = [];
 
-        // Discovery of available tools with their declared intent
-        // Scan ALL loaded assemblies, not just executing assembly
+        // Discovery of available tools with their declared intent. Every assembly currently loaded
+        // into the process is scanned, not just this one — same rationale as
+        // HandlesIntentAgentRegistryService's identical scan: a domain author's plugin DLL is
+        // exactly where [ProvidesToolForIntent]-decorated MorganaTool subclasses are expected to
+        // live, and it's loaded (by PluginLoaderService) before this service ever runs.
         IEnumerable<Type> toolTypes = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic)
             .SelectMany(a =>
@@ -73,7 +82,8 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
 
             string intent = attr.Intent.ToLowerInvariant();
 
-            // Check for duplicate tool registrations
+            // Duplicate registration: reported (registrationErrors, printed further down) but the
+            // FIRST tool found for this intent keeps the slot — `continue` skips the overwrite.
             if (registry.TryGetValue(intent, out Type? value))
             {
                 string error = $"Duplicate tool registration for intent '{intent}': {value.Name} and {toolType.Name}";
@@ -90,22 +100,31 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         Console.WriteLine();
 
         #region Validation
-        // Bidirectional validation of tools and agents
         Console.WriteLine("========================================");
         Console.WriteLine("Tool Registry Validation");
         Console.WriteLine("========================================");
 
-        // Find all agent types with HandlesIntentAttribute
-        List<Type> agentTypes = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic)
-            .SelectMany(a =>
-            {
-                try { return a.GetTypes(); }
-                catch (ReflectionTypeLoadException) { return []; }
-            })
-            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)))
-            .Where(t => t.GetCustomAttribute<HandlesIntentAttribute>() != null)
-            .ToList();
+        // Same reflection scan HandlesIntentAgentRegistryService runs for its own registry —
+        // duplicated here rather than shared, because this service needs the raw agent Type list
+        // (to cross-reference against tool intents below), not just the finished intent→type map.
+        List<Type> agentTypes =
+        [
+            .. AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => !a.IsDynamic)
+                .SelectMany(a =>
+                {
+                    try
+                    {
+                        return a.GetTypes();
+                    }
+                    catch (ReflectionTypeLoadException)
+                    {
+                        return [];
+                    }
+                })
+                .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)))
+                .Where(t => t.GetCustomAttribute<HandlesIntentAttribute>() != null)
+        ];
 
         HashSet<string> agentIntents = agentTypes
             .Select(t => t.GetCustomAttribute<HandlesIntentAttribute>()?.Intent)
@@ -114,7 +133,8 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
 
         HashSet<string> toolIntents = [.. registry.Keys];
 
-        // Check for agents without tools (warning: limited capabilities)
+        // Warning, not an error: an MCP-only agent (see [UsesMCPServer]) legitimately has no
+        // native MorganaTool at all — its tools arrive at runtime from the MCP server instead.
         List<string> agentsWithoutTools = [.. agentIntents.Except(toolIntents, StringComparer.OrdinalIgnoreCase)];
         if (agentsWithoutTools.Count > 0)
         {
@@ -130,7 +150,8 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             }
         }
 
-        // Check for orphaned tools (tools without agents - warning)
+        // Orphaned tool: a MorganaTool built for an intent no agent currently claims — dead code
+        // (renamed/removed agent) more often than intentional, so flagged but not fatal.
         List<string> toolsWithoutAgents = [.. toolIntents.Except(agentIntents, StringComparer.OrdinalIgnoreCase)];
         if (toolsWithoutAgents.Count > 0)
         {
@@ -173,36 +194,10 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         return registry;
     }
 
-    /// <summary>
-    /// Finds the MorganaTool type that provides native tools for the specified intent.
-    /// </summary>
-    /// <param name="intent">Intent name to find tool for (e.g., "billing")</param>
-    /// <returns>
-    /// Type of MorganaTool class decorated with [ProvidesToolForIntent(intent)],
-    /// or null if no tool found for this intent.
-    /// </returns>
+    /// <summary>Finds the MorganaTool type registered for an intent, or null (case-insensitive).</summary>
     /// <remarks>
-    /// <para><strong>Case-Insensitive Matching:</strong></para>
-    /// <para>Intent matching uses case-insensitive comparison (normalized to lowercase during registration).</para>
-    /// <para><strong>Null Return:</strong></para>
-    /// <para>Returns null for intents without tool implementations rather than throwing.
-    /// This allows agents to operate with only framework tools (GetContextVariable, SetContextVariable)
-    /// if no domain-specific tool exists.</para>
-    /// <para><strong>Usage by MorganaAgentAdapter:</strong></para>
-    /// <code>
-    /// Type? toolType = toolRegistryService.FindToolTypeForIntent("billing");
-    /// if (toolType != null)
-    /// {
-    ///     // Create tool instance and register methods
-    ///     MorganaTool tool = (MorganaTool)Activator.CreateInstance(toolType, ...);
-    ///     RegisterToolsInAdapter(toolAdapter, tool, toolDefinitions);
-    /// }
-    /// else
-    /// {
-    ///     // Agent has no native tool, only framework tools available
-    ///     logger.LogInformation("No native tool found for intent 'billing'");
-    /// }
-    /// </code>
+    /// Null is a legitimate, expected outcome — not an error: it means the agent for that intent
+    /// has no native tool and runs on framework tools alone (GetContextVariable, etc.) or MCP.
     /// </remarks>
     public Type? FindToolTypeForIntent(string intent)
     {
@@ -211,18 +206,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             : intentToToolType.Value.GetValueOrDefault(intent.ToLowerInvariant());
     }
 
-    /// <summary>
-    /// Gets all registered tool types with their associated intents.
-    /// </summary>
-    /// <returns>Read-only dictionary mapping intent names to tool types</returns>
-    /// <remarks>
-    /// <para><strong>Usage Scenarios:</strong></para>
-    /// <list type="bullet">
-    /// <item>Diagnostics: Display available tools at runtime</item>
-    /// <item>Validation: Verify configuration consistency</item>
-    /// <item>Testing: Enumerate tools for test coverage</item>
-    /// </list>
-    /// </remarks>
+    /// <summary>All registered tool types keyed by intent — diagnostics/validation/testing enumeration.</summary>
     public IReadOnlyDictionary<string, Type> GetAllRegisteredTools()
     {
         return intentToToolType.Value;

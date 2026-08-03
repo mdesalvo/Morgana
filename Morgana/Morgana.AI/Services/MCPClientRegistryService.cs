@@ -11,16 +11,10 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Service implementation for managing MCP client connections.
-/// Provides connection pooling, lazy initialization, and lifecycle management.
+/// Manages MCP client connections: pooling, lazy connect, and reconnect-on-session-drop.
+/// Pool key comes straight from <see cref="UsesMCPServerAttribute"/> (URI for Http, command
+/// path for Stdio) — no external configuration needed, agents are fully self-contained.
 /// </summary>
-/// <remarks>
-/// <para>
-/// Clients are pooled by a key derived from the <see cref="UsesMCPServerAttribute"/>:
-/// the URI for Http transport, the command path for Stdio transport.
-/// No external configuration is required — agents are fully self-contained.
-/// </para>
-/// </remarks>
 public class MCPClientRegistryService : IMCPClientRegistryService
 {
     /// <summary>
@@ -117,13 +111,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         UsesMCPServerAttribute serverAttribute,
         Func<MCPClient, Task<T>> operation)
     {
-        // Invariant that keeps a misspelled/wrong endpoint from being misread as a lost
-        // session: GetOrCreateClientAsync only returns a client if McpClient.CreateAsync
-        // completed, and CreateAsync performs the initialize handshake eagerly. A bad URI
-        // therefore 404s at initialize and throws HERE — outside the catch below — so it
-        // surfaces as the existing "Failed to connect" error, never as a spurious retry.
-        // Consequently any 404 the catch can observe is on a request that already carries
-        // an Mcp-Session-Id: the spec's session-terminated case, not a routing mistake.
+        // A bad URI 404s at the eager initialize handshake inside GetOrCreateClientAsync and
+        // throws HERE, outside the catch below — so any 404 the catch DOES observe is on an
+        // already-established session (carries Mcp-Session-Id), never a routing mistake.
         MCPClient mcpClient = await GetOrCreateClientAsync(serverAttribute);
         try
         {
@@ -131,11 +121,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         }
         catch (Exception ex) when (IsSessionTerminated(ex))
         {
-            // Single-flight, instance-conditional recovery (see ReconnectAsync): collapses
-            // N concurrent session-terminated failures into one reconnect and refuses to
-            // tear down a healthy client another caller already re-established. Retry runs
-            // exactly once — a second failure is a real fault (server down, auth, protocol)
-            // and is allowed to propagate.
+            // Single-flight, instance-conditional recovery (see ReconnectAsync): collapses N
+            // concurrent failures into one reconnect. Retry runs exactly once — a second
+            // failure is a real fault (server down, auth, protocol) and propagates.
             MCPClient reconnectedMCPClient = await ReconnectAsync(serverAttribute, staleMCPClient: mcpClient);
             return await operation(reconnectedMCPClient);
         }
@@ -146,13 +134,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         => new ReconnectingMCPTool(discoveredTool, serverAttribute, this);
 
     /// <summary>
-    /// Recovers from terminated session: holds per-pool-key gate for single-flight reconnect,
-    /// replaces pooled client only if still the exact instance the caller saw fail.
-    /// Late stragglers adopt already-recovered client instead of evicting, preventing strand/storm.
+    /// Recovers from a terminated session: single-flight reconnect behind a per-pool-key gate,
+    /// replacing the pooled client only if it's still the exact instance the caller saw fail.
     /// </summary>
-    /// <param name="serverAttribute">The server whose session was terminated.</param>
-    /// <param name="staleMCPClient">The exact client instance the caller observed failing.</param>
-    /// <returns>A live client for the server — freshly reconnected, or the healthy one a peer already restored.</returns>
     private async Task<MCPClient> ReconnectAsync(UsesMCPServerAttribute serverAttribute, MCPClient staleMCPClient)
     {
         string poolKey = PoolKey(serverAttribute);
@@ -269,9 +253,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         logger.LogInformation("Disconnecting {McpClientsCount} MCP clients...", mcpClients.Count);
 
         // Disconnect in parallel (network I/O may block); failures caught per-client to avoid cascading
-        List<Task> disconnectTasks = [];
-        disconnectTasks.AddRange(
-            mcpClients.Select(kvp => Task.Run(async () =>
+        List<Task> disconnectTasks =
+        [
+            .. mcpClients.Select(kvp => Task.Run(async () =>
             {
                 try
                 {
@@ -282,7 +266,8 @@ public class MCPClientRegistryService : IMCPClientRegistryService
                 {
                     logger.LogError(ex, "Error disconnecting MCP client: {KvpKey}", kvp.Key);
                 }
-            })));
+            }))
+        ];
         await Task.WhenAll(disconnectTasks);
         mcpClients.Clear();
 
@@ -331,11 +316,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         private readonly string toolName;
 
         /// <summary>
-        /// The tool this instance currently calls through. Read and replaced without a lock: a race
-        /// between two concurrent tool calls both observing a dead session is benign — both fall
-        /// through to the refresh below, the registry's own single-flight reconnect gate
-        /// (<see cref="ReconnectAsync"/>) collapses the redundant work, and whichever refreshed
-        /// reference is written last is the one every following call observes.
+        /// The tool this instance currently calls through. Read/replaced without a lock: a race
+        /// between two concurrent calls both seeing a dead session is benign — the registry's own
+        /// single-flight gate (<see cref="ReconnectAsync"/>) collapses the redundant refresh.
         /// </summary>
         private McpClientTool currentTool;
 
@@ -433,17 +416,9 @@ public class MCPClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// Selects the transport from the attribute (Http → URI; Stdio → spawned process),
-    /// then performs the MCP <c>initialize</c> handshake eagerly via
-    /// <see cref="McpClient.CreateAsync"/> — so a bad endpoint fails HERE, at connect, not
-    /// later on a tool call. On failure the error is logged and rethrown unchanged; the
-    /// caller (<see cref="MCPClientRegistryService.GetOrCreateClientAsync"/>) wraps it as
-    /// the user-facing "Failed to connect to MCP server".
+    /// Builds the transport (Http → URI; Stdio → spawned process) then performs the MCP
+    /// <c>initialize</c> handshake eagerly, so a bad endpoint fails HERE, not on a later tool call.
     /// </summary>
-    /// <param name="attr">Server declaration: transport, command/URI, optional args.</param>
-    /// <param name="logger">Logger propagated into the wrapper.</param>
-    /// <param name="cancellationToken">Cancels the connect/handshake.</param>
-    /// <returns>A connected wrapper with a live session, ready for discovery/invocation.</returns>
     public static async Task<MCPClient> ConnectAsync(
         UsesMCPServerAttribute attr,
         ILogger logger,

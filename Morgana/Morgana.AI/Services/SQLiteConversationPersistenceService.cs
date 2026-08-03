@@ -24,13 +24,8 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     private readonly ConversationPersistenceOptions options;
     private readonly byte[] encryptionKey;
 
-    /// <summary>
-    /// Initializes a new instance of the SQLiteConversationPersistenceService.
-    /// Validates configuration and ensures storage directory exists.
-    /// </summary>
-    /// <param name="options">Configuration options containing storage path and encryption key</param>
-    /// <param name="logger">Logger instance for diagnostics</param>
-    /// <exception cref="ArgumentException">Thrown if StoragePath or EncryptionKey are not configured</exception>
+    /// <summary>Validates StoragePath/EncryptionKey are configured and ensures the storage directory exists.</summary>
+    /// <exception cref="ArgumentException">StoragePath or EncryptionKey are not configured.</exception>
     public SQLiteConversationPersistenceService(
         IOptions<ConversationPersistenceOptions> options,
         ILogger logger)
@@ -325,10 +320,12 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             // (ensure to present messages in their effective temporal order,
             //  since they comes from database in agent's appearance order;
             //  also ensure to filter out tool messages)
-            return ProcessMessagesForHistory(conversationId,
-                allMessages.Where(m => m.message.Role != ChatRole.Tool)
-                           .OrderBy(m => m.message.CreatedAt?.UtcDateTime ?? DateTime.UtcNow)
-                           .ToList(), jsonSerializerOptions);
+            return ProcessMessagesForHistory(
+                conversationId, 
+                allMessages: [
+                    .. allMessages.Where(m => m.message.Role != ChatRole.Tool)
+                                  .OrderBy(m => m.message.CreatedAt?.UtcDateTime ?? DateTime.UtcNow)
+                ], jsonSerializerOptions);
         }
         catch (Exception ex)
         {
@@ -696,12 +693,16 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     {
         using Aes aes = Aes.Create();
         aes.Key = encryptionKey;
+        // A fresh random IV every single call, never reused across rows or across saves of the
+        // same row: CBC mode leaks patterns between ciphertexts that share both key and IV, so
+        // reuse would be the actual vulnerability, not just a decrypt-time inconvenience.
         aes.GenerateIV();
 
         using ICryptoTransform encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
         using MemoryStream msEncrypt = new MemoryStream();
 
-        // Write IV to beginning of stream (needed for decryption)
+        // The IV isn't secret, only unique — prepending it in the clear is standard practice and
+        // is exactly what Decrypt below expects to find at the start of every stored blob.
         msEncrypt.Write(aes.IV, 0, aes.IV.Length);
 
         using (CryptoStream csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write))
@@ -793,11 +794,14 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         // tool-use scratchpad doesn't appear in the rendered transcript on resume. Agents whose
         // sessions have no marker (e.g. persisted before this feature shipped) follow the legacy
         // path: every assistant message is rendered, just like before.
-        HashSet<string> markedAgents = allMessages
-            .Where(m => m.message.Role == ChatRole.Assistant
-                     && m.message.AdditionalProperties?.ContainsKey(MorganaChatHistoryProvider.UserFacingMarkerKey) == true)
-            .Select(m => m.agentName)
-            .ToHashSet();
+        HashSet<string> markedAgents =
+        [
+            .. allMessages
+                .Where(m => m.message.Role == ChatRole.Assistant
+                            && m.message.AdditionalProperties?.ContainsKey(MorganaChatHistoryProvider
+                                .UserFacingMarkerKey) == true)
+                .Select(m => m.agentName)
+        ];
 
         // NOTE: the MEAI SummarizingChatReducer annotates the anchor message with
         // `AdditionalProperties["__summary__"]` when it reduces the view for the LLM.
@@ -848,13 +852,10 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             bool isUserFacing = chatMessage.Role == ChatRole.Assistant
                              && chatMessage.AdditionalProperties?.ContainsKey(MorganaChatHistoryProvider.UserFacingMarkerKey) == true;
 
-            // Tool-call messages are normally skipped because their widgets get attached to a
-            // separate, text-bearing assistant message later in the turn. The user-facing
-            // assistant is the one exception: for layouts where the same message carries BOTH
-            // text and a SetRichCard / SetQuickReplies call (typical of Haiku-class models that
-            // close the turn without emitting a follow-up empty assistant), this message owns
-            // the visible text AND the widgets. Falling through to text rendering keeps them
-            // bound together in a single bubble.
+            // Tool-call messages are normally skipped — their widgets attach to a later,
+            // text-bearing assistant message. Exception: the user-facing message itself, when a
+            // model (typically Haiku-class) closes the turn carrying BOTH text and the tool call
+            // in one message — falling through here keeps text and widgets in one bubble.
             if (chatMessageHasToolCalls && !isUserFacing)
                 continue;
 
@@ -897,7 +898,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         logger.LogInformation(
             "Processed {HistoryMessagesCount} messages (filtered from {AllMessagesCount} raw messages) for {ConversationId}", historyMessages.Count, allMessages.Count, conversationId);
 
-        return historyMessages.ToArray();
+        return [.. historyMessages];
     }
 
     /// <summary>

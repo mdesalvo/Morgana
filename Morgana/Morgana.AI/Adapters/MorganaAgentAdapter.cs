@@ -533,9 +533,7 @@ public class MorganaAgentAdapter
     {
         // An agent may declare several [UsesMCPServer] (multiple servers, mixed
         // Http/Stdio) — collect them all, not just the first.
-        UsesMCPServerAttribute[] attributes = agentType
-            .GetCustomAttributes<UsesMCPServerAttribute>()
-            .ToArray();
+        UsesMCPServerAttribute[] attributes = [.. agentType.GetCustomAttributes<UsesMCPServerAttribute>()];
 
         // No MCP on this agent is the common, expected case (native-tool or tool-less
         // agents) — Debug, not Warning: it is not a problem, just not applicable.

@@ -24,6 +24,10 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     {
         this.logger = logger;
 
+        // Lazy, not loaded eagerly here: reflection over every loaded assembly (see
+        // LoadAgentConfiguration below) is comparatively expensive and only needs to run once, the
+        // first time an intent or a prompt is actually asked for — not on DI construction, which
+        // may happen before plugin assemblies have even finished loading in some hosting orders.
         agentConfiguration = new Lazy<AgentConfiguration>(LoadAgentConfiguration);
     }
 
@@ -55,7 +59,12 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     {
         logger.LogInformation("Searching for agents.json in loaded assemblies...");
 
-        // Search for agents.json in ALL loaded assemblies
+        // Every assembly currently loaded into the process is a candidate — not just Morgana's
+        // own — because a domain author's plugin DLL (loaded by PluginLoaderService before this
+        // service ever runs, see Program.cs) is exactly where agents.json is expected to live.
+        // IsDynamic assemblies are skipped because they never carry embedded resources (they're
+        // runtime-generated, e.g. by reflection emit) and GetManifestResourceNames would just
+        // throw NotSupportedException on them.
         foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic))
         {
@@ -89,17 +98,30 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                             logger.LogInformation("   📋 Intent: {IntentName} - {IntentDescription}", intent.Name, intent.Description);
                         }
 
+                        // First successful load wins, full stop — this method does NOT keep
+                        // scanning to merge a second agents.json from a second plugin assembly.
+                        // Today's deployment model is one domain plugin per Morgana instance, so
+                        // this is a deliberate simplification, not an oversight: if a future
+                        // multi-plugin scenario needs several agents.json files merged together,
+                        // this early return is exactly the line that would need to change.
                         return config;
                     }
                 }
                 catch (Exception ex)
                 {
+                    // Deliberately caught per-assembly rather than left to propagate: a malformed
+                    // agents.json in ONE assembly (e.g. a half-built plugin sitting in the plugins/
+                    // folder) should not prevent scanning the rest for a valid one elsewhere, and
+                    // should definitely not crash Morgana's startup over a single bad resource file.
                     logger.LogError(ex, "Failed to deserialize agents.json from {Name}", assembly.GetName().Name);
                 }
             }
         }
 
-        // Fallback: no agents.json found
+        // Reached only if no assembly contributed a usable agents.json at all. This is a
+        // supported, documented mode ("agentless") rather than a startup failure — see
+        // EmbeddedAgentConfigurationService's class summary and HandlesIntentAgentRegistryService,
+        // which both tolerate an empty intent/agent set gracefully.
         logger.LogWarning(
             "⚠️  No agents.json found in any loaded assembly. " +
             "Classifier and presentation will have no intents available. " +

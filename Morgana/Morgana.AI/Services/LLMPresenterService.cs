@@ -10,10 +10,8 @@ namespace Morgana.AI.Services;
 
 /// <summary>
 /// IPresenterService implementation: generates presentation via LLM or falls back to config.
-/// Caches per-channel deterministically (same intents + capabilities = same outcome) via
-/// Lazy&lt;Task&lt;&gt;&gt; and adapts via MorganaChannelAdapter. Never throws — LLM failures
-/// route to deterministic fallback (FallbackMessage + intent-derived quick replies).
-/// Channel resolution is internal via IChannelMetadataStore; callers pass only conversationId.
+/// Caches per-channel (same intents + capabilities = same outcome) and never throws — LLM
+/// failures route to a deterministic fallback (FallbackMessage + intent-derived quick replies).
 /// </summary>
 public class LLMPresenterService : IPresenterService
 {
@@ -31,22 +29,8 @@ public class LLMPresenterService : IPresenterService
     /// </summary>
     private readonly ConcurrentDictionary<string, Lazy<Task<Records.PresentationResult>>> cache = new();
 
-    /// <summary>
-    /// Initialises a new instance of <see cref="LLMPresenterService"/>.
-    /// </summary>
-    /// <param name="llmService">LLM service used for presentation generation.</param>
-    /// <param name="promptResolverService">Prompt resolver used to load the Presentation prompt.</param>
-    /// <param name="channelMetadataStore">
-    /// Registry of per-conversation channel metadata. Used to resolve the originating channel's
-    /// name and capability budget so the presenter can cache (and adapt) per channel without
-    /// leaking that concern to its callers.
-    /// </param>
-    /// <param name="channelAdapter">
-    /// Canonical capability-driven adaptation chain. Invoked on the rich
-    /// <see cref="ChannelMessage"/> built around the LLM-generated presentation so that
-    /// resource-poor channels see the same degradation any other outbound message would receive.
-    /// </param>
-    /// <param name="logger">Logger for diagnostic output.</param>
+    /// <param name="channelMetadataStore">Resolves the originating channel's name/capabilities, so callers only pass conversationId.</param>
+    /// <param name="channelAdapter">Same capability-driven degradation chain any outbound message goes through.</param>
     public LLMPresenterService(
         ILLMService llmService,
         IPromptResolverService promptResolverService,
@@ -156,9 +140,7 @@ public class LLMPresenterService : IPresenterService
                  ?? throw new InvalidOperationException("LLM returned null presentation");
 
             // Map the wire-format DTO into the domain QuickReply records the rest of Morgana speaks.
-            List<QuickReply> quickReplies = presentation.QuickReplies
-                .Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value))
-                .ToList();
+            List<QuickReply> quickReplies = [.. presentation.QuickReplies.Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value))];
 
             logger.LogInformation(
                 "LLMPresenterService: LLM generated presentation with {Count} quick replies", quickReplies.Count);
@@ -188,12 +170,14 @@ public class LLMPresenterService : IPresenterService
 
         // One quick reply per intent. Label falls back to the intent name; value falls back to a
         // generic "Help me with X" so the button always carries a usable payload.
-        List<QuickReply> fallbackReplies = displayableIntents
-            .Select(intent => new QuickReply(
-                intent.Name,
-                intent.Label ?? intent.Name,
-                intent.DefaultValue ?? $"Help me with {intent.Name}"))
-            .ToList();
+        List<QuickReply> fallbackReplies =
+        [
+            .. displayableIntents
+                .Select(intent => new QuickReply(
+                    intent.Name,
+                    intent.Label ?? intent.Name,
+                    intent.DefaultValue ?? $"Help me with {intent.Name}"))
+        ];
 
         logger.LogInformation(
             "LLMPresenterService: fallback presentation with {Count} quick replies", fallbackReplies.Count);

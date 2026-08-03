@@ -8,23 +8,12 @@ using static Morgana.AI.Records;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// SQLite-backed dust limiter. Stores the per-conversation lifetime token budget in the
-/// same per-conversation database used by <see cref="SQLiteConversationPersistenceService"/>,
-/// mirroring how <see cref="SQLiteRateLimitService"/> shares that file.
+/// SQLite-backed dust limiter: a per-conversation LIFETIME budget (no sliding window, no reset)
+/// in the single-row <c>dust_budget</c> table, sharing the same per-conversation database as
+/// <see cref="SQLiteConversationPersistenceService"/>. "Let-it-finish": a turn already running
+/// completes even if it pushes the total over budget — only the NEXT turn gets blocked, by
+/// <see cref="IsOverBudgetAsync"/>. Every operation fails open on a storage fault.
 /// </summary>
-/// <remarks>
-/// <para><strong>Storage:</strong></para>
-/// <code>
-/// {StoragePath}/morgana-{conversationId}.db
-///   ├─ dust_budget     — single row (id=1): running total + one-shot warning flags
-///   └─ dust_usage_log  — per-call audit trail (diagnostics / OTel only, not enforcement)
-/// </code>
-/// <para><strong>Semantics:</strong> the budget is a lifetime resource — no sliding window,
-/// no reset. "Let-it-finish": a turn already running completes even if it pushes the total
-/// over budget; the <em>next</em> turn is blocked by <see cref="IsOverBudgetAsync"/>.</para>
-/// <para>Every operation fails open: a storage fault is logged and treated as "allow", so the
-/// limiter can never become a single point of failure mid-conversation.</para>
-/// </remarks>
 public class SQLiteDustLimitService : IDustLimitService
 {
     private readonly ILogger logger;

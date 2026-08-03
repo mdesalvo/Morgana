@@ -7,36 +7,11 @@ using static Morgana.AI.Records;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// SQLite-based rate limiting service with persistent request tracking.
-/// Stores request logs in the same database as conversation data for consistency.
-/// Delegates database initialization to IConversationPersistenceService.
+/// SQLite-based sliding-window rate limiter: per-minute/hour/day caps, one row per accepted
+/// request in the SAME per-conversation database conversation persistence uses (table
+/// <c>rate_limit_log</c>). Each check cleans up requests older than 24h, counts each configured
+/// window, and — only if every window is under its cap — records the request, all in one transaction.
 /// </summary>
-/// <remarks>
-/// <para><strong>Storage Model:</strong></para>
-/// <code>
-/// Database per conversation (same as agent persistence):
-///   {StoragePath}/morgana-conv12345.db
-///     ├─ table: morgana (agent sessions)
-///     └─ table: rate_limit_log (request timestamps)
-/// </code>
-/// <para><strong>Sliding Window Algorithm:</strong></para>
-/// <para>On each check:</para>
-/// <list type="number">
-/// <item>Ensure database exists (via persistence service)</item>
-/// <item>Delete expired requests (older than 24 hours)</item>
-/// <item>Count requests in each time window (minute, hour, day)</item>
-/// <item>If any limit exceeded, deny request</item>
-/// <item>If allowed, insert current request timestamp</item>
-/// </list>
-/// <para><strong>Database Initialization:</strong></para>
-/// <para>Delegates to IConversationPersistenceService.EnsureDatabaseInitializedAsync()
-/// to handle schema creation and versioning. This prevents duplication of schema logic
-/// and ensures consistency with agent persistence.</para>
-/// <para><strong>Race Condition Prevention:</strong></para>
-/// <para>Rate limiting is checked BEFORE any agent executes. The database might not exist yet
-/// (created only when first agent saves thread). Calling EnsureDatabaseInitializedAsync()
-/// prevents FileNotFoundException by creating the database on-demand.</para>
-/// </remarks>
 public class SQLiteRateLimitService : IRateLimitService
 {
     private readonly ILogger logger;
@@ -44,14 +19,6 @@ public class SQLiteRateLimitService : IRateLimitService
     private readonly ConversationPersistenceOptions persistenceOptions;
     private readonly IConversationPersistenceService persistenceService;
 
-    /// <summary>
-    /// Initializes the rate limit service with the configured limits and the persistence
-    /// service used to ensure the SQLite database exists before logging requests.
-    /// </summary>
-    /// <param name="options">Rate limit configuration (per-minute/hour/day caps).</param>
-    /// <param name="persistenceOptions">Persistence options (storage path).</param>
-    /// <param name="persistenceService">Persistence service that owns database lifecycle.</param>
-    /// <param name="logger">Logger for rate limit decisions.</param>
     public SQLiteRateLimitService(
         IOptions<RateLimitOptions> options,
         IOptions<ConversationPersistenceOptions> persistenceOptions,
@@ -74,11 +41,6 @@ public class SQLiteRateLimitService : IRateLimitService
     /// Evaluates the per-minute/hour/day sliding windows for the given conversation and,
     /// if all limits are respected, records the current request. Fails open on error.
     /// </summary>
-    /// <param name="conversationId">Conversation whose rate limit database is queried.</param>
-    /// <returns>
-    /// A <see cref="RateLimitResult"/> with <c>IsAllowed = true</c> when the request is admitted,
-    /// or <c>false</c> with <c>ViolatedLimit</c> populated when a window is exceeded.
-    /// </returns>
     public async Task<RateLimitResult> CheckAndRecordAsync(string conversationId)
     {
         if (!options.Enabled)
@@ -86,13 +48,18 @@ public class SQLiteRateLimitService : IRateLimitService
 
         try
         {
-            // Ensure database exists (delegates to persistence service)
+            // Rate limiting runs BEFORE any agent executes, so the database may not exist yet —
+            // it's normally created lazily the first time an agent saves its session. Calling this
+            // here too, on-demand, avoids a FileNotFoundException on a brand-new conversation.
             await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
 
             string sqliteConnectionString = GetConnectionString(conversationId);
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
 
+            // Cleanup + count + record all share one transaction so a second request for the same
+            // conversation arriving mid-check can't interleave with this one and both slip past
+            // the same limit — the whole check-and-record sequence is what needs to be atomic.
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
             try
             {
@@ -180,6 +147,9 @@ public class SQLiteRateLimitService : IRateLimitService
         SqliteTransaction transaction,
         DateTime now)
     {
+        // ISO-8601 with a fixed-width, zero-padded format: request_timestamp is stored as TEXT,
+        // and this specific format sorts correctly under a plain lexicographic "<"/">=" comparison
+        // — the same trick every timestamp comparison in this file relies on.
         DateTime cutoff = now.AddDays(-1);
         string cutoffIso = cutoff.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
 
@@ -200,7 +170,10 @@ public class SQLiteRateLimitService : IRateLimitService
         SqliteTransaction transaction,
         DateTime utcNow)
     {
-        // Check per-minute limit
+        // >= not >: count is the number of PRIOR requests already in the window, and this one
+        // would be the (count+1)th — so count==limit means this request is the one that breaches
+        // the cap and must be denied, not admitted as the "last allowed" one. A limit of 0 skips
+        // the window entirely (see the `> 0` guards) rather than meaning "zero requests allowed".
         if (options.MaxMessagesPerMinute > 0)
         {
             int count = await CountRequestsAsync(
@@ -303,6 +276,10 @@ public class SQLiteRateLimitService : IRateLimitService
     /// </summary>
     private string GetDatabasePath(string conversationId)
     {
+        // conversationId is client-supplied (arrives via the REST API), so it's split on every
+        // character the OS forbids in a file name and rejoined with "_" before it ever touches a
+        // path — the same sanitisation SQLiteConversationPersistenceService applies to the exact
+        // same id, so both services always agree on which physical file backs a given conversation.
         string sanitized = string.Join("_", conversationId.Split(Path.GetInvalidFileNameChars()));
         return Path.Combine(persistenceOptions.StoragePath, $"morgana-{sanitized}.db");
     }

@@ -1,0 +1,32 @@
+id: classifier-disambiguates-colliding-billing-contract
+description: >-
+  A request that genuinely brushes both billing and contract lands the classifier's top two
+  candidates within Morgana:ActorSystem:IntentCollisionThreshold of each other. The
+  supervisor must divert before ever reaching an agent: no tool call, no active agent, a
+  disambiguation quick reply naming both intents instead of a silent coin-flip route. The
+  wording names both topics by their own configured intent name, deliberately and evenly —
+  earlier drafts tried to stay vague and hope the model would find both intents plausible on its
+  own, but a vague request just gets resolved decisively toward whichever intent's description
+  happens to match its wording slightly better (proven live: one neutral phrasing landed 5/5 on
+  "billing", a differently-neutral phrasing landed 3/3 on "contract" — never a collision).
+  Naming both intents outright is what actually produces the two-way tie this scenario tests.
+runs: 5
+minPasses: 5
+
+turns:
+  - say: "What about my billing and my contract?"
+    expect:
+      agentCompleted: false
+      quickReplies: "min:2"
+      quickReplyIds: ["billing", "contract"]
+      textNotEmpty: true
+    judge:
+      - "The message asks the user to clarify which of two distinct topics they mean, without committing to either one."
+    judgeNot:
+      # The disease this scenario exists to catch: the classifier picks a single winner under the
+      # hood and Morgana just runs with it — silently answering (or starting to work) as if only
+      # billing, or only the contract, had been asked about, instead of surfacing the disambiguation
+      # quick reply the collision is supposed to produce. Either direction of that collapse is a
+      # failure, so both get their own proposition rather than one that could pass by catching only one.
+      - "The message proceeds to address a billing, invoice or payment matter specifically, without first asking the user to clarify which of two topics they meant."
+      - "The message proceeds to address a contract, clause or service-terms matter specifically, without first asking the user to clarify which of two topics they meant."

@@ -149,6 +149,9 @@ public static class MorganaTelemetry
     /// <summary>Confidence score from 0.0 to 1.0 returned by the LLM classifier.</summary>
     public const string ClassificationConfidence = "classification.confidence";
 
+    /// <summary>Classified metadata returned by the LLM classifier.</summary>
+    public const string ClassificationMetadata = "classification.metadata";
+
     // ==============================================================================
     // ATTRIBUTE NAMES — ROUTER
     // ==============================================================================

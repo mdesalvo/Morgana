@@ -119,7 +119,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
 
         if (viewReducer != null)
         {
-            List<ChatMessage> reducedView = (await viewReducer.ReduceAsync(fullMessageHistory, cancellationToken)).ToList();
+            List<ChatMessage> reducedView = [.. await viewReducer.ReduceAsync(fullMessageHistory, cancellationToken)];
 
             logger.LogInformation(
                 $"{nameof(MorganaChatHistoryProvider)} PROVIDING reduced view " +
@@ -147,9 +147,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
 
         // The base class filters context.RequestMessages to exclude messages already in chat history,
         // so only the new user/tool messages for this turn arrive here.
-        List<ChatMessage> newMessages = context.RequestMessages
-            .Concat(context.ResponseMessages ?? [])
-            .ToList();
+        List<ChatMessage> newMessages = [.. context.RequestMessages, .. context.ResponseMessages ?? []];
 
         // Stamp response messages with a server-side UTC timestamp.
         int responseStartIndex = context.RequestMessages?.Count() ?? 0;

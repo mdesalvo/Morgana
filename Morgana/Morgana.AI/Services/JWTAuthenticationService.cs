@@ -8,33 +8,11 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="IAuthenticationService"/> implementation that validates JWT tokens
-/// signed with a shared symmetric key (HMAC-SHA256) on a per-issuer basis.
+/// Default <see cref="IAuthenticationService"/> implementation: validates JWTs signed with a
+/// shared symmetric key (HMAC-SHA256) on a per-issuer basis. One <see cref="TokenValidationParameters"/>
+/// bundle per declared issuer, each pinned to that issuer's own key — see
+/// <see cref="AuthenticateAsync"/> for the peek-then-validate flow that selects the right one.
 /// </summary>
-/// <remarks>
-/// <para><strong>Per-Issuer Trust Model:</strong></para>
-/// <para>One <see cref="TokenValidationParameters"/> bundle is built per declared issuer,
-/// each pinned to that issuer's own signing key. On validation the <c>iss</c> claim is
-/// peeked first (without trusting the token), then the matching bundle is selected.
-/// Tokens whose <c>iss</c> is not declared in configuration are rejected outright,
-/// so the blast radius of a leaked key is limited to a single channel.</para>
-///
-/// <para><strong>Validation Strategy:</strong></para>
-/// <list type="bullet">
-/// <item>Signature: HMAC-SHA256 with the issuer's own shared symmetric key</item>
-/// <item>Issuer: must be declared in <c>Morgana:Authentication:Issuers</c></item>
-/// <item>Audience: must match the configured <c>Audience</c></item>
-/// <item>Lifetime: token must not be expired (30s clock skew)</item>
-/// </list>
-///
-/// <para><strong>Identity Extraction:</strong></para>
-/// <para>On successful validation, extracts <c>sub</c> → UserId and <c>name</c> → DisplayName
-/// from the token claims. If <c>name</c> is absent, falls back to the <c>sub</c> value.</para>
-///
-/// <para><strong>No External Dependencies:</strong></para>
-/// <para>All validation is performed locally using <c>Microsoft.IdentityModel.JsonWebTokens</c>.
-/// No network calls, no IdP dependency.</para>
-/// </remarks>
 public class JWTAuthenticationService : IAuthenticationService
 {
     private readonly Dictionary<string, TokenValidationParameters> validationParametersByIssuer;
@@ -77,6 +55,9 @@ public class JWTAuthenticationService : IAuthenticationService
                             $"Morgana authentication issuer '{issuer.Name}' has no SymmetricKey configured.");
             }
 
+            // HMAC-SHA256 needs a key at least as long as its output (256 bits / 32 bytes) to
+            // deliver its full security margin — a shorter key is startup-fatal, not a warning,
+            // because a weak signing key is silently exploitable, not silently degraded.
             byte[] keyBytes = Encoding.UTF8.GetBytes(issuer.SymmetricKey);
             if (keyBytes.Length < 32)
             {
@@ -116,9 +97,11 @@ public class JWTAuthenticationService : IAuthenticationService
         try
         {
             #region Issuer Lookup
-            // Peek the iss claim WITHOUT trusting the token. This selects which key to
-            // validate against; the signature check below proves the token actually
-            // belongs to that issuer.
+            // ReadJsonWebToken only decodes the JWT's own claims — it does NOT check the
+            // signature. Peeking iss here is safe precisely because it's unauthenticated: it's
+            // used only to pick which issuer's key to validate against, and ValidateTokenAsync
+            // below is what actually proves the token was signed with that issuer's own key —
+            // an attacker forging an iss claim still fails the signature check on the real key.
             string? issuer;
             try
             {
@@ -148,6 +131,9 @@ public class JWTAuthenticationService : IAuthenticationService
             #region Validation
             if (!result.IsValid)
             {
+                // Maps the library's internal exception type to a stable, user/log-facing string —
+                // deliberately not result.Exception.Message, which is free-form library prose that
+                // could change across a NuGet update and isn't meant for external consumption.
                 string error = result.Exception switch
                 {
                     SecurityTokenExpiredException => "Token has expired",
@@ -169,6 +155,8 @@ public class JWTAuthenticationService : IAuthenticationService
             }
             #endregion
 
+            // "name" is optional on a channel's self-issued token; falling back to the "sub" value
+            // (the user id itself) means callers always get a non-null DisplayName to show.
             string? displayName = result.Claims.TryGetValue(JwtRegisteredClaimNames.Name, out object? nameValue) ? nameValue?.ToString() : userId;
             return new Records.AuthenticationResult(IsAuthenticated: true, UserId: userId, DisplayName: displayName);
         }

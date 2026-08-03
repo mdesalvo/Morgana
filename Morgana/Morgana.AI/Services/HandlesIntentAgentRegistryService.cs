@@ -22,20 +22,20 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// </summary>
     private readonly Lazy<Dictionary<string, Type>> intentToAgentType;
 
-    /// <summary>
-    /// Initializes a new instance of HandlesIntentAgentRegistryService.
-    /// Performs agent discovery and bidirectional validation immediately.
-    /// </summary>
-    /// <param name="agentConfigService">Service for loading intent configuration from agents.json</param>
-    /// <param name="llmTierValidationService">Service validating each agent's declared [RequiresLLMTier] against the active provider's configuration — a separate concern from intent↔agent discovery, delegated rather than inlined here</param>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if bidirectional validation fails (missing agents or missing configuration)
-    /// </exception>
+    /// <summary>Discovers agents and runs bidirectional intent↔agent validation (lazily — see field above).</summary>
+    /// <param name="agentConfigService">Loads intent configuration from agents.json.</param>
+    /// <param name="llmTierValidationService">Validates each agent's [RequiresLLMTier], delegated as a separate concern.</param>
+    /// <exception cref="InvalidOperationException">Validation fails: missing agents or missing configuration.</exception>
     public HandlesIntentAgentRegistryService(IAgentConfigurationService agentConfigService, ILLMTierValidationService llmTierValidationService)
     {
         this.agentConfigService = agentConfigService;
         this.llmTierValidationService = llmTierValidationService;
 
+        // Lazy rather than run in the constructor: InitializeRegistry does a full-AppDomain
+        // reflection scan plus the startup-fatal bidirectional validation below, and both need to
+        // happen after every plugin assembly has finished loading — deferring to first use (which
+        // in practice is startup validation itself, just called explicitly rather than via DI
+        // construction order) keeps this service indifferent to exactly when it gets constructed.
         intentToAgentType = new Lazy<Dictionary<string, Type>>(InitializeRegistry);
     }
 
@@ -69,6 +69,9 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
         foreach (Type? morganaAgentType in morganaAgentTypes)
         {
+            // No [HandlesIntent] at all is a silent skip (e.g. an abstract base agent). Two
+            // DIFFERENT agents declaring the SAME intent is a real bug this indexer hides: the
+            // later one in (undocumented) reflection order silently shadows the earlier one.
             HandlesIntentAttribute? handlesIntentAttribute = morganaAgentType.GetCustomAttribute<HandlesIntentAttribute>();
             if (handlesIntentAttribute != null)
                 registry[handlesIntentAttribute.Intent] = morganaAgentType;
@@ -80,10 +83,12 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         List<Records.IntentDefinition> allIntents = agentConfigService.GetIntentsAsync().GetAwaiter().GetResult();
 
         // Extract intent names, excluding "other" (special fallback intent with no dedicated agent)
-        HashSet<string> classifierIntents = allIntents
-            .Where(intent => !string.Equals(intent.Name, "other", StringComparison.OrdinalIgnoreCase))
-            .Select(intent => intent.Name)
-            .ToHashSet();
+        HashSet<string> classifierIntents =
+        [
+            .. allIntents
+                .Where(intent => !string.Equals(intent.Name, "other", StringComparison.OrdinalIgnoreCase))
+                .Select(intent => intent.Name)
+        ];
 
         HashSet<string> registeredIntents = [.. registry.Keys];
 
@@ -135,15 +140,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     public Type? ResolveAgentFromIntent(string intent)
         => intentToAgentType.Value.GetValueOrDefault(intent);
 
-    /// <summary>
-    /// Gets all registered intent names from discovered agents.
-    /// </summary>
-    /// <returns>Enumerable of intent names that have agent implementations</returns>
-    /// <remarks>
-    /// <para><strong>Usage:</strong></para>
-    /// <para>RouterActor uses this to pre-create all agents during initialization,
-    /// ensuring agents are ready before the first request arrives.</para>
-    /// </remarks>
+    /// <summary>All registered intent names — RouterActor uses this to pre-create agents at startup.</summary>
     public IEnumerable<string> GetAllIntents()
         => intentToAgentType.Value.Keys;
 }
