@@ -9,23 +9,7 @@ namespace Morgana.Contracts;
 /// <param name="Id">Unique identifier for the quick reply (typically matches intent name or action)</param>
 /// <param name="Label">Display text shown on the button with emoji (e.g., "📄 View Invoices")</param>
 /// <param name="Value">Message text sent when user clicks the button (e.g., "Show my invoices")</param>
-/// <param name="Termination">Reserved flag indicating that the button is the one for exiting to Morgana</param>
-/// <remarks>
-/// <para><strong>Dual Purpose:</strong></para>
-/// <para>This record serves both as a runtime model and JSON serialization DTO:</para>
-/// <list type="bullet">
-/// <item><term>Runtime Model</term><description>Used by AgentResponse, ConversationResponse, StructuredMessage</description></item>
-/// <item><term>JSON DTO</term><description>Deserialized from LLM SetQuickReplies tool calls</description></item>
-/// </list>
-/// <para><strong>JSON Format:</strong></para>
-/// <code>
-/// {
-///   "id": "no-internet",
-///   "label": "🔴 No Internet Connection",
-///   "value": "Show me the no-internet assistance guide"
-/// }
-/// </code>
-/// </remarks>
+/// <param name="Termination">Reserved flag indicating that the button is used as "exit to Morgana"</param>
 public record QuickReply(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("label")] string Label,

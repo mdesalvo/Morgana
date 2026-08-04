@@ -8,4 +8,6 @@ namespace Morgana.Contracts;
 /// </summary>
 /// <param name="ConversationId">Target conversation id (echoed from the active conversation).</param>
 /// <param name="ChunkText">Incremental chunk text (delta from the agent's streaming response).</param>
-public record StreamChunkRequest(string ConversationId, string ChunkText);
+public record StreamChunkRequest(
+    string ConversationId,
+    string ChunkText);

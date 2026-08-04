@@ -92,8 +92,7 @@ public abstract record CardComponent
 /// <param name="Style">Visual styling for the text</param>
 public record TextBlockComponent(
     [property: JsonPropertyName("content")] string Content,
-    [property: JsonPropertyName("style")] TextStyle Style = TextStyle.Normal
-) : CardComponent
+    [property: JsonPropertyName("style")] TextStyle Style = TextStyle.Normal) : CardComponent
 {
     private const int Overhead = 2;
 
@@ -110,8 +109,7 @@ public record TextBlockComponent(
 public record KeyValueComponent(
     [property: JsonPropertyName("key")] string Key,
     [property: JsonPropertyName("value")] string Value,
-    [property: JsonPropertyName("emphasize")] bool Emphasize = false
-) : CardComponent
+    [property: JsonPropertyName("emphasize")] bool Emphasize = false) : CardComponent
 {
     private const int Overhead = 4;
 
@@ -138,8 +136,7 @@ public record DividerComponent : CardComponent
 /// <param name="Style">List presentation style (bullet, numbered, plain)</param>
 public record ListComponent(
     [property: JsonPropertyName("items")] List<string> Items,
-    [property: JsonPropertyName("style")] ListStyle Style = ListStyle.Bullet
-) : CardComponent
+    [property: JsonPropertyName("style")] ListStyle Style = ListStyle.Bullet) : CardComponent
 {
     private const int ItemOverhead = 3;
 
@@ -157,8 +154,7 @@ public record ListComponent(
 public record SectionComponent(
     [property: JsonPropertyName("title")] string Title,
     [property: JsonPropertyName("subtitle")] string? Subtitle,
-    [property: JsonPropertyName("components")] List<CardComponent> Components
-) : CardComponent
+    [property: JsonPropertyName("components")] List<CardComponent> Components) : CardComponent
 {
     private const int TitleOverhead = 4;
     private const int SubtitleOverhead = 2;
@@ -177,8 +173,7 @@ public record SectionComponent(
 /// <param name="Items">Grid cells with key-value pairs</param>
 public record GridComponent(
     [property: JsonPropertyName("columns")] int Columns,
-    [property: JsonPropertyName("items")] List<GridItem> Items
-) : CardComponent
+    [property: JsonPropertyName("items")] List<GridItem> Items) : CardComponent
 {
     private const int ItemOverhead = 4;
 
@@ -194,8 +189,7 @@ public record GridComponent(
 /// <param name="Value">Value for this grid cell</param>
 public record GridItem(
     [property: JsonPropertyName("key")] string Key,
-    [property: JsonPropertyName("value")] string Value
-);
+    [property: JsonPropertyName("value")] string Value);
 
 /// <summary>
 /// Badge component for status indicators and categorical labels.
@@ -204,8 +198,7 @@ public record GridItem(
 /// <param name="Variant">Visual variant determining color/style</param>
 public record BadgeComponent(
     [property: JsonPropertyName("text")] string Text,
-    [property: JsonPropertyName("variant")] BadgeVariant Variant = BadgeVariant.Neutral
-) : CardComponent
+    [property: JsonPropertyName("variant")] BadgeVariant Variant = BadgeVariant.Neutral) : CardComponent
 {
     private const int Overhead = 2;
 
@@ -225,8 +218,7 @@ public record ImageComponent(
     [property: JsonPropertyName("src")] string Src,
     [property: JsonPropertyName("alt")] string? Alt = null,
     [property: JsonPropertyName("caption")] string? Caption = null,
-    [property: JsonPropertyName("size")] ImageSize Size = ImageSize.Medium
-) : CardComponent
+    [property: JsonPropertyName("size")] ImageSize Size = ImageSize.Medium) : CardComponent
 {
     private const int PlaceholderOverhead = 10;
     private const int CaptionOverhead = 2;
