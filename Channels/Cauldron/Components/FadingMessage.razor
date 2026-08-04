@@ -1,14 +1,11 @@
-@*
-    FadingMessage - System Warning / Error Banner
+@implements IDisposable
 
-    Features:
-    - Auto-dismiss after configurable N seconds (default 10) for TRANSIENT notices
-      (rate-limit "slow down", generic warnings)
-    - TERMINAL notices (dust budget exhausted) never auto-dismiss and get their own
-      styling — the conversation is dead, this is not a "wait and retry" hint
-    - Smooth fade-out animation (last 2 seconds) for transient notices only
-    - Self-contained state management
-    - Configurable icon based on error reason
+@*
+    FadingMessage - system warning / error banner.
+
+    Transient notices (rate limit, generic warnings) fade out and dismiss themselves after
+    DurationSeconds. Terminal notices (dust budget exhausted) never dismiss and carry their own
+    styling: the conversation is over, so "wait and retry" would be the wrong thing to imply.
 *@
 
 @if (isVisible)
@@ -59,10 +56,9 @@
     private CancellationTokenSource? cancellationTokenSource;
 
     /// <summary>
-    /// A terminal notice ends the conversation (dust budget spent): unlike a rate-limit
-    /// "slow down" or a generic warning it must persist — there is nothing to wait for,
-    /// the only way forward is a new conversation. Drives both the no-auto-dismiss
-    /// behaviour and the distinct banner styling so it is not read as a transient warning.
+    /// True for a notice that ends the conversation (dust budget spent). There is nothing to wait
+    /// for, so it must persist: this drives both the no-auto-dismiss behaviour and the distinct
+    /// styling that keeps it from reading as a transient warning.
     /// </summary>
     private bool IsTerminal =>
         string.Equals(Message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal);
@@ -80,35 +76,39 @@
     /// </summary>
     private void StartAutoDismissTimer()
     {
+        // Cancelled on disposal, so a banner removed early does not keep a timer running
         cancellationTokenSource = new CancellationTokenSource();
 
-        // Calculate visible phase duration (total - 2s fade-out)
-        int visibleDuration = Math.Max(1, DurationSeconds - 2) * 1000; // Min 1s
-        const int fadeDuration = 2000; // 2 seconds fade-out
+        // The fade is the tail of the total duration, not an extra: a 10s banner sits still for 8s
+        // and fades for 2. Floored at 1s so a very short DurationSeconds still shows something.
+        int visibleDuration = Math.Max(1, DurationSeconds - 2) * 1000;
+        const int fadeDuration = 2000;
 
+        // Detached on purpose: the caller renders the banner now and must not await its lifetime
         _ = Task.Run(async () =>
         {
             try
             {
-                // Phase 1: Visible
+                // Phase 1: fully visible, no styling change
                 await Task.Delay(visibleDuration, cancellationTokenSource.Token);
 
-                // Phase 2: Trigger fade-out animation
+                // Phase 2: the "fading" class hands the fade-out over to CSS
                 isFading = true;
                 await InvokeAsync(StateHasChanged);
 
                 await Task.Delay(fadeDuration, cancellationTokenSource.Token);
 
-                // Phase 3: Hide and notify parent
+                // Phase 3: hide the markup once the animation has actually finished
                 isVisible = false;
                 await InvokeAsync(StateHasChanged);
 
-                // Notify parent to remove this specific message from list
+                // Hand the message back so the parent drops it from its list: the component alone
+                // cannot remove itself from a collection it does not own.
                 await OnDismissed.InvokeAsync(Message);
             }
             catch (TaskCanceledException)
             {
-                // Component disposed before timer completed - cleanup handled
+                // Disposed mid-wait: nothing to clean up here, Dispose owns the token source
             }
         }, cancellationTokenSource.Token);
     }
@@ -128,13 +128,13 @@
     }
 
     /// <summary>
-    /// Gets the CSS class for banner styling. The terminal dust notice gets its own
-    /// variant (calm purple, dust-theme) so it never reads as the alarming red of a
-    /// transient error or the pink of a rate-limit warning.
+    /// Gets the CSS class for banner styling.
     /// </summary>
     /// <returns>"dust-exhausted" for the terminal notice, "error" for errors, empty for warnings.</returns>
     private string GetBannerClass()
     {
+        // Checked first: the terminal notice gets a calm purple of its own, never the alarming
+        // red of an error, which would misread as something the user could retry past.
         if (IsTerminal)
             return "dust-exhausted";
 
@@ -142,10 +142,12 @@
     }
 
     /// <summary>
-    /// Cleanup cancellation token on component disposal.
+    /// Cancels the auto-dismiss timer when the banner is removed before it expires.
     /// </summary>
     public void Dispose()
     {
+        // Cancelling first unblocks the detached task, which then exits through its
+        // TaskCanceledException arm instead of firing OnDismissed on a dead component.
         cancellationTokenSource?.Cancel();
         cancellationTokenSource?.Dispose();
     }

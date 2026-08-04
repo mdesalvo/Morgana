@@ -1,10 +1,13 @@
 ﻿@namespace Cauldron.Components
 
-@* Confirmation modal component with magical Morgana theme *@
+@* Confirmation modal. Purely presentational: both outcomes are reported to the parent,
+   which decides what they mean. *@
 
 @if (IsVisible)
 {
     <div class="modal-overlay" @onclick="HandleBackdropClick">
+        @* Stops the click here, or every click inside the dialog would bubble up to the
+           overlay and be read as "clicked outside". *@
         <div class="modal-content" @onclick:stopPropagation="true">
             <div class="modal-header">
                 <div class="magical-icon">✨</div>
@@ -56,6 +59,8 @@
 
     private void HandleBackdropClick()
     {
+        // Clicking away is treated as cancelling, never as confirming: a destructive action
+        // must not be triggered by a stray click on the overlay.
         if (CloseOnBackdrop)
         {
             OnCancel.InvokeAsync();

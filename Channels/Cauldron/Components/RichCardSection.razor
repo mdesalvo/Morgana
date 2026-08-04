@@ -1,5 +1,7 @@
 @namespace Cauldron.Components
 
+@* Renders a section: a titled group that can nest further components inside itself. *@
+
 <div class="rich-card-section rich-card-section-depth-@Depth">
     @* Section header *@
     <div class="rich-card-section-header">
@@ -14,6 +16,8 @@
     <div class="rich-card-section-body">
         @foreach (CardComponent child in Component.Components)
         {
+            @* Depth grows on the way down and drives the CSS class above, so nested
+               sections indent and de-emphasise instead of all looking top-level. *@
             <RichCardComponent Component="@child" Depth="@(Depth + 1)" />
         }
     </div>

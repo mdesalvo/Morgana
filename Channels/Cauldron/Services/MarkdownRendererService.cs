@@ -11,12 +11,9 @@ namespace Cauldron.Services;
 /// </summary>
 public static class MarkdownRendererService
 {
-    // UseEmojiAndSmiley resolves :shortcode: emoji (e.g. :white_check_mark: → ✅) to real glyphs,
-    // matching the Spectre Emoji.Replace step in the Grimoire/Rune renderers — a browser no more
-    // expands GitHub-style shortcodes than a terminal does. enableSmiley:false is deliberate: we
-    // want ONLY the :name: form, not ASCII smiley conversion (:) → 😃), which would mangle
-    // legitimate prose and code. The single shared Pipeline means this covers chat prose (ToHtml),
-    // inline card fields (ToInlineHtml) and the ToPlainText strip (StripMarkdown) in one place.
+    // Resolves :shortcode: emoji to real glyphs (:white_check_mark: → ✅), which a browser no
+    // more expands on its own than a terminal does. Smileys stay off on purpose: converting
+    // :) into 😃 would mangle legitimate prose and code. Shared by both renderers below.
     private static readonly MarkdownPipeline Pipeline =
         new MarkdownPipelineBuilder().UseEmojiAndSmiley(enableSmileys: false).Build();
 
@@ -35,6 +32,8 @@ public static class MarkdownRendererService
     {
         string html = Markdown.ToHtml(text ?? string.Empty, Pipeline).Trim();
 
+        // Markdig always wraps in a paragraph. Inside a card field that block-level wrapper
+        // breaks the layout, so it is peeled off when it is the only one.
         if (html.StartsWith("<p>") && html.EndsWith("</p>"))
             html = html[3..^4];
 

@@ -56,54 +56,9 @@
 </html>
 
 @*
-    ============================================================================
-    _HOST.CSHTML - BLAZOR SERVER ENTRY POINT
-    ============================================================================
+    Host page for the Blazor Server app: the browser gets this shell with the app pre-rendered,
+    then blazor.server.js opens the SignalR connection that carries every later DOM update.
 
-    PURPOSE:
-    This is the root HTML page for the Cauldron Blazor Server application.
-    It provides the initial HTML shell and loads the necessary resources.
-
-    BLAZOR SERVER ARCHITECTURE:
-
-    1. Initial Request (Browser → Server)
-       - Browser requests "/"
-       - Server returns this _Host.cshtml HTML
-       - HTML includes <component> tag helper
-       - Server renders App component to HTML
-       - Browser receives fully-rendered page
-
-    2. SignalR Connection Establishment
-       - blazor.server.js loads and executes
-       - JavaScript establishes SignalR WebSocket connection
-       - Connection used for all subsequent UI updates
-    
-    3. Interactive Phase (Browser ↔ Server)
-       - User interactions (clicks, typing) sent via SignalR
-       - Server processes events and updates component state
-       - Server sends DOM diffs via SignalR
-       - Browser applies patches to update UI
-
-    RENDER MODE: SERVER
-    - Components execute on the server
-    - UI state maintained on server
-    - Only DOM updates sent to client
-    - Benefits: No client-side Blazor runtime, instant initial load
-    - Trade-offs: Requires persistent connection, server resources per client
-
-    ERROR HANDLING:
-    The blazor-error-ui div is shown automatically by Blazor when:
-    - Unhandled exception in component lifecycle
-    - SignalR connection lost and reconnection fails
-    - Component rendering errors
-
-    User can either:
-    - Reload: Restart the entire application
-    - Dismiss: Hide the error banner (may cause issues)
-
-    RESOURCE LOADING ORDER:
-    1. favicon.ico (browser tab icon)
-    2. CSS stylesheets (site → cauldron → quick-reply → sparkle-loader)
-    3. Blazor Server component rendering
-    4. blazor.server.js (establishes SignalR connection)
+    The blazor-error-ui div is shown by Blazor itself on an unhandled component exception or a
+    failed reconnect; it is hidden until then.
 *@

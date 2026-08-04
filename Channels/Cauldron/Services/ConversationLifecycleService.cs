@@ -58,8 +58,12 @@ public class ConversationLifecycleService : IConversationLifecycleService
                 StartConversationResponse? result = await response.Content
                     .ReadFromJsonAsync<StartConversationResponse>();
 
+                // The server's id wins over the one just minted: it is what every later call
+                // and every SignalR group is keyed on.
                 _chatStateService.ConversationId = result?.ConversationId ?? string.Empty;
 
+                // Join before the presentation message is generated, or it arrives with nobody
+                // listening — the greeting is pushed, never polled.
                 await _signalR.JoinConversation(_chatStateService.ConversationId);
                 await _storage.SaveConversationIdAsync(_chatStateService.ConversationId);
 
@@ -130,6 +134,8 @@ public class ConversationLifecycleService : IConversationLifecycleService
                 return await LoadHistoryAsync();
             }
 
+            // 404 is the ordinary case of a stale browser: the saved id outlived the server's
+            // knowledge of it. Anything else is a real failure, but both recover the same way.
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 _logger.LogWarning("Conversation {ConversationId} not found, starting fresh", savedConversationId);
             else
@@ -141,6 +147,41 @@ public class ConversationLifecycleService : IConversationLifecycleService
         {
             _logger.LogError(ex, "ResumeConversation exception");
             return await FallbackToNewConversationAsync();
+        }
+    }
+
+    /// <summary>
+    /// Ends the current conversation server-side so Morgana can tear down its actor tree.
+    /// </summary>
+    public async Task EndConversationAsync()
+    {
+        // Snapshot the id before anything else touches the state, so the whole teardown targets
+        // one conversation even though the caller clears the state right after.
+        string conversationId = _chatStateService.ConversationId;
+
+        // Nothing to end when no conversation was ever established (first load, or a start that failed)
+        if (string.IsNullOrEmpty(conversationId))
+            return;
+
+        try
+        {
+            // Leave the SignalR group first, so anything still in flight for this conversation
+            // does not land on a circuit that has already walked away from it.
+            await _signalR.LeaveConversation(conversationId);
+
+            // Tell Morgana the conversation is over: the manager stops the supervisor and the
+            // guard/classifier/router/agent subtree underneath it, releasing their sessions.
+            // The persisted history is untouched — this frees actors, it does not delete data.
+            await _http.PostAsync($"/api/morgana/conversation/{conversationId}/end", content: null);
+
+            _logger.LogInformation("Conversation ended: {ConversationId}", conversationId);
+        }
+        catch (Exception ex)
+        {
+            // Best-effort cleanup: the user is leaving this conversation either way, and the next
+            // load starts a fresh one. A failure here costs an actor tree on the server, not the
+            // user's ability to move on, so it is logged and swallowed rather than surfaced.
+            _logger.LogWarning(ex, "EndConversation failed for {ConversationId}", conversationId);
         }
     }
 
@@ -219,9 +260,11 @@ public class ConversationLifecycleService : IConversationLifecycleService
 
             _logger.LogInformation("Retrieved {Count} messages from history", history.Messages.Length);
 
+            // Walked in order so the synthetic handover lines can be woven in at the right spot
             for (int i = 0; i < history.Messages.Length; i++)
             {
-                // Inject transient agent-turn-boundary hints
+                // Handover lines are never persisted, so they are reconstructed here by spotting
+                // a user turn that sits between two different agents.
                 if (string.Equals(history.Messages[i].Role, "user", StringComparison.OrdinalIgnoreCase))
                 {
                     bool isPrecededByAssistant = i > 0
@@ -234,6 +277,8 @@ public class ConversationLifecycleService : IConversationLifecycleService
 
                     if (isTurnBoundary)
                     {
+                        // Backdated just before the user message it precedes, so it reads as the
+                        // specialist signing off rather than answering.
                         _chatStateService.ChatMessages.Add(new ChatMessage
                         {
                             ConversationId = history.Messages[i].ConversationId,
@@ -250,7 +295,8 @@ public class ConversationLifecycleService : IConversationLifecycleService
                 _chatStateService.ChatMessages.Add(MapToChatMessage(history.Messages[i]));
             }
 
-            // Detect trailing agent boundary
+            // The loop above only catches handovers followed by another turn. A conversation that
+            // ended while a specialist was active needs its closing line added here.
             MorganaChatMessage lastMsg = history.Messages.Last();
             if (_chatStateService.IsSpecializedAgent(lastMsg.AgentName)
                 && !_chatStateService.IsSpecializedAgent(_chatStateService.CurrentAgentName))
@@ -308,6 +354,8 @@ public class ConversationLifecycleService : IConversationLifecycleService
 
     private async Task<bool> FallbackToNewConversationAsync()
     {
+        // Drop the unusable id first: leaving it would make the next page load retry the same
+        // dead conversation and fall through to here again.
         await _storage.ClearConversationIdAsync();
         return await StartConversationAsync();
     }

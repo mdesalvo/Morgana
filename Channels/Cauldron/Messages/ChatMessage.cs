@@ -3,26 +3,10 @@ using Morgana.Contracts;
 namespace Cauldron.Messages;
 
 /// <summary>
-/// Represents a chat message in the Cauldron UI.
-/// Used to display user messages, agent responses, typing indicators, and error messages.
+/// One row of the chat as the UI knows it. Deliberately distinct from the wire contracts: it is
+/// mutable, it carries state the server never sees (typing indicator, streaming flag, which quick
+/// reply was picked), and it covers rows the server never sent, like the local error line.
 /// </summary>
-/// <remarks>
-/// <para><strong>Message Lifecycle:</strong></para>
-/// <list type="number">
-/// <item>User types message → ChatMessage created with Type = User</item>
-/// <item>Typing indicator shown → ChatMessage created with IsTyping = true</item>
-/// <item>Agent responds via SignalR → ChatMessage created with Type = Assistant</item>
-/// <item>Optional quick replies attached → QuickReplies list populated</item>
-/// <item>User clicks quick reply → SelectedQuickReplyId set, all buttons disabled</item>
-/// </list>
-/// <para><strong>Message Types:</strong></para>
-/// <list type="bullet">
-/// <item><term>User</term><description>Message from the user</description></item>
-/// <item><term>Assistant</term><description>Regular response from agent</description></item>
-/// <item><term>Presentation</term><description>Welcome/completion message with special styling</description></item>
-/// <item><term>Error</term><description>Error message with error styling</description></item>
-/// </list>
-/// </remarks>
 public class ChatMessage
 {
     /// <summary>
@@ -85,18 +69,10 @@ public class ChatMessage
     public string? SelectedQuickReplyId { get; set; }
 
     /// <summary>
-    /// Gets or sets the message role for CSS styling ("user" or "assistant").
-    /// Automatically converts between MessageType enum and string role.
+    /// The message role as CSS wants it, projected from <see cref="Type"/>. Everything that is
+    /// not a user message renders on the assistant side, presentation and error lines included.
+    /// Setting it collapses to User or Assistant, so the finer types survive only if set directly.
     /// </summary>
-    /// <remarks>
-    /// <para><strong>Conversion Logic:</strong></para>
-    /// <code>
-    /// MessageType.User → "user"
-    /// MessageType.Assistant → "assistant"
-    /// MessageType.Presentation → "assistant"
-    /// MessageType.Error → "assistant"
-    /// </code>
-    /// </remarks>
     public string Role
     {
         get => Type switch
@@ -115,9 +91,7 @@ public class ChatMessage
     /// Indicates whether this message is a typing indicator.
     /// When true, displays animated three-dot typing indicator instead of text.
     /// </summary>
-    /// <remarks>
-    /// Typing indicators are temporary messages removed when the actual agent response arrives.
-    /// </remarks>
+
     public bool IsTyping { get; set; }
 
     /// <summary>

@@ -7,6 +7,10 @@ namespace Cauldron.Services;
 /// <summary>
 /// Manages the chat UI state: message list, temporary messages, agent tracking, and sending state.
 /// </summary>
+/// <summary>
+/// Holds every piece of UI state for one chat session: the message list, the transient banners,
+/// the active agent and the flags that gate the input. Scoped, so one instance per Blazor circuit.
+/// </summary>
 public class ChatStateService : IChatStateService
 {
     private readonly IConfiguration _configuration;
@@ -75,6 +79,8 @@ public class ChatStateService : IChatStateService
     /// </summary>
     public void AddUserMessage(string text)
     {
+        // Echoed locally and immediately: the user sees their own words without waiting
+        // for the server, which never sends them back.
         ChatMessages.Add(new ChatMessage
         {
             ConversationId = ConversationId,
@@ -89,6 +95,8 @@ public class ChatStateService : IChatStateService
     /// </summary>
     public void AddTypingIndicator()
     {
+        // Lives in the message list rather than beside it, so it occupies the spot the real
+        // answer will take and the conversation does not jump when it is swapped out.
         ChatMessages.Add(new ChatMessage
         {
             ConversationId = ConversationId,
@@ -105,6 +113,7 @@ public class ChatStateService : IChatStateService
     /// <returns>True if a typing indicator was found and removed.</returns>
     public bool RemoveTypingIndicator()
     {
+        // Last, not first: only the most recent turn can legitimately still be waiting
         ChatMessage? typingMessage = ChatMessages.LastOrDefault(m => m.IsTyping);
         if (typingMessage != null)
         {
@@ -119,7 +128,7 @@ public class ChatStateService : IChatStateService
     /// </summary>
     public void AddChatError(string text, string errorReason, int? fadingDurationSeconds = 10)
     {
-        // Temporary banner
+        // The banner carries the technical detail and fades on its own
         TemporaryMessages.Add(new ChannelMessage
         {
             ConversationId = ConversationId,
@@ -130,7 +139,8 @@ public class ChatStateService : IChatStateService
             FadingMessageDurationSeconds = fadingDurationSeconds
         });
 
-        // Permanent message in chat
+        // The chat line stays forever and is deliberately vague: it marks where the
+        // conversation broke without leaving a status code in the transcript.
         ChatMessages.Add(new ChatMessage
         {
             ConversationId = ConversationId,
@@ -190,6 +200,8 @@ public class ChatStateService : IChatStateService
     /// </summary>
     public bool IsSpecializedAgent(string? agentName)
     {
+        // Specialized agents are named "Morgana (Billing)"; the base one is plain "Morgana",
+        // so the parentheses are the whole test.
         return agentName != null && agentName.Contains('(') && agentName.Contains(')');
     }
 
@@ -221,6 +233,8 @@ public class ChatStateService : IChatStateService
     /// <returns>True if agent name was actually changed.</returns>
     public bool UpdateAgentFromMessage(ChannelMessage message)
     {
+        // A completed agent hands control back, so the header returns to base Morgana even
+        // though the message itself was signed by the specialist that just finished.
         string newAgentName = message.AgentCompleted || string.IsNullOrEmpty(message.AgentName)
             ? "Morgana"
             : message.AgentName;
@@ -238,8 +252,10 @@ public class ChatStateService : IChatStateService
     /// </summary>
     public void AddCompletionMessageIfNeeded(ChannelMessage message)
     {
+        // Only a specialist earns a handover line: base Morgana finishing a turn is just a turn
         if (message.AgentCompleted && IsSpecializedAgent(message.AgentName))
         {
+            // Timestamped just after the message it follows, so ordering by time keeps it last
             ChatMessages.Add(new ChatMessage
             {
                 ConversationId = message.ConversationId,

@@ -4,8 +4,9 @@ using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 namespace Cauldron.Services;
 
 /// <summary>
-/// Implementation of conversation storage using ASP.NET Core ProtectedLocalStorage.
-/// Provides encrypted, persistent storage of conversation IDs across browser sessions.
+/// Persists the conversation id in the browser's localStorage through ProtectedLocalStorage,
+/// which encrypts it with the server's data-protection keys. That is what lets a returning
+/// visitor resume, and what makes the value useless if lifted from the browser.
 /// </summary>
 public class ProtectedLocalStorageService : IConversationStorageService
 {
@@ -28,6 +29,7 @@ public class ProtectedLocalStorageService : IConversationStorageService
             ProtectedBrowserStorageResult<string> result =
                 await protectedLocalStore.GetAsync<string>(StorageKey);
 
+            // Success is false for a plain absence too, not just a decryption failure
             if (result.Success)
             {
                 logger.LogInformation("Retrieved conversation ID from protected storage");
@@ -39,6 +41,8 @@ public class ProtectedLocalStorageService : IConversationStorageService
         }
         catch (Exception ex)
         {
+            // Typically the data-protection keys rotated, leaving an entry that can no longer be
+            // read. Clearing it turns a permanently broken load into one fresh conversation.
             logger.LogWarning(ex, "Failed to retrieve conversation ID, clearing corrupted data");
             await ClearConversationIdAsync();
             return null;
@@ -54,6 +58,8 @@ public class ProtectedLocalStorageService : IConversationStorageService
         }
         catch (Exception ex)
         {
+            // Rethrown, unlike the other two: without a saved id the conversation cannot be
+            // resumed later, and silently continuing would hide that from the user.
             logger.LogError(ex, "Failed to save conversation ID to protected storage");
             throw;
         }

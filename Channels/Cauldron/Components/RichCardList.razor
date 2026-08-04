@@ -1,5 +1,7 @@
 @namespace Cauldron.Components
 
+@* Renders a list as bulleted, numbered or plain, per the component's declared Style. *@
+
 @switch (Component.Style)
 {
     case ListStyle.Bullet:
@@ -22,6 +24,8 @@
         </ol>
         break;
     }
+    // Plain shares the default arm: an unrecognised style degrades to unadorned lines
+    // rather than dropping the list from the card entirely.
     case ListStyle.Plain:
     default:
     {

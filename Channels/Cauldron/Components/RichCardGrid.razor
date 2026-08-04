@@ -1,5 +1,7 @@
 @namespace Cauldron.Components
 
+@* Renders a grid: key/value pairs laid out in a fixed number of columns. *@
+
 <div class="rich-card-grid" style="grid-template-columns: repeat(@Component.Columns, 1fr);">
     @foreach (GridItem item in Component.Items)
     {

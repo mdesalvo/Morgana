@@ -45,6 +45,8 @@ public class MorganaAuthHandler : DelegatingHandler
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        // Minted per request rather than cached: tokens live five minutes and a long-lived
+        // circuit would otherwise keep presenting an expired one.
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken());
         return base.SendAsync(request, cancellationToken);
     }
@@ -55,6 +57,8 @@ public class MorganaAuthHandler : DelegatingHandler
     /// </summary>
     public string GenerateToken()
     {
+        // Issuer must match an entry in Morgana's Authentication:Issuers list, and the key must
+        // match that entry's: an unknown issuer is rejected at the gate before any handler runs.
         SecurityTokenDescriptor descriptor =
             new SecurityTokenDescriptor
             {

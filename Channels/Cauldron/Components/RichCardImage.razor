@@ -1,11 +1,12 @@
 @namespace Cauldron.Components
 
+@* Renders an image with optional caption. Lazy-loaded: cards may sit far up the history. *@
+
 <div class="rich-card-image rich-card-image-@Component.Size.ToString().ToLower()">
     <img src="@Component.Src" 
          alt="@(Component.Alt ?? "Image")" 
          class="rich-card-image-content"
-         loading="lazy"
-         @onclick="HandleImageClick" />
+         loading="lazy" />
     
     @if (!string.IsNullOrEmpty(Component.Caption))
     {
@@ -19,14 +20,4 @@
     /// </summary>
     [Parameter]
     public required ImageComponent Component { get; set; }
-
-    /// <summary>
-    /// Handles image click events.
-    /// Currently logs to console; can be extended for lightbox/fullscreen modal.
-    /// </summary>
-    private void HandleImageClick()
-    {
-        // TODO: Future enhancement - open in fullscreen modal/lightbox
-        Console.WriteLine($"🖼️ Image clicked: {Component.Src}");
-    }
 }

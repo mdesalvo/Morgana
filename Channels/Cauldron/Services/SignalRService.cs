@@ -5,20 +5,10 @@ using Microsoft.AspNetCore.SignalR.Client;
 namespace Cauldron.Services;
 
 /// <summary>
-/// Service for managing SignalR connection to Morgana backend.
-/// Handles connection lifecycle, group membership, and strongly-typed message reception.
+/// SignalR client for the Morgana backend: owns the hub connection, its reconnection policy and
+/// group membership, and republishes what arrives as plain events. This is the only place in
+/// Cauldron that touches SignalR — everything else subscribes.
 /// </summary>
-/// <remarks>
-/// <para><strong>Architecture:</strong></para>
-/// <para>This service abstracts SignalR complexity from Blazor components.
-/// Components subscribe to events rather than dealing with SignalR directly.</para>
-/// <para><strong>Connection Management:</strong></para>
-/// <list type="bullet">
-/// <item>Automatic reconnection with exponential backoff</item>
-/// <item>Connection state tracking and event notification</item>
-/// <item>Graceful handling of network interruptions</item>
-/// </list>
-/// </remarks>
 public class SignalRService : IAsyncDisposable
 {
     private readonly IConfiguration configuration;
@@ -27,46 +17,20 @@ public class SignalRService : IAsyncDisposable
     private readonly ILogger logger;
 
     /// <summary>
-    /// Event raised when a message is received from the backend via SignalR.
-    /// Subscribers receive a strongly-typed ChannelMessage DTO.
+    /// Raised for each message the backend delivers on this conversation, already deserialized.
     /// </summary>
-    /// <remarks>
-    /// <para><strong>Simplified Signature:</strong></para>
-    /// <para>Previously: 6+ individual parameters (conversationId, text, timestamp, ...)</para>
-    /// <para>Now: Single ChannelMessage DTO with all fields</para>
-    /// <para>This improves type safety, maintainability, and extensibility.</para>
-    /// </remarks>
     public event Func<ChannelMessage, Task>? OnMessageReceived;
 
     /// <summary>
-    /// Event raised when a streaming chunk is received from the backend via SignalR.
-    /// Enables real-time progressive rendering of agent responses as they are generated.
+    /// Raised for each streaming chunk of an agent response. Chunks are incremental deltas, to be
+    /// appended in arrival order; the finished message arrives separately on
+    /// <see cref="OnMessageReceived"/> carrying the full metadata.
     /// </summary>
-    /// <remarks>
-    /// <para><strong>Streaming Protocol:</strong></para>
-    /// <para>Chunks arrive via "ReceiveStreamChunk" event during agent response generation.
-    /// Each chunk contains partial text that should be appended to the current message being displayed.</para>
-    /// <para><strong>Usage Pattern:</strong></para>
-    /// <code>
-    /// signalRService.OnStreamChunkReceived += async (chunkText) => {
-    ///     // Append chunk to currently streaming message in UI
-    ///     currentStreamingMessage.Text += chunkText;
-    ///     StateHasChanged();
-    /// };
-    /// </code>
-    /// <para><strong>Completion:</strong></para>
-    /// <para>When streaming finishes, a complete message arrives via OnMessageReceived with full metadata
-    /// (quick replies, agent completion status, etc.).</para>
-    /// </remarks>
     public event Func<string, Task>? OnStreamChunkReceived;
 
     /// <summary>
-    /// Event raised when SignalR connection state changes.
+    /// Raised whenever the connection goes up or down. True means connected.
     /// </summary>
-    /// <remarks>
-    /// Subscribers receive true when connected, false when disconnected.
-    /// Use this to update UI connection indicators.
-    /// </remarks>
     public event Action<bool>? OnConnectionStateChanged;
 
     /// <summary>
@@ -82,34 +46,25 @@ public class SignalRService : IAsyncDisposable
     }
 
     /// <summary>
-    /// Starts the SignalR connection and subscribes to backend events.
+    /// Opens the hub connection and wires up the backend event subscriptions.
     /// </summary>
     /// <returns>Task representing the async start operation</returns>
-    /// <remarks>
-    /// <para><strong>Connection Configuration:</strong></para>
-    /// <list type="bullet">
-    /// <item>Automatic reconnection with delays: 0s, 2s, 10s, 30s</item>
-    /// <item>Hub endpoint from configuration: "{Cauldron:MorganaURL}/morganaHub"</item>
-    /// <item>WebSocket preferred, Server-Sent Events fallback</item>
-    /// </list>
-    /// <para><strong>Event Subscription:</strong></para>
-    /// <para>Subscribes to "ReceiveMessage" event with strongly-typed ChannelMessage DTO.
-    /// The DTO is automatically deserialized from JSON by SignalR client.</para>
-    /// </remarks>
     public async Task StartAsync()
     {
-        // Idempotent: skip if already connected
+        // Idempotent: a connection already exists, so there is nothing to build
         if (hubConnection != null)
             return;
 
         string apiBaseUrl = configuration["Cauldron:MorganaURL"]!;
 
-        // Build SignalR hub connection with automatic reconnect and Bearer token authentication
         hubConnection = new HubConnectionBuilder()
             .WithUrl($"{apiBaseUrl}/morganaHub", options =>
             {
+                // Re-issued on every (re)connect attempt: tokens are short-lived, so the callback
+                // has to mint a fresh one rather than capture one at build time.
                 options.AccessTokenProvider = () => Task.FromResult<string?>(authHandler.GenerateToken());
             })
+            // Four attempts on a widening backoff, then the connection is given up as Closed
             .WithAutomaticReconnect(
             [
                 TimeSpan.Zero,           // Attempt 1: immediate
@@ -119,36 +74,40 @@ public class SignalRService : IAsyncDisposable
             ])
             .Build();
 
-        // Subscribe to ReceiveMessage
+        // Inbound agent messages: deserialized by the client, then handed to subscribers as-is
         hubConnection.On<ChannelMessage>("ReceiveMessage", async (message) =>
         {
             logger.LogInformation(
                 $"📩 SignalR message received: {message.AgentName} -> " +
                 $"{message.ConversationId} (type: {message.MessageType}, completed: {message.AgentCompleted})");
 
-            // Invoke event with DTO (no parameter unpacking needed)
             await (OnMessageReceived?.Invoke(message) ?? Task.CompletedTask);
         });
 
-        // Subscribe to ReceiveStreamChunk for progressive response rendering
+        // Streaming chunks: forwarded raw and unlogged, they arrive one per token
         hubConnection.On<string>("ReceiveStreamChunk", async (chunkText) =>
         {
             await (OnStreamChunkReceived?.Invoke(chunkText) ?? Task.CompletedTask);
         });
 
-        // Subscribe to connection state changes
+        // Connection gone for good: the reconnect attempts above are exhausted
         hubConnection.Closed += async (error) =>
         {
             logger.LogWarning("❌ SignalR disconnected: {ErrorMessage}", error?.Message ?? "No error");
             OnConnectionStateChanged?.Invoke(false);
             await Task.CompletedTask;
         };
+
+        // Reconnect in progress: reported as offline so the UI stops accepting input
         hubConnection.Reconnecting += async (error) =>
         {
             logger.LogInformation("🔄 SignalR reconnecting: {ErrorMessage}", error?.Message ?? "No error");
             OnConnectionStateChanged?.Invoke(false);
             await Task.CompletedTask;
         };
+
+        // Reconnect succeeded. Note the connection id changes, so group membership does not
+        // survive: callers relying on a conversation group must rejoin it.
         hubConnection.Reconnected += async (connectionId) =>
         {
             logger.LogInformation("✅ SignalR reconnected: {ConnectionId}", connectionId);
@@ -156,11 +115,10 @@ public class SignalRService : IAsyncDisposable
             await Task.CompletedTask;
         };
 
-        // Start connection
         await hubConnection.StartAsync();
         logger.LogInformation("✅ SignalR connected and listening for messages");
 
-        // Notify subscribers
+        // Announce the initial state, which subscribers have no other way to observe
         OnConnectionStateChanged?.Invoke(true);
         logger.LogInformation("SignalR started successfully");
     }
@@ -175,6 +133,8 @@ public class SignalRService : IAsyncDisposable
         {
             await hubConnection.StopAsync();
             await hubConnection.DisposeAsync();
+
+            // Cleared so a later StartAsync builds a fresh connection instead of short-circuiting
             hubConnection = null;
 
             OnConnectionStateChanged?.Invoke(false);
@@ -183,14 +143,11 @@ public class SignalRService : IAsyncDisposable
     }
 
     /// <summary>
-    /// Joins a conversation group to start receiving messages for that conversation.
+    /// Joins a conversation group, which is what makes this client start receiving that
+    /// conversation's messages. Call it after the REST start/resume succeeds.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to join</param>
     /// <returns>Task representing the async join operation</returns>
-    /// <remarks>
-    /// Must be called after starting a conversation via REST API.
-    /// All messages for this conversation will be delivered via OnMessageReceived event.
-    /// </remarks>
     public async Task JoinConversation(string conversationId)
     {
         if (hubConnection?.State == HubConnectionState.Connected)
@@ -200,6 +157,8 @@ public class SignalRService : IAsyncDisposable
         }
         else
         {
+            // Not connected: the join is dropped rather than queued, so the caller ends up
+            // subscribed to nothing and simply never sees this conversation's traffic.
             logger.LogWarning("⚠️ Cannot join conversation: SignalR not connected");
         }
     }
@@ -211,6 +170,7 @@ public class SignalRService : IAsyncDisposable
     /// <returns>Task representing the async leave operation</returns>
     public async Task LeaveConversation(string conversationId)
     {
+        // Nothing to leave when disconnected: the group membership died with the connection
         if (hubConnection?.State == HubConnectionState.Connected)
         {
             await hubConnection.InvokeAsync("LeaveConversation", conversationId);

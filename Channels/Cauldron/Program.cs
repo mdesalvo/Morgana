@@ -16,8 +16,8 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // Blazor Server provides server-side rendering with real-time UI updates via SignalR.
 // The UI state lives on the server, and DOM updates are sent to the client via WebSocket.
 
-builder.Services.AddRazorPages();       // Enable Razor Pages (used for _Host.cshtml)
-builder.Services.AddServerSideBlazor(); // Enable Blazor Server with SignalR for UI updates
+builder.Services.AddRazorPages();       // Razor Pages, used only to serve _Host.cshtml
+builder.Services.AddServerSideBlazor(); // Blazor Server: UI state lives here, DOM diffs go over SignalR
 
 // ============================================================================
 // 2. HTTP CLIENT CONFIGURATION
@@ -37,6 +37,7 @@ builder.Services.AddHttpClient("Morgana", client =>
 }).AddHttpMessageHandler<MorganaAuthHandler>();
 
 // Default scoped HttpClient resolved from the named "Morgana" registration
+// Lets services take a plain HttpClient dependency and still get the authenticated one
 builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IHttpClientFactory>().CreateClient("Morgana"));
 
@@ -57,6 +58,7 @@ builder.Services.AddScoped<SignalRService>();
 
 // Dynamic configuration-based landing message service
 // Selects a random welcome message during the "magic sparkle" loading
+// Singleton: the message pool is configuration, identical for every visitor
 builder.Services.AddSingleton<ILandingMessageService, LandingMessageService>();
 
 // Conversation persistence & history services using ProtectedLocalStorage
@@ -66,6 +68,8 @@ builder.Services.AddScoped<IConversationStorageService, ProtectedLocalStorageSer
 builder.Services.AddScoped<IConversationHistoryService, ConversationHistoryService>();
 
 // Chat state, conversation lifecycle and streaming services
+// All scoped, which in Blazor Server means one instance per circuit: two browser tabs get
+// separate chat state, and everything here dies with the connection that owns it.
 builder.Services.AddScoped<IChatStateService, ChatStateService>();
 builder.Services.AddScoped<IConversationLifecycleService, ConversationLifecycleService>();
 builder.Services.AddScoped<IStreamingService, StreamingService>();
@@ -90,8 +94,8 @@ app.UseStaticFiles();                   // Serve static files (CSS, JS, images)
 app.UseRouting();                       // Enable endpoint routing
 
 // Blazor Server endpoints
-app.MapBlazorHub();                     // SignalR hub for Blazor Server UI updates
-app.MapFallbackToPage("/_Host");        // Fallback to _Host.cshtml for all unmatched routes (SPA behavior)
+app.MapBlazorHub();                     // SignalR hub carrying Blazor's own UI updates
+app.MapFallbackToPage("/_Host");        // Every unmatched route renders the single page (SPA behavior)
 
 // ============================================================================
 // 6. APPLICATION STARTUP

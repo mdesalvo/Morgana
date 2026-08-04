@@ -1,6 +1,7 @@
 @namespace Cauldron.Components
 
-@* Send button component with magical Morgana theme *@
+@* Send button. Its theme follows the active agent, so the control matches the header
+   colour of whoever is currently answering. *@
 
 <button
     @onclick="OnClick"
@@ -45,18 +46,8 @@
     [Parameter]
     public EventCallback OnClick { get; set; }
 
-    private bool IsSpecializedAgent => 
+    // Specialized agents are named "Morgana (Billing)"; the base one is plain "Morgana"
+    private bool IsSpecializedAgent =>
         !string.IsNullOrEmpty(AgentName) && AgentName.Contains("(") && AgentName.Contains(")");
-
-    protected override void OnParametersSet()
-    {
-        Console.WriteLine($"🎨 SendButton: IsSending={IsSending}, AgentName={AgentName}, IsDisabled={IsDisabled}");
-        base.OnParametersSet();
-    }
-
-    protected override bool ShouldRender()
-    {
-        return true; // Let Blazor's parameter change detection handle it
-    }
 }
 

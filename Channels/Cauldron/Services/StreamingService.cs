@@ -5,7 +5,8 @@ using Morgana.Contracts;
 namespace Cauldron.Services;
 
 /// <summary>
-/// Manages streaming state: chunk buffering, typewriter timer, and streaming lifecycle.
+/// Drives the typewriter effect for streaming responses: buffers the chunks arriving from SignalR
+/// and releases them into the visible message a few characters per tick.
 /// </summary>
 public class StreamingService : IStreamingService
 {
@@ -38,11 +39,15 @@ public class StreamingService : IStreamingService
     /// </summary>
     public async Task HandleChunkAsync(string chunkText)
     {
-        // First chunk - initialize streaming
+        // A null current message means this is the opening chunk of a new response, so the
+        // session has to be built before the text can go anywhere.
         if (_currentStreamingMessage == null)
         {
+            // The agent is no longer "thinking", it is answering: the placeholder makes way
             _chatStateService.RemoveTypingIndicator();
 
+            // Starts empty and grows one tick at a time; the agent name is taken from current
+            // state because the message carrying the authoritative one has not arrived yet.
             _currentStreamingMessage = new ChatMessage
             {
                 ConversationId = _chatStateService.ConversationId,
@@ -55,6 +60,8 @@ public class StreamingService : IStreamingService
 
             _chatStateService.ChatMessages.Add(_currentStreamingMessage);
 
+            // Typewriter pace, re-read per session so a config change needs no restart.
+            // Both fall back to their defaults on a missing, unparsable or non-positive value.
             int.TryParse(_configuration["Cauldron:StreamingResponse:TypewriterTickMilliseconds"], out int tickMs);
             if (tickMs <= 0)
                 tickMs = 15;
@@ -62,14 +69,18 @@ public class StreamingService : IStreamingService
             if (tickChars <= 0)
                 tickChars = 1;
 
+            // Defensive: a timer left over from a session that never reached StopStreaming
             if (_typewriterTimer is not null)
                 await _typewriterTimer.DisposeAsync();
 
+            // Chars-per-tick travels as the timer state, so the callback stays stateless
             _typewriterTimer = new Timer(TypewriterTick, tickChars, 0, tickMs);
 
             OnStateChanged?.Invoke();
         }
 
+        // Chunks are queued, never rendered directly: the timer decides the pace at which
+        // they surface, which is what makes the text type out instead of appearing in bursts.
         _streamingBuffer += chunkText;
     }
 
@@ -77,25 +88,27 @@ public class StreamingService : IStreamingService
     /// Finalizes the current streaming session with the complete message metadata.
     /// </summary>
     /// <remarks>
-    /// The server is the source of truth for the final text: Morgana's channel adapter may
-    /// rewrite the message before delivery (e.g. transcoding a rich card into prose for a
-    /// channel that does not advertise <c>SupportsRichCards</c>), in which case the streamed
-    /// chunks represent the original unadapted narrative and must be replaced. We therefore
-    /// overwrite <c>Text</c> with <paramref name="completeMessage"/>.Text and drop any chunks
-    /// still queued in the typewriter buffer; the next tick observes an empty buffer plus
-    /// <c>IsStreaming == false</c> and tears the session down.
+    /// The server is the source of truth for the final text: Morgana's channel adapter may rewrite
+    /// the message before delivery, in which case the streamed chunks were a preview of something
+    /// that no longer applies and must be replaced wholesale.
     /// </remarks>
     public void FinalizeStreaming(ChannelMessage completeMessage)
     {
+        // Nothing was streaming: this response arrived complete, and the caller handles it
         if (_currentStreamingMessage == null)
             return;
 
+        // Overwrite rather than append, and drop whatever was still queued: the buffered tail
+        // belongs to the pre-adaptation text and would duplicate what is now on screen.
         _currentStreamingMessage.Text = completeMessage.Text;
         _streamingBuffer = string.Empty;
 
+        // Attachments only exist on the finished message, never on the chunks
         _currentStreamingMessage.QuickReplies = completeMessage.QuickReplies;
         _currentStreamingMessage.RichCard = completeMessage.RichCard;
         _currentStreamingMessage.AgentName = completeMessage.AgentName;
+
+        // Clearing the flag is what lets the next tick tear the session down
         _currentStreamingMessage.IsStreaming = false;
     }
 
@@ -105,11 +118,14 @@ public class StreamingService : IStreamingService
     /// </summary>
     private void TypewriterTick(object? state)
     {
+        // The session was already torn down; a tick may still be in flight
         if (_currentStreamingMessage == null)
             return;
 
         if (string.IsNullOrEmpty(_streamingBuffer))
         {
+            // Buffer drained and the server has spoken: the session is genuinely over. If the
+            // flag is still set the buffer is merely outrunning the network, so keep ticking.
             if (!_currentStreamingMessage.IsStreaming)
             {
                 StopStreaming();
@@ -117,6 +133,7 @@ public class StreamingService : IStreamingService
             return;
         }
 
+        // Clamped to what is actually buffered, so a fast tick rate cannot overrun the text
         int charsToTake = Math.Min((int)state!, _streamingBuffer.Length);
         string nextChars = _streamingBuffer[..charsToTake];
         _streamingBuffer = _streamingBuffer[charsToTake..];
@@ -131,8 +148,11 @@ public class StreamingService : IStreamingService
         _typewriterTimer?.Dispose();
         _typewriterTimer = null;
         _streamingBuffer = string.Empty;
+
+        // Nulling this is what flips IsStreaming false and frees the service for the next response
         _currentStreamingMessage = null;
 
+        // Final re-render, so the message settles without the streaming styling
         OnStateChanged?.Invoke();
     }
 

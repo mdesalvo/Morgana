@@ -3,33 +3,8 @@ using Morgana.Contracts;
 namespace Cauldron.Interfaces;
 
 /// <summary>
-/// Service for retrieving conversation message history from backend.
-/// Provides HTTP-based access to persisted conversation state for UI rendering.
+/// Retrieves persisted conversation history so a resumed session can be rebuilt in the UI.
 /// </summary>
-/// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>This service abstracts the HTTP call to GET /api/morgana/conversation/{id}/history,
-/// enabling the Cauldron frontend to load complete conversation history when resuming
-/// a conversation from ProtectedLocalStorage.</para>
-/// <para><strong>Usage Pattern:</strong></para>
-/// <code>
-/// // In Index.razor - ResumeConversationAsync
-/// await SignalRService.JoinConversation(conversationId);
-///
-/// // Load history via HTTP (not SignalR)
-/// ConversationHistoryResponse? history = await HistoryService.GetHistoryAsync(conversationId);
-/// if (history?.Messages != null)
-/// {
-///     foreach (var msg in history.Messages)
-///     {
-///         messages.Add(MapToChatMessage(msg));
-///     }
-/// }
-///
-/// // Remove loader, display history
-/// StateHasChanged();
-/// </code>
-/// </remarks>
 public interface IConversationHistoryService
 {
     /// <summary>

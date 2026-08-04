@@ -4,31 +4,15 @@ using Morgana.Contracts;
 namespace Cauldron.Services;
 
 /// <summary>
-/// HTTP-based service for retrieving conversation message history from Morgana backend.
-/// Implements synchronous HTTP GET to ensure complete history is loaded before UI updates.
+/// Fetches a conversation's message history over HTTP. Deliberately not SignalR: the caller needs
+/// the whole history in one awaited call, so it can hold the loader up until the chat is ready to
+/// render. Every failure returns null and leaves the recovery decision to the caller.
 /// </summary>
-/// <remarks>
-/// <para><strong>Architecture Note:</strong></para>
-/// <para>Unlike real-time message delivery (which uses SignalR), history retrieval uses HTTP
-/// to ensure synchronous, predictable loading behavior. This allows the UI to keep the
-/// magical loader active until the complete history is loaded and rendered.</para>
-/// <para><strong>Error Handling:</strong></para>
-/// <list type="bullet">
-/// <item>404 Not Found → Returns null (conversation expired/deleted)</item>
-/// <item>500 Server Error → Returns null (backend error)</item>
-/// <item>Network Error → Returns null (connection failure)</item>
-/// </list>
-/// </remarks>
 public class ConversationHistoryService : IConversationHistoryService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
 
-    /// <summary>
-    /// Initializes a new instance of the ConversationHistoryService.
-    /// </summary>
-    /// <param name="httpClient">HTTP client for API calls (injected by DI)</param>
-    /// <param name="logger">Logger instance for diagnostics</param>
     public ConversationHistoryService(
         HttpClient httpClient,
         ILogger logger)
@@ -58,12 +42,15 @@ public class ConversationHistoryService : IConversationHistoryService
                 return history;
             }
 
+            // Expected whenever a saved id outlives the conversation behind it; null lets the
+            // caller fall back to a fresh conversation rather than treating it as an error.
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 _logger.LogWarning("Conversation {ConversationId} not found (404)", conversationId);
                 return null;
             }
 
+            // Any other status: read the body purely so the failure is diagnosable from the log
             string errorContent = await response.Content.ReadAsStringAsync();
             _logger.LogError(
                 "Failed to retrieve history for {ConversationId}: {ResponseStatusCode} - {ErrorContent}", conversationId, response.StatusCode, errorContent);

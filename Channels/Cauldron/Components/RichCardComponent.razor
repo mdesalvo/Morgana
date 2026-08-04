@@ -1,3 +1,5 @@
+@* Polymorphic dispatcher: routes each card component to its own renderer by concrete type. *@
+
 @switch (Component)
 {
     case TextBlockComponent textBlock:
@@ -33,7 +35,9 @@
         break;
 
     default:
-        @* Graceful fallback for unknown component types *@
+        @* A component type this build does not know about: shown as a visible placeholder
+           rather than skipped, so a card authored against a newer contract degrades loudly
+           instead of silently losing content. *@
         <div class="rich-card-unknown">
             <span class="rich-card-unknown-icon">⚠️</span>
             <span class="rich-card-unknown-text">Unknown component type: @Component.GetType().Name</span>

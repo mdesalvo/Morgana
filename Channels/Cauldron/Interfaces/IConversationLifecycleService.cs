@@ -21,6 +21,11 @@ public interface IConversationLifecycleService
     Task<bool> ResumeConversationAsync(string savedConversationId);
 
     /// <summary>
+    /// Ends the current conversation server-side so Morgana can tear down its actor tree.
+    /// </summary>
+    Task EndConversationAsync();
+
+    /// <summary>
     /// Clears the saved conversation from storage.
     /// </summary>
     Task ClearConversationAsync();

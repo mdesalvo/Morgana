@@ -65,10 +65,11 @@
             </div>
         }
 
+        @* Empty list is the loading state: it holds until the first backend message lands,
+           whether that is the presentation on a new conversation or the rehydrated history
+           on a resume. Also what gates the input, via IsAwaitingFirstBackendMessage. *@
         @if (ChatStateService.ChatMessages.Count == 0)
         {
-            <!-- Loading state with magical animation -->
-            <!-- Loader visible until first message arrives from backend (presentation or conversation history) -->
             <div class="magical-loader">
                 <div class="magic-sparkle-core">
                     <div class="glow-core"></div>
@@ -100,18 +101,19 @@
             {
                 <div class="message @chatMessage.Role"
                      aria-label="@(chatMessage.Role == "user" ? "You" : chatMessage.AgentName)">
+                    @* Only the assistant side gets an avatar; user messages sit bare on the right *@
                     @if (chatMessage.Role == "assistant")
                     {
-                        <!-- Agent avatar with dynamic border color -->
                         <img src="images/morgana-avatar.jpg"
                              alt="@chatMessage.AgentName"
                              class="message-avatar"
                              style="border: 2px solid @ChatStateService.GetAvatarBorderColor(chatMessage.AgentName);"/>
                     }
                     <div class="message-bubble @(chatMessage.IsStreaming ? "streaming" : "")">
+                        @* A typing row is a placeholder: it holds the spot the real answer
+                           will take, so nothing jumps when the two are swapped. *@
                         @if (chatMessage.IsTyping)
                         {
-                            <!-- Typing indicator (sparkles stars) -->
                             <div class="typing-indicator @(ChatStateService.IsSpecializedAgent(chatMessage.AgentName) ? "specialized" : "base")"
                                  role="status"
                                  aria-label="@(chatMessage.AgentName) is typing">
@@ -134,6 +136,8 @@
                             }
 
                             @* Quick replies (if present) *@
+                            @* Withheld while streaming: buttons that appear mid-sentence invite
+                               a click on a reply the user has not finished reading. *@
                             @if (chatMessage is { QuickReplies.Count: > 0, IsStreaming: false })
                             {
                                 <QuickReplyButton Replies="@chatMessage.QuickReplies"
@@ -242,8 +246,11 @@
             };
             SignalRService.OnConnectionStateChanged += onConnectionStateChanged;
 
+            // Guards against re-running the whole bootstrap when the component re-initialises
+            // on a circuit that already has its conversation.
             if (!ChatStateService.HasCheckedStorage)
             {
+                // Set before the attempt, not after: a failure below must not cause a retry loop
                 ChatStateService.HasCheckedStorage = true;
 
                 try
@@ -251,6 +258,8 @@
                     // Check ProtectedLocalStorage for saved conversation ID
                     string? savedConversationId = await ConversationLifecycleService.GetSavedConversationIdAsync();
 
+                    // A saved id means a returning visitor. Resume falls back to a fresh
+                    // conversation on its own if the id turns out to be stale.
                     if (!string.IsNullOrEmpty(savedConversationId))
                         await ConversationLifecycleService.ResumeConversationAsync(savedConversationId);
                     else
@@ -291,6 +300,8 @@
         if (string.IsNullOrWhiteSpace(inputText) || ChatStateService.IsSending || !ChatStateService.IsConnected)
             return;
 
+        // Captured and cleared up front, so the box is empty the moment the user hits send
+        // rather than after the round-trip completes.
         string messageText = inputText.Trim();
         inputText = string.Empty;
         ChatStateService.IsSending = true;
@@ -298,11 +309,13 @@
         // Add user message to UI
         ChatStateService.AddUserMessage(messageText);
 
-        // Add typing indicator
+        // Shown immediately: the real answer arrives over SignalR, so without this the UI
+        // would sit inert for the whole time the agent is thinking.
         ChatStateService.AddTypingIndicator();
         StateHasChanged();
 
-        // Send message to backend
+        // Only a failure needs a re-render here: the success path is repainted by the
+        // SignalR handlers when the response actually arrives.
         if (!await ConversationLifecycleService.SendMessageAsync(messageText))
             await InvokeAsync(StateHasChanged);
     }
@@ -351,11 +364,11 @@
                     return;
                 }
 
-                // Verify message is for this conversation
+                // Late arrival from a conversation this circuit has moved on from
                 if (ChatStateService.ConversationId != message.ConversationId)
                     return;
 
-                // PATH 1: Finalize active streaming
+                // PATH 1: this message closes a response already typing itself out on screen
                 if (StreamingService.IsStreaming)
                 {
                     StreamingService.FinalizeStreaming(message);
@@ -366,7 +379,7 @@
                     return;
                 }
 
-                // PATH 2: Non-streaming message (presentation, history restore)
+                // PATH 2: the response arrived whole, with no chunks preceding it
                 ChatStateService.RemoveTypingIndicator();
                 ChatStateService.UpdateAgentFromMessage(message);
 
@@ -456,14 +469,16 @@
         if (message.SelectedQuickReplyId != null)
             return;
 
-        // Mark as selected and update UI
+        // Recorded on the message itself, which is what freezes the whole row and marks
+        // the chosen button in the transcript.
         message.SelectedQuickReplyId = reply.Id;
         StateHasChanged();
 
-        // Visual feedback delay
+        // Lets the selected state actually paint before the send redraws the conversation
         await Task.Delay(250);
 
-        // Send the quick reply value as user message
+        // The reply's Value is what gets sent, not its Label: the button text is for the
+        // user, the value is the phrasing Morgana expects back.
         inputText = reply.Value;
         await SendMessageAsync();
     }
@@ -491,10 +506,21 @@
     /// </summary>
     private async Task ConfirmNewConversationAsync()
     {
+        // Dismiss the modal before the teardown, so the user is not left staring at a dialog
+        // while the round-trips to Morgana complete.
         showConfirmModal = false;
         StateHasChanged();
 
+        // Tell Morgana to release the conversation's actor tree. Must come before clearing the
+        // storage: the id being ended is read from the state the next call is about to reset.
+        await ConversationLifecycleService.EndConversationAsync();
+
+        // Drop the saved id, so the reload below finds no conversation and starts a fresh one
+        // instead of resuming the one just ended.
         await ConversationLifecycleService.ClearConversationAsync();
+
+        // Full page reload rather than a Blazor navigation: it rebuilds the circuit from scratch,
+        // which is the simplest way to get every scoped service back to its initial state.
         NavigationManager.NavigateTo("/", forceLoad: true);
     }
 

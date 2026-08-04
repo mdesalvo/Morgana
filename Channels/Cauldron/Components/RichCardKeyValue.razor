@@ -1,5 +1,7 @@
 @namespace Cauldron.Components
 
+@* Renders a key_value: one labelled field, optionally emphasized. *@
+
 <div class="rich-card-key-value @(Component.Emphasize ? "rich-card-key-value-emphasized" : "")">
     <span class="rich-card-key">@MarkdownRendererService.ToInlineHtml(Component.Key):</span>
     <span class="rich-card-value">@MarkdownRendererService.ToInlineHtml(Component.Value)</span>
