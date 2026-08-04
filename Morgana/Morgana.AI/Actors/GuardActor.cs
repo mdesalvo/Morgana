@@ -9,15 +9,12 @@ namespace Morgana.AI.Actors;
 /// <summary>
 /// Content moderation actor that enforces guard-rail policies on every incoming user message.
 /// </summary>
-/// <remarks>
-/// Thin orchestration actor that delegates all content moderation logic to IGuardRailService,
-/// making the policy strategy swappable via DI. Uses Tell pattern (captures sender, replies via
-/// originalSender.Tell) to avoid Ask actor overhead. IGuardRailService implementations are expected
-/// to fail open on transient errors (see interface contract). Unhandled exceptions propagate
-/// Status.Failure to supervisor for its own fail-open fallback handling.
-/// </remarks>
 public class GuardActor : MorganaActor
 {
+    /// <summary>
+    /// Guard-rail service holding the whole moderation strategy: the actor never inspects the
+    /// message itself, it only hands it over and relays the verdict back to the supervisor.
+    /// </summary>
     private readonly IGuardRailService guardRailService;
 
     /// <summary>
@@ -37,6 +34,7 @@ public class GuardActor : MorganaActor
     {
         this.guardRailService = guardRailService;
 
+        // Requests the guardrail checking of the user message to the guard service (see CheckComplianceAsync)
         ReceiveAsync<Records.GuardCheckRequest>(CheckComplianceAsync);
     }
 
@@ -50,16 +48,18 @@ public class GuardActor : MorganaActor
 
         try
         {
-            bool enableGuardrail = configuration.GetValue("Morgana:ActorSystem:EnableGuardrail", true);
+            // The guardrail strategy lives behind this one call, which is controlled by a feature flag
+            // permitting its eventual switch-off.
             Records.GuardRailResult result =
-                enableGuardrail ? await guardRailService.CheckAsync(req.ConversationId, req.Message)
-                                : new Records.GuardRailResult(true, null);
+                configuration.GetValue("Morgana:ActorSystem:EnableGuardrail", true)
+                    ? await guardRailService.CheckAsync(req.ConversationId, req.Message)
+                    : new Records.GuardRailResult(true, null);
 
             actorLogger.Info(
                 "Guard check complete for conversation {0}: compliant={1}",
                 req.ConversationId, result.Compliant);
 
-            // Map GuardRailResult → GuardCheckResponse (the message the supervisor expects)
+            // Gives the supervisor the response of the message checking
             originalSender.Tell(new Records.GuardCheckResponse(result.Compliant, result.Violation));
         }
         catch (Exception ex)

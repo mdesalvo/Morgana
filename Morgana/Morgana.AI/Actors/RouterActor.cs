@@ -11,11 +11,6 @@ namespace Morgana.AI.Actors;
 /// Intent-to-agent routing actor that directs requests to specialized agents based on intent classification.
 /// Maintains a registry of intent-to-agent mappings with lazy agent creation.
 /// </summary>
-/// <remarks>
-/// This actor uses on-demand agent creation instead of upfront creation to avoid conflicts
-/// during conversation resume when agents may already exist.
-/// It routes requests using Ask pattern with PipeTo for non-blocking communication.
-/// </remarks>
 public class RouterActor : MorganaActor
 {
     /// <summary>
@@ -69,7 +64,7 @@ public class RouterActor : MorganaActor
         // Route classified requests to specialized agents based on intent:
         // - Validates classification exists and intent is recognized
         // - Creates agent on-demand if not yet created
-        // - Forwards request to appropriate agent (BillingAgent, ContractAgent, etc.) using Tell
+        // - Forwards request to appropriate agent
         // - Receives both streaming chunks and final response via Tell
         // - Returns error messages for missing/unrecognized intents
         ReceiveAsync<Records.AgentRequest>(RouteToAgentAsync);
@@ -116,16 +111,10 @@ public class RouterActor : MorganaActor
     }
 
     /// <summary>
-    /// Routes an agent request to the appropriate specialized agent based on intent classification.
-    /// Creates agent on-demand if not yet created.
-    /// Uses Ask pattern with PipeTo for non-blocking communication, while streaming chunks flow separately.
+    /// Routes an agent request to the appropriate specialized agent, creating it on-demand
+    /// if this intent hasn't been routed to yet.
     /// </summary>
     /// <param name="req">Agent request containing classification and message data</param>
-    /// <remarks>
-    /// Returns error messages for missing classification or unrecognized intents.
-    /// Captures original sender before async operations to ensure correct response routing.
-    /// Streaming chunks arrive via separate Tell messages and are forwarded to original sender.
-    /// </remarks>
     private async Task RouteToAgentAsync(Records.AgentRequest req)
     {
         IActorRef originalSender = Sender;
@@ -137,9 +126,10 @@ public class RouterActor : MorganaActor
         // Get or create agent for this intent
         IActorRef? selectedAgent = await GetOrCreateAgentForIntent(req.Classification!.Intent);
 
-        // Validate agent exists for this intent
+        // Validate that an agent exists for this intent
         if (selectedAgent == null)
         {
+            // No [HandlesIntent] agent is registered for this intent
             Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
             string unrecognizedIntentError = classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError");
             originalSender.Tell(new Records.AgentResponse(unrecognizedIntentError, true));
@@ -157,8 +147,8 @@ public class RouterActor : MorganaActor
     }
 
     /// <summary>
-    /// Handles agent responses (final message after streaming completes).
-    /// Wraps the response with agent reference and forwards to original sender.
+    /// Handles an agent's final response, once its own streaming (if any) has finished, and
+    /// forwards it to the supervisor wrapped with the agent reference it came from.
     /// </summary>
     /// <param name="response">Agent response from specialized agent</param>
     private void HandleAgentResponseDirect(Records.AgentResponse response)
@@ -171,10 +161,12 @@ public class RouterActor : MorganaActor
                              $"completed: {response.IsCompleted}, " +
                              $"#quickReplies: {response.QuickReplies?.Count ?? 0}");
 
-            // Clean up streaming context (response received, streaming done)
+            // The exchange with this agent is over — its slot in the map is freed for the next
+            // request this same agent instance might be routed to in a later turn.
             streamingContexts.Remove(agentSender);
 
-            // Forward to supervisor wrapped as ActiveAgentResponse
+            // ActiveAgentResponse is what carries agentSender onward: it's how the supervisor
+            // learns which agent actor to keep as activeAgent for this conversation's follow-ups.
             originalSender.Tell(new Records.ActiveAgentResponse(
                 response.Response,
                 response.IsCompleted,
@@ -196,13 +188,11 @@ public class RouterActor : MorganaActor
     /// <param name="chunk">Streaming chunk from agent</param>
     private void HandleAgentStreamChunk(Records.AgentStreamChunk chunk)
     {
-        // Find the original sender for this agent's stream
         IActorRef agentSender = Sender;
 
         if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
         {
             // Forward chunk to original sender (supervisor)
-            // No logging to avoid spamming logs with partial text
             originalSender.Tell(chunk);
         }
         else if (supervisorRef is not null)
@@ -232,6 +222,8 @@ public class RouterActor : MorganaActor
 
         actorLogger.Info($"Restoring agent for intent '{req.AgentIntent}'");
 
+        // Get an instance for the agent serving the current intent:
+        // this is handled by Akka.NET, which will rehydrate it if existing
         IActorRef? agentRef = await GetOrCreateAgentForIntent(req.AgentIntent);
 
         if (agentRef != null)
@@ -243,6 +235,7 @@ public class RouterActor : MorganaActor
             actorLogger.Warning($"Could not restore agent for intent '{req.AgentIntent}' - no matching agent type");
         }
 
+        // Answer the supervisor with the rehydrated agent reference
         originalSender.Tell(new Records.RestoreAgentResponse(req.AgentIntent, agentRef));
     }
 }
