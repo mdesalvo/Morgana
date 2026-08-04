@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[Cauldron]** Two event handlers on the chat page were subscribed as inline lambdas and so were never actually unsubscribed on dispose, the SignalR connection-state handler was not unsubscribed at all
 - **[Cauldron]** Some controller calls exchanged anonymous types instead of relying on Morgana.Contracts, leaving the two ends free to drift apart with nothing to catch it until runtime
 - **[Cauldron]** Starting a new conversation abandoned the old one without telling Morgana, which kept it alive in memory with nothing left to ever release it
-- **[Cauldron]** A warning banner dismissed before its time was up kept its timer running, because the component declared a cleanup step that was never actually wired up
+- **[Cauldron]** Dismissing a warning banner before expiration failed to clear its timer, because the component's cleanup logic was never executed
 
 ### 🚀 Future Enablement
 
