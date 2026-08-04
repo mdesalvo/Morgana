@@ -53,6 +53,10 @@
     <!-- Messages Area -->
     <div class="messages-container" aria-live="polite" aria-relevant="additions">
 
+        @* Single child of the scrolling container, which is column-reverse so the view stays
+           pinned to the newest message. Everything inside here renders in normal order. *@
+        <div class="messages-inner">
+
         @if (ChatStateService.TemporaryMessages.Any())
         {
             <div class="temporary-messages-container" aria-live="assertive" aria-relevant="additions">
@@ -153,6 +157,8 @@
                 </div>
             }
         }
+
+        </div>
     </div>
 
     <!-- Input Area -->

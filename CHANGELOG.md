@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[Cauldron]** Some controller calls exchanged anonymous types instead of relying on Morgana.Contracts, leaving the two ends free to drift apart with nothing to catch it until runtime
 - **[Cauldron]** Starting a new conversation abandoned the old one without telling Morgana, which kept it alive in memory with nothing left to ever release it
 - **[Cauldron]** Dismissing a warning banner before expiration failed to clear its timer, because the component's cleanup logic was never executed
+- **[Cauldron]** The conversation did not follow new messages, which piled up below the fold and had to be scrolled into view by hand, streamed replies included
 
 ### 🚀 Future Enablement
 

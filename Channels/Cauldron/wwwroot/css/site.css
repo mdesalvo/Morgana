@@ -302,11 +302,24 @@ body {
 .messages-container {
     flex: 1;
     overflow-y: auto;
-    padding: 24px;
+    display: flex;
+    /* column-reverse is what keeps the view pinned to the newest message: the browser anchors
+       the scroll to what is, in this direction, the start of the box. No JS involved. The single
+       .messages-inner child below flips reading order back to normal. */
+    flex-direction: column-reverse;
+    background: var(--bg-color);
+}
+
+/* Holds the actual conversation in natural top-to-bottom order, and carries the padding and gap
+   that used to sit on the scrolling container. It grows to fill the box so a short conversation
+   still starts at the top, and never shrinks, so a long one stays scrollable. */
+.messages-inner {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    background: var(--bg-color);
+    padding: 24px;
+    flex-grow: 1;
+    flex-shrink: 0;
 }
 
 .welcome-message {
