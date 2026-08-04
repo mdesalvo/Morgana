@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Morgana.AI.Actors;
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;
 using Morgana.Contracts;
@@ -15,10 +14,35 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class LLMPresenterService : IPresenterService
 {
+    /// <summary>
+    /// LLM used to author the welcome message and its quick replies. Consumed through the
+    /// stateless completion path, so it always runs on the cheapest configured tier.
+    /// </summary>
     private readonly ILLMService llmService;
+
+    /// <summary>
+    /// Source of the <c>Presentation</c> prompt: the message template interpolated with
+    /// <c>((intents))</c>, plus the <c>FallbackMessage</c> and <c>NoAgentsMessage</c>
+    /// additional properties the two non-LLM paths return verbatim.
+    /// </summary>
     private readonly IPromptResolverService promptResolverService;
+
+    /// <summary>
+    /// Registry of per-conversation handshakes, queried to turn the caller's conversationId into
+    /// the originating channel's name (the cache key) and capability budget.
+    /// </summary>
     private readonly IChannelMetadataStore channelMetadataStore;
+
+    /// <summary>
+    /// The same degradation pass every outbound message goes through, applied here before caching
+    /// so the cached value is exactly what a real send would have produced for this channel.
+    /// </summary>
     private readonly MorganaChannelAdapter channelAdapter;
+
+    /// <summary>
+    /// Logger for cache misses, LLM outcomes and fallback activations — the only visibility into
+    /// which of the three paths produced a given presentation.
+    /// </summary>
     private readonly ILogger logger;
 
     /// <summary>
@@ -29,8 +53,11 @@ public class LLMPresenterService : IPresenterService
     /// </summary>
     private readonly ConcurrentDictionary<string, Lazy<Task<Records.PresentationResult>>> cache = new();
 
+    /// <param name="llmService">LLM service used to generate the presentation; always runs on the cheapest configured tier.</param>
+    /// <param name="promptResolverService">Prompt resolver used to load the <c>Presentation</c> prompt (message template, <c>FallbackMessage</c>, <c>NoAgentsMessage</c>).</param>
     /// <param name="channelMetadataStore">Resolves the originating channel's name/capabilities, so callers only pass conversationId.</param>
     /// <param name="channelAdapter">Same capability-driven degradation chain any outbound message goes through.</param>
+    /// <param name="logger">Logger for generation, cache-miss and fallback diagnostics.</param>
     public LLMPresenterService(
         ILLMService llmService,
         IPromptResolverService promptResolverService,
@@ -46,6 +73,11 @@ public class LLMPresenterService : IPresenterService
     }
 
     /// <inheritdoc/>
+    /// <exception cref="InvalidOperationException">
+    /// No channel metadata is registered for <paramref name="conversationId"/>. This is an invariant
+    /// violation (the controller gate or the ConversationManagerActor registration step was bypassed),
+    /// not an LLM failure, so it is surfaced rather than routed to the fallback.
+    /// </exception>
     public Task<Records.PresentationResult> GenerateAsync(
         IReadOnlyList<Records.IntentDefinition> displayableIntents,
         string conversationId)
@@ -76,6 +108,10 @@ public class LLMPresenterService : IPresenterService
     /// Generates the initial presentation and runs it through the canonical adaptation chain so that
     /// the cached value is exactly what a real outbound send would produce for this channel.
     /// </summary>
+    /// <param name="displayableIntents">Intents to turn into quick replies; an empty list yields the prompt's <c>NoAgentsMessage</c> and no buttons.</param>
+    /// <param name="channelCapabilities">Feature budget of the originating channel, driving the degradation pass.</param>
+    /// <param name="channelName">Cache key and channel identity, also used to synthesise the adapter's placeholder conversation id.</param>
+    /// <returns>The presentation already degraded to what this channel can actually render.</returns>
     private async Task<Records.PresentationResult> BuildPresentationResultAsync(
         IReadOnlyList<Records.IntentDefinition> displayableIntents,
         ChannelCapabilities channelCapabilities,
@@ -115,6 +151,9 @@ public class LLMPresenterService : IPresenterService
     /// null payload) it logs and returns the deterministic fallback so the caller never sees an
     /// exception — the service's reliability contract is enforced here.
     /// </summary>
+    /// <param name="presentationPrompt">Resolved <c>Presentation</c> prompt; its <c>((intents))</c> placeholder is interpolated here, and it also carries the fallback text.</param>
+    /// <param name="displayableIntents">Intents rendered into the prompt as a bullet list, and reused verbatim by the fallback path.</param>
+    /// <returns>The LLM-generated presentation, or the deterministic fallback if anything went wrong.</returns>
     private async Task<Records.PresentationResult> GenerateMessageAsync(
         Records.Prompt presentationPrompt,
         IReadOnlyList<Records.IntentDefinition> displayableIntents)
@@ -162,6 +201,9 @@ public class LLMPresenterService : IPresenterService
     /// label and default value. This path makes no LLM call and cannot fail — it's the safety net
     /// that lets the service guarantee its never-throw contract.
     /// </summary>
+    /// <param name="presentationPrompt">Resolved <c>Presentation</c> prompt, read here only for its <c>FallbackMessage</c> additional property.</param>
+    /// <param name="displayableIntents">One quick reply is derived per intent from its <c>Label</c> and <c>DefaultValue</c>.</param>
+    /// <returns>A presentation built purely from configuration; makes no LLM call and cannot fail.</returns>
     private Records.PresentationResult BuildFallbackMessage(
         Records.Prompt presentationPrompt,
         IReadOnlyList<Records.IntentDefinition> displayableIntents)

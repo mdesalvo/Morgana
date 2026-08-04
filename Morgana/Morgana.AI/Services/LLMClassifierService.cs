@@ -13,7 +13,16 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class LLMClassifierService : IClassifierService
 {
+    /// <summary>
+    /// LLM used for every classification call. Consumed through the stateless completion path:
+    /// classification keeps no per-conversation memory, so it always runs on the cheapest tier.
+    /// </summary>
     private readonly ILLMService llmService;
+
+    /// <summary>
+    /// Logger for the intent load at construction and for each classification outcome, including
+    /// whether a collision was flagged — the fail-safe path makes failures otherwise invisible.
+    /// </summary>
     private readonly ILogger logger;
 
     /// <summary>
@@ -41,7 +50,11 @@ public class LLMClassifierService : IClassifierService
             });
 
     /// <summary>Loads intent definitions and builds the classifier system prompt eagerly.</summary>
+    /// <param name="llmService">LLM service used for every classification call; always runs on the cheapest configured tier.</param>
+    /// <param name="promptResolverService">Prompt resolver used to load the <c>Classifier</c> prompt, whose <c>((formattedIntents))</c> placeholder is interpolated once here.</param>
+    /// <param name="agentConfigService">Source of the intent definitions from <c>agents.json</c>; an empty list is legal and means agentless mode.</param>
     /// <param name="configuration">Read for <c>Morgana:ActorSystem:IntentCollisionThreshold</c>.</param>
+    /// <param name="logger">Logger for load-time and per-classification diagnostics.</param>
     public LLMClassifierService(
         ILLMService llmService,
         IPromptResolverService promptResolverService,
@@ -114,9 +127,8 @@ public class LLMClassifierService : IClassifierService
             // Step 4: the top of the ranked list is our "official" pick — the one that goes into
             // ClassificationResult.Intent and is used for normal (non-ambiguous) routing regardless
             // of whether we end up flagging a collision below.
-            Records.IntentScore topIntentScore = rankedIntentScores[0];
-            string intent = topIntentScore.Intent;
-            string confidence = topIntentScore.Confidence.ToString("F2");
+            (string topIntentName, double topIntentScore) = rankedIntentScores[0];
+            string topIntentConfidence = topIntentScore.ToString("F2");
 
             // Step 5: any candidate within disambiguationThreshold of the TOP score collides with
             // it — every qualifying entry, not just the runner-up, so a three-way tie disambiguates
@@ -126,8 +138,8 @@ public class LLMClassifierService : IClassifierService
             List<string> collidingIntents =
             [
                 .. rankedIntentScores
-                    .Where(candidate => topIntentScore.Confidence - candidate.Confidence < disambiguationThreshold)
                     .Where(candidate => !string.Equals(candidate.Intent, "other", StringComparison.OrdinalIgnoreCase))
+                    .Where(candidate => topIntentScore - candidate.Confidence < disambiguationThreshold)
                     .Select(candidate => candidate.Intent)
             ];
 
@@ -137,8 +149,8 @@ public class LLMClassifierService : IClassifierService
             // two breaks.
             Dictionary<string, string> metadata = new()
             {
-                ["intent"] = intent,
-                ["confidence"] = confidence
+                ["intent"] = topIntentName,
+                ["confidence"] = topIntentConfidence
             };
 
             // Step 7: the "ambiguousIntents" key's mere PRESENCE (not its value) is what
@@ -154,16 +166,16 @@ public class LLMClassifierService : IClassifierService
                 metadata["ambiguousIntents"] = string.Join(",", collidingIntents);
                 logger.LogInformation(
                     "LLMClassifierService: classification ambiguous — top='{Intent}', confidence={Confidence}, colliding=[{Colliding}]",
-                    intent, confidence, metadata["ambiguousIntents"]);
+                    topIntentName, topIntentConfidence, metadata["ambiguousIntents"]);
             }
             else
             {
                 logger.LogInformation(
                     "LLMClassifierService: classification complete — intent='{Intent}', confidence={Confidence}",
-                    intent, confidence);
+                    topIntentName, topIntentConfidence);
             }
 
-            return new Records.ClassificationResult(intent, metadata);
+            return new Records.ClassificationResult(topIntentName, metadata);
         }
         catch (Exception ex)
         {

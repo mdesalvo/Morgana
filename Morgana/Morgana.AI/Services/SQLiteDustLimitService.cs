@@ -16,9 +16,28 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class SQLiteDustLimitService : IDustLimitService
 {
+    /// <summary>
+    /// Logger for charges, threshold crossings and the fail-open path — a storage fault that
+    /// silently stops metering is otherwise invisible.
+    /// </summary>
     private readonly ILogger logger;
+
+    /// <summary>
+    /// Dust policy from <c>Morgana:DustLimiting</c>: enable flag, per-conversation budget and the
+    /// three user-facing texts (70% warning, 90% warning, lockout).
+    /// </summary>
     private readonly DustLimitingOptions options;
+
+    /// <summary>
+    /// Persistence configuration, read only for <c>StoragePath</c>: the budget tables live in the
+    /// conversation's own database, not in one of their own.
+    /// </summary>
     private readonly ConversationPersistenceOptions persistenceOptions;
+
+    /// <summary>
+    /// Owner of the database file. Delegated to for schema creation, since a dust charge can land
+    /// before anything else has had reason to create the conversation's database.
+    /// </summary>
     private readonly IConversationPersistenceService persistenceService;
 
     /// <summary>

@@ -12,7 +12,17 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class HandlesIntentAgentRegistryService : IAgentRegistryService
 {
+    /// <summary>
+    /// Source of the configured intents, i.e. the other half of the bidirectional check: every
+    /// intent it declares must be matched by a <c>[HandlesIntent]</c> agent, and vice versa.
+    /// </summary>
     private readonly IAgentConfigurationService agentConfigService;
+
+    /// <summary>
+    /// Validates each discovered agent's <c>[RequiresLLMTier]</c> against the active provider's
+    /// configured tiers. A separate collaborator because tier validation is a distinct concern
+    /// from intent↔agent matching, even though both run in the same startup pass.
+    /// </summary>
     private readonly ILLMTierValidationService llmTierValidationService;
 
     /// <summary>

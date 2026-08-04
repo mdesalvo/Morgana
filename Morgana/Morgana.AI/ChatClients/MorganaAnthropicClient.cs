@@ -134,7 +134,6 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
                 List<AIContent> textContents =
                 [
                     .. trailing.Contents.OfType<TextContent>()
-                        .Cast<AIContent>()
                 ];
 
                 if (textContents.Count == 0)
@@ -309,7 +308,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
             AuthorName = chatMessage.AuthorName,
             CreatedAt = chatMessage.CreatedAt,
             MessageId = chatMessage.MessageId,
-            AdditionalProperties = chatMessage.AdditionalProperties,
+            AdditionalProperties = chatMessage.AdditionalProperties
         };
 
     private static bool IsAcceptableTrailingRole(ChatRole role) =>

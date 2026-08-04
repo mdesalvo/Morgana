@@ -311,8 +311,13 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// </summary>
     private sealed class ReconnectingMCPTool : AIFunction
     {
+        /// <summary>The pool this tool reconnects through, so a refresh goes via its single-flight gate rather than opening a private session.</summary>
         private readonly MCPClientRegistryService registry;
+
+        /// <summary>The server declaration to reconnect to; also what resolves to the pool key on a refresh.</summary>
         private readonly UsesMCPServerAttribute serverAttribute;
+
+        /// <summary>Name to re-resolve after a reconnect: the refreshed session returns new tool instances, matched back by name.</summary>
         private readonly string toolName;
 
         /// <summary>

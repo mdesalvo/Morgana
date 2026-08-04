@@ -16,7 +16,16 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class SummarizingChatReducerService
 {
+    /// <summary>
+    /// Read for the <c>Morgana:HistoryReducer</c> section on every create call, so a reducer
+    /// reflects the configuration in force when the agent was built.
+    /// </summary>
     private readonly IConfiguration configuration;
+
+    /// <summary>
+    /// Logger for the reducer's configuration at creation time and for the disabled case, which
+    /// returns null and would otherwise be indistinguishable from a misconfiguration.
+    /// </summary>
     private readonly ILogger logger;
 
     /// <summary>

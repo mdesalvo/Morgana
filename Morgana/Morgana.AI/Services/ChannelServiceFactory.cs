@@ -9,6 +9,11 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class ChannelServiceFactory : IChannelServiceFactory
 {
+    /// <summary>
+    /// The dispatch table, built once at construction: normalised <c>deliveryMode</c> key to the
+    /// concrete transport serving it. Ordinal comparer — the keys are already lowercased, so a
+    /// case-insensitive one would be paid for nothing.
+    /// </summary>
     private readonly IReadOnlyDictionary<string, IChannelService> servicesByDeliveryMode;
 
     /// <summary>Initialises the factory from the full set of registrations present in DI.</summary>
@@ -23,6 +28,7 @@ public class ChannelServiceFactory : IChannelServiceFactory
         foreach (ChannelServiceRegistration registration in registrations)
         {
             string key = Normalise(registration.DeliveryMode);
+
             // TryAdd returning false means some earlier registration already claimed this exact
             // deliveryMode — fail loud at startup rather than silently letting the last-registered
             // service win and shadow the others, which would be a very confusing runtime surprise.
@@ -39,6 +45,7 @@ public class ChannelServiceFactory : IChannelServiceFactory
     public IChannelService Resolve(string deliveryMode)
     {
         string key = Normalise(deliveryMode);
+
         // This throw is not expected to be reachable in practice: MorganaController's
         // start-conversation gate calls IsRegistered before ever accepting a handshake for this
         // deliveryMode, so Resolve should only ever see values that already passed that check. It
@@ -57,7 +64,7 @@ public class ChannelServiceFactory : IChannelServiceFactory
     // instead of an exception thrown from inside a supposedly side-effect-free predicate.
     public bool IsRegistered(string deliveryMode) =>
         !string.IsNullOrWhiteSpace(deliveryMode)
-        && servicesByDeliveryMode.ContainsKey(Normalise(deliveryMode));
+            && servicesByDeliveryMode.ContainsKey(Normalise(deliveryMode));
 
     // The single normalisation rule every key in this factory goes through — both at construction
     // (building the table) and at lookup (Resolve/IsRegistered) — so "Webhook", "webhook " and

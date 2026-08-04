@@ -11,6 +11,11 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class ChannelMetadataStore : IChannelMetadataStore
 {
+    /// <summary>
+    /// The registry itself: one handshake record per live conversation, keyed by conversation id.
+    /// In-memory only — a process restart loses it, and the persisted copy in the conversation's
+    /// own database is what a resume replays into it.
+    /// </summary>
     private readonly ConcurrentDictionary<string, ChannelMetadata> metadataByConversation = new();
 
     /// <inheritdoc/>

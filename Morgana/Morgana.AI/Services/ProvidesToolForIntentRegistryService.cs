@@ -13,6 +13,10 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class ProvidesToolForIntentRegistryService : IToolRegistryService
 {
+    /// <summary>
+    /// Logger for the discovery diagnostics: duplicate registrations, orphaned tools and agents
+    /// without one. These are warnings, not failures — the only trace they leave is this log.
+    /// </summary>
     private readonly ILogger logger;
 
     /// <summary>

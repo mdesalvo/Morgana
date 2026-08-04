@@ -33,6 +33,9 @@ public class AdaptingChannelService : IChannelService
     /// </summary>
     private readonly MorganaChannelAdapter channelAdapter;
 
+    /// <param name="channelServiceFactory">Resolves the concrete transport for a conversation's <c>deliveryMode</c>.</param>
+    /// <param name="channelMetadataStore">Leaf singleton holding the per-conversation handshake; injected rather than folded in, to keep the DI graph acyclic.</param>
+    /// <param name="channelAdapter">Capability-driven degradation applied to every outbound <see cref="ChannelMessage"/>.</param>
     public AdaptingChannelService(
         IChannelServiceFactory channelServiceFactory,
         IChannelMetadataStore channelMetadataStore,
@@ -44,6 +47,10 @@ public class AdaptingChannelService : IChannelService
     }
 
     /// <inheritdoc/>
+    /// <exception cref="InvalidOperationException">
+    /// No channel metadata is registered for the message's conversation — an internal invariant
+    /// violation, see <see cref="GetRegisteredMetadataOrThrow"/>.
+    /// </exception>
     public async Task SendMessageAsync(ChannelMessage channelMessage)
     {
         ChannelMetadata registeredChannelMetadata = GetRegisteredMetadataOrThrow(channelMessage.ConversationId);
@@ -54,6 +61,10 @@ public class AdaptingChannelService : IChannelService
     }
 
     /// <inheritdoc/>
+    /// <exception cref="InvalidOperationException">
+    /// No channel metadata is registered for <paramref name="conversationId"/> — an internal
+    /// invariant violation, see <see cref="GetRegisteredMetadataOrThrow"/>.
+    /// </exception>
     // No AdaptAsync call here, unlike SendMessageAsync: a stream chunk is a fragment of
     // still-forming text, not a structured ChannelMessage — there's nothing coherent yet for the
     // adapter to degrade. Streaming is suppressed upstream whenever adaptation would be needed
@@ -71,6 +82,9 @@ public class AdaptingChannelService : IChannelService
     /// violation, not a client mistake — the start-conversation gate and ConversationManagerActor
     /// guarantee registration before any send path can be reached.
     /// </summary>
+    /// <param name="conversationId">Conversation whose handshake record is looked up.</param>
+    /// <returns>The registered metadata: coordinates (for transport resolution) plus capabilities (for adaptation).</returns>
+    /// <exception cref="InvalidOperationException">No metadata is registered for the conversation.</exception>
     private ChannelMetadata GetRegisteredMetadataOrThrow(string conversationId)
     {
         if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? registeredChannelMetadata))

@@ -11,6 +11,10 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class RequiresLLMTierValidationService : ILLMTierValidationService
 {
+    /// <summary>
+    /// The active provider, queried only for the set of tiers it actually has configured — the
+    /// reference each agent's declared tier is checked against. No completion is ever issued here.
+    /// </summary>
     private readonly ILLMService llmService;
 
     /// <summary>

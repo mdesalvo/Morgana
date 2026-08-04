@@ -12,7 +12,17 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 {
+    /// <summary>
+    /// The loaded <c>agents.json</c>, deferred behind a <see cref="Lazy{T}"/>: the scan over every
+    /// loaded assembly runs once, on first use, rather than at DI construction — which in some
+    /// hosting orders happens before the plugin assemblies have finished loading.
+    /// </summary>
     private readonly Lazy<AgentConfiguration> agentConfiguration;
+
+    /// <summary>
+    /// Logger for the assembly scan: which resource was found, or that none was and Morgana is
+    /// therefore running agentless — a legal configuration whose only signal is this warning.
+    /// </summary>
     private readonly ILogger logger;
 
     /// <summary>
@@ -66,10 +76,10 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
         // runtime-generated, e.g. by reflection emit) and GetManifestResourceNames would just
         // throw NotSupportedException on them.
         foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic))
+                                                             .Where(a => !a.IsDynamic))
         {
             string? resourceName = assembly.GetManifestResourceNames()
-                .FirstOrDefault(n => n.EndsWith(".agents.json", StringComparison.OrdinalIgnoreCase));
+                                           .FirstOrDefault(n => n.EndsWith(".agents.json", StringComparison.OrdinalIgnoreCase));
 
             if (resourceName != null)
             {

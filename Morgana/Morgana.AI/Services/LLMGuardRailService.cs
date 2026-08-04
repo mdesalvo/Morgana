@@ -10,7 +10,16 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class LLMGuardRailService : IGuardRailService
 {
+    /// <summary>
+    /// LLM used for the policy check. Consumed through the stateless completion path — each
+    /// message is judged on its own text, on the cheapest configured tier.
+    /// </summary>
     private readonly ILLMService llmService;
+
+    /// <summary>
+    /// Logger for compliance verdicts and for the fail-open path, which admits a message the
+    /// check could not evaluate and would otherwise leave no trace.
+    /// </summary>
     private readonly ILogger logger;
 
     /// <summary>

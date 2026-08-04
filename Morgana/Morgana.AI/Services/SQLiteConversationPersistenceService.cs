@@ -20,8 +20,21 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class SQLiteConversationPersistenceService : IConversationPersistenceService
 {
+    /// <summary>
+    /// Logger for schema migrations, session save/load and decryption failures.
+    /// </summary>
     private readonly ILogger logger;
+
+    /// <summary>
+    /// Persistence configuration from <c>Morgana:ConversationPersistence</c>: <c>StoragePath</c>
+    /// (where the per-conversation database files live) and the configured encryption key.
+    /// </summary>
     private readonly ConversationPersistenceOptions options;
+
+    /// <summary>
+    /// The 32-byte AES-256 key decoded from the configured base64 string, validated for length at
+    /// construction. Used for every <c>agent_session</c> BLOB, with the IV prepended to ciphertext.
+    /// </summary>
     private readonly byte[] encryptionKey;
 
     /// <summary>Validates StoragePath/EncryptionKey are configured and ensures the storage directory exists.</summary>
@@ -551,7 +564,7 @@ WHERE id = 1;
                     JsonValueKind.True   => true,
                     JsonValueKind.False  => false,
                     JsonValueKind.Null   => null,
-                    _                    => element, // arrays/objects: keep as JsonElement
+                    _                    => element // arrays/objects: keep as JsonElement
                 };
                 if (value is not null)
                     sharedVariables[variableName] = value;

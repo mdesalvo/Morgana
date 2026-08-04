@@ -15,8 +15,22 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class JWTAuthenticationService : IAuthenticationService
 {
+    /// <summary>
+    /// One validation bundle per declared issuer, each pinned to that issuer's own signing key —
+    /// which is what keeps a leaked channel key from validating another channel's tokens. Built
+    /// once at construction; an issuer absent from this map is rejected outright.
+    /// </summary>
     private readonly Dictionary<string, TokenValidationParameters> validationParametersByIssuer;
+
+    /// <summary>
+    /// Stateless, thread-safe token reader/validator, shared across all calls.
+    /// </summary>
     private readonly JsonWebTokenHandler jsonWebTokenHandler = new JsonWebTokenHandler();
+
+    /// <summary>
+    /// Logger for the issuers configured at startup and for each rejection — the caller only ever
+    /// sees a fail-closed result, so the reason lives here.
+    /// </summary>
     private readonly ILogger logger;
 
     /// <summary>
