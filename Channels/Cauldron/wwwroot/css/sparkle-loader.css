@@ -4,13 +4,14 @@
 
 .magical-loader {
     text-align: center;
-    padding: 80px 20px;
+    padding: 20px;
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 400px;
+    flex: 1;
+    min-height: 0;
 }
 
 /* Magic Sparkle Core - Main glowing center */
@@ -18,16 +19,18 @@
     position: relative;
     width: 300px;
     height: 300px;
-    margin: 0 auto 60px auto;
+    margin: 0 auto;
     animation: coreFloat 4s ease-in-out infinite;
 }
 
+/* Symmetric about the resting point: floating upward only (0 to -15px) kept the orb an
+   average ~8px above true centre even when the layout was right. */
 @keyframes coreFloat {
     0%, 100% {
-        transform: translateY(0px);
+        transform: translateY(8px);
     }
     50% {
-        transform: translateY(-15px);
+        transform: translateY(-8px);
     }
 }
 
@@ -478,9 +481,14 @@
 }
 
 /* Loading Text */
+/* Out of flow, so it does not push the orb above it off centre */
 .loading-text {
     display: block;
-    margin-top: 30px;
+    position: absolute;
+    top: calc(50% + 165px);
+    left: 0;
+    right: 0;
+    margin-top: 0;
     font-size: 20px;
     font-weight: 500;
     color: rgba(233, 213, 255, 0.95);
