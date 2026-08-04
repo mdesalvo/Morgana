@@ -8,7 +8,7 @@ namespace Morgana.Contracts;
 /// the handshake: channel name (e.g. <c>cauldron</c>, <c>twilio-sms</c>, …) plus the expressive
 /// capability budget. Required: Morgana rejects start requests from channels that do not
 /// announce both their name and their capability budget.</param>
-/// <param name="InitialContext">Optional initial context information (reserved for future use)</param>
+/// <param name="InitialContext">Optional initial context information</param>
 public record StartConversationRequest(
     string ConversationId,
     ChannelMetadata? ChannelMetadata,

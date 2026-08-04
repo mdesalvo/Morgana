@@ -542,12 +542,18 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// LLM response from ClassifierActor containing intent classification.
-    /// Deserialized from JSON returned by the LLM.
+    /// LLM response from ClassifierActor: every intent the classifier judged plausible, ranked by
+    /// confidence. One entry for a clean match; two or more only for a genuine collision — see
+    /// <see cref="Services.LLMClassifierService"/> for how that distinction gets made.
     /// </summary>
-    /// <param name="Intent">Classified intent name (e.g., "billing", "contract", "other")</param>
-    /// <param name="Confidence">Confidence score from 0.0 to 1.0</param>
+    /// <param name="Intents">Candidate intents, ranked by confidence (highest first).</param>
     public record ClassificationResponse(
+        [property: JsonPropertyName("intents")] List<IntentScore> Intents);
+
+    /// <summary>One candidate intent with its confidence score, as scored by the classifier LLM.</summary>
+    /// <param name="Intent">Candidate intent name (e.g., "billing", "contract", "other").</param>
+    /// <param name="Confidence">Confidence 0.0-1.0, this intent's own match quality — not a rank.</param>
+    public record IntentScore(
         [property: JsonPropertyName("intent")] string Intent,
         [property: JsonPropertyName("confidence")] double Confidence);
 
@@ -555,13 +561,15 @@ public static class Records
     /// Internal classification result used by the conversation pipeline.
     /// Contains the classified intent and additional metadata for routing and diagnostics.
     /// </summary>
-    /// <param name="Intent">Classified intent name</param>
+    /// <param name="Intent">Classified intent name — the top-ranked candidate.</param>
     /// <param name="Metadata">
-    /// Additional metadata dictionary (e.g., confidence score, error codes, classification notes)
+    /// Confidence, error codes, etc. Also carries disambiguation as the well-known key
+    /// <c>"ambiguousIntents"</c> — see <see cref="Services.LLMClassifierService"/> for how it's
+    /// computed and <see cref="Actors.ConversationSupervisorActor"/> for how it's consumed.
     /// </param>
     public record ClassificationResult(
-        string Intent,
-        Dictionary<string, string> Metadata);
+        [property: JsonPropertyName("intent")] string Intent,
+        [property: JsonPropertyName("metadata")] Dictionary<string, string> Metadata);
 
     // ==========================================================================
     // AGENT REQUEST/RESPONSE MODELS
@@ -771,10 +779,12 @@ public static class Records
         /// </summary>
         public List<IntentDefinition> GetDisplayableIntents()
         {
-            return Intents
-                .Where(i => !string.Equals(i.Name, "other", StringComparison.OrdinalIgnoreCase)
-                              && !string.IsNullOrEmpty(i.Label))
-                .ToList();
+            return
+            [
+                .. Intents
+                    .Where(i => !string.Equals(i.Name, "other", StringComparison.OrdinalIgnoreCase)
+                                && !string.IsNullOrEmpty(i.Label))
+            ];
         }
     }
 

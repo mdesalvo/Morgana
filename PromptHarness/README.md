@@ -128,6 +128,7 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 | `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
 | `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
 | `behaviour-rich-card`, `context-no-invented-writes` | Inventory | **`Performance`** |
+| `classifier-disambiguates-colliding-billing-contract` | *(none — diverted before routing)* | `Efficiency` (classifier only) |
 
 Everything Morgana runs on its own account — guard, classifier, presenter — plus the judge, always
 goes to the cheapest configured tier. So the two Inventory scenarios dominate the bill: at 5 runs

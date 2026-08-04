@@ -8,28 +8,36 @@ using static Morgana.AI.Records;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// SQLite-backed dust limiter. Stores the per-conversation lifetime token budget in the
-/// same per-conversation database used by <see cref="SQLiteConversationPersistenceService"/>,
-/// mirroring how <see cref="SQLiteRateLimitService"/> shares that file.
+/// SQLite-backed dust limiter: a per-conversation LIFETIME budget (no sliding window, no reset)
+/// in the single-row <c>dust_budget</c> table, sharing the same per-conversation database as
+/// <see cref="SQLiteConversationPersistenceService"/>. "Let-it-finish": a turn already running
+/// completes even if it pushes the total over budget — only the NEXT turn gets blocked, by
+/// <see cref="IsOverBudgetAsync"/>. Every operation fails open on a storage fault.
 /// </summary>
-/// <remarks>
-/// <para><strong>Storage:</strong></para>
-/// <code>
-/// {StoragePath}/morgana-{conversationId}.db
-///   ├─ dust_budget     — single row (id=1): running total + one-shot warning flags
-///   └─ dust_usage_log  — per-call audit trail (diagnostics / OTel only, not enforcement)
-/// </code>
-/// <para><strong>Semantics:</strong> the budget is a lifetime resource — no sliding window,
-/// no reset. "Let-it-finish": a turn already running completes even if it pushes the total
-/// over budget; the <em>next</em> turn is blocked by <see cref="IsOverBudgetAsync"/>.</para>
-/// <para>Every operation fails open: a storage fault is logged and treated as "allow", so the
-/// limiter can never become a single point of failure mid-conversation.</para>
-/// </remarks>
 public class SQLiteDustLimitService : IDustLimitService
 {
+    /// <summary>
+    /// Logger for charges, threshold crossings and the fail-open path — a storage fault that
+    /// silently stops metering is otherwise invisible.
+    /// </summary>
     private readonly ILogger logger;
+
+    /// <summary>
+    /// Dust policy from <c>Morgana:DustLimiting</c>: enable flag, per-conversation budget and the
+    /// three user-facing texts (70% warning, 90% warning, lockout).
+    /// </summary>
     private readonly DustLimitingOptions options;
+
+    /// <summary>
+    /// Persistence configuration, read only for <c>StoragePath</c>: the budget tables live in the
+    /// conversation's own database, not in one of their own.
+    /// </summary>
     private readonly ConversationPersistenceOptions persistenceOptions;
+
+    /// <summary>
+    /// Owner of the database file. Delegated to for schema creation, since a dust charge can land
+    /// before anything else has had reason to create the conversation's database.
+    /// </summary>
     private readonly IConversationPersistenceService persistenceService;
 
     /// <summary>

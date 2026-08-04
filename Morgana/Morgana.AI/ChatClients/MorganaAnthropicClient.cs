@@ -66,7 +66,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
     /// </summary>
     private List<ChatMessage> NormalizeForAnthropic(IEnumerable<ChatMessage> chatMessages)
     {
-        List<ChatMessage> chatMessagesList = chatMessages.ToList();
+        List<ChatMessage> chatMessagesList = [.. chatMessages];
 
         if (chatMessagesList.Count == 0)
             return chatMessagesList;
@@ -131,9 +131,10 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
             // otherwise strip. Same non-mutating clone strategy as the system branch.
             if (trailing.Role == ChatRole.Assistant)
             {
-                List<AIContent> textContents = trailing.Contents.OfType<TextContent>()
-                                                                .Cast<AIContent>()
-                                                                .ToList();
+                List<AIContent> textContents =
+                [
+                    .. trailing.Contents.OfType<TextContent>()
+                ];
 
                 if (textContents.Count == 0)
                 {
@@ -302,12 +303,12 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
     /// fresh list so the returned message does not share state with the chatMessage.
     /// </summary>
     private static ChatMessage CloneAsUser(ChatMessage chatMessage, IEnumerable<AIContent> contents) =>
-        new ChatMessage(ChatRole.User, contents.ToList())
+        new ChatMessage(ChatRole.User, [.. contents])
         {
             AuthorName = chatMessage.AuthorName,
             CreatedAt = chatMessage.CreatedAt,
             MessageId = chatMessage.MessageId,
-            AdditionalProperties = chatMessage.AdditionalProperties,
+            AdditionalProperties = chatMessage.AdditionalProperties
         };
 
     private static bool IsAcceptableTrailingRole(ChatRole role) =>

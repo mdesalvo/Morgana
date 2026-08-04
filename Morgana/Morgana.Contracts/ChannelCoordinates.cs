@@ -7,11 +7,6 @@ namespace Morgana.Contracts;
 /// here so they can grow (e.g. callback URLs, routing keys) without perturbing the
 /// capability budget.
 /// </summary>
-/// <remarks>
-/// <para>Coordinates are "where/how to reach the channel", capabilities are "what the
-/// channel can render" — the two concerns evolve on different axes, which is why they sit
-/// in distinct records and are composed by <see cref="ChannelMetadata"/>.</para>
-/// </remarks>
 public record ChannelCoordinates
 {
     /// <summary>Free-form label declared by the channel (e.g. <c>cauldron</c>,

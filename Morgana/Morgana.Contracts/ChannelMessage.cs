@@ -8,18 +8,6 @@ namespace Morgana.Contracts;
 /// text, quick replies, rich card, agent identity, error reason, and rendering metadata
 /// (message type, fading duration).
 /// </summary>
-/// <remarks>
-/// <para><strong>Wire contract:</strong></para>
-/// <para>This DTO is serialized by the active channel implementation (for SignalR +
-/// Cauldron, via the "ReceiveMessage" event). Property names and types intentionally match
-/// <c>Cauldron.Messages.SignalRMessage</c> so the wire format stays identical.</para>
-/// <para><strong>Contract sync policy:</strong></para>
-/// <list type="bullet">
-/// <item>Required fields must match exactly between backend and frontend</item>
-/// <item>Optional fields can be added without breaking compatibility (use default values)</item>
-/// <item>Field removal or type changes are BREAKING and require coordinated deployment</item>
-/// </list>
-/// </remarks>
 public sealed class ChannelMessage
 {
     /// <summary>
@@ -77,7 +65,7 @@ public sealed class ChannelMessage
 
     /// <summary>
     /// Name of the agent that generated this message.
-    /// Examples: "Morgana", "Morgana (Billing)", "Morgana (Technical Support)".
+    /// Examples: "Morgana", "Morgana (Billing)", ...
     /// Default: "Morgana"
     /// </summary>
     [JsonPropertyName("agentName")]
@@ -96,7 +84,7 @@ public sealed class ChannelMessage
     /// by this channel message (depending on its MessageType).
     /// </summary>
     [JsonPropertyName("fadingMessageDurationSeconds")]
-    public int? FadingMessageDurationSeconds { get; set; } = 10;
+    public int? FadingMessageDurationSeconds { get; init; } = 10;
 
     /// <summary>
     /// Conversation-level metadata (e.g. remaining dust budget). Characterises the

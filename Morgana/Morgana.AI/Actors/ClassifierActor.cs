@@ -9,16 +9,13 @@ namespace Morgana.AI.Actors;
 /// <summary>
 /// Intent classification actor that analyses user messages and determines their underlying intent.
 /// </summary>
-/// <remarks>
-/// Thin orchestration actor that delegates all classification logic to IClassifierService,
-/// making the strategy swappable via DI. Default implementation (LLMClassifierService) uses
-/// LLM-based classification with intent definitions and classifier prompt. Uses Tell pattern
-/// (captures sender, replies via originalSender.Tell) to avoid Ask actor overhead.
-/// IClassifierService implementations fail safe by returning "other" intent on transient errors;
-/// unhandled exceptions propagate Status.Failure to supervisor for its fallback handling.
-/// </remarks>
 public class ClassifierActor : MorganaActor
 {
+    /// <summary>
+    /// Classifier service holding the whole classification strategy: the actor never reads the
+    /// message itself, it only hands it over and relays the ranked result — collision metadata
+    /// included — back to the supervisor.
+    /// </summary>
     private readonly IClassifierService classifierService;
 
     /// <summary>
@@ -41,6 +38,7 @@ public class ClassifierActor : MorganaActor
     {
         this.classifierService = classifierService;
 
+        // Requests the classification of the user message to the classifier service (see ClassifyMessageAsync)
         ReceiveAsync<Records.UserMessage>(ClassifyMessageAsync);
     }
 
@@ -54,22 +52,26 @@ public class ClassifierActor : MorganaActor
 
         try
         {
-            Records.ClassificationResult result =
+            // The classification strategy (LLM call, ranking, the confidence-gap collision check
+            // that decides whether metadata carries "ambiguousIntents") lives behind this one call.
+            Records.ClassificationResult classificationResult =
                 await classifierService.ClassifyAsync(msg.ConversationId, msg.Text);
 
             actorLogger.Info(
                 "Classification complete for conversation {0}: intent='{1}', confidence={2}",
                 msg.ConversationId,
-                result.Intent,
-                result.Metadata.GetValueOrDefault("confidence", "N/A"));
+                classificationResult.Intent,
+                classificationResult.Metadata.GetValueOrDefault("confidence", "N/A"));
 
-            originalSender.Tell(result);
+            // Replies the supervisor with the result of the classification, which includes the intents
+            // ranked by descending score and the eventual collision metadata to support user-driven disambiguation.
+            originalSender.Tell(classificationResult);
         }
         catch (Exception ex)
         {
             actorLogger.Error(ex, "ClassifierActor: unexpected error during classification");
 
-            // Propagate failure to supervisor — it will apply its own 'other'-intent fallback
+            // Replies the supervisor with a specific technical failure
             originalSender.Tell(new Status.Failure(ex));
         }
     }

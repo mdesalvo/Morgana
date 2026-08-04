@@ -6,22 +6,21 @@ using Morgana.Contracts;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="IChannelMetadataStore"/> implementation: a process-wide
-/// <see cref="ConcurrentDictionary{TKey,TValue}"/> keyed by conversation id.
+/// Process-wide <see cref="ConcurrentDictionary{TKey,TValue}"/> keyed by conversation id. A leaf
+/// singleton with no channel-service dependency, so transports can read it without a DI cycle.
 /// </summary>
-/// <remarks>
-/// <para>Kept as a standalone leaf singleton — with no dependency on any channel service — so
-/// that concrete transports (e.g. <c>WebhookChannelService</c>) can read per-conversation
-/// coordinates without pulling the <c>AdaptingChannelService</c> into their construction
-/// graph. Merging the store into the decorator would close a cycle
-/// (<c>IChannelServiceFactory → WebhookChannelService → IChannelMetadataStore → AdaptingChannelService → IChannelServiceFactory</c>)
-/// that the DI container cannot resolve.</para>
-/// </remarks>
 public class ChannelMetadataStore : IChannelMetadataStore
 {
+    /// <summary>
+    /// The registry itself: one handshake record per live conversation, keyed by conversation id.
+    /// In-memory only — a process restart loses it, and the persisted copy in the conversation's
+    /// own database is what a resume replays into it.
+    /// </summary>
     private readonly ConcurrentDictionary<string, ChannelMetadata> metadataByConversation = new();
 
     /// <inheritdoc/>
+    // Plain indexer assignment, not TryAdd: registering the same conversationId twice (e.g. a
+    // resume that re-announces ChannelMetadata) is meant to overwrite, not fail — last write wins.
     public void RegisterChannelMetadata(string conversationId, ChannelMetadata channelMetadata) =>
         metadataByConversation[conversationId] = channelMetadata;
 

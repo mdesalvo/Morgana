@@ -10,7 +10,16 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class LLMGuardRailService : IGuardRailService
 {
+    /// <summary>
+    /// LLM used for the policy check. Consumed through the stateless completion path — each
+    /// message is judged on its own text, on the cheapest configured tier.
+    /// </summary>
     private readonly ILLMService llmService;
+
+    /// <summary>
+    /// Logger for compliance verdicts and for the fail-open path, which admits a message the
+    /// check could not evaluate and would otherwise leave no trace.
+    /// </summary>
     private readonly ILogger logger;
 
     /// <summary>
@@ -33,6 +42,9 @@ public class LLMGuardRailService : IGuardRailService
         this.llmService = llmService;
         this.logger = logger;
 
+        // Built once here, not per-call: unlike LLMClassifierService/EmbeddedAgentConfigurationService
+        // this isn't deferred behind a Lazy<> — the Guard prompt is needed on essentially every
+        // turn (guard check gates every user message), so eager beats lazy for the common case.
         Records.Prompt guardPrompt =
             promptResolverService.ResolveAsync("Guard").GetAwaiter().GetResult();
 
@@ -52,6 +64,11 @@ public class LLMGuardRailService : IGuardRailService
             Records.GuardCheckResponse? llmResult =
                 System.Text.Json.JsonSerializer.Deserialize<Records.GuardCheckResponse>(response, Records.DefaultJsonSerializerOptions);
 
+            // `compliant` here is only for the log line below — it is NOT what the return
+            // statement branches on (that re-checks llmResult != null itself). Both default to
+            // true/compliant on a null result, so the two are never actually inconsistent, but
+            // don't confuse this local for the decision — a null parse fails open by design,
+            // same policy as the outer catch clause a few lines down.
             bool compliant = llmResult?.Compliant ?? true;
 
             logger.LogInformation(

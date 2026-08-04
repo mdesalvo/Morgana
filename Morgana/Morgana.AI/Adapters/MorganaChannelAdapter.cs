@@ -179,12 +179,8 @@ public class MorganaChannelAdapter
     private static bool ContainsMarkdown(string text)
     {
         MarkdownDocument document = Markdown.Parse(text);
-        foreach (MarkdownObject node in document.Descendants())
-        {
-            if (node is not ParagraphBlock && node is not LiteralInline)
-                return true;
-        }
-        return false;
+        return document.Descendants()
+                       .Any(node => node is not ParagraphBlock && node is not LiteralInline);
     }
 
     // Enforces MaxMessageLength: strip markdown first (cheaper); truncate with ellipsis if still over.

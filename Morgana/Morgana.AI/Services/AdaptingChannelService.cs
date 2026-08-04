@@ -33,15 +33,9 @@ public class AdaptingChannelService : IChannelService
     /// </summary>
     private readonly MorganaChannelAdapter channelAdapter;
 
-    /// <summary>
-    /// Initialises a new instance of <see cref="AdaptingChannelService"/>.
-    /// </summary>
-    /// <param name="channelServiceFactory">Factory that resolves the concrete
-    /// <see cref="IChannelService"/> for a conversation's delivery mode.</param>
-    /// <param name="channelMetadataStore">Registry from which per-conversation channel metadata
-    /// is read on every send.</param>
-    /// <param name="channelAdapter">The adapter used to degrade outbound messages to the
-    /// capabilities advertised by the originating channel.</param>
+    /// <param name="channelServiceFactory">Resolves the concrete transport for a conversation's <c>deliveryMode</c>.</param>
+    /// <param name="channelMetadataStore">Leaf singleton holding the per-conversation handshake; injected rather than folded in, to keep the DI graph acyclic.</param>
+    /// <param name="channelAdapter">Capability-driven degradation applied to every outbound <see cref="ChannelMessage"/>.</param>
     public AdaptingChannelService(
         IChannelServiceFactory channelServiceFactory,
         IChannelMetadataStore channelMetadataStore,
@@ -53,6 +47,10 @@ public class AdaptingChannelService : IChannelService
     }
 
     /// <inheritdoc/>
+    /// <exception cref="InvalidOperationException">
+    /// No channel metadata is registered for the message's conversation — an internal invariant
+    /// violation, see <see cref="GetRegisteredMetadataOrThrow"/>.
+    /// </exception>
     public async Task SendMessageAsync(ChannelMessage channelMessage)
     {
         ChannelMetadata registeredChannelMetadata = GetRegisteredMetadataOrThrow(channelMessage.ConversationId);
@@ -63,6 +61,15 @@ public class AdaptingChannelService : IChannelService
     }
 
     /// <inheritdoc/>
+    /// <exception cref="InvalidOperationException">
+    /// No channel metadata is registered for <paramref name="conversationId"/> — an internal
+    /// invariant violation, see <see cref="GetRegisteredMetadataOrThrow"/>.
+    /// </exception>
+    // No AdaptAsync call here, unlike SendMessageAsync: a stream chunk is a fragment of
+    // still-forming text, not a structured ChannelMessage — there's nothing coherent yet for the
+    // adapter to degrade. Streaming is suppressed upstream whenever adaptation would be needed
+    // (see ConversationSupervisorActor.GetEffectiveCapabilities), so this path only ever runs for
+    // channels the message will reach unadapted anyway.
     public Task SendStreamChunkAsync(string conversationId, string chunkText)
     {
         ChannelMetadata registeredChannelMetadata = GetRegisteredMetadataOrThrow(conversationId);
@@ -71,12 +78,13 @@ public class AdaptingChannelService : IChannelService
     }
 
     /// <summary>
-    /// Looks up the registered channel metadata for a conversation or throws if none is
-    /// registered. The start-conversation gate in MorganaController refuses handshakes without
-    /// channel metadata, and ConversationManagerActor registers the per-conversation entry
-    /// before any outbound send happens — reaching a send path without a registered entry is
-    /// therefore an internal invariant violation, not a client mistake.
+    /// Looks up the registered channel metadata or throws. A miss here is an internal invariant
+    /// violation, not a client mistake — the start-conversation gate and ConversationManagerActor
+    /// guarantee registration before any send path can be reached.
     /// </summary>
+    /// <param name="conversationId">Conversation whose handshake record is looked up.</param>
+    /// <returns>The registered metadata: coordinates (for transport resolution) plus capabilities (for adaptation).</returns>
+    /// <exception cref="InvalidOperationException">No metadata is registered for the conversation.</exception>
     private ChannelMetadata GetRegisteredMetadataOrThrow(string conversationId)
     {
         if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? registeredChannelMetadata))

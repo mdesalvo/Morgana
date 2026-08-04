@@ -5,7 +5,7 @@ namespace Morgana.Contracts;
 /// </summary>
 /// <param name="ConversationId">Unique identifier of the target conversation</param>
 /// <param name="Text">Message text from the user</param>
-/// <param name="Metadata">Optional metadata dictionary (reserved for future use)</param>
+/// <param name="Metadata">Optional metadata dictionary</param>
 public record SendMessageRequest(
     string ConversationId,
     string Text,

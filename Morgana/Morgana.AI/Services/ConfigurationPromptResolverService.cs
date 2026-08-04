@@ -31,6 +31,10 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     {
         this.agentConfigService = agentConfigService;
 
+        // Lazy<> rather than loading eagerly in the constructor: morgana.json never changes after
+        // deployment, so the embedded-resource read + JSON parse in LoadMorganaPrompts only ever
+        // needs to happen once, on whichever thread first asks for a prompt — not on every DI
+        // resolution of this singleton, and not before it's actually needed.
         morganaPrompts = new Lazy<Records.Prompt[]>(LoadMorganaPrompts);
     }
 
@@ -38,22 +42,27 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     /// <returns>Array of framework prompts + domain prompts</returns>
     public async Task<Records.Prompt[]> GetAllPromptsAsync()
     {
-        // Merge: morgana.json + domain
+        // Framework prompts first, domain prompts appended after: ResolveAsync below picks the
+        // FIRST id match via SingleOrDefault, so this ordering alone doesn't decide precedence —
+        // see ResolveAsync's own comment for why a domain/framework ID collision is actually an
+        // ambiguity error, not a silent override, despite what "domain prompts override" might imply.
         List<Records.Prompt> agentPrompts = await agentConfigService.GetAgentPromptsAsync();
         return [..morganaPrompts.Value, ..agentPrompts];
     }
 
-    /// <summary>
-    /// Resolves a prompt by ID (case-insensitive) from merged framework + domain sources.
-    /// Framework IDs: Morgana, Classifier, Guard, Presentation; Domain IDs: intent names.
-    /// </summary>
-    /// <param name="promptID">Prompt identifier to resolve</param>
-    /// <returns>Prompt matching the ID (case-insensitive)</returns>
-    /// <exception cref="KeyNotFoundException">If ID not found in morgana.json or agents.json</exception>
+    /// <summary>Resolves a prompt by ID (case-insensitive) from merged framework + domain sources.</summary>
+    /// <param name="promptID">Framework ID (Morgana, Classifier, Guard, Presentation) or a domain intent name.</param>
+    /// <exception cref="KeyNotFoundException">ID not found in morgana.json or agents.json.</exception>
     public async Task<Records.Prompt> ResolveAsync(string promptID)
     {
         Records.Prompt[] allPrompts = await GetAllPromptsAsync();
 
+        // SingleOrDefault, not FirstOrDefault: framework IDs ("Morgana", "Classifier", "Guard",
+        // "Presentation") and domain IDs (intent names from agents.json) are meant to be disjoint
+        // vocabularies. If a plugin author names an intent "guard" or "classifier", that collides
+        // with a framework prompt and SingleOrDefault throws InvalidOperationException — loud and
+        // at prompt-resolution time — rather than silently letting whichever one happens to come
+        // first in the merged array win and the other become permanently unreachable.
         Records.Prompt? prompt = allPrompts
             .SingleOrDefault(p => string.Equals(p.ID, promptID, StringComparison.OrdinalIgnoreCase));
 
@@ -61,36 +70,19 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     }
 
     /// <summary>
-    /// Loads framework prompts from morgana.json embedded resource in Morgana.Agents assembly.
-    /// Called once during service initialization for performance.
+    /// Loads framework prompts from morgana.json, embedded as a resource in this very assembly.
+    /// Called once (via the Lazy&lt;&gt; above), the first time any prompt is resolved.
     /// </summary>
     /// <returns>Array of framework prompts (Morgana, Classifier, Guard, Presentation)</returns>
-    /// <exception cref="FileNotFoundException">Thrown if morgana.json resource not found in assembly</exception>
-    /// <remarks>
-    /// <para><strong>Embedded Resource Loading:</strong></para>
-    /// <list type="number">
-    /// <item>Get executing assembly (Morgana.Agents.dll)</item>
-    /// <item>Find manifest resource ending with ".morgana.json"</item>
-    /// <item>Open resource stream</item>
-    /// <item>Deserialize JSON to PromptCollection</item>
-    /// <item>Extract Prompts array</item>
-    /// <item>Cache in morganaPrompts field</item>
-    /// </list>
-    /// <para><strong>Resource Naming:</strong></para>
-    /// <para>The resource name depends on the project structure and namespace.
-    /// Typical format: "Morgana.Agents.morgana.json" or similar.
-    /// The code uses EndsWith(".morgana.json") to be flexible with namespace variations.</para>
-    /// <para><strong>Error Cases:</strong></para>
-    /// <list type="bullet">
-    /// <item>morgana.json not embedded as resource → FileNotFoundException</item>
-    /// <item>Invalid JSON format → JsonException during deserialization</item>
-    /// <item>Missing Prompts property → Returns empty array</item>
-    /// </list>
-    /// </remarks>
+    /// <exception cref="FileNotFoundException">morgana.json is not embedded in this assembly.</exception>
     private static Records.Prompt[] LoadMorganaPrompts()
     {
-        // Load only morgana.json (framework prompts: Morgana, Classifier, Guard, Presentation)
         Assembly assembly = Assembly.GetExecutingAssembly();
+
+        // EndsWith rather than an exact resource name: the MSBuild-generated manifest resource
+        // name is namespace-prefixed (typically "Morgana.AI.morgana.json"), and matching only the
+        // file-name suffix means this keeps working even if the root namespace or the assembly
+        // name itself changes — the file is still found by its own name.
         string resourceName = assembly.GetManifestResourceNames()
             .First(n => n.EndsWith(".morgana.json", StringComparison.OrdinalIgnoreCase));
 
@@ -100,6 +92,11 @@ public class ConfigurationPromptResolverService : IPromptResolverService
         Records.PromptCollection? promptsCollection = JsonSerializer.Deserialize<Records.PromptCollection>(
             stream, Records.DefaultJsonSerializerOptions);
 
+        // A null collection (empty/malformed JSON body) degrades to an empty prompt array rather
+        // than throwing — every consumer of GetAllPromptsAsync/ResolveAsync already has to handle
+        // "prompt ID not found" as a real, expected outcome (see ResolveAsync's KeyNotFoundException
+        // above), so an empty framework layer surfaces through that exact same, already-handled path
+        // instead of needing a second failure mode of its own.
         return promptsCollection?.Prompts ?? [];
     }
 }

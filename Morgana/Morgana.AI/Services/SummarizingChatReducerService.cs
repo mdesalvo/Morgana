@@ -16,7 +16,16 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class SummarizingChatReducerService
 {
+    /// <summary>
+    /// Read for the <c>Morgana:HistoryReducer</c> section on every create call, so a reducer
+    /// reflects the configuration in force when the agent was built.
+    /// </summary>
     private readonly IConfiguration configuration;
+
+    /// <summary>
+    /// Logger for the reducer's configuration at creation time and for the disabled case, which
+    /// returns null and would otherwise be indistinguishable from a misconfiguration.
+    /// </summary>
     private readonly ILogger logger;
 
     /// <summary>
@@ -49,8 +58,13 @@ public class SummarizingChatReducerService
         int targetCount = config.GetValue<int>("SummarizationTargetCount", 8);
         int threshold = config.GetValue<int>("SummarizationThreshold", 12);
 
+        // chatClient here is whichever tier the calling agent runs on — each agent gets its own
+        // reducer instance sized to its own history, there is no shared/singleton reducer.
         SummarizingChatReducer chatReducer = new SummarizingChatReducer(chatClient, targetCount, threshold);
 
+        // Only overridden when configured: SummarizingChatReducer already ships a sensible
+        // built-in default prompt, so an unset/blank SummarizationPrompt should leave that alone
+        // rather than override it with an empty string.
         string? summaryPrompt = config.GetValue<string?>("SummarizationPrompt");
         if (!string.IsNullOrWhiteSpace(summaryPrompt))
             chatReducer.SummarizationPrompt = summaryPrompt;
