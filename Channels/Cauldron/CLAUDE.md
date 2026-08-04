@@ -57,16 +57,7 @@ Channels/Cauldron/
     MarkdownRendererService.cs        # Markdig-based HTML rendering for message text
   Messages/
     ChatMessage.cs                    # UI-side message model (text, role, agent, quickReplies, richCard, streaming state)
-    Contracts/                        # DTOs mirroring Morgana's wire format
-      ChannelMessage.cs               # SignalR "ReceiveMessage" payload
-      ChannelMetadata.cs              # Handshake metadata (coordinates + capabilities, with Cauldron singleton)
-      ChannelCoordinates.cs           # Identity + addressing (channelName, deliveryMode)
-      ChannelCapabilities.cs          # Feature flags (richCards, quickReplies, streaming, markdown, maxLength)
-      QuickReply.cs                   # Quick reply button definition (id, label, value)
-      RichCard.cs                     # Rich card with polymorphic CardComponent array
-    ConversationStartResponse.cs
-    ConversationResumeResponse.cs
-    ConversationHistoryResponse.cs
+    CauldronChannelMetadata.cs        # Channel identity + capability profile announced at handshake
   Program.cs                          # DI wiring and app pipeline
   Shared/MainLayout.razor             # Layout wrapper
   wwwroot/css/                        # Component-specific CSS (site.css, rich-card.css, quick-reply.css, etc.)
@@ -163,7 +154,11 @@ The contract types are immutable records (init-only / positional), so code that 
 
 The Docker build mirrors the repo layout under `/src` and stages the `Morgana.Contracts` subtree so the `ProjectReference` resolves (see `Cauldron.Dockerfile`).
 
-Channel-only shapes that are **not** part of `Morgana.Contracts` stay under `Messages/` (e.g. the response DTOs that mirror anonymous shapes returned by `MorganaController`).
+Requests **and responses** both come from `Morgana.Contracts`: Cauldron posts `StartConversationRequest`/`SendMessageRequest` and reads back `StartConversationResponse`, `ResumeConversationResponse` and `ConversationHistoryResponse` — the very types `MorganaController` returns. No hand-written response mirrors survive.
+
+`MorganaChatMessage` (the history element, with its `ChatMessageType` enum) is a wire DTO and lives in `Morgana.Contracts`, not in `Morgana.AI.Records`. It is **not** the UI model: `ConversationLifecycleService.MapToChatMessage` projects it onto `Messages/ChatMessage.cs`, which adds UI-only state the server knows nothing about (typing indicator, streaming flag, selected quick reply) and has its own richer `MessageType` (`Presentation`, `Error`). Keep the two enums apart — the mapping switch is exhaustive on purpose, so a value added server-side breaks the build here instead of silently landing on the wrong styling.
+
+Channel-only shapes that are **not** part of `Morgana.Contracts` stay under `Messages/` (`ChatMessage`, `CauldronChannelMetadata`).
 
 ## Channel Handshake
 

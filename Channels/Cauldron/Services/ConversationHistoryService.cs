@@ -1,5 +1,5 @@
 using Cauldron.Interfaces;
-using Cauldron.Messages;
+using Morgana.Contracts;
 
 namespace Cauldron.Services;
 

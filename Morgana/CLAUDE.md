@@ -124,7 +124,7 @@ ConversationManagerActor          ← entry point, lifecycle, channel metadata p
 | `conversation/{id}/end` | POST | Terminates conversation, stops supervisor | 200 |
 | `conversation/{id}/resume` | POST | Checks `ConversationExists` (404 if not), restores active agent | 202 + activeAgent |
 | `conversation/{id}/message` | POST | Auth check → rate limit check (429) → dust budget check (429) → captures OTel context → tells `UserMessage` | 202 |
-| `conversation/{id}/history` | GET | Returns `MorganaChatMessage[]` via persistence service | 200/404 |
+| `conversation/{id}/history` | GET | Returns `ConversationHistoryResponse` (wrapping `MorganaChatMessage[]`) via persistence service | 200/404 |
 | `health` | GET | Actor system liveness check | 200/503 |
 
 All endpoints authenticate via `AuthenticateRequestAsync` (Bearer JWT validation, fail-closed).

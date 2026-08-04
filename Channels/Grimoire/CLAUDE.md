@@ -34,7 +34,6 @@ Channels/Grimoire/
   Interfaces/
     IViewportResizeWatcher.cs        # Abstraction over terminal resize notifications (SIGWINCH vs polling)
   Messages/                          # Channel-only shapes (the shared wire DTOs come from Morgana.Contracts)
-    StartConversationResponse.cs     # Echo of conversation id from MorganaController.StartConversation
     GrimoireChannelMetadata.cs       # Build(callbackUrl) factory over Morgana.Contracts.ChannelMetadata (channel identity)
   Services/
     MorganaClientService.cs          # REST wrapper: start / send / end conversation
@@ -117,7 +116,7 @@ The contract types are immutable records (init-only / positional): `StartConvers
 
 The Docker build mirrors the repo layout under `/src` and stages the `Morgana.Contracts` subtree so the `ProjectReference` resolves (see `Grimoire.Dockerfile`).
 
-`StartConversationResponse` stays under `Messages/` because it mirrors an anonymous response shape in `MorganaController.StartConversation`, not a declared contract (same split Cauldron uses for its own response DTOs).
+Responses are contracts too: `StartConversationResponse` is consumed straight from `Morgana.Contracts` — the controller returns that very type — so there is no channel-side mirror left to keep in step with a controller rename.
 
 ## Terminal UI (ConsoleUiService)
 

@@ -1,5 +1,6 @@
 using Cauldron.Interfaces;
 using Cauldron.Messages;
+using Morgana.Contracts;
 
 namespace Cauldron.Services;
 
@@ -42,20 +43,20 @@ public class ConversationLifecycleService : IConversationLifecycleService
         {
             _logger.LogInformation("Starting new conversation...");
 
-            HttpResponseMessage response = await _http.PostAsJsonAsync("/api/morgana/conversation/start", new
-            {
-                conversationId = Guid.NewGuid().ToString("N"),
+            // Cauldron is the reference channel: announces itself by name and declares
+            // full capabilities at handshake, so Morgana persists the metadata and stops
+            // relying on hard-coded defaults.
+            StartConversationRequest request = new(
+                ConversationId: Guid.NewGuid().ToString("N"),
+                ChannelMetadata: CauldronChannelMetadata.Profile);
 
-                // Cauldron is the reference channel: announces itself by name and declares
-                // full capabilities at handshake, so Morgana persists the metadata and stops
-                // relying on hard-coded defaults.
-                channelMetadata = CauldronChannelMetadata.Profile
-            });
+            HttpResponseMessage response = await _http.PostAsJsonAsync(
+                "/api/morgana/conversation/start", request);
 
             if (response.IsSuccessStatusCode)
             {
-                ConversationStartResponse? result = await response.Content
-                    .ReadFromJsonAsync<ConversationStartResponse>();
+                StartConversationResponse? result = await response.Content
+                    .ReadFromJsonAsync<StartConversationResponse>();
 
                 _chatStateService.ConversationId = result?.ConversationId ?? string.Empty;
 
@@ -95,8 +96,8 @@ public class ConversationLifecycleService : IConversationLifecycleService
 
             if (response.IsSuccessStatusCode)
             {
-                ConversationResumeResponse? result = await response.Content
-                    .ReadFromJsonAsync<ConversationResumeResponse>();
+                ResumeConversationResponse? result = await response.Content
+                    .ReadFromJsonAsync<ResumeConversationResponse>();
 
                 _chatStateService.ConversationId = result?.ConversationId ?? savedConversationId;
 
@@ -168,12 +169,12 @@ public class ConversationLifecycleService : IConversationLifecycleService
     {
         try
         {
+            SendMessageRequest request = new(
+                ConversationId: _chatStateService.ConversationId,
+                Text: text);
+
             HttpResponseMessage response = await _http.PostAsJsonAsync(
-                $"/api/morgana/conversation/{_chatStateService.ConversationId}/message", new
-                {
-                    conversationId = _chatStateService.ConversationId,
-                    text
-                });
+                $"/api/morgana/conversation/{_chatStateService.ConversationId}/message", request);
 
             _logger.LogInformation("Message sent, response status: {StatusCode}", response.StatusCode);
 
@@ -246,11 +247,11 @@ public class ConversationLifecycleService : IConversationLifecycleService
                     }
                 }
 
-                _chatStateService.ChatMessages.Add(history.Messages[i]);
+                _chatStateService.ChatMessages.Add(MapToChatMessage(history.Messages[i]));
             }
 
             // Detect trailing agent boundary
-            ChatMessage lastMsg = history.Messages.Last();
+            MorganaChatMessage lastMsg = history.Messages.Last();
             if (_chatStateService.IsSpecializedAgent(lastMsg.AgentName)
                 && !_chatStateService.IsSpecializedAgent(_chatStateService.CurrentAgentName))
             {
@@ -274,6 +275,36 @@ public class ConversationLifecycleService : IConversationLifecycleService
             return await FallbackToNewConversationAsync();
         }
     }
+
+    /// <summary>
+    /// Projects a history message from the wire contract onto the mutable UI model.
+    /// </summary>
+    /// <remarks>
+    /// The two models are deliberately distinct: <see cref="MorganaChatMessage"/> is what Morgana
+    /// persisted, <see cref="ChatMessage"/> carries UI-only state the server knows nothing about
+    /// (typing indicator, streaming flag, selected quick reply). Mapping the message type through
+    /// an exhaustive switch means a new value added server-side surfaces here rather than being
+    /// silently coerced into the wrong UI styling.
+    /// </remarks>
+    private static ChatMessage MapToChatMessage(MorganaChatMessage message) =>
+        new()
+        {
+            ConversationId = message.ConversationId,
+            Text = message.Text,
+            Timestamp = message.Timestamp,
+            Type = message.Type switch
+            {
+                ChatMessageType.User => MessageType.User,
+                ChatMessageType.Assistant => MessageType.Assistant,
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(message), message.Type, "Unmapped history message type.")
+            },
+            AgentName = message.AgentName,
+            AgentCompleted = message.AgentCompleted,
+            QuickReplies = message.QuickReplies,
+            RichCard = message.RichCard,
+            IsLastHistoryMessage = message.IsLastHistoryMessage
+        };
 
     private async Task<bool> FallbackToNewConversationAsync()
     {

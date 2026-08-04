@@ -130,11 +130,9 @@ public class MorganaController : ControllerBase
 
             logger.LogInformation("Conversation creation queued: {RequestConversationId}", request.ConversationId);
 
-            return Accepted(new
-            {
-                conversationId = request.ConversationId,
-                message = "Conversation creation started"
-            });
+            return Accepted(new StartConversationResponse(
+                ConversationId: request.ConversationId,
+                Message: "Conversation creation started"));
         }
         catch (Exception ex)
         {
@@ -247,14 +245,12 @@ public class MorganaController : ControllerBase
                 ? dustLimitingOptions.ErrorMessage
                 : null;
 
-            return Accepted(new
-            {
-                conversationId = conversationId,
-                resumed = true,
-                activeAgent = lastActiveAgent,
-                dustLevel = dustLevel,
-                dustExhaustedMessage = dustExhaustedMessage
-            });
+            return Accepted(new ResumeConversationResponse(
+                ConversationId: conversationId,
+                Resumed: true,
+                ActiveAgent: lastActiveAgent,
+                DustLevel: dustLevel,
+                DustExhaustedMessage: dustExhaustedMessage));
         }
         catch (Exception ex)
         {
@@ -269,7 +265,7 @@ public class MorganaController : ControllerBase
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation</param>
     /// <returns>
-    /// 200 OK with array of MorganaChatMessage on success.
+    /// 200 OK with a ConversationHistoryResponse wrapping the MorganaChatMessage array on success.
     /// 404 Not Found if conversation doesn't exist.
     /// 500 Internal Server Error on failure.
     /// </returns>
@@ -284,7 +280,7 @@ public class MorganaController : ControllerBase
 
             logger.LogInformation("Retrieving conversation history for {ConversationId}", conversationId);
 
-            Records.MorganaChatMessage[] chatMessages = await conversationPersistenceService
+            MorganaChatMessage[] chatMessages = await conversationPersistenceService
                 .GetConversationHistoryAsync(conversationId);
 
             if (chatMessages.Length == 0)
@@ -295,7 +291,7 @@ public class MorganaController : ControllerBase
 
             logger.LogInformation("Retrieved {ChatMessagesLength} messages for conversation {ConversationId}", chatMessages.Length, conversationId);
 
-            return Ok(new { messages = chatMessages });
+            return Ok(new ConversationHistoryResponse(chatMessages));
         }
         catch (Exception ex)
         {

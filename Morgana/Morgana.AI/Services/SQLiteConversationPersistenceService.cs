@@ -1019,9 +1019,9 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         string messageText = ExtractTextFromMessage(chatMessage);
 
         // Determine message type from role
-        MessageType messageType = chatMessage.Role == ChatRole.User
-            ? MessageType.User
-            : MessageType.Assistant;
+        ChatMessageType messageType = chatMessage.Role == ChatRole.User
+            ? ChatMessageType.User
+            : ChatMessageType.Assistant;
 
         // Format agent name for UI
         string displayAgentName = chatMessage.Role == ChatRole.User
