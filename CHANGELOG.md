@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 - A safety block from the LLM provider itself (e.g. a jailbreak attempt caught by Azure's own content filter) is now treated as a genuine violation instead of silently letting the message through
+- **[Cauldron]** Two event handlers on the chat page were subscribed as inline lambdas and so were never actually unsubscribed on dispose, the SignalR connection-state handler was not unsubscribed at all
+- **[Cauldron]** Some controller calls exchanged anonymous types instead of relying on Morgana.Contracts, leaving the two ends free to drift apart with nothing to catch it until runtime
 
 ### 🚀 Future Enablement
 
