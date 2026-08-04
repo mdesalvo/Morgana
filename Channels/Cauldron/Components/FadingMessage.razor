@@ -103,8 +103,11 @@
                 await InvokeAsync(StateHasChanged);
 
                 // Hand the message back so the parent drops it from its list: the component alone
-                // cannot remove itself from a collection it does not own.
-                await OnDismissed.InvokeAsync(Message);
+                // cannot remove itself from a collection it does not own. Dispatched through
+                // InvokeAsync because this still runs on the timer thread: invoked directly, the
+                // parent's StateHasChanged throws off-dispatcher, the exception dies inside this
+                // fire-and-forget task, and the emptied container silently never leaves the DOM.
+                await InvokeAsync(() => OnDismissed.InvokeAsync(Message));
             }
             catch (TaskCanceledException)
             {

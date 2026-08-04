@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[Cauldron]** Dismissing a warning banner before expiration failed to clear its timer, because the component's cleanup logic was never executed
 - **[Cauldron]** The conversation did not follow new messages, which piled up below the fold and had to be scrolled into view by hand, streamed replies included
 - **[Cauldron]** The loading animation rested against the top of the message area instead of its centre, leaving an empty band underneath it — three stacked causes: a fixed-height block that refused to fill the area, a float animation drifting upward only, and text below the orb dragging the centring down
+- **[Cauldron]** A faded warning banner was never truly removed from the page: an invisible leftover kept holding its space, nudging the loader and the conversation off place until some unrelated event happened to redraw the page
 
 ### 🚀 Future Enablement
 
