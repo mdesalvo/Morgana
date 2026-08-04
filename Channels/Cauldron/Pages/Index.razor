@@ -199,6 +199,15 @@
     /// </summary>
     private bool showConfirmModal;
 
+    /// <summary>
+    /// Retained references to the lambda-based event handlers subscribed in
+    /// <see cref="OnInitializedAsync"/>. Kept in fields because <c>-=</c> compares delegate
+    /// identity: re-declaring the same lambda body at dispose time builds a *different*
+    /// instance and removes nothing, silently leaving the subscription in place.
+    /// </summary>
+    private Action? onStreamingStateChanged;
+    private Action<bool>? onConnectionStateChanged;
+
     // =========================================================================
     // LIFECYCLE
     // =========================================================================
@@ -216,7 +225,8 @@
             landingMessage = LandingMessageService.GetLandingMessage();
 
             // Subscribe to streaming state changes for UI re-render
-            StreamingService.OnStateChanged += () => InvokeAsync(StateHasChanged);
+            onStreamingStateChanged = () => InvokeAsync(StateHasChanged);
+            StreamingService.OnStateChanged += onStreamingStateChanged;
 
             // Start SignalRService connection
             await SignalRService.StartAsync();
@@ -225,11 +235,12 @@
             // Subscribe to events (message received, streaming chunks for progressive rendering, connection state changes)
             SignalRService.OnMessageReceived += HandleMessageReceivedAsync;
             SignalRService.OnStreamChunkReceived += HandleStreamChunkReceivedAsync;
-            SignalRService.OnConnectionStateChanged += (connected) =>
+            onConnectionStateChanged = (connected) =>
             {
                 ChatStateService.IsConnected = connected;
                 InvokeAsync(StateHasChanged);
             };
+            SignalRService.OnConnectionStateChanged += onConnectionStateChanged;
 
             if (!ChatStateService.HasCheckedStorage)
             {
@@ -558,7 +569,10 @@
         // Unsubscribe from events
         SignalRService.OnMessageReceived -= HandleMessageReceivedAsync;
         SignalRService.OnStreamChunkReceived -= HandleStreamChunkReceivedAsync;
-        StreamingService.OnStateChanged -= () => InvokeAsync(StateHasChanged);
+        if (onConnectionStateChanged is not null)
+            SignalRService.OnConnectionStateChanged -= onConnectionStateChanged;
+        if (onStreamingStateChanged is not null)
+            StreamingService.OnStateChanged -= onStreamingStateChanged;
 
         await StreamingService.DisposeAsync();
         await SignalRService.StopAsync();
