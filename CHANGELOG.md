@@ -19,8 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[Cauldron]** Some controller calls exchanged anonymous types instead of relying on Morgana.Contracts, leaving the two ends free to drift apart with nothing to catch it until runtime
 - **[Cauldron]** Starting a new conversation abandoned the old one without telling Morgana, which kept it alive in memory with nothing left to ever release it
 - **[Cauldron]** A warning banner dismissed before its time was up kept its timer running, because the component declared a cleanup step that was never actually wired up
-- **[Cauldron]** Leftover debug logging wrote to the console on every render of the send button, and a card image was clickable while doing nothing at all
-- **[Cauldron]** Code documentation was long, decorative and in places simply wrong — the SignalR reconnect delays were described as values other than the ones in use
 
 ### 🚀 Future Enablement
 
