@@ -12,10 +12,10 @@ namespace Cauldron.Services;
 public class MarkdownRendererService : IMarkdownRendererService
 {
     /// <summary>
-    /// The Markdown → HTML rules this instance renders with: emoji shortcodes, and raw HTML
-    /// tags disabled. Without that second part, a bare-looking tag typed in ordinary prose
-    /// (e.g. "List&lt;string&gt;", "&lt;Component&gt;") would reach <see cref="sanitizer"/> as
-    /// an unclosed HTML element, which silently swallows the rest of the message as that
+    /// The Markdown → HTML rules this instance renders with: emoji shortcodes, GFM pipe tables,
+    /// and raw HTML tags disabled. Without that last part, a bare-looking tag typed in ordinary
+    /// prose (e.g. "List&lt;string&gt;", "&lt;Component&gt;") would reach <see cref="sanitizer"/>
+    /// as an unclosed HTML element, which silently swallows the rest of the message as that
     /// element's content before dropping it — truncating legitimate text, not just blocking
     /// attacks. Disabling HTML here turns those into harmless literal text instead.
     /// </summary>
@@ -39,15 +39,22 @@ public class MarkdownRendererService : IMarkdownRendererService
     {
         // Resolves :shortcode: emoji to real glyphs (:white_check_mark: → ✅), which a browser no
         // more expands on its own than a terminal does. Smileys stay off on purpose: converting
-        // :) into 😃 would mangle legitimate prose and code. DisableHtml() is the truncation-bug
-        // fix described on the pipeline field above.
-        pipeline = new MarkdownPipelineBuilder().UseEmojiAndSmiley(enableSmileys: false).DisableHtml().Build();
+        // :) into 😃 would mangle legitimate prose and code. UsePipeTables() is GFM table syntax
+        // (`| a | b |`) — off by default in Markdig, without it the pipes render as literal text
+        // instead of a <table>. DisableHtml() is the truncation-bug fix described on the pipeline
+        // field above.
+        pipeline = new MarkdownPipelineBuilder()
+            .UseEmojiAndSmiley(enableSmileys: false)
+            .UsePipeTables()
+            .DisableHtml()
+            .Build();
     }
 
     /// <summary>
     /// Renders Markdown as block-level HTML (paragraphs, lists, headings, etc.).
     /// </summary>
-    public MarkupString ToHtml(string? text) => new MarkupString(Render(text));
+    public MarkupString ToHtml(string? text)
+        => new MarkupString(Render(text));
 
     /// <summary>
     /// Renders Markdown as inline HTML, stripping the outer &lt;p&gt; wrapper that

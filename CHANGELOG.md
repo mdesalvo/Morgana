@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[Cauldron]** The loading animation rested against the top of the message area instead of its centre, leaving an empty band underneath it — three stacked causes: a fixed-height block that refused to fill the area, a float animation drifting upward only, and text below the orb dragging the centring down
 - **[Cauldron]** A faded warning banner was never truly removed from the page: an invisible leftover kept holding its space, nudging the loader and the conversation off place until some unrelated event happened to redraw the page
 - **[Cauldron]** Markdown rendered raw HTML and `javascript:`/`data:` links untouched, exposing an injection vector for any untrusted text reaching the chat; now sanitized via `HtmlSanitizer`
+- **[Cauldron]** Markdown tables rendered as literal pipe-separated text instead of an HTML table, because the Markdig pipeline never enabled GFM pipe-table syntax
 
 ### 🚀 Future Enablement
 
