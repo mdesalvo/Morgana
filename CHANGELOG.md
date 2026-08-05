@@ -16,15 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 - A safety block from the LLM provider itself (e.g. a jailbreak attempt caught by Azure's own content filter) is now treated as a genuine violation instead of silently letting the message through
-- **[Cauldron]** Two event handlers on the chat page were subscribed as inline lambdas and so were never actually unsubscribed on dispose, the SignalR connection-state handler was not unsubscribed at all
-- **[Cauldron]** Some controller calls exchanged anonymous types instead of relying on Morgana.Contracts, leaving the two ends free to drift apart with nothing to catch it until runtime
-- **[Cauldron]** Starting a new conversation abandoned the old one without telling Morgana, which kept it alive in memory with nothing left to ever release it
-- **[Cauldron]** Dismissing a warning banner before expiration failed to clear its timer, because the component's cleanup logic was never executed
-- **[Cauldron]** The conversation did not follow new messages, which piled up below the fold and had to be scrolled into view by hand, streamed replies included
-- **[Cauldron]** The loading animation rested against the top of the message area instead of its centre, leaving an empty band underneath it — three stacked causes: a fixed-height block that refused to fill the area, a float animation drifting upward only, and text below the orb dragging the centring down
-- **[Cauldron]** A faded warning banner was never truly removed from the page: an invisible leftover kept holding its space, nudging the loader and the conversation off place until some unrelated event happened to redraw the page
-- **[Cauldron]** Markdown rendered raw HTML and `javascript:`/`data:` links untouched, exposing an injection vector for any untrusted text reaching the chat; now sanitized via `HtmlSanitizer`
-- **[Cauldron]** Markdown tables rendered as literal pipe-separated text instead of an HTML table, because the Markdig pipeline never enabled GFM pipe-table syntax
+- **Cauldron (9)**
+  - Two event handlers on the chat page were subscribed as inline lambdas and so were never actually unsubscribed on dispose, the SignalR connection-state handler was not unsubscribed at all
+  - Some controller calls exchanged anonymous types instead of relying on Morgana.Contracts, leaving the two ends free to drift apart with nothing to catch it until runtime
+  - Starting a new conversation abandoned the old one without telling Morgana, which kept it alive in memory with nothing left to ever release it
+  - Dismissing a warning banner before expiration failed to clear its timer, because the component's cleanup logic was never executed
+  - The conversation did not follow new messages, which piled up below the fold and had to be scrolled into view by hand, streamed replies included
+  - The loading animation rested against the top of the message area instead of its centre, leaving an empty band underneath it — three stacked causes: a fixed-height block that refused to fill the area, a float animation drifting upward only, and text below the orb dragging the centring down
+  - A faded warning banner was never truly removed from the page: an invisible leftover kept holding its space, nudging the loader and the conversation off place until some unrelated event happened to redraw the page
+  - Markdown rendered raw HTML and `javascript:`/`data:` links untouched, exposing an injection vector for any untrusted text reaching the chat; now sanitized via `HtmlSanitizer`
+  - Markdown tables rendered as literal pipe-separated text instead of an HTML table, because the Markdig pipeline never enabled GFM pipe-table syntax
+- **Grimoire (1)**
+  - Raw terminal control bytes (ESC, BEL, ...) in message text or an agent name passed straight through to the TTY unfiltered, letting untrusted text ring the terminal bell or inject ANSI/OSC sequences (rename the terminal title, move the cursor, ...)
+- **Rune (1)**
+  - Same terminal control-byte injection as Grimoire above — Rune renders message text verbatim with no Markdig pass to filter it incidentally, so the fix strips control characters explicitly where the webhook message is first read
 
 ### 🚀 Future Enablement
 

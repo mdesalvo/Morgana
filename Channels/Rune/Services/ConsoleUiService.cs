@@ -210,17 +210,23 @@ public sealed class ConsoleUiService
             {
                 // Attribute the row to whoever authored it: a specialised agent keeps its
                 // own colour even on the farewell line that carries AgentCompleted=true.
-                string messageSpeaker = string.IsNullOrWhiteSpace(message.AgentName) ? "Morgana" : message.AgentName;
+                // Sanitized once here — message.AgentName and message.Text both arrive over
+                // the webhook from Morgana, so neither is trusted terminal input; every
+                // downstream use (history, header, courtesy line) reuses this cleaned value
+                // instead of re-reading the raw field.
+                string messageSpeaker = string.IsNullOrWhiteSpace(message.AgentName)
+                    ? "Morgana"
+                    : StripControlCharacters(message.AgentName);
 
                 lock (renderLock)
                 {
-                    history.Add(new DisplayedMessage(messageSpeaker, message.Text, RowColor(message, messageSpeaker)));
+                    history.Add(new DisplayedMessage(messageSpeaker, StripControlCharacters(message.Text), RowColor(message, messageSpeaker)));
 
                     // On agent completion append a base-Morgana courtesy line — same pattern
                     // as Cauldron's ChatStateService.AddCompletionMessageIfNeeded.
                     if (message.AgentCompleted && IsSpecializedAgent(message.AgentName))
                     {
-                        string completion = string.Format(agentExitTemplate, message.AgentName);
+                        string completion = string.Format(agentExitTemplate, messageSpeaker);
                         history.Add(new DisplayedMessage("Morgana", completion, MorganaColor));
                     }
 
@@ -228,7 +234,7 @@ public sealed class ConsoleUiService
                     // turn doesn't render under the outgoing agent's colour.
                     currentSpeaker = message.AgentCompleted || string.IsNullOrWhiteSpace(message.AgentName)
                         ? "Morgana"
-                        : message.AgentName;
+                        : messageSpeaker;
 
                     // Refresh the header gauge from ANY metadata-bearing message. The main
                     // assistant response carries the pre-delivery estimate; the trailing
@@ -877,6 +883,18 @@ public sealed class ConsoleUiService
                 sb.Append(c);
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Strips ASCII/Unicode control characters (ESC, BEL, C1 controls, ...) out of text bound
+    /// for the terminal. <see cref="Markup.Escape"/> only neutralizes Spectre's own <c>[ ]</c>
+    /// markup syntax — a raw control byte in message text or an agent name (an OSC sequence
+    /// renaming the terminal title, a cursor move, the BEL that rings the system bell, ...)
+    /// passes straight through it and gets interpreted by the user's TTY. Rune has no Markdig
+    /// pipeline to filter this incidentally (see the class remarks), so it is done explicitly
+    /// here, once, at the point <see cref="DrainIncomingLoop"/> reads the webhook message.
+    /// </summary>
+    private static string StripControlCharacters(string text) =>
+        text.Any(char.IsControl) ? new string(text.Where(c => !char.IsControl(c)).ToArray()) : text;
 
     /// <summary>Maps a speaker name to its palette color: <c>You</c> → white, <c>Morgana</c> → emerald green, everything else (specialised agents) → light green.</summary>
     private static string SpeakerColor(string agentName)

@@ -171,7 +171,7 @@ public static class MarkdownTerminalRenderService
         List<RenderedLine> output = [];
         for (int i = 0; i < code.Lines.Count; i++)
         {
-            string text = code.Lines.Lines[i].Slice.ToString();
+            string text = StripControlCharacters(code.Lines.Lines[i].Slice.ToString());
             output.Add(new RenderedLine([new StyledSpan(text, CodeBlockForeground, CodeBackground)], false));
         }
         return output;
@@ -286,9 +286,22 @@ public static class MarkdownTerminalRenderService
 
     private static void Append(List<StyledSpan> spans, string text, string foreground, string decorations)
     {
+        text = StripControlCharacters(text);
         if (text.Length > 0)
             spans.Add(new StyledSpan(text, foreground, decorations));
     }
+
+    /// <summary>
+    /// Strips ASCII/Unicode control characters (ESC, BEL, C1 controls, ...) out of text bound
+    /// for the terminal. <see cref="Markup.Escape"/> only neutralizes Spectre's own <c>[ ]</c>
+    /// markup syntax — a raw control byte in the source text (an OSC sequence renaming the
+    /// terminal title, a cursor move, the BEL that rings the system bell, ...) passes straight
+    /// through it and gets interpreted by the user's TTY. Every literal-text entry point in this
+    /// renderer funnels through here or <see cref="RenderCodeBlock"/> before becoming a
+    /// <see cref="StyledSpan"/>, so nothing reaches Spectre unfiltered.
+    /// </summary>
+    private static string StripControlCharacters(string text) =>
+        text.Any(char.IsControl) ? new string(text.Where(c => !char.IsControl(c)).ToArray()) : text;
 
     /// <summary>Joins two decoration token strings with a space, tolerating empties.</summary>
     private static string Combine(string a, string b) =>
