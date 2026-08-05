@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 - GuardActor has been hardened against **social engineering**: now recognizes and refuses attempts to claim false authority over Morgana or to talk her into revealing her own inner workings, even when dressed up as a polite, in-character favor rather than an obvious demand
+- Grimoire and Rune's "thinking hint" is now tinted in the speaker's own colour instead of a flat grey (colour is part of Morgana's identity, not just decoration on the finished reply)
 - Updated `Microsoft.Agents.AI` dependency to 1.17.0
 
 ### 🐛 Fixed
@@ -26,10 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A faded warning banner was never truly removed from the page: an invisible leftover kept holding its space, nudging the loader and the conversation off place until some unrelated event happened to redraw the page
   - Markdown rendered raw HTML and `javascript:`/`data:` links untouched, exposing an injection vector for any untrusted text reaching the chat; now sanitized via `HtmlSanitizer`
   - Markdown tables were rendered as literal pipe-separated text instead of an HTML table, because the Markdig pipeline never enabled GFM pipe-table syntax
-- **Grimoire (1)**
+- **Grimoire/Rune (2)**
   - Raw terminal control bytes (ESC, BEL, ...) in message text or an agent name passed straight through to the TTY unfiltered, letting untrusted text ring the terminal bell or inject ANSI/OSC sequences (rename the terminal title, move the cursor, ...)
-- **Rune (1)**
-  - Same terminal control-byte injection as Grimoire above — Rune renders message text verbatim with no Markdig pass to filter it incidentally, so the fix strips control characters explicitly where the webhook message is first read
+  - The terminal's own cursor was never hidden, so it showed up as a stray blinking block wherever Spectre's repaints last left it
 
 ### 🚀 Future Enablement
 
