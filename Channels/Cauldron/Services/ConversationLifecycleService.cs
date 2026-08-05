@@ -39,16 +39,23 @@ public class ConversationLifecycleService : IConversationLifecycleService
     /// <returns>True if conversation started successfully.</returns>
     public async Task<bool> StartConversationAsync()
     {
+        // Cauldron is the reference channel: announces itself by name and declares
+        // full capabilities at handshake, so Morgana persists the metadata and stops
+        // relying on hard-coded defaults.
+        StartConversationRequest request = new(
+            ConversationId: Guid.NewGuid().ToString("N"),
+            ChannelMetadata: CauldronChannelMetadata.Profile);
+
+        // Scopes every log line below to this conversation id, so a single id lets an
+        // operator pull the whole start attempt out of the log stream, failures included.
+        using IDisposable? scope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["ConversationId"] = request.ConversationId
+        });
+
         try
         {
             _logger.LogInformation("Starting new conversation...");
-
-            // Cauldron is the reference channel: announces itself by name and declares
-            // full capabilities at handshake, so Morgana persists the metadata and stops
-            // relying on hard-coded defaults.
-            StartConversationRequest request = new(
-                ConversationId: Guid.NewGuid().ToString("N"),
-                ChannelMetadata: CauldronChannelMetadata.Profile);
 
             HttpResponseMessage response = await _http.PostAsJsonAsync(
                 "/api/morgana/conversation/start", request);
@@ -91,6 +98,13 @@ public class ConversationLifecycleService : IConversationLifecycleService
     /// <returns>True if conversation was resumed or a new one started successfully.</returns>
     public async Task<bool> ResumeConversationAsync(string savedConversationId)
     {
+        // Scopes every log line below to this conversation id, so a single id lets an
+        // operator pull the whole start attempt out of the log stream, failures included.
+        using IDisposable? scope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["ConversationId"] = savedConversationId
+        });
+
         try
         {
             _logger.LogInformation("Attempting to resume conversation {ConversationId}", savedConversationId);
@@ -163,6 +177,13 @@ public class ConversationLifecycleService : IConversationLifecycleService
         if (string.IsNullOrEmpty(conversationId))
             return;
 
+        // Scopes every log line below to this conversation id, so a single id lets an
+        // operator pull the whole start attempt out of the log stream, failures included.
+        using IDisposable? scope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["ConversationId"] = conversationId
+        });
+
         try
         {
             // Leave the SignalR group first, so anything still in flight for this conversation
@@ -208,6 +229,13 @@ public class ConversationLifecycleService : IConversationLifecycleService
     /// <returns>True if the message was sent successfully.</returns>
     public async Task<bool> SendMessageAsync(string text)
     {
+        // Scopes every log line below to this conversation id, so a single id lets an
+        // operator pull the whole start attempt out of the log stream, failures included.
+        using IDisposable? scope = _logger.BeginScope(new Dictionary<string, object>
+        {
+            ["ConversationId"] = _chatStateService.ConversationId
+        });
+
         try
         {
             SendMessageRequest request = new(

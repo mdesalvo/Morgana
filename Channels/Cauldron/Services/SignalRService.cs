@@ -77,9 +77,17 @@ public class SignalRService : IAsyncDisposable
         // Inbound agent messages: deserialized by the client, then handed to subscribers as-is
         hubConnection.On<ChannelMessage>("ReceiveMessage", async (message) =>
         {
+            // Scopes the conversation id onto every log line emitted while this message is
+            // handled, including the ones downstream subscribers (lifecycle, streaming) write —
+            // without threading the id through each of their call signatures.
+            using IDisposable? scope = logger.BeginScope(new Dictionary<string, object>
+            {
+                ["ConversationId"] = message.ConversationId
+            });
+
             logger.LogInformation(
-                $"📩 SignalR message received: {message.AgentName} -> " +
-                $"{message.ConversationId} (type: {message.MessageType}, completed: {message.AgentCompleted})");
+                "📩 SignalR message received: {AgentName} -> {ConversationId} (type: {MessageType}, completed: {AgentCompleted})",
+                message.AgentName, message.ConversationId, message.MessageType, message.AgentCompleted);
 
             await (OnMessageReceived?.Invoke(message) ?? Task.CompletedTask);
         });

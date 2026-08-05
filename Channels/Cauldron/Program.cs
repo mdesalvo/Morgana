@@ -100,6 +100,14 @@ app.UseRouting();                       // Enable endpoint routing
 app.MapBlazorHub();                     // SignalR hub carrying Blazor's own UI updates
 app.MapFallbackToPage("/_Host");        // Every unmatched route renders the single page (SPA behavior)
 
+// Health check endpoint for monitoring (status + uptime)
+DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "healthy",
+    uptime = DateTimeOffset.UtcNow - startedAt
+}));
+
 // ============================================================================
 // 6. APPLICATION STARTUP
 // ============================================================================
