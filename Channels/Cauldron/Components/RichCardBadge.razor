@@ -1,9 +1,10 @@
 @namespace Cauldron.Components
+@inject IMarkdownRendererService MarkdownRenderer
 
 @* Renders a badge: a short inline pill, coloured by its Variant (info, warning, ...). *@
 
 <span class="rich-card-badge rich-card-badge-@Component.Variant.ToString().ToLower()">
-    @MarkdownRendererService.ToInlineHtml(Component.Text)
+    @MarkdownRenderer.ToInlineHtml(Component.Text)
 </span>
 
 @code {

@@ -61,6 +61,9 @@ builder.Services.AddScoped<SignalRService>();
 // Singleton: the message pool is configuration, identical for every visitor
 builder.Services.AddSingleton<ILandingMessageService, LandingMessageService>();
 
+// Converts message and rich-card Markdown to HTML, sanitizing away injected script/markup
+builder.Services.AddSingleton<IMarkdownRendererService, MarkdownRendererService>();
+
 // Conversation persistence & history services using ProtectedLocalStorage
 // Stores conversation ID in browser localStorage with automatic AES-256 encryption
 // Enables seamless conversation resume across browser sessions

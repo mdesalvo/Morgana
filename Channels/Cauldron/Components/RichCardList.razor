@@ -1,4 +1,5 @@
 @namespace Cauldron.Components
+@inject IMarkdownRendererService MarkdownRenderer
 
 @* Renders a list as bulleted, numbered or plain, per the component's declared Style. *@
 
@@ -9,7 +10,7 @@
         <ul class="rich-card-list rich-card-list-bullet">
             @foreach (string item in Component.Items)
             {
-                <li>@MarkdownRendererService.ToInlineHtml(item)</li>
+                <li>@MarkdownRenderer.ToInlineHtml(item)</li>
             }
         </ul>
         break;
@@ -19,7 +20,7 @@
         <ol class="rich-card-list rich-card-list-numbered">
             @foreach (string item in Component.Items)
             {
-                <li>@MarkdownRendererService.ToInlineHtml(item)</li>
+                <li>@MarkdownRenderer.ToInlineHtml(item)</li>
             }
         </ol>
         break;
@@ -32,7 +33,7 @@
         <div class="rich-card-list rich-card-list-plain">
             @foreach (string item in Component.Items)
             {
-                <div class="rich-card-list-item">@MarkdownRendererService.ToInlineHtml(item)</div>
+                <div class="rich-card-list-item">@MarkdownRenderer.ToInlineHtml(item)</div>
             }
         </div>
         break;

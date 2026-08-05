@@ -1,4 +1,5 @@
 @namespace Cauldron.Components
+@inject IMarkdownRendererService MarkdownRenderer
 
 @* Renders an image with optional caption. Lazy-loaded: cards may sit far up the history. *@
 
@@ -10,7 +11,7 @@
     
     @if (!string.IsNullOrEmpty(Component.Caption))
     {
-        <p class="rich-card-image-caption">@MarkdownRendererService.ToInlineHtml(Component.Caption)</p>
+        <p class="rich-card-image-caption">@MarkdownRenderer.ToInlineHtml(Component.Caption)</p>
     }
 </div>
 

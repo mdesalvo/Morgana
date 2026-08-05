@@ -4,6 +4,7 @@
 @inject IStreamingService StreamingService
 @inject SignalRService SignalRService
 @inject ILandingMessageService LandingMessageService
+@inject IMarkdownRendererService MarkdownRenderer
 @inject NavigationManager NavigationManager
 @implements IAsyncDisposable
 
@@ -130,7 +131,7 @@
                         {
                             @* Message content (text) *@
                             <div class="message-text @(chatMessage.Type == MessageType.Presentation ? "completion-text" : "")">
-                                @MarkdownRendererService.ToHtml(chatMessage.Text)
+                                @MarkdownRenderer.ToHtml(chatMessage.Text)
                             </div>
 
                             @* Rich card (if present) *@

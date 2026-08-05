@@ -1,9 +1,10 @@
 @namespace Cauldron.Components
+@inject IMarkdownRendererService MarkdownRenderer
 
 @* Renders a text_block: a paragraph of card prose, styled by its declared Style. *@
 
 <div class="rich-card-text-block rich-card-text-@Component.Style.ToString().ToLower()">
-    @MarkdownRendererService.ToInlineHtml(Component.Content)
+    @MarkdownRenderer.ToInlineHtml(Component.Content)
 </div>
 
 @code {

@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   When that happens the supervisor stops the turn before routing — no agent is ever invoked, nothing is guessed — and replies directly with a disambiguation message plus one quick reply per colliding intent, most-likely first, each carrying that intent's own `Label` and `DefaultValue` sample phrase, so tapping a button resubmits a phrasing that classifies unambiguously on the next turn.
 
 ### 🔄 Changed
-- GuardActor hardened against **social engineering**: now recognizes and refuses attempts to claim false authority over Morgana or to talk her into revealing her own inner workings, even when dressed up as a polite, in-character favor rather than an obvious demand
+- GuardActor has been hardened against **social engineering**: now recognizes and refuses attempts to claim false authority over Morgana or to talk her into revealing her own inner workings, even when dressed up as a polite, in-character favor rather than an obvious demand
+- Updated `Microsoft.Agents.AI` dependency to 1.17.0
 
 ### 🐛 Fixed
 - A safety block from the LLM provider itself (e.g. a jailbreak attempt caught by Azure's own content filter) is now treated as a genuine violation instead of silently letting the message through
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[Cauldron]** The conversation did not follow new messages, which piled up below the fold and had to be scrolled into view by hand, streamed replies included
 - **[Cauldron]** The loading animation rested against the top of the message area instead of its centre, leaving an empty band underneath it — three stacked causes: a fixed-height block that refused to fill the area, a float animation drifting upward only, and text below the orb dragging the centring down
 - **[Cauldron]** A faded warning banner was never truly removed from the page: an invisible leftover kept holding its space, nudging the loader and the conversation off place until some unrelated event happened to redraw the page
+- **[Cauldron]** Markdown rendered raw HTML and `javascript:`/`data:` links untouched, exposing an injection vector for any untrusted text reaching the chat; now sanitized via `HtmlSanitizer`
 
 ### 🚀 Future Enablement
 

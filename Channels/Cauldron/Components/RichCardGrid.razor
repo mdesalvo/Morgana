@@ -1,4 +1,5 @@
 @namespace Cauldron.Components
+@inject IMarkdownRendererService MarkdownRenderer
 
 @* Renders a grid: key/value pairs laid out in a fixed number of columns. *@
 
@@ -6,8 +7,8 @@
     @foreach (GridItem item in Component.Items)
     {
         <div class="rich-card-grid-item">
-            <div class="rich-card-grid-key">@MarkdownRendererService.ToInlineHtml(item.Key)</div>
-            <div class="rich-card-grid-value">@MarkdownRendererService.ToInlineHtml(item.Value)</div>
+            <div class="rich-card-grid-key">@MarkdownRenderer.ToInlineHtml(item.Key)</div>
+            <div class="rich-card-grid-value">@MarkdownRenderer.ToInlineHtml(item.Value)</div>
         </div>
     }
 </div>
