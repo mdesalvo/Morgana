@@ -11,10 +11,18 @@ namespace Grimoire.Services;
 /// Markdig parses source→AST, Render walks it into RenderedLines with StyledSpans, Wrap breaks at
 /// terminal width. Block-level widgets (Panel, Table, Rule) reserved for rich-card mapper.
 /// </summary>
-public static class MarkdownTerminalRenderService
+public sealed class MarkdownTerminalRenderService
 {
     /// <summary>Shared default pipeline — same configuration Cauldron's renderer uses.</summary>
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().Build();
+
+    /// <summary>Cell-width measurement this renderer wraps/truncates against.</summary>
+    private readonly TerminalCellService cells;
+
+    public MarkdownTerminalRenderService(TerminalCellService cells)
+    {
+        this.cells = cells;
+    }
 
     /// <summary>Foreground for fenced/indented code blocks: a neutral light grey so a code block reads as "other" against the speaker-coloured prose.</summary>
     private const string CodeBlockForeground = "grey85";
@@ -51,7 +59,7 @@ public static class MarkdownTerminalRenderService
     /// wrap the result to single-row <see cref="Markup"/>s at <paramref name="width"/>.
     /// Streaming callers pass a null prefix.
     /// </summary>
-    public static List<Markup> RenderToRows(string markdown, string baseColor, string? speakerPrefix, int width)
+    public List<Markup> RenderToRows(string markdown, string baseColor, string? speakerPrefix, int width)
     {
         List<RenderedLine> lines = Render(markdown, baseColor);
         if (speakerPrefix is { Length: > 0 })
@@ -60,12 +68,14 @@ public static class MarkdownTerminalRenderService
     }
 
     /// <summary>Walks the Markdig AST of <paramref name="markdown"/> into logical lines, colouring prose in <paramref name="baseColor"/>.</summary>
-    internal static List<RenderedLine> Render(string markdown, string baseColor)
+    internal List<RenderedLine> Render(string markdown, string baseColor)
     {
         // Resolve emoji shortcodes (:tada: → 🎉) to real glyphs up front, mirroring the rich-card
         // path (RichCardTerminalRenderService.Plain): Markup does not expand them downstream, so a
         // model that emits GitHub-style shortcodes in prose would otherwise leave them literal.
-        MarkdownDocument document = Markdown.Parse(Emoji.Replace(markdown ?? string.Empty), Pipeline);
+        // Strip variation selectors afterward so Wrap's cell-width measurement (below) agrees with
+        // what the terminal actually draws for an emoji-presentation sequence (e.g. ⚠️).
+        MarkdownDocument document = Markdown.Parse(cells.StripVariationSelectors(Emoji.Replace(markdown ?? string.Empty)), Pipeline);
         List<RenderedLine> lines = RenderBlocks(document, baseColor);
         // An empty document (e.g. whitespace-only message) still owes one line so the
         // speaker prefix has somewhere to land and the row never silently vanishes.
@@ -309,13 +319,8 @@ public static class MarkdownTerminalRenderService
 
     // ---- wrapping ---------------------------------------------------------------------
 
-    /// <summary>
-    /// Breaks each logical line into single-row <see cref="Markup"/>s at <paramref name="width"/>
-    /// visible columns. Spans are sliced across rows as needed; style tokens never count toward
-    /// the column budget. Rule lines emit one full-width <c>─</c> row; empty lines emit one blank
-    /// row, preserving the budget accounting <see cref="ConsoleUiService.BuildBody"/> depends on.
-    /// </summary>
-    internal static List<Markup> Wrap(List<RenderedLine> lines, int width)
+    /// <summary>Breaks each logical line into single-row <see cref="Markup"/>s at the given terminal width, measuring by cell via <see cref="TerminalCellService"/> rather than char count so a wide glyph never desyncs the row budget <see cref="ConsoleUiService.BuildBody"/> relies on.</summary>
+    internal List<Markup> Wrap(List<RenderedLine> lines, int width)
     {
         width = Math.Max(1, width);
         List<Markup> rows = [];
@@ -340,19 +345,41 @@ public static class MarkdownTerminalRenderService
 
             foreach (StyledSpan span in line.Spans)
             {
-                int consumed = 0;
-                while (consumed < span.Text.Length)
+                // Walk the span rune-by-rune, accumulating a same-style slice for the current row,
+                // so a wide glyph is never split and the row is closed exactly when the next rune
+                // would overflow it — not when a char count happens to hit width.
+                StringBuilder slice = new();
+                int sliceCells = 0;
+
+                foreach (Rune rune in span.Text.EnumerateRunes())
                 {
-                    if (col == width)
+                    int runeCells = cells.RuneCells(rune);
+
+                    // Close the row before a rune that would overflow it — but never on an empty
+                    // row, so a rune wider than the whole terminal width (pathological) still lands
+                    // somewhere instead of looping forever. Flush this span's pending slice first
+                    // so its style tag closes before the row does.
+                    if (col + sliceCells + runeCells > width && col + sliceCells > 0)
                     {
+                        if (slice.Length > 0)
+                        {
+                            AppendSegment(sb, span, slice.ToString());
+                            slice.Clear();
+                            sliceCells = 0;
+                        }
                         rows.Add(new Markup(sb.ToString()));
                         sb.Clear();
                         col = 0;
                     }
-                    int take = Math.Min(width - col, span.Text.Length - consumed);
-                    AppendSegment(sb, span, span.Text.Substring(consumed, take));
-                    consumed += take;
-                    col += take;
+
+                    slice.Append(rune.ToString());
+                    sliceCells += runeCells;
+                }
+
+                if (slice.Length > 0)
+                {
+                    AppendSegment(sb, span, slice.ToString());
+                    col += sliceCells;
                 }
             }
 

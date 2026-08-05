@@ -72,14 +72,16 @@ builder.Services.AddHttpClient("Morgana", client =>
 // ==============================================================================
 // 5. SERVICES
 // ==============================================================================
-// MorganaClientService     : wraps start/send/end conversation lifecycle.
-// WebhookReceiverService   : thin dispatcher invoked by the /morgana-hook endpoint.
-// ConsoleUiService         : Spectre.Console Live(Layout) with sticky header + REPL body.
-// All singletons: the process hosts exactly one Rune "session" at a time.
+// MorganaClientService   : wraps start/send/end conversation lifecycle.
+// WebhookReceiverService : thin dispatcher invoked by the /morgana-hook endpoint.
+// ConsoleUiService       : Spectre.Console Live(Layout) with sticky header + REPL body.
+// LandingMessageService  : picks a random "warming up" line for the startup window.
+// TerminalCellService    : rune-safe terminal-cell-width wrap, used by ConsoleUiService's own rendering.
 builder.Services.AddSingleton<MorganaClientService>();
 builder.Services.AddSingleton<WebhookReceiverService>();
 builder.Services.AddSingleton<ConsoleUiService>();
 builder.Services.AddSingleton<LandingMessageService>();
+builder.Services.AddSingleton<TerminalCellService>();
 
 // ==============================================================================
 // 5a. VIEWPORT RESIZE WATCHER - PLATFORM-SPECIFIC STRATEGY

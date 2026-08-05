@@ -10,10 +10,18 @@ namespace Grimoire.Services;
 /// instead of variable-height IRenderables. Card text fields flattened through Markdown.ToPlainText
 /// (no inline markdown in terminal, unlike Cauldron's browser HTML formatting).
 /// </summary>
-public static class RichCardTerminalRenderService
+public sealed class RichCardTerminalRenderService
 {
     /// <summary>Shared default pipeline — same base configuration as Cauldron's <c>MarkdownRendererService</c>, here feeding <c>Markdown.ToPlainText</c> to flatten card text for the terminal.</summary>
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().Build();
+
+    /// <summary>Cell-width measurement this renderer wraps/truncates against.</summary>
+    private readonly TerminalCellService cells;
+
+    public RichCardTerminalRenderService(TerminalCellService cells)
+    {
+        this.cells = cells;
+    }
 
     /// <summary>Body prose foreground — Cauldron's <c>#d0d0d0</c> neutral, distinct from speaker-tinted chat prose.</summary>
     private const string BodyForeground = "grey85";
@@ -34,7 +42,7 @@ public static class RichCardTerminalRenderService
     /// body keeps Cauldron's neutral grey ramp for legibility. <paramref name="width"/> is the
     /// full terminal width the box may occupy.
     /// </summary>
-    public static List<Markup> RenderRichCard(RichCard richCard, string baseColor, int width)
+    public List<Markup> RenderRichCard(RichCard richCard, string baseColor, int width)
     {
         // Geometry. The box owns the full terminal width; each interior content row is
         // `│␣ … ␣│` — two border glyphs plus one padding space on each side — so the text
@@ -86,7 +94,7 @@ public static class RichCardTerminalRenderService
     // ---- component walking --------------------------------------------------------------
 
     /// <summary>Walks a component list into logical card lines, inserting a blank breather between consecutive cardComponents (no leading/trailing blank) to mirror Cauldron's margins.</summary>
-    private static List<CardLine> BuildComponents(IEnumerable<CardComponent> cardComponents, string baseColor, int width)
+    private List<CardLine> BuildComponents(IEnumerable<CardComponent> cardComponents, string baseColor, int width)
     {
         List<CardLine> output = [];
         bool first = true;
@@ -106,7 +114,7 @@ public static class RichCardTerminalRenderService
         return output;
     }
 
-    private static List<CardLine> BuildComponent(CardComponent component, string baseColor, int width) => component switch
+    private List<CardLine> BuildComponent(CardComponent component, string baseColor, int width) => component switch
     {
         TextBlockComponent textBlock => BuildTextBlock(textBlock, width),
         KeyValueComponent keyValue => BuildKeyValue(keyValue, width),
@@ -119,7 +127,7 @@ public static class RichCardTerminalRenderService
         _ => []
     };
 
-    private static List<CardLine> BuildTextBlock(TextBlockComponent textBlock, int width)
+    private List<CardLine> BuildTextBlock(TextBlockComponent textBlock, int width)
     {
         // Map the four declared text styles onto what a TTY can actually express. Bold is real;
         // Muted and Small both collapse to the dim grey — a terminal can't shrink a glyph, so
@@ -135,7 +143,7 @@ public static class RichCardTerminalRenderService
         return [.. WrapText(Plain(textBlock.Content), width).Select(slice => Content([new CardSeg(slice, style)]))];
     }
 
-    private static List<CardLine> BuildKeyValue(KeyValueComponent keyValue, int width)
+    private List<CardLine> BuildKeyValue(KeyValueComponent keyValue, int width)
     {
         string key = Plain(keyValue.Key);
         string value = Plain(keyValue.Value);
@@ -165,7 +173,7 @@ public static class RichCardTerminalRenderService
         return lines;
     }
 
-    private static List<CardLine> BuildList(ListComponent list, string baseColor, int width)
+    private List<CardLine> BuildList(ListComponent list, string baseColor, int width)
     {
         List<CardLine> output = [];
         int ordinal = 1; // only consumed by the Numbered style, but advanced every item to stay in lockstep
@@ -195,7 +203,7 @@ public static class RichCardTerminalRenderService
         return output;
     }
 
-    private static List<CardLine> BuildSection(SectionComponent section, string baseColor, int width)
+    private List<CardLine> BuildSection(SectionComponent section, string baseColor, int width)
     {
         // No leading blank here: BuildComponents already inserts a breather before every
         // non-first component, so a self-blank would double the gap ahead of a section.
@@ -227,7 +235,7 @@ public static class RichCardTerminalRenderService
         return output;
     }
 
-    private static List<CardLine> BuildGrid(GridComponent grid, int width)
+    private List<CardLine> BuildGrid(GridComponent grid, int width)
     {
         // Clamp the requested column count: at least 1, and at most width/2 so every cell keeps
         // a usable ≥2-column slot even on a narrow terminal. Then each cell gets an equal share of
@@ -261,7 +269,7 @@ public static class RichCardTerminalRenderService
         return output;
     }
 
-    private static List<CardLine> BuildBadge(BadgeComponent badge, int width)
+    private List<CardLine> BuildBadge(BadgeComponent badge, int width)
     {
         // Semantic variant → a "foreground on background" Spectre style. The background fill is
         // what makes it read as a pill/chip; the fg is chosen for contrast against each bg.
@@ -280,7 +288,7 @@ public static class RichCardTerminalRenderService
         return [Content([new CardSeg(chip, style)])];
     }
 
-    private static List<CardLine> BuildImage(ImageComponent image, int width)
+    private List<CardLine> BuildImage(ImageComponent image, int width)
     {
         // No bitmap rendering and no OSC 8 hyperlinks (the frozen low-effort decision): surface the
         // image as honest text — an "[image: alt]" tag, the URL, and an optional italic caption.
@@ -370,86 +378,14 @@ public static class RichCardTerminalRenderService
     /// not expand them in this path, and the badge builder upper-cases its text (turning <c>:tada:</c> into the
     /// non-shortcode <c>:TADA:</c>), so the conversion must happen before either step. A resolved glyph is then
     /// measured correctly by <c>GetCellWidth</c>, keeping the right border aligned.</summary>
-    private static string Plain(string? text) =>
-        string.IsNullOrEmpty(text) ? string.Empty : StripVariationSelectors(Emoji.Replace(Markdown.ToPlainText(text, Pipeline).Trim()));
+    private string Plain(string? text) =>
+        string.IsNullOrEmpty(text) ? string.Empty : cells.StripVariationSelectors(Emoji.Replace(Markdown.ToPlainText(text, Pipeline).Trim()));
 
-    /// <summary>
-    /// Removes Unicode variation selectors (U+FE00–U+FE0F). These are zero-width format codepoints
-    /// that flip a base glyph between text and emoji presentation; an emoji-presentation sequence
-    /// such as <c>⚠️</c> (<c>⚠</c> + U+FE0F) is measured as <b>two</b> cells by Wcwidth yet rendered
-    /// as <b>one</b> by most terminals — a mismatch that insets that single row's right border.
-    /// Forcing text presentation keeps the measured and rendered widths in agreement. All selectors
-    /// are single BMP chars, so a char-level scan is surrogate-safe.
-    /// </summary>
-    private static string StripVariationSelectors(string text)
-    {
-        bool hasSelector = false;
-        foreach (char c in text)
-            if (c is >= '\uFE00' and <= '\uFE0F') { hasSelector = true; break; }
-        if (!hasSelector)
-            return text; // hot path: the overwhelming majority of card text has none
+    /// <summary>Wraps to terminal columns — delegates to <see cref="TerminalCellService.Wrap"/>.</summary>
+    private List<string> WrapText(string text, int width) => cells.Wrap(text, width);
 
-        StringBuilder sb = new(text.Length);
-        foreach (char c in text)
-            if (c is not (>= '\uFE00' and <= '\uFE0F'))
-                sb.Append(c);
-        return sb.ToString();
-    }
-
-    /// <summary>
-    /// Greedy wrap at <paramref name="width"/> terminal columns, measured in cells (CJK count as
-    /// two, combining marks/variation selectors as zero) and broken on whole runes so a surrogate
-    /// pair is never split. Always returns at least one (possibly empty) slice.
-    /// </summary>
-    private static List<string> WrapText(string text, int width)
-    {
-        width = Math.Max(1, width);
-        if (text.Length == 0)
-            return [string.Empty];
-
-        List<string> slices = [];
-        StringBuilder current = new();
-        int currentCells = 0;
-        foreach (Rune rune in text.EnumerateRunes())
-        {
-            int runeCells = RuneCells(rune);
-            // Close the current slice before a rune that would overflow the width — but never on an
-            // empty slice, otherwise a rune wider than the whole width (pathological) would loop.
-            if (currentCells + runeCells > width && current.Length > 0)
-            {
-                slices.Add(current.ToString());
-                current.Clear();
-                currentCells = 0;
-            }
-            current.Append(rune.ToString());
-            currentCells += runeCells;
-        }
-        if (current.Length > 0 || slices.Count == 0)
-            slices.Add(current.ToString());
-        return slices;
-    }
-
-    /// <summary>Truncates to <paramref name="width"/> terminal columns (cell-measured, rune-safe), appending an ellipsis when it has to cut and there is room for one.</summary>
-    private static string Trunc(string text, int width)
-    {
-        width = Math.Max(1, width);
-        if (text.GetCellWidth() <= width)
-            return text;
-        // The "…" itself occupies one column, so keep width-1 columns of content and append it —
-        // total stays ≤ width. When width is 1 there's no room for both, so hard-cut to a single column.
-        int budget = width >= 2 ? width - 1 : width;
-        StringBuilder sb = new();
-        int cells = 0;
-        foreach (Rune rune in text.EnumerateRunes())
-        {
-            int runeCells = RuneCells(rune);
-            if (cells + runeCells > budget)
-                break;
-            sb.Append(rune.ToString());
-            cells += runeCells;
-        }
-        return width >= 2 ? sb + "…" : sb.ToString();
-    }
+    /// <summary>Truncates to terminal columns — delegates to <see cref="TerminalCellService.Trunc"/>.</summary>
+    private string Trunc(string text, int width) => cells.Trunc(text, width);
 
     /// <summary>Right-pads with spaces to exactly <paramref name="width"/> terminal columns (cell-measured; input assumed already ≤ width).</summary>
     private static string Pad(string text, int width)
@@ -457,9 +393,6 @@ public static class RichCardTerminalRenderService
         int cells = text.GetCellWidth();
         return cells >= width ? text : text + new string(' ', width - cells);
     }
-
-    /// <summary>Terminal cell width of a single rune (0 for combining/zero-width, 2 for wide CJK, 1 otherwise), via Spectre's Wcwidth-backed measurement.</summary>
-    private static int RuneCells(Rune rune) => rune.ToString().GetCellWidth();
 
     /// <summary>One styled run of visible text inside a card line. <paramref name="Style"/> is a full Spectre style token string (e.g. <c>"grey85 bold"</c>) or empty for unstyled padding.</summary>
     private readonly record struct CardSeg(string Text, string Style);

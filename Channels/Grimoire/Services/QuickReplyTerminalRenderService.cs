@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using Morgana.Contracts;
 using Spectre.Console;
@@ -28,8 +29,16 @@ namespace Grimoire.Services;
 /// this service is pure presentation.
 /// </para>
 /// </remarks>
-public static class QuickReplyTerminalRenderService
+public sealed class QuickReplyTerminalRenderService
 {
+    /// <summary>Cell-width measurement this renderer wraps/truncates against.</summary>
+    private readonly TerminalCellService cells;
+
+    public QuickReplyTerminalRenderService(TerminalCellService cells)
+    {
+        this.cells = cells;
+    }
+
     /// <summary>Foreground for the non-selected options — the same de-emphasised grey the rich-card body uses.</summary>
     private const string InactiveForeground = "grey70";
 
@@ -51,7 +60,7 @@ public static class QuickReplyTerminalRenderService
     /// (the channel's user colour). The first row is always the controls hint; the option rows
     /// follow, one per row. <paramref name="width"/> is the terminal width available.
     /// </summary>
-    public static List<Markup> RenderQuickReplies(IReadOnlyList<QuickReply> quickReplies, int selectedIndex, string accentColor, int width)
+    public List<Markup> RenderQuickReplies(IReadOnlyList<QuickReply> quickReplies, int selectedIndex, string accentColor, int width)
     {
         int termWidth = Math.Max(1, width);
         List<Markup> rows = WrapHint(termWidth);
@@ -63,11 +72,13 @@ public static class QuickReplyTerminalRenderService
     }
 
     /// <summary>Builds one option as its own row: a caret, then the space-padded label. The label is truncated so caret(2) + padding(2) + label never exceeds <paramref name="width"/>.</summary>
-    private static Markup RenderQuickReply(QuickReply quickReply, bool active, string accentColor, int width)
+    private Markup RenderQuickReply(QuickReply quickReply, bool active, string accentColor, int width)
     {
         // Resolve emoji shortcodes to glyphs before truncation/escaping, consistent with the prose
-        // and rich-card renderers — Markup leaves :shortcodes: literal in this path otherwise.
-        string label = Trunc(Emoji.Replace(quickReply.Label), Math.Max(1, width - 4));
+        // and rich-card renderers — Markup leaves :shortcodes: literal in this path otherwise. Strip
+        // variation selectors too, so the cell-measured truncation below agrees with what the
+        // terminal actually draws (e.g. an emoji-presentation warning sign).
+        string label = cells.Trunc(cells.StripVariationSelectors(Emoji.Replace(quickReply.Label)), Math.Max(1, width - 4));
         StringBuilder sb = new(width + 32);
         AppendCaret(sb, active, accentColor);
         sb.Append('[').Append(ChipStyle(quickReply, active, accentColor)).Append("] ").Append(Markup.Escape(label)).Append(" [/]");
@@ -95,21 +106,7 @@ public static class QuickReplyTerminalRenderService
         return active ? $"black on {accentColor}" : InactiveForeground;
     }
 
-    /// <summary>Renders the controls hint, char-wrapped to <paramref name="width"/> so it too honours one-Markup-per-row on a narrow terminal.</summary>
-    private static List<Markup> WrapHint(int width)
-    {
-        List<Markup> rows = [];
-        for (int offset = 0; offset < HintText.Length; offset += width)
-            rows.Add(new Markup($"[{HintStyle}]{Markup.Escape(HintText.Substring(offset, Math.Min(width, HintText.Length - offset)))}[/]"));
-        return rows;
-    }
-
-    /// <summary>Truncates to <paramref name="width"/> columns, appending an ellipsis when it has to cut (and there's room for one).</summary>
-    private static string Trunc(string text, int width)
-    {
-        width = Math.Max(1, width);
-        if (text.Length <= width)
-            return text;
-        return width >= 2 ? text[..(width - 1)] + "…" : text[..width];
-    }
+    /// <summary>Renders the controls hint, cell-wrapped to <paramref name="width"/> so it too honours one-Markup-per-row on a narrow terminal.</summary>
+    private List<Markup> WrapHint(int width) =>
+        [.. cells.Wrap(HintText, width).Select(slice => new Markup($"[{HintStyle}]{Markup.Escape(slice)}[/]"))];
 }

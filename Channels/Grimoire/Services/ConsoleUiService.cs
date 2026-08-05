@@ -192,14 +192,31 @@ public sealed class ConsoleUiService
     /// <summary>Platform-specific terminal-resize notifier; subscribed in <see cref="RunAsync"/> so the viewport anchor follows live window resizes without per-frame polling.</summary>
     private readonly IViewportResizeWatcher viewportResizeWatcher;
 
+    /// <summary>Renders chat/streaming text to Spectre rows — holds the cell-width service that keeps a wide glyph from desyncing the row budget the rest of this class relies on.</summary>
+    private readonly MarkdownTerminalRenderService markdownRenderer;
+
+    /// <summary>Renders a <see cref="RichCard"/> to a bordered Spectre box.</summary>
+    private readonly RichCardTerminalRenderService richCardRenderer;
+
+    /// <summary>Renders a turn's quick replies to the selectable prompt surface.</summary>
+    private readonly QuickReplyTerminalRenderService quickReplyRenderer;
+
     /// <summary>Serializes mutations of <see cref="history"/>, <see cref="currentInput"/>, <see cref="currentSpeaker"/> and the paired <see cref="LiveDisplayContext.UpdateTarget"/>/<see cref="LiveDisplayContext.Refresh"/> calls. The resize callback runs on its own thread (SIGWINCH handler / polling task) and would otherwise race with <see cref="ReadKeysLoop"/> and <see cref="DrainInboundLoop"/> over the shared list. Uses <see cref="System.Threading.Lock"/> (.NET 9+) instead of <c>object</c> so the compiler emits the optimised primitive and rejects misuse (e.g. passing the lock as an <c>object</c>).</summary>
     private readonly Lock renderLock = new();
 
-    /// <summary>Reads the <c>Grimoire:AgentExitMessage</c> template, falling back to <see cref="DefaultAgentExitMessage"/>, the typewriter cadence settings, and captures the injected resize watcher.</summary>
-    public ConsoleUiService(IConfiguration configuration, IViewportResizeWatcher viewportResizeWatcher)
+    /// <summary>Reads the <c>Grimoire:AgentExitMessage</c> template, falling back to <see cref="DefaultAgentExitMessage"/>, the typewriter cadence settings, and captures the injected resize watcher and the three DI-registered renderers.</summary>
+    public ConsoleUiService(
+        IConfiguration configuration,
+        IViewportResizeWatcher viewportResizeWatcher,
+        MarkdownTerminalRenderService markdownRenderer,
+        RichCardTerminalRenderService richCardRenderer,
+        QuickReplyTerminalRenderService quickReplyRenderer)
     {
         agentExitTemplate = configuration["Grimoire:AgentExitMessage"] ?? DefaultAgentExitMessage;
         this.viewportResizeWatcher = viewportResizeWatcher;
+        this.markdownRenderer = markdownRenderer;
+        this.richCardRenderer = richCardRenderer;
+        this.quickReplyRenderer = quickReplyRenderer;
 
         // Typewriter cadence — mirror of Cauldron's Cauldron:StreamingResponse:Typewriter* keys.
         // Non-positive values fall back to the Cauldron defaults (15 ms, 1 char/tick) so a
@@ -242,6 +259,27 @@ public sealed class ConsoleUiService
             layout = BuildLayout();
         }
 
+        // Spectre's Live rendering only ever writes/diffs content — it never touches the terminal's
+        // own native cursor. Left visible, that cursor sits wherever the last partial repaint's
+        // cursor-position escape happened to leave it (often the start of whatever row Spectre wrote
+        // last), showing up as a stray blinking block in the middle of the scrollback that has
+        // nothing to do with the blinking "_"/inverted-block caret Grimoire draws itself at the
+        // prompt. Hidden for the whole Live session, restored in the finally below so the user's
+        // shell prompt gets its cursor back on exit.
+        AnsiConsole.Cursor.Hide();
+        try
+        {
+            await RunLiveDisplayAsync(layout, onSend, cancellationToken);
+        }
+        finally
+        {
+            AnsiConsole.Cursor.Show();
+        }
+    }
+
+    /// <summary>The actual Live(Layout) session — split out of <see cref="RunAsync"/> so the cursor hide/show wrap above reads as a single, obvious guard rather than being buried inside the lambda.</summary>
+    private async Task RunLiveDisplayAsync(Layout layout, Func<string, Task> onSend, CancellationToken cancellationToken)
+    {
         await AnsiConsole
             .Live(layout)
             .AutoClear(false)
@@ -978,7 +1016,7 @@ public sealed class ConsoleUiService
 
         // No speaker prefix on the streaming pane (matches prior behaviour); no caching —
         // the buffer changes every tick, and Markdig is cheap on these small payloads.
-        return [.. MarkdownTerminalRenderService.RenderToRows(streamingDisplayed, MorganaAgentColor, null, termWidth)];
+        return [.. markdownRenderer.RenderToRows(streamingDisplayed, MorganaAgentColor, null, termWidth)];
     }
 
     /// <summary>
@@ -993,16 +1031,16 @@ public sealed class ConsoleUiService
     /// invalidates automatically when the terminal width changes (resize).
     /// </summary>
     /// <remarks>Mutates <paramref name="message"/>'s cache fields; always invoked under <see cref="renderLock"/> via <see cref="BuildBody"/>.</remarks>
-    private static List<Markup> RenderMessageRows(DisplayedMessage message, int termWidth)
+    private List<Markup> RenderMessageRows(DisplayedMessage message, int termWidth)
     {
         if (message.CachedWidth == termWidth && message.CachedRows is not null)
             return message.CachedRows;
 
-        List<Markup> rows = MarkdownTerminalRenderService.RenderToRows(message.Text, message.Color, $"{message.Who}: ", termWidth);
+        List<Markup> rows = markdownRenderer.RenderToRows(message.Text, message.Color, $"{message.Who}: ", termWidth);
         if (message.Card is not null)
         {
             rows.Add(new Markup(string.Empty));
-            rows.AddRange(RichCardTerminalRenderService.RenderRichCard(message.Card, message.Color, termWidth));
+            rows.AddRange(richCardRenderer.RenderRichCard(message.Card, message.Color, termWidth));
         }
         message.CachedRows = rows;
         message.CachedWidth = termWidth;
@@ -1034,8 +1072,10 @@ public sealed class ConsoleUiService
         // Quick replies own the prompt for this turn (set in CommitFinalMessage): render the
         // selectable options in place of the text input. The accent is the user colour because
         // this is the user's choice surface. Markup → IRenderable via the spread, as elsewhere.
+        // Framed like the free-text prompt: picking an option is still the user's turn to act,
+        // just via arrow keys instead of typing.
         if (quickReplyActive && activeQuickReplies is { Count: > 0 } replies)
-            return [.. QuickReplyTerminalRenderService.RenderQuickReplies(replies, quickReplyIndex, UserColor, termWidth)];
+            return FramePromptRows([.. quickReplyRenderer.RenderQuickReplies(replies, quickReplyIndex, UserColor, termWidth)], termWidth);
 
         if (awaitingResponse)
         {
@@ -1045,8 +1085,11 @@ public sealed class ConsoleUiService
             if (streamingDisplayed.Length > 0)
                 return [];
 
+            // Tinted in the speaker's own colour (primary purple for base Morgana, secondary pink
+            // for a specialised agent) instead of a flat grey, so the hint already signals who's
+            // about to answer before the first token of the reply arrives.
             string content = $"{currentSpeaker} is thinking…";
-            return ChunkStyledRows(content, termWidth, "grey54 italic");
+            return ChunkStyledRows(content, termWidth, $"{SpeakerColor(currentSpeaker)} italic");
         }
 
         // Visible layout, one cell per visible column: chevron, a space, then the input chars —
@@ -1083,7 +1126,21 @@ public sealed class ConsoleUiService
         }
         if (sb.Length > 0)
             rows.Add(new Markup(sb.ToString()));
-        return rows;
+        return FramePromptRows(rows, termWidth);
+    }
+
+    /// <summary>Sandwiches the row(s) where the user actually acts — free-text typing or the quick-reply picker — between two full-width rules in the same grey as the header panel's border, so that surface isn't marked only by the caret or the option highlight. Not used for the thinking hint or the dead-conversation notice: those are status, not something the user is doing right now.</summary>
+    private static List<IRenderable> FramePromptRows(List<IRenderable> rows, int termWidth)
+    {
+        // Nothing to frame while the streaming pane owns the bottom row — bordering emptiness
+        // would just steal two rows from history for no visual gain.
+        if (rows.Count == 0)
+            return rows;
+
+        // Grey50 matches BuildHeader's Panel BorderStyle, so the prompt frame reads as the same
+        // chrome family as the header rather than a second, competing accent colour.
+        Markup border = new($"[grey50]{new string('─', Math.Max(1, termWidth))}[/]");
+        return [border, .. rows, border];
     }
 
     /// <summary>Splits <paramref name="content"/> into <paramref name="termWidth"/>-wide chunks, each rendered as a single-row <see cref="Markup"/> wrapped in <paramref name="style"/>.</summary>

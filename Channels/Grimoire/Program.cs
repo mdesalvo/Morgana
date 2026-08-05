@@ -75,14 +75,22 @@ builder.Services.AddHttpClient("Morgana", client =>
 // ==============================================================================
 // 5. SERVICES
 // ==============================================================================
-// MorganaClientService     : wraps start/send/end conversation lifecycle.
-// WebhookReceiverService   : thin dispatcher invoked by the /morgana-hook endpoint.
-// ConsoleUiService         : Spectre.Console Live(Layout) with sticky header + REPL body.
-// All singletons: the process hosts exactly one Grimoire "session" at a time.
+// MorganaClientService            : wraps start/send/end conversation lifecycle.
+// WebhookReceiverService          : thin dispatcher invoked by the /morgana-hook endpoint.
+// ConsoleUiService                : Spectre.Console Live(Layout) with sticky header + REPL body.
+// LandingMessageService           : picks a random "warming up" line for the startup window.
+// TerminalCellService             : rune-safe terminal-cell-width wrap/truncate, shared by the three renderers below.
+// MarkdownTerminalRenderService   : renders a ChannelMessage's prose to Spectre rows via Markdig.
+// RichCardTerminalRenderService   : renders a RichCard to a bordered Spectre box.
+// QuickReplyTerminalRenderService : renders a turn's quick replies to the selectable prompt surface.
 builder.Services.AddSingleton<MorganaClientService>();
 builder.Services.AddSingleton<WebhookReceiverService>();
 builder.Services.AddSingleton<ConsoleUiService>();
 builder.Services.AddSingleton<LandingMessageService>();
+builder.Services.AddSingleton<TerminalCellService>();
+builder.Services.AddSingleton<MarkdownTerminalRenderService>();
+builder.Services.AddSingleton<RichCardTerminalRenderService>();
+builder.Services.AddSingleton<QuickReplyTerminalRenderService>();
 
 // ==============================================================================
 // 5a. VIEWPORT RESIZE WATCHER - PLATFORM-SPECIFIC STRATEGY

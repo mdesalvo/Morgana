@@ -137,14 +137,18 @@ public sealed class ConsoleUiService
     /// <summary>Platform-specific terminal-resize notifier; subscribed in <see cref="RunAsync"/> so the viewport anchor follows live window resizes without per-frame polling.</summary>
     private readonly IViewportResizeWatcher viewportResizeWatcher;
 
+    /// <summary>Cell-width measurement this class wraps/truncates against, so a wide glyph never desyncs the row budget BuildBody relies on.</summary>
+    private readonly TerminalCellService cells;
+
     /// <summary>Serializes mutations of <see cref="history"/>, <see cref="currentInput"/>, <see cref="currentSpeaker"/> and the paired <see cref="LiveDisplayContext.UpdateTarget"/>/<see cref="LiveDisplayContext.Refresh"/> calls. The resize callback runs on its own thread (SIGWINCH handler / polling task) and would otherwise race with <see cref="ReadKeysLoop"/> and <see cref="DrainIncomingLoop"/> over the shared list. Uses <see cref="System.Threading.Lock"/> (.NET 9+) instead of <c>object</c> so the compiler emits the optimised primitive and rejects misuse (e.g. passing the lock as an <c>object</c>).</summary>
     private readonly Lock renderLock = new();
 
     /// <summary>Reads the <c>Rune:AgentExitMessage</c> template, falling back to <see cref="DefaultAgentExitMessage"/>, and captures the injected resize watcher.</summary>
-    public ConsoleUiService(IConfiguration configuration, IViewportResizeWatcher viewportResizeWatcher)
+    public ConsoleUiService(IConfiguration configuration, IViewportResizeWatcher viewportResizeWatcher, TerminalCellService cells)
     {
         agentExitTemplate = configuration["Rune:AgentExitMessage"] ?? DefaultAgentExitMessage;
         this.viewportResizeWatcher = viewportResizeWatcher;
+        this.cells = cells;
 
         // Non-positive (or absent) falls back to 500 so a misconfiguration can't lock the prompt shut.
         maxInputLength = configuration.GetValue<int?>("Rune:MaxInputLength") ?? 500;
@@ -174,6 +178,27 @@ public sealed class ConsoleUiService
             layout = BuildLayout();
         }
 
+        // Spectre's Live rendering only ever writes/diffs content — it never touches the terminal's
+        // own native cursor. Left visible, that cursor sits wherever the last partial repaint's
+        // cursor-position escape happened to leave it (often the start of whatever row Spectre wrote
+        // last), showing up as a stray blinking block in the middle of the scrollback that has
+        // nothing to do with the blinking "_"/inverted-block caret Rune draws itself at the prompt.
+        // Hidden for the whole Live session, restored in the finally below so the user's shell
+        // prompt gets its cursor back on exit.
+        AnsiConsole.Cursor.Hide();
+        try
+        {
+            await RunLiveDisplayAsync(layout, onSend, cancellationToken);
+        }
+        finally
+        {
+            AnsiConsole.Cursor.Show();
+        }
+    }
+
+    /// <summary>The actual Live(Layout) session — split out of <see cref="RunAsync"/> so the cursor hide/show wrap above reads as a single, obvious guard rather than being buried inside the lambda.</summary>
+    private async Task RunLiveDisplayAsync(Layout layout, Func<string, Task> onSend, CancellationToken cancellationToken)
+    {
         await AnsiConsole
             .Live(layout)
             .AutoClear(false)
@@ -669,7 +694,7 @@ public sealed class ConsoleUiService
     /// terminal rows behind the viewport budget's back. That single-row-per-Markup contract is what
     /// lets <see cref="BuildBody"/> materialise the whole history and slice an exact window of it.
     /// </remarks>
-    private static List<IRenderable> RenderMessageRows(DisplayedMessage message, int termWidth)
+    private List<IRenderable> RenderMessageRows(DisplayedMessage message, int termWidth)
     {
         List<IRenderable> rows = [];
 
@@ -685,7 +710,7 @@ public sealed class ConsoleUiService
         // honest plain Unicode (not a "rich" capability), and Rune's rune/cell-based wrapper below
         // measures the resolved glyph correctly. Order: resolve first, then strip variation
         // selectors from the produced glyphs so the cell-width accounting stays exact.
-        string text = StripVariationSelectors(BlankRunRegex.Replace(Emoji.Replace(message.Text.Trim()), "\n\n"));
+        string text = cells.StripVariationSelectors(BlankRunRegex.Replace(Emoji.Replace(message.Text.Trim()), "\n\n"));
         string fullText = $"{message.Who}: {text}";
         bool first = true;
         foreach (string line in fullText.Split('\n'))
@@ -694,7 +719,7 @@ public sealed class ConsoleUiService
             // two columns and a combining mark as zero, so a char-indexed chunk could overflow the
             // row and Spectre would silently wrap it — breaking the one-Markup-per-row contract that
             // BuildBody's scrollback budget depends on.
-            foreach (string chunk in ChunkByCells(line, termWidth))
+            foreach (string chunk in cells.Wrap(line, termWidth))
             {
                 EmitMessageRow(rows, message, chunk, isFirstRowOfMessage: first);
                 first = false;
@@ -754,8 +779,11 @@ public sealed class ConsoleUiService
 
         if (awaitingResponse)
         {
+            // Tinted in the speaker's own colour (emerald for base Morgana, light green for a
+            // specialised agent) instead of a flat grey, so the hint already signals who's about
+            // to answer before the first word of the reply arrives.
             string content = $"{currentSpeaker} is thinking…";
-            return ChunkStyledRows(content, termWidth, "grey54 italic");
+            return ChunkStyledRows(content, termWidth, $"{SpeakerColor(currentSpeaker)} italic");
         }
 
         // Visible layout: chevron, a space, the input runes, then the cursor — packed into rows of
@@ -776,11 +804,11 @@ public sealed class ConsoleUiService
             string glyph = Markup.Escape(rune.ToString());
             if (!caretPlaced && cursorPosition >= charOffset && cursorPosition < charOffset + rune.Utf16SequenceLength)
             {
-                units.Add(($"[blink {UserColor} invert]{glyph}[/]", RuneCells(rune)));
+                units.Add(($"[blink {UserColor} invert]{glyph}[/]", cells.RuneCells(rune)));
                 caretPlaced = true;
             }
             else
-                units.Add((glyph, RuneCells(rune)));
+                units.Add((glyph, cells.RuneCells(rune)));
             charOffset += rune.Utf16SequenceLength;
         }
         if (!caretPlaced) // caret at end-of-line
@@ -804,54 +832,29 @@ public sealed class ConsoleUiService
         }
         if (sb.Length > 0)
             rows.Add(new Markup(sb.ToString()));
-        return rows;
+        return FramePromptRows(rows, termWidth);
+    }
+
+    /// <summary>Sandwiches the free-text input row between two full-width rules in the same grey as the header panel's border, so the caret isn't the only thing marking "you type here". Not used for the thinking hint or the dead-conversation notice — those already read as "not a normal turn" on their own.</summary>
+    private static List<IRenderable> FramePromptRows(List<IRenderable> rows, int termWidth)
+    {
+        if (rows.Count == 0)
+            return rows;
+
+        // Grey50 matches BuildHeader's Panel BorderStyle, so the prompt frame reads as the same
+        // chrome family as the header rather than a second, competing accent colour.
+        Markup border = new($"[grey50]{new string('─', Math.Max(1, termWidth))}[/]");
+        return [border, .. rows, border];
     }
 
     /// <summary>Splits <paramref name="content"/> into <paramref name="termWidth"/>-cell chunks, each rendered as a single-row <see cref="Markup"/> wrapped in <paramref name="style"/>.</summary>
-    private static List<IRenderable> ChunkStyledRows(string content, int termWidth, string style)
+    private List<IRenderable> ChunkStyledRows(string content, int termWidth, string style)
     {
         List<IRenderable> rows = [];
-        foreach (string chunk in ChunkByCells(content, termWidth))
+        foreach (string chunk in cells.Wrap(content, termWidth))
             rows.Add(new Markup($"[{style}]{Markup.Escape(chunk)}[/]"));
         return rows;
     }
-
-    /// <summary>
-    /// Greedy wrap of <paramref name="text"/> at <paramref name="width"/> terminal columns, measured
-    /// in cells (Spectre's Wcwidth-backed <c>GetCellWidth</c>: wide CJK count as two, combining
-    /// marks/variation selectors as zero) and broken on whole runes so a surrogate pair is never
-    /// split. Always returns at least one (possibly empty) slice, so an empty line still emits one row.
-    /// </summary>
-    private static List<string> ChunkByCells(string text, int width)
-    {
-        width = Math.Max(1, width);
-        if (text.Length == 0)
-            return [string.Empty];
-
-        List<string> slices = [];
-        StringBuilder current = new();
-        int currentCells = 0;
-        foreach (System.Text.Rune rune in text.EnumerateRunes())
-        {
-            int runeCells = RuneCells(rune);
-            // Close the current slice before a rune that would overflow the width — but never on an
-            // empty slice, otherwise a rune wider than the whole width (pathological) would loop.
-            if (currentCells + runeCells > width && current.Length > 0)
-            {
-                slices.Add(current.ToString());
-                current.Clear();
-                currentCells = 0;
-            }
-            current.Append(rune.ToString());
-            currentCells += runeCells;
-        }
-        if (current.Length > 0 || slices.Count == 0)
-            slices.Add(current.ToString());
-        return slices;
-    }
-
-    /// <summary>Terminal cell width of a single rune (0 for combining/zero-width, 2 for wide CJK, 1 otherwise), via Spectre's Wcwidth-backed measurement.</summary>
-    private static int RuneCells(System.Text.Rune rune) => rune.ToString().GetCellWidth();
 
     /// <summary>UTF-16 length (1, or 2 for a surrogate pair) of the rune ending just before <paramref name="pos"/> in <see cref="currentInput"/>. Caller guarantees <paramref name="pos"/> &gt; 0; keeps the caret on a rune boundary going left.</summary>
     private int RuneLengthBefore(int pos) =>
@@ -860,29 +863,6 @@ public sealed class ConsoleUiService
     /// <summary>UTF-16 length (1, or 2 for a surrogate pair) of the rune starting at <paramref name="pos"/> in <see cref="currentInput"/>. Caller guarantees <paramref name="pos"/> &lt; length; keeps the caret on a rune boundary going right.</summary>
     private int RuneLengthAt(int pos) =>
         pos + 1 < currentInput.Length && char.IsHighSurrogate(currentInput[pos]) && char.IsLowSurrogate(currentInput[pos + 1]) ? 2 : 1;
-
-    /// <summary>
-    /// Removes Unicode variation selectors (U+FE00–U+FE0F): zero-width format codepoints that flip a
-    /// base glyph between text and emoji presentation. An emoji-presentation sequence such as <c>⚠️</c>
-    /// (<c>⚠</c> + U+FE0F) is measured as two cells by Wcwidth yet rendered as one by most terminals,
-    /// which would throw the per-message row budget off by a column. Forcing text presentation keeps
-    /// measured and rendered widths in agreement. All selectors are single BMP chars, so a char scan
-    /// is surrogate-safe.
-    /// </summary>
-    private static string StripVariationSelectors(string text)
-    {
-        bool hasSelector = false;
-        foreach (char c in text)
-            if (c is >= '\uFE00' and <= '\uFE0F') { hasSelector = true; break; }
-        if (!hasSelector)
-            return text; // hot path: the overwhelming majority of message text has none
-
-        StringBuilder sb = new(text.Length);
-        foreach (char c in text)
-            if (c is not (>= '\uFE00' and <= '\uFE0F'))
-                sb.Append(c);
-        return sb.ToString();
-    }
 
     /// <summary>
     /// Strips ASCII/Unicode control characters (ESC, BEL, C1 controls, ...) out of text bound
