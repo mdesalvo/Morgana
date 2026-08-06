@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.27.0] - UNDER DEVELOPMENT
+## [0.27.0] - 2026-08-06
 ### ✨ Added
 - **Intent collision detection with automatic disambiguation** — The classifier now returns its candidate intents *ranked* by confidence instead of a single pick, and any candidate falling within `Morgana:ActorSystem:IntentCollisionThreshold` (default `0.10`) of the top score is treated as a genuine collision rather than a clean match.
   When that happens the supervisor stops the turn before routing — no agent is ever invoked, nothing is guessed — and replies directly with a disambiguation message plus one quick reply per colliding intent, most-likely first, each carrying that intent's own `Label` and `DefaultValue` sample phrase, so tapping a button resubmits a phrasing that classifies unambiguously on the next turn.
