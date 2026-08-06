@@ -31,8 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Raw terminal control bytes (ESC, BEL, ...) in message text or an agent name passed straight through to the TTY unfiltered, letting untrusted text ring the terminal bell or inject ANSI/OSC sequences (rename the terminal title, move the cursor, ...)
   - The terminal's own cursor was never hidden, so it showed up as a stray blinking block wherever Spectre's repaints last left it
 
-### 🚀 Future Enablement
-
 ## [0.26.0] - 2026-08-01
 ### 🎯 Major Feature: PromptHarness — Behavioral & Contextual Test Suite for Morgana Prompt System
 To ensure **stability of prompt development**, this release introduces `PromptHarness`: a live, black-box xUnit suite designed to catch **silent contradictions between framework capabilities (morgana.json) and domain specializations (agents.json)**.
