@@ -33,7 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🚀 Future Enablement
 
-
 ## [0.26.0] - 2026-08-01
 ### 🎯 Major Feature: PromptHarness — Behavioral & Contextual Test Suite for Morgana Prompt System
 To ensure **stability of prompt development**, this release introduces `PromptHarness`: a live, black-box xUnit suite designed to catch **silent contradictions between framework capabilities (morgana.json) and domain specializations (agents.json)**.
