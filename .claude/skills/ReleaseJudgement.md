@@ -60,6 +60,11 @@ Activated when the user says things like:
 6. **Default output is prose in the conversation**, in whichever language the user asked in. If the
    user asks for it as a **deliverable to attach somewhere** (a GitHub release, a doc), producing a
    **self-contained HTML file** is the default shape unless they specify otherwise:
+   - **Always written in English**, regardless of the conversation's language — this deliverable
+     travels outside the conversation (a release page, an attachment) and outlives it, so it follows
+     the language of the codebase and its release history, not the language of the chat that
+     requested it. Only the in-conversation prose (when no file is requested) follows the user's
+     own language.
    - Write it to the session's scratchpad directory, never into the repository, unless the user
      explicitly asks for it to be committed
    - Self-contained (inline CSS, no external assets/fonts/scripts) since it travels as a standalone
@@ -69,8 +74,7 @@ Activated when the user says things like:
      charts, badges or decoration that doesn't carry information
    - Support both light and dark rendering (`prefers-color-scheme`) since it may be viewed embedded
      in a GitHub release page, which respects the viewer's OS theme
-   - Tell the user the file path when done, and ask whether the language matches what they need
-     (release notes are often wanted in English regardless of the conversation's language)
+   - Tell the user the file path when done
 
 ## Notes
 
