@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.28.0] - UNDER DEVELOPMENT
+### ✨ Added
+
+### 🔄 Changed
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+
 ## [0.27.0] - 2026-08-06
 ### ✨ Added
 - **Intent collision detection with automatic disambiguation** — The classifier now returns its candidate intents *ranked* by confidence instead of a single pick, and any candidate falling within `Morgana:ActorSystem:IntentCollisionThreshold` (default `0.10`) of the top score is treated as a genuine collision rather than a clean match.
