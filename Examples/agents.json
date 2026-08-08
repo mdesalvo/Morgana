@@ -238,7 +238,7 @@
                 },
                 {
                   "Name": "userId",
-                  "Description": "Unique alphanumeric identifier of the customer (e.g., 'P994E').",
+                  "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.",
                   "Required": true,
                   "Scope": "context",
                   "Shared": true
@@ -316,7 +316,7 @@
               "Parameters": [
                 {
                   "Name": "userId",
-                  "Description": "Unique alphanumeric identifier of THIS caller, already bound in conversation context (e.g., 'P994E'). Retrieve it from context and pass it as-is; it scopes the history to this caller. It is NOT a selector for choosing whose history to read, so never obtain it from the user's words or ask which userId to consult.",
+                  "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code. It scopes the listing to that one customer, and is not a selector for choosing whose history to read.",
                   "Required": true,
                   "Scope": "context",
                   "Shared": true

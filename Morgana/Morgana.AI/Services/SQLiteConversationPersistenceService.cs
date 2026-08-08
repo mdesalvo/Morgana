@@ -816,7 +816,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
                 .Select(m => m.agentName)
         ];
 
-        // NOTE: the MEAI SummarizingChatReducer annotates the anchor message with
+        // NOTE: MorganaChatReducer annotates the anchor message with
         // `AdditionalProperties["__summary__"]` when it reduces the view for the LLM.
         // That anchor is a real, user-visible turn — it must NOT be filtered out here,
         // otherwise quick replies/rich cards attached to it leak into the next turn.
@@ -989,10 +989,22 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     }
 
     /// <summary>
-    /// Extracts and concatenates all TextContent blocks from a ChatMessage.
+    /// Text to render for a ChatMessage: the turn's delivered reply when the message carries one,
+    /// otherwise its own TextContent blocks concatenated.
     /// </summary>
+    /// <remarks>
+    /// The recorded turn text wins because it is what the user read. A turn that called a tool wrote
+    /// its answer across several assistant messages and only the last survives the filter above, so
+    /// extracting from this message alone would silently drop everything written before the tool call
+    /// — see <see cref="MorganaChatHistoryProvider.TurnTextKey"/>. Messages that carry no recorded turn
+    /// text (user turns, sessions persisted before this shipped) fall through to the original path.
+    /// </remarks>
     private string ExtractTextFromMessage(ChatMessage chatMessage)
     {
+        string? turnText = TryGetRecordedTurnText(chatMessage);
+        if (!string.IsNullOrWhiteSpace(turnText))
+            return turnText;
+
         if (chatMessage.Contents == null || chatMessage.Contents.Count == 0)
             return string.Empty;
 
@@ -1002,6 +1014,28 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             .Select(tc => tc.Text.Trim()));
 
         //TODO: in future we may have more content types handled here
+    }
+
+    /// <summary>
+    /// Reads <see cref="MorganaChatHistoryProvider.TurnTextKey"/> off a message, or <c>null</c> when absent.
+    /// </summary>
+    /// <remarks>
+    /// Both shapes of the value are accepted: a live <see cref="string"/> for a session still in memory,
+    /// and a <see cref="JsonElement"/> for one that has been through the encrypted round trip, where
+    /// <c>AdditionalProperties</c> deserializes as loosely-typed JSON. Anything else is treated as absent
+    /// rather than trusted, leaving the caller on its original extraction path.
+    /// </remarks>
+    private static string? TryGetRecordedTurnText(ChatMessage chatMessage)
+    {
+        if (chatMessage.AdditionalProperties?.TryGetValue(MorganaChatHistoryProvider.TurnTextKey, out object? value) != true)
+            return null;
+
+        return value switch
+        {
+            string text => text,
+            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+            _ => null
+        };
     }
 
     /// <summary>

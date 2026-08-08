@@ -226,7 +226,7 @@ builder.Services.AddSingleton<IAuthenticationService, JWTAuthenticationService>(
 // ==============================================================================
 // Service for reducing history messages sent to LLM (configurable summarization)
 
-builder.Services.AddSingleton<SummarizingChatReducerService>();
+builder.Services.AddSingleton<HistoryReducerService>();
 
 // ==============================================================================
 // SECTION 8.2: Adapters

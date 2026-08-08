@@ -53,7 +53,7 @@ public class MorganaAgentAdapter
     /// Service for creating IChatReducer instances for context window management.
     /// Creates SummarizingChatReducer based on configuration to optimize LLM costs.
     /// </summary>
-    protected readonly SummarizingChatReducerService chatReducerService;
+    protected readonly HistoryReducerService chatReducerService;
 
     /// <summary>
     /// Per-conversation lifetime token-budget limiter. Domain-agent LLM calls (and their
@@ -94,7 +94,7 @@ public class MorganaAgentAdapter
         IPromptResolverService promptResolverService,
         IToolRegistryService toolRegistryService,
         IMCPClientRegistryService imcpClientRegistryService,
-        SummarizingChatReducerService chatReducerService,
+        HistoryReducerService chatReducerService,
         IDustLimitService dustLimitService,
         ILogger logger)
     {
