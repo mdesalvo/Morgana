@@ -62,6 +62,11 @@ builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptCompose
 // - IDraftExportService: renders a Draft back into the agents.json Morgana loads. Together with
 //   the importer it carries the invariant everything later stands on — a configuration that goes
 //   in comes back out equivalent — which is what makes the interview safe to build on top.
+// - IDraftValidationService: everything about a Draft decidable without asking a model. Runs
+//   before the recap, because composing a beautiful prompt for a domain that would not start is
+//   a way of lying to the client with something that looks like evidence.
+// - IRecapService: drives IPromptComposerService over the Draft, so what the client reviews is
+//   the prompt the model will really read rather than a summary of their own answers.
 // - IDraftSerializationService: reads and writes alembic-draft.json, the interview's save file.
 //   An interview over a real domain does not fit in one sitting, and Alembic has no database.
 // - IDraftStateService: the Draft currently under construction. Scoped, which in Blazor Server
@@ -70,6 +75,8 @@ builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptCompose
 
 builder.Services.AddSingleton<IDraftImportService, DraftImportService>();
 builder.Services.AddSingleton<IDraftExportService, DraftExportService>();
+builder.Services.AddSingleton<IDraftValidationService, DraftValidationService>();
+builder.Services.AddSingleton<IRecapService, RecapService>();
 builder.Services.AddSingleton<IDraftSerializationService, DraftSerializationService>();
 builder.Services.AddScoped<IDraftStateService, DraftStateService>();
 

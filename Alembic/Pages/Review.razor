@@ -1,0 +1,176 @@
+@page "/review"
+@using Alembic.Interfaces
+@using Alembic.Model
+@inject IDraftValidationService DraftValidationService
+@inject IRecapService RecapService
+@inject IDraftStateService DraftStateService
+
+@*
+    Phase 4, and the first thing in Alembic that is useful on its own. Two panels, in this order
+    on purpose: what would stop this domain, then what its model actually reads. Showing a
+    beautifully composed prompt for a configuration that would not start is a way of lying to the
+    client with something that looks like evidence.
+*@
+
+<div class="alembic-page">
+
+    <h1>Review</h1>
+    <p class="tagline">What would stop this domain, and what its models really read.</p>
+
+    @if (DraftStateService.Current is not { } draft)
+    {
+        <div class="panel">
+            <h2>Nothing to review</h2>
+            <p>Import an <code>agents.json</code> first.</p>
+            <p><a href="import">Go to import &rarr;</a></p>
+        </div>
+    }
+    else
+    {
+        <div class="panel">
+            <h2>Findings</h2>
+            @if (findings.Count == 0)
+            {
+                <p>Nothing to report. Every deterministic check passes.</p>
+            }
+            else
+            {
+                <p class="muted">
+                    @findings.Count(f => f.Severity == FindingSeverity.Error) errors,
+                    @findings.Count(f => f.Severity == FindingSeverity.Warning) warnings.
+                    Each one restates a rule Morgana enforces later and more expensively.
+                </p>
+                <table>
+                    <thead>
+                        <tr><th></th><th>Where</th><th>What</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (ValidationFinding finding in findings)
+                        {
+                            <tr>
+                                <td class="@(finding.Severity == FindingSeverity.Error ? "severity-error" : "severity-warning")">
+                                    @(finding.Severity == FindingSeverity.Error ? "error" : "warning")
+                                </td>
+                                <td><code>@finding.Where</code></td>
+                                <td>
+                                    @finding.Message
+                                    <div class="because">@finding.Because</div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        <div class="panel">
+            <h2>Composed prompts</h2>
+            <p class="muted">
+                Produced by the framework's own <code>IPromptComposerService</code> &mdash; the same
+                service, fences and policy ordering a running agent gets. The framework layer comes
+                from the <code>morgana.json</code> embedded in the Morgana.AI this Alembic was built
+                against; it has no override anywhere in the framework, so what follows is true for
+                that version and says nothing about a different one.
+            </p>
+            <p>
+                @foreach (AgentDraft agent in draft.Agents)
+                {
+                    <button class="agent-pick @(selectedAgentId == agent.ID ? "picked" : "")"
+                            @onclick="() => SelectAsync(agent)">@agent.ID</button>
+                }
+            </p>
+        </div>
+
+        @if (recap is not null)
+        {
+            <div class="panel">
+                <h2>@recap.AgentId &mdash; system prompt</h2>
+                <p class="muted">Read once, before anything else in the turn.</p>
+                <pre class="prompt">@recap.SystemPrompt</pre>
+            </div>
+
+            @if (recap.Tools.Count > 0)
+            {
+                <div class="panel">
+                    <h2>@recap.AgentId &mdash; tools, as the model weighs them</h2>
+                    <p class="muted">
+                        Read when the model decides whether to call the tool at all. Where a tool
+                        declares context-scoped parameters, the framework has already spliced its
+                        context guidance onto the authored description.
+                    </p>
+                    @foreach (ToolRecap tool in recap.Tools)
+                    {
+                        <h3><code>@tool.Name</code></h3>
+                        <pre class="prompt">@tool.Description</pre>
+                        @if (tool.Parameters.Count > 0)
+                        {
+                            <table>
+                                <thead>
+                                    <tr><th>Parameter</th><th>Scope</th><th>Required</th><th>Description, as the schema carries it</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (ParameterRecap parameter in tool.Parameters)
+                                    {
+                                        <tr>
+                                            <td><code>@parameter.Name</code></td>
+                                            <td>@(parameter.Scope ?? "—")</td>
+                                            <td>@(parameter.Required ? "yes" : "no")</td>
+                                            <td class="description">
+                                                @(string.IsNullOrWhiteSpace(parameter.Description)
+                                                    ? "(emitted bare — no description reaches the model)"
+                                                    : parameter.Description)
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    }
+                </div>
+            }
+
+            @if (recap.HypotheticalHeldContext is not null)
+            {
+                <div class="panel">
+                    <h2>@recap.AgentId &mdash; held-context declaration</h2>
+                    <p class="muted">
+                        Read <em>before any tool is weighed</em> &mdash; the top rung of the ladder,
+                        and the one an agent activated mid-conversation depends on.
+                        <strong>Hypothetical by construction</strong>: this injection states which
+                        variables the session holds right now, and no session exists while you are
+                        authoring. The template and the splice are real; the supposition is that
+                        every context-scoped parameter in this toolkit
+                        (<code>@string.Join(", ", recap.HypotheticalHeldVariables)</code>)
+                        happens to be populated at once.
+                    </p>
+                    <pre class="prompt">@recap.HypotheticalHeldContext</pre>
+                </div>
+            }
+        }
+    }
+
+    <p class="phase-note">
+        Phase 4 &mdash; validation and recap. The interview and the emit are not here yet.
+    </p>
+
+    <p><a href="">&larr; back</a></p>
+
+</div>
+
+@code {
+    private IReadOnlyList<ValidationFinding> findings = [];
+    private AgentRecap? recap;
+    private string? selectedAgentId;
+
+    protected override void OnInitialized()
+    {
+        if (DraftStateService.Current is { } draft)
+            findings = DraftValidationService.Validate(draft);
+    }
+
+    private async Task SelectAsync(AgentDraft agent)
+    {
+        selectedAgentId = agent.ID;
+        recap = await RecapService.ComposeAsync(agent);
+    }
+}

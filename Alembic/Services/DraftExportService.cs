@@ -3,28 +3,25 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Alembic.Interfaces;
 using Alembic.Model;
-using Morgana.AI;
 
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="IDraftExportService"/>: rebuilds Morgana's own record types from the Draft
-/// and serializes them.
+/// Default <see cref="IDraftExportService"/>: serializes the Draft through
+/// <see cref="DraftProjection"/>, which rebuilds Morgana's own record types.
 /// </summary>
 /// <remarks>
-/// The output shape is not hand-written JSON: it is <see cref="Records.IntentDefinition"/> and
-/// <see cref="Records.Prompt"/> serialized as they are, so the file Alembic emits and the file
-/// Morgana reads are the same type seen from two sides. A field added to those records reaches this
+/// The output shape is not hand-written JSON: it is <c>Records.IntentDefinition</c> and
+/// <c>Records.Prompt</c> serialized as they are, so the file Alembic emits and the file Morgana
+/// reads are the same type seen from two sides. A field added to those records reaches this
 /// exporter without anyone remembering to come here.
+/// <para>
+/// The projection is shared with the recap on purpose: a recap composed from a slightly different
+/// prompt than the one that gets written would be a recap of a domain nobody is going to run.
+/// </para>
 /// </remarks>
 public class DraftExportService : IDraftExportService
 {
-    /// <summary>
-    /// The AdditionalProperties key carrying an agent's toolkit — the same ordinal name the
-    /// importer split out.
-    /// </summary>
-    private const string ToolsPropertyName = "Tools";
-
     /// <summary>
     /// Indented because a client reads, reviews and commits this file.
     /// </summary>
@@ -60,70 +57,9 @@ public class DraftExportService : IDraftExportService
     public byte[] Export(DomainDraft draft)
     {
         AgentsConfigurationFile file = new AgentsConfigurationFile(
-            [.. draft.Intents.Select(ToIntentDefinition)],
-            [.. draft.Agents.Select(ToPrompt)]);
+            [.. draft.Intents.Select(DraftProjection.ToIntentDefinition)],
+            [.. draft.Agents.Select(DraftProjection.ToPrompt)]);
 
         return JsonSerializer.SerializeToUtf8Bytes(file, ExportOptions);
     }
-
-    /// <summary>
-    /// Rebuilds an intent definition from its Draft element.
-    /// </summary>
-    private static Records.IntentDefinition ToIntentDefinition(IntentDraft intent) =>
-        new(intent.Name ?? string.Empty,
-            intent.Description ?? string.Empty,
-            intent.Label,
-            intent.DefaultValue);
-
-    /// <summary>
-    /// Rebuilds an agent prompt from its Draft element, putting the toolkit back into
-    /// AdditionalProperties alongside whatever else was carried through.
-    /// </summary>
-    /// <remarks>
-    /// The toolkit is written as its own entry, first, and the unmodelled entries follow. This does
-    /// not necessarily reproduce the grouping the file arrived with — AdditionalProperties is a list
-    /// of dictionaries and the same content can be spread across it in several ways — which is
-    /// precisely why the round-trip invariant is stated as equivalence and not as byte identity.
-    /// Morgana looks keys up across every entry, so the grouping is not information.
-    /// </remarks>
-    private static Records.Prompt ToPrompt(AgentDraft agent)
-    {
-        List<Dictionary<string, object>> additionalProperties = [];
-
-        if (agent.Tools.Count > 0)
-            additionalProperties.Add(new Dictionary<string, object>
-            {
-                [ToolsPropertyName] = agent.Tools.Select(ToToolDefinition).ToList()
-            });
-
-        additionalProperties.AddRange(agent.UnmodelledProperties);
-
-        return new Records.Prompt(
-            agent.ID ?? string.Empty,
-            agent.Type,
-            agent.SubType,
-            agent.Target ?? string.Empty,
-            agent.Instructions ?? string.Empty,
-            agent.Formatting ?? string.Empty,
-            agent.Personality,
-            agent.Language,
-            agent.Version,
-            additionalProperties);
-    }
-
-    /// <summary>
-    /// Rebuilds a tool definition from its Draft element.
-    /// </summary>
-    private static Records.ToolDefinition ToToolDefinition(ToolDraft tool) =>
-        new(tool.Name ?? string.Empty,
-            tool.Description ?? string.Empty,
-            [.. tool.Parameters.Select(parameter => new Records.ToolParameter(
-                parameter.Name ?? string.Empty,
-                parameter.Description ?? string.Empty,
-                parameter.Required,
-                // A parameter carrying a value the model itself authors declares no scope. The
-                // framework's record types it as a non-nullable string, so "no scope" travels as
-                // the empty string — which is what the importer read it back from.
-                parameter.Scope ?? string.Empty,
-                parameter.Shared))]);
 }

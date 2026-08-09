@@ -140,6 +140,65 @@ code {
     color: var(--alembic-muted);
 }
 
+.panel h3 {
+    margin: 1.25rem 0 0.4rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.because {
+    color: var(--alembic-muted);
+    font-size: 0.85rem;
+    margin-top: 0.2rem;
+}
+
+.severity-error {
+    color: var(--alembic-error);
+    white-space: nowrap;
+}
+
+.severity-warning {
+    color: #d8b25c;
+    white-space: nowrap;
+}
+
+pre.prompt {
+    background: #0e0c16;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.35rem;
+    padding: 0.9rem 1rem;
+    margin: 0 0 0.5rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: "Cascadia Mono", "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    max-height: 34rem;
+    overflow-y: auto;
+}
+
+.agent-pick {
+    background: var(--alembic-bg);
+    color: var(--alembic-text);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.3rem;
+    padding: 0.35rem 0.8rem;
+    margin: 0 0.4rem 0.4rem 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+.agent-pick:hover {
+    border-color: var(--alembic-accent);
+}
+
+.agent-pick.picked {
+    border-color: var(--alembic-accent);
+    color: var(--alembic-accent);
+}
+
 a {
     color: var(--alembic-accent);
 }

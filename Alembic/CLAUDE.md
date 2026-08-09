@@ -79,9 +79,50 @@ what changed against the uploaded `agents.json`.
 ### The recap is the real prompt
 
 The interview recap is **the composed prompt the model will actually read**, not a summary of the
-client's answers. This is possible because `IPromptComposerService.ComposeAgentInstructionsAsync`
-takes the domain prompt as a parameter: the `Records.Prompt` is built in memory from the Draft and
-needs to exist nowhere on disk.
+client's answers — a summary would be Alembic grading its own homework. This is possible because
+`IPromptComposerService.ComposeAgentInstructionsAsync` takes the domain prompt as a parameter: the
+`Records.Prompt` is built in memory from the Draft and needs to exist nowhere on disk.
+
+It is shown as **three separate blocks, never concatenated**, because that is the framework's
+placement ladder and each rung is read at a different moment of the turn:
+
+1. the composed two-layer system prompt — read once, before anything else;
+2. each tool description as the model weighs it, with `ToolDescriptionContextGuidance` already
+   spliced in where the tool declares context-scoped parameters, plus the parameter descriptions
+   exactly as authored (the framework splices no template at that rung, and an undescribed
+   parameter is emitted bare);
+3. the per-turn held-context declaration — **hypothetical by construction**, and labelled as such
+   in the UI. That injection states which variables the session holds *right now*, and no session
+   exists while authoring. The template and the splice are real; the supposition is that every
+   context-scoped parameter in the toolkit happens to be populated at once.
+
+**What the recap is true of.** The framework layer comes from the `morgana.json` embedded in the
+Morgana.AI this Alembic was built against, and the framework offers no override for it anywhere —
+it is an embedded resource, so "customising the policies" means forking Morgana.AI. The recap is
+therefore true for that version of Morgana and says nothing about a different one. Alembic
+deliberately does **not** accept an uploaded `morgana.json`: that would model a capability the
+framework does not have.
+
+### Validation runs before the recap
+
+The order is the design. Composing a beautiful prompt for a domain that would not start is a way of
+lying to the client with something that looks like evidence.
+
+Every check in `DraftValidationService` is decidable by reading the Draft — no model is asked, and
+none would help. Most of them restate a rule the framework already enforces at startup, and the
+duplication is the entire value: an `InvalidOperationException` from
+`HandlesIntentAgentRegistryService` arrives after the client has packaged, deployed and run,
+whereas the same sentence here arrives while they are still authoring and it costs nothing to
+change. Each finding carries a `Because` naming the rule, so it teaches instead of merely refusing.
+
+What it cannot see matters as much: whether two intent descriptions overlap enough to collide in
+the classifier, or whether an agent's `Instructions` contradict its `Formatting`, is not decidable
+here. That is the cross-agent coherence pass, it needs a model, and nothing in this service guesses
+at it.
+
+Against the shipped `Examples` domain the pass reports **0 errors and 5 warnings**, all of them
+true statements about an *imported* domain: four agents whose class names are Alembic's guess and
+whose tier is unknown, and one agent with no native tools (legal — `Monkeys` is MCP-only).
 
 ## Project Structure
 
@@ -100,16 +141,22 @@ Alembic/
   Model/
     DomainDraft.cs                    # The Draft: DomainDraft, IntentDraft, AgentDraft, ToolDraft, …
     AgentsConfigurationFile.cs        # The on-disk shape of an agents.json (Morgana's own Records inside)
+    DraftProjection.cs                # Draft → Records, shared by the exporter and the recap
+    ValidationFinding.cs              # Severity, Where, Message, Because
+    AgentRecap.cs                     # The three rungs of the placement ladder
     Provenance.cs                     # Imported / Revised / Authored
   Interfaces/
     IDraftImportService.cs            # Uploaded agents.json → Draft
     IDraftExportService.cs            # Draft → agents.json (the round-trip invariant)
     IDraftSerializationService.cs     # Draft ⇄ alembic-draft.json (the interview's save file)
+    IDraftValidationService.cs        # Everything decidable about a Draft without a model
+    IRecapService.cs                  # Draft → the prompt the model really reads
     IDraftStateService.cs             # The Draft under construction (per circuit)
   Services/                           # Default implementations of the above
   Pages/_Host.cshtml                  # Blazor Server host page (ServerPrerendered)
   Pages/Index.razor                   # Landing page
   Pages/Import.razor                  # Upload an agents.json, see the parsed Draft, download it back
+  Pages/Review.razor                  # Findings, then the composed prompts
   Shared/MainLayout.razor             # Layout wrapper
   wwwroot/css/site.css                # Base styles
 ```
@@ -181,6 +228,8 @@ against the `Examples` domain it proposes `MonkeysAgent` where the real class is
 | `IDraftImportService` | Singleton | `DraftImportService` — uploaded `agents.json` → Draft. Holds no per-client state; it only projects one shape onto another |
 | `IDraftExportService` | Singleton | `DraftExportService` — Draft → `agents.json`. Rebuilds Morgana's own record types and serializes those, so the file Alembic emits and the file Morgana reads are the same type seen from two sides |
 | `IDraftSerializationService` | Singleton | `DraftSerializationService` — Draft ⇄ `alembic-draft.json`. An interview over a real domain does not fit in one sitting, and Alembic has no database |
+| `IDraftValidationService` | Singleton | `DraftValidationService` — the deterministic checks, each restating a rule the framework enforces later and more expensively |
+| `IRecapService` | Singleton | `RecapService` — drives `IPromptComposerService` over the Draft. Deliberately almost empty: anything Alembic added on top would be a claim about the prompt rather than the prompt |
 | `IDraftStateService` | **Scoped** | `DraftStateService` — the Draft under construction. One per Blazor circuit: two tabs are two separate interviews, and the state dies with the connection |
 
 ## Why the project reference is Morgana.AI, not Morgana.Contracts
@@ -222,7 +271,7 @@ closes it is a hard invariant the interview cannot break.
 | 1 | Scaffold — solution, project, Blazor shell, Morgana.AI reference, LLM wiring, Docker | **done** |
 | 2 | Draft model + import of an uploaded `agents.json` (fixture: `Examples/agents.json`) | **done** |
 | 3 | Export + round-trip invariant (an untouched file comes back out intact) | **done** |
-| 4 | Deterministic validation + recap as the real composed prompt — *first shippable milestone: useful without any interview* | |
+| 4 | Deterministic validation + recap as the real composed prompt — *first shippable milestone: useful without any interview* | **done** |
 | 5 | Interview, functional pass (`alembic.json`, FSM, intent + agent prose) | |
 | 6 | Interview, toolkit pass + return pass (`Instructions`/`Formatting` speak about tools, so they come last) | |
 | 7 | C# asset emit + migration report — *turnkey* | |
