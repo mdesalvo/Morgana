@@ -10,6 +10,27 @@ way to know a prompt revision did not break anything is to make the model do the
 
 A scenario is a YAML file. Its name is its `id`, and a test loads it by that name.
 
+## What is yours to write, and what is not
+
+The suite splits in two, and you write exactly one half.
+
+**Morgana's half is already written and ships with her.** The guard's refusals, the classifier's
+disambiguation, quick-reply doctrine, turn continuation, rich cards as such, the channel adapter's
+degradation, history summarization, the context cycle and its closed vocabulary — all of it is
+framework behaviour, all of it holds for every domain, and Morgana carries scenarios for all of it.
+Those scenarios are maintained where the policies are.
+
+**Your half is the domain, and nothing but.** Write only what is true of *this* business and could
+not be true of another: the flow this agent exists for, the refusal its Target commits it to, the
+order its own tools must be called in, the confirmation it owes before something irreversible, the
+thing it must never say out loud. If a scenario you are about to write would still make sense with
+every domain word swapped for another domain's, it is Morgana's and you are duplicating her —
+badly, because your copy will drift from the policy it guards while hers will not.
+
+That is also how to read the exemplars below. They are Morgana's own infrastructural scenarios, and
+they are here for their **form** — key order, how a comment justifies an admitted second shape, how
+a judge proposition is phrased. Never for their subject.
+
 ## What can be observed, and how
 
 This is the part that decides which assertions are possible, and it is worth knowing exactly.
@@ -58,9 +79,8 @@ Not that `toolsCalled` lists the tools that were called.
 
 ## Scenarios from the suite that ships with Morgana
 
-They follow this briefing, verbatim, as they run today. Read them as the idiom — the key order, the
-comments that explain why a turn admits two shapes, the way a judge proposition is phrased so it can
-be answered from the reply alone.
+Verbatim, as they run today. Every one of them guards a framework policy, which is precisely why you
+must not write anything like them: read the form, not the subject.
 
 ## The complete vocabulary
 

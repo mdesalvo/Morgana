@@ -378,6 +378,25 @@ writes the **starting set and no more**: it knows what the agents were designed 
 a first scenario is made of, and nothing about what will actually go wrong, which is every scenario
 after it.
 
+**And it writes a suite that is 100% domain.** The infrastructural half — the guard, the classifier,
+quick replies, turn continuation, rich cards, channel degradation, summarization, the context cycle —
+stays in Morgana's charge: that behaviour holds for every domain, and her scenarios for it are
+maintained where the policies are, in `PromptHarness/Scenarios`. The client's suite sits beside hers
+and never re-tests it, because a copy of a policy scenario drifts from the policy while the original
+does not. The operative test, stated in the briefing: *a scenario that would still make sense with
+every domain word swapped for another domain's is one of Morgana's, duplicated badly.*
+
+That line reaches the model three ways — the prompt's `Target` states it, the briefing opens with it,
+and `ScenarioSchema.Vocabulary()` splits the generated key list in two, naming `guardCompliant`,
+`summarizationOccurred`, `textMaxLength`, `textNotMarkdown` and `degradedChannel` as *not yours*.
+Named rather than withheld: the vocabulary belongs to the harness and Alembic has no standing to
+shrink it, so saying which half is whose is the whole of the intervention.
+
+It also settles how the exemplars are read. Every scenario in the shipped suite is infrastructural,
+necessarily — that suite *is* the infrastructural half — so they are embedded for their **form** and
+labelled as such twice: read the key order, the comment that justifies an admitted second shape, the
+phrasing of a judge proposition. Never the subject.
+
 The hard part is not generating YAML, it is that **the model has never seen this instrument**. A
 list of keys is not understanding: it does not convey what a run is, what the observer can actually
 see, what the judge sees and does not, or why a threshold is 5 and not 1. So two things carry it:

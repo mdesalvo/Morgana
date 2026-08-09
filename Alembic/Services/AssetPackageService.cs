@@ -191,6 +191,12 @@ public class AssetPackageService : IAssetPackageService
         which is what a first scenario is made of, and knows nothing about what will actually go
         wrong, which is what every scenario after it is made of.
 
+        They are **domain scenarios only**, and that is the whole of what they should be. The guard,
+        the classifier, quick replies, turn continuation, rich cards, channel degradation, history
+        summarization and the context cycle are framework behaviour: they hold for every domain and
+        Morgana ships her own scenarios for them, maintained where the policies are. Yours sit beside
+        hers and never re-test them.
+
         They assert that a tool ran, never what it returned. That is deliberate: an assertion on a
         mock's data fails the day you wire in the real system, which is the day the suite most needs
         to still work.

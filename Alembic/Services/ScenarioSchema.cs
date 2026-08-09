@@ -71,6 +71,21 @@ public static class ScenarioSchema
                 .Order(StringComparer.Ordinal)];
 
     /// <summary>
+    /// Keys that assert framework behaviour rather than domain behaviour.
+    /// </summary>
+    /// <remarks>
+    /// Morgana ships her own scenarios for the guard, the reducer and channel degradation, and they
+    /// hold for every domain. A domain scenario reaching for these is duplicating a suite that is
+    /// maintained where the policies are — badly, because the copy drifts and the original does not.
+    /// Named rather than removed: the vocabulary belongs to the harness, and Alembic has no standing
+    /// to shrink it. Saying which half is whose is enough.
+    /// </remarks>
+    private static readonly HashSet<string> FrameworkKeys = new(StringComparer.Ordinal)
+    {
+        "guardCompliant", "summarizationOccurred", "textMaxLength", "textNotMarkdown"
+    };
+
+    /// <summary>
     /// Renders the vocabulary as the table appended to the briefing.
     /// </summary>
     /// <remarks>
@@ -86,7 +101,11 @@ public static class ScenarioSchema
          An `expect` block carries these and NO others — the harness silently ignores a key it does
          not recognise, so an invented one produces a scenario that runs, passes and asserts nothing:
 
-         {string.Join(", ", ExpectKeys.Select(k => $"`{k}`"))}.
+         {string.Join(", ", ExpectKeys.Where(k => !FrameworkKeys.Contains(k)).Select(k => $"`{k}`"))}.
+
+         These exist too, and are not yours: {string.Join(", ", FrameworkKeys.Order(StringComparer.Ordinal).Select(k => $"`{k}`"))}
+         — plus `degradedChannel` on the document. They assert framework behaviour that holds for
+         every domain, and Morgana's own scenarios already cover it.
          """;
 
     /// <summary>
