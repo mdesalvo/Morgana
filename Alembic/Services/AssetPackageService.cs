@@ -19,6 +19,7 @@ public class AssetPackageService : IAssetPackageService
     private readonly IDraftSerializationService draftSerializationService;
     private readonly ICodeEmitService codeEmitService;
     private readonly IToolMockService toolMockService;
+    private readonly IScenarioAuthorService scenarioAuthorService;
     private readonly IMigrationReportService migrationReportService;
     private readonly ILogger logger;
 
@@ -30,6 +31,7 @@ public class AssetPackageService : IAssetPackageService
         IDraftSerializationService draftSerializationService,
         ICodeEmitService codeEmitService,
         IToolMockService toolMockService,
+        IScenarioAuthorService scenarioAuthorService,
         IMigrationReportService migrationReportService,
         ILogger logger)
     {
@@ -37,6 +39,7 @@ public class AssetPackageService : IAssetPackageService
         this.draftSerializationService = draftSerializationService;
         this.codeEmitService = codeEmitService;
         this.toolMockService = toolMockService;
+        this.scenarioAuthorService = scenarioAuthorService;
         this.migrationReportService = migrationReportService;
         this.logger = logger;
     }
@@ -44,6 +47,7 @@ public class AssetPackageService : IAssetPackageService
     /// <inheritdoc />
     public async Task<byte[]> BuildAsync(
         DomainDraft draft,
+        bool includeScenarios = true,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -86,6 +90,34 @@ public class AssetPackageService : IAssetPackageService
                         progress, cancellationToken);
                 }
             }
+
+            // Last, and caught the same way. Scenarios are the most valuable thing in the archive on
+            // the day someone edits the prose, and the least valuable on the day it is downloaded —
+            // so a domain whose scenarios failed still ships, and says so.
+            //
+            // Never an early return from inside this block: the archive's central directory is
+            // written when the ZipArchive is disposed, and a buffer read before that is a file no
+            // unzip program will open.
+            foreach (AgentDraft agent in includeScenarios
+                         ? draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID))
+                         : [])
+            {
+                try
+                {
+                    foreach (EmittedFile scenario in await scenarioAuthorService.AuthorAsync(agent, agent.ID!, cancellationToken))
+                        await WriteAsync(archive, scenario.Path, scenario.Content, progress, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    logger.LogError(ex, "Could not author scenarios for {AgentId}", agent.ID);
+
+                    await WriteAsync(archive, $"Scenarios/{agent.ID}.FAILED.txt",
+                        $"Alembic could not write starter scenarios for this agent: {ex.Message}\n\n"
+                        + "Nothing else in the archive depends on them. Write them by hand against the harness's own\n"
+                        + "Scenarios directory, or run the emit again.",
+                        progress, cancellationToken);
+                }
+            }
         }
 
         return buffer.ToArray();
@@ -121,6 +153,7 @@ public class AssetPackageService : IAssetPackageService
         | `Tools/*.g.cs` | Alembic's. Attributes, constructor, and one `partial` signature per tool |
         | `Tools/*.cs` | **yours.** Written once as a working mock, never written again |
         | `MIGRATION.md` | what this differs from, if anything was uploaded |
+        | `Scenarios/*.yaml` | starter PromptHarness scenarios — yours from here |
         | `alembic-draft.json` | the interview's save file — upload it to carry on |
 
         ## The two halves
@@ -149,5 +182,17 @@ public class AssetPackageService : IAssetPackageService
         The mocks return plausible data of your domain, so you can talk to your agents on the first
         run and hear whether their prose is right — which is what the interview was for. Replace
         them with your real integration when it is.
+
+        ## The scenarios
+
+        A domain agent is its prose, and prose gets edited. `Scenarios/` holds the starting set:
+        drop the files into PromptHarness's own `Scenarios` directory and add a test that names each
+        one. They are a floor, never a suite — Alembic knows what your agents were designed to do,
+        which is what a first scenario is made of, and knows nothing about what will actually go
+        wrong, which is what every scenario after it is made of.
+
+        They assert that a tool ran, never what it returned. That is deliberate: an assertion on a
+        mock's data fails the day you wire in the real system, which is the day the suite most needs
+        to still work.
         """;
 }

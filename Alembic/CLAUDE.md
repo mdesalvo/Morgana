@@ -370,6 +370,62 @@ Against the shipped `Examples` domain the pass reports **0 errors and 5 warnings
 true statements about an *imported* domain: four agents whose class names are Alembic's guess and
 whose tier is unknown, and one agent with no native tools (legal — `Monkeys` is MCP-only).
 
+### The starter scenarios, and teaching an instrument Alembic does not run
+
+A domain agent *is* its prose, prose gets edited, and the only way to know an edit broke nothing is
+PromptHarness. A client who leaves without scenarios has a domain nobody can revise safely. Alembic
+writes the **starting set and no more**: it knows what the agents were designed to do, which is what
+a first scenario is made of, and nothing about what will actually go wrong, which is every scenario
+after it.
+
+The hard part is not generating YAML, it is that **the model has never seen this instrument**. A
+list of keys is not understanding: it does not convey what a run is, what the observer can actually
+see, what the judge sees and does not, or why a threshold is 5 and not 1. So two things carry it:
+
+- **`harness.md`**, embedded: a briefing on the rig — the observation surfaces (`agent.tools_invoked`
+  gives tool *names only*, the console tee gives variable *names only*, the judge sees only what a
+  user sees), why `runs`/`minPasses` state a claim rather than a retry count, what makes a scenario
+  brittle or vacuous — and **two real scenarios from the shipped suite**, comments intact, as worked
+  examples of the idiom.
+- **The harness's own schema, compiled in.** `ScenarioDefinition.cs` is a `<Compile Include>` link
+  from `PromptHarness/`, so `ScenarioSchema` reflects the vocabulary off `ExpectSpec` and *generates*
+  the key table appended to the briefing.
+
+That link is the important decision, and the reason is a silent failure mode. `ScenarioLoader`'s
+deserializer is built `.IgnoreUnmatchedProperties()` — right there, where a human is editing — which
+means **a key the harness does not recognise is dropped without a sound**: the scenario loads, runs,
+passes, and asserts nothing. It reads as coverage and is not. A model reaching for a plausible-but-
+absent key (`textContains`, say) produces exactly that, and no amount of briefing makes it
+impossible. So every generated document is parsed back with a **strict** deserializer — the harness's
+configuration minus the forgiveness — and an unknown key comes back named, with its line, from
+YamlDotNet itself. A scenario that fails the check still ships, with the problem written across its
+top: Alembic has no business deciding a client may not see its own artifact.
+
+A `ProjectReference` was the wrong shape — PromptHarness pulls `Morgana.Web`, the `Examples` plugin
+and xUnit, none of which belong in an authoring workbench. One linked file costs `YamlDotNet`, which
+is what buys parsing instead of pattern-matching. Its consequence is honest and small: the repo
+layout is now load-bearing for Alembic's build, and `Alembic.Dockerfile` copies that one file.
+
+### The coherence pass
+
+The other half of reviewing a domain, and the half `DraftValidationService` explicitly cannot do.
+That one decides everything decidable by reading the Draft and asks no model, because none would
+help. Whether two intent descriptions overlap enough to collide in the classifier is the opposite
+kind of question: it is about meaning, and it is the most expensive defect a multi-agent domain
+carries, because no prose downstream resolves it and the user meets it as an agent answering the
+wrong question.
+
+Every defect it looks for is **relational**, which is exactly why nothing earlier could see it — the
+interview settles one agent at a time by construction. Overlapping intents; two agents claiming the
+same capability; a value one publishes as `userId` that another expects as `customerCode`; ground
+the domain's own descriptions imply and no agent covers; an agent promising what no tool of its
+backs. It is handed the domain's exact words, never a summary, because a summary is precisely the
+step that would smooth an overlap away before the model saw it.
+
+It answers JSON — the one place in Alembic that does, because this output is a list to be sorted and
+tabulated rather than writing to be read. And it **advises, never blocks**: a domain expert who
+disagrees with it about their own business is usually right.
+
 ## Project Structure
 
 ```
@@ -529,7 +585,7 @@ closes it is a hard invariant the interview cannot break.
 | 5 | Interview, functional pass (`alembic.json`, FSM, intent + agent prose) | **done** |
 | 6 | Interview, toolkit pass + return pass (`Instructions`/`Formatting` speak about tools, so they come last) | **done** |
 | 7 | C# asset emit + migration report — *turnkey* | **done** |
-| 8 | PromptHarness starter scenarios + cross-agent coherence pass | |
+| 8 | PromptHarness starter scenarios + cross-agent coherence pass | **done** |
 
 ## Conventions
 

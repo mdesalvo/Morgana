@@ -35,6 +35,12 @@ COPY Alembic/ Alembic/
 COPY Morgana/Morgana.AI/ Morgana/Morgana.AI/
 COPY Morgana/Morgana.Contracts/ Morgana/Morgana.Contracts/
 
+# One file of PromptHarness, and only one: Alembic compiles its scenario schema in as a linked
+# source (see the <Compile Include> in Alembic.csproj) so the vocabulary it hands a model and the
+# vocabulary it checks the answer against are both the harness's own. Not a ProjectReference, which
+# would drag Morgana.Web, the Examples plugin and xUnit into an authoring workbench.
+COPY ["PromptHarness/Infrastructure/Engine/ScenarioDefinition.cs", "PromptHarness/Infrastructure/Engine/"]
+
 # Build application in Release mode — InsideDockerBuild skips
 # Directory.Build.targets' host-side .env.versions generation, which can't see
 # sibling projects here.

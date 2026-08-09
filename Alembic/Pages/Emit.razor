@@ -158,6 +158,17 @@
                     written by a model, one call per agent, so this takes a moment.
                 </p>
 
+                <p>
+                    <label>
+                        <input type="checkbox" @bind="includeScenarios" />
+                        Starter PromptHarness scenarios
+                    </label>
+                    <span class="muted">
+                        &mdash; one more call per agent. A domain agent <em>is</em> its prose, and
+                        prose gets edited: these are what will be watching when it does.
+                    </span>
+                </p>
+
                 @if (package is null)
                 {
                     <button class="primary" @onclick="BuildAsync" disabled="@isBuilding">
@@ -206,6 +217,7 @@
 
     private string rootNamespace = Alembic.Services.CodeEmitService.DefaultNamespace;
     private byte[]? package;
+    private bool includeScenarios = true;
     private bool isBuilding;
     private string? error;
 
@@ -266,7 +278,7 @@
                 InvokeAsync(StateHasChanged);
             });
 
-            package = await AssetPackageService.BuildAsync(draft, progress);
+            package = await AssetPackageService.BuildAsync(draft, includeScenarios, progress);
         }
         catch (Exception ex)
         {

@@ -4,6 +4,7 @@
 @inject IDraftValidationService DraftValidationService
 @inject IRecapService RecapService
 @inject IDraftStateService DraftStateService
+@inject ICoherenceService CoherenceService
 
 @*
     Phase 4, and the first thing in Alembic that is useful on its own. Two panels, in this order
@@ -60,6 +61,66 @@
                         }
                     </tbody>
                 </table>
+            }
+        </div>
+
+        <div class="panel">
+            <h2>Coherence</h2>
+            <p class="muted">
+                The other half of reviewing a domain, and the half no deterministic check reaches:
+                whether two intent descriptions overlap enough to collide in the classifier, whether
+                two agents claim the same ground, whether a value one publishes is the value another
+                expects. Every defect here is a <em>relation</em> between agents, and the interview
+                settles one agent at a time by construction &mdash; so nothing before this point
+                could have seen any of it. It costs one call on the Performance die, and it advises
+                rather than blocks.
+            </p>
+
+            @if (coherence is null)
+            {
+                <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || draft.Agents.Count < 2)">
+                    @(isReviewing ? "Reading the domain…" : "Run the coherence pass")
+                </button>
+
+                @if (draft.Agents.Count < 2)
+                {
+                    <p class="muted">
+                        One agent, so there is nothing to relate: this pass needs two.
+                    </p>
+                }
+            }
+            else if (coherence.Error is not null)
+            {
+                <p class="severity-warning">@coherence.Error</p>
+                <button class="agent-pick" @onclick="ReviewAsync" disabled="@isReviewing">Try again</button>
+            }
+            else if (coherence.Findings.Count == 0)
+            {
+                <p>Nothing to report. No overlap, no contested capability, no value that disagrees with itself.</p>
+                <button class="agent-pick" @onclick="ReviewAsync" disabled="@isReviewing">Run it again</button>
+            }
+            else
+            {
+                <table>
+                    <thead>
+                        <tr><th>Kind</th><th>Where</th><th>What, and what it costs</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (CoherenceFinding finding in coherence.Findings)
+                        {
+                            <tr>
+                                <td class="severity-warning">@finding.Kind</td>
+                                <td><code>@finding.Where</code></td>
+                                <td>
+                                    @finding.What
+                                    <div class="because">@finding.Why</div>
+                                    <div class="because"><strong>Proposed:</strong> @finding.Fix</div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <button class="agent-pick" @onclick="ReviewAsync" disabled="@isReviewing">Run it again</button>
             }
         </div>
 
@@ -159,6 +220,8 @@
 
 @code {
     private IReadOnlyList<ValidationFinding> findings = [];
+    private CoherenceReport? coherence;
+    private bool isReviewing;
     private AgentRecap? recap;
     private string? selectedAgentId;
 
@@ -166,6 +229,16 @@
     {
         if (DraftStateService.Current is { } draft)
             findings = DraftValidationService.Validate(draft);
+    }
+
+    private async Task ReviewAsync()
+    {
+        if (DraftStateService.Current is not { } draft)
+            return;
+
+        isReviewing = true;
+        try { coherence = await CoherenceService.ReviewAsync(draft); }
+        finally { isReviewing = false; }
     }
 
     private async Task SelectAsync(AgentDraft agent)

@@ -83,9 +83,9 @@ builder.Services.AddScoped<IDraftStateService, DraftStateService>();
 // - IAlembicPromptService: Alembic's own prose, from alembic.json embedded here the same way
 //   morgana.json is embedded in Morgana.AI — same shape, same four sections. Alembic is an agent
 //   of Morgana that produces agents of Morgana, so it is composed the way one is: her Personality
-//   on top, resolved live rather than copied, then Alembic's doctrine, then the running pass.
-//   Her GlobalPolicies, Formatting and Target are left out on purpose: they govern how a channel
-//   turn is formed, and Alembic has no channel and no turn in that sense.
+//   on top, resolved live rather than copied, then the running pass — itself a complete four-section
+//   agent prompt. Her GlobalPolicies, Formatting and Target are left out on purpose: they govern how
+//   a channel turn is formed, and Alembic has no channel and no turn in that sense.
 // - IInterviewService: the interview. Scoped — one per circuit. The state machine is C# and the
 //   conducting is the model's: facts about the configuration are never left to a model's
 //   discretion, and phrasing is never left to a template.
@@ -108,6 +108,18 @@ builder.Services.AddScoped<IInterviewService, InterviewService>();
 builder.Services.AddSingleton<ICodeEmitService, CodeEmitService>();
 builder.Services.AddSingleton<IToolMockService, ToolMockService>();
 builder.Services.AddSingleton<IMigrationReportService, MigrationReportService>();
+
+// - IScenarioAuthorService: the starter PromptHarness scenarios. A domain agent IS its prose, prose
+//   gets edited, and a client who leaves without scenarios has a domain nobody can revise safely.
+//   Alembic knows what the agents were designed to do, which is what a first scenario is made of —
+//   and nothing about what will actually go wrong, which is every scenario after it.
+// - ICoherenceService: the half of reviewing a domain that DraftValidationService cannot do. Every
+//   defect it looks for is a relation between agents — overlapping intent descriptions, contested
+//   capabilities, a shared value published under two names — and the interview settles one agent at
+//   a time by construction, so no per-agent pass can see any of it. Advisory, never blocking.
+
+builder.Services.AddSingleton<IScenarioAuthorService, ScenarioAuthorService>();
+builder.Services.AddSingleton<ICoherenceService, CoherenceService>();
 builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
 
 // ==============================================================================
