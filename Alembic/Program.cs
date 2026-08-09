@@ -1,3 +1,5 @@
+using Alembic.Interfaces;
+using Alembic.Services;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 
@@ -53,7 +55,22 @@ builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolve
 builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptComposerService>();
 
 // ==============================================================================
-// 4. LLM
+// 4. ALEMBIC SERVICES
+// ==============================================================================
+// - IDraftImportService: parses an uploaded agents.json into a DomainDraft. Singleton: it holds
+//   no per-client state, it only projects one shape onto another.
+// - IDraftSerializationService: reads and writes alembic-draft.json, the interview's save file.
+//   An interview over a real domain does not fit in one sitting, and Alembic has no database.
+// - IDraftStateService: the Draft currently under construction. Scoped, which in Blazor Server
+//   means one per circuit: two tabs are two separate interviews, and the state dies with the
+//   connection that owns it.
+
+builder.Services.AddSingleton<IDraftImportService, DraftImportService>();
+builder.Services.AddSingleton<IDraftSerializationService, DraftSerializationService>();
+builder.Services.AddScoped<IDraftStateService, DraftStateService>();
+
+// ==============================================================================
+// 5. LLM
 // ==============================================================================
 // Alembic runs on the Performance tier, and the choice is not caution. Its whole job is writing
 // dispositive prose that does not contradict itself — the exact task where the Efficiency die
@@ -88,7 +105,7 @@ builder.Services.AddSingleton<ILLMService>(sp =>
 });
 
 // ============================================================================
-// 5. APPLICATION PIPELINE
+// 6. APPLICATION PIPELINE
 // ============================================================================
 
 WebApplication app = builder.Build();
@@ -116,7 +133,7 @@ app.MapGet("/health", () => Results.Ok(new
 }));
 
 // ============================================================================
-// 6. APPLICATION STARTUP
+// 7. APPLICATION STARTUP
 // ============================================================================
 
 await app.RunAsync();

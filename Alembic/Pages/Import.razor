@@ -1,0 +1,178 @@
+@page "/import"
+@using Alembic.Interfaces
+@using Alembic.Model
+@inject IDraftImportService DraftImportService
+@inject IDraftStateService DraftStateService
+@inject NavigationManager NavigationManager
+
+@*
+    Phase 2. The only way an existing domain enters Alembic: there is no filesystem to read from,
+    by design. What the page shows back is the parsed Draft, not a "file accepted" message — the
+    client has to be able to see that Alembic understood the same domain Morgana would load.
+*@
+
+<div class="alembic-page">
+
+    <h1>Import</h1>
+    <p class="tagline">Upload an existing <code>agents.json</code> to evolve it, or start from nothing.</p>
+
+    <div class="panel">
+        <h2>Upload</h2>
+        <InputFile OnChange="OnFileSelectedAsync" accept=".json" disabled="@isReading" />
+        @if (isReading)
+        {
+            <p class="muted">Reading&hellip;</p>
+        }
+    </div>
+
+    @if (error is not null)
+    {
+        <div class="panel panel-error">
+            <h2>Not read</h2>
+            <p>@error</p>
+        </div>
+    }
+
+    @if (notices.Count > 0)
+    {
+        <div class="panel">
+            <h2>What was read</h2>
+            <ul>
+                @foreach (string notice in notices)
+                {
+                    <li>@notice</li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (DraftStateService.Current is { } draft)
+    {
+        <div class="panel">
+            <h2>Intents</h2>
+            <table>
+                <thead>
+                    <tr><th>Name</th><th>Label</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (IntentDraft intent in draft.Intents)
+                    {
+                        <tr>
+                            <td><code>@intent.Name</code></td>
+                            <td>@intent.Label</td>
+                            <td class="description">@intent.Description</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @foreach (AgentDraft agent in draft.Agents)
+        {
+            <div class="panel">
+                <h2>Agent &mdash; @agent.ID</h2>
+                <dl>
+                    <dt>Language</dt><dd>@agent.Language</dd>
+                    <dt>Version</dt><dd>@agent.Version</dd>
+                    <dt>Personality</dt><dd>@(agent.Personality is null ? "—" : "declared")</dd>
+                    <dt>Proposed classes</dt>
+                    <dd>
+                        <code>@agent.Code.AgentClassName</code>
+                        @if (agent.Code.ToolClassName is not null)
+                        {
+                            <text>, <code>@agent.Code.ToolClassName</code></text>
+                        }
+                        <span class="muted"> (inferred &mdash; to confirm)</span>
+                    </dd>
+                </dl>
+
+                @if (agent.Tools.Count == 0)
+                {
+                    <p class="muted">No native tools. Legal: this may be an MCP-only agent.</p>
+                }
+                else
+                {
+                    <table>
+                        <thead>
+                            <tr><th>Tool</th><th>Parameter</th><th>Scope</th><th>Required</th><th>Shared</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (ToolDraft tool in agent.Tools)
+                            {
+                                @if (tool.Parameters.Count == 0)
+                                {
+                                    <tr>
+                                        <td><code>@tool.Name</code></td>
+                                        <td colspan="4" class="muted">no parameters</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach ((ToolParameterDraft parameter, int index) in tool.Parameters.Select((p, i) => (p, i)))
+                                    {
+                                        <tr>
+                                            <td>@(index == 0 ? tool.Name : string.Empty)</td>
+                                            <td><code>@parameter.Name</code></td>
+                                            <td>@(parameter.Scope ?? "—")</td>
+                                            <td>@(parameter.Required ? "yes" : "no")</td>
+                                            <td>@(parameter.Shared ? "yes" : "—")</td>
+                                        </tr>
+                                    }
+                                }
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        }
+    }
+
+    <p class="phase-note">
+        Phase 2 &mdash; Draft and import. Export, validation and the interview are not here yet.
+    </p>
+
+    <p><a href="">&larr; back</a></p>
+
+</div>
+
+@code {
+    /// <summary>Maximum size accepted for an agents.json upload.</summary>
+    /// <remarks>
+    /// Generous by two orders of magnitude against any real configuration — the Examples domain,
+    /// four agents with full prose and toolkits, is a few tens of kilobytes. The cap exists so a
+    /// mistaken upload fails immediately instead of being read into the circuit's memory.
+    /// </remarks>
+    private const long MaxUploadBytes = 4 * 1024 * 1024;
+
+    private IReadOnlyList<string> notices = [];
+    private string? error;
+    private bool isReading;
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        isReading = true;
+        error = null;
+        notices = [];
+
+        try
+        {
+            IBrowserFile file = e.File;
+
+            await using Stream stream = file.OpenReadStream(MaxUploadBytes);
+            DraftImportResult result = await DraftImportService.ImportAsync(stream, file.Name);
+
+            notices = result.Notices;
+            error = result.Error;
+            DraftStateService.Set(result.Draft);
+        }
+        catch (IOException ex)
+        {
+            // Thrown by OpenReadStream when the upload exceeds MaxUploadBytes.
+            error = ex.Message;
+        }
+        finally
+        {
+            isReading = false;
+        }
+    }
+}

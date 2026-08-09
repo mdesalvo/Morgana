@@ -31,13 +31,19 @@ html, body {
     min-height: 100vh;
 }
 
-.alembic-landing {
+.alembic-landing,
+.alembic-page {
     max-width: 46rem;
     margin: 0 auto;
     padding: 4rem 1.5rem;
 }
 
-.alembic-landing h1 {
+.alembic-page {
+    max-width: 62rem;
+}
+
+.alembic-landing h1,
+.alembic-page h1 {
     margin: 0;
     font-size: 3rem;
     font-weight: 300;
@@ -95,6 +101,51 @@ html, body {
 code {
     font-family: "Cascadia Mono", "JetBrains Mono", ui-monospace, monospace;
     font-size: 0.9em;
+}
+
+.panel table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.panel th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--alembic-muted);
+    border-bottom: 1px solid var(--alembic-border);
+    padding: 0.35rem 0.6rem 0.35rem 0;
+}
+
+.panel td {
+    padding: 0.35rem 0.6rem 0.35rem 0;
+    border-bottom: 1px solid rgba(50, 44, 82, 0.5);
+    vertical-align: top;
+}
+
+.panel td.description {
+    color: var(--alembic-muted);
+}
+
+.panel ul {
+    margin: 0;
+    padding-left: 1.1rem;
+}
+
+.panel li {
+    margin-bottom: 0.3rem;
+}
+
+.muted {
+    color: var(--alembic-muted);
+}
+
+a {
+    color: var(--alembic-accent);
+}
+
+input[type="file"] {
+    color: var(--alembic-muted);
 }
 
 .phase-note {

@@ -97,11 +97,51 @@ Alembic/
   Program.cs                          # DI wiring and app pipeline
   App.razor                           # Blazor root component
   _Imports.razor                      # Shared @using directives
+  Model/
+    DomainDraft.cs                    # The Draft: DomainDraft, IntentDraft, AgentDraft, ToolDraft, …
+    AgentsConfigurationFile.cs        # The on-disk shape of an agents.json (Morgana's own Records inside)
+    Provenance.cs                     # Imported / Revised / Authored
+  Interfaces/
+    IDraftImportService.cs            # Uploaded agents.json → Draft
+    IDraftSerializationService.cs     # Draft ⇄ alembic-draft.json (the interview's save file)
+    IDraftStateService.cs             # The Draft under construction (per circuit)
+  Services/                           # Default implementations of the above
   Pages/_Host.cshtml                  # Blazor Server host page (ServerPrerendered)
   Pages/Index.razor                   # Landing page
+  Pages/Import.razor                  # Upload an agents.json, see the parsed Draft
   Shared/MainLayout.razor             # Layout wrapper
   wwwroot/css/site.css                # Base styles
 ```
+
+## The Draft
+
+The single artifact the interview fills, the validator checks, the recap composes and the emit
+reads. Three things about it are decisions rather than mechanics:
+
+**Why not the `Records` types directly.** They are the *serialization* model: immutable, complete,
+positional. The Draft is the *editing* model, and an interview in progress is incomplete by
+definition — a tool whose description has not been asked for is a different state from one whose
+description is deliberately empty, and only a nullable field distinguishes them. Every nullable
+string in `DomainDraft.cs` means "not asked yet". Where a shape is final it still *is* the
+framework's own record; nothing here re-models a concept Morgana already models.
+
+**What survives that Alembic does not understand.** AdditionalProperties keys other than `Tools`
+are kept verbatim in `AgentDraft.UnmodelledProperties` and written back untouched. The round-trip
+invariant must not depend on Alembic having a use for every key it meets. The `Tools` key is
+matched **ordinally**, deliberately: `Records.Prompt.GetAdditionalProperty` looks it up in a plain
+`Dictionary<string, object>`, so a differently-cased key is invisible to the framework and must
+stay invisible here rather than be promoted into a toolkit Morgana would never load.
+
+**Provenance** (`Imported` / `Revised` / `Authored`) exists so Alembic rewrites only what it owns
+and can *report* honestly. It is not what preserves untouched content — that is the round-trip
+invariant, which holds regardless.
+
+`AgentCodeFacts` holds what `agents.json` cannot: namespace, class names, tier, MCP servers. On
+import all of it is unknown, so Alembic proposes the class names from the framework's naming
+convention and flags the whole record `Inferred`. Namespace and tier are left null rather than
+guessed — they follow from nothing in the file, and a confident wrong value is worse than an empty
+one the interview will ask about. The inference is a genuine guess and is meant to be seen as one:
+against the `Examples` domain it proposes `MonkeysAgent` where the real class is `MonkeyAgent`.
 
 ## DI Registrations (Program.cs)
 
@@ -112,6 +152,9 @@ Alembic/
 | `IPromptResolverService` | Singleton | `ConfigurationPromptResolverService` — resolves the framework prompts from `morgana.json`, embedded in Morgana.AI and free through the project reference |
 | `IPromptComposerService` | Singleton | `ConfigurationPromptComposerService` — assembles what the model reads; this is what makes the recap a real composed prompt |
 | `ILLMService` | Singleton (factory) | Provider selected by `Morgana:LLM:Provider`. **Never resolved during startup**, so a working copy without credentials still builds, boots and serves the shell — the failure surfaces on the first call, with the provider's own message |
+| `IDraftImportService` | Singleton | `DraftImportService` — uploaded `agents.json` → Draft. Holds no per-client state; it only projects one shape onto another |
+| `IDraftSerializationService` | Singleton | `DraftSerializationService` — Draft ⇄ `alembic-draft.json`. An interview over a real domain does not fit in one sitting, and Alembic has no database |
+| `IDraftStateService` | **Scoped** | `DraftStateService` — the Draft under construction. One per Blazor circuit: two tabs are two separate interviews, and the state dies with the connection |
 
 ## Why the project reference is Morgana.AI, not Morgana.Contracts
 
@@ -150,7 +193,7 @@ closes it is a hard invariant the interview cannot break.
 | Phase | Content | State |
 |---|---|---|
 | 1 | Scaffold — solution, project, Blazor shell, Morgana.AI reference, LLM wiring, Docker | **done** |
-| 2 | Draft model + import of an uploaded `agents.json` (fixture: `Examples/agents.json`) | |
+| 2 | Draft model + import of an uploaded `agents.json` (fixture: `Examples/agents.json`) | **done** |
 | 3 | Export + round-trip invariant (an untouched file comes back out intact) | |
 | 4 | Deterministic validation + recap as the real composed prompt — *first shippable milestone: useful without any interview* | |
 | 5 | Interview, functional pass (`alembic.json`, FSM, intent + agent prose) | |
