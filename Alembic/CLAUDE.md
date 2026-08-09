@@ -103,12 +103,13 @@ Alembic/
     Provenance.cs                     # Imported / Revised / Authored
   Interfaces/
     IDraftImportService.cs            # Uploaded agents.json → Draft
+    IDraftExportService.cs            # Draft → agents.json (the round-trip invariant)
     IDraftSerializationService.cs     # Draft ⇄ alembic-draft.json (the interview's save file)
     IDraftStateService.cs             # The Draft under construction (per circuit)
   Services/                           # Default implementations of the above
   Pages/_Host.cshtml                  # Blazor Server host page (ServerPrerendered)
   Pages/Index.razor                   # Landing page
-  Pages/Import.razor                  # Upload an agents.json, see the parsed Draft
+  Pages/Import.razor                  # Upload an agents.json, see the parsed Draft, download it back
   Shared/MainLayout.razor             # Layout wrapper
   wwwroot/css/site.css                # Base styles
 ```
@@ -136,6 +137,31 @@ stay invisible here rather than be promoted into a toolkit Morgana would never l
 and can *report* honestly. It is not what preserves untouched content — that is the round-trip
 invariant, which holds regardless.
 
+## The round-trip invariant
+
+**A configuration that goes in comes back out equivalent.** This is what makes the interview safe
+to build on: a client uploading a domain of ten agents to add an eleventh gets the other ten back
+untouched, and Alembic does not need to understand them to promise it.
+
+Equivalent, not byte-identical, and the difference is not a compromise — it is what the format
+actually means:
+
+- `AdditionalProperties` is a *list* of dictionaries and Morgana looks keys up **across** every
+  entry, so the grouping carries no information. The exporter writes the toolkit as its own entry
+  followed by the unmodelled ones, which need not reproduce the arrangement the file arrived with.
+- Defaults are written explicitly. An omitted `Shared` and an explicit `"Shared": false` say the
+  same thing; stating it is the clearer of the two.
+- Emoji come back as escaped surrogate pairs. `JavaScriptEncoder.UnsafeRelaxedJsonEscaping` stops
+  escaping accented text, dashes and apostrophes, but its allow-list is expressed in
+  `UnicodeRange`s, which stop at U+FFFF — so anything outside the BMP is still escaped. The first
+  export normalises a hand-written file once; every export after that is diffable against the one
+  before it, which is the comparison that matters in use.
+
+Verified against `Examples/agents.json` (5 intents, 4 agents, 14 tools, 23 parameters): the
+exported JSON is semantically equal to the original field by field, re-importing it yields an
+identical Draft, and exporting that Draft again is byte-for-byte stable — the export is a fixed
+point, so a file that has been through Alembic once stops moving.
+
 `AgentCodeFacts` holds what `agents.json` cannot: namespace, class names, tier, MCP servers. On
 import all of it is unknown, so Alembic proposes the class names from the framework's naming
 convention and flags the whole record `Inferred`. Namespace and tier are left null rather than
@@ -153,6 +179,7 @@ against the `Examples` domain it proposes `MonkeysAgent` where the real class is
 | `IPromptComposerService` | Singleton | `ConfigurationPromptComposerService` — assembles what the model reads; this is what makes the recap a real composed prompt |
 | `ILLMService` | Singleton (factory) | Provider selected by `Morgana:LLM:Provider`. **Never resolved during startup**, so a working copy without credentials still builds, boots and serves the shell — the failure surfaces on the first call, with the provider's own message |
 | `IDraftImportService` | Singleton | `DraftImportService` — uploaded `agents.json` → Draft. Holds no per-client state; it only projects one shape onto another |
+| `IDraftExportService` | Singleton | `DraftExportService` — Draft → `agents.json`. Rebuilds Morgana's own record types and serializes those, so the file Alembic emits and the file Morgana reads are the same type seen from two sides |
 | `IDraftSerializationService` | Singleton | `DraftSerializationService` — Draft ⇄ `alembic-draft.json`. An interview over a real domain does not fit in one sitting, and Alembic has no database |
 | `IDraftStateService` | **Scoped** | `DraftStateService` — the Draft under construction. One per Blazor circuit: two tabs are two separate interviews, and the state dies with the connection |
 
@@ -194,7 +221,7 @@ closes it is a hard invariant the interview cannot break.
 |---|---|---|
 | 1 | Scaffold — solution, project, Blazor shell, Morgana.AI reference, LLM wiring, Docker | **done** |
 | 2 | Draft model + import of an uploaded `agents.json` (fixture: `Examples/agents.json`) | **done** |
-| 3 | Export + round-trip invariant (an untouched file comes back out intact) | |
+| 3 | Export + round-trip invariant (an untouched file comes back out intact) | **done** |
 | 4 | Deterministic validation + recap as the real composed prompt — *first shippable milestone: useful without any interview* | |
 | 5 | Interview, functional pass (`alembic.json`, FSM, intent + agent prose) | |
 | 6 | Interview, toolkit pass + return pass (`Instructions`/`Formatting` speak about tools, so they come last) | |

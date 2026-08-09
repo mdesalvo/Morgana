@@ -2,8 +2,9 @@
 @using Alembic.Interfaces
 @using Alembic.Model
 @inject IDraftImportService DraftImportService
+@inject IDraftExportService DraftExportService
+@inject IDraftSerializationService DraftSerializationService
 @inject IDraftStateService DraftStateService
-@inject NavigationManager NavigationManager
 
 @*
     Phase 2. The only way an existing domain enters Alembic: there is no filesystem to read from,
@@ -48,6 +49,18 @@
 
     @if (DraftStateService.Current is { } draft)
     {
+        <div class="panel">
+            <h2>Download</h2>
+            <p>
+                <a download="agents.json" href="@DataUri(DraftExportService.Export(draft))">agents.json</a>
+                <span class="muted"> &mdash; the configuration Morgana loads</span>
+            </p>
+            <p>
+                <a download="alembic-draft.json" href="@DataUri(DraftSerializationService.Serialize(draft))">alembic-draft.json</a>
+                <span class="muted"> &mdash; the interview's save file: provenance, the C# facts a configuration cannot express, and half-answered elements</span>
+            </p>
+        </div>
+
         <div class="panel">
             <h2>Intents</h2>
             <table>
@@ -143,6 +156,18 @@
     /// mistaken upload fails immediately instead of being read into the circuit's memory.
     /// </remarks>
     private const long MaxUploadBytes = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// Renders bytes as a downloadable <c>data:</c> URI.
+    /// </summary>
+    /// <remarks>
+    /// A plain anchor rather than JS interop or a download endpoint, and the reason is the same one
+    /// that shapes the rest of Alembic: the Draft lives in the circuit, so no stateless endpoint
+    /// can reach it, and a configuration is tens of kilobytes — small enough that the simplest
+    /// mechanism with no moving parts is also the right one.
+    /// </remarks>
+    private static string DataUri(byte[] content) =>
+        $"data:application/json;charset=utf-8;base64,{Convert.ToBase64String(content)}";
 
     private IReadOnlyList<string> notices = [];
     private string? error;

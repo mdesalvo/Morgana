@@ -59,6 +59,9 @@ builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptCompose
 // ==============================================================================
 // - IDraftImportService: parses an uploaded agents.json into a DomainDraft. Singleton: it holds
 //   no per-client state, it only projects one shape onto another.
+// - IDraftExportService: renders a Draft back into the agents.json Morgana loads. Together with
+//   the importer it carries the invariant everything later stands on — a configuration that goes
+//   in comes back out equivalent — which is what makes the interview safe to build on top.
 // - IDraftSerializationService: reads and writes alembic-draft.json, the interview's save file.
 //   An interview over a real domain does not fit in one sitting, and Alembic has no database.
 // - IDraftStateService: the Draft currently under construction. Scoped, which in Blazor Server
@@ -66,6 +69,7 @@ builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptCompose
 //   connection that owns it.
 
 builder.Services.AddSingleton<IDraftImportService, DraftImportService>();
+builder.Services.AddSingleton<IDraftExportService, DraftExportService>();
 builder.Services.AddSingleton<IDraftSerializationService, DraftSerializationService>();
 builder.Services.AddScoped<IDraftStateService, DraftStateService>();
 
