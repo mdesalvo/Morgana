@@ -9,17 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
-- **`MorganaChatReducer` replaces `SummarizingChatReducer` as the history reducer** — MEAI hides tool calls and results from the summarizer, so tool returns and one-shot identifiers were summarized away and the model reported they never existed. Ours renders them as `[tool call]` / `[tool result]` lines. The cut logic is a faithful port, and `__summary__` is unchanged so older conversations resume.
-- A SignalR channel must now join its conversation group **before** starting the conversation, which its own minting of the conversation id makes possible
+- **`MorganaChatReducer` replacing `Microsoft.Extensions.AI.SummarizingChatReducer` as history reducer** — gaining complete control over history reduction strategies while maintaining backward compatibility.
+- A SignalR channel must now join its conversation group **before** starting the conversation, which its own minting of the conversation id makes possible.
 
 ### 🐛 Fixed
-- Text written on either side of a tool call was joined with nothing in between, welding the closing sentence of one message onto the opening word of the next (`"...behold the Mandrill!The Mandrill is..."`). The model cannot prevent this — it never sees its earlier message as something the next word attaches to — so the paragraph break is now restored where the two meet
-- A reply written across a tool call lost everything said before that call as soon as the conversation was resumed: the rendered history keeps one message per turn, and it was the last fragment rather than the reply the user had actually read
+- Text welded across tool calls — a turn that calls a tool writes several assistant messages, and their texts were concatenated with nothing in between.
+- History losing part of a reply on resume — only the last assistant message of a turn is marked user-facing, so everything written before a tool call vanished from the rendered history while the live reply had shown it.
+- Summarizer blind to tool activity — MEAI's SummarizingChatReducer drops every message carrying function-call or function-result content from the summarizer's input, so a tool-driven agent was summarized from a text-only skeleton and the model reported that no tool ran and no identifier existed.
 - **Cauldron (1)**
-  - The greeting of a new conversation could vanish without a trace, because the conversation started before anyone was listening for its first message
+  - SignalR presentation race — a fresh conversation's greeting could reach an empty group and be discarded without a trace, since Cauldron joined the group only after the start response returned.
 
 ### 🚀 Future Enablement
-- **Screening what reaches the summarizer** — with the reducer's input assembled by Morgana rather than by the framework it consumes, the projection is a natural place to redact before summarization: a value that must never enter a summary (and therefore never enter the model's long-term view of the conversation) can be withheld at exactly one point, without touching the stored transcript or the live turn.
 - **Per-agent reduction policy** — the reducer is already built per agent and bound to that agent's own tier, so length and threshold can become properties of the agent rather than of the deployment: a dispositive agent holding order identifiers can be made to fold late and rarely, while a chatty informational one folds early and cheaply.
 
 ## [0.27.0] - 2026-08-06
