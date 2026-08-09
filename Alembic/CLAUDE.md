@@ -42,20 +42,55 @@ Alembic is not a `MorganaAgent`, so it carries no `[RequiresLLMTier]`; it consum
 framework's own no-cross-tier-fallback rule: **Alembic does not serve a single-tier deployment**
 (Ollama being the canonical case) until a `Performance` entry is configured.
 
-### Alembic's own prose
+### Alembic is of Morgana, and so is everything it writes
 
-Alembic's conducting prompt lives in an `alembic.json` of **identical shape** to an agent's
-(Target / Instructions / Personality / Formatting) — dogfooding: whoever tunes Alembic does the job
-Alembic teaches.
+Alembic is an agent of Morgana that produces agents of Morgana. It is therefore composed the way one
+is — layered, fenced, subordinate to her — from an `alembic.json` of **identical shape** to an
+agent's (Target / Instructions / Personality / Formatting), embedded the way `morgana.json` is
+embedded in Morgana.AI. Dogfooding: whoever tunes Alembic does the job Alembic teaches.
 
-It is **not** composed through `IPromptComposerService`. The framework layer in `morgana.json` is the
-law of a *channel turn* — QuickReplyDoctrine, TurnContinuation, RichCardUsage, ToolGrounding — and
-Alembic has no channel, no Guard, no Classifier and no turn in that sense. Stacking those policies on
-it would issue instructions about things that do not exist in its world, which is the most direct way
-to manufacture the non-local contradictions this whole project exists to avoid. Same *form*, own prompt.
+Three layers, in `AlembicPromptService.ComposeAsync`:
 
-For the same reason the variant "Alembic is a Morgana agent with its own intent" was rejected: it
-would drag in the entire Akka pipeline for an interview FSM that has nothing in common with it.
+1. **Morgana's own Personality**, resolved live from `morgana.json` rather than copied — her
+   identity is Alembic's identity, and a copy would drift the day someone tunes her voice.
+2. **`Doctrine`** — who Alembic is, how it speaks, what the four sections of a Morgana agent mean,
+   and what keeps an authored agent inside her universe. Identical across passes.
+3. **The pass** — only what this particular pass settles and how it answers.
+
+What is deliberately left out of layer 1: her `GlobalPolicies`, her `Formatting` and her `Target`.
+Those govern how a **channel turn** is formed — quick replies, rich cards, turn continuation, the
+system tools every agent shares, markdown for a rendered surface — and Alembic has no channel, no
+Guard, no Classifier, no turn in that sense, and answers in JSON. Handing it rules about things that
+do not exist in its world is the most direct way to manufacture the non-local contradictions this
+project exists to avoid. **What carries over is who she is; what does not is the mechanics of a
+conversation Alembic is not having.** For the same reason the variant "Alembic is a routed Morgana
+agent with its own intent" was rejected: it would drag in the whole Akka pipeline for an interview
+that has nothing in common with it.
+
+### The four sections, and staying inside the universe
+
+The doctrine gives each section one question to answer, because a sentence in the wrong section is
+worse than a sentence missing — the agent reads each for a different purpose:
+
+| Section | Answers | Size |
+|---|---|---|
+| `Target` | what this agent does well and existentially, and what it is significant to say it does **not** do | 2–4 sentences |
+| `Instructions` | how it goes about it, what it is trying to achieve on the way, what it must **not** do while doing it | 2–5 sentences |
+| `Personality` | the empathy, language, tone and humanity it meets the user with — voice only | 2–3 sentences |
+| `Formatting` | how this agent presents its **own** information: which shape suits which tool's output | brief, concrete |
+
+`Instructions` and `Formatting` both speak about the toolkit, which is exactly why they wait for the
+toolkit pass.
+
+And the universe is self-consistent by rule, not by luck. An authored agent is **one agent of
+Morgana**, never a separate creature: it is never "a virtual assistant", never "a helpful bot",
+never neutral corporate staff. `Personality` **names which facet she is here** — "a formal and
+exacting witch", "a brisk and steady witch" — which specialises her voice and is new information,
+where a bare list of adjectives would leave the agent sounding like anyone. Where the domain admits
+it she gets something of her own to speak from (a ledger, a scroll, a seed-bed); where it does not —
+someone whose pet is ill does not want whimsy — she gets none, and the brevity is the character. The
+colouring always stays in **how she speaks, never in what she claims to do**: a ledger may be gazed
+into, an invoice may not be conjured.
 
 ### Regeneration contract
 

@@ -149,7 +149,7 @@ public class InterviewService : IInterviewService
         // baking it into the prompt once.
         List<ChatMessage> messages =
         [
-            new ChatMessage(ChatRole.System, $"{alembicPromptService.Compose(FunctionalPassPromptId)}\n\n{DescribeState(state)}"),
+            new ChatMessage(ChatRole.System, $"{await alembicPromptService.ComposeAsync(FunctionalPassPromptId)}\n\n{DescribeState(state)}"),
             .. conversation
         ];
 
