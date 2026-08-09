@@ -1,5 +1,6 @@
 @page "/import"
 @using Alembic.Interfaces
+@using System.Text.Json
 @using Alembic.Model
 @inject IDraftImportService DraftImportService
 @inject IDraftExportService DraftExportService
@@ -7,19 +8,27 @@
 @inject IDraftStateService DraftStateService
 
 @*
-    Phase 2. The only way an existing domain enters Alembic: there is no filesystem to read from,
-    by design. What the page shows back is the parsed Draft, not a "file accepted" message — the
-    client has to be able to see that Alembic understood the same domain Morgana would load.
+    The only way an existing domain enters Alembic: there is no filesystem to read from, by design.
+    What the page shows back is the parsed Draft, not a "file accepted" message — the client has to
+    be able to see that Alembic understood the same domain Morgana would load.
+
+    Two kinds of file arrive through the same control, because to the client they are one gesture:
+    "here is where I am". Which one it is is decided by reading it, never by its name.
 *@
 
 <div class="alembic-page">
 
     <h1>Import</h1>
-    <p class="tagline">Upload an existing <code>agents.json</code> to evolve it, or start from nothing.</p>
+    <p class="tagline">Upload an existing <code>agents.json</code> to evolve it, resume a saved interview, or start from nothing.</p>
 
     <div class="panel">
         <h2>Upload</h2>
         <InputFile OnChange="OnFileSelectedAsync" accept=".json" disabled="@isReading" />
+        <p class="muted">
+            Either an <code>agents.json</code> &mdash; the configuration Morgana loads &mdash; or an
+            <code>alembic-draft.json</code> saved from a previous sitting. Alembic tells them apart by
+            reading them, not by their name, so a renamed file still lands where it belongs.
+        </p>
         @if (isReading)
         {
             <p class="muted">Reading&hellip;</p>
@@ -142,7 +151,7 @@
     }
 
     <p class="phase-note">
-        Phase 4 &mdash; validation and recap. The interview and the emit are not here yet.
+        An <code>agents.json</code> becomes a Draft, and a Draft becomes an <code>agents.json</code> again &mdash; the invariant everything else stands on.
     </p>
 
     <p><a href="">&larr; back</a></p>
@@ -174,6 +183,16 @@
     private string? error;
     private bool isReading;
 
+    /// <summary>
+    /// The root property only a saved interview carries.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="DomainDraft.CreatedAt"/> is non-nullable, so a serialized Draft always has it and
+    /// an <c>agents.json</c> never does — the two shapes are told apart by a fact rather than by a
+    /// file name, which the client is free to change and often has.
+    /// </remarks>
+    private const string SaveFileMarker = "CreatedAt";
+
     private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
     {
         isReading = true;
@@ -184,8 +203,25 @@
         {
             IBrowserFile file = e.File;
 
-            await using Stream stream = file.OpenReadStream(MaxUploadBytes);
-            DraftImportResult result = await DraftImportService.ImportAsync(stream, file.Name);
+            // Buffered because it is read twice: once to decide what it is, once to parse it. A
+            // configuration is tens of kilobytes and the cap above is two orders of magnitude above
+            // any real one, so this costs nothing worth avoiding.
+            using MemoryStream buffer = new MemoryStream();
+            await using (Stream stream = file.OpenReadStream(MaxUploadBytes))
+                await stream.CopyToAsync(buffer);
+
+            buffer.Position = 0;
+
+            if (IsSaveFile(buffer))
+            {
+                buffer.Position = 0;
+                await ResumeAsync(buffer, file.Name);
+                return;
+            }
+
+            buffer.Position = 0;
+
+            DraftImportResult result = await DraftImportService.ImportAsync(buffer, file.Name);
 
             notices = result.Notices;
             error = result.Error;
@@ -199,6 +235,69 @@
         finally
         {
             isReading = false;
+        }
+    }
+
+    /// <summary>
+    /// Restores a Draft saved in an earlier sitting.
+    /// </summary>
+    /// <remarks>
+    /// An interview over a real domain does not fit in one sitting and Alembic has no database, so
+    /// the save file is the whole of its memory. It carries what a configuration cannot: provenance,
+    /// the C# facts <c>agents.json</c> does not express, half-answered elements, and the baseline the
+    /// migration report diffs against — which is why the report still tells the truth on the second
+    /// day.
+    /// </remarks>
+    private async Task ResumeAsync(Stream saveFile, string fileName)
+    {
+        DomainDraft? draft = await DraftSerializationService.DeserializeAsync(saveFile);
+
+        if (draft is null)
+        {
+            error = $"{fileName} looks like a saved interview but could not be read.";
+            return;
+        }
+
+        DraftStateService.Set(draft);
+
+        List<string> read =
+        [
+            $"Resumed a saved interview: {draft.Intents.Count} intents and {draft.Agents.Count} agents, "
+            + $"carrying {draft.Agents.Sum(a => a.Tools.Count)} tools.",
+
+            draft.Baseline is null
+                ? "It was started from nothing, so the migration report will say everything is new."
+                : $"It carries the domain as uploaded from {draft.Baseline.ImportedFrom}, so the migration report still diffs against it."
+        ];
+
+        int authored = draft.Agents.Count(a => a.Origin == Provenance.Authored);
+
+        if (authored > 0)
+            read.Add($"{authored} of the agents were authored here rather than imported.");
+
+        notices = read;
+    }
+
+    /// <summary>
+    /// Decides which of the two shapes arrived, by reading the file.
+    /// </summary>
+    private static bool IsSaveFile(Stream json)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+
+            // Case-insensitively, because the reader that follows is case-insensitive too and this
+            // file is documented as hand-editable between sittings.
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.EnumerateObject().Any(p =>
+                       string.Equals(p.Name, SaveFileMarker, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (JsonException)
+        {
+            // Not JSON at all. Left to the importer, whose error message is about a configuration
+            // that could not be read — which is what the client was almost certainly uploading.
+            return false;
         }
     }
 }

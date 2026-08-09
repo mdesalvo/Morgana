@@ -174,6 +174,22 @@ report nobody has learned to read on the day it matters. It diffs the Draft agai
 bytes so the comparison is like with like, and serialized with the save file so a second sitting does
 not lose it. `Provenance` alone could not serve: it says an element was revised, never what it was.
 
+### Two files, one gesture
+
+An interview over a real domain does not fit in one sitting and Alembic has no database, so
+`alembic-draft.json` is the whole of its memory: provenance, the C# facts a configuration cannot
+express, half-answered elements, and the baseline. Both it and an `agents.json` arrive through the
+**same upload control**, because to the client they are one gesture — *here is where I am* — and
+which one it is is decided **by reading the file, never by its name**: a serialized Draft carries
+`CreatedAt` at the root and a configuration never does. A renamed file still lands where it belongs.
+
+Verified end to end without a model: a save file and a configuration are told apart correctly, a
+resumed Draft keeps its provenance, its tiers and its baseline (whose own baseline stays `null` —
+one level, never a chain), the migration report still diffs against that baseline on the second day,
+and the `agents.json` re-exported after the detour is **byte-identical** to the one before it. The
+save file is roughly twice the configuration's size, which is the baseline, and is the price of a
+report that does not start lying when the client comes back tomorrow.
+
 Entries are ordered by what they cost to act on, and the load-bearing section is signatures. A tool
 whose parameter list changed still compiles on the generated side and fails at Morgana's startup in
 `MorganaToolAdapter.AddTool`, and the client-owned half is exactly where that fix is made by hand.
