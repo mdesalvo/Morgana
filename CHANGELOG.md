@@ -6,11 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.28.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Prompt Composition Extension Point
+This release opens the **innermost core of an AI application — how a prompt is assembled — to substitution**: `IPromptComposerService` joins the suite of pluggable interfaces as the sibling of `IPromptResolverService`, splitting a responsibility the two had shared implicitly. The resolver abstracts *where prompts come from*; the composer abstracts *how they become what the model actually reads*. They are kept apart because they vary for different reasons: swapping prompt storage for a database must not force a reimplementation of the layer fences, and redesigning the prompt architecture must not force a reimplementation of storage.
+The composer owns **all three assembly points at once** — the fenced two-layer system prompt, the tool descriptions carrying `ToolDescriptionContextGuidance`, and the per-turn `HeldContextDeclaration` — because an implementation governing only one of them would have redesigned a fraction of the prompt architecture rather than the whole of it. The structural fences remain `const` and carry no configuration point: they are substitutable only wholesale, by replacing the service, since the fences and the layering they express are one design and not a set of independent knobs.
+
 ### ✨ Added
+- Introduced `IPromptComposerService` as an **extension point for prompt composition**: `ConfigurationPromptComposerService` ships as the default implementation (two-layer fenced composition of framework + domain prompts, global policies ordered by type and priority, injection templates spliced into tool descriptions and into the per-turn context declaration) and can be replaced in DI with any alternative prompt architecture without touching the agent adapter, the tool adapter or the context provider
+- `MorganaAgentAdapter.CreateAgentAsync` — the asynchronous counterpart of `CreateAgent` and now the real implementation, public so that any caller owning an async seam never blocks. `CreateAgent` keeps its synchronous signature for the sole caller that has none: the Akka constructor materializing agents through `DependencyResolver.Props`
 
 ### 🔄 Changed
 - **`MorganaChatReducer` replacing `Microsoft.Extensions.AI.SummarizingChatReducer` as history reducer** — gaining complete control over history reduction strategies while maintaining backward compatibility.
 - A SignalR channel must now join its conversation group **before** starting the conversation, which its own minting of the conversation id makes possible.
+- Agent creation resolves and composes asynchronously end to end, leaving **one** sync-over-async point where there were two: prompt resolution used to block as well. `MorganaAIContextProvider.ProvideAIContextAsync`, the only per-turn path involved, is now genuinely asynchronous
+- `MorganaToolAdapter` takes an `IPromptComposerService` instead of a `List<GlobalPolicy>`, and `CreateFunction`/`CreateAllFunctions` became `CreateFunctionAsync`/`CreateAllFunctionsAsync`
+- **Breaking for out-of-tree plugins extending `MorganaAgentAdapter`**: the `protected morganaPolicies` field is gone, having existed only for the composition that moved out
 
 ### 🐛 Fixed
 - Text welded across tool calls — a turn that calls a tool writes several assistant messages, and their texts were concatenated with nothing in between.
