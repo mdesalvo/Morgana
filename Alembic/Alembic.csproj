@@ -17,6 +17,15 @@
 
     <ItemGroup>
        <!--
+         Alembic's own conducting prose, embedded exactly the way morgana.json is embedded in
+         Morgana.AI — same mechanism, same Records.PromptCollection shape, same four sections.
+         Dogfooding: whoever tunes Alembic does the job Alembic teaches.
+       -->
+       <EmbeddedResource Include="alembic.json" />
+    </ItemGroup>
+
+    <ItemGroup>
+       <!--
          Morgana.AI, not Morgana.Contracts: Alembic is not a channel and exchanges no wire DTOs.
          What it needs is the domain model of a Morgana configuration — Records.Prompt,
          Records.ToolDefinition, Records.Intent — plus IPromptComposerService, which lets it show

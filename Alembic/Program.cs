@@ -80,6 +80,17 @@ builder.Services.AddSingleton<IRecapService, RecapService>();
 builder.Services.AddSingleton<IDraftSerializationService, DraftSerializationService>();
 builder.Services.AddScoped<IDraftStateService, DraftStateService>();
 
+// - IAlembicPromptService: Alembic's own conducting prose, from alembic.json embedded here the
+//   same way morgana.json is embedded in Morgana.AI — same shape, same four sections. It is NOT
+//   composed through IPromptComposerService: the framework layer is the law of a channel turn,
+//   and an interviewer has no channel, no Guard, no Classifier and no turn in that sense.
+// - IInterviewService: the interview. Scoped — one per circuit. The state machine is C# and the
+//   conducting is the model's: facts about the configuration are never left to a model's
+//   discretion, and phrasing is never left to a template.
+
+builder.Services.AddSingleton<IAlembicPromptService, AlembicPromptService>();
+builder.Services.AddScoped<IInterviewService, InterviewService>();
+
 // ==============================================================================
 // 5. LLM
 // ==============================================================================

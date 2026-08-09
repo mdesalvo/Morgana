@@ -178,6 +178,96 @@ pre.prompt {
     overflow-y: auto;
 }
 
+.alembic-wide {
+    max-width: 76rem;
+}
+
+.interview-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    align-items: start;
+}
+
+@media (max-width: 60rem) {
+    .interview-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.transcript {
+    max-height: 30rem;
+    overflow-y: auto;
+    margin-bottom: 0.9rem;
+}
+
+.turn {
+    margin-bottom: 0.9rem;
+}
+
+.turn .who {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--alembic-muted);
+    margin-bottom: 0.15rem;
+}
+
+.turn-alembic .said {
+    color: var(--alembic-text);
+}
+
+.turn-client .said {
+    color: var(--alembic-accent);
+}
+
+.said {
+    white-space: pre-wrap;
+}
+
+textarea {
+    width: 100%;
+    background: #0e0c16;
+    color: var(--alembic-text);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.35rem;
+    padding: 0.6rem 0.7rem;
+    font: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: var(--alembic-accent);
+}
+
+dl.fields {
+    grid-template-columns: 10rem 1fr;
+}
+
+dl.fields dd {
+    white-space: pre-wrap;
+}
+
+button.primary {
+    background: var(--alembic-accent);
+    color: #1a1030;
+    border: 1px solid var(--alembic-accent);
+    border-radius: 0.3rem;
+    padding: 0.4rem 1rem;
+    margin-right: 0.5rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+button.primary:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
 .agent-pick {
     background: var(--alembic-bg);
     color: var(--alembic-text);

@@ -103,6 +103,35 @@ therefore true for that version of Morgana and says nothing about a different on
 deliberately does **not** accept an uploaded `morgana.json`: that would model a capability the
 framework does not have.
 
+### The interview: C# owns the state, the model owns the conducting
+
+The split is fixed. **What has been established, which pass is running and what may be written next
+are facts**, and facts are not left to a model's discretion — they live in `InterviewState` and in
+`InterviewService`'s merge and readiness gate. **Which question to ask next, and how to turn a
+domain expert's answer into dispositive prose, is the model's** — no template writes that well.
+
+Two consequences that look like details and are not:
+
+- Readiness is checked, not believed. The model reports that it thinks a pass is settled; the state
+  machine confirms the fields are actually there before agreeing.
+- The **section labels** (`[TARGET]`, `[PERSONALITY]`) are guaranteed in code, not asked of the
+  model. Both composed layers use the same four labels — precisely why the framework fences them —
+  so a domain layer arriving unlabelled leaves half the composed prompt without the markers the
+  other half has. A label says *which section this is*, not what it means: it is structure, and a
+  structural invariant must not depend on a model remembering a formatting rule. The normalisation
+  is idempotent and applies only to prose the interview authored; an imported agent's prose is the
+  client's and is never rewritten.
+
+The passes are the machine's states, and their order is forced by the inverse dependency: an
+agent's `Instructions` and `Formatting` speak about its tools, so they cannot be written before the
+toolkit exists. The functional pass therefore writes the intent's four fields plus the agent's
+`Target` and `Personality`, and **nothing else** — `FunctionalPassProposals` carries no key for
+either deferred field, so the pass could not write them if the model tried.
+
+The client never writes prose and is never shown a field name. They answer questions about their
+work; Alembic writes the configuration and says what it understood. That asymmetry is the whole
+arrangement, and it is what spares a domain expert from having to become a prompt author.
+
 ### Validation runs before the recap
 
 The order is the design. Composing a beautiful prompt for a domain that would not start is a way of
@@ -134,6 +163,7 @@ Alembic/
   Directory.Build.targets             # Regenerates the root .env.versions on each build
   Alembic.Dockerfile                  # Multi-stage container build (root context)
   appsettings.json                    # Morgana:LLM section (Performance tier only)
+  alembic.json                        # Alembic's OWN conducting prose, embedded resource
   Properties/launchSettings.json      # Dev profile: https://localhost:5005
   Program.cs                          # DI wiring and app pipeline
   App.razor                           # Blazor root component
@@ -144,6 +174,7 @@ Alembic/
     DraftProjection.cs                # Draft → Records, shared by the exporter and the recap
     ValidationFinding.cs              # Severity, Where, Message, Because
     AgentRecap.cs                     # The three rungs of the placement ladder
+    InterviewState.cs                 # The interview's C# state machine
     Provenance.cs                     # Imported / Revised / Authored
   Interfaces/
     IDraftImportService.cs            # Uploaded agents.json → Draft
@@ -151,12 +182,15 @@ Alembic/
     IDraftSerializationService.cs     # Draft ⇄ alembic-draft.json (the interview's save file)
     IDraftValidationService.cs        # Everything decidable about a Draft without a model
     IRecapService.cs                  # Draft → the prompt the model really reads
+    IAlembicPromptService.cs          # Alembic's own prose, from alembic.json
+    IInterviewService.cs              # Conducts a pass, folds the result into the Draft
     IDraftStateService.cs             # The Draft under construction (per circuit)
   Services/                           # Default implementations of the above
   Pages/_Host.cshtml                  # Blazor Server host page (ServerPrerendered)
   Pages/Index.razor                   # Landing page
   Pages/Import.razor                  # Upload an agents.json, see the parsed Draft, download it back
   Pages/Review.razor                  # Findings, then the composed prompts
+  Pages/Interview.razor               # The functional pass: talk on the left, config fills on the right
   Shared/MainLayout.razor             # Layout wrapper
   wwwroot/css/site.css                # Base styles
 ```
@@ -230,6 +264,8 @@ against the `Examples` domain it proposes `MonkeysAgent` where the real class is
 | `IDraftSerializationService` | Singleton | `DraftSerializationService` — Draft ⇄ `alembic-draft.json`. An interview over a real domain does not fit in one sitting, and Alembic has no database |
 | `IDraftValidationService` | Singleton | `DraftValidationService` — the deterministic checks, each restating a rule the framework enforces later and more expensively |
 | `IRecapService` | Singleton | `RecapService` — drives `IPromptComposerService` over the Draft. Deliberately almost empty: anything Alembic added on top would be a claim about the prompt rather than the prompt |
+| `IAlembicPromptService` | Singleton | `AlembicPromptService` — loads `alembic.json` from this assembly, the way `ConfigurationPromptResolverService` loads `morgana.json`. Unlike it, refuses to degrade to an empty set: an interviewer with no prose is not diminished, it is silent |
+| `IInterviewService` | **Scoped** | `InterviewService` — one interview per circuit. Runs on `GetChatClient(Performance)` directly, not `CompleteWithSystemPromptAsync`, which always takes the cheapest tier |
 | `IDraftStateService` | **Scoped** | `DraftStateService` — the Draft under construction. One per Blazor circuit: two tabs are two separate interviews, and the state dies with the connection |
 
 ## Why the project reference is Morgana.AI, not Morgana.Contracts
@@ -272,7 +308,7 @@ closes it is a hard invariant the interview cannot break.
 | 2 | Draft model + import of an uploaded `agents.json` (fixture: `Examples/agents.json`) | **done** |
 | 3 | Export + round-trip invariant (an untouched file comes back out intact) | **done** |
 | 4 | Deterministic validation + recap as the real composed prompt — *first shippable milestone: useful without any interview* | **done** |
-| 5 | Interview, functional pass (`alembic.json`, FSM, intent + agent prose) | |
+| 5 | Interview, functional pass (`alembic.json`, FSM, intent + agent prose) | **done** |
 | 6 | Interview, toolkit pass + return pass (`Instructions`/`Formatting` speak about tools, so they come last) | |
 | 7 | C# asset emit + migration report — *turnkey* | |
 | 8 | PromptHarness starter scenarios + cross-agent coherence pass | |
