@@ -38,15 +38,16 @@ public interface IAlembicPromptService
     Records.Prompt Resolve(string promptId);
 
     /// <summary>
-    /// Renders the shared doctrine plus one pass into the system prompt Alembic sends.
+    /// Renders one pass into the system prompt Alembic sends.
     /// </summary>
     /// <remarks>
-    /// Two layers, fenced — the same shape Alembic teaches, applied to Alembic. The
-    /// <c>Doctrine</c> layer carries who Alembic is, how it speaks, what the four sections of a
-    /// Morgana agent mean, and what keeps an authored agent inside Morgana's universe; the pass
-    /// layer carries only what this particular pass does. That split is not decoration: the
-    /// doctrine is identical across passes and a pass restating any of it would be a second voice
-    /// claiming the same ground, which is exactly the defect the doctrine warns the model against.
+    /// Two layers, fenced — the same shape Alembic teaches, applied to Alembic: Morgana's
+    /// Personality, then the pass. A pass <em>is</em> an agent prompt, four sections complete on
+    /// their own, and what the three passes say identically they each say themselves — exactly as
+    /// two agents in <c>agents.json</c> each state their own read-only rule. An earlier design put a
+    /// shared doctrine layer between the two, on the model of Morgana's framework layer; hers binds
+    /// the global policies to the multi-turn machinery, and there is nothing here for such a layer
+    /// to bind.
     /// </remarks>
     /// <param name="passId">Which pass to render beneath the doctrine.</param>
     /// <returns>The system prompt.</returns>

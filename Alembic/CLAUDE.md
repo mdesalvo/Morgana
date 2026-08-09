@@ -49,13 +49,23 @@ is — layered, fenced, subordinate to her — from an `alembic.json` of **ident
 agent's (Target / Instructions / Personality / Formatting), embedded the way `morgana.json` is
 embedded in Morgana.AI. Dogfooding: whoever tunes Alembic does the job Alembic teaches.
 
-Three layers, in `AlembicPromptService.ComposeAsync`:
+Two layers, in `AlembicPromptService.ComposeAsync`:
 
 1. **Morgana's own Personality**, resolved live from `morgana.json` rather than copied — her
    identity is Alembic's identity, and a copy would drift the day someone tunes her voice.
-2. **`Doctrine`** — who Alembic is, how it speaks, what the four sections of a Morgana agent mean,
-   and what keeps an authored agent inside her universe. Identical across passes.
-3. **The pass** — only what this particular pass settles and how it answers.
+2. **The pass** — a complete agent prompt: Target, Personality, Instructions, Formatting.
+
+Two, not three. An earlier design put a shared `Doctrine` between them, on the model of Morgana's
+own framework layer — but hers is *glue*, binding the global policies to the multi-turn and context
+machinery, and there is nothing here for such a layer to bind. **The structure is what carries the
+semantics**: the four sections say what they always say, and a pass that is an agent prompt needs no
+scaffolding around it. What the three passes state identically they each state themselves, exactly
+as two agents in `agents.json` each state their own read-only rule.
+
+That collapse halved the composed prompt, from ~10 000 characters to ~5 000, and everything cut was
+scaffolding: role taxonomies, restated rationale, sentences describing rather than instructing. The
+prose an interviewer reads obeys the same law as the prose it writes — clear, direct, committed to
+the purpose, focused on how to reach it.
 
 What is deliberately left out of layer 1: her `GlobalPolicies`, her `Formatting` and her `Target`.
 Those govern how a **channel turn** is formed — quick replies, rich cards, turn continuation, the
@@ -171,7 +181,9 @@ descriptions the classifier will weigh this one against — an overlap you never
 collision no prose fixes afterwards), `GetFindings` (the deterministic pass, run against a probe
 domain so the relational rules are visible, filtered to this pass's business), and
 `GetComposedPrompt` (the whole of what the authored agent's model will read). **Alembic is the last
-reader of an agent before it exists**, and these are what let it read.
+reader of an agent before it exists**, and these are what let it read. `GetToolkit` joins them from
+the toolkit pass on, for the same reason at the tool layer: a description that never says *when* to
+call the tool is only visible when the toolkit is read back whole.
 
 ### Choices: a channel's contract, an interviewer's doctrine
 
@@ -187,15 +199,17 @@ while they are live. Alembic's only ever ask a **closed** question:
 - **Never on a question about the client's domain.** Their words are the material being distilled,
   and a menu replaces them with Alembic's — an expert clicking a button you wrote is an expert who
   has stopped telling you how they work.
-- Only where the answer set is closed and known to Alembic rather than to the client: the
-  framework's own vocabulary (a parameter's scope, required or not, shared or not, the tier), and
-  confirmations of something just understood.
+- Only where the answer set is closed and known to Alembic rather than to the client — in practice
+  that is **confirming an inference Alembic has just stated back**. Not the framework's vocabulary
+  asked raw: "is this parameter context-scoped?" is a closed question the client cannot answer,
+  which is why scope is inferred rather than offered.
 - **The text box never closes.** A choice is an offer, never a gate, so the escape is structural
   rather than an extra button. A spent row is shown inert rather than removed: the transcript
   should still say what was offered.
 
 The functional pass rarely uses them, and correctly so — nearly every question it asks is a domain
-question. The toolkit pass is where they earn their place.
+question. Observed across a full three-pass run: **two turns out of eighteen**, both of them
+confirmations, which is the right frequency rather than a shortfall.
 
 Rich cards have no equivalent here and are not missed: the persistent configuration panel beside the
 transcript is the better surface. A card is richness *per turn* that scrolls away with the
@@ -212,7 +226,8 @@ Two consequences that look like details and are not:
 
 - Readiness is checked, not believed. The model reports that it thinks a pass is settled; the state
   machine confirms the fields are actually there before agreeing.
-- The **section labels** (`[TARGET]`, `[PERSONALITY]`) are guaranteed in code, not asked of the
+- The **section labels** (`[TARGET]`, `[PERSONALITY]`, `[INSTRUCTIONS]`, `[FORMATTING]`) are
+  guaranteed in code, not asked of the
   model. Both composed layers use the same four labels — precisely why the framework fences them —
   so a domain layer arriving unlabelled leaves half the composed prompt without the markers the
   other half has. A label says *which section this is*, not what it means: it is structure, and a
@@ -220,15 +235,60 @@ Two consequences that look like details and are not:
   is idempotent and applies only to prose the interview authored; an imported agent's prose is the
   client's and is never rewritten.
 
-The passes are the machine's states, and their order is forced by the inverse dependency: an
-agent's `Instructions` and `Formatting` speak about its tools, so they cannot be written before the
-toolkit exists. The functional pass therefore writes the intent's four fields plus the agent's
-`Target` and `Personality`, and **nothing else** — `FunctionalPassProposals` carries no key for
-either deferred field, so the pass could not write them if the model tried.
-
 The client never writes prose and is never shown a field name. They answer questions about their
 work; Alembic writes the configuration and says what it understood. That asymmetry is the whole
 arrangement, and it is what spares a domain expert from having to become a prompt author.
+
+The client will also never *use* the agent — the people who will are their customers — so everything
+Alembic writes is addressed to the agent about those people, never to the client. Two sentences in
+the doctrine, because it is a pronoun that needs pinning down and not a taxonomy that needs
+teaching.
+
+### Three passes, three agents
+
+The passes are the machine's states, and their order is forced by an inverse dependency: an agent's
+`Instructions` and `Formatting` speak about its tools, so they cannot be written before the toolkit
+exists.
+
+| Pass | Settles | Cannot touch |
+|---|---|---|
+| `Functional` | the intent's four fields, the agent's `Target` and `Personality` | tools, `Instructions`, `Formatting` |
+| `Toolkit` | the tools, their descriptions, their parameters, scopes and sharing | what the agent *is*, `Instructions`, `Formatting` |
+| `Return` | `Instructions` and `Formatting` | everything already settled |
+
+Each pass is a **fresh agent and a fresh session**, and that is design rather than limitation: a
+toolkit pass carrying the whole functional interview in its context spends it re-litigating
+decisions already taken, and pays for that context on every turn thereafter. What crosses a pass
+boundary is the *configuration*, handed over by `GetAgentSoFar` and `GetToolkit` — read as settled
+fact rather than replayed as a conversation. The client's transcript is continuous: they are having
+one interview, and the seam belongs to the model alone.
+
+The right-hand column is enforced structurally. A pass's toolset is its own `Tools` declaration in
+`alembic.json`, so the toolkit pass has no `SetIntent` and no `SetAgentTarget`, and the functional
+pass has no `DeclareTool`. `InterviewState.Missing()` is pass-scoped for the same reason — a pass is
+complete when the fields *it* owns are set, and the toolkit pass owns none, since an agent with no
+native tools is the legal MCP-only shape.
+
+### One question, one step
+
+The characteristic failure of an LLM-conducted interview is not a wrong answer, it is **circling**:
+the model asks the same thing a second and a third time, each phrasing slightly better than the
+last, and the client stops answering. It appeared first in the functional pass on an agent's
+boundaries, and again in the toolkit pass — where the shape of the work invites it, because the
+naive reading asks each parameter's scope separately and four tools carry a dozen parameters.
+
+The fix is doctrine, high in Alembic's own `Instructions` where all three passes read it, rather
+than a patch per pass: every question is a step, and an answer advances it if **anything can be
+written down**. Adequate is not complete and never ideal — half an answer advances the step, and the
+other half is inferred, proposed, and corrected rather than asked again. Asking twice tells the
+client their answer was not good enough; asking three times ends the interview whether they say so
+or not.
+
+The toolkit pass then states the one instance the doctrine cannot know: **scope is inferred, never
+asked per parameter.** The client is asked once, about their setup — what the system already knows
+about a user the moment they arrive — and everything on that answer is `context` for the whole
+toolkit while everything else is `request`. `Shared` is an inference from what the value *is*: an
+identity the domain establishes once is shared, an agent's own working value is not.
 
 ### Validation runs before the recap
 
@@ -408,7 +468,7 @@ closes it is a hard invariant the interview cannot break.
 | 3 | Export + round-trip invariant (an untouched file comes back out intact) | **done** |
 | 4 | Deterministic validation + recap as the real composed prompt — *first shippable milestone: useful without any interview* | **done** |
 | 5 | Interview, functional pass (`alembic.json`, FSM, intent + agent prose) | **done** |
-| 6 | Interview, toolkit pass + return pass (`Instructions`/`Formatting` speak about tools, so they come last) | |
+| 6 | Interview, toolkit pass + return pass (`Instructions`/`Formatting` speak about tools, so they come last) | **done** |
 | 7 | C# asset emit + migration report — *turnkey* | |
 | 8 | PromptHarness starter scenarios + cross-agent coherence pass | |
 

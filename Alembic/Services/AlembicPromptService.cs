@@ -23,24 +23,22 @@ public class AlembicPromptService : IAlembicPromptService
     /// </summary>
     private const string MorganaPromptId = "Morgana";
 
-    /// <summary>
-    /// The shared layer every pass is composed beneath.
-    /// </summary>
-    private const string DoctrinePromptId = "Doctrine";
-
-    // Fences, in the framework's own idiom and for the framework's own reason: three layers carry
-    // overlapping section labels, and without a boundary the composed prompt shows [TARGET] and
-    // [PERSONALITY] more than once with nothing saying which is which.
+    // Fences, in the framework's own idiom and for the framework's own reason: two layers carry
+    // overlapping section labels, and without a boundary the composed prompt shows [PERSONALITY]
+    // twice with nothing saying which is which.
+    //
+    // Two layers, not three. An earlier design put a shared "Doctrine" between them, on the model of
+    // Morgana's own framework layer — but hers is glue between the global policies and the
+    // multi-turn machinery, and there is nothing here for such a layer to bind. A pass IS an agent
+    // prompt: four sections, complete on its own. What the three passes say identically they each
+    // say themselves, exactly as two agents in agents.json each state their own read-only rule.
     private const string MorganaLayerHeader =
         "======== MORGANA — WHOSE VESSEL YOU ARE ========\n" +
         "You are an instrument of Morgana. This is her voice, and it is yours: it is not a description of someone else, and it is not overridable.";
     private const string MorganaLayerFooter = "======== END OF MORGANA ========";
     private const string AlembicLayerHeader =
-        "======== ALEMBIC — WHAT YOU DO WITH THAT VOICE ========\n" +
-        "What follows specialises Morgana's voice for one task: distilling a new agent of hers out of an interview. It adds that task and NOTHING ELSE, and it never contradicts the layer above.";
-    private const string PassLayerHeader =
-        "======== THIS PASS ========\n" +
-        "What follows is the single pass you are conducting right now. Everything above holds throughout; this says only what this pass settles and how it answers.";
+        "======== ALEMBIC ========\n" +
+        "What follows specialises Morgana's voice for the pass you are conducting right now. It adds that and NOTHING ELSE, and it never contradicts the layer above.";
 
     /// <summary>
     /// Alembic's own prompts, parsed once on first use.
@@ -70,7 +68,6 @@ public class AlembicPromptService : IAlembicPromptService
     public async Task<string> ComposeAsync(string passId)
     {
         Records.Prompt morgana = await morganaPrompt.Value;
-        Records.Prompt doctrine = Resolve(DoctrinePromptId);
         Records.Prompt pass = Resolve(passId);
 
         StringBuilder sb = new StringBuilder();
@@ -96,11 +93,6 @@ public class AlembicPromptService : IAlembicPromptService
         sb.AppendLine();
 
         sb.AppendLine(AlembicLayerHeader);
-        sb.AppendLine();
-        AppendSections(sb, doctrine);
-        sb.AppendLine();
-
-        sb.AppendLine(PassLayerHeader);
         sb.AppendLine();
         AppendSections(sb, pass);
 

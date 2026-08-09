@@ -32,15 +32,25 @@ namespace Alembic.Services;
 public class InterviewService : IInterviewService
 {
     /// <summary>
-    /// The pass conducted when an interview begins.
+    /// The prompt in <c>alembic.json</c> conducting each pass.
     /// </summary>
-    private const string FunctionalPassPromptId = "FunctionalPass";
+    private static readonly Dictionary<InterviewPass, string> PassPromptIds = new()
+    {
+        [InterviewPass.Functional] = "FunctionalPass",
+        [InterviewPass.Toolkit] = "ToolkitPass",
+        [InterviewPass.Return] = "ReturnPass"
+    };
 
     /// <summary>
-    /// What the agent is sent when the transcript is still empty. Never shown to the client: a
-    /// chat completion needs a user turn to answer, not because anybody said it.
+    /// What the agent is sent to open a pass. Never shown to the client: a chat completion needs a
+    /// user turn to answer, not because anybody said it.
     /// </summary>
-    private const string BootstrapMessage = "Begin the interview.";
+    private static readonly Dictionary<InterviewPass, string> BootstrapMessages = new()
+    {
+        [InterviewPass.Functional] = "Begin the interview.",
+        [InterviewPass.Toolkit] = "The client is still here and the previous pass is settled. Begin this one.",
+        [InterviewPass.Return] = "The client is still here and the toolkit is settled. Begin the last pass."
+    };
 
     private readonly IAlembicPromptService alembicPromptService;
     private readonly IPromptComposerService promptComposerService;
@@ -85,10 +95,20 @@ public class InterviewService : IInterviewService
     {
         Current = new InterviewState();
 
-        await BuildAgentAsync(Current, FunctionalPassPromptId);
-        await ExchangeAsync(Current, BootstrapMessage, cancellationToken);
+        await EnterPassAsync(Current, InterviewPass.Functional, cancellationToken);
 
         return Current;
+    }
+
+    /// <inheritdoc />
+    public async Task<InterviewState> AdvanceAsync(CancellationToken cancellationToken = default)
+    {
+        if (Current is not { ReadyForReview: true } state || state.Pass == InterviewPass.Return)
+            return Current ?? await StartAsync(cancellationToken);
+
+        await EnterPassAsync(state, state.Pass + 1, cancellationToken);
+
+        return state;
     }
 
     /// <inheritdoc />
@@ -117,7 +137,13 @@ public class InterviewService : IInterviewService
         state.Agent.Origin = Provenance.Authored;
         state.Agent.ID = state.Intent.Name;
         state.Agent.Code.Inferred = true;
-        state.Agent.Code.AgentClassName = ProposeClassName(state.Intent.Name);
+        state.Agent.Code.AgentClassName = ProposeClassName(state.Intent.Name, "Agent");
+
+        // An agent with no native tools gets no tool class, and that is a legal shape rather than a
+        // gap: an MCP-only agent's tools arrive at runtime and never appear in agents.json.
+        state.Agent.Code.ToolClassName = state.Agent.Tools.Count > 0
+            ? ProposeClassName(state.Intent.Name, "Tool")
+            : null;
 
         draft.Intents.Add(state.Intent);
         draft.Agents.Add(state.Agent);
@@ -135,6 +161,26 @@ public class InterviewService : IInterviewService
         Current = null;
         agent = null;
         session = null;
+    }
+
+    /// <summary>
+    /// Moves the interview into a pass: new agent, new session, and the pass's opening question.
+    /// </summary>
+    /// <remarks>
+    /// The session does not carry over, and that is the design rather than a limitation. A toolkit
+    /// pass holding the entire functional interview in its context spends it re-litigating decisions
+    /// already taken, and every turn of it thereafter. What must survive a pass boundary is the
+    /// configuration, which is what <c>GetAgentSoFar</c> and <c>GetToolkit</c> hand back — read as
+    /// settled fact rather than replayed as a conversation. The client's transcript is untouched:
+    /// they are having one interview, and only the model starts again.
+    /// </remarks>
+    private async Task EnterPassAsync(InterviewState state, InterviewPass pass, CancellationToken cancellationToken)
+    {
+        state.Pass = pass;
+        state.ReadyForReview = false;
+
+        await BuildAgentAsync(state, PassPromptIds[pass]);
+        await ExchangeAsync(state, BootstrapMessages[pass], cancellationToken);
     }
 
     /// <summary>
@@ -165,6 +211,14 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.SetIntent)] = tools.SetIntent,
             [nameof(InterviewTools.SetAgentTarget)] = tools.SetAgentTarget,
             [nameof(InterviewTools.SetAgentPersonality)] = tools.SetAgentPersonality,
+            [nameof(InterviewTools.SetAgentInstructions)] = tools.SetAgentInstructions,
+            [nameof(InterviewTools.SetAgentFormatting)] = tools.SetAgentFormatting,
+            [nameof(InterviewTools.DeclareTool)] = tools.DeclareTool,
+            [nameof(InterviewTools.SetToolParameter)] = tools.SetToolParameter,
+            [nameof(InterviewTools.DropToolParameter)] = tools.DropToolParameter,
+            [nameof(InterviewTools.DropTool)] = tools.DropTool,
+            [nameof(InterviewTools.GetToolkit)] = tools.GetToolkit,
+            [nameof(InterviewTools.GetAgentSoFar)] = tools.GetAgentSoFar,
             [nameof(InterviewTools.SetChoices)] = tools.SetChoices,
             [nameof(InterviewTools.GetExistingIntents)] = tools.GetExistingIntents,
             [nameof(InterviewTools.GetComposedPrompt)] = tools.GetComposedPrompt,
@@ -236,8 +290,8 @@ public class InterviewService : IInterviewService
     /// <summary>
     /// Proposes a class name from an intent name, by the framework's own naming convention.
     /// </summary>
-    private static string? ProposeClassName(string? intentName) =>
+    private static string? ProposeClassName(string? intentName, string suffix) =>
         string.IsNullOrWhiteSpace(intentName)
             ? null
-            : $"{char.ToUpperInvariant(intentName[0])}{intentName[1..]}Agent";
+            : $"{char.ToUpperInvariant(intentName[0])}{intentName[1..]}{suffix}";
 }

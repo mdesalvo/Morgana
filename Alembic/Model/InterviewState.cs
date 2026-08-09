@@ -111,10 +111,27 @@ public sealed class InterviewState
     public string? Error { get; set; }
 
     /// <summary>
-    /// The fields this pass is responsible for that are still unset — the same list Alembic is told
-    /// about at the start of every turn.
+    /// The fields the <em>running</em> pass is responsible for that are still unset.
     /// </summary>
-    public IReadOnlyList<string> Missing()
+    /// <remarks>
+    /// Pass-scoped on purpose, and it is what makes <c>SetPassCompleted</c> mean anything: a pass is
+    /// complete when the fields it owns are set, never when the fields of a later one are still
+    /// blank. The toolkit pass owns no field at all — an agent with no native tools is a legal
+    /// configuration, the MCP-only case — so it reports only tools left half-declared, and its
+    /// emptiness is a decision Alembic must have taken with the client rather than a gate.
+    /// </remarks>
+    public IReadOnlyList<string> Missing() => Pass switch
+    {
+        InterviewPass.Functional => MissingFunctional(),
+        InterviewPass.Toolkit => MissingToolkit(),
+        InterviewPass.Return => MissingReturn(),
+        _ => []
+    };
+
+    /// <summary>
+    /// What the agent IS: the intent's four fields, plus its Target and Personality.
+    /// </summary>
+    private List<string> MissingFunctional()
     {
         List<string> missing = [];
 
@@ -124,6 +141,28 @@ public sealed class InterviewState
         if (string.IsNullOrWhiteSpace(Intent.DefaultValue)) missing.Add("intentDefaultValue");
         if (string.IsNullOrWhiteSpace(Agent.Target)) missing.Add("agentTarget");
         if (string.IsNullOrWhiteSpace(Agent.Personality)) missing.Add("agentPersonality");
+
+        return missing;
+    }
+
+    /// <summary>
+    /// Tools that were opened and never finished. A tool with no parameters is not one of them: a
+    /// tool that takes nothing is ordinary.
+    /// </summary>
+    private List<string> MissingToolkit() =>
+        [.. Agent.Tools
+                .Where(t => string.IsNullOrWhiteSpace(t.Description))
+                .Select(t => $"description of {t.Name ?? "(unnamed tool)"}")];
+
+    /// <summary>
+    /// The two sections that speak about the toolkit, and could not be written before it existed.
+    /// </summary>
+    private List<string> MissingReturn()
+    {
+        List<string> missing = [];
+
+        if (string.IsNullOrWhiteSpace(Agent.Instructions)) missing.Add("agentInstructions");
+        if (string.IsNullOrWhiteSpace(Agent.Formatting)) missing.Add("agentFormatting");
 
         return missing;
     }

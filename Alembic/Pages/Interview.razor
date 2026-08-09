@@ -6,16 +6,19 @@
 @inject NavigationManager NavigationManager
 
 @*
-    Phase 5 — the functional pass. Two columns on purpose: the client talks on the left and watches
+    Phase 6 — the three passes. Two columns on purpose: the client talks on the left and watches
     the configuration fill in on the right. Seeing a field appear the moment it is inferred is what
     turns "answer some questions" into "watch your domain being written", and it is also what makes
     a wrong inference cheap to catch.
+
+    One transcript across all three passes. The model starts each pass with a fresh session, but the
+    client is having a single interview and must never be shown the seam.
 *@
 
 <div class="alembic-page alembic-wide">
 
     <h1>Interview</h1>
-    <p class="tagline">Functional pass &mdash; what the agent is for, where it stops, how it sounds.</p>
+    <p class="tagline">@Tagline(InterviewService.Current?.Pass ?? InterviewPass.Functional)</p>
 
     @if (InterviewService.Current is not { } state)
     {
@@ -26,8 +29,9 @@
                 to a new colleague; Alembic writes the configuration.
             </p>
             <p class="muted">
-                This pass deliberately does not ask about tools, data sources or systems. What you
-                say there could change what belongs here, which is why the toolkit is a separate pass.
+                Three passes, one conversation: what the agent is for, then what it has to reach for,
+                then how it works. The first deliberately does not ask about tools or systems &mdash;
+                what you say there could change what belongs here, which is why they are separate.
             </p>
             <button class="primary" @onclick="StartAsync" disabled="@isBusy">
                 @(isBusy ? "Starting…" : "Start the interview")
@@ -101,23 +105,67 @@
                     <dt>opening sentence</dt><dd>@Show(state.Intent.DefaultValue)</dd>
                     <dt>agent target</dt><dd>@Show(state.Agent.Target)</dd>
                     <dt>agent personality</dt><dd>@Show(state.Agent.Personality)</dd>
+                    <dt>agent instructions</dt><dd>@Show(state.Agent.Instructions)</dd>
+                    <dt>agent formatting</dt><dd>@Show(state.Agent.Formatting)</dd>
                     <dt>language</dt><dd>@state.Agent.Language</dd>
                 </dl>
 
-                <p class="muted">
-                    Instructions and Formatting are not written in this pass. They speak about the
-                    agent's tools, and a rule written about a tool that has not been designed is a
-                    rule that will have to be unwritten.
-                </p>
+                <h2>Toolkit</h2>
 
-                @if (state.ReadyForReview)
+                @if (state.Agent.Tools.Count == 0)
                 {
-                    <p>Every field this pass owns is settled.</p>
-                    <button class="primary" @onclick="CommitAsync" disabled="@isBusy">Add to the draft</button>
+                    <p class="muted">
+                        No tools yet. An agent may legitimately end with none &mdash; one whose tools
+                        all arrive from an MCP server declares nothing here.
+                    </p>
                 }
                 else
                 {
-                    <p class="muted">Still unproposed: @string.Join(", ", state.Missing()).</p>
+                    @foreach (ToolDraft tool in state.Agent.Tools)
+                    {
+                        <div class="tool">
+                            <div class="tool-name">@tool.Name</div>
+                            <div class="muted">@Show(tool.Description)</div>
+
+                            @if (tool.Parameters.Count > 0)
+                            {
+                                <dl class="fields">
+                                    @foreach (ToolParameterDraft parameter in tool.Parameters)
+                                    {
+                                        <dt>@parameter.Name @Annotations(parameter)</dt>
+                                        <dd>@Show(parameter.Description)</dd>
+                                    }
+                                </dl>
+                            }
+                        </div>
+                    }
+                }
+
+                @if (state.Pass == InterviewPass.Functional)
+                {
+                    <p class="muted">
+                        Instructions and Formatting are not written in this pass. They speak about the
+                        agent's tools, and a rule written about a tool that has not been designed is a
+                        rule that will have to be unwritten.
+                    </p>
+                }
+
+                @if (state.ReadyForReview)
+                {
+                    <p>@Settled(state.Pass)</p>
+
+                    @if (state.Pass == InterviewPass.Return)
+                    {
+                        <button class="primary" @onclick="CommitAsync" disabled="@isBusy">Add to the draft</button>
+                    }
+                    else
+                    {
+                        <button class="primary" @onclick="AdvanceAsync" disabled="@isBusy">@NextPassLabel(state.Pass)</button>
+                    }
+                }
+                else if (state.Missing() is { Count: > 0 } missing)
+                {
+                    <p class="muted">Still unproposed: @string.Join(", ", missing).</p>
                 }
             </div>
 
@@ -125,7 +173,7 @@
     }
 
     <p class="phase-note">
-        Phase 5 &mdash; functional pass. The toolkit pass, the return pass and the emit are not here yet.
+        Phase 6 &mdash; the three passes. The C# emit and the harness scenarios are not here yet.
     </p>
 
     <p><a href="">&larr; back</a></p>
@@ -137,6 +185,41 @@
     private bool isBusy;
 
     private static string Show(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    private static string Tagline(InterviewPass pass) => pass switch
+    {
+        InterviewPass.Functional => "Functional pass — what the agent is for, where it stops, how it sounds.",
+        InterviewPass.Toolkit => "Toolkit pass — what the agent reaches for outside the conversation.",
+        _ => "Last pass — how the agent works, and how it shows what it finds."
+    };
+
+    private static string Settled(InterviewPass pass) => pass switch
+    {
+        InterviewPass.Functional => "The agent's purpose and voice are settled.",
+        InterviewPass.Toolkit => "The toolkit is settled.",
+        _ => "Every section is settled."
+    };
+
+    private static string NextPassLabel(InterviewPass pass) => pass switch
+    {
+        InterviewPass.Functional => "Continue to the toolkit",
+        _ => "Continue to instructions"
+    };
+
+    /// <summary>
+    /// The parameter's scope and its two flags, shown as they are configured rather than as prose:
+    /// a context-scoped parameter is what lets the agent stop re-asking, and shared is what carries
+    /// it to the other agents, so both are worth seeing at a glance.
+    /// </summary>
+    private static string Annotations(ToolParameterDraft parameter)
+    {
+        List<string> annotations = [parameter.Scope ?? "authored"];
+
+        if (!parameter.Required) annotations.Add("optional");
+        if (parameter.Shared) annotations.Add("shared");
+
+        return $"[{string.Join(", ", annotations)}]";
+    }
 
     private async Task StartAsync()
     {
@@ -158,6 +241,13 @@
     {
         isBusy = true;
         try { await InterviewService.AnswerAsync(said); }
+        finally { isBusy = false; }
+    }
+
+    private async Task AdvanceAsync()
+    {
+        isBusy = true;
+        try { await InterviewService.AdvanceAsync(); }
         finally { isBusy = false; }
     }
 

@@ -250,6 +250,25 @@ dl.fields dd {
     white-space: pre-wrap;
 }
 
+/* One declared tool. Indented under its name so a parameter list reads as belonging to it
+   rather than to the panel — the toolkit column is the one place the client sees nesting. */
+.tool {
+    margin-bottom: 1rem;
+    padding-left: 0.7rem;
+    border-left: 2px solid var(--alembic-border);
+}
+
+.tool-name {
+    font-weight: 600;
+    color: var(--alembic-accent);
+}
+
+.tool dl.fields {
+    grid-template-columns: 12rem 1fr;
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+}
+
 button.primary {
     background: var(--alembic-accent);
     color: #1a1030;

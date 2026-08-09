@@ -36,6 +36,28 @@ public class InterviewTools
     /// <summary>Section label carried by an agent's Personality.</summary>
     private const string PersonalityMarker = "[PERSONALITY]";
 
+    /// <summary>Section label carried by an agent's Instructions.</summary>
+    private const string InstructionsMarker = "[INSTRUCTIONS]";
+
+    /// <summary>Section label carried by an agent's Formatting.</summary>
+    private const string FormattingMarker = "[FORMATTING]";
+
+    /// <summary>
+    /// The intent name the framework reserves for the classifier's fallback. No authored agent may
+    /// take it.
+    /// </summary>
+    private const string ReservedFallbackIntent = "other";
+
+    /// <summary>
+    /// The scope of a parameter Morgana resolves from the session's own context variables.
+    /// </summary>
+    private const string ContextScope = "context";
+
+    /// <summary>
+    /// The scope of a parameter the agent obtains from the user in conversation.
+    /// </summary>
+    private const string RequestScope = "request";
+
     private readonly InterviewState state;
     private readonly IDraftStateService draftStateService;
     private readonly IDraftValidationService draftValidationService;
@@ -66,6 +88,15 @@ public class InterviewTools
     public string SetIntent(string name, string description, string label, string defaultValue)
     {
         string cleanName = (name ?? string.Empty).Trim();
+
+        // Refused rather than reported. 'other' is the classifier's own fallback — the intent it
+        // falls back to when it cannot place a message at all — and it is the single name
+        // HandlesIntentAgentRegistryService exempts from needing an agent. An authored agent taking
+        // it would shadow the fallback for the whole domain, so this is the one name that must not
+        // reach the Draft even provisionally.
+        if (string.Equals(cleanName, ReservedFallbackIntent, StringComparison.OrdinalIgnoreCase))
+            return $"Nothing recorded: '{ReservedFallbackIntent}' is reserved. It is the intent the classifier "
+                   + "falls back to when it cannot place a message, and no agent may claim it. Call this again with a name from the domain.";
 
         state.Intent.Name = cleanName;
         state.Intent.Description = description?.Trim();
@@ -104,6 +135,206 @@ public class InterviewTools
     }
 
     /// <summary>
+    /// Records the agent's Instructions section.
+    /// </summary>
+    public string SetAgentInstructions(string instructions)
+    {
+        state.Agent.Instructions = Marked(InstructionsMarker, instructions);
+        return Shaped("Instructions", instructions, 4, 12);
+    }
+
+    /// <summary>
+    /// Records the agent's Formatting section.
+    /// </summary>
+    public string SetAgentFormatting(string formatting)
+    {
+        state.Agent.Formatting = Marked(FormattingMarker, formatting);
+        return Shaped("Formatting", formatting, 2, 5);
+    }
+
+    /// <summary>
+    /// Opens a tool, or revises the description of one already open.
+    /// </summary>
+    /// <remarks>
+    /// Revising keeps the parameters. A tool's contract is settled in several turns — the name and
+    /// what it does come out of one answer, its inputs out of the next — and re-declaring it to
+    /// sharpen the description must not silently empty it.
+    /// </remarks>
+    public string DeclareTool(string name, string description)
+    {
+        string cleanName = (name ?? string.Empty).Trim();
+
+        if (cleanName.Length == 0)
+            return "No tool recorded: a tool must have a name, because the name is what pairs it with its C# method.";
+
+        ToolDraft? existing = Find(cleanName);
+        bool revision = existing is not null;
+
+        ToolDraft tool = existing ?? new ToolDraft { Name = cleanName, Origin = Provenance.Authored };
+        tool.Description = description?.Trim();
+
+        if (!revision)
+            state.Agent.Tools.Add(tool);
+
+        // Reported, never rewritten: the name is domain vocabulary, and a silent correction leaves
+        // Alembic telling the client one word while the configuration carries another.
+        string complaint = IdentifierComplaint(cleanName, "tool name", pascalCase: true);
+
+        return (revision ? $"'{cleanName}' revised." : $"'{cleanName}' declared.")
+               + (complaint.Length > 0 ? " " + complaint : string.Empty)
+               + (string.IsNullOrWhiteSpace(description)
+                   ? " It has no description, and the description is what the model reads when it decides whether to call this tool at all."
+                   : string.Empty);
+    }
+
+    /// <summary>
+    /// Adds a parameter to a tool, or revises one already there.
+    /// </summary>
+    /// <remarks>
+    /// Revision is by name and in place, so the declaration order survives — which matters, because
+    /// that order becomes the C# method's parameter order, and C# cannot declare a required
+    /// parameter after an optional one.
+    /// </remarks>
+    public string SetToolParameter(string toolName, string name, string description, string scope, bool required, bool shared)
+    {
+        if (Find(toolName) is not { } tool)
+            return $"No parameter recorded: no tool named '{toolName}' has been declared yet.";
+
+        string cleanName = (name ?? string.Empty).Trim();
+
+        if (cleanName.Length == 0)
+            return "No parameter recorded: a parameter must have a name, because the adapter pairs it with the C# method's parameter by name and not by position.";
+
+        // "none" is spelled out because a model asked for an empty string tends to send the word.
+        string cleanScope = (scope ?? string.Empty).Trim().ToLowerInvariant();
+        string? resolvedScope = cleanScope switch
+        {
+            ContextScope => ContextScope,
+            RequestScope => RequestScope,
+            "" or "none" or "null" => null,
+            _ => cleanScope
+        };
+
+        ToolParameterDraft? existing = tool.Parameters.FirstOrDefault(p =>
+            string.Equals(p.Name, cleanName, StringComparison.Ordinal));
+
+        bool revision = existing is not null;
+        ToolParameterDraft parameter = existing ?? new ToolParameterDraft { Name = cleanName };
+
+        parameter.Description = description?.Trim();
+        parameter.Scope = resolvedScope;
+        parameter.Required = required;
+        parameter.Shared = shared;
+
+        if (!revision)
+            tool.Parameters.Add(parameter);
+
+        List<string> complaints = [];
+
+        string identifier = IdentifierComplaint(cleanName, "parameter name", pascalCase: false);
+        if (identifier.Length > 0)
+            complaints.Add(identifier);
+
+        if (resolvedScope is not null and not ContextScope and not RequestScope)
+            complaints.Add($"'{cleanScope}' is not a scope: a parameter resolving an input declares '{ContextScope}' or '{RequestScope}', and one carrying a value you author yourself declares none.");
+
+        if (shared && resolvedScope != ContextScope)
+            complaints.Add($"Shared only means something alongside scope '{ContextScope}': it publishes a resolved context variable so other agents can hydrate from it.");
+
+        // The order is the signature, so an optional parameter followed by a required one is not a
+        // preference: MorganaToolAdapter.AddTool refuses the pair, and C# could not declare it.
+        int firstOptional = tool.Parameters.FindIndex(p => !p.Required);
+        if (firstOptional >= 0 && tool.Parameters.Skip(firstOptional).Any(p => p.Required))
+            complaints.Add("A required parameter now sits after an optional one, which C# cannot declare. Reorder them by dropping and re-adding, or make the earlier one required.");
+
+        return $"'{cleanName}' recorded on {tool.Name}."
+               + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty);
+    }
+
+    /// <summary>
+    /// Removes a parameter from a tool.
+    /// </summary>
+    public string DropToolParameter(string toolName, string parameterName)
+    {
+        if (Find(toolName) is not { } tool)
+            return $"Nothing dropped: no tool named '{toolName}' has been declared.";
+
+        int removed = tool.Parameters.RemoveAll(p =>
+            string.Equals(p.Name, parameterName?.Trim(), StringComparison.Ordinal));
+
+        return removed > 0
+            ? $"'{parameterName}' dropped from {tool.Name}."
+            : $"Nothing dropped: {tool.Name} has no parameter named '{parameterName}'.";
+    }
+
+    /// <summary>
+    /// Removes a tool and everything on it.
+    /// </summary>
+    public string DropTool(string toolName)
+    {
+        int removed = state.Agent.Tools.RemoveAll(t =>
+            string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
+
+        return removed > 0
+            ? $"'{toolName}' dropped, with its parameters."
+            : $"Nothing dropped: no tool named '{toolName}' has been declared.";
+    }
+
+    /// <summary>
+    /// Returns the toolkit as it currently stands.
+    /// </summary>
+    public string GetToolkit()
+    {
+        if (state.Agent.Tools.Count == 0)
+            return "This agent declares no tools yet. That is a legal end state — an agent whose tools "
+                   + "all arrive from an MCP server declares none here — but it must be a conclusion you reached by asking.";
+
+        IEnumerable<string> rendered = state.Agent.Tools.Select(t =>
+            $"- {t.Name}: {t.Description ?? "(no description)"}"
+            + (t.Parameters.Count == 0
+                ? "\n    (takes nothing)"
+                : string.Concat(t.Parameters.Select(p =>
+                    $"\n    {p.Name} [{p.Scope ?? "authored by you"}"
+                    + (p.Required ? "" : ", optional")
+                    + (p.Shared ? ", shared" : "")
+                    + $"]: {p.Description ?? "(no description)"}"))));
+
+        return "The toolkit as it stands:\n" + string.Join("\n", rendered);
+    }
+
+    /// <summary>
+    /// Returns what earlier passes settled about this agent.
+    /// </summary>
+    /// <remarks>
+    /// Each pass is a fresh agent with a fresh session, so nothing of the previous conversation
+    /// carries over — deliberately, because a toolkit pass that still has the whole functional
+    /// interview in its context spends it re-litigating decisions already taken. What must carry
+    /// over is the configuration, and the configuration is exactly what this returns.
+    /// </remarks>
+    public string GetAgentSoFar()
+    {
+        if (string.IsNullOrWhiteSpace(state.Intent.Name))
+            return "Nothing settled yet: this agent has no intent.";
+
+        List<string> sections =
+        [
+            $"Intent '{state.Intent.Name}': {state.Intent.Description}",
+            $"Opening sentence a user would send: {state.Intent.DefaultValue}",
+            state.Agent.Target ?? "(no target)",
+            state.Agent.Personality ?? "(no personality)"
+        ];
+
+        if (!string.IsNullOrWhiteSpace(state.Agent.Instructions))
+            sections.Add(state.Agent.Instructions);
+
+        if (!string.IsNullOrWhiteSpace(state.Agent.Formatting))
+            sections.Add(state.Agent.Formatting);
+
+        return "Settled in the earlier passes, and not yours to reopen:\n\n"
+               + string.Join("\n\n", sections);
+    }
+
+    /// <summary>
     /// Attaches buttons to the question about to be asked.
     /// </summary>
     public string SetChoices(string choices)
@@ -120,7 +351,7 @@ public class InterviewTools
             state.PendingChoices.AddRange(parsed);
 
             return $"{parsed.Count} choices will be drawn under your question. "
-                   + "The client's text box stays open, so they may still answer in their own words.";
+                   + "The text box stays open, so the answer may still come in its own words.";
         }
         catch (JsonException ex)
         {
@@ -208,7 +439,53 @@ public class InterviewTools
                    + (missing.Count == 1 ? "Set it and call this again." : "Set them and call this again.");
 
         state.ReadyForReview = true;
-        return "This pass is settled. Tell the client it is done and what comes next.";
+
+        return "This pass is settled. Say it is done and what comes next: "
+               + state.Pass switch
+               {
+                   InterviewPass.Functional => "the toolkit — what this agent has to reach for outside the conversation.",
+                   InterviewPass.Toolkit => "the agent's own instructions and the way it presents what its tools return.",
+                   _ => "the agent joins the domain, and they can review or export it."
+               };
+    }
+
+    /// <summary>
+    /// Finds a declared tool by exact name.
+    /// </summary>
+    /// <remarks>
+    /// Ordinal, because the name becomes a C# method name and <c>MorganaToolAdapter.AddTool</c>
+    /// pairs the two exactly. Two tools differing only in case are two tools here and one collision
+    /// at startup, which is a finding rather than something to paper over by matching loosely.
+    /// </remarks>
+    private ToolDraft? Find(string? toolName) =>
+        state.Agent.Tools.FirstOrDefault(t =>
+            string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
+
+    /// <summary>
+    /// Says what is wrong with a name that has to survive into C#, or nothing if it is fine.
+    /// </summary>
+    /// <remarks>
+    /// Shape only, and deliberately not the compiler: the point is to catch what a domain
+    /// conversation actually produces — a space, a hyphen, a leading digit — while it is still free
+    /// to change. The casing check is separate because it is a convention rather than a rule, and it
+    /// is worth stating: the generated method and the declaration have to read like the framework's
+    /// own.
+    /// </remarks>
+    private static string IdentifierComplaint(string name, string what, bool pascalCase)
+    {
+        bool shapeOk = name.Length > 0
+                       && (char.IsAsciiLetter(name[0]) || name[0] == '_')
+                       && name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
+
+        if (!shapeOk)
+            return $"But '{name}' cannot be a C# identifier, and the {what} becomes C# verbatim: "
+                   + "it must start with a letter and carry only letters, digits and underscores. Call again with one that can.";
+
+        bool casingOk = pascalCase ? char.IsAsciiLetterUpper(name[0]) : char.IsAsciiLetterLower(name[0]);
+
+        return casingOk
+            ? string.Empty
+            : $"But the {what} should be {(pascalCase ? "PascalCase" : "camelCase")}, the way the framework's own are. Call again to fix it.";
     }
 
     /// <summary>
@@ -230,11 +507,15 @@ public class InterviewTools
     {
         int sentences = CountSentences(value);
 
-        return sentences >= minimum && sentences <= maximum
-            ? $"{section} recorded."
-            : $"{section} recorded, but it runs to {sentences} "
-              + (sentences == 1 ? "sentence" : "sentences")
-              + $" where this section's shape is {minimum} to {maximum}. Tighten it and call again.";
+        if (sentences >= minimum && sentences <= maximum)
+            return $"{section} recorded.";
+
+        return $"{section} recorded, but it runs to {sentences} "
+               + (sentences == 1 ? "sentence" : "sentences")
+               + $" where this section's shape is {minimum} to {maximum}. "
+               + (sentences < minimum
+                   ? "It is saying less than the section is for. Fill it out and call again."
+                   : "Tighten it and call again.");
     }
 
     /// <summary>
