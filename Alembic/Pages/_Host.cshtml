@@ -29,5 +29,14 @@
         </div>
 
         <script src="_framework/blazor.server.js"></script>
+        <script>
+            // The transcript is a fixed-height scroll box, so without this every new turn — the
+            // client's own answer, Alembic's "thinking", the reply — lands below the fold and
+            // pressing a button looks like nothing happening.
+            window.alembicScrollTranscript = () => {
+                const box = document.querySelector('.transcript');
+                if (box) box.scrollTop = box.scrollHeight;
+            };
+        </script>
     </body>
 </html>

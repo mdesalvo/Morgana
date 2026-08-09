@@ -265,11 +265,18 @@ public class InterviewService : IInterviewService
 
         state.Error = null;
         state.PendingChoices.Clear();
+        state.Changed.Clear();
+
+        Dictionary<string, string?> before = state.Snapshot();
 
         try
         {
             AgentResponse response = await agent.RunAsync(
                 new ChatMessage(ChatRole.User, message), session, cancellationToken: cancellationToken);
+
+            foreach ((string field, string? value) in state.Snapshot())
+                if (!string.Equals(value, before[field], StringComparison.Ordinal))
+                    state.Changed.Add(field);
 
             string said = response.Text?.Trim() ?? string.Empty;
 

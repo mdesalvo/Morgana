@@ -294,8 +294,58 @@ button.primary:disabled {
     gap: 0.4rem;
 }
 
-.choices.spent {
-    opacity: 0.45;
+/* The one that was pressed stays lit while the rest fade, so the transcript records the gesture
+   and not only the sentence it sent on the client's behalf.
+
+   Faded on the children rather than on the row: container opacity multiplies with the children's,
+   and the pressed one would come out as dim as the rest. Both selectors also outrank
+   `button.choice:disabled` further down, which every spent button matches. */
+.choices.spent button.choice {
+    opacity: 0.4;
+}
+
+.choices button.choice.chosen,
+.choices.spent button.choice.chosen {
+    opacity: 1;
+    border-color: var(--alembic-accent);
+    background: rgba(176, 140, 255, 0.18);
+    font-weight: 600;
+}
+
+.choices-hint {
+    margin-top: 0.35rem;
+    font-size: 0.78rem;
+    color: var(--alembic-muted);
+}
+
+/* A field the last exchange moved. The panel exists to be watched, so what changed has to be
+   visible without re-reading the whole column. */
+dl.fields dt.moved,
+h3.moved {
+    color: var(--alembic-accent);
+}
+
+dl.fields dt.moved::after {
+    content: " •";
+}
+
+.settled {
+    border-left: 2px solid var(--alembic-border);
+    padding-left: 0.7rem;
+}
+
+.settled .muted {
+    display: block;
+    font-size: 0.8rem;
+    margin-top: 0.2rem;
+}
+
+.later {
+    font-size: 0.82rem;
+    color: var(--alembic-muted);
+    border-top: 1px dashed var(--alembic-border);
+    padding-top: 0.6rem;
+    margin-top: 0.9rem;
 }
 
 button.choice {

@@ -55,7 +55,19 @@ public enum InterviewSpeaker
 public sealed record InterviewTurn(
     InterviewSpeaker Speaker,
     string Text,
-    IReadOnlyList<QuickReply>? Choices = null);
+    IReadOnlyList<QuickReply>? Choices = null)
+{
+    /// <summary>
+    /// The <see cref="QuickReply.Id"/> of the choice that was pressed on this turn, if one was.
+    /// </summary>
+    /// <remarks>
+    /// Recorded because a button's label and the answer it sends are deliberately different things
+    /// — the label is short, the value reads as something the client would have typed. Without this
+    /// the transcript shows an answer nobody wrote and no trace of the gesture that produced it, so
+    /// pressing a button reads as nothing having happened.
+    /// </remarks>
+    public string? ChosenId { get; set; }
+}
 
 /// <summary>
 /// One interview in progress.
@@ -109,6 +121,41 @@ public sealed class InterviewState
     /// Why the last exchange failed, when it did. Null on a healthy interview.
     /// </summary>
     public string? Error { get; set; }
+
+    /// <summary>
+    /// The fields the last exchange actually moved.
+    /// </summary>
+    /// <remarks>
+    /// The two-column layout exists so the client watches their domain being written, and that only
+    /// works if the panel says what just changed. Without it the same rows sit there turn after turn
+    /// and the panel reads as decoration — which is exactly what it becomes once a field is set and
+    /// never mentioned again.
+    /// <para>
+    /// Computed by diffing a snapshot across the exchange rather than reported by the tools, because
+    /// a tool called twice with the same value changed nothing and should not claim to have.
+    /// </para>
+    /// </remarks>
+    public HashSet<string> Changed { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Every field this interview can write, by the key the panel highlights it under.
+    /// </summary>
+    public Dictionary<string, string?> Snapshot() => new(StringComparer.Ordinal)
+    {
+        ["intentName"] = Intent.Name,
+        ["intentDescription"] = Intent.Description,
+        ["intentLabel"] = Intent.Label,
+        ["intentDefaultValue"] = Intent.DefaultValue,
+        ["agentTarget"] = Agent.Target,
+        ["agentPersonality"] = Agent.Personality,
+        ["agentInstructions"] = Agent.Instructions,
+        ["agentFormatting"] = Agent.Formatting,
+
+        // The whole toolkit as one string: any tool added, dropped, renamed, redescribed or
+        // reparametrised moves it, which is precisely when the toolkit panel deserves attention.
+        ["tools"] = string.Join("|", Agent.Tools.Select(t =>
+            $"{t.Name}:{t.Description}:{string.Join(",", t.Parameters.Select(x => $"{x.Name}/{x.Scope}/{x.Required}/{x.Shared}/{x.Description}"))}"))
+    };
 
     /// <summary>
     /// The fields the <em>running</em> pass is responsible for that are still unset.

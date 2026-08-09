@@ -4,6 +4,7 @@
 @inject IInterviewService InterviewService
 @inject IDraftStateService DraftStateService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 @*
     The three passes. Two columns on purpose: the client talks on the left and watches
@@ -64,15 +65,24 @@
                             *@
                             @if (turn.Choices is { Count: > 0 } choices)
                             {
-                                bool spent = index != state.Transcript.Count - 1;
+                                bool spent = index != state.Transcript.Count - 1 || turn.ChosenId is not null;
 
                                 <div class="choices @(spent ? "spent" : "")">
                                     @foreach (QuickReply choice in choices)
                                     {
-                                        <button class="choice" disabled="@(spent || isBusy)"
-                                                @onclick="() => ChooseAsync(choice)">@choice.Label</button>
+                                        <button class="choice @(turn.ChosenId == choice.Id ? "chosen" : "")"
+                                                disabled="@(spent || isBusy)"
+                                                @onclick="() => ChooseAsync(turn, choice)">@choice.Label</button>
                                     }
                                 </div>
+
+                                @if (!spent)
+                                {
+                                    <div class="choices-hint">
+                                        Pressing one sends it as your answer. You can ignore them and
+                                        write your own &mdash; they never replace the box below.
+                                    </div>
+                                }
                             }
                         </div>
                     }
@@ -96,58 +106,100 @@
             </div>
 
             <div class="panel">
-                <h2>Configuration so far</h2>
+                <h2>@PanelTitle(state.Pass)</h2>
+                <p class="muted">@PanelLead(state.Pass)</p>
 
-                <dl class="fields">
-                    <dt>intent name</dt><dd>@Show(state.Intent.Name)</dd>
-                    <dt>intent description</dt><dd>@Show(state.Intent.Description)</dd>
-                    <dt>label</dt><dd>@Show(state.Intent.Label)</dd>
-                    <dt>opening sentence</dt><dd>@Show(state.Intent.DefaultValue)</dd>
-                    <dt>agent target</dt><dd>@Show(state.Agent.Target)</dd>
-                    <dt>agent personality</dt><dd>@Show(state.Agent.Personality)</dd>
-                    <dt>agent instructions</dt><dd>@Show(state.Agent.Instructions)</dd>
-                    <dt>agent formatting</dt><dd>@Show(state.Agent.Formatting)</dd>
-                    <dt>language</dt><dd>@state.Agent.Language</dd>
-                </dl>
+                @*
+                    Pass-aware, and the point is that it should never look the same twice. What this
+                    pass is settling is shown open and labelled in the client's terms; what an
+                    earlier pass settled folds into a line of history; what a later one will write is
+                    named as pending rather than left as an empty row that reads like a gap.
 
-                <h2>Toolkit</h2>
+                    A field the last exchange moved is marked. Without that the panel is a list that
+                    fills in silently, and the whole reason for the second column — watching your
+                    domain being written — is lost.
+                *@
 
-                @if (state.Agent.Tools.Count == 0)
+                @if (state.Pass == InterviewPass.Functional)
                 {
-                    <p class="muted">
-                        No tools yet. An agent may legitimately end with none &mdash; one whose tools
-                        all arrive from an MCP server declares nothing here.
+                    <dl class="fields">
+                        <dt class="@Moved(state, "intentName")">what it is called</dt>
+                        <dd>@Show(state.Intent.Name)</dd>
+                        <dt class="@Moved(state, "intentDescription")">when a message belongs to it</dt>
+                        <dd>@Show(state.Intent.Description)</dd>
+                        <dt class="@Moved(state, "intentLabel")">its button</dt>
+                        <dd>@Show(state.Intent.Label)</dd>
+                        <dt class="@Moved(state, "intentDefaultValue")">how someone opens with it</dt>
+                        <dd>@Show(state.Intent.DefaultValue)</dd>
+                        <dt class="@Moved(state, "agentTarget")">what it is for, and where it stops</dt>
+                        <dd>@Show(state.Agent.Target)</dd>
+                        <dt class="@Moved(state, "agentPersonality")">how it meets someone</dt>
+                        <dd>@Show(state.Agent.Personality)</dd>
+                    </dl>
+
+                    <p class="later">
+                        Still to come: what it reaches for, then how it works and how it shows what
+                        it finds. Those speak about its tools, so they wait for the tools.
                     </p>
                 }
                 else
                 {
-                    @foreach (ToolDraft tool in state.Agent.Tools)
-                    {
-                        <div class="tool">
-                            <div class="tool-name">@tool.Name</div>
-                            <div class="muted">@Show(tool.Description)</div>
+                    <p class="settled">
+                        <strong>@state.Intent.Name</strong> &mdash; @Show(state.Intent.Description)
+                        <span class="muted">Settled in the first pass, with its voice and its edges.</span>
+                    </p>
+                }
 
-                            @if (tool.Parameters.Count > 0)
-                            {
-                                <dl class="fields">
-                                    @foreach (ToolParameterDraft parameter in tool.Parameters)
-                                    {
-                                        <dt>@parameter.Name @Annotations(parameter)</dt>
-                                        <dd>@Show(parameter.Description)</dd>
-                                    }
-                                </dl>
-                            }
-                        </div>
+                @if (state.Pass != InterviewPass.Functional)
+                {
+                    <h3 class="@Moved(state, "tools")">What it reaches for</h3>
+
+                    @if (state.Agent.Tools.Count == 0)
+                    {
+                        <p class="muted">
+                            Nothing yet. An agent may end with none &mdash; one whose tools all arrive
+                            from an MCP server declares nothing here.
+                        </p>
+                    }
+                    else
+                    {
+                        @foreach (ToolDraft tool in state.Agent.Tools)
+                        {
+                            <div class="tool">
+                                <div class="tool-name">@tool.Name</div>
+                                <div class="muted">@Show(tool.Description)</div>
+
+                                @if (tool.Parameters.Count > 0)
+                                {
+                                    <dl class="fields">
+                                        @foreach (ToolParameterDraft parameter in tool.Parameters)
+                                        {
+                                            <dt>@parameter.Name @Annotations(parameter)</dt>
+                                            <dd>@Show(parameter.Description)</dd>
+                                        }
+                                    </dl>
+                                }
+                            </div>
+                        }
                     }
                 }
 
-                @if (state.Pass == InterviewPass.Functional)
+                @if (state.Pass == InterviewPass.Toolkit)
                 {
-                    <p class="muted">
-                        Instructions and Formatting are not written in this pass. They speak about the
-                        agent's tools, and a rule written about a tool that has not been designed is a
-                        rule that will have to be unwritten.
+                    <p class="later">
+                        Still to come: how it works, and how it shows what these give back.
                     </p>
+                }
+
+                @if (state.Pass == InterviewPass.Return)
+                {
+                    <h3>How it works</h3>
+                    <dl class="fields">
+                        <dt class="@Moved(state, "agentInstructions")">the order of the work, and its refusals</dt>
+                        <dd>@Show(state.Agent.Instructions)</dd>
+                        <dt class="@Moved(state, "agentFormatting")">how it shows what it finds</dt>
+                        <dd>@Show(state.Agent.Formatting)</dd>
+                    </dl>
                 }
 
                 @if (state.ReadyForReview)
@@ -183,8 +235,30 @@
 @code {
     private string answer = string.Empty;
     private bool isBusy;
+    private int scrolledTo = -1;
 
     private static string Show(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    /// <summary>
+    /// Marks a field the last exchange actually moved, so the panel says what just happened rather
+    /// than only what is true.
+    /// </summary>
+    private static string Moved(InterviewState state, string field) =>
+        state.Changed.Contains(field) ? "moved" : string.Empty;
+
+    private static string PanelTitle(InterviewPass pass) => pass switch
+    {
+        InterviewPass.Functional => "What this agent is",
+        InterviewPass.Toolkit => "What it reaches for",
+        _ => "How it works"
+    };
+
+    private static string PanelLead(InterviewPass pass) => pass switch
+    {
+        InterviewPass.Functional => "Filled in as Alembic infers it. Anything wrong here is cheapest to say now.",
+        InterviewPass.Toolkit => "Each action becomes a tool, and what must be known before it becomes its inputs.",
+        _ => "Written from the toolkit above, which is why it waited for it."
+    };
 
     private static string Tagline(InterviewPass pass) => pass switch
     {
@@ -235,13 +309,46 @@
         await SendAsync(said);
     }
 
-    private Task ChooseAsync(QuickReply choice) => SendAsync(choice.Value);
+    /// <summary>
+    /// Sends a choice as the answer, and records on the turn which one was pressed.
+    /// </summary>
+    /// <remarks>
+    /// Recorded before the round trip, so the button lights the instant it is clicked rather than
+    /// after the model answers. The label and the value are deliberately different things, and
+    /// without this the transcript shows a sentence the client never wrote with no sign of the
+    /// gesture that produced it.
+    /// </remarks>
+    private Task ChooseAsync(InterviewTurn turn, QuickReply choice)
+    {
+        turn.ChosenId = choice.Id;
+        return SendAsync(choice.Value);
+    }
 
     private async Task SendAsync(string said)
     {
         isBusy = true;
         try { await InterviewService.AnswerAsync(said); }
         finally { isBusy = false; }
+    }
+
+    /// <summary>
+    /// Keeps the newest turn in view.
+    /// </summary>
+    /// <remarks>
+    /// The transcript is a fixed-height scroll box that does not scroll itself, so without this
+    /// every new turn lands below the fold: the client presses a button, the row greys out, and
+    /// their own answer and Alembic's reply are both off-screen. Pressing a button then reads as
+    /// nothing having happened, which is exactly what it looked like.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        int turns = InterviewService.Current?.Transcript.Count ?? 0;
+
+        if (turns == scrolledTo && !isBusy)
+            return;
+
+        scrolledTo = turns;
+        await JS.InvokeVoidAsync("alembicScrollTranscript");
     }
 
     private async Task AdvanceAsync()
