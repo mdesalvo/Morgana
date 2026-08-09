@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -73,10 +72,11 @@ public class MorganaAgentAdapter
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
-    /// Framework global policies unpacked once from morganaPrompt.
-    /// Shared across instruction composition, tool registration, and context provider.
+    /// Assembles everything the agent's model reads: the composed system prompt and the tool
+    /// descriptions. Passed on to <see cref="MorganaToolAdapter"/> and
+    /// <see cref="MorganaAIContextProvider"/>, which compose their own fragments through it.
     /// </summary>
-    protected readonly List<Records.GlobalPolicy> morganaPolicies;
+    protected readonly IPromptComposerService promptComposerService;
 
     /// <summary>
     /// Initializes a new instance of the MorganaAgentAdapter.
@@ -84,6 +84,7 @@ public class MorganaAgentAdapter
     /// </summary>
     /// <param name="llmService">LLM service abstraction, queried per-agent for its declared tier's chat client and pricing</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
+    /// <param name="promptComposerService">Service composing prompts and tool descriptions for the model</param>
     /// <param name="toolRegistryService">Service for discovering custom MorganaTool implementations</param>
     /// <param name="imcpClientRegistryService">Service for managing MCP server connections</param>
     /// <param name="chatReducerService">Service for reducing context window sent to LLM</param>
@@ -92,6 +93,7 @@ public class MorganaAgentAdapter
     public MorganaAgentAdapter(
         ILLMService llmService,
         IPromptResolverService promptResolverService,
+        IPromptComposerService promptComposerService,
         IToolRegistryService toolRegistryService,
         IMCPClientRegistryService imcpClientRegistryService,
         HistoryReducerService chatReducerService,
@@ -100,6 +102,7 @@ public class MorganaAgentAdapter
     {
         this.llmService = llmService;
         this.promptResolverService = promptResolverService;
+        this.promptComposerService = promptComposerService;
         this.toolRegistryService = toolRegistryService;
         this.imcpClientRegistryService = imcpClientRegistryService;
         this.chatReducerService = chatReducerService;
@@ -107,7 +110,6 @@ public class MorganaAgentAdapter
         this.logger = logger;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
-        morganaPolicies = morganaPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
     }
 
     /// <summary>
@@ -139,6 +141,30 @@ public class MorganaAgentAdapter
         string conversationId,
         Func<AgentSession?> sessionAccessor,
         Action<string, object>? sharedContextCallback = null)
+        // The single sync-over-async point of the whole creation path, and it is a structural
+        // boundary rather than a shortcut: a MorganaAgent is materialized by Akka through
+        // DependencyResolver.Props, i.e. inside a constructor, which offers no async seam. Everything
+        // below this line is properly awaited; callers that DO have one — Forge composing a draft
+        // agent, or a future async actor-initialization pattern — should call CreateAgentAsync
+        // directly and never come through here.
+        => CreateAgentAsync(agentType, conversationId, sessionAccessor, sharedContextCallback)
+            .GetAwaiter()
+            .GetResult();
+
+    /// <summary>
+    /// Asynchronous counterpart of <see cref="CreateAgent"/>, and the real implementation: prompt
+    /// resolution, prompt composition and tool-description assembly are all awaited here.
+    /// </summary>
+    /// <inheritdoc cref="CreateAgent" path="/param"/>
+    /// <returns>
+    /// A tuple of (AIAgent, MorganaAIContextProvider, MorganaChatHistoryProvider) —
+    /// all three singletons for this agent instance.
+    /// </returns>
+    public async Task<(AIAgent agent, MorganaAIContextProvider contextProvider, MorganaChatHistoryProvider historyProvider)> CreateAgentAsync(
+        Type agentType,
+        string conversationId,
+        Func<AgentSession?> sessionAccessor,
+        Action<string, object>? sharedContextCallback = null)
     {
         // 1) Identity: the [HandlesIntent] attribute is the agent's contract. Its absence
         //    is a wiring bug (a MorganaAgent subclass that forgot the attribute), so fail
@@ -157,9 +183,8 @@ public class MorganaAgentAdapter
         logger.LogInformation("Creating agent for intent '{IntentAttributeIntent}' on tier '{Tier}'...", intentAttribute.Intent, tierAttribute.Tier);
 
         // 2) Domain prompt for this intent (instructions/personality/formatting/tools),
-        //    resolved from agents.json. Sync-over-async is intentional: agent creation is
-        //    a one-time, non-hot setup path.
-        Records.Prompt agentPrompt = promptResolverService.ResolveAsync(intentAttribute.Intent).GetAwaiter().GetResult();
+        //    resolved from agents.json.
+        Records.Prompt agentPrompt = await promptResolverService.ResolveAsync(intentAttribute.Intent);
 
         // 3) Tool surface = framework base tools (morgana.json: GetContextVariable,
         //    SetContextVariable, SetQuickReplies, SetRichCard) UNION the agent's domain
@@ -244,8 +269,8 @@ public class MorganaAgentAdapter
                 // Give the agent its instructions and tools
                 ChatOptions = new ChatOptions
                 {
-                    Instructions = ComposeAgentInstructions(agentPrompt),
-                    Tools = [.. morganaToolAdapter.CreateAllFunctions(), .. mcpTools]
+                    Instructions = await promptComposerService.ComposeAgentInstructionsAsync(agentPrompt),
+                    Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools]
                 }
             });
 
@@ -253,86 +278,6 @@ public class MorganaAgentAdapter
         //     history-provider handles to drive context/history across turns — the agent
         //     alone is not enough because providers are queried/mutated outside InvokeAsync.
         return (aiAgent, morganaAIContextProvider, chatHistoryProvider);
-    }
-
-    // Structural boundary markers for the composed prompt. These are glue between the framework
-    // and domain layers, not domain-tunable prose, so — unlike everything they surround — they are
-    // fixed in code and morgana.json carries no override point for them.
-    private const string GlobalPoliciesHeader = "=== CRITICAL RULES — binding, without exception ===";
-    private const string GlobalPoliciesFooter = "=== END OF CRITICAL RULES ===";
-    private const string FrameworkLayerHeader =
-        "======== MORGANA FRAMEWORK — THE LAW OF EVERY TURN ========\n" +
-        "Everything until the end of this block is binding on you and on every other agent of Morgana. It is not advice and it is not overridable.";
-    private const string FrameworkLayerFooter = "======== END OF MORGANA FRAMEWORK ========";
-    private const string DomainLayerHeader =
-        "======== DOMAIN AGENT — SUBORDINATE TO THE FRAMEWORK ABOVE ========\n" +
-        "What follows specialises the framework for a single domain: what you are for, how you work, how you speak, how you present. It adds domain knowledge and NOTHING ELSE. It NEVER contradicts the framework above, on any point — where the two appear to differ, the framework governs and you follow it.";
-
-    private string FormatGlobalPolicies(List<Records.GlobalPolicy> policies)
-    {
-        StringBuilder sb = new StringBuilder();
-
-        sb.AppendLine(GlobalPoliciesHeader);
-
-        // Injection templates are excluded: they are not policies but fragments spliced by
-        // MorganaToolAdapter into the description of the tool (or parameter) they govern, at
-        // the point where the model decides.
-        //
-        // Ordered by Type, then ascending Priority within each type. The LLM reads the system
-        // prompt top-to-bottom and the order is load-bearing for compliance, so a policy's
-        // Priority states where it must be read, not merely how it was filed.
-        foreach (Records.GlobalPolicy policy in policies.Where(p => !p.IsInjectionTemplate)
-                                                        .OrderBy(p => p.Type)
-                                                        .ThenBy(p => p.Priority))
-        {
-            sb.AppendLine($"{policy.Name}: {policy.Description}");
-        }
-
-        sb.AppendLine(GlobalPoliciesFooter);
-
-        return sb.ToString().TrimEnd();
-    }
-
-    private string ComposeAgentInstructions(Records.Prompt agentPrompt)
-    {
-        StringBuilder sb = new StringBuilder();
-
-        // The two layers are fenced. Both carry the same four section labels ([TARGET],
-        // [PERSONALITY], [INSTRUCTIONS], [FORMATTING]), so without a delimiter the composed prompt
-        // shows each of them twice with nothing marking which is which — and the framework's claim
-        // to precedence, made in its own Target, names a boundary the model cannot locate. The
-        // domain fence carries the subordination rule itself rather than only separating: it is read
-        // at the exact point where the layer it governs begins.
-
-        // Morgana layers
-        sb.AppendLine(FrameworkLayerHeader);
-        sb.AppendLine();
-        sb.AppendLine(morganaPrompt.Target);
-        sb.AppendLine();
-        sb.AppendLine(morganaPrompt.Personality);
-        sb.AppendLine();
-        sb.AppendLine(FormatGlobalPolicies(morganaPolicies));
-        sb.AppendLine();
-        sb.AppendLine(morganaPrompt.Instructions);
-        sb.AppendLine();
-        sb.AppendLine(morganaPrompt.Formatting);
-        sb.AppendLine();
-        sb.AppendLine(FrameworkLayerFooter);
-        sb.AppendLine();
-
-        // Agent layers
-        sb.AppendLine(DomainLayerHeader);
-        sb.AppendLine();
-        sb.AppendLine(agentPrompt.Target);
-        sb.AppendLine();
-        sb.AppendLine(agentPrompt.Personality);
-        sb.AppendLine();
-        sb.AppendLine(agentPrompt.Instructions);
-        sb.AppendLine();
-        sb.AppendLine(agentPrompt.Formatting);
-        sb.AppendLine();
-
-        return sb.ToString();
     }
 
     /// <summary>
@@ -372,18 +317,12 @@ public class MorganaAgentAdapter
                 ? $"Agent '{agentName}' has {sharedVariables.Count} shared variables: {string.Join(", ", sharedVariables)}"
                 : $"Agent '{agentName}' has NO shared variables");
 
-        // The HeldContextDeclaration template is prose and lives with the rest of it in
-        // morgana.json, spliced per invocation rather than rendered into the system prompt —
-        // hence Type "Injection", like the two tool/parameter guidances. Handed over as a plain
-        // string so the provider keeps no prompt-layer dependency. Absent from the configuration,
-        // the provider injects nothing.
-        string heldContextDeclaration = Records.GlobalPolicy.ResolveTemplate(
-            morganaPolicies, Records.GlobalPolicy.Templates.HeldContextDeclaration);
-
         // The provider needs the allow-list up front: only writes to a name in this set
-        // trigger OnSharedContextUpdate; everything else stays agent-local.
+        // trigger OnSharedContextUpdate; everything else stays agent-local. The composer goes
+        // with it because the held-context declaration is assembled per turn, not now: it names
+        // the variables the session holds at that moment, which nobody knows at creation time.
         MorganaAIContextProvider aiContextProvider =
-            new MorganaAIContextProvider(logger, sharedVariables, heldContextDeclaration: heldContextDeclaration);
+            new MorganaAIContextProvider(logger, sharedVariables, promptComposerService: promptComposerService);
 
         // Wire persistence only when a callback was supplied. Left null (e.g. an agent
         // created outside the actor path) shared writes still update local state but are
@@ -408,12 +347,11 @@ public class MorganaAgentAdapter
         Records.ToolDefinition[] tools,
         Func<MorganaTool.ToolContext> toolContextFactory)
     {
-        // The adapter needs the framework GlobalPolicies up front: it splices
-        // ToolDescriptionContextGuidance into the description of each generated AIFunction that
-        // declares context-scoped parameters. Without it the tools still work but lose that
-        // grounding nudge. Parameter descriptions carry no framework template at all — see
-        // MorganaToolAdapter.CreateFunction.
-        MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(morganaPolicies);
+        // The adapter composes the description of each generated AIFunction through the composer,
+        // which splices ToolDescriptionContextGuidance into the tools declaring context-scoped
+        // parameters. Parameter descriptions carry no framework template at all — see
+        // MorganaToolAdapter.CreateFunctionAsync.
+        MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(promptComposerService);
 
         // Split the merged set back into base (morgana.json) vs intent-specific
         // (agents.json). Compare by Name only: the incoming `tools` array was produced by

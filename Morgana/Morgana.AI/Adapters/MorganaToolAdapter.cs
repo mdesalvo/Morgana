@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using Microsoft.Extensions.AI;
+using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Adapters;
 
@@ -10,18 +11,12 @@ namespace Morgana.AI.Adapters;
 /// <remarks>
 /// Bridges between Morgana tool definitions (from agents.json) and Microsoft.Extensions.AI AIFunction system.
 /// Manages registration of tool method delegates against their definitions, validates delegate signatures,
-/// converts them to AIFunction instances for LLM tool calling, and applies global policies
-/// (context vs request guidance) to parameter descriptions. Workflow: Create adapter → AddTool for each →
-/// CreateAllFunctions to generate AIFunction[] → pass to AIAgent.
+/// and converts them to AIFunction instances for LLM tool calling. Tool descriptions are assembled by
+/// <see cref="IPromptComposerService"/>; parameter descriptions are passed through as authored.
+/// Workflow: Create adapter → AddTool for each → CreateAllFunctions to generate AIFunction[] → pass to AIAgent.
 /// </remarks>
 public class MorganaToolAdapter
 {
-    /// <summary>
-    /// Placeholder in the ToolDescriptionContextGuidance injection template, resolved to the
-    /// comma-separated names of the tool's own context-scoped parameters.
-    /// </summary>
-    private const string ContextParametersPlaceholder = "((context_parameters))";
-
     /// <summary>
     /// Dictionary mapping tool names to their delegate implementations.
     /// </summary>
@@ -33,18 +28,18 @@ public class MorganaToolAdapter
     private readonly Dictionary<string, Records.ToolDefinition> toolDefinitions = [];
 
     /// <summary>
-    /// Global policies from Morgana configuration (e.g., context handling rules).
-    /// Applied to tool parameter descriptions to guide LLM behavior.
+    /// Assembles the description each generated AIFunction presents to the model, splicing the
+    /// framework's context guidance into the tools that declare context-scoped parameters.
     /// </summary>
-    private readonly List<Records.GlobalPolicy> globalPolicies;
+    private readonly IPromptComposerService promptComposerService;
 
     /// <summary>
-    /// Initializes a new instance of the MorganaToolAdapter with global policy enforcement.
+    /// Initializes a new instance of the MorganaToolAdapter.
     /// </summary>
-    /// <param name="globalPolicies">Global policies from Morgana prompt configuration</param>
-    public MorganaToolAdapter(List<Records.GlobalPolicy> globalPolicies)
+    /// <param name="promptComposerService">Composes the descriptions exposed to the model</param>
+    public MorganaToolAdapter(IPromptComposerService promptComposerService)
     {
-        this.globalPolicies = globalPolicies;
+        this.promptComposerService = promptComposerService;
     }
 
     /// <summary>
@@ -85,23 +80,14 @@ public class MorganaToolAdapter
     /// <param name="toolName">Name of the tool to create function for</param>
     /// <returns>AIFunction instance ready for agent use</returns>
     /// <exception cref="InvalidOperationException">Thrown if tool or definition not found</exception>
-    public AIFunction CreateFunction(string toolName)
+    public async Task<AIFunction> CreateFunctionAsync(string toolName)
     {
         Delegate implementation = ResolveTool(toolName);
         Records.ToolDefinition definition = toolDefinitions.TryGetValue(toolName, out Records.ToolDefinition? def)
             ? def
             : throw new InvalidOperationException($"Tool definition '{toolName}' not found");
 
-        string descriptionGuidance = Records.GlobalPolicy.ResolveTemplate(globalPolicies, Records.GlobalPolicy.Templates.ToolDescriptionContext);
-
-        // Extract context-scoped parameter names; if present and guidance template exists, splice names into guidance text
-        string[] contextParameters = [.. definition.Parameters
-            .Where(p => string.Equals(p.Scope?.Trim(), "context", StringComparison.OrdinalIgnoreCase))
-            .Select(p => p.Name)];
-
-        string description = contextParameters.Length > 0 && descriptionGuidance.Length > 0
-            ? $"{definition.Description}\n\n{descriptionGuidance.Replace(ContextParametersPlaceholder, string.Join(", ", contextParameters))}"
-            : definition.Description;
+        string description = await promptComposerService.ComposeToolDescriptionAsync(definition);
 
         // Build parameter name → description map; fed to AIFunctionFactory's ParameterDescriptionProvider hook,
         // which resolves each parameter's description keyword in the generated JSON schema
@@ -136,12 +122,12 @@ public class MorganaToolAdapter
     /// AIAgent agent = chatClient.CreateAIAgent(
     ///     instructions: instructions,
     ///     name: "billing",
-    ///     tools: toolAdapter.CreateAllFunctions().ToArray()
+    ///     tools: await toolAdapter.CreateAllFunctionsAsync()
     /// );
     /// </code>
     /// </remarks>
-    public IEnumerable<AIFunction> CreateAllFunctions()
-        => toolMethods.Keys.Select(CreateFunction);
+    public async Task<AIFunction[]> CreateAllFunctionsAsync()
+        => await Task.WhenAll(toolMethods.Keys.Select(CreateFunctionAsync));
 
     /// <summary>
     /// Validates delegate implementation matches tool definition.
