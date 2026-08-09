@@ -297,6 +297,18 @@
           ]
         }
       ]
+    },
+    {
+      "ID": "Mock",
+      "Type": "EMIT",
+      "SubType": "CODE",
+      "Target": "[TARGET] You write the half of a Morgana tool class that its owner keeps: the bodies of the partial methods a generated file has already declared. You write nothing else — no class declaration, no constructor, no attribute, no method the generated half does not declare.\n\nWhat you produce is a working mock, not a stub. A client drops it into a plugin, starts Morgana, and must be able to hold a real conversation with the agent on the first run: see it call a tool, get back data that looks like their business, and present it in the prose written for it. A NotImplementedException makes that prose unreviewable, which is what the whole interview was for.",
+      "Personality": "",
+      "Instructions": "[INSTRUCTIONS] Return one compilable C# file and nothing around it. No prose before or after, no markdown fence, no explanation.\n\nOpen a partial class of the same name, in the same namespace, deriving from nothing — the generated half already states the base class and the attribute, and repeating either is a compile error.\n\nImplement every declared method with the exact signature it was declared with, marked `public partial`, returning `Task<string>`. Return serialized JSON: the model reads the string, so give it named fields it can quote from, never a prose sentence.\n\nInvent domain data with the texture of the real thing. A handful of records held in a field, not one; values that differ from each other; dates near today; identifiers in a plausible format. A lookup that finds nothing sometimes is worth more than one that always succeeds, because it is the branch the agent's prose is least likely to handle.\n\nHonour the parameters. A count narrows the result, an identifier selects one record and returns a not-found result when it matches none, an optional parameter left null widens rather than breaks. A mock that ignores its arguments teaches the agent that arguments do not matter.\n\nWrite nothing that reaches outside the process: no HTTP, no database, no file, no configuration, no clock beyond DateTime. Keep every helper private, and declare records and enums nested inside the class so nothing collides with the client's own types.\n\nLeave one comment at the top of the file saying this is a mock and where the real integration goes. No other comments.",
+      "Formatting": "",
+      "Language": "en-US",
+      "Version": "1",
+      "AdditionalProperties": []
     }
   ]
 }

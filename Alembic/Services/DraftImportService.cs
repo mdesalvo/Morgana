@@ -80,6 +80,16 @@ public class DraftImportService : IDraftImportService
             Agents = [.. configuration.Agents.Select(agent => ToAgentDraft(agent, notices))]
         };
 
+        // Frozen here, before anything can touch it, and by a second projection of the same parsed
+        // configuration rather than a copy of what was just built: the baseline is the file, and
+        // deriving it the same way guarantees the migration report can only ever show a real edit.
+        draft.Baseline = new DomainDraft
+        {
+            ImportedFrom = fileName,
+            Intents = [.. configuration.Intents.Select(ToIntentDraft)],
+            Agents = [.. configuration.Agents.Select(agent => ToAgentDraft(agent, []))]
+        };
+
         notices.Insert(0, $"Read {draft.Intents.Count} intents and {draft.Agents.Count} agents, "
                           + $"carrying {draft.Agents.Sum(a => a.Tools.Count)} tools.");
 

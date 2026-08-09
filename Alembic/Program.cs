@@ -93,6 +93,23 @@ builder.Services.AddScoped<IDraftStateService, DraftStateService>();
 builder.Services.AddSingleton<IAlembicPromptService, AlembicPromptService>();
 builder.Services.AddScoped<IInterviewService, InterviewService>();
 
+// - ICodeEmitService: the deterministic half of the generated C#. Same Draft, same bytes, so a
+//   re-run against an evolved domain diffs to exactly the change and nothing else — which is the
+//   only thing that makes a regenerated file safe to overwrite.
+// - IToolMockService: the half a template writes badly. A working mock of each toolkit, authored by
+//   a model, so the client can talk to their agent on the first run and hear whether its prose is
+//   right. That is what the whole interview was for, and a stub would make it unreviewable.
+// - IMigrationReportService: what this domain changes against the one that was uploaded. Produced
+//   unconditionally, greenfield included: a report that only appears when something is wrong is a
+//   report nobody has learned to read on the day it matters.
+// - IAssetPackageService: one archive, because the pieces are only correct together — an
+//   agents.json whose toolkit has moved on from the C# beside it is a startup failure.
+
+builder.Services.AddSingleton<ICodeEmitService, CodeEmitService>();
+builder.Services.AddSingleton<IToolMockService, ToolMockService>();
+builder.Services.AddSingleton<IMigrationReportService, MigrationReportService>();
+builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
+
 // ==============================================================================
 // 5. LLM
 // ==============================================================================

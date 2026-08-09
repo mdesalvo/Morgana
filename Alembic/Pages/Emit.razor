@@ -1,0 +1,287 @@
+@page "/emit"
+@using Alembic.Interfaces
+@using Alembic.Model
+@using Morgana.AI
+@inject IDraftStateService DraftStateService
+@inject IDraftValidationService DraftValidationService
+@inject IMigrationReportService MigrationReportService
+@inject IAssetPackageService AssetPackageService
+
+@*
+    Phase 7 — the emit. The turnkey end of the workbench: the whole domain leaves as one archive,
+    because the pieces are only correct together.
+
+    Three things settle before it can be built, and none of them is in agents.json: the namespace,
+    each agent's tier, and — where an agent has no native tools — nothing at all. The validator has
+    been calling these "Alembic's guess" since phase 4; this is the page that stops them being one.
+*@
+
+<div class="alembic-page">
+
+    <h1>Emit</h1>
+    <p class="tagline">The configuration, the C# behind it, and what it changes.</p>
+
+    @if (DraftStateService.Current is not { } draft)
+    {
+        <div class="panel">
+            <h2>Nothing to emit</h2>
+            <p>Import an <code>agents.json</code> or run an interview first.</p>
+            <p><a href="import">Go to import &rarr;</a></p>
+        </div>
+    }
+    else
+    {
+        @if (errors.Count > 0)
+        {
+            <div class="panel">
+                <h2>Not yet</h2>
+                <p class="severity-error">
+                    @errors.Count @(errors.Count == 1 ? "error stops" : "errors stop") this domain from
+                    starting, so there is nothing worth generating from it.
+                </p>
+                <ul>
+                    @foreach (ValidationFinding finding in errors)
+                    {
+                        <li><code>@finding.Where</code> &mdash; @finding.Message</li>
+                    }
+                </ul>
+                <p class="muted">
+                    A required parameter behind an optional one is the one that would also emit C#
+                    that does not compile: the generated signature follows the configuration's own
+                    order, and never quietly reorders it.
+                </p>
+                <p><a href="review">See them all &rarr;</a></p>
+            </div>
+        }
+        else
+        {
+            <div class="panel">
+                <h2>What agents.json cannot say</h2>
+                <p class="muted">
+                    A namespace, a die per agent, and the class names. None of it is in a
+                    configuration, so an imported domain arrives without it &mdash; and the emit
+                    needs it stated rather than guessed.
+                </p>
+
+                <p>
+                    <label>Namespace <input @bind="rootNamespace" @bind:event="oninput" /></label>
+                </p>
+
+                <table>
+                    <thead>
+                        <tr><th>Agent</th><th>Die</th><th>Classes</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (AgentDraft agent in draft.Agents)
+                        {
+                            <tr>
+                                <td><code>@agent.ID</code></td>
+                                <td>
+                                    <select value="@(agent.Code.Tier ?? Records.LLMTier.Efficiency)"
+                                            @onchange="e => SetTier(agent, e)">
+                                        <option value="@Records.LLMTier.Efficiency">Efficiency</option>
+                                        <option value="@Records.LLMTier.Performance">Performance</option>
+                                    </select>
+                                </td>
+                                <td class="muted">
+                                    <code>@(agent.Code.AgentClassName ?? "—")</code>
+                                    @if (agent.Tools.Count > 0)
+                                    {
+                                        <text>, <code>@(agent.Code.ToolClassName ?? "—")</code></text>
+                                    }
+                                    else
+                                    {
+                                        <text> &mdash; no tool class: nothing native to back</text>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <p class="muted">
+                    <strong>Performance</strong> is not an upgrade. The framework reserves it for an
+                    agent whose author declares an existential need for deep reasoning, and there is
+                    no fallback between dies: an agent asking for a die the deployment does not
+                    configure fails startup.
+                </p>
+            </div>
+
+            <div class="panel">
+                <h2>Migration</h2>
+                <p class="muted">
+                    @if (report.BaselineName is null)
+                    {
+                        <text>Nothing was uploaded into this session, so everything here is new.</text>
+                    }
+                    else
+                    {
+                        <text>
+                            Against <code>@report.BaselineName</code>. Alembic never sees your tree,
+                            so nothing is applied for you &mdash; this names every difference
+                            precisely enough to apply by hand.
+                        </text>
+                    }
+                </p>
+
+                @if (report.Entries.Count == 0)
+                {
+                    <p>Nothing changed.</p>
+                }
+                else
+                {
+                    <table>
+                        <thead>
+                            <tr><th></th><th>Where</th><th>What it costs you</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (MigrationEntry entry in report.Entries)
+                            {
+                                <tr>
+                                    <td class="@(Compiled(entry.Change) ? "severity-error" : "severity-warning")">
+                                        @entry.Change.ToString().ToLowerInvariant()
+                                    </td>
+                                    <td><code>@entry.Where</code></td>
+                                    <td>@entry.Detail</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <div class="panel">
+                <h2>Download</h2>
+                <p class="muted">
+                    One archive: <code>agents.json</code>, the generated <code>*.g.cs</code>, a
+                    working mock per toolkit, the migration report and the save file. The mocks are
+                    written by a model, one call per agent, so this takes a moment.
+                </p>
+
+                @if (package is null)
+                {
+                    <button class="primary" @onclick="BuildAsync" disabled="@isBuilding">
+                        @(isBuilding ? "Distilling…" : "Build the archive")
+                    </button>
+                }
+                else
+                {
+                    <p>
+                        <a download="@ArchiveName" href="@DataUri(package)">@ArchiveName</a>
+                        <span class="muted"> &mdash; @(package.Length / 1024) KB, @written.Count files</span>
+                    </p>
+                    <button class="agent-pick" @onclick="Reset" disabled="@isBuilding">Build it again</button>
+                }
+
+                @if (written.Count > 0)
+                {
+                    <ul class="muted">
+                        @foreach (string path in written)
+                        {
+                            <li><code>@path</code></li>
+                        }
+                    </ul>
+                }
+
+                @if (error is not null)
+                {
+                    <p class="severity-error">@error</p>
+                }
+            </div>
+        }
+    }
+
+    <p class="phase-note">
+        Phase 7 &mdash; emit and migration report. The starter harness scenarios are not here yet.
+    </p>
+
+    <p><a href="">&larr; back</a></p>
+
+</div>
+
+@code {
+    private IReadOnlyList<ValidationFinding> errors = [];
+    private MigrationReport report = new(null, [], string.Empty);
+    private readonly List<string> written = [];
+
+    private string rootNamespace = Alembic.Services.CodeEmitService.DefaultNamespace;
+    private byte[]? package;
+    private bool isBuilding;
+    private string? error;
+
+    private string ArchiveName => $"{rootNamespace.ToLowerInvariant().Replace('.', '-')}-morganized.zip";
+
+    /// <summary>
+    /// Whether acting on this change means touching code rather than re-reading a sentence.
+    /// </summary>
+    private static bool Compiled(MigrationChange change) =>
+        change is MigrationChange.Removed or MigrationChange.SignatureChanged;
+
+    protected override void OnInitialized()
+    {
+        if (DraftStateService.Current is not { } draft)
+            return;
+
+        errors = [.. DraftValidationService.Validate(draft).Where(f => f.Severity == FindingSeverity.Error)];
+        report = MigrationReportService.Build(draft);
+
+        // A namespace already stated by one agent is the domain's, not a default to be re-typed.
+        if (draft.Agents.FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.Code.Namespace)) is { } stated)
+            rootNamespace = stated.Code.Namespace!;
+    }
+
+    private void SetTier(AgentDraft agent, ChangeEventArgs e)
+    {
+        if (Enum.TryParse(e.Value?.ToString(), out Records.LLMTier tier))
+            agent.Code.Tier = tier;
+
+        // Stated is no longer guessed, and the validator's warning about it should stop.
+        agent.Code.Inferred = false;
+        package = null;
+    }
+
+    private void Reset()
+    {
+        package = null;
+        written.Clear();
+    }
+
+    private async Task BuildAsync()
+    {
+        if (DraftStateService.Current is not { } draft)
+            return;
+
+        isBuilding = true;
+        error = null;
+        written.Clear();
+
+        try
+        {
+            foreach (AgentDraft agent in draft.Agents)
+                agent.Code.Namespace = rootNamespace;
+
+            Progress<string> progress = new Progress<string>(path =>
+            {
+                written.Add(path);
+                InvokeAsync(StateHasChanged);
+            });
+
+            package = await AssetPackageService.BuildAsync(draft, progress);
+        }
+        catch (Exception ex)
+        {
+            error = $"The archive could not be built: {ex.Message}";
+        }
+        finally
+        {
+            isBuilding = false;
+        }
+    }
+
+    /// <summary>
+    /// The archive as a downloadable <c>data:</c> URI, for the same reason the JSON downloads are:
+    /// the Draft lives in the circuit, so no stateless endpoint can reach it.
+    /// </summary>
+    private static string DataUri(byte[] content) =>
+        $"data:application/zip;base64,{Convert.ToBase64String(content)}";
+}

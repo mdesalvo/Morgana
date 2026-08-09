@@ -115,11 +115,70 @@ The split does double duty: it is the non-destructive-regeneration mechanism, *a
 between what is templated (deterministic, so a re-run produces no spurious diff) and what is authored
 by the LLM (a plausible domain mock, which a template writes badly).
 
+The agent class has no client half: a `MorganaAgent` subclass is attributes plus one constructor
+handing its type to `MorganaAgentAdapter`, and every domain decision it expresses is configuration
+Alembic already holds. A tool class does, and the seam is `partial` **methods**: the `.g.cs` declares
+`public partial Task<string> GetInvoices(string userId, string count);` from the same
+`ToolDefinition` that goes into `agents.json`, and the `.cs` implements it. That buys two things for
+free — the pair `MorganaToolAdapter.AddTool` validates at startup is generated correct by
+construction, and a tool added to the configuration and forgotten in the code **does not compile**.
+
+Every emitted parameter is a `string`, and that is a statement about the configuration rather than a
+shortcut: `Records.ToolParameter` carries a name, a description, required, scope and shared, and no
+type. The JSON schema the model reads is generated from the *delegate*, so the type lives in the C#
+and only there. Narrowing one is a one-word edit in both halves; guessing one from a parameter's name
+would be a guess the client meets at runtime.
+
 Because Alembic never sees the client's tree, this convention travels **inside the downloaded
 archive** and holds even where Alembic is absent. It does not need enforcing either: a signature that
 drifts is already a startup failure, since `MorganaToolAdapter.AddTool` validates delegate against
 definition. Alembic's job is only to surface it earlier, via an unconditional **migration report** of
 what changed against the uploaded `agents.json`.
+
+### The emit, and what a template must not write
+
+The archive is one download because the pieces are only correct together: an `agents.json` whose
+toolkit has moved on from the C# beside it is a startup failure, and two downloads is an invitation
+to take one of them. Inside: the configuration, the generated sources, a working mock per toolkit,
+`MIGRATION.md`, `README.md` carrying the two-halves convention, and the interview's save file.
+
+The split between `ICodeEmitService` and `IToolMockService` is the same split the file names carry.
+The emit is **string templates and nothing else** — no Roslyn — so the same Draft emits the same
+bytes and a re-run diffs to exactly the change. The mocks are the one artifact a template writes
+badly: invented invoices, a diary with believable gaps, stock levels that vary. They are **mocks and
+not stubs**, and the reason is the turnkey promise — the client drops the archive into a plugin,
+starts Morgana, and must be able to *talk to their agent on the first run*, which is the only way to
+hear whether the prose the interview wrote is right. A `NotImplementedException` makes the prose
+unreviewable, and the prose is what the whole interview was for.
+
+Two things the live run settled. First, **no output ceiling is declared in Alembic's code**: a source
+file's length is a property of the toolkit, not a number choosable in advance, so `ToolMockService`
+streams and resumes on `FinishReason.Length` until the model stops of its own accord — the only other
+exit being a continuation that adds nothing. Second, a reasoning model spends its budget on thinking
+**first**: at the tier's prose-calibrated 8192 the InventoryTool request came back with 8192 output
+tokens, all reasoning, and *zero characters of text*. Removing `MaxOutputTokens` entirely is worse,
+because Anthropic requires `max_tokens` and the SDK default is smaller. The number therefore lives
+where a number belongs — Alembic's own `appsettings.json`, generous, with the reason written beside
+it — and an empty answer throws rather than writing an empty file, because a source file that looks
+like success and is not is the worst thing to hand a client at the end of an interview.
+
+Verified end to end against the shipped `Examples` domain: import → emit → unzip into a class library
+referencing `Morgana.AI` → **`dotnet build`, 0 errors**, four agents and three toolkits with 856 lines
+of mock behind them.
+
+### The migration report
+
+Unconditional, greenfield included, because a report that only appears when something is wrong is a
+report nobody has learned to read on the day it matters. It diffs the Draft against
+`DomainDraft.Baseline` — the domain frozen at import, kept as a Draft rather than as the uploaded
+bytes so the comparison is like with like, and serialized with the save file so a second sitting does
+not lose it. `Provenance` alone could not serve: it says an element was revised, never what it was.
+
+Entries are ordered by what they cost to act on, and the load-bearing section is signatures. A tool
+whose parameter list changed still compiles on the generated side and fails at Morgana's startup in
+`MorganaToolAdapter.AddTool`, and the client-owned half is exactly where that fix is made by hand.
+Nothing is applied for the client, and nothing pretends to be: Alembic cannot see their tree, so what
+it can do is name every change precisely enough to apply in a minute.
 
 ### The recap is the real prompt
 
@@ -469,7 +528,7 @@ closes it is a hard invariant the interview cannot break.
 | 4 | Deterministic validation + recap as the real composed prompt — *first shippable milestone: useful without any interview* | **done** |
 | 5 | Interview, functional pass (`alembic.json`, FSM, intent + agent prose) | **done** |
 | 6 | Interview, toolkit pass + return pass (`Instructions`/`Formatting` speak about tools, so they come last) | **done** |
-| 7 | C# asset emit + migration report — *turnkey* | |
+| 7 | C# asset emit + migration report — *turnkey* | **done** |
 | 8 | PromptHarness starter scenarios + cross-agent coherence pass | |
 
 ## Conventions

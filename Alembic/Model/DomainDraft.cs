@@ -43,6 +43,23 @@ public sealed class DomainDraft
     /// When this Draft was created or last imported into, UTC.
     /// </summary>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// The domain exactly as it was uploaded, frozen at import. <c>null</c> for a greenfield Draft.
+    /// </summary>
+    /// <remarks>
+    /// The migration report has to diff against something, and <see cref="Provenance"/> alone cannot
+    /// serve: it says an element was revised, never what it used to be, and "the parameter list
+    /// changed" is only useful next to the list it changed from. Kept as a Draft rather than as the
+    /// uploaded bytes so the diff compares like with like — two Drafts, one projection, no chance of
+    /// reporting a difference that is really a parsing artefact.
+    /// <para>
+    /// Serialized with the rest, because an interview over a real domain does not fit in one
+    /// sitting and a report that forgets its baseline on resume is a report that lies the second
+    /// day. Its own baseline is always <c>null</c>: one level, never a chain.
+    /// </para>
+    /// </remarks>
+    public DomainDraft? Baseline { get; set; }
 }
 
 /// <summary>
