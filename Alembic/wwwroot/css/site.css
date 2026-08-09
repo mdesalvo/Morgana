@@ -1,0 +1,122 @@
+/* ==========================================================================
+   Alembic - base styles
+   Deliberately small: Phase 1 owns a shell, not a design system.
+   ========================================================================== */
+
+:root {
+    --alembic-bg: #12101a;
+    --alembic-panel: #1c1930;
+    --alembic-border: #322c52;
+    --alembic-text: #e8e4f4;
+    --alembic-muted: #9a92bd;
+    --alembic-accent: #b08cff;
+    --alembic-error: #ff8a8a;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    background: var(--alembic-bg);
+    color: var(--alembic-text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+}
+
+.page, main {
+    min-height: 100vh;
+}
+
+.alembic-landing {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 4rem 1.5rem;
+}
+
+.alembic-landing h1 {
+    margin: 0;
+    font-size: 3rem;
+    font-weight: 300;
+    letter-spacing: 0.12em;
+    color: var(--alembic-accent);
+}
+
+.tagline {
+    margin: 0.25rem 0 2.5rem;
+    color: var(--alembic-muted);
+}
+
+.panel {
+    background: var(--alembic-panel);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.5rem;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.panel h2 {
+    margin: 0 0 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--alembic-muted);
+}
+
+.panel-error {
+    border-color: var(--alembic-error);
+}
+
+.panel-error pre {
+    margin: 0;
+    white-space: pre-wrap;
+    color: var(--alembic-error);
+}
+
+.panel dl {
+    display: grid;
+    grid-template-columns: 12rem 1fr;
+    gap: 0.4rem 1rem;
+    margin: 0;
+}
+
+.panel dt {
+    color: var(--alembic-muted);
+}
+
+.panel dd {
+    margin: 0;
+}
+
+code {
+    font-family: "Cascadia Mono", "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.9em;
+}
+
+.phase-note {
+    margin-top: 2rem;
+    color: var(--alembic-muted);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+/* Blazor's own unhandled-exception banner */
+#blazor-error-ui {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 0.75rem 1.25rem;
+    background: var(--alembic-error);
+    color: #2a0d0d;
+}
+
+#blazor-error-ui .dismiss {
+    float: right;
+    cursor: pointer;
+}

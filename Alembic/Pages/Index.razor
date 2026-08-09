@@ -1,0 +1,94 @@
+@page "/"
+@using System.Reflection
+@inject IPromptResolverService PromptResolverService
+
+@*
+    Phase 1 landing page. It is deliberately not a placeholder: it resolves the framework
+    prompt through Morgana.AI's own resolver, which proves in one shot the three things the
+    scaffold exists to establish — the project reference reaches Morgana.AI, morgana.json is
+    readable as an embedded resource from here, and the absence of any embedded agents.json
+    degrades to agentless mode instead of failing. Everything Alembic later composes stands
+    on those three facts.
+*@
+
+<div class="alembic-landing">
+
+    <h1>Alembic</h1>
+    <p class="tagline">Morgana's authoring workbench &mdash; where a domain is distilled.</p>
+
+    @if (loadError is not null)
+    {
+        <div class="panel panel-error">
+            <h2>Framework layer unreachable</h2>
+            <pre>@loadError</pre>
+        </div>
+    }
+    else if (frameworkPrompt is null)
+    {
+        <div class="panel">
+            <h2>Resolving the framework layer&hellip;</h2>
+        </div>
+    }
+    else
+    {
+        <div class="panel">
+            <h2>Framework layer</h2>
+            <dl>
+                <dt>Source</dt>
+                <dd><code>morgana.json</code>, embedded in Morgana.AI</dd>
+                <dt>Prompt</dt>
+                <dd><code>@frameworkPrompt.ID</code></dd>
+                <dt>Global policies</dt>
+                <dd>@policyCount</dd>
+                <dt>Injection templates</dt>
+                <dd>@templateCount</dd>
+            </dl>
+        </div>
+    }
+
+    <div class="panel">
+        <h2>Build</h2>
+        <dl>
+            <dt>Alembic</dt>
+            <dd>@AlembicVersion</dd>
+            <dt>Morgana.AI</dt>
+            <dd>@MorganaVersion</dd>
+        </dl>
+    </div>
+
+    <p class="phase-note">
+        Phase 1 &mdash; scaffold. The interview, the Draft and the emit are not here yet.
+    </p>
+
+</div>
+
+@code {
+    private Records.Prompt? frameworkPrompt;
+    private int policyCount;
+    private int templateCount;
+    private string? loadError;
+
+    private static string AlembicVersion =>
+        typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+
+    private static string MorganaVersion =>
+        typeof(Records).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            frameworkPrompt = await PromptResolverService.ResolveAsync("Morgana");
+
+            List<Records.GlobalPolicy> policies =
+                frameworkPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
+
+            policyCount = policies.Count(p => !p.IsInjectionTemplate);
+            templateCount = policies.Count(p => p.IsInjectionTemplate);
+        }
+        catch (Exception ex)
+        {
+            loadError = ex.Message;
+        }
+    }
+}

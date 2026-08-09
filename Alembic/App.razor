@@ -1,0 +1,13 @@
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+</Router>
+
+@*
+    Root component: builds the route table from this assembly and renders the match.
+
+    No <NotFound> handler on purpose — Program.cs already routes every unmatched request to
+    _Host, so nothing ever reaches a not-found branch.
+*@

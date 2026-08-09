@@ -33,13 +33,14 @@ Morgana/
     Rune/                  # Spectre.Console CLI — basic-TTY reference channel (webhook)
   Examples/                # Example plugin with BillingAgent, ContractAgent, MonkeyAgent, InventoryAgent
   PromptHarness/           # Live non-regression harness (xUnit v3) — measures prompt behaviour, not code
+  Alembic/                 # Blazor Server authoring workbench — AI interview → a whole domain
   CHANGELOG.md
 ```
 
-Six solutions, one per unit: `Morgana.slnx` (the framework — Contracts, AI, Web), one per channel,
-`Examples.slnx` and `PromptHarness.slnx`. Only the framework's own projects live in
-`Morgana.slnx`; the plugin, the channels and the harness each stand alone and reach it by project
-reference. That is what keeps every one of them replaceable by a customer's own.
+Seven solutions, one per unit: `Morgana.slnx` (the framework — Contracts, AI, Web), one per channel,
+`Examples.slnx`, `PromptHarness.slnx` and `Alembic.slnx`. Only the framework's own projects live in
+`Morgana.slnx`; the plugin, the channels, the harness and the workbench each stand alone and reach it
+by project reference. That is what keeps every one of them replaceable by a customer's own.
 
 ### Morgana.AI (core library)
 
@@ -99,6 +100,16 @@ Live, black-box, xUnit v3 suite at `PromptHarness/` (repo root, own solution, ha
 - **Assertions**: two layers. *Structural* (deterministic, from the message + span + log): completion, quick replies, rich card, tools called and their order, context reads/writes and the closed vocabulary. *LLM-judge* (natural-language propositions on the cheapest configured tier) for what structure cannot reach — the judge sees only what a user would see, never the tool trace.
 - **Scenarios**: YAML under `Scenarios/`, one file per flow, replayed **N times against an explicit pass threshold** — the honest shape when the system under test is a language model. The **context-handling group runs at 5/5 and is blocking**: the cycle, the closed vocabulary and non-revelation are contract, and their failure mode is silent.
 - **Secrets**: none of its own. It declares the same `UserSecretsId` as `Morgana.Web` and republishes the resolved `Morgana:` configuration to the host as environment variables, so the suite always runs against whatever provider and tiers that instance is wired to. Per run it overrides a throwaway `StoragePath`, disables exporters/rate/dust limiting, applies `Harness:EnableGuardrail`, and mints a random key for the `harness` issuer.
+
+### Alembic (authoring workbench)
+
+Blazor Server app at `Alembic/` (repo root, own solution, has its own `CLAUDE.md`). It gives a client the *initial morganization* turnkey: an AI-conducted functional interview distilled into a whole domain — intents, agent prose, tool contracts, C# assets and starter harness scenarios. The name follows the repo's habit of naming the **instrument** (Cauldron the vessel, Grimoire the book, Rune the mark): an alembic is the apparatus that distils.
+
+Two properties set it apart from everything else in the tree, and both are structural rather than incidental:
+- **It is not a channel and not a client of Morgana at all.** No JWT, no `ChannelMetadata`, no pipeline; its only external dependency is an LLM. It is the one unit that runs with no Morgana instance in sight.
+- **It assumes no filesystem.** At runtime it lives wherever the client deployed it — exactly like Cauldron, and its position in this repo says nothing about that. Configuration arrives as an **upload** and leaves as a **download**. So Alembic can never know which C# already exists client-side, and never tries to guess or merge it: generated code is split `X.g.cs` (Alembic's, always overwritten, deterministic template) / `X.cs` (the client's, written once, LLM-authored working mock), the convention travels inside the archive, and drift is reported rather than patched — `MorganaToolAdapter.AddTool` already fails startup on a signature mismatch, so Alembic only has to surface it earlier.
+
+It references **`Morgana.AI`** (not `Morgana.Contracts` like the channels): it exchanges no wire DTOs but needs the domain model of a configuration — `Records.Prompt`, `Records.ToolDefinition`, `Records.Intent` — which makes parsing an uploaded `agents.json` free. It also consumes `IPromptComposerService`, which is what lets the interview recap be **the composed prompt the model will really read** rather than a summary of the client's answers: `ComposeAgentInstructionsAsync` takes the domain prompt as a parameter, so the `Records.Prompt` can be built in memory from a Draft that exists nowhere on disk. Alembic runs on the `Performance` tier — writing non-contradictory dispositive prose is precisely where the `Efficiency` die fails — and consequently does not serve a single-tier deployment. Its own conducting prompt lives in an `alembic.json` of identical shape (dogfooding) but is deliberately **not** composed through the framework layer, whose policies govern a channel turn Alembic does not have.
 
 ## Architecture and Message Flow
 
@@ -380,7 +391,8 @@ At application startup, comprehensive validation is performed:
 - **Build**: `dotnet build` from solution root
 - **Run**: start both `Morgana.Web` (backend, default https://localhost:5001) and `Cauldron` (frontend, default https://localhost:5002)
 - **PromptHarness suite**: `dotnet test PromptHarness/PromptHarness.csproj` (from the repo root — it is its own solution, outside `Morgana.slnx`) — live LLM calls, on-demand only. Start from `--filter "FullyQualifiedName~HarnessSmokeTests"` to verify the rig before believing any scenario result
-- **Docker**: `docker compose up` starts Morgana + Cauldron (`Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`); the two TTY channels Grimoire and Rune are profile-gated (`profiles: ["tui"]`) so `up` skips them, and each must be launched interactively in a separate terminal via `docker compose run --rm --service-ports --use-aliases grimoire` (or `… rune`, using `Channels/Grimoire/Grimoire.Dockerfile` / `Channels/Rune/Rune.Dockerfile`), because Spectre.Console needs to own stdin/stdout (only one TTY channel at a time). `compose run` auto-activates the service's profiles so no `--profile` flag is needed. `--use-aliases` is mandatory: `compose run` skips network aliases by default, so without it Morgana's webhook callback to `http://grimoire:5004` (resp. `http://rune:5003`) fails DNS resolution
+- **Alembic**: `dotnet run` from `Alembic/` (default https://localhost:5005). Needs no Morgana instance running — it talks only to an LLM
+- **Docker**: `docker compose up` starts Morgana + Cauldron (`Morgana/Morgana.Dockerfile` + `Channels/Cauldron/Cauldron.Dockerfile`); the two TTY channels Grimoire and Rune are profile-gated (`profiles: ["tui"]`) so `up` skips them, and each must be launched interactively in a separate terminal via `docker compose run --rm --service-ports --use-aliases grimoire` (or `… rune`, using `Channels/Grimoire/Grimoire.Dockerfile` / `Channels/Rune/Rune.Dockerfile`), because Spectre.Console needs to own stdin/stdout (only one TTY channel at a time). `compose run` auto-activates the service's profiles so no `--profile` flag is needed. `--use-aliases` is mandatory: `compose run` skips network aliases by default, so without it Morgana's webhook callback to `http://grimoire:5004` (resp. `http://rune:5003`) fails DNS resolution. Alembic is profile-gated too (`profiles: ["authoring"]`) but for an unrelated reason — it is not part of a running Morgana at all, joins no network and needs no backend: `docker compose --profile authoring up alembic` (port 5005)
 
 ## Conventions
 

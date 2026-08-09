@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+       <Title>Alembic</Title>
+       <PackageId>Alembic</PackageId>
+       <RootNamespace>Alembic</RootNamespace>
+       <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+       <!--
+         Same UserSecretsId as Morgana.Web, on purpose and for the same reason PromptHarness
+         shares it: Alembic owns no secrets of its own. It reads the very same `Morgana:LLM:*`
+         section (MorganaLLM hardcodes that path), so in-repo it runs against whatever provider
+         and tiers this working copy is already wired to, with nothing to configure twice.
+         A client deploying Alembic on its own supplies that section by environment variable.
+       -->
+       <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
+    </PropertyGroup>
+
+    <ItemGroup>
+       <!--
+         Morgana.AI, not Morgana.Contracts: Alembic is not a channel and exchanges no wire DTOs.
+         What it needs is the domain model of a Morgana configuration — Records.Prompt,
+         Records.ToolDefinition, Records.Intent — plus IPromptComposerService, which lets it show
+         the client the prompt the model will really read. Morgana.Contracts comes transitively.
+       -->
+       <ProjectReference Include="..\Morgana\Morgana.AI\Morgana.AI.csproj" />
+    </ItemGroup>
+
+</Project>

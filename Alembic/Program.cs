@@ -1,0 +1,122 @@
+using Morgana.AI.Interfaces;
+using Morgana.AI.Services;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+// ==============================================================================
+// ALEMBIC - MORGANA'S AUTHORING WORKBENCH
+// ==============================================================================
+// Alembic distils a functional interview with a domain expert into a complete Morgana
+// domain: intents, agent prose, tool contracts, C# assets and non-regression scenarios.
+//
+// What Alembic is NOT: a channel. It never calls a Morgana instance, holds no JWT, announces
+// no ChannelMetadata and joins no conversation pipeline. Its only external dependency is an
+// LLM. It also makes NO assumption about seeing the client's filesystem: configuration comes
+// in as an upload and goes out as a download, because at runtime Alembic lives wherever the
+// client deployed it — exactly like Cauldron, and for exactly the same reason.
+
+// ============================================================================
+// 1. BLAZOR SERVER CONFIGURATION
+// ============================================================================
+// Blazor Server provides server-side rendering with real-time UI updates via SignalR.
+// The interview is long and stateful, which is precisely what a server-held circuit is good at.
+
+builder.Services.AddRazorPages();       // Razor Pages, used only to serve _Host.cshtml
+builder.Services.AddServerSideBlazor(); // Blazor Server: UI state lives here, DOM diffs go over SignalR
+
+// ==============================================================================
+// 2. LOGGING INFRASTRUCTURE
+// ==============================================================================
+// Several Morgana.AI services take a bare ILogger (not ILogger<T>), so one is registered here.
+
+builder.Services.AddSingleton<ILogger>(sp =>
+    sp.GetRequiredService<ILoggerFactory>().CreateLogger("Alembic"));
+
+// ==============================================================================
+// 3. MORGANA.AI SERVICES
+// ==============================================================================
+// Alembic reuses the framework's own prompt stack rather than reimplementing it.
+//
+// - IAgentConfigurationService: scans loaded assemblies for embedded agents.json. Alembic embeds
+//   none and none is expected to be found: the service degrades to agentless mode, which is the
+//   correct state here, because the domain Alembic works on is the one the CLIENT uploads, never
+//   one compiled into this process.
+// - IPromptResolverService: resolves the framework prompts from morgana.json, embedded in
+//   Morgana.AI and therefore available for free through the project reference.
+// - IPromptComposerService: assembles what the model reads. This is what lets Alembic show a
+//   real composed prompt as the interview recap instead of a summary of the client's answers —
+//   ComposeAgentInstructionsAsync takes the domain prompt as a parameter, so the Records.Prompt
+//   can be built in memory from a Draft that exists nowhere on disk yet.
+
+builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
+builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
+builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptComposerService>();
+
+// ==============================================================================
+// 4. LLM
+// ==============================================================================
+// Alembic runs on the Performance tier, and the choice is not caution. Its whole job is writing
+// dispositive prose that does not contradict itself — the exact task where the Efficiency die
+// amplifies contradiction-following failures. A wizard that emits a subtly self-contradictory
+// prompt is worse than no wizard, because the client has no instrument to notice. Alembic runs
+// once, at onboarding, not per conversational turn: this is the wrong place to save.
+//
+// Consequence, deliberate and inherited from the framework's own "no cross-tier fallback" rule:
+// Alembic does not run against a single-tier deployment (Ollama being the canonical case) until
+// a Performance entry is configured.
+//
+// Registered as a factory and never resolved during startup, so a working copy with no LLM
+// credentials still builds, boots and serves the shell — the failure surfaces where it belongs,
+// on the first call, with the provider's own message.
+
+builder.Services.AddSingleton<ILLMService>(sp =>
+{
+    IConfiguration config = sp.GetRequiredService<IConfiguration>();
+    IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
+    ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    string llmProvider = config["Morgana:LLM:Provider"]
+        ?? throw new InvalidOperationException("Morgana:LLM:Provider is not configured.");
+
+    return llmProvider.ToLowerInvariant() switch
+    {
+        "anthropic"   => new Morgana.AI.Abstractions.LLMs.Anthropic(config, promptResolver, loggerFactory),
+        "azureopenai" => new Morgana.AI.Abstractions.LLMs.AzureOpenAI(config, promptResolver, loggerFactory),
+        "ollama"      => new Morgana.AI.Abstractions.LLMs.Ollama(config, promptResolver, loggerFactory),
+        "openai"      => new Morgana.AI.Abstractions.LLMs.OpenAI(config, promptResolver, loggerFactory),
+        _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'Anthropic', 'AzureOpenAI', 'Ollama', 'OpenAI'")
+    };
+});
+
+// ============================================================================
+// 5. APPLICATION PIPELINE
+// ============================================================================
+
+WebApplication app = builder.Build();
+
+// Production-only middleware
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error");  // Global exception handler page
+    app.UseHsts();                      // HTTP Strict Transport Security
+}
+
+app.UseHttpsRedirection();              // Redirect HTTP → HTTPS
+app.UseStaticFiles();                   // Serve static files (CSS, JS, images)
+app.UseRouting();                       // Enable endpoint routing
+
+app.MapBlazorHub();                     // SignalR hub carrying Blazor's own UI updates
+app.MapFallbackToPage("/_Host");        // Every unmatched route renders the single page
+
+// Health check endpoint for monitoring (status + uptime)
+DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "healthy",
+    uptime = DateTimeOffset.UtcNow - startedAt
+}));
+
+// ============================================================================
+// 6. APPLICATION STARTUP
+// ============================================================================
+
+await app.RunAsync();

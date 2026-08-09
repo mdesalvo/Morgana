@@ -8,7 +8,7 @@
   <Target Name="GenerateDockerVersionFile" BeforeTargets="Build" Condition="'$(InsideDockerBuild)' != 'true'">
 
     <PropertyGroup>
-      <!-- Repository root is ONE level up from this Directory.Build.targets -->
+      <!-- Repository root is ONE level up from this file (Alembic/ → repo root) -->
       <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</RepoRoot>
       <EnvVersionsFile>$(RepoRoot)\.env.versions</EnvVersionsFile>
 
