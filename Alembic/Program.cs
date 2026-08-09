@@ -85,7 +85,7 @@ builder.Services.AddScoped<IDraftStateService, DraftStateService>();
 //   of Morgana that produces agents of Morgana, so it is composed the way one is: her Personality
 //   on top, resolved live rather than copied, then Alembic's doctrine, then the running pass.
 //   Her GlobalPolicies, Formatting and Target are left out on purpose: they govern how a channel
-//   turn is formed, and Alembic has no channel and answers in JSON.
+//   turn is formed, and Alembic has no channel and no turn in that sense.
 // - IInterviewService: the interview. Scoped — one per circuit. The state machine is C# and the
 //   conducting is the model's: facts about the configuration are never left to a model's
 //   discretion, and phrasing is never left to a template.

@@ -1,3 +1,5 @@
+using Morgana.Contracts;
+
 namespace Alembic.Model;
 
 /// <summary>
@@ -45,7 +47,15 @@ public enum InterviewSpeaker
 /// </summary>
 /// <param name="Speaker">Who said it.</param>
 /// <param name="Text">What was said.</param>
-public sealed record InterviewTurn(InterviewSpeaker Speaker, string Text);
+/// <param name="Choices">
+/// Buttons Alembic attached to this question, if any. The contract is Morgana's own
+/// <see cref="QuickReply"/> — the shape the client's own agents will emit — but the behaviour is
+/// not a channel's: these never gate the text box, they sit beside it.
+/// </param>
+public sealed record InterviewTurn(
+    InterviewSpeaker Speaker,
+    string Text,
+    IReadOnlyList<QuickReply>? Choices = null);
 
 /// <summary>
 /// One interview in progress.
@@ -83,7 +93,17 @@ public sealed class InterviewState
     /// Whether Alembic considers this pass's fields settled. A statement about the configuration,
     /// never about the client's patience.
     /// </summary>
+    /// <remarks>
+    /// Set only through the <c>SetPassCompleted</c> tool, never by a token in Alembic's text —
+    /// the same out-of-band rule Morgana applies to its own turn continuation, and for the same
+    /// reason: a marker inside prose is a marker the prose can accidentally produce.
+    /// </remarks>
     public bool ReadyForReview { get; set; }
+
+    /// <summary>
+    /// Buttons Alembic attached to the question it is asking right now, cleared when answered.
+    /// </summary>
+    public List<QuickReply> PendingChoices { get; } = [];
 
     /// <summary>
     /// Why the last exchange failed, when it did. Null on a healthy interview.

@@ -42,11 +42,34 @@
                 <h2>Conversation</h2>
 
                 <div class="transcript">
-                    @foreach (InterviewTurn turn in state.Transcript)
+                    @foreach ((InterviewTurn turn, int index) in state.Transcript.Select((t, i) => (t, i)))
                     {
                         <div class="turn @(turn.Speaker == InterviewSpeaker.Alembic ? "turn-alembic" : "turn-client")">
                             <div class="who">@(turn.Speaker == InterviewSpeaker.Alembic ? "Alembic" : "You")</div>
                             <div class="said">@turn.Text</div>
+
+                            @*
+                                Buttons render only on the turn still awaiting an answer. Once the
+                                client has replied the row is spent, so it is shown inert rather
+                                than removed — the transcript should still say what was offered.
+
+                                Unlike a channel's quick replies, these never disable the text box
+                                below. A choice here is an offer, never a gate: the client's own
+                                words are the material being distilled, and a menu must never be
+                                the only way to answer.
+                            *@
+                            @if (turn.Choices is { Count: > 0 } choices)
+                            {
+                                bool spent = index != state.Transcript.Count - 1;
+
+                                <div class="choices @(spent ? "spent" : "")">
+                                    @foreach (QuickReply choice in choices)
+                                    {
+                                        <button class="choice" disabled="@(spent || isBusy)"
+                                                @onclick="() => ChooseAsync(choice)">@choice.Label</button>
+                                    }
+                                </div>
+                            }
                         </div>
                     }
                     @if (isBusy)
@@ -126,6 +149,13 @@
     {
         string said = answer;
         answer = string.Empty;
+        await SendAsync(said);
+    }
+
+    private Task ChooseAsync(QuickReply choice) => SendAsync(choice.Value);
+
+    private async Task SendAsync(string said)
+    {
         isBusy = true;
         try { await InterviewService.AnswerAsync(said); }
         finally { isBusy = false; }

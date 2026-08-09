@@ -21,7 +21,7 @@ namespace Alembic.Interfaces;
 /// framework layer is left out: her <c>GlobalPolicies</c>, her <c>Formatting</c> and her
 /// <c>Target</c>. Those govern how a <em>channel turn</em> is formed — quick replies, rich cards,
 /// turn continuation, the system tools every agent shares, markdown for a rendered surface — and
-/// Alembic has no channel, no Guard, no Classifier, no turn in that sense, and answers in JSON.
+/// Alembic has no channel, no Guard, no Classifier and no turn in that sense.
 /// Handing it rules about things that do not exist in its world is the most direct way to
 /// manufacture the non-local contradictions this whole project exists to avoid. What carries over
 /// is who she is; what does not is the mechanics of a conversation Alembic is not having.

@@ -85,7 +85,7 @@ public class AlembicPromptService : IAlembicPromptService
         // "the system tools every agent shares", and Alembic has neither. So are her GlobalPolicies
         // and her Formatting, which govern how a CHANNEL TURN is formed — quick replies, rich
         // cards, turn continuation, markdown for a rendered surface. Alembic has no channel, no
-        // Guard, no Classifier and no turn in that sense, and it answers in JSON. Handing it rules
+        // Guard, no Classifier and no turn in that sense. Handing it rules
         // about things that do not exist in its world is the most direct way to manufacture the
         // non-local contradictions this whole project exists to avoid.
         sb.AppendLine(MorganaLayerHeader);

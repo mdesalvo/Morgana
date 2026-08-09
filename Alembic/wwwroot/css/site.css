@@ -268,6 +268,36 @@ button.primary:disabled {
     cursor: default;
 }
 
+.choices {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.choices.spent {
+    opacity: 0.45;
+}
+
+button.choice {
+    background: transparent;
+    color: var(--alembic-accent);
+    border: 1px solid var(--alembic-border);
+    border-radius: 1rem;
+    padding: 0.25rem 0.8rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.85rem;
+}
+
+button.choice:hover:not(:disabled) {
+    border-color: var(--alembic-accent);
+}
+
+button.choice:disabled {
+    cursor: default;
+}
+
 .agent-pick {
     background: var(--alembic-bg);
     color: var(--alembic-text);

@@ -60,7 +60,7 @@ Three layers, in `AlembicPromptService.ComposeAsync`:
 What is deliberately left out of layer 1: her `GlobalPolicies`, her `Formatting` and her `Target`.
 Those govern how a **channel turn** is formed — quick replies, rich cards, turn continuation, the
 system tools every agent shares, markdown for a rendered surface — and Alembic has no channel, no
-Guard, no Classifier, no turn in that sense, and answers in JSON. Handing it rules about things that
+Guard, no Classifier and no turn in that sense. Handing it rules about things that
 do not exist in its world is the most direct way to manufacture the non-local contradictions this
 project exists to avoid. **What carries over is who she is; what does not is the mechanics of a
 conversation Alembic is not having.** For the same reason the variant "Alembic is a routed Morgana
@@ -138,6 +138,69 @@ therefore true for that version of Morgana and says nothing about a different on
 deliberately does **not** accept an uploaded `morgana.json`: that would model a capability the
 framework does not have.
 
+### Alembic is an agent, and its tools are declared the way an agent's are
+
+Alembic is assembled with the framework's own machinery, not an imitation of it:
+`MorganaToolAdapter` binds each tool's declaration in `alembic.json` to its delegate — validating
+parameter count, names and required/optional, so a declaration that drifts from its method fails at
+assembly rather than reaching the model as a schema nothing can satisfy — and
+`IChatClient.AsAIAgent` makes the agent.
+
+Not `MorganaAgent` via `MorganaAgentAdapter`: that belongs to the routed world of `agents.json`,
+`[HandlesIntent]`, base tools and per-conversation persistence, and Alembic has none of it. **The
+reuse stops exactly where the resemblance does.**
+
+Tools rather than a structured reply, and the difference is not stylistic:
+
+- Alembic simply **talks** to the client and carries the configuration out of band, so the reply
+  text and the proposal stop being welded into one object.
+- A malformed answer stops costing the client a turn of their own interview — that failure branch
+  no longer exists.
+- **A tool answers back.** Every method in `InterviewTools` returns a sentence *to the model*: a
+  `Target` that arrives at one sentence where the shape is two to four is told so and corrects
+  itself in the same turn. Recorded either way — the size is a shape, not a gate.
+- **What a pass may write is which tools exist.** The functional pass has no `SetAgentInstructions`
+  and no `SetAgentFormatting`, so it cannot write them. The constraint stopped being a sentence
+  asking for restraint.
+- `SetPassCompleted` is believed only as far as the state machine can confirm it, and the
+  declaration lives in the call rather than in a token inside the prose — the same out-of-band rule
+  Morgana applies to `SetTurnContinuation`, for the same reason.
+
+Three of the tools are the ones that stop Alembic writing blind: `GetExistingIntents` (the
+descriptions the classifier will weigh this one against — an overlap you never looked at is a
+collision no prose fixes afterwards), `GetFindings` (the deterministic pass, run against a probe
+domain so the relational rules are visible, filtered to this pass's business), and
+`GetComposedPrompt` (the whole of what the authored agent's model will read). **Alembic is the last
+reader of an agent before it exists**, and these are what let it read.
+
+### Choices: a channel's contract, an interviewer's doctrine
+
+Alembic has no `IChannelService` and needs none — it *is* its own UI. `SetChoices` attaches buttons
+to a question, carried by `Morgana.Contracts.QuickReply`, so the shape the client sees in Alembic is
+literally the shape their own agents will emit. The component is **not** borrowed from Cauldron:
+same contract, own rendering, exactly as Rune and Grimoire relate to it.
+
+The doctrine is nearly the inverse of Morgana's, and that is why copying the component would have
+been wrong. Her quick replies let a user pick the next action, and the channel gates the text box
+while they are live. Alembic's only ever ask a **closed** question:
+
+- **Never on a question about the client's domain.** Their words are the material being distilled,
+  and a menu replaces them with Alembic's — an expert clicking a button you wrote is an expert who
+  has stopped telling you how they work.
+- Only where the answer set is closed and known to Alembic rather than to the client: the
+  framework's own vocabulary (a parameter's scope, required or not, shared or not, the tier), and
+  confirmations of something just understood.
+- **The text box never closes.** A choice is an offer, never a gate, so the escape is structural
+  rather than an extra button. A spent row is shown inert rather than removed: the transcript
+  should still say what was offered.
+
+The functional pass rarely uses them, and correctly so — nearly every question it asks is a domain
+question. The toolkit pass is where they earn their place.
+
+Rich cards have no equivalent here and are not missed: the persistent configuration panel beside the
+transcript is the better surface. A card is richness *per turn* that scrolls away with the
+conversation; the panel updates on every proposal and stays.
+
 ### The interview: C# owns the state, the model owns the conducting
 
 The split is fixed. **What has been established, which pass is running and what may be written next
@@ -198,7 +261,7 @@ Alembic/
   Directory.Build.targets             # Regenerates the root .env.versions on each build
   Alembic.Dockerfile                  # Multi-stage container build (root context)
   appsettings.json                    # Morgana:LLM section (Performance tier only)
-  alembic.json                        # Alembic's OWN conducting prose, embedded resource
+  alembic.json                        # Alembic's OWN prose AND tool declarations, embedded resource
   Properties/launchSettings.json      # Dev profile: https://localhost:5005
   Program.cs                          # DI wiring and app pipeline
   App.razor                           # Blazor root component
@@ -217,10 +280,11 @@ Alembic/
     IDraftSerializationService.cs     # Draft ⇄ alembic-draft.json (the interview's save file)
     IDraftValidationService.cs        # Everything decidable about a Draft without a model
     IRecapService.cs                  # Draft → the prompt the model really reads
-    IAlembicPromptService.cs          # Alembic's own prose, from alembic.json
+    IAlembicPromptService.cs          # Alembic's own prose + tool declarations, from alembic.json
     IInterviewService.cs              # Conducts a pass, folds the result into the Draft
     IDraftStateService.cs             # The Draft under construction (per circuit)
   Services/                           # Default implementations of the above
+    InterviewTools.cs                 # The tools Alembic calls while conducting a pass
   Pages/_Host.cshtml                  # Blazor Server host page (ServerPrerendered)
   Pages/Index.razor                   # Landing page
   Pages/Import.razor                  # Upload an agents.json, see the parsed Draft, download it back
@@ -300,7 +364,7 @@ against the `Examples` domain it proposes `MonkeysAgent` where the real class is
 | `IDraftValidationService` | Singleton | `DraftValidationService` — the deterministic checks, each restating a rule the framework enforces later and more expensively |
 | `IRecapService` | Singleton | `RecapService` — drives `IPromptComposerService` over the Draft. Deliberately almost empty: anything Alembic added on top would be a claim about the prompt rather than the prompt |
 | `IAlembicPromptService` | Singleton | `AlembicPromptService` — loads `alembic.json` from this assembly, the way `ConfigurationPromptResolverService` loads `morgana.json`. Unlike it, refuses to degrade to an empty set: an interviewer with no prose is not diminished, it is silent |
-| `IInterviewService` | **Scoped** | `InterviewService` — one interview per circuit. Runs on `GetChatClient(Performance)` directly, not `CompleteWithSystemPromptAsync`, which always takes the cheapest tier |
+| `IInterviewService` | **Scoped** | `InterviewService` — one interview per circuit. Builds a Microsoft.Agents.AI agent via `MorganaToolAdapter` + `AsAIAgent`, on `GetChatClient(Performance)` directly rather than `CompleteWithSystemPromptAsync`, which always takes the cheapest tier |
 | `IDraftStateService` | **Scoped** | `DraftStateService` — the Draft under construction. One per Blazor circuit: two tabs are two separate interviews, and the state dies with the connection |
 
 ## Why the project reference is Morgana.AI, not Morgana.Contracts
