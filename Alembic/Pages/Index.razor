@@ -3,67 +3,79 @@
 @inject IPromptResolverService PromptResolverService
 
 @*
-    The landing page. It is deliberately not a placeholder: it resolves the framework
-    prompt through Morgana.AI's own resolver, which proves in one shot the three things the
-    scaffold exists to establish — the project reference reaches Morgana.AI, morgana.json is
-    readable as an embedded resource from here, and the absence of any embedded agents.json
-    degrades to agentless mode instead of failing. Everything Alembic later composes stands
-    on those three facts.
+    The landing, and what it is a landing on.
+
+    Two ways in and nothing else, because there are only two: begin a sitting, or bring back a
+    file. Reviewing a domain and taking one away are not ways in at all — they are what you do to a
+    domain once one exists, and they are reached from the work itself: a finished sitting lets its
+    agent into the domain and lands on the review. A landing that also listed them would be a menu
+    of pages rather than a way through the work.
+
+    Neither doorway explains itself, because neither needs to: a door labelled "distil an agent"
+    that also tells you what distilling an agent is has stopped being a door and become a leaflet.
+    What Morgana does with your answers is hers to show once you are inside.
+
+    It still proves what the scaffold exists to establish — the project reference reaches
+    Morgana.AI, morgana.json is readable as an embedded resource from here, and the absence of any
+    embedded agents.json degrades to agentless mode instead of failing. Nobody comes here to read
+    that, so it is one line at the foot.
 *@
 
 <div class="alembic-landing">
 
-    <h1>Alembic</h1>
-    <p class="tagline">Morgana's authoring workbench &mdash; where a domain is distilled.</p>
+    <div class="landing-head">
+        <div class="vessel">
+            <img src="images/alembic.jpg" alt="Morgana's alembic, lit from within" />
+        </div>
 
-    @if (loadError is not null)
-    {
-        <div class="panel panel-error">
-            <h2>Framework layer unreachable</h2>
-            <pre>@loadError</pre>
-        </div>
-    }
-    else if (frameworkPrompt is null)
-    {
-        <div class="panel">
-            <h2>Resolving the framework layer&hellip;</h2>
-        </div>
-    }
-    else
-    {
-        <div class="panel">
-            <h2>Framework layer</h2>
-            <dl>
-                <dt>Source</dt>
-                <dd><code>morgana.json</code>, embedded in Morgana.AI</dd>
-                <dt>Prompt</dt>
-                <dd><code>@frameworkPrompt.ID</code></dd>
-                <dt>Global policies</dt>
-                <dd>@policyCount</dd>
-                <dt>Injection templates</dt>
-                <dd>@templateCount</dd>
-            </dl>
-        </div>
-    }
-
-    <div class="panel">
-        <h2>Build</h2>
-        <dl>
-            <dt>Alembic</dt>
-            <dd>@AlembicVersion</dd>
-            <dt>Morgana.AI</dt>
-            <dd>@MorganaVersion</dd>
-        </dl>
+        <h1>Alembic</h1>
+        <p class="tagline">Here Morgana takes life. Yours the shape, hers the spells.</p>
     </div>
 
-    <p><a href="interview">Start an interview: distil a new agent &rarr;</a></p>
-    <p><a href="import">Import an existing <code>agents.json</code> &rarr;</a></p>
-    <p><a href="review">Review a domain: findings, and the prompt its models really read &rarr;</a></p>
-    <p><a href="emit">Emit: the configuration, the C# behind it, and what it changes &rarr;</a></p>
+    @*
+        The icons are drawn here rather than typed. The alchemical characters this used to use
+        have no font on most Linux desktops, so they arrived as tofu or as nothing at all — and an
+        icon nobody can see is worse than none, because the space is still spent on it.
+    *@
+    <div class="gateways">
 
-    <p class="phase-note">
-        Import a configuration or a saved interview, distil an agent, review the domain, emit it.
-    </p>
+        <a class="gateway primary-gateway" href="interview">
+            <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9.3 3h5.4M10.6 3.4v5.2M13.4 3.4v5.2" />
+                <circle cx="12" cy="14.6" r="5.9" />
+                <path d="M6.6 15.4c1.8 1.4 9 1.4 10.8 0" />
+                <path d="M17.6 12.4H20a1 1 0 0 1 1 1v4" />
+            </svg>
+
+            <h2>Distil an agent</h2>
+            <span class="go">Begin &rarr;</span>
+        </a>
+
+        <a class="gateway" href="import">
+            <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1" />
+                <path d="M20.8 3.5V8h-4.5" />
+                <path d="M12 7.5V12l3 1.8" />
+            </svg>
+
+            <h2>Take up where you left off</h2>
+            <span class="go">Upload &rarr;</span>
+        </a>
+
+    </div>
+
+    <div class="footnote">
+        @if (loadError is not null)
+        {
+            <span class="bad">Framework layer unreachable: @loadError</span>
+        }
+        else if (frameworkPrompt is null)
+        {
+            <span>Resolving the framework layer&hellip;</span>
+        }
+    </div>
 
 </div>
 
@@ -72,12 +84,6 @@
     private int policyCount;
     private int templateCount;
     private string? loadError;
-
-    private static string AlembicVersion =>
-        typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown";
-
-    private static string MorganaVersion =>
-        typeof(Records).Assembly.GetName().Version?.ToString(3) ?? "unknown";
 
     protected override async Task OnInitializedAsync()
     {

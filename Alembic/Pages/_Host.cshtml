@@ -11,6 +11,10 @@
 
         <title>Alembic - Morgana's Authoring Workbench</title>
 
+        @* SVG, so the vessel stays sharp at every size a browser asks for and there is one file
+           rather than a set of rasters to keep in step. *@
+        <link href="favicon.svg" rel="icon" type="image/svg+xml" />
+
         <link href="css/site.css" rel="stylesheet" asp-append-version="true" />
     </head>
     <body>
@@ -30,9 +34,25 @@
 
         <script src="_framework/blazor.server.js"></script>
         <script>
-            // The transcript is a fixed-height scroll box, so without this every new turn — the
-            // client's own answer, Alembic's "thinking", the reply — lands below the fold and
-            // pressing a button looks like nothing happening.
+            // Back means the page you came from, not the front door. history.length is 1 only when
+            // this tab has been nowhere else — a bookmark, a pasted URL — and there stepping back
+            // would leave Alembic entirely, so the landing is the honest destination instead.
+            window.alembicBack = () => {
+                if (window.history.length > 1) window.history.back();
+                else window.location.href = '/';
+            };
+
+            // A new question means a new answer, so the box that takes it gets the caret. Without
+            // this the client reads the question and then has to go and find where to reply, every
+            // single turn — the one piece of friction a one-question-at-a-time interview cannot
+            // afford, because it is paid on every question rather than once.
+            window.alembicFocusReply = () => {
+                const box = document.querySelector('.reply textarea');
+                if (box) box.focus();
+            };
+
+            // The transcript is a fixed-height scroll box and opens showing its oldest line, which
+            // is the wrong end: what the client wants when they unfold it is what was just said.
             window.alembicScrollTranscript = () => {
                 const box = document.querySelector('.transcript');
                 if (box) box.scrollTop = box.scrollHeight;

@@ -300,7 +300,13 @@ domain expert's answer into dispositive prose, is the model's** — no template 
 Two consequences that look like details and are not:
 
 - Readiness is checked, not believed. The model reports that it thinks a pass is settled; the state
-  machine confirms the fields are actually there before agreeing.
+  machine confirms the fields are actually there before agreeing. **And the moment it agrees, the
+  next pass opens** — inside the same `AnswerAsync`, with no gesture from the client. Asking them to
+  press a button between two passes was asking them to acknowledge a boundary that is Alembic's
+  alone, and the only thing they can say about it is yes. `IInterviewService` therefore has no
+  `Advance`: the loop terminates because entering a pass clears the flag, and a pass that settles
+  the moment it opens (a toolkit the client already described in full) moves on instead of stranding
+  the interview one question short.
 - The **section labels** (`[TARGET]`, `[PERSONALITY]`, `[INSTRUCTIONS]`, `[FORMATTING]`) are
   guaranteed in code, not asked of the
   model. Both composed layers use the same four labels — precisely why the framework fences them —
@@ -313,6 +319,15 @@ Two consequences that look like details and are not:
 The client never writes prose and is never shown a field name. They answer questions about their
 work; Alembic writes the configuration and says what it understood. That asymmetry is the whole
 arrangement, and it is what spares a domain expert from having to become a prompt author.
+
+**One question is the whole screen**, and that is the same argument made in layout. The earlier page
+put a scrolling transcript beside a filling panel, which reads as a long single page of requirements
+gathering — and a domain expert answers a long page of requirements the way anybody does, by getting
+shorter. So the question stands alone and large, everything said so far folds into a line nobody has
+to open, and what the answers have become runs along the foot as a strip of drops, lit where the
+last exchange moved one. The rail of four stations (*what it is*, *what it reaches for*, *how it
+works*, *in the domain*) reports where the distillation has got to and controls nothing: three of
+them are the model's to leave, and only the last is the client's to take.
 
 The client will also never *use* the agent — the people who will are their customers — so everything
 Alembic writes is addressed to the agent about those people, never to the client. Two sentences in
@@ -540,12 +555,14 @@ Alembic/
   Services/                           # Default implementations of the above
     InterviewTools.cs                 # The tools Alembic calls while conducting a pass
   Pages/_Host.cshtml                  # Blazor Server host page (ServerPrerendered)
-  Pages/Index.razor                   # Landing page
+  Pages/Index.razor                   # Landing: the vessel, and four cards for the four things to do
   Pages/Import.razor                  # Upload an agents.json, see the parsed Draft, download it back
   Pages/Review.razor                  # Findings, then the composed prompts
-  Pages/Interview.razor               # The functional pass: talk on the left, config fills on the right
+  Pages/Interview.razor               # The wizard: one question a screen, a rail of stations, drops at the foot
   Shared/MainLayout.razor             # Layout wrapper
-  wwwroot/css/site.css                # Base styles
+  wwwroot/css/site.css                # The whole surface. Palette read off the alembic image
+  wwwroot/favicon.svg                 # The vessel at 16px: belly, neck, spout, one spark
+  wwwroot/images/alembic.jpg          # Morgana's alembic — the landing's centrepiece
 ```
 
 ## The Draft

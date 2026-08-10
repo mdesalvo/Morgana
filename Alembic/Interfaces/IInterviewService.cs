@@ -34,17 +34,10 @@ public interface IInterviewService
     /// <param name="cancellationToken">Cancellation token.</param>
     Task<InterviewState> AnswerAsync(string answer, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Moves to the next pass and asks its opening question. A no-op unless the running pass has
-    /// declared itself settled, and on the last one.
-    /// </summary>
-    /// <remarks>
-    /// A pass boundary is a new agent and a new session: only the configuration crosses it, handed
-    /// back to the next pass through its own tools. The client's transcript is continuous — they are
-    /// having one interview, and the restart is the model's alone.
-    /// </remarks>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    Task<InterviewState> AdvanceAsync(CancellationToken cancellationToken = default);
+    // There is deliberately no Advance: a pass boundary is not the client's to cross. It is a new
+    // agent and a new session, only the configuration goes over it, and it happens inside
+    // AnswerAsync the moment the state machine confirms the running pass settled. The client's
+    // transcript is continuous — they are having one interview, and the restart is the model's alone.
 
     /// <summary>
     /// Folds the interview's intent and agent into the Draft under construction, creating a Draft

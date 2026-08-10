@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Alembic">
+    <!--
+        A vessel, not a picture of one. At 16 pixels everything but the silhouette is gone, so the
+        shape carries it: a round belly, a straight neck, one spout. The colours are the page's —
+        night violet behind, the distillate lit magenta from inside, one cyan bead at the spout.
+    -->
+    <defs>
+        <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#2a1b5e"/>
+            <stop offset="1" stop-color="#140b2e"/>
+        </linearGradient>
+        <radialGradient id="brew" cx="0.5" cy="0.75" r="0.75">
+            <stop offset="0" stop-color="#f0abfc"/>
+            <stop offset="0.55" stop-color="#c084fc"/>
+            <stop offset="1" stop-color="#7c3aed"/>
+        </radialGradient>
+    </defs>
+
+    <rect width="32" height="32" rx="7" fill="url(#ground)"/>
+
+    <!-- The glow the brew throws on the glass around it. -->
+    <circle cx="14.5" cy="20.5" r="9.5" fill="#a855f7" opacity="0.22"/>
+
+    <!-- Spout: drawn before the belly so the joint is covered by it rather than butted against it. -->
+    <path d="M20 18.5 H24.5 A1.6 1.6 0 0 1 26 20.1 V25"
+          fill="none" stroke="#d8b4fe" stroke-width="1.7" stroke-linecap="round"/>
+    <circle cx="26" cy="26.4" r="1.15" fill="#67e8f9"/>
+
+    <!-- Neck, with the collar that reads as a stopper even when it is two pixels tall. -->
+    <path d="M12.6 12 V6.4 M16.4 12 V6.4"
+          fill="none" stroke="#d8b4fe" stroke-width="1.7" stroke-linecap="round"/>
+    <rect x="10.9" y="5" width="7.2" height="2.4" rx="1.2" fill="#d8b4fe"/>
+
+    <!-- The belly, and the distillate standing in it. -->
+    <circle cx="14.5" cy="20.5" r="7.6" fill="url(#brew)"/>
+    <circle cx="14.5" cy="20.5" r="7.6" fill="none" stroke="#e9d5ff" stroke-width="1.5"/>
+    <circle cx="11.8" cy="17.6" r="1.9" fill="#ffffff" opacity="0.45"/>
+
+    <!-- One spark leaving the neck: the only thing that says this vessel is working. -->
+    <path d="M14.5 3.4 L15.2 1.9 L15.9 3.4 L17.4 4.1 L15.9 4.8 L15.2 6.3 L14.5 4.8 L13 4.1 Z"
+          fill="#f4c56a"/>
+</svg>

@@ -101,17 +101,6 @@ public class InterviewService : IInterviewService
     }
 
     /// <inheritdoc />
-    public async Task<InterviewState> AdvanceAsync(CancellationToken cancellationToken = default)
-    {
-        if (Current is not { ReadyForReview: true } state || state.Pass == InterviewPass.Return)
-            return Current ?? await StartAsync(cancellationToken);
-
-        await EnterPassAsync(state, state.Pass + 1, cancellationToken);
-
-        return state;
-    }
-
-    /// <inheritdoc />
     public async Task<InterviewState> AnswerAsync(string answer, CancellationToken cancellationToken = default)
     {
         InterviewState state = Current ?? await StartAsync(cancellationToken);
@@ -121,6 +110,19 @@ public class InterviewService : IInterviewService
 
         state.Transcript.Add(new InterviewTurn(InterviewSpeaker.Client, answer));
         await ExchangeAsync(state, answer, cancellationToken);
+
+        // The seam belongs to the model. Once the state machine has CONFIRMED the pass settled —
+        // SetPassCompleted is checked against Missing(), never believed — the next one opens in the
+        // same turn, and the client simply gets the next question. Asking them to press a button
+        // between two passes was asking them to acknowledge a boundary that is Alembic's alone: they
+        // are having one interview, and the only thing they can say about a pass boundary is yes.
+        //
+        // A loop rather than an if, and it terminates: EnterPassAsync clears ReadyForReview, so it
+        // takes a fresh confirmation from the new pass to go round again. A pass that genuinely
+        // settles the moment it opens is legal — a toolkit the client has already described in full
+        // — and would otherwise strand the interview one question short of moving.
+        while (state is { ReadyForReview: true, Error: null } && state.Pass != InterviewPass.Return)
+            await EnterPassAsync(state, state.Pass + 1, cancellationToken);
 
         return state;
     }
