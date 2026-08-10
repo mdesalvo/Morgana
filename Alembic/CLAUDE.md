@@ -386,7 +386,7 @@ Against the shipped `Examples` domain the pass reports **0 errors and 5 warnings
 true statements about an *imported* domain: four agents whose class names are Alembic's guess and
 whose tier is unknown, and one agent with no native tools (legal — `Monkeys` is MCP-only).
 
-### The starter scenarios, and teaching an instrument Alembic does not run
+### The starter scenarios: templates in, one domain out
 
 A domain agent *is* its prose, prose gets edited, and the only way to know an edit broke nothing is
 PromptHarness. A client who leaves without scenarios has a domain nobody can revise safely. Alembic
@@ -394,52 +394,91 @@ writes the **starting set and no more**: it knows what the agents were designed 
 a first scenario is made of, and nothing about what will actually go wrong, which is every scenario
 after it.
 
-**And it writes a suite that is 100% domain.** The infrastructural half — the guard, the classifier,
-quick replies, turn continuation, rich cards, channel degradation, summarization, the context cycle —
-stays in Morgana's charge: that behaviour holds for every domain, and her scenarios for it are
-maintained where the policies are, in `PromptHarness/Scenarios`. The client's suite sits beside hers
-and never re-tests it, because a copy of a policy scenario drifts from the policy while the original
-does not. The operative test, stated in the briefing: *a scenario that would still make sense with
-every domain word swapped for another domain's is one of Morgana's, duplicated badly.*
+The split that makes this work is between **which behaviours are worth protecting** and **which
+words say them here**. The first is knowledge about agents, true before any client arrives, and it is
+settled once in this repository as `Harness/Templates/*.yaml`: one file per behavioural use-case,
+each a scenario the harness would load if its placeholders were real. The second is knowledge about
+the client's business, and only a model that has just read the whole domain can supply it. So the
+model derives — it replaces every `{{…}}` with this domain's own words and changes nothing else.
 
-That line reaches the model three ways — the prompt's `Target` states it, the briefing opens with it,
-and `ScenarioSchema.Vocabulary()` splits the generated key list in two, naming `guardCompliant`,
-`summarizationOccurred`, `textMaxLength`, `textNotMarkdown` and `degradedChannel` as *not yours*.
-Named rather than withheld: the vocabulary belongs to the harness and Alembic has no standing to
-shrink it, so saying which half is whose is the whole of the intervention.
+Asking a model for "two or three scenarios" was the earlier shape and was the wrong one: it made the
+model choose which behaviours matter, which is the one decision it is worst placed to take after a
+single request, and the answer was the same three shapes every time.
 
-It also settles how the exemplars are read. Every scenario in the shipped suite is infrastructural,
-necessarily — that suite *is* the infrastructural half — so they are embedded for their **form** and
-labelled as such twice: read the key order, the comment that justifies an admitted second shape, the
-phrasing of a judge proposition. Never the subject.
+| Template | Protects | Needs |
+|---|---|---|
+| `capability-happy-path` | the flow the agent exists for, end to end | a tool |
+| `prerequisite-before-action` | it asks for what it needs instead of inventing it | a tool |
+| `confirmation-before-commit` | nothing irreversible happens before a yes | a tool |
+| `boundary-refusal` | the edge its own `Target` commits it not to cross | — |
+| `tool-choice-under-ambiguity` | the request between two tools reaches the right one | two tools |
+| `absent-subject` | it says nothing was found instead of writing something plausible | a tool |
+| `withheld-detail` | what its `Formatting` keeps back stays back | — |
+| `established-context-not-reasked` | a value given once is not asked for twice | a context parameter |
 
-The hard part is not generating YAML, it is that **the model has never seen this instrument**. A
-list of keys is not understanding: it does not convey what a run is, what the observer can actually
-see, what the judge sees and does not, or why a threshold is 5 and not 1. So two things carry it:
+The right-hand column is the only applicability decided in C#, because counting a list is not a
+question worth paying a model for. Everything semantic is the model's: a template it has no instance
+of comes back `not-applicable:` with a reason and is dropped. **A read-only toolkit has no
+confirmation to protect, and a scenario demanding one would fail a correct agent every run** — which
+is why declining had to be a first-class answer, and why each template is asked about on its own.
 
-- **`harness.md`**, embedded: a briefing on the rig — the observation surfaces (`agent.tools_invoked`
-  gives tool *names only*, the console tee gives variable *names only*, the judge sees only what a
-  user sees), why `runs`/`minPasses` state a claim rather than a retry count, what makes a scenario
-  brittle or vacuous — and **two real scenarios from the shipped suite**, comments intact, as worked
-  examples of the idiom.
-- **The harness's own schema, compiled in.** `ScenarioDefinition.cs` is a `<Compile Include>` link
-  from `PromptHarness/`, so `ScenarioSchema` reflects the vocabulary off `ExpectSpec` and *generates*
-  the key table appended to the briefing.
+### What the templates are not
 
-That link is the important decision, and the reason is a silent failure mode. `ScenarioLoader`'s
-deserializer is built `.IgnoreUnmatchedProperties()` — right there, where a human is editing — which
-means **a key the harness does not recognise is dropped without a sound**: the scenario loads, runs,
-passes, and asserts nothing. It reads as coverage and is not. A model reaching for a plausible-but-
-absent key (`textContains`, say) produces exactly that, and no amount of briefing makes it
-impossible. So every generated document is parsed back with a **strict** deserializer — the harness's
-configuration minus the forgiveness — and an unknown key comes back named, with its line, from
-YamlDotNet itself. A scenario that fails the check still ships, with the problem written across its
-top: Alembic has no business deciding a client may not see its own artifact.
+They are **not copies of anything**. Nothing is linked or embedded from `PromptHarness/`: that suite
+is entirely infrastructural — it *is* the framework half — so there is nothing in it to derive a
+domain scenario from, and a worked example taken from it teaches the subject along with the form.
+The templates carry the harness's shape because they were written against it, not because they are
+pieces of it.
 
-A `ProjectReference` was the wrong shape — PromptHarness pulls `Morgana.Web`, the `Examples` plugin
-and xUnit, none of which belong in an authoring workbench. One linked file costs `YamlDotNet`, which
-is what buys parsing instead of pattern-matching. Its consequence is honest and small: the repo
-layout is now load-bearing for Alembic's build, and `Alembic.Dockerfile` copies that one file.
+**And that is what makes the suite 100% domain, structurally rather than by instruction.** The
+earlier design said so in prose and hoped; now the vocabulary a derivation is allowed is exactly the
+union of the keys the templates use — fourteen, all of them domain — so `guardCompliant`,
+`textMaxLength`, `summarizationOccurred`, `textNotMarkdown`, `degradedChannel`, `classifierIntent`
+and the whole context cycle are not reachable. They are Morgana's, her scenarios cover them, and
+they are maintained where the policies are. A client's copy of a policy scenario drifts from the
+policy while the original does not.
+
+The templates also carry what no key table conveys: `runs: 3, minPasses: 3` is already written in
+with the comment saying why it is a contract and not a tendency, and the header tells the model what
+a good derivation of *this* use-case decides. The reasoning is in the artifact rather than in a
+briefing beside it.
+
+### The one check, and why it cannot wait
+
+**A derivation may drop a key and may never add one.** That is the whole rule, and it is enough
+because the template is the vocabulary — every key in it is one Alembic wrote knowing the harness
+binds it.
+
+It has to be checked at the emit because it cannot be caught later. `ScenarioLoader`'s deserializer
+is built `.IgnoreUnmatchedProperties()` — right where it is, since a suite that refused to load over
+one stray key would be brittle in the hands of the person editing it — which means **a key the
+harness does not recognise is dropped without a sound**: the scenario loads, runs, passes, and
+asserts nothing. It reads as coverage and is not, and a model reaching for a plausible-but-absent key
+(`textContains`, say) produces exactly that. So every derivation is parsed with YamlDotNet and held
+to its template's key set, along with two other silent failures: a placeholder left unresolved, and a
+document with no turns.
+
+A scenario that fails still ships, with the problem written across its top. Alembic has no business
+deciding a client may not see its own artifact, and a silently missing scenario costs them more than
+a visibly broken one. The `id` is Alembic's either way — `{intent}-{template}`, unique across a
+domain by construction — rewritten as a line rather than re-serialized, because re-serializing would
+discard the comments and a comment saying why a turn admits two shapes is how the next reader knows
+the looseness was deliberate.
+
+### The discretionary pass
+
+The templated base protects what is worth protecting in any domain, which is precisely the part that
+could be known in advance. It cannot protect the rule that holds only here — the step that must
+never happen twice, the two things this business never says in the same breath — because nobody knew
+about it until the interview was over.
+
+So one call runs after the base, handed the domain and **the base in full**, and may add up to two
+scenarios of its own. The base is handed over whole for the one constraint that matters: an extra
+scenario must neither repeat what is already asserted nor contradict it, since a suite where two
+files disagree about the same turn is worse than one that never covered it — the failing one gets
+deleted and nobody remembers which was right. It is held to the union vocabulary rather than to one
+template's keys, and **none is the ordinary answer**, stated as such in the request: a domain the
+base already describes is a well-designed domain, not a gap.
 
 ### The coherence pass
 
@@ -493,6 +532,11 @@ Alembic/
     IAlembicPromptService.cs          # Alembic's own prose + tool declarations, from alembic.json
     IInterviewService.cs              # Conducts a pass, folds the result into the Draft
     IDraftStateService.cs             # The Draft under construction (per circuit)
+  Harness/                            # Alembic's own harness component — owes PromptHarness nothing
+    Templates/*.yaml                  # One behavioural use-case each, domain words left as placeholders
+    ScenarioTemplate.cs               # A template: its `#@` brief and the scenario shape below it
+    ScenarioTemplateLibrary.cs        # The templates, embedded; which apply; the union vocabulary
+    ScenarioDerivation.cs             # A derivation checked against the vocabulary it was allowed
   Services/                           # Default implementations of the above
     InterviewTools.cs                 # The tools Alembic calls while conducting a pass
   Pages/_Host.cshtml                  # Blazor Server host page (ServerPrerendered)

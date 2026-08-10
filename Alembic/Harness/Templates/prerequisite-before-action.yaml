@@ -1,0 +1,32 @@
+#@ use-case: The agent establishes what it needs before acting, instead of inventing it.
+#@ requires: tools
+#@ derive: |
+#@   Find a tool with a required parameter the user would not volunteer unprompted — which one,
+#@   which date, whose account. Script them asking for the thing while leaving that value out.
+#@   Turn one asserts the tool did NOT run and the agent asked. Turn two supplies the value and
+#@   the tool runs. The pair is the whole point: either half alone proves nothing.
+#@   If the agent's only required values are ones the session already holds, answer not-applicable.
+
+id: "{{intent}}-prerequisite-before-action"
+description: >-
+  {{one sentence: the value this action cannot proceed without, and that the agent asks for it}}
+
+# Acting on a value nobody supplied is the failure this guards: contract, not tendency.
+runs: 3
+minPasses: 3
+
+turns:
+  - say: "{{the request, with the needed value left out, as someone would really phrase it}}"
+    expect:
+      agent: "{{AgentClass}}"
+      toolsNotCalled: ["{{the tool that must not run yet}}"]
+      textNotEmpty: true
+    judge:
+      - "{{the reply asks for <the missing thing, in the domain's own word for it>}}"
+    judgeNot:
+      - "{{the reply presents <the thing asked for> as if it had already been looked up}}"
+
+  - say: "{{just the missing value, the way someone answers a question — bare, no sentence}}"
+    expect:
+      toolsCalled: ["{{the tool, now that it can run}}"]
+      textNotEmpty: true

@@ -200,5 +200,11 @@ public class AssetPackageService : IAssetPackageService
         They assert that a tool ran, never what it returned. That is deliberate: an assertion on a
         mock's data fails the day you wire in the real system, which is the day the suite most needs
         to still work.
+
+        Each one is a behavioural use-case Alembic carries — the flow the agent exists for, the
+        boundary it refuses, the confirmation it owes, the detail it withholds — derived against your
+        domain and written in your words. You will not have every one for every agent, and that is
+        the point rather than a gap: an agent whose tools only look things up has no irreversible
+        action to confirm, so that scenario was declined instead of invented.
         """;
 }

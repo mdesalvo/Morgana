@@ -112,7 +112,9 @@ builder.Services.AddSingleton<IMigrationReportService, MigrationReportService>()
 // - IScenarioAuthorService: the starter PromptHarness scenarios. A domain agent IS its prose, prose
 //   gets edited, and a client who leaves without scenarios has a domain nobody can revise safely.
 //   Alembic knows what the agents were designed to do, which is what a first scenario is made of —
-//   and nothing about what will actually go wrong, which is every scenario after it.
+//   and nothing about what will actually go wrong, which is every scenario after it. It carries its
+//   own behavioural use-cases as templates and derives each against the domain just authored, so
+//   which behaviours are worth protecting is settled here once and only the words are the model's.
 // - ICoherenceService: the half of reviewing a domain that DraftValidationService cannot do. Every
 //   defect it looks for is a relation between agents — overlapping intent descriptions, contested
 //   capabilities, a shared value published under two names — and the interview settles one agent at

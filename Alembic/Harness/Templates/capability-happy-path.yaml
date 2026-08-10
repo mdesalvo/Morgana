@@ -1,0 +1,27 @@
+#@ use-case: The flow the agent exists for, from a user's first words to a grounded answer.
+#@ requires: tools
+#@ derive: |
+#@   The one scenario worth having if there were only one. Take the single request this agent
+#@   is most for — the one its Target names first — and script a real person arriving with it.
+#@   The say: line is how they would actually type it: lowercase, partial, their words and not
+#@   the intent description's, which would be testing the classifier against its own answer key.
+#@   Name the tool that produces the answer, and assert nothing about what it returned: today
+#@   it is a mock, tomorrow it is the client's system, and that is the day this must still pass.
+#@   One judge proposition, about something a user would see in the reply.
+
+id: "{{intent}}-happy-path"
+description: >-
+  {{one sentence: what a user came for and what they get when this agent works}}
+
+# The agent's reason to exist: it holds every run, or it does not hold.
+runs: 3
+minPasses: 3
+
+turns:
+  - say: "{{how someone actually opens this request, in their own half-formed words}}"
+    expect:
+      agent: "{{AgentClass}}"
+      toolsCalled: ["{{the tool that produces the answer}}"]
+      textNotEmpty: true
+    judge:
+      - "{{what the reply must tell them, stated so it can be checked from the reply alone}}"

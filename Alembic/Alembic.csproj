@@ -22,52 +22,29 @@
          Dogfooding: whoever tunes Alembic does the job Alembic teaches.
        -->
        <EmbeddedResource Include="alembic.json" />
-       <!--
-         The briefing Alembic hands a model before asking it for harness scenarios: what the rig is,
-         what can be observed and what cannot, and two scenarios from the shipped suite as worked
-         examples. Prose and exemplars only — the key table it ends with is generated at runtime from
-         the linked ScenarioDefinition below, so the one part that could drift silently cannot.
-       -->
-       <EmbeddedResource Include="harness.md" />
 
        <!--
-         Three scenarios from the suite that actually ships, embedded VERBATIM from PromptHarness so
-         the worked examples handed to a model are the real thing rather than a copy somebody pasted
-         once. Compile-time fills the backpack; at runtime Alembic reads nothing but its own assembly.
+         Alembic's harness component: one YAML template per behavioural use-case worth protecting in
+         any domain — a boundary refused, an irreversible action confirmed, a subject that is not
+         there — with every domain word left as a placeholder. At the end of the journey each one is
+         derived against the domain just authored, and what comes out is 100% that domain's.
 
-         Copies would be the obvious alternative and are the trap: an exemplar is only worth showing
-         while it is still what the suite does, and a pasted one goes stale in silence, teaching a
-         model an idiom nothing uses any more.
+         Authored here and owned here. Nothing is linked or copied from PromptHarness: its suite
+         tests framework policy, which is precisely the half a client must never duplicate, so there
+         is nothing in it to derive a domain scenario from. The templates carry the harness's shape
+         because they were written against it, not because they are pieces of it.
+
+         Globbed rather than listed: adding a use-case is a file in this folder and nothing else.
        -->
-       <EmbeddedResource Include="..\PromptHarness\Scenarios\behaviour-turn-continuation-operand.yaml"
-                         Link="Exemplars\behaviour-turn-continuation-operand.yaml" />
-       <EmbeddedResource Include="..\PromptHarness\Scenarios\behaviour-conversation-closure.yaml"
-                         Link="Exemplars\behaviour-conversation-closure.yaml" />
-       <EmbeddedResource Include="..\PromptHarness\Scenarios\context-cycle-on-miss.yaml"
-                         Link="Exemplars\context-cycle-on-miss.yaml" />
+       <EmbeddedResource Include="Harness\Templates\*.yaml" />
     </ItemGroup>
 
     <ItemGroup>
        <!--
-         PromptHarness's own scenario schema, compiled into Alembic as a LINKED SOURCE FILE.
-
-         Alembic writes starter scenarios for a domain, and the harness's deserializer is built
-         .IgnoreUnmatchedProperties() — so a key it does not recognise is dropped in silence and the
-         scenario runs, passes and asserts nothing. Describing the schema in prose and hoping the two
-         stay in step is exactly the failure this guards against, so the real type is compiled in:
-         the vocabulary handed to the model and the vocabulary checked afterwards are both reflected
-         off it, and a rename in the harness breaks Alembic's build instead of Alembic's output.
-
-         A ProjectReference would be wrong — PromptHarness pulls Morgana.Web, the Examples plugin and
-         xUnit, none of which belong in an authoring workbench. One file costs YamlDotNet, which
-         Alembic wants anyway: it is what lets a generated scenario be parsed as the harness will
-         parse it rather than pattern-matched.
+         Parses a derivation the way the harness would, so a key the model invented is named here
+         instead of dropped in silence there — ScenarioLoader ignores what it does not recognise,
+         and a scenario that runs, passes and asserts nothing is the worst artifact to hand anybody.
        -->
-       <Compile Include="..\PromptHarness\Infrastructure\Engine\ScenarioDefinition.cs"
-                Link="Model\ScenarioDefinition.linked.cs" />
-    </ItemGroup>
-
-    <ItemGroup>
        <PackageReference Include="YamlDotNet" Version="18.*" />
     </ItemGroup>
 

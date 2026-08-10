@@ -1,0 +1,33 @@
+#@ use-case: What the conversation has already established is not asked for a second time.
+#@ requires: context
+#@ derive: |
+#@   This agent has a value the session holds once and reuses — the account, the customer code, the
+#@   patient. The failure is the one users notice fastest: being asked for it again three turns
+#@   later, as though nothing had been said.
+#@   Turn one is the ordinary request that establishes it. Turn two asks for something else the same
+#@   value is needed for, and names it nowhere. Assert the second tool ran, and assert through the
+#@   judge that the reply does not ask for the value again.
+#@   Say nothing about how the value is kept. That machinery is Morgana's and she tests it; what is
+#@   yours is that this domain's own value is one the user should only ever give once.
+
+id: "{{intent}}-established-context-not-reasked"
+description: >-
+  {{one sentence: the value given once, and the later request that must not ask for it again}}
+
+# Asking twice is not a lapse the agent recovers from: the user has already decided it is not listening.
+runs: 3
+minPasses: 3
+
+turns:
+  - say: "{{the first request, supplying the value the way someone volunteers it}}"
+    expect:
+      agent: "{{AgentClass}}"
+      toolsCalled: ["{{the tool that first request reaches}}"]
+      textNotEmpty: true
+
+  - say: "{{the follow-up, needing the same value and naming it nowhere}}"
+    expect:
+      toolsCalled: ["{{the tool this second request reaches}}"]
+      textNotEmpty: true
+    judgeNot:
+      - "{{the reply asks the user for <the value> again}}"

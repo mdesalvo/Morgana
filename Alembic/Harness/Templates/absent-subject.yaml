@@ -1,0 +1,27 @@
+#@ use-case: What is asked for is not there, and the agent says so instead of filling the gap.
+#@ requires: tools
+#@ derive: |
+#@   The failure this catches is the expensive one: an agent that finds nothing and writes
+#@   something plausible anyway. Script the user naming a thing the domain's own vocabulary makes
+#@   obviously absent — a reference in the right shape that belongs to nobody, a date long past.
+#@   Assert that the tool ran, which is the difference between looking and guessing, and assert
+#@   through the judge that the reply says nothing was found. Never assert what came back.
+
+id: "{{intent}}-absent-subject"
+description: >-
+  {{one sentence: what is asked for, why nothing will be found, and that the agent says so}}
+
+# Inventing an answer is worse than a wrong one, because nobody can see it happen.
+runs: 3
+minPasses: 3
+
+turns:
+  - say: "{{the request naming something in the right shape that plainly does not exist}}"
+    expect:
+      agent: "{{AgentClass}}"
+      toolsCalled: ["{{the tool that goes and looks}}"]
+      textNotEmpty: true
+    judge:
+      - "{{the reply says <the thing> could not be found, and says what the user can do next}}"
+    judgeNot:
+      - "{{the reply presents details of <the thing> as though it existed}}"
