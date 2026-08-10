@@ -21,7 +21,7 @@ public class ToolMockService : IToolMockService
     /// <summary>
     /// The prompt in <c>alembic.json</c> that governs mock authoring.
     /// </summary>
-    private const string MockPromptId = "Mock";
+    private const string MockPromptId = "CodeMocker";
 
     private readonly IAlembicPromptService alembicPromptService;
     private readonly ICodeEmitService codeEmitService;

@@ -90,6 +90,16 @@ public class DraftImportService : IDraftImportService
             Agents = [.. configuration.Agents.Select(agent => ToAgentDraft(agent, []))]
         };
 
+        // On the working draft only. The baseline is the file as it arrived, so a domain that came
+        // without a fallback shows the addition in the migration report, which is where the client
+        // should meet it — not silently, and not as something they have to write themselves.
+        int before = draft.Intents.Count;
+        draft.EnsureFallbackIntent();
+
+        if (draft.Intents.Count > before)
+            notices.Add($"This configuration had no '{DomainDraft.FallbackIntent}' intent, so one is in place: "
+                        + "it is where the classifier sends everything the domain does not cover, and it is the one intent no agent may claim.");
+
         notices.Insert(0, $"Read {draft.Intents.Count} intents and {draft.Agents.Count} agents, "
                           + $"carrying {draft.Agents.Sum(a => a.Tools.Count)} tools.");
 

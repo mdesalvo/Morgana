@@ -1,0 +1,74 @@
+/* ==========================================================================
+   What came in: the parsed configuration after an upload, and the way back out.
+   ========================================================================== */
+
+.read {
+    font-size: 1.15rem;
+    font-weight: 300;
+    color: var(--alembic-text);
+    margin: 2rem 0 0.5rem;
+}
+
+.notices {
+    margin: 0 0 1rem;
+    padding-left: 1.1rem;
+    color: var(--alembic-muted);
+    font-size: 0.9rem;
+}
+
+h2.what-now {
+    margin: 2.5rem 0 1rem;
+    font-size: 0.74rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--alembic-muted);
+}
+
+/* One agent as its owner would recognise it: what brings it, and what it can do. The scope of a
+   parameter, whether it is shared, and the class name Alembic guessed are all true and all
+   Review's business — here they would answer a question nobody asked. */
+.creature {
+    border-left: 2px solid var(--alembic-border);
+    padding: 0.1rem 0 0.1rem 1rem;
+    margin-bottom: 1.4rem;
+}
+
+.creature-name {
+    font-size: 1.1rem;
+    color: var(--alembic-accent);
+}
+
+.creature-when {
+    margin: 0.2rem 0 0.5rem;
+    color: var(--alembic-muted);
+    font-size: 0.9rem;
+}
+
+.creature-can {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: baseline;
+    font-size: 0.9rem;
+    color: var(--alembic-muted);
+}
+
+.can {
+    border: 1px solid var(--alembic-border);
+    border-radius: 1rem;
+    padding: 0.15rem 0.7rem;
+    color: var(--alembic-text);
+    font-size: 0.85rem;
+    background: rgba(30, 23, 64, 0.6);
+}
+
+/* The round-trip, which is real and which nobody arrives wanting. */
+.give-back {
+    margin-top: 2.5rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid rgba(53, 41, 107, 0.6);
+    font-size: 0.85rem;
+    color: var(--alembic-muted);
+}

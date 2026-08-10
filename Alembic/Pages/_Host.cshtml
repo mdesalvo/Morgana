@@ -15,7 +15,15 @@
            rather than a set of rasters to keep in step. *@
         <link href="favicon.svg" rel="icon" type="image/svg+xml" />
 
-        <link href="css/site.css" rel="stylesheet" asp-append-version="true" />
+        @* One file per part of the workbench, in cascade order: base defines the palette every
+           other file spends, and the rest never redefine what a file before them settled. Linked
+           rather than @imported, so they are fetched in parallel instead of one after another. *@
+        <link href="css/base.css" rel="stylesheet" asp-append-version="true" />
+        <link href="css/landing.css" rel="stylesheet" asp-append-version="true" />
+        <link href="css/import.css" rel="stylesheet" asp-append-version="true" />
+        <link href="css/panels.css" rel="stylesheet" asp-append-version="true" />
+        <link href="css/interview.css" rel="stylesheet" asp-append-version="true" />
+        <link href="css/controls.css" rel="stylesheet" asp-append-version="true" />
     </head>
     <body>
         <!--
@@ -49,13 +57,6 @@
             window.alembicFocusReply = () => {
                 const box = document.querySelector('.reply textarea');
                 if (box) box.focus();
-            };
-
-            // The transcript is a fixed-height scroll box and opens showing its oldest line, which
-            // is the wrong end: what the client wants when they unfold it is what was just said.
-            window.alembicScrollTranscript = () => {
-                const box = document.querySelector('.transcript');
-                if (box) box.scrollTop = box.scrollHeight;
             };
         </script>
     </body>

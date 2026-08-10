@@ -1,0 +1,67 @@
+@*
+    What the answers have become, along the foot: catchable out of the corner of an eye without
+    competing with the question, which is why the row the last exchange moved is lit and the rest are
+    quiet.
+
+    What is still empty is shown faint rather than hidden — a strip that grows a new row every few
+    turns reads as a form growing under the client, where one that fills in place reads as their own
+    domain taking shape.
+*@
+
+<div class="distilled">
+    <h2>This agent so far</h2>
+
+    <div class="drops">
+        @foreach (Row row in Rows())
+        {
+            <div class="drop @(row.Value is null ? "empty" : "") @(row.Moved ? "moved" : "")">
+                <span class="what">@row.What</span>
+                <span class="value">@(row.Value ?? "not yet")</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// The interview whose agent this is about.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public InterviewState State { get; set; } = default!;
+
+    /// <summary>
+    /// One row of the strip.
+    /// </summary>
+    /// <param name="What">The client's name for it. Never a field name.</param>
+    /// <param name="Value">What has been written, or null while it is still unasked.</param>
+    /// <param name="Moved">Whether the last exchange is what put it there.</param>
+    private sealed record Row(string What, string? Value, bool Moved);
+
+    /// <summary>
+    /// Everything this agent is made of, in the order it gets written.
+    /// </summary>
+    private IEnumerable<Row> Rows()
+    {
+        yield return new Row("it is called", State.Intent.Name, State.Changed.Contains("intentName"));
+        yield return new Row("it is theirs when", State.Intent.Description, State.Changed.Contains("intentDescription"));
+        yield return new Row("its button", State.Intent.Label, State.Changed.Contains("intentLabel"));
+        yield return new Row("it opens with", State.Intent.DefaultValue, State.Changed.Contains("intentDefaultValue"));
+        yield return new Row("what it is for", State.Agent.Target, State.Changed.Contains("agentTarget"));
+        yield return new Row("how it meets them", State.Agent.Personality, State.Changed.Contains("agentPersonality"));
+
+        bool toolsMoved = State.Changed.Contains("tools");
+
+        if (State.Agent.Tools.Count == 0)
+        {
+            yield return new Row("what it reaches for", null, toolsMoved);
+        }
+        else
+        {
+            foreach (ToolDraft tool in State.Agent.Tools)
+                yield return new Row("it can", tool.Name, toolsMoved);
+        }
+
+        yield return new Row("the order of the work", State.Agent.Instructions, State.Changed.Contains("agentInstructions"));
+        yield return new Row("how it shows what it finds", State.Agent.Formatting, State.Changed.Contains("agentFormatting"));
+    }
+}

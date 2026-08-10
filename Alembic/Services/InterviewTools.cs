@@ -83,37 +83,105 @@ public class InterviewTools
     }
 
     /// <summary>
-    /// Records the intent that routes to this agent.
+    /// Puts one kind of request on the domain map, or revises one already there.
     /// </summary>
-    public string SetIntent(string name, string description, string label, string defaultValue)
+    /// <remarks>
+    /// <para>
+    /// The map is the interview's spine: one entry becomes one intent and one agent, and the three
+    /// later passes run once down the list. Revising keeps the entry's place, because the order is
+    /// the order the client thought of their own business in and the interview walks it in that
+    /// order.
+    /// </para>
+    /// <para>
+    /// All four fields of an intent, and the two that arrive later arrive here too. The button and
+    /// the sentence it sends are read by a user <em>beside every other intent's button</em>, exactly
+    /// as the descriptions are weighed beside every other description — so they are written where
+    /// the whole set is visible, and not one at a time in an agent's own pass where nothing can be
+    /// compared to anything.
+    /// </para>
+    /// </remarks>
+    public string DeclareIntent(string name, string description, string? label = null, string? defaultValue = null)
     {
         string cleanName = (name ?? string.Empty).Trim();
 
-        // Refused rather than reported. 'other' is the classifier's own fallback — the intent it
-        // falls back to when it cannot place a message at all — and it is the single name
-        // HandlesIntentAgentRegistryService exempts from needing an agent. An authored agent taking
-        // it would shadow the fallback for the whole domain, so this is the one name that must not
-        // reach the Draft even provisionally.
+        if (cleanName.Length == 0)
+            return "Nothing recorded: an intent must have a name — it becomes a C# attribute argument and a prompt ID.";
+
         if (string.Equals(cleanName, ReservedFallbackIntent, StringComparison.OrdinalIgnoreCase))
             return $"Nothing recorded: '{ReservedFallbackIntent}' is reserved. It is the intent the classifier "
                    + "falls back to when it cannot place a message, and no agent may claim it. Call this again with a name from the domain.";
 
-        state.Intent.Name = cleanName;
-        state.Intent.Description = description?.Trim();
-        state.Intent.Label = label?.Trim();
-        state.Intent.DefaultValue = defaultValue?.Trim();
-        state.Agent.ID = cleanName;
+        if (draftStateService.Current?.Intents.Any(i =>
+                string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase)) == true)
+            return $"Nothing recorded: '{cleanName}' is already an intent of this domain, written before today. "
+                   + "Two agents answering the same intent is a startup failure. Name what is different about this one.";
 
-        // Reported rather than corrected: the name is the client's domain vocabulary, and silently
-        // rewriting it would leave Alembic telling them one thing while the configuration says
-        // another. A shape complaint it can act on is worth more than a fix it never learns about.
-        bool bareLowercaseWord = cleanName.Length > 0
-                                 && cleanName.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c));
+        IntentDraft? existing = state.Map.FirstOrDefault(i =>
+            string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase));
 
-        return bareLowercaseWord
-            ? $"Intent recorded as '{cleanName}'."
-            : $"Intent recorded as '{cleanName}', but that is not a bare lowercase word. "
-              + "It becomes a C# attribute argument and a prompt ID, so call this tool again with one that is.";
+        bool revision = existing is not null;
+        IntentDraft intent = existing ?? new IntentDraft { Origin = Provenance.Authored };
+
+        intent.Name = cleanName;
+        intent.Description = description?.Trim();
+
+        // Left alone when the call omits them, so declaring an entry early and giving it a button
+        // later is one entry revised twice rather than a button silently thrown away.
+        if (!string.IsNullOrWhiteSpace(label))
+            intent.Label = label.Trim();
+
+        if (!string.IsNullOrWhiteSpace(defaultValue))
+            intent.DefaultValue = defaultValue.Trim();
+
+        if (!revision)
+            state.Map.Add(intent);
+
+        List<string> complaints = [];
+
+        if (!cleanName.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c)))
+            complaints.Add("But that is not a bare lowercase word, and it becomes a C# attribute argument and a prompt ID. Call this again with one that is.");
+
+        if (string.IsNullOrWhiteSpace(description))
+            complaints.Add("It says nothing about what routes here, which is the sentence the classifier weighs against every other intent.");
+
+        if (string.IsNullOrWhiteSpace(intent.Label) || string.IsNullOrWhiteSpace(intent.DefaultValue))
+            complaints.Add("It has no button yet: the map is not settled until every entry carries the words a user reads and the sentence pressing them sends.");
+
+        return (revision ? $"'{cleanName}' revised on the map." : $"'{cleanName}' is on the map, in position {state.Map.Count}.")
+               + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty);
+    }
+
+    /// <summary>
+    /// Takes a kind of request off the map.
+    /// </summary>
+    public string DropIntent(string name)
+    {
+        int removed = state.Map.RemoveAll(i =>
+            string.Equals(i.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        return removed > 0
+            ? $"'{name}' is off the map."
+            : $"Nothing dropped: '{name}' is not on the map.";
+    }
+
+    /// <summary>
+    /// Returns the domain map as it currently stands.
+    /// </summary>
+    /// <remarks>
+    /// Read back whole for the same reason the toolkit is: two descriptions overlap or they do not,
+    /// and that is only visible side by side. It is the one defect no prose downstream repairs — the
+    /// user meets it as the wrong agent answering.
+    /// </remarks>
+    public string GetDomainMap()
+    {
+        if (state.Map.Count == 0)
+            return "The map is empty: no kind of request has been named yet.";
+
+        return "The domain map as it stands. The descriptions are weighed against each other by the classifier, "
+               + "and the buttons are read side by side by a user:\n"
+               + string.Join("\n", state.Map.Select((i, n) =>
+                   $"{n + 1}. {i.Name}: {i.Description ?? "(nothing said about what routes here)"}"
+                   + $"\n    button: {i.Label ?? "(none)"} → \"{i.DefaultValue ?? "(nothing)"}\""));
     }
 
     /// <summary>
@@ -362,16 +430,26 @@ public class InterviewTools
     /// <summary>
     /// Returns the intents already in the domain.
     /// </summary>
+    /// <remarks>
+    /// Two sources, and both are load-bearing. What the domain already holds arrived from earlier
+    /// sittings or an uploaded configuration; what the map still holds is what this interview has
+    /// promised to write next. A description only has to be told apart from both.
+    /// </remarks>
     public string GetExistingIntents()
     {
-        List<IntentDraft> existing =
-            [.. (draftStateService.Current?.Intents ?? [])
-                .Where(i => !string.Equals(i.Name, state.Intent.Name, StringComparison.OrdinalIgnoreCase))];
+        IEnumerable<string> written = (draftStateService.Current?.Intents ?? [])
+            .Where(i => !string.Equals(i.Name, state.Intent.Name, StringComparison.OrdinalIgnoreCase))
+            .Select(i => $"- {i.Name}: {i.Description} (already in the domain)");
 
-        return existing.Count == 0
-            ? "The domain holds no other intents yet: this is the first, and nothing can collide with it."
-            : "Intents already in this domain, with the descriptions the classifier weighs yours against:\n"
-              + string.Join("\n", existing.Select(i => $"- {i.Name}: {i.Description}"));
+        IEnumerable<string> planned = state.Map
+            .Where(i => !ReferenceEquals(i, state.Intent))
+            .Select(i => $"- {i.Name}: {i.Description} (on the map, not written yet)");
+
+        List<string> all = [.. written, .. planned];
+
+        return all.Count == 0
+            ? "Nothing else claims a route: this is the only intent, and nothing can collide with it."
+            : "The descriptions the classifier weighs this one against:\n" + string.Join("\n", all);
     }
 
     /// <summary>
@@ -443,8 +521,9 @@ public class InterviewTools
         return "This pass is settled. Say it is done and what comes next: "
                + state.Pass switch
                {
-                   InterviewPass.Functional => "the toolkit — what this agent has to reach for outside the conversation.",
-                   InterviewPass.Toolkit => "the agent's own instructions and the way it presents what its tools return.",
+                   InterviewPass.DomainMapper => $"the first of the {state.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.",
+                   InterviewPass.AgentModeler => "the toolkit — what this agent has to reach for outside the conversation.",
+                   InterviewPass.ToolkitModeler => "the agent's own instructions and the way it presents what its tools return.",
                    _ => "the agent joins the domain, and they can review or export it."
                };
     }

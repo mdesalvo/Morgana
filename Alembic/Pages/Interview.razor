@@ -1,125 +1,54 @@
 @page "/interview"
-@using Alembic.Interfaces
-@using Alembic.Model
 @inject IInterviewService InterviewService
 @inject IDraftStateService DraftStateService
 @inject NavigationManager NavigationManager
-@inject IJSRuntime JS
 
 @*
-    One question at a time, and the question is the whole scene.
+    The interview, and this page owns none of its pieces: the journey across the top, the question,
+    and the agent's rows along the foot are each their own component under Shared/Interview. What is
+    left here is the only thing that is genuinely this page's — driving the state machine and
+    deciding where the client goes when the map is spent.
 
-    The earlier layout put a scrolling transcript beside a filling panel, which made the interview
-    look like a form being completed in company. It reads as a long single page of requirements
-    gathering, and a domain expert answers a long page of requirements the way anybody does — by
-    getting shorter. So the question is alone and large, what has already been distilled runs along
-    the foot, and everything said so far folds away into a line nobody has to read.
+    There is no transcript on the screen, and remembering the conversation is not the client's job
+    either: it is the agent's, and it has a live AgentSession that is the real record. A second copy
+    beside it would be a log to keep in step with one that already exists, in exchange for a panel
+    saying what the client has just finished saying.
 
-    Nothing on this page advances the interview. The stations report where the distillation has got
-    to; the model decides which question comes next and when a station is behind it, and the state
-    machine confirms that before agreeing. The client is asked about their work and never about
-    Alembic's structure — which is why the stations are named in their words and the word "pass"
-    appears nowhere they can see it.
+    Opening this page is what lights the burner. Arriving here is already the client saying what they
+    came to do, so a screen that describes the interview and offers to begin it is a door in front of
+    a door.
+
+    Nothing on this page advances the interview by itself. The model decides which question comes
+    next and when a step is behind it; the state machine confirms that before agreeing. The client is
+    asked about their work and never about Alembic's structure, which is why the steps are named in
+    their words and the word "pass" appears nowhere they can see it.
 *@
 
 <div class="alembic-page">
 
     @if (InterviewService.Current is not { } state)
     {
-        <div class="landing-head">
-            <h1>Come in</h1>
-            <p class="tagline">Bring nothing. What I need, you already know.</p>
+        <div class="scene">
+            <div class="thinking"><span>&bull;</span><span>&bull;</span><span>&bull;</span></div>
         </div>
-
-        <div class="panel">
-            <p>
-                Tell me your work the way you would tell it to someone who has to do it tomorrow.
-                You talk, I write. No forms, no fields, and not one question about me.
-            </p>
-            <p>
-                I will get things wrong. Say so, and they stop being wrong &mdash; that is what the
-                sitting is for.
-            </p>
-            <p class="muted">
-                And I will not ask for everything at once. What a thing is for has to settle before
-                what it reaches for.
-            </p>
-            <p>
-                <button class="primary" @onclick="StartAsync" disabled="@isBusy">
-                    @(isBusy ? "Lighting the burner…" : "Light the fire")
-                </button>
-            </p>
-        </div>
-
-        <Back />
     }
     else
     {
-        <ol class="stations">
-            @foreach ((Station station, int index) in Stations.Select((s, i) => (s, i)))
-            {
-                <li class="station @StationClass(state, index)">
-                    <span class="mark"></span>
-                    @station.Label
-                </li>
-            }
-        </ol>
+        <Journey State="state" Established="Established" Written="Written(state)" />
 
-        @if (Sealed(state))
+        @if (Written(state))
         {
-            @* The one moment of the interview that is genuinely the client's decision. *@
-            <div class="sealed">
-                <h2>@Named(state) has come off the still</h2>
-                <p>
-                    Everything it is, everything it reaches for, everything it does &mdash; settled.
-                    Let it into the domain and you may weigh it against the others, or set another
-                    one boiling.
-                </p>
-                <button class="primary" @onclick="CommitAsync" disabled="@isBusy">Let it into the domain</button>
-            </div>
+            <AgentWritten State="state" Busy="isBusy" OnCommit="CommitAsync" />
         }
         else
         {
-            <div class="scene">
-                @if (isBusy)
-                {
-                    <div class="thinking"><span>&bull;</span><span>&bull;</span><span>&bull;</span></div>
-                }
-                else
-                {
-                    <p class="asked">@Asked(state)</p>
-
-                    @*
-                        Choices are an offer and never a gate: the box below stays open, because the
-                        client's own words are the material being distilled and a menu would replace
-                        them with Alembic's. They only ever confirm an inference it has just stated.
-                    *@
-                    @if (Offered(state) is { Count: > 0 } choices)
-                    {
-                        <div class="choices">
-                            @foreach (QuickReply choice in choices)
-                            {
-                                <button class="choice" disabled="@isBusy"
-                                        @onclick="() => ChooseAsync(choice)">@choice.Label</button>
-                            }
-                        </div>
-                    }
-
-                    <div class="reply">
-                        <textarea @bind="answer" @bind:event="oninput" rows="3"
-                                  placeholder="In your own words&hellip;" disabled="@isBusy"></textarea>
-
-                        <div class="reply-actions">
-                            <span class="reply-hint">
-                                Half an answer is an answer. I infer the rest, and show you what I
-                                inferred.
-                            </span>
-                            <button class="primary" @onclick="AnswerAsync"
-                                    disabled="@(isBusy || string.IsNullOrWhiteSpace(answer))">Answer &rarr;</button>
-                        </div>
-                    </div>
-                }
-            </div>
+            <Question Asked="@(state.Question ?? "…")"
+                      Prompting="@Prompting(state)"
+                      Choices="Offered(state)"
+                      Busy="isBusy"
+                      Turn="state.Exchanges"
+                      OnAnswer="SendAsync"
+                      OnChoose="ChooseAsync" />
         }
 
         @if (state.Error is not null)
@@ -127,208 +56,84 @@
             <p class="severity-error">@state.Error</p>
         }
 
-        <details class="said-so-far" @onclick="TranscriptToggled">
-            <summary>What we have said so far (@state.Transcript.Count)</summary>
-
-            <div class="transcript">
-                @foreach (InterviewTurn turn in state.Transcript)
-                {
-                    <div class="turn @(turn.Speaker == InterviewSpeaker.Alembic ? "turn-alembic" : "turn-client")">
-                        <div class="who">@(turn.Speaker == InterviewSpeaker.Alembic ? "Alembic" : "You")</div>
-                        <div class="said">@turn.Text</div>
-
-                        @*
-                            A spent row is shown inert rather than removed: the transcript should
-                            still say what was offered, and which one was pressed — the label and the
-                            answer it sends are deliberately different things.
-                        *@
-                        @if (turn.Choices is { Count: > 0 } choices)
-                        {
-                            <div class="choices spent">
-                                @foreach (QuickReply choice in choices)
-                                {
-                                    <button class="choice @(turn.ChosenId == choice.Id ? "chosen" : "")"
-                                            disabled>@choice.Label</button>
-                                }
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-        </details>
-
         @*
-            What the answers have become. The old second column, flattened along the foot: it must
-            be catchable out of the corner of an eye without competing with the question, which is
-            why a drop the last exchange moved is lit and the rest are quiet.
+            From the second step on. While the map is being drawn there is no agent for this strip to
+            be about, and nine rows reading "not yet" would report nothing achieved at the moment the
+            interview is deciding everything else.
         *@
-        <div class="distilled">
-            <h2>What has come off the still</h2>
-
-            <div class="drops">
-                @foreach (Drop drop in Drops(state))
-                {
-                    <div class="drop @(drop.Value is null ? "empty" : "") @(drop.Moved ? "moved" : "")">
-                        <span class="what">@drop.What</span>
-                        <span class="value">@(drop.Value ?? "not yet")</span>
-                    </div>
-                }
-            </div>
-        </div>
-
-        <p>
-            <button class="quiet" @onclick="Abandon" disabled="@isBusy">Pour this sitting away</button>
-        </p>
+        @if (state.Pass != InterviewPass.DomainMapper)
+        {
+            <AgentSoFar State="state" />
+        }
     }
 
 </div>
 
 @code {
-    private string answer = string.Empty;
     private bool isBusy;
-    private int focusedOn = -1;
+    private bool started;
 
     /// <summary>
-    /// One station of the interview, named as the client would name it.
-    /// </summary>
-    /// <param name="Label">What it is called on the rail.</param>
-    /// <param name="Pass">The pass that is running while the interview stands here.</param>
-    private sealed record Station(string Label, InterviewPass Pass);
-
-    /// <summary>
-    /// The rail. Four stations for three passes: the last one is not a pass at all but the moment
-    /// the agent joins the domain, which is the only step of the four that is the client's.
-    /// </summary>
-    private static readonly Station[] Stations =
-    [
-        new("what it is", InterviewPass.Functional),
-        new("what it reaches for", InterviewPass.Toolkit),
-        new("how it works", InterviewPass.Return),
-        new("into the domain", InterviewPass.Return)
-    ];
-
-    /// <summary>
-    /// One line of the strip along the foot.
-    /// </summary>
-    /// <param name="What">The client's name for it. Never a field name.</param>
-    /// <param name="Value">What has been written, or null while it is still unasked.</param>
-    /// <param name="Moved">Whether the last exchange is what put it there.</param>
-    private sealed record Drop(string What, string? Value, bool Moved);
-
-    /// <summary>
-    /// What to call the finished agent: its button first, since that is the client's own phrase for
-    /// it, then its name. Neither can be missing by the time this shows — the pass would not have
-    /// settled — but the fallback keeps a headline from rendering as an empty line if one ever is.
-    /// </summary>
-    private static string Named(InterviewState state) =>
-        state.Intent.Label ?? state.Intent.Name ?? "This agent";
-
-    /// <summary>
-    /// Whether every section is settled and the agent is waiting to be added to the domain.
-    /// </summary>
-    private static bool Sealed(InterviewState state) =>
-        state is { Pass: InterviewPass.Return, ReadyForReview: true };
-
-    /// <summary>
-    /// Where the rail is lit.
+    /// What the domain held before this interview: earlier sittings and uploaded configurations.
     /// </summary>
     /// <remarks>
-    /// The last station is a special case in both directions: the interview stands there only once
-    /// everything is settled, and the third station stays lit until then even though its pass and
-    /// the last station's are the same one.
+    /// Anything on today's map is left out, agents committed a minute ago included — the map shows
+    /// those in their own place, and a name in both strips reads as two intents. The fallback is left
+    /// out for a different reason: it is in every domain, no agent answers it, and it is not a step
+    /// of anybody's work.
     /// </remarks>
-    private static string StationClass(InterviewState state, int index)
+    private IEnumerable<IntentDraft> Established =>
+        (DraftStateService.Current?.Intents ?? [])
+            .Where(i => !string.Equals(i.Name, DomainDraft.FallbackIntent, StringComparison.OrdinalIgnoreCase))
+            .Where(i => InterviewService.Current?.Map.Any(m =>
+                            string.Equals(m.Name, i.Name, StringComparison.OrdinalIgnoreCase)) != true);
+
+    /// <summary>
+    /// Whether every section is settled and the agent is waiting to be let into the domain.
+    /// </summary>
+    private static bool Written(InterviewState state) =>
+        state is { Pass: InterviewPass.AgentFinalizer, ReadyForReview: true };
+
+    /// <summary>
+    /// What the empty answer box asks for: the material this step is short of, said in the words a
+    /// client would use for their own work.
+    /// </summary>
+    /// <remarks>
+    /// A placeholder is read by somebody who has just been asked a question and does not yet know
+    /// what a good answer looks like, so it has to be a plain sentence about their business — not a
+    /// clipped phrase in Alembic's vocabulary, which reads as a label for a field they cannot see.
+    /// </remarks>
+    private static string Prompting(InterviewState state) => state.Pass switch
     {
-        int here = Sealed(state) ? Stations.Length - 1 : (int)state.Pass;
-
-        return index == here ? "here" : index < here ? "done" : string.Empty;
-    }
-
-    /// <summary>
-    /// The question on the table: the last thing Alembic said.
-    /// </summary>
-    /// <remarks>
-    /// Read off the transcript rather than held separately, because they are the same fact and two
-    /// copies of one fact drift. A turn Alembic spent entirely on tool calls adds nothing to the
-    /// transcript, so the last line is always something addressed to the client.
-    /// </remarks>
-    private static string Asked(InterviewState state) =>
-        state.Transcript.LastOrDefault(t => t.Speaker == InterviewSpeaker.Alembic)?.Text
-        ?? "…";
+        InterviewPass.DomainMapper => "What people write to you about, as many kinds as come to mind",
+        InterviewPass.AgentModeler => "What happens when a request like this arrives, and what must never happen",
+        InterviewPass.ToolkitModeler => "What you have to look up, change or send to answer one of these",
+        _ => "In what order the work is done, and anything that should stay unsaid"
+    };
 
     /// <summary>
     /// The choices attached to the question being asked right now, if any.
     /// </summary>
     /// <remarks>
-    /// Only on the very last turn: a choice belongs to the question it was asked with, and one
-    /// offered two questions ago is an answer to something already settled.
+    /// A choice belongs to the question it was asked with, so the row goes the moment one is
+    /// pressed: what stands after that is the next question, and offering an answer to something
+    /// already settled is worse than offering nothing.
     /// </remarks>
-    private static IReadOnlyList<QuickReply>? Offered(InterviewState state)
-    {
-        InterviewTurn? last = state.Transcript.LastOrDefault();
-
-        return last is { Speaker: InterviewSpeaker.Alembic, ChosenId: null } ? last.Choices : null;
-    }
+    private static IReadOnlyList<QuickReply>? Offered(InterviewState state) =>
+        state.ChosenId is null ? state.Choices : null;
 
     /// <summary>
-    /// Everything the interview has written, in the order it gets written.
-    /// </summary>
-    /// <remarks>
-    /// Unfiltered by pass, deliberately. What is still empty is shown faint rather than hidden,
-    /// because a strip that grows a new row every few turns reads as a form growing under the
-    /// client — where one that fills in place reads as their own domain taking shape.
-    /// </remarks>
-    private static IEnumerable<Drop> Drops(InterviewState state)
-    {
-        yield return new Drop("it is called", state.Intent.Name, state.Changed.Contains("intentName"));
-        yield return new Drop("it is theirs when", state.Intent.Description, state.Changed.Contains("intentDescription"));
-        yield return new Drop("its button", state.Intent.Label, state.Changed.Contains("intentLabel"));
-        yield return new Drop("it opens with", state.Intent.DefaultValue, state.Changed.Contains("intentDefaultValue"));
-        yield return new Drop("what it is for", state.Agent.Target, state.Changed.Contains("agentTarget"));
-        yield return new Drop("how it meets them", state.Agent.Personality, state.Changed.Contains("agentPersonality"));
-
-        bool toolsMoved = state.Changed.Contains("tools");
-
-        if (state.Agent.Tools.Count == 0)
-        {
-            yield return new Drop("what it reaches for", null, toolsMoved);
-        }
-        else
-        {
-            foreach (ToolDraft tool in state.Agent.Tools)
-                yield return new Drop("it can", tool.Name, toolsMoved);
-        }
-
-        yield return new Drop("the order of the work", state.Agent.Instructions, state.Changed.Contains("agentInstructions"));
-        yield return new Drop("how it shows what it finds", state.Agent.Formatting, state.Changed.Contains("agentFormatting"));
-    }
-
-    private async Task StartAsync()
-    {
-        isBusy = true;
-        try { await InterviewService.StartAsync(); }
-        finally { isBusy = false; }
-    }
-
-    private async Task AnswerAsync()
-    {
-        string said = answer;
-        answer = string.Empty;
-        await SendAsync(said);
-    }
-
-    /// <summary>
-    /// Sends a choice as the answer, and records on the turn which one was pressed.
+    /// Sends a choice as the answer, and records which one was pressed.
     /// </summary>
     /// <remarks>
     /// Recorded before the round trip, so the button lights the instant it is clicked rather than
-    /// after the model answers. Without it the transcript shows a sentence the client never wrote
-    /// with no sign of the gesture that produced it.
+    /// after the model answers. Without it the screen shows an answer nobody typed and no trace of
+    /// the gesture that produced it.
     /// </remarks>
     private Task ChooseAsync(QuickReply choice)
     {
-        if (InterviewService.Current?.Transcript.LastOrDefault() is { } turn)
-            turn.ChosenId = choice.Id;
+        if (InterviewService.Current is { } state)
+            state.ChosenId = choice.Id;
 
         return SendAsync(choice.Value);
     }
@@ -341,35 +146,45 @@
     }
 
     /// <summary>
-    /// Puts the caret where the next answer goes, once per question.
+    /// Lights the burner on arrival.
     /// </summary>
     /// <remarks>
-    /// Keyed on the transcript's length rather than run on every render, so the focus lands when a
-    /// new question arrives and never steals the caret back from a client who has clicked away
-    /// mid-sentence.
+    /// Here rather than in <c>OnInitializedAsync</c> because the host prerenders, so that one runs
+    /// twice and the first turn of an interview is a model call on the Performance tier. This runs
+    /// only once the circuit is live, and the flag keeps a re-render from starting a second one.
     /// </remarks>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        int turns = InterviewService.Current?.Transcript.Count ?? 0;
-
-        if (turns == focusedOn || isBusy || InterviewService.Current is null)
+        if (!firstRender || started || InterviewService.Current is not null)
             return;
 
-        focusedOn = turns;
-        await JS.InvokeVoidAsync("alembicFocusReply");
+        started = true;
+        isBusy = true;
+        StateHasChanged();
+
+        try { await InterviewService.StartAsync(); }
+        finally { isBusy = false; }
+
+        StateHasChanged();
     }
 
     /// <summary>
-    /// Sends the unfolded transcript to its newest line.
+    /// Lets the finished agent into the domain, and goes on to the next entry of the map.
     /// </summary>
-    private async Task TranscriptToggled() => await JS.InvokeVoidAsync("alembicScrollTranscript");
-
-    private Task CommitAsync()
+    /// <remarks>
+    /// The review is where the interview ends, not where each agent lands: an agent is only worth
+    /// weighing against the others once the others exist, and a report between every two entries of
+    /// the map turns one interview into a series of errands.
+    /// </remarks>
+    private async Task CommitAsync()
     {
-        InterviewService.Commit();
-        NavigationManager.NavigateTo("review");
-        return Task.CompletedTask;
-    }
+        isBusy = true;
 
-    private void Abandon() => InterviewService.Abandon();
+        try
+        {
+            if (!await InterviewService.CommitAsync())
+                NavigationManager.NavigateTo("review");
+        }
+        finally { isBusy = false; }
+    }
 }

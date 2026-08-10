@@ -23,27 +23,38 @@ public class AlembicPromptService : IAlembicPromptService
     /// </summary>
     private const string MorganaPromptId = "Morgana";
 
+    /// <summary>
+    /// The prompt holding what Alembic says in every interview, whichever interviewer is conducting
+    /// it: its identity, how a Morgana domain runs, how it asks and how it answers.
+    /// </summary>
+    private const string AlembicPromptId = "Alembic";
+
     // Fences, in the framework's own idiom and for the framework's own reason: two layers carry
     // overlapping section labels, and without a boundary the composed prompt shows [PERSONALITY]
     // twice with nothing saying which is which.
     //
-    // Two layers, not three. An earlier design put a shared "Doctrine" between them, on the model of
-    // Morgana's own framework layer — but hers is glue between the global policies and the
-    // multi-turn machinery, and there is nothing here for such a layer to bind. A pass IS an agent
-    // prompt: four sections, complete on its own. What the three passes say identically they each
-    // say themselves, exactly as two agents in agents.json each state their own read-only rule.
+    // Two layers, not three, and that is still true of what the model reads: Morgana, then Alembic.
+    // What changed is where Alembic's half is stored. Four passes that differ only in which tools
+    // they hold were carrying four copies of the same conducting rules, the same voice and the same
+    // output format — 22 000 characters of which half was duplication, and duplication in a prompt
+    // is not merely long: it is four places to edit a rule and three chances to leave one behind.
+    //
+    // So the identical part lives once, in the "Alembic" prompt, and a pass carries only what is
+    // its own — what it settles, what it must leave alone, how it goes about that. The two are
+    // merged section by section here, under one set of labels, because the composed prompt must
+    // still be the four sections an agent prompt always is: the model sees no seam.
     private const string MorganaLayerHeader =
         "======== MORGANA — WHOSE VESSEL YOU ARE ========\n" +
         "You are an instrument of Morgana. This is her voice, and it is yours: it is not a description of someone else, and it is not overridable.";
     private const string MorganaLayerFooter = "======== END OF MORGANA ========";
     private const string AlembicLayerHeader =
         "======== ALEMBIC ========\n" +
-        "What follows specialises Morgana's voice for the pass you are conducting right now. It adds that and NOTHING ELSE, and it never contradicts the layer above.";
+        "What follows specialises Morgana's voice for the step of the interview you are conducting right now. It adds that and NOTHING ELSE, and it never contradicts the layer above.";
 
     /// <summary>
     /// Alembic's own prompts, parsed once on first use.
     /// </summary>
-    private readonly Lazy<Records.Prompt[]> prompts = new(LoadPrompts);
+    private readonly Lazy<Records.Prompt[]> alembicPrompts = new(LoadAlembicPrompts);
 
     /// <summary>
     /// Morgana's framework prompt, resolved once from <c>morgana.json</c> in Morgana.AI.
@@ -61,63 +72,86 @@ public class AlembicPromptService : IAlembicPromptService
 
     /// <inheritdoc />
     public Records.Prompt Resolve(string promptId) =>
-        prompts.Value.FirstOrDefault(p => string.Equals(p.ID, promptId, StringComparison.OrdinalIgnoreCase))
+        alembicPrompts.Value.FirstOrDefault(p => string.Equals(p.ID, promptId, StringComparison.OrdinalIgnoreCase))
         ?? throw new KeyNotFoundException($"Prompt '{promptId}' is not declared in alembic.json.");
 
     /// <inheritdoc />
-    public async Task<string> ComposeAsync(string passId)
+    public async Task<string> ComposeAsync(string interviewerId)
     {
-        Records.Prompt morgana = await morganaPrompt.Value;
-        Records.Prompt pass = Resolve(passId);
-
         StringBuilder sb = new StringBuilder();
 
-        // Morgana's Personality and nothing else of hers.
-        //
-        // Her Personality IS her identity — a good witch whose magic reaches the user as a result
-        // and never as a procedure they are made to watch — and Alembic is an instrument of hers,
-        // so it inherits it rather than inventing a character next to it.
-        //
-        // Her Target is deliberately left out: it is a preamble about a two-layer agent prompt and
-        // "the system tools every agent shares", and Alembic has neither. So are her GlobalPolicies
-        // and her Formatting, which govern how a CHANNEL TURN is formed — quick replies, rich
-        // cards, turn continuation, markdown for a rendered surface. Alembic has no channel, no
-        // Guard, no Classifier and no turn in that sense. Handing it rules
-        // about things that do not exist in its world is the most direct way to manufacture the
-        // non-local contradictions this whole project exists to avoid.
+        // Morgana
+        Records.Prompt morgana = await morganaPrompt.Value;
         sb.AppendLine(MorganaLayerHeader);
+        sb.AppendLine();
+        sb.AppendLine(morgana.Target);
         sb.AppendLine();
         sb.AppendLine(morgana.Personality);
         sb.AppendLine();
+        sb.AppendLine(BindingPolicies(morgana));
+        sb.AppendLine();
         sb.AppendLine(MorganaLayerFooter);
         sb.AppendLine();
-
+        
+        // Alembic
+        Records.Prompt interviewer = Resolve(interviewerId);
+        Records.Prompt alembic = Resolve(AlembicPromptId);
         sb.AppendLine(AlembicLayerHeader);
         sb.AppendLine();
-        AppendSections(sb, pass);
+        AppendSection(sb, alembic.Target, interviewer.Target);
+        AppendSection(sb, alembic.Personality, interviewer.Personality);
+        AppendSection(sb, alembic.Instructions, interviewer.Instructions);
+        AppendSection(sb, alembic.Formatting, interviewer.Formatting);
 
         return sb.ToString();
     }
 
     /// <summary>
-    /// Appends whichever of a prompt's four sections carry anything.
+    /// Names the policies already binding on every agent Alembic writes.
     /// </summary>
-    private static void AppendSections(StringBuilder sb, Records.Prompt prompt)
+    /// <remarks>
+    /// Names only. What Alembic has to know is which subjects are settled above the agent, so that
+    /// it writes none of them again; how they are settled is the agent's business at runtime and
+    /// not the author's, and the bodies run to some 14 000 characters of turn mechanics Alembic has
+    /// no turn to apply them to.
+    /// </remarks>
+    private static string BindingPolicies(Records.Prompt morgana)
     {
-        foreach (string? section in new[] { prompt.Target, prompt.Personality, prompt.Instructions, prompt.Formatting })
-        {
-            if (string.IsNullOrWhiteSpace(section))
-                continue;
+        List<Records.GlobalPolicy> policies =
+            morgana.GetAdditionalPropertyOrDefault<List<Records.GlobalPolicy>>("GlobalPolicies", []);
 
-            sb.AppendLine(section);
-            sb.AppendLine();
-        }
+        if (policies.Count == 0)
+            return string.Empty;
+
+        return "ALREADY BINDING on every agent written here, stated above it and with more authority: "
+               + string.Join(", ", policies.Select(p => p.Name))
+               + ". Never write a rule about any of these subjects into an agent's own prose.";
+    }
+
+    /// <summary>
+    /// Appends one section of the composed prompt: what Alembic always says under this label, then
+    /// what this interviewer adds under it.
+    /// </summary>
+    /// <param name="sb">The prompt being built.</param>
+    /// <param name="alembics">What Alembic says in every interview. Carries the section label.</param>
+    /// <param name="interviewers">What this interviewer adds. Unlabelled, because the label is above it.</param>
+    private static void AppendSection(StringBuilder sb, string? alembics, string? interviewers)
+    {
+        if (string.IsNullOrWhiteSpace(alembics) && string.IsNullOrWhiteSpace(interviewers))
+            return;
+
+        foreach (string? part in new[] { alembics, interviewers })
+            if (!string.IsNullOrWhiteSpace(part))
+            {
+                sb.AppendLine(part.Trim());
+                sb.AppendLine();
+            }
     }
 
     /// <summary>
     /// Reads <c>alembic.json</c> out of this assembly.
     /// </summary>
-    private static Records.Prompt[] LoadPrompts()
+    private static Records.Prompt[] LoadAlembicPrompts()
     {
         Assembly assembly = Assembly.GetExecutingAssembly();
 

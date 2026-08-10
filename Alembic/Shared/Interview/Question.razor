@@ -1,0 +1,122 @@
+@inject IJSRuntime JS
+
+@*
+    One question, alone, because that is the whole of what the client is being asked to do right now.
+
+    The question and the box it is answered in, and nothing else. No standing reassurance under the
+    box either — a line promising that half an answer will do is read once and is furniture from the
+    second turn on, and Alembic says the same thing better by actually inferring the rest and showing
+    what it inferred.
+*@
+
+<div class="scene">
+    @if (Busy)
+    {
+        @* Three dots that breathe: a spinner says "loading", and this is somebody composing. *@
+        <div class="thinking"><span>&bull;</span><span>&bull;</span><span>&bull;</span></div>
+    }
+    else
+    {
+        <p class="asked">@Asked</p>
+
+        @*
+            Choices are an offer and never a gate: the box below stays open, because the client's own
+            words are the material and a menu would replace them with Alembic's. They only ever
+            confirm an inference it has just stated back.
+        *@
+        @if (Choices is { Count: > 0 })
+        {
+            <div class="choices">
+                @foreach (QuickReply choice in Choices)
+                {
+                    <button class="choice" @onclick="() => OnChoose.InvokeAsync(choice)">@choice.Label</button>
+                }
+            </div>
+        }
+
+        <div class="reply">
+            <textarea @bind="answer" @bind:event="oninput" rows="3"
+                      placeholder="@Prompting" aria-label="Your answer"></textarea>
+
+            <div class="reply-actions">
+                <button class="primary" @onclick="SendAsync"
+                        disabled="@string.IsNullOrWhiteSpace(answer)">Answer &rarr;</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string answer = string.Empty;
+    private int focusedOn = -1;
+
+    /// <summary>
+    /// The question on the table.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public string Asked { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What the empty box asks for: the material this step is short of, named.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public string Prompting { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Buttons attached to this question, if any.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<QuickReply>? Choices { get; set; }
+
+    /// <summary>
+    /// Whether Alembic is composing, in which case there is nothing to answer yet.
+    /// </summary>
+    [Parameter]
+    public bool Busy { get; set; }
+
+    /// <summary>
+    /// How many exchanges have happened. The caret follows it, and nothing else.
+    /// </summary>
+    [Parameter]
+    public int Turn { get; set; }
+
+    /// <summary>
+    /// Raised with what the client typed.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnAnswer { get; set; }
+
+    /// <summary>
+    /// Raised with the button they pressed instead.
+    /// </summary>
+    [Parameter]
+    public EventCallback<QuickReply> OnChoose { get; set; }
+
+    /// <summary>
+    /// Sends the answer and empties the box, so the next question is not met by the last answer.
+    /// </summary>
+    private async Task SendAsync()
+    {
+        string said = answer;
+        answer = string.Empty;
+
+        await OnAnswer.InvokeAsync(said);
+    }
+
+    /// <summary>
+    /// Puts the caret where the next answer goes, once per question.
+    /// </summary>
+    /// <remarks>
+    /// Keyed on the turn count rather than run on every render, so the focus lands when a new
+    /// question arrives and never steals the caret back from a client who has clicked away
+    /// mid-sentence.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Busy || Turn == focusedOn)
+            return;
+
+        focusedOn = Turn;
+        await JS.InvokeVoidAsync("alembicFocusReply");
+    }
+}

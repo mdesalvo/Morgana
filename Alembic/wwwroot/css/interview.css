@@ -1,0 +1,356 @@
+/* ==========================================================================
+   The interview: the map across the top, the journey, the question that is the whole scene, the
+   transcript folded away, and the agent's own rows along the foot. One file per component would
+   scatter a language that has to agree with itself - gold behind, accent for here, faint for
+   ahead - so the interview is one file and the agreement is visible in it.
+   ========================================================================== */
+
+/* Where the interview stands: the domain, the four steps each entry of it goes through, and one
+   line saying what is being asked for here. One block, because it is one fact — the entries across
+   the top are the first step, not a caption above it.
+
+   The entries are big enough to read as the work: a strip of tiny grey pills reads as a progress
+   ornament, and this is the list the client is dictating. */
+.journey {
+    margin: 2.2rem 0 2.6rem;
+}
+
+.journey .domain {
+    margin: 0 0 1.8rem;
+    text-align: center;
+}
+
+.journey .domain .what {
+    display: block;
+    margin-bottom: 0.8rem;
+    color: var(--alembic-muted);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+}
+
+.journey .domain .kinds {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+}
+
+.journey .domain .nothing {
+    color: var(--alembic-muted);
+    font-size: 1rem;
+    opacity: 0.8;
+}
+
+.journey .domain .already,
+.journey .domain .ahead,
+.journey .domain .under-way {
+    padding: 0.4rem 1.1rem;
+    border-radius: 1.4rem;
+    border: 1px solid var(--alembic-border);
+    color: var(--alembic-text);
+    font-size: 1rem;
+}
+
+/* Written already, being written, still to come — the three states of a map entry, told apart by
+   how solid they look rather than by a legend. */
+.journey .domain .already {
+    border-color: var(--alembic-accent-deep);
+    color: var(--alembic-muted);
+}
+
+.journey .domain .ahead {
+    border-style: dashed;
+    color: var(--alembic-muted);
+}
+
+.journey .domain .under-way {
+    border-color: var(--alembic-accent);
+    background: rgba(192, 132, 252, 0.16);
+    box-shadow: 0 0 1.4rem rgba(192, 132, 252, 0.25);
+}
+
+/* The stepper: the four steps every entry of the map goes through, numbered, in the client's own
+   words — never "pass", which is a fact
+   about how Alembic is built and none of theirs. Three states, and the palette carries them so
+   nobody has to read a legend: gold behind, because gold is what is finished; the accent lit and
+   ringed for where the work is now; hollow and faint for what has not been reached. The rail fills
+   gold up to the step in hand, so the journey reads left to right at a glance. It reports and
+   controls nothing — none of these steps is the client's to advance. */
+.stations {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* While the map is being drawn, the four steps are what will happen to each entry once it is
+   closed — every one of them ahead, and the caption below says so. */
+.stations.waiting {
+    opacity: 0.55;
+}
+
+.station {
+    flex: 1 1 0;
+    max-width: 11rem;
+    position: relative;
+    padding-top: 3rem;
+    text-align: center;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: var(--alembic-muted);
+    opacity: 0.55;
+    transition: color 0.3s, opacity 0.3s;
+}
+
+/* The rail, drawn as two half-segments per station so the first and last ends stop at their own
+   mark instead of hanging off the row. */
+.station::before,
+.station::after {
+    content: "";
+    position: absolute;
+    top: 1.1rem;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--alembic-border);
+    transition: background 0.3s;
+}
+
+.station::before { left: 0; width: 50%; }
+.station::after { right: 0; width: 50%; }
+
+.station:first-child::before,
+.station:last-child::after {
+    background: transparent !important;
+}
+
+.station .mark {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    translate: -50% 0;
+    display: grid;
+    place-items: center;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 50%;
+    border: 1px solid var(--alembic-border);
+    background: var(--alembic-bg);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--alembic-muted);
+    transition: background 0.3s, box-shadow 0.3s, border-color 0.3s, color 0.3s;
+}
+
+/* Behind: finished, and gold says so. The rail behind it is gold too, which is the progress bar
+   this stepper would otherwise need drawing separately. */
+.station.done {
+    opacity: 1;
+}
+
+.station.done .mark {
+    border-color: var(--alembic-gold);
+    background: rgba(244, 197, 106, 0.14);
+    color: var(--alembic-gold);
+}
+
+.station.done::before,
+.station.done::after,
+.station.here::before {
+    background: var(--alembic-gold);
+}
+
+/* Here: the only lit thing on the rail. */
+.station.here {
+    opacity: 1;
+    color: var(--alembic-text);
+    font-weight: 600;
+}
+
+.station.here .mark {
+    border-color: transparent;
+    background: linear-gradient(140deg, var(--alembic-accent), var(--alembic-accent-deep));
+    color: #14082b;
+    box-shadow: 0 0 0 0.3rem rgba(192, 132, 252, 0.18), 0 0 1.6rem rgba(192, 132, 252, 0.6);
+}
+
+@media (max-width: 44rem) {
+    .station {
+        font-size: 0.72rem;
+    }
+
+    .station .mark {
+        width: 1.8rem;
+        height: 1.8rem;
+    }
+}
+
+/* The scene: one question, alone, because that is what the client is being asked to do right
+   now. Everything else on the page is either what they already said or what it has become. */
+.scene {
+    min-height: 16rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 2.5rem 0 1rem;
+}
+
+/* What is being asked for at this step. It sits under the steps, not over the question, so the
+   client has one voice to answer and one to read. */
+.journey .after {
+    max-width: 36rem;
+    margin: 1.6rem auto 0;
+    color: var(--alembic-muted);
+    font-size: 0.92rem;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.asked {
+    font-size: 1.5rem;
+    font-weight: 300;
+    line-height: 1.45;
+    letter-spacing: 0.01em;
+    white-space: pre-wrap;
+    margin: 0 auto 2rem;
+    max-width: 34rem;
+    text-align: center;
+}
+
+/* Alembic is thinking. Three dots that breathe, because a spinner says "loading" and this is
+   somebody composing a sentence. */
+.thinking {
+    text-align: center;
+    color: var(--alembic-muted);
+    font-size: 1.2rem;
+    letter-spacing: 0.5rem;
+}
+
+.thinking span {
+    animation: breathe 1.4s ease-in-out infinite;
+}
+
+.thinking span:nth-child(2) { animation-delay: 0.2s; }
+.thinking span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes breathe {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .thinking span { animation: none; opacity: 0.6; }
+    .gateway { transition: none; }
+    .gateway:hover { transform: none; }
+}
+
+.reply {
+    max-width: 34rem;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.reply textarea {
+    font-size: 1rem;
+    padding: 0.85rem 1rem;
+    border-radius: 0.6rem;
+}
+
+.reply-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.8rem;
+}
+
+textarea {
+    width: 100%;
+    background: var(--alembic-bg-deep);
+    color: var(--alembic-text);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.35rem;
+    padding: 0.6rem 0.7rem;
+    font: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: var(--alembic-border-lit);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+/* ============================ what has been distilled ============================ */
+
+/* The strip along the foot. It is the second column of the old layout, flattened: the client
+   should be able to see their domain being written without it competing with the question. */
+.distilled {
+    border-top: 1px solid rgba(53, 41, 107, 0.7);
+    padding-top: 1.2rem;
+    margin-top: 2rem;
+}
+
+.distilled h2 {
+    margin: 0 0 0.8rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--alembic-muted);
+}
+
+.drops {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.drop {
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.5rem;
+    padding: 0.45rem 0.75rem;
+    background: rgba(23, 17, 48, 0.7);
+    max-width: 22rem;
+    transition: border-color 0.4s, box-shadow 0.4s;
+}
+
+.drop .what {
+    display: block;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--alembic-muted);
+}
+
+.drop .value {
+    display: block;
+    font-size: 0.88rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.drop.empty {
+    opacity: 0.45;
+}
+
+.drop.empty .value {
+    color: var(--alembic-muted);
+}
+
+/* Just written. The whole reason this strip exists is to be caught out of the corner of an
+   eye, so a drop the last exchange moved is lit and then settles. */
+.drop.moved {
+    border-color: var(--alembic-accent);
+    box-shadow: 0 0 1.2rem rgba(192, 132, 252, 0.35);
+}
+
+.drop.moved .what {
+    color: var(--alembic-accent);
+}

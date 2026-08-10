@@ -36,9 +36,10 @@ public class InterviewService : IInterviewService
     /// </summary>
     private static readonly Dictionary<InterviewPass, string> PassPromptIds = new()
     {
-        [InterviewPass.Functional] = "FunctionalPass",
-        [InterviewPass.Toolkit] = "ToolkitPass",
-        [InterviewPass.Return] = "ReturnPass"
+        [InterviewPass.DomainMapper] = "DomainMapper",
+        [InterviewPass.AgentModeler] = "AgentModeler",
+        [InterviewPass.ToolkitModeler] = "ToolkitModeler",
+        [InterviewPass.AgentFinalizer] = "AgentFinalizer"
     };
 
     /// <summary>
@@ -47,9 +48,9 @@ public class InterviewService : IInterviewService
     /// </summary>
     private static readonly Dictionary<InterviewPass, string> BootstrapMessages = new()
     {
-        [InterviewPass.Functional] = "Begin the interview.",
-        [InterviewPass.Toolkit] = "The client is still here and the previous pass is settled. Begin this one.",
-        [InterviewPass.Return] = "The client is still here and the toolkit is settled. Begin the last pass."
+        [InterviewPass.DomainMapper] = "Begin the interview.",
+        [InterviewPass.ToolkitModeler] = "The client is still here and the previous pass is settled. Begin this one.",
+        [InterviewPass.AgentFinalizer] = "The client is still here and the toolkit is settled. Begin the last pass."
     };
 
     private readonly IAlembicPromptService alembicPromptService;
@@ -95,7 +96,7 @@ public class InterviewService : IInterviewService
     {
         Current = new InterviewState();
 
-        await EnterPassAsync(Current, InterviewPass.Functional, cancellationToken);
+        await EnterPassAsync(Current, InterviewPass.DomainMapper, cancellationToken);
 
         return Current;
     }
@@ -108,7 +109,6 @@ public class InterviewService : IInterviewService
         if (string.IsNullOrWhiteSpace(answer))
             return state;
 
-        state.Transcript.Add(new InterviewTurn(InterviewSpeaker.Client, answer));
         await ExchangeAsync(state, answer, cancellationToken);
 
         // The seam belongs to the model. Once the state machine has CONFIRMED the pass settled —
@@ -121,19 +121,35 @@ public class InterviewService : IInterviewService
         // takes a fresh confirmation from the new pass to go round again. A pass that genuinely
         // settles the moment it opens is legal — a toolkit the client has already described in full
         // — and would otherwise strand the interview one question short of moving.
-        while (state is { ReadyForReview: true, Error: null } && state.Pass != InterviewPass.Return)
+        //
+        // The Return pass is where it stops, because what follows is the client's: letting the agent
+        // into the domain is the one decision of the interview that is theirs.
+        while (state is { ReadyForReview: true, Error: null } && state.Pass != InterviewPass.AgentFinalizer)
+        {
+            // Leaving the map is also stepping onto its first entry. The mapping pass settles no
+            // agent, so there would be nothing for the functional pass to be about otherwise.
+            if (state.Pass == InterviewPass.DomainMapper)
+                state.At = 0;
+
             await EnterPassAsync(state, state.Pass + 1, cancellationToken);
+        }
 
         return state;
     }
 
     /// <inheritdoc />
-    public void Commit()
+    public async Task<bool> CommitAsync(CancellationToken cancellationToken = default)
     {
         if (Current is not { } state)
-            return;
+            return false;
 
         DomainDraft draft = draftStateService.Current ?? new DomainDraft();
+
+        // Every domain has the fallback, including one being written from nothing this minute. It is
+        // the single intent no interview authors and no client edits: the classifier goes there when
+        // it cannot place a message, and a domain without it has nowhere to put what it does not
+        // cover.
+        draft.EnsureFallbackIntent();
 
         state.Intent.Origin = Provenance.Authored;
         state.Agent.Origin = Provenance.Authored;
@@ -150,11 +166,24 @@ public class InterviewService : IInterviewService
         draft.Intents.Add(state.Intent);
         draft.Agents.Add(state.Agent);
 
-        Abandon();
-
         // Re-setting the same instance is what raises Changed, so a page showing the Draft
         // re-renders whether or not the Draft object itself was new.
         draftStateService.Set(draft);
+
+        // Down the map, not out of the interview. The map is the promise the client made when they
+        // said what their business gets asked, and an interview that stopped at the first agent
+        // would leave them to remember the rest of their own list.
+        if (state.At + 1 < state.Map.Count)
+        {
+            state.At++;
+            state.Agent = new AgentDraft();
+
+            await EnterPassAsync(state, InterviewPass.AgentModeler, cancellationToken);
+            return true;
+        }
+
+        Abandon();
+        return false;
     }
 
     /// <inheritdoc />
@@ -182,8 +211,23 @@ public class InterviewService : IInterviewService
         state.ReadyForReview = false;
 
         await BuildAgentAsync(state, PassPromptIds[pass]);
-        await ExchangeAsync(state, BootstrapMessages[pass], cancellationToken);
+        await ExchangeAsync(state, Bootstrap(state, pass), cancellationToken);
     }
+
+    /// <summary>
+    /// What the agent is sent to open a pass.
+    /// </summary>
+    /// <remarks>
+    /// The functional pass is the one that cannot be opened with a fixed sentence: it runs once per
+    /// entry of the map, and which entry is a fact the state machine holds. Telling it here costs
+    /// one line and saves the pass a tool call to find out where it is standing.
+    /// </remarks>
+    private static string Bootstrap(InterviewState state, InterviewPass pass) =>
+        pass == InterviewPass.AgentModeler
+            ? $"The map is settled and you are on entry {state.At + 1} of {state.Map.Count}: the intent "
+              + $"'{state.Intent.Name}', which the map describes as: {state.Intent.Description}. "
+              + "Write its agent."
+            : BootstrapMessages[pass];
 
     /// <summary>
     /// Assembles the agent for one pass: its prompt, and only the tools that pass is allowed.
@@ -194,12 +238,12 @@ public class InterviewService : IInterviewService
     /// abstain. The functional pass has no tool for an agent's instructions or formatting, and that
     /// is the whole of the constraint.
     /// </remarks>
-    private async Task BuildAgentAsync(InterviewState state, string passId)
+    private async Task BuildAgentAsync(InterviewState state, string interviewerId)
     {
-        Records.Prompt pass = alembicPromptService.Resolve(passId);
+        Records.Prompt interviewer = alembicPromptService.Resolve(interviewerId);
 
         List<Records.ToolDefinition> definitions =
-            pass.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>("Tools", []);
+            interviewer.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>("Tools", []);
 
         InterviewTools tools = new InterviewTools(state, draftStateService, draftValidationService, recapService);
         MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);
@@ -210,7 +254,9 @@ public class InterviewService : IInterviewService
         // reaching the model as a schema nothing can satisfy.
         Dictionary<string, Delegate> implementations = new(StringComparer.Ordinal)
         {
-            [nameof(InterviewTools.SetIntent)] = tools.SetIntent,
+            [nameof(InterviewTools.DeclareIntent)] = tools.DeclareIntent,
+            [nameof(InterviewTools.DropIntent)] = tools.DropIntent,
+            [nameof(InterviewTools.GetDomainMap)] = tools.GetDomainMap,
             [nameof(InterviewTools.SetAgentTarget)] = tools.SetAgentTarget,
             [nameof(InterviewTools.SetAgentPersonality)] = tools.SetAgentPersonality,
             [nameof(InterviewTools.SetAgentInstructions)] = tools.SetAgentInstructions,
@@ -232,7 +278,7 @@ public class InterviewService : IInterviewService
         {
             if (!implementations.TryGetValue(definition.Name, out Delegate? implementation))
                 throw new InvalidOperationException(
-                    $"alembic.json declares tool '{definition.Name}' for pass '{passId}', but InterviewTools has no method by that name.");
+                    $"alembic.json declares tool '{definition.Name}' for '{interviewerId}', but InterviewTools has no method by that name.");
 
             toolAdapter.AddTool(definition.Name, implementation, definition);
         }
@@ -244,11 +290,11 @@ public class InterviewService : IInterviewService
 
         agent = chatClient.AsAIAgent(new ChatClientAgentOptions
         {
-            Id = $"alembic-{passId.ToLowerInvariant()}",
+            Id = $"alembic-{interviewerId.ToLowerInvariant()}",
             Name = "Alembic",
             ChatOptions = new ChatOptions
             {
-                Instructions = await alembicPromptService.ComposeAsync(passId),
+                Instructions = await alembicPromptService.ComposeAsync(interviewerId),
                 Tools = [.. await toolAdapter.CreateAllFunctionsAsync()]
             }
         });
@@ -283,11 +329,15 @@ public class InterviewService : IInterviewService
             string said = response.Text?.Trim() ?? string.Empty;
 
             // A turn that spent itself entirely on tool calls is legitimate — reading findings or a
-            // composed prompt takes a round trip that has nothing to say to the client — but it
-            // must not surface as an empty bubble.
+            // composed prompt takes a round trip that has nothing to say to the client — and the
+            // question already on the screen simply stands.
             if (said.Length > 0)
-                state.Transcript.Add(new InterviewTurn(
-                    InterviewSpeaker.Alembic, said, [.. state.PendingChoices]));
+            {
+                state.Question = said;
+                state.Choices = [.. state.PendingChoices];
+                state.ChosenId = null;
+                state.Exchanges++;
+            }
         }
         catch (Exception ex)
         {

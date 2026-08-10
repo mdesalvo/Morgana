@@ -51,23 +51,52 @@ embedded in Morgana.AI. Dogfooding: whoever tunes Alembic does the job Alembic t
 
 Two layers, in `AlembicPromptService.ComposeAsync`:
 
-1. **Morgana's own Personality**, resolved live from `morgana.json` rather than copied — her
-   identity is Alembic's identity, and a copy would drift the day someone tunes her voice.
-2. **The pass** — a complete agent prompt: Target, Personality, Instructions, Formatting.
+1. **Morgana in her own words**, resolved live from `morgana.json` rather than copied: her
+   `Personality`, because her identity is Alembic's identity; her `Target`, because it is the only
+   place that says what an agent *of* Morgana is — one agent of a multi-agent assistant whose
+   prompt comes in two layers, hers on top and the domain's below — and that lower layer is
+   precisely what Alembic writes; and her `GlobalPolicies` **by name only**, as the list of
+   subjects already settled above every agent.
+2. **Alembic's own prose**, assembled from two rows of `alembic.json`: what every pass says
+   identically, and what this pass adds.
 
 Two, not three. An earlier design put a shared `Doctrine` between them, on the model of Morgana's
 own framework layer — but hers is *glue*, binding the global policies to the multi-turn and context
 machinery, and there is nothing here for such a layer to bind. **The structure is what carries the
-semantics**: the four sections say what they always say, and a pass that is an agent prompt needs no
-scaffolding around it. What the three passes state identically they each state themselves, exactly
-as two agents in `agents.json` each state their own read-only rule.
+semantics**: the four sections say what they always say.
 
-That collapse halved the composed prompt, from ~10 000 characters to ~5 000, and everything cut was
-scaffolding: role taxonomies, restated rationale, sentences describing rather than instructing. The
-prose an interviewer reads obeys the same law as the prose it writes — clear, direct, committed to
-the purpose, focused on how to reach it.
+**The second layer is stored twice-over deduplicated, and read as one.** The four passes differ only
+in which tools they hold, so four copies of the conducting rules, the voice and the output format
+were four places to edit one rule and three chances to leave one behind — 22 000 characters of which
+half was duplication, and one of the copies had already drifted into contradicting the voice it was
+supposed to share. The identical half now lives once, in the `Interview` prompt; a pass carries only
+what is its own — what it settles, what it must leave alone, how it goes about that. `ComposeAsync`
+merges them **section by section under one set of labels**, the shared half carrying the label and
+the pass's half following it inside the same section, so what the model reads is still the four
+sections an agent prompt always is and there is no seam in it. `Personality` and `Formatting` are
+shared outright: the interviewer is one person however many passes they conduct.
 
-What is deliberately left out of layer 1: her `GlobalPolicies`, her `Formatting` and her `Target`.
+The whole of Alembic's prose is now ~10 000 characters where it was ~22 500, and nothing was cut
+that instructs — what went was restatement, rules already enforced by a tool's own answer, and
+prohibitions the vocabulary rule already covers. The prose an interviewer reads obeys the law it
+teaches: clear, direct, and short enough that every sentence is read.
+
+**Her `Target` was missing for a long time, and that was a real hole.** Only her `Personality` went
+in, so the whole interview rested on the model already knowing what "a Morgana domain" means, and
+the prose kept talking to it about classifiers, context scope and startup failures on that
+assumption. The two ways out are not equal: Alembic explaining Morgana in Alembic's own words is a
+copy of the framework's self-description, and it drifts the day the framework is tuned — the exact
+failure that resolving her `Personality` live already avoids. So her `Target` is injected, and what
+stays in `alembic.json` is only what `morgana.json` does **not** say: that a classifier routes on
+intent descriptions, that a tool is the only reach outside the conversation, what `context`,
+`request` and shared mean, and that `other` catches what nothing else does.
+
+The policies go in **as names, not bodies**. What Alembic needs is *which* subjects are already
+covered above an agent, so it writes none of them again; how they are covered is the running agent's
+business and runs to some 14 000 characters of turn mechanics. Naming them from `morgana.json` also
+retired a hand-written list inside `alembic.json` that went stale the moment a policy was added.
+
+What is deliberately left out of layer 1: the policies' bodies and her `Formatting`.
 Those govern how a **channel turn** is formed — quick replies, rich cards, turn continuation, the
 system tools every agent shares, markdown for a rendered surface — and Alembic has no channel, no
 Guard, no Classifier and no turn in that sense. Handing it rules about things that
@@ -320,31 +349,87 @@ The client never writes prose and is never shown a field name. They answer quest
 work; Alembic writes the configuration and says what it understood. That asymmetry is the whole
 arrangement, and it is what spares a domain expert from having to become a prompt author.
 
-**One question is the whole screen**, and that is the same argument made in layout. The earlier page
-put a scrolling transcript beside a filling panel, which reads as a long single page of requirements
-gathering — and a domain expert answers a long page of requirements the way anybody does, by getting
-shorter. So the question stands alone and large, everything said so far folds into a line nobody has
-to open, and what the answers have become runs along the foot as a strip of drops, lit where the
-last exchange moved one. The rail of four stations (*what it is*, *what it reaches for*, *how it
-works*, *in the domain*) reports where the distillation has got to and controls nothing: three of
-them are the model's to leave, and only the last is the client's to take.
+**One question is the whole screen**, and that is the same argument made in layout: a page of
+requirements is answered the way anybody answers one, by getting shorter. So the question stands
+alone and large, and what the answers have become runs along the foot as a strip lit where the last
+exchange moved a row. There is no transcript on the screen: remembering the conversation is the
+agent's job and it has a live `AgentSession` doing it, so a second copy would be a log to keep in
+step with one that already exists — bought with a panel telling the client what they have just
+finished saying. The strip appears once the map is drawn — until then there is no agent for it to be
+about, and nine rows reading *not yet* would report nothing achieved at the moment the interview is
+deciding everything else.
+
+Above it, **one block says where the work stands**, and it is one block because it is one fact: the
+entries of the domain across the top — what earlier sittings left, then today's, written, being
+written, still ahead — and under them the four steps (*what it is*, *what it reaches for*, *how it
+works*, *into the domain*) each entry goes through in turn. The map is not a caption above the
+journey; it is the journey's first step and its subject.
+
+**Nothing appears empty, and nothing is explained in prose.** On the first screen there is no
+domain and no agent, so that block is not rendered at all: the client meets one question, one box
+and one button, and nothing else. The entries appear as they are named, the steps when an entry is
+actually being written. A rail labelled *what it reaches for* over work that has not started is the
+surest way to lose somebody on the screen where they should feel invited, and a paragraph explaining
+each tier is a wall of text however carefully it is worded — the three things on the screen are
+three kinds of thing, and the eye tells them apart without being told. There is no standing hint
+under the box either: a line promising that half an answer will do is furniture from the second turn
+on, and Alembic says it better by inferring the rest and showing what it inferred.
+
+The questions themselves are held to the same rule in `alembic.json`: **one sentence, one question
+mark, nothing after it**. A question carrying three sub-questions joined by dashes is answered on
+one of them, and no reader can tell which.
 
 The client will also never *use* the agent — the people who will are their customers — so everything
 Alembic writes is addressed to the agent about those people, never to the client. Two sentences in
 the doctrine, because it is a pronoun that needs pinning down and not a taxonomy that needs
 teaching.
 
-### Three passes, three agents
+### The map first, then the agents
 
-The passes are the machine's states, and their order is forced by an inverse dependency: an agent's
-`Instructions` and `Formatting` speak about its tools, so they cannot be written before the toolkit
-exists.
+**Alembic edits a domain, not an agent**, and a domain is a configuration of two halves: the
+`Intents`, and the `Agents` that answer them one each. So the interview opens on the half that comes
+first in every sense — the mapping pass produces the whole `Intents` section and nothing else, which
+is the ground the rest is planted in. Only then does it walk that list, three passes per entry, until
+every intent has its agent.
 
-| Pass | Settles | Cannot touch |
-|---|---|---|
-| `Functional` | the intent's four fields, the agent's `Target` and `Personality` | tools, `Instructions`, `Formatting` |
-| `Toolkit` | the tools, their descriptions, their parameters, scopes and sharing | what the agent *is*, `Instructions`, `Formatting` |
-| `Return` | `Instructions` and `Formatting` | everything already settled |
+An intent missing from the map is a capability the domain will never have; an intent nobody could
+tell from the one beside it is a user meeting the wrong agent. Both are settled while the client is
+still choosing words, which is the only moment either is cheap.
+
+**All four of an intent's fields are written there, and that is the same argument twice.** A
+description is read by the classifier *against every other description*, and a label with the
+sentence it sends is read by a user *against every other button* — both are only correct side by
+side, so both belong to the pass that has the whole set in view. The buttons come last and in one
+go, once the list is closed: written by Alembic from what it was told, stated back as a set, and
+corrected. Never asked for one at a time, and never asked of the client at all.
+
+That is also why no later pass can write an intent: `SetIntent` does not exist. The functional pass
+declares `SetAgentTarget` and `SetAgentPersonality` and nothing else that writes, so "the map is not
+reopened" is a fact about which tools exist rather than a sentence asking for restraint — and
+`InterviewState.MissingFunctional` names the same two fields, because it is the same fact.
+
+The order is forced twice over. The intent descriptions are what the classifier weighs *against each
+other*, so an intent settled alone is a description nobody compared to anything: the map has to be
+drawn before any agent, and read back whole (`GetDomainMap`) before it is called settled. And inside
+an agent, `Instructions` and `Formatting` speak about its tools, so they cannot be written before
+the toolkit exists.
+
+| Pass | Runs | Settles | Cannot touch |
+|---|---|---|---|
+| `Mapping` | once | the whole `Intents` section: every name, description, label and opening sentence | everything about every agent |
+| `Functional` | per entry | the agent's `Target` and `Personality` | the intents, tools, `Instructions`, `Formatting` |
+| `Toolkit` | per entry | the tools, their descriptions, their parameters, scopes and sharing | what the agent *is*, `Instructions`, `Formatting` |
+| `Return` | per entry | `Instructions` and `Formatting` | everything already settled |
+
+The `Return` pass is the one place the loop stops for the client: letting a finished agent into the
+domain is the single decision of the interview that is theirs, and `CommitAsync` reports whether the
+map has another entry — if it has, the next `Functional` pass opens on the same screen, and the
+client never goes back to a menu to remember their own list.
+
+**The fallback intent is not on the map and never was.** `other` is where the classifier sends what
+it cannot place; `DomainDraft.EnsureFallbackIntent` puts it in every domain — greenfield at commit,
+uploaded at import, where its absence is also said out loud — and `DeclareIntent` refuses the name.
+It is the one element of a domain no interview authors and no client edits.
 
 Each pass is a **fresh agent and a fresh session**, and that is design rather than limitation: a
 toolkit pass carrying the whole functional interview in its context spends it re-litigating
@@ -354,8 +439,8 @@ fact rather than replayed as a conversation. The client's transcript is continuo
 one interview, and the seam belongs to the model alone.
 
 The right-hand column is enforced structurally. A pass's toolset is its own `Tools` declaration in
-`alembic.json`, so the toolkit pass has no `SetIntent` and no `SetAgentTarget`, and the functional
-pass has no `DeclareTool`. `InterviewState.Missing()` is pass-scoped for the same reason — a pass is
+`alembic.json`, so the mapping pass has no `SetAgentTarget` and no `DeclareTool`, the toolkit pass
+has no `SetIntent`, and the functional pass has no `DeclareTool`. `InterviewState.Missing()` is pass-scoped for the same reason — a pass is
 complete when the fields *it* owns are set, and the toolkit pass owns none, since an agent with no
 native tools is the legal MCP-only shape.
 
@@ -504,8 +589,9 @@ kind of question: it is about meaning, and it is the most expensive defect a mul
 carries, because no prose downstream resolves it and the user meets it as an agent answering the
 wrong question.
 
-Every defect it looks for is **relational**, which is exactly why nothing earlier could see it — the
-interview settles one agent at a time by construction. Overlapping intents; two agents claiming the
+Every defect it looks for is **relational**, and that is why the interview cannot close them all: it
+settles the map together, so the classifier collisions visible *there* are caught while the words
+are still being chosen, but it writes each agent's prose alone. Overlapping intents; two agents claiming the
 same capability; a value one publishes as `userId` that another expects as `customerCode`; ground
 the domain's own descriptions imply and no agent covers; an agent promising what no tool of its
 backs. It is handed the domain's exact words, never a summary, because a summary is precisely the
@@ -536,7 +622,7 @@ Alembic/
     DraftProjection.cs                # Draft → Records, shared by the exporter and the recap
     ValidationFinding.cs              # Severity, Where, Message, Because
     AgentRecap.cs                     # The three rungs of the placement ladder
-    InterviewState.cs                 # The interview's C# state machine
+    InterviewState.cs                 # The interview's C# state machine: the map, where it stands on it, the pass
     Provenance.cs                     # Imported / Revised / Authored
   Interfaces/
     IDraftImportService.cs            # Uploaded agents.json → Draft
@@ -545,7 +631,7 @@ Alembic/
     IDraftValidationService.cs        # Everything decidable about a Draft without a model
     IRecapService.cs                  # Draft → the prompt the model really reads
     IAlembicPromptService.cs          # Alembic's own prose + tool declarations, from alembic.json
-    IInterviewService.cs              # Conducts a pass, folds the result into the Draft
+    IInterviewService.cs              # Conducts the passes, folds each finished agent into the Draft
     IDraftStateService.cs             # The Draft under construction (per circuit)
   Harness/                            # Alembic's own harness component — owes PromptHarness nothing
     Templates/*.yaml                  # One behavioural use-case each, domain words left as placeholders
@@ -555,12 +641,22 @@ Alembic/
   Services/                           # Default implementations of the above
     InterviewTools.cs                 # The tools Alembic calls while conducting a pass
   Pages/_Host.cshtml                  # Blazor Server host page (ServerPrerendered)
-  Pages/Index.razor                   # Landing: the vessel, and four cards for the four things to do
+  Pages/Index.razor                   # Landing: the alembic, and the two ways in — begin, or bring a file back
   Pages/Import.razor                  # Upload an agents.json, see the parsed Draft, download it back
   Pages/Review.razor                  # Findings, then the composed prompts
-  Pages/Interview.razor               # The wizard: one question a screen, a rail of stations, drops at the foot
-  Shared/MainLayout.razor             # Layout wrapper
-  wwwroot/css/site.css                # The whole surface. Palette read off the alembic image
+  Pages/Interview.razor               # The wizard: drives the state machine, owns none of the pieces
+  Shared/MainLayout.razor             # Layout wrapper; carries the alembic as a mark on every page but the landing
+  Shared/Back.razor                   # The way back, and it is the way you came
+  Shared/Interview/                   # The wizard's pieces, one component each
+    Journey.razor                     #   the domain, the four steps each entry goes through, and what is asked for here
+    Question.razor                    #   the question, the choices, the box
+    AgentSoFar.razor                  #   the agent's own rows along the foot
+    AgentWritten.razor                #   the one decision that is the client's, and the join to the next entry
+  wwwroot/css/                        # Six files, cascade order set in _Host.cshtml
+    base.css                          #   palette, reset, page shells, the mark
+    landing.css / import.css          #   the two entrances
+    panels.css / controls.css         #   what is read in a panel; buttons and shared furniture
+    interview.css                     #   the interview, whose three states have to agree in one place
   wwwroot/favicon.svg                 # The vessel at 16px: belly, neck, spout, one spark
   wwwroot/images/alembic.jpg          # Morgana's alembic — the landing's centrepiece
 ```

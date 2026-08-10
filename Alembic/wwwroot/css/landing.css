@@ -1,0 +1,150 @@
+/* ==========================================================================
+   The landing: the alembic at full size, and the two ways in.
+   ========================================================================== */
+
+/* The vessel, and the room it stands in. The glow is a sibling rather than a shadow on the
+   image, because the image is square with dark corners and a box-shadow would trace them. */
+.vessel {
+    position: relative;
+    width: min(20rem, 62vw);
+    margin: 0 auto 1.5rem;
+    aspect-ratio: 1;
+}
+
+.vessel::before {
+    content: "";
+    position: absolute;
+    inset: -12%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(192, 132, 252, 0.35), transparent 68%);
+    filter: blur(1.4rem);
+}
+
+.vessel img {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 1px solid var(--alembic-border-lit);
+    box-shadow: 0 0 3rem rgba(139, 92, 246, 0.35);
+}
+
+.landing-head {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.landing-head h1 {
+    font-size: 3.6rem;
+}
+
+.landing-head .tagline {
+    margin-bottom: 0;
+    font-size: 1.05rem;
+}
+
+/* The two ways in. Doors, not leaflets: a drawn sigil, the name of the thing, and the word for
+   going through — anything more and the client is reading instead of choosing. Side by side and
+   the same size, because they are the same kind of act; the first is lit because it is the one
+   most people want. What each actually involves is Morgana's to show once you are inside. */
+.gateways {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 3rem;
+}
+
+@media (max-width: 44rem) {
+    .gateways {
+        grid-template-columns: 1fr;
+    }
+}
+
+.gateway {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.9rem;
+    padding: 2.2rem 1.5rem 1.8rem;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.9rem;
+    background: linear-gradient(160deg, var(--alembic-panel-lit), var(--alembic-panel));
+    color: var(--alembic-text);
+    text-align: center;
+    text-decoration: none;
+    transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+}
+
+.gateway:hover {
+    border-color: var(--alembic-border-lit);
+    transform: translateY(-2px);
+    box-shadow: var(--alembic-glow);
+}
+
+/* Drawn rather than typed. The alchemical characters this used to use (🜍, 🜚) have no font on
+   most Linux desktops and land as tofu or as nothing — an icon that depends on the reader
+   having a glyph is an icon that is sometimes absent, and the space is spent on it either way. */
+.gateway .sigil {
+    width: 3rem;
+    height: 3rem;
+    color: var(--alembic-accent);
+    flex: none;
+}
+
+.gateway h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    color: var(--alembic-text);
+    text-transform: none;
+}
+
+/* The action line: the difference between a panel about a thing and a way to go and do it. */
+.gateway .go {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--alembic-accent);
+    padding: 0.5rem 1.3rem;
+    border: 1px solid var(--alembic-border-lit);
+    border-radius: 1.4rem;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.gateway:hover .go {
+    background: rgba(192, 132, 252, 0.16);
+    border-color: var(--alembic-accent);
+}
+
+.gateway.primary-gateway {
+    border-color: var(--alembic-border-lit);
+    background:
+        radial-gradient(ellipse 22rem 12rem at 50% 0%, rgba(192, 132, 252, 0.24), transparent 72%),
+        linear-gradient(160deg, var(--alembic-panel-lit), var(--alembic-panel));
+}
+
+.gateway.primary-gateway .go {
+    background: linear-gradient(135deg, var(--alembic-accent), var(--alembic-accent-deep));
+    border-color: transparent;
+    color: #14082b;
+    box-shadow: 0 0 1.2rem rgba(139, 92, 246, 0.35);
+}
+
+.gateway.primary-gateway:hover .go {
+    box-shadow: 0 0 1.8rem rgba(192, 132, 252, 0.6);
+}
+
+/* Three doorways instead of two, for the page you land on after bringing a file: same shape as
+   the landing's, because they are the same kind of thing — a way on, not a description. */
+.gateways-three {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 52rem) {
+    .gateways-three {
+        grid-template-columns: 1fr;
+    }
+}

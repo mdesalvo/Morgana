@@ -31,7 +31,7 @@ public class ScenarioAuthorService : IScenarioAuthorService
     /// <summary>
     /// The prompt in <c>alembic.json</c> that governs scenario derivation.
     /// </summary>
-    private const string ScenariosPromptId = "Scenarios";
+    private const string ScenariosPromptId = "HarnessMocker";
 
     /// <summary>
     /// How a placeholder is written in a template, quoted back to the model as its own notation.

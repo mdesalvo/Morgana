@@ -1,0 +1,190 @@
+/* ==========================================================================
+   Controls and the small shared furniture: buttons, quick replies, the finished-agent panel, the
+   way back, and Blazor's own error banner.
+   ========================================================================== */
+
+button.primary {
+    background: linear-gradient(135deg, var(--alembic-accent), var(--alembic-accent-deep));
+    color: #14082b;
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.6rem 1.5rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    box-shadow: 0 0 1.2rem rgba(139, 92, 246, 0.35);
+    transition: box-shadow 0.18s, opacity 0.18s;
+}
+
+button.primary:hover:not(:disabled) {
+    box-shadow: 0 0 1.8rem rgba(192, 132, 252, 0.6);
+}
+
+button.primary:disabled {
+    opacity: 0.4;
+    box-shadow: none;
+    cursor: default;
+}
+
+button.quiet {
+    background: transparent;
+    color: var(--alembic-muted);
+    border: 1px solid transparent;
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.9rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.85rem;
+}
+
+button.quiet:hover:not(:disabled) {
+    color: var(--alembic-text);
+    border-color: var(--alembic-border);
+}
+
+/* Choices. Offers, never gates — the text box stays open beside them, so they are styled as
+   something you may take rather than as the row of buttons a form ends with. */
+.choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 1.2rem;
+}
+
+button.choice {
+    background: rgba(30, 23, 64, 0.8);
+    color: var(--alembic-accent);
+    border: 1px solid var(--alembic-border);
+    border-radius: 1.4rem;
+    padding: 0.45rem 1.1rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+button.choice:hover:not(:disabled) {
+    border-color: var(--alembic-accent);
+    background: rgba(192, 132, 252, 0.14);
+}
+
+button.choice:disabled {
+    cursor: default;
+}
+
+.agent-pick {
+    background: var(--alembic-panel);
+    color: var(--alembic-text);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    margin: 0 0.4rem 0.4rem 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+.agent-pick:hover {
+    border-color: var(--alembic-border-lit);
+}
+
+.agent-pick.picked {
+    border-color: var(--alembic-accent);
+    color: var(--alembic-accent);
+}
+
+/* The last station: the agent is written and joins the domain. Centred and alone, because it
+   is the only moment of the interview where the client decides something. */
+.sealed {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.sealed h2 {
+    font-size: 1.6rem;
+    font-weight: 300;
+    color: var(--alembic-gold);
+    margin: 0 0 0.5rem;
+    text-transform: none;
+    letter-spacing: 0.02em;
+}
+
+.sealed p {
+    color: var(--alembic-muted);
+    max-width: 32rem;
+    margin: 0 auto 1.8rem;
+}
+
+/* ============================ odds and ends ============================ */
+
+a {
+    color: var(--alembic-accent);
+}
+
+input[type="file"] {
+    color: var(--alembic-muted);
+}
+
+.phase-note {
+    margin-top: 2rem;
+    color: var(--alembic-muted);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+dl.fields {
+    grid-template-columns: 10rem 1fr;
+}
+
+dl.fields dd {
+    white-space: pre-wrap;
+}
+
+.tool {
+    margin-bottom: 1rem;
+    padding-left: 0.7rem;
+    border-left: 2px solid var(--alembic-border);
+}
+
+.tool-name {
+    font-weight: 600;
+    color: var(--alembic-accent);
+}
+
+.tool dl.fields {
+    grid-template-columns: 12rem 1fr;
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+}
+
+.back {
+    display: inline-block;
+    margin-top: 2.5rem;
+    color: var(--alembic-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.back:hover {
+    color: var(--alembic-accent);
+}
+
+/* Blazor's own unhandled-exception banner */
+#blazor-error-ui {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 0.75rem 1.25rem;
+    background: var(--alembic-error);
+    color: #2a0d0d;
+}
+
+#blazor-error-ui .dismiss {
+    float: right;
+    cursor: pointer;
+}

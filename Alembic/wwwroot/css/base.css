@@ -1,0 +1,123 @@
+/* ==========================================================================
+   Alembic — the surface, in six files.
+
+   One file per part of the workbench, linked in this order by Pages/_Host.cshtml: base, landing,
+   import, panels, interview, controls. The palette is read off the alembic in wwwroot/images — a
+   night-violet room, the vessel lit magenta from inside, cyan where the distillate runs cold, and
+   one warm gold for what is finished — and it lives here, in base.css, because every other file
+   spends it and none of them defines it.
+
+   base.css — the tokens, the reset, the page shells, and the mark that carries the alembic onto
+   every page past the landing.
+   ========================================================================== */
+
+:root {
+    --alembic-bg: #0c0917;
+    --alembic-bg-deep: #070510;
+    --alembic-panel: #171130;
+    --alembic-panel-lit: #1e1740;
+    --alembic-border: #35296b;
+    --alembic-border-lit: #5a44b0;
+    --alembic-text: #ece8f8;
+    --alembic-muted: #a396cd;
+    --alembic-accent: #c084fc;
+    --alembic-accent-deep: #8b5cf6;
+    --alembic-cyan: #67e8f9;
+    --alembic-gold: #f4c56a;
+    --alembic-error: #ff8a8a;
+
+    /* The glow the vessel throws on everything near it. One shadow, reused, so the page reads
+       as lit from a single source rather than as a set of independently glowing boxes. */
+    --alembic-glow: 0 0 2.5rem rgba(139, 92, 246, 0.18);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    background:
+        radial-gradient(ellipse 60rem 40rem at 50% -10%, rgba(139, 92, 246, 0.16), transparent 70%),
+        radial-gradient(ellipse 40rem 30rem at 85% 100%, rgba(103, 232, 249, 0.07), transparent 70%),
+        var(--alembic-bg);
+    background-attachment: fixed;
+    color: var(--alembic-text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.55;
+}
+
+.page, main {
+    min-height: 100vh;
+}
+
+.alembic-landing,
+.alembic-page {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 4rem;
+}
+
+.alembic-page {
+    max-width: 62rem;
+}
+
+.alembic-wide {
+    max-width: 76rem;
+}
+
+.alembic-landing h1,
+.alembic-page h1 {
+    margin: 0;
+    font-size: 3rem;
+    font-weight: 200;
+    letter-spacing: 0.14em;
+    background: linear-gradient(100deg, var(--alembic-accent), var(--alembic-cyan) 85%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.tagline {
+    margin: 0.25rem 0 2.5rem;
+    color: var(--alembic-muted);
+}
+
+/* The vessel once you are past the landing: same image, same place — centred, over the top of the
+   page — only smaller. Central because the alembic is what the client stands in front of on every
+   page here; at the edge it would be a brand instead. It keeps its glow, because a mark that goes
+   grey reads as decoration and this one is the alembic still lit while you work. It is the way home. */
+.alembic-mark {
+    display: block;
+    width: 6.5rem;
+    margin: 2rem auto 0;
+    text-align: center;
+    text-decoration: none;
+    opacity: 0.85;
+    transition: opacity 0.2s ease;
+}
+
+.alembic-mark:hover {
+    opacity: 1;
+}
+
+.alembic-mark img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 1px solid var(--alembic-border-lit);
+    box-shadow: 0 0 2.1rem rgba(139, 92, 246, 0.42);
+}
+
+.alembic-mark span {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--alembic-muted);
+}

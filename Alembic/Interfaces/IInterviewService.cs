@@ -23,7 +23,7 @@ public interface IInterviewService
     InterviewState? Current { get; }
 
     /// <summary>
-    /// Begins a functional pass and asks the opening question.
+    /// Begins the interview at the domain map and asks the opening question.
     /// </summary>
     Task<InterviewState> StartAsync(CancellationToken cancellationToken = default);
 
@@ -40,14 +40,19 @@ public interface IInterviewService
     // transcript is continuous — they are having one interview, and the restart is the model's alone.
 
     /// <summary>
-    /// Folds the interview's intent and agent into the Draft under construction, creating a Draft
-    /// if there is none, and ends the interview.
+    /// Folds the agent just finished into the Draft, creating a Draft if there is none, and moves
+    /// the interview to the next entry of the domain map.
     /// </summary>
+    /// <returns>
+    /// <c>true</c> if the map still has an entry and the interview goes on with it, <c>false</c>
+    /// when the last one is written and the interview is over.
+    /// </returns>
     /// <remarks>
     /// Everything committed is marked <see cref="Provenance.Authored"/>: it exists in no uploaded
-    /// file, and the migration report has to be able to say so.
+    /// file, and the migration report has to be able to say so. The fallback intent is put in the
+    /// same Draft if it is not there — it belongs to every domain and to no interview.
     /// </remarks>
-    void Commit();
+    Task<bool> CommitAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Discards the interview without touching the Draft.

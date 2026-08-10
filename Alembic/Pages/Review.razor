@@ -210,9 +210,25 @@
         }
     }
 
-    <p class="phase-note">
-        What would stop this domain, what its models really read, and what only the whole domain shows.
-    </p>
+    @*
+        Where the domain goes next. A review that ends in a dead end reads as a verdict on one
+        finished agent; the two things a client does after reading it are add the next agent and
+        take the whole domain away, so both are here rather than behind the front door.
+    *@
+    @if (DraftStateService.Current is not null)
+    {
+        <div class="gateways">
+            <a class="gateway primary-gateway" href="interview">
+                <h2>Add another agent</h2>
+                <span class="go">Begin &rarr;</span>
+            </a>
+
+            <a class="gateway" href="emit">
+                <h2>Take the domain away</h2>
+                <span class="go">Package &rarr;</span>
+            </a>
+        </div>
+    }
 
     <Back />
 

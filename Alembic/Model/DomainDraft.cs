@@ -60,6 +60,38 @@ public sealed class DomainDraft
     /// </para>
     /// </remarks>
     public DomainDraft? Baseline { get; set; }
+
+    /// <summary>
+    /// The name the classifier falls back to when it cannot place a message at all.
+    /// </summary>
+    public const string FallbackIntent = "other";
+
+    /// <summary>
+    /// Puts the fallback intent in the domain if it is not already there.
+    /// </summary>
+    /// <remarks>
+    /// The one intent no interview writes and no client edits. Every domain has it, it takes no
+    /// agent — <c>HandlesIntentAgentRegistryService</c> exempts this single name from its
+    /// bidirectional check — and it carries no label, because it is not a button anybody presses.
+    /// A domain without it has nowhere to put the messages it does not cover, which is why the
+    /// description is the framework's own words rather than something to phrase per client.
+    /// <para>
+    /// Matched case-insensitively but never rewritten: a domain that arrived with its own wording
+    /// for the fallback keeps it, since that is the client's sentence about their own catch-all.
+    /// </para>
+    /// </remarks>
+    public void EnsureFallbackIntent()
+    {
+        if (Intents.Any(i => string.Equals(i.Name, FallbackIntent, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        Intents.Add(new IntentDraft
+        {
+            Name = FallbackIntent,
+            Description = "any other topic not expressly intercepted by known intents",
+            Origin = Provenance.Authored
+        });
+    }
 }
 
 /// <summary>

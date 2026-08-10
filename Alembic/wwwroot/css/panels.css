@@ -1,0 +1,125 @@
+/* ==========================================================================
+   Panels, and everything read inside one: findings, tables, composed prompts.
+   ========================================================================== */
+
+.panel {
+    background: var(--alembic-panel);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.7rem;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.panel h2 {
+    margin: 0 0 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--alembic-muted);
+}
+
+.panel-error {
+    border-color: var(--alembic-error);
+}
+
+.panel-error pre {
+    margin: 0;
+    white-space: pre-wrap;
+    color: var(--alembic-error);
+}
+
+.panel dl {
+    display: grid;
+    grid-template-columns: 12rem 1fr;
+    gap: 0.4rem 1rem;
+    margin: 0;
+}
+
+.panel dt {
+    color: var(--alembic-muted);
+}
+
+.panel dd {
+    margin: 0;
+}
+
+.panel h3 {
+    margin: 1.25rem 0 0.4rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.panel table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.panel th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--alembic-muted);
+    border-bottom: 1px solid var(--alembic-border);
+    padding: 0.35rem 0.6rem 0.35rem 0;
+}
+
+.panel td {
+    padding: 0.35rem 0.6rem 0.35rem 0;
+    border-bottom: 1px solid rgba(53, 41, 107, 0.5);
+    vertical-align: top;
+}
+
+.panel td.description {
+    color: var(--alembic-muted);
+}
+
+.panel ul {
+    margin: 0;
+    padding-left: 1.1rem;
+}
+
+.panel li {
+    margin-bottom: 0.3rem;
+}
+
+code {
+    font-family: "Cascadia Mono", "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.9em;
+}
+
+.muted {
+    color: var(--alembic-muted);
+}
+
+.because {
+    color: var(--alembic-muted);
+    font-size: 0.85rem;
+    margin-top: 0.2rem;
+}
+
+.severity-error {
+    color: var(--alembic-error);
+    white-space: nowrap;
+}
+
+.severity-warning {
+    color: var(--alembic-gold);
+    white-space: nowrap;
+}
+
+pre.prompt {
+    background: var(--alembic-bg-deep);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.35rem;
+    padding: 0.9rem 1rem;
+    margin: 0 0 0.5rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: "Cascadia Mono", "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    max-height: 34rem;
+    overflow-y: auto;
+}

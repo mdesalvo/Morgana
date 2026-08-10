@@ -21,7 +21,7 @@ public class CoherenceService : ICoherenceService
     /// <summary>
     /// The prompt in <c>alembic.json</c> that governs the coherence pass.
     /// </summary>
-    private const string CoherencePromptId = "Coherence";
+    private const string CoherencePromptId = "DomainValidator";
 
     private readonly IAlembicPromptService alembicPromptService;
     private readonly ILLMService llmService;

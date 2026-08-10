@@ -1,0 +1,125 @@
+@*
+    Where the interview stands — and nothing at all until there is somewhere to stand.
+
+    The rule here is that no part of this appears empty. On the first screen the domain has no
+    entries and no agent is being written, so the client sees the question and the box and nothing
+    else: a progress rail for work that has not started, labelled with words that mean nothing yet
+    (*what it reaches for*), is the surest way to make somebody feel lost on the screen where they
+    should feel invited.
+
+    So it arrives in two stages, each when it becomes true. The entries appear as they are named,
+    because by then they are the client's own words and worth seeing. The four steps appear when the
+    map is closed and one entry is actually being written.
+
+    Neither of them explains itself in prose. Three tiers of paragraph above a question is a wall of
+    text however carefully each tier is worded, and the three things here are three kinds of thing —
+    what the domain holds, where the work is, what is being asked — so the eye can tell them apart
+    without being told.
+*@
+
+@if (Anything)
+{
+    <div class="journey">
+
+        @if (Entries.Any())
+        {
+            <div class="domain">
+                <span class="what">what your Morgana takes care of</span>
+
+                <div class="kinds">
+                    @foreach ((IntentDraft intent, string standing) in Entries)
+                    {
+                        <span class="@standing">@Named(intent)</span>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (!Drawing)
+        {
+            <ol class="stations">
+                @foreach ((string label, int index) in Steps.Select((s, i) => (s, i)))
+                {
+                    <li class="station @Standing(index)">
+                        <span class="mark">@(index + 1)</span>
+                        <span class="name">@label</span>
+                    </li>
+                }
+            </ol>
+        }
+
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// The interview being reported on.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public InterviewState State { get; set; } = default!;
+
+    /// <summary>
+    /// What the domain held before this interview, shown first and never lit.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public IEnumerable<IntentDraft> Established { get; set; } = [];
+
+    /// <summary>
+    /// Whether the agent in hand is finished and waiting for the client's word.
+    /// </summary>
+    [Parameter]
+    public bool Written { get; set; }
+
+    /// <summary>
+    /// What happens to every entry of the map, in order. Four steps, not five: the map itself is the
+    /// strip above, and the last of these is not a pass at all but the moment the client lets the
+    /// agent into the domain.
+    /// </summary>
+    private static readonly string[] Steps =
+    [
+        "what it is",
+        "what it reaches for",
+        "how it works",
+        "into the domain"
+    ];
+
+    /// <summary>
+    /// Whether the map is still being drawn, in which case no entry is being written yet.
+    /// </summary>
+    private bool Drawing => State.Pass == InterviewPass.DomainMapper;
+
+    /// <summary>
+    /// Whether there is anything true to show yet.
+    /// </summary>
+    private bool Anything => !Drawing || Entries.Any();
+
+    /// <summary>
+    /// Every entry the client can see, with how it stands: what earlier sittings left, then today's
+    /// map — written, being written, still ahead.
+    /// </summary>
+    private IEnumerable<(IntentDraft Intent, string Standing)> Entries =>
+        Established.Select(i => (i, "already"))
+            .Concat(State.Map.Select((intent, index) =>
+                (intent, index < State.At ? "already" : index == State.At ? "under-way" : "ahead")));
+
+    /// <summary>
+    /// The client's own word for an entry: its button once it has one, its name until then.
+    /// </summary>
+    private static string Named(IntentDraft intent) => intent.Label ?? intent.Name ?? "…";
+
+    /// <summary>
+    /// Where the rail is lit.
+    /// </summary>
+    /// <remarks>
+    /// The pass is the index by construction — the enum and this list are in the same order, once
+    /// the mapping pass is subtracted. The last step is the exception in both directions: the
+    /// interview stands there only when everything is settled, and the third stays lit until then
+    /// even though its pass and the last step's are the same one.
+    /// </remarks>
+    private string Standing(int index)
+    {
+        int here = Written ? Steps.Length - 1 : (int)State.Pass - 1;
+
+        return index == here ? "here" : index < here ? "done" : string.Empty;
+    }
+}

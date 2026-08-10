@@ -1,25 +1,4 @@
 @page "/"
-@using System.Reflection
-@inject IPromptResolverService PromptResolverService
-
-@*
-    The landing, and what it is a landing on.
-
-    Two ways in and nothing else, because there are only two: begin a sitting, or bring back a
-    file. Reviewing a domain and taking one away are not ways in at all — they are what you do to a
-    domain once one exists, and they are reached from the work itself: a finished sitting lets its
-    agent into the domain and lands on the review. A landing that also listed them would be a menu
-    of pages rather than a way through the work.
-
-    Neither doorway explains itself, because neither needs to: a door labelled "distil an agent"
-    that also tells you what distilling an agent is has stopped being a door and become a leaflet.
-    What Morgana does with your answers is hers to show once you are inside.
-
-    It still proves what the scaffold exists to establish — the project reference reaches
-    Morgana.AI, morgana.json is readable as an embedded resource from here, and the absence of any
-    embedded agents.json degrades to agentless mode instead of failing. Nobody comes here to read
-    that, so it is one line at the foot.
-*@
 
 <div class="alembic-landing">
 
@@ -66,40 +45,4 @@
 
     </div>
 
-    <div class="footnote">
-        @if (loadError is not null)
-        {
-            <span class="bad">Framework layer unreachable: @loadError</span>
-        }
-        else if (frameworkPrompt is null)
-        {
-            <span>Resolving the framework layer&hellip;</span>
-        }
-    </div>
-
 </div>
-
-@code {
-    private Records.Prompt? frameworkPrompt;
-    private int policyCount;
-    private int templateCount;
-    private string? loadError;
-
-    protected override async Task OnInitializedAsync()
-    {
-        try
-        {
-            frameworkPrompt = await PromptResolverService.ResolveAsync("Morgana");
-
-            List<Records.GlobalPolicy> policies =
-                frameworkPrompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies");
-
-            policyCount = policies.Count(p => !p.IsInjectionTemplate);
-            templateCount = policies.Count(p => p.IsInjectionTemplate);
-        }
-        catch (Exception ex)
-        {
-            loadError = ex.Message;
-        }
-    }
-}

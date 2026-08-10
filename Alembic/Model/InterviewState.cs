@@ -6,67 +6,36 @@ namespace Alembic.Model;
 /// Which pass of the interview is running.
 /// </summary>
 /// <remarks>
-/// The passes are the states of the machine, and their order is forced by an inverse dependency:
-/// an agent's Instructions and Formatting speak about its tools, so they cannot be written before
-/// the toolkit exists. Hence functional first, toolkit second, and a return to the prose last.
+/// The mapping pass runs once and the other three run once per intent it produced. That order is
+/// forced twice over. The intents are what a classifier weighs against each other, so they are
+/// designed together or they collide — an intent settled alone is a description nobody compared to
+/// anything. And within an agent, Instructions and Formatting speak about its tools, so they cannot
+/// be written before the toolkit exists.
 /// </remarks>
 public enum InterviewPass
 {
+    /// <summary>
+    /// The domain map: every kind of request this business gets, named and described, before any
+    /// agent is written. Runs once per interview and settles no agent at all.
+    /// </summary>
+    DomainMapper,
+
     /// <summary>
     /// What the agent is for, where it stops, how it sounds, and the intent that routes to it.
     /// Writes the intent's four fields plus the agent's Target and Personality — and deliberately
     /// not its Instructions or Formatting.
     /// </summary>
-    Functional,
+    AgentModeler,
 
     /// <summary>
     /// The toolkit: one tool at a time, its contract and its parameters.
     /// </summary>
-    Toolkit,
+    ToolkitModeler,
 
     /// <summary>
     /// Back to Instructions and Formatting, now that there is a toolkit for them to speak about.
     /// </summary>
-    Return
-}
-
-/// <summary>
-/// Who said one line of the interview.
-/// </summary>
-public enum InterviewSpeaker
-{
-    /// <summary>Alembic.</summary>
-    Alembic,
-
-    /// <summary>The domain expert.</summary>
-    Client
-}
-
-/// <summary>
-/// One line of the interview.
-/// </summary>
-/// <param name="Speaker">Who said it.</param>
-/// <param name="Text">What was said.</param>
-/// <param name="Choices">
-/// Buttons Alembic attached to this question, if any. The contract is Morgana's own
-/// <see cref="QuickReply"/> — the shape the client's own agents will emit — but the behaviour is
-/// not a channel's: these never gate the text box, they sit beside it.
-/// </param>
-public sealed record InterviewTurn(
-    InterviewSpeaker Speaker,
-    string Text,
-    IReadOnlyList<QuickReply>? Choices = null)
-{
-    /// <summary>
-    /// The <see cref="QuickReply.Id"/> of the choice that was pressed on this turn, if one was.
-    /// </summary>
-    /// <remarks>
-    /// Recorded because a button's label and the answer it sends are deliberately different things
-    /// — the label is short, the value reads as something the client would have typed. Without this
-    /// the transcript shows an answer nobody wrote and no trace of the gesture that produced it, so
-    /// pressing a button reads as nothing having happened.
-    /// </remarks>
-    public string? ChosenId { get; set; }
+    AgentFinalizer
 }
 
 /// <summary>
@@ -82,24 +51,68 @@ public sealed record InterviewTurn(
 public sealed class InterviewState
 {
     /// <summary>
+    /// Somewhere for a tool called before the map exists to write, so a stray call is a wasted call
+    /// rather than a crash.
+    /// </summary>
+    private readonly IntentDraft nowhere = new();
+
+    /// <summary>
     /// Which pass is running.
     /// </summary>
-    public InterviewPass Pass { get; set; } = InterviewPass.Functional;
+    public InterviewPass Pass { get; set; } = InterviewPass.DomainMapper;
 
     /// <summary>
-    /// Everything said so far, oldest first.
+    /// The question on the table: the last thing Alembic said to the client.
     /// </summary>
-    public List<InterviewTurn> Transcript { get; } = [];
+    /// <remarks>
+    /// One question, not a log. The conversation is the agent's — it runs in a live
+    /// <c>AgentSession</c> and is what the model reads back — and a second copy on this side would
+    /// be a transcript nobody needs kept in step with one that already exists. What the screen
+    /// needs is what is being asked right now.
+    /// </remarks>
+    public string? Question { get; set; }
 
     /// <summary>
-    /// The intent being built.
+    /// Buttons attached to the question on the table, and the one that was pressed.
     /// </summary>
-    public IntentDraft Intent { get; } = new();
+    /// <remarks>
+    /// The pressed id is held because a button's label and the answer it sends are deliberately
+    /// different things, so a row that stays lit is the only sign the gesture happened at all.
+    /// </remarks>
+    public IReadOnlyList<QuickReply> Choices { get; set; } = [];
+
+    /// <inheritdoc cref="Choices" />
+    public string? ChosenId { get; set; }
 
     /// <summary>
-    /// The agent being built.
+    /// How many exchanges have happened. The caret follows it, and nothing else does.
     /// </summary>
-    public AgentDraft Agent { get; } = new();
+    public int Exchanges { get; set; }
+
+    /// <summary>
+    /// The domain map: every kind of request this business gets, in the order they were named.
+    /// </summary>
+    /// <remarks>
+    /// The interview's spine. One entry becomes one intent and one agent, and the three later passes
+    /// run once down this list — which is why the map is settled first and whole: what routes to an
+    /// agent is only correct relative to what routes to the others.
+    /// </remarks>
+    public List<IntentDraft> Map { get; } = [];
+
+    /// <summary>
+    /// Which entry of the map is being written, or -1 while the map itself is being drawn.
+    /// </summary>
+    public int At { get; set; } = -1;
+
+    /// <summary>
+    /// The intent being built: the map entry the interview stands on.
+    /// </summary>
+    public IntentDraft Intent => At >= 0 && At < Map.Count ? Map[At] : nowhere;
+
+    /// <summary>
+    /// The agent being built for that intent. A fresh one each time the interview moves down the map.
+    /// </summary>
+    public AgentDraft Agent { get; set; } = new();
 
     /// <summary>
     /// Whether Alembic considers this pass's fields settled. A statement about the configuration,
@@ -169,23 +182,54 @@ public sealed class InterviewState
     /// </remarks>
     public IReadOnlyList<string> Missing() => Pass switch
     {
-        InterviewPass.Functional => MissingFunctional(),
-        InterviewPass.Toolkit => MissingToolkit(),
-        InterviewPass.Return => MissingReturn(),
+        InterviewPass.DomainMapper => MissingMap(),
+        InterviewPass.AgentModeler => MissingFunctional(),
+        InterviewPass.ToolkitModeler => MissingToolkit(),
+        InterviewPass.AgentFinalizer => MissingReturn(),
         _ => []
     };
 
     /// <summary>
-    /// What the agent IS: the intent's four fields, plus its Target and Personality.
+    /// The map: at least one kind of request, each one complete — the whole <c>Intents</c> section
+    /// of an <c>agents.json</c> and nothing less.
     /// </summary>
+    /// <remarks>
+    /// All four fields, because all four are read against their neighbours: the description by the
+    /// classifier, the label and its sentence by a user seeing every button at once. An entry
+    /// missing one of them is not half-written, it is a route that cannot be taken or a button that
+    /// cannot be pressed.
+    /// </remarks>
+    private List<string> MissingMap()
+    {
+        if (Map.Count == 0)
+            return ["the domain map: not one kind of request has been named yet"];
+
+        List<string> missing = [];
+
+        foreach (IntentDraft intent in Map)
+        {
+            string named = intent.Name ?? "(unnamed)";
+
+            if (string.IsNullOrWhiteSpace(intent.Description)) missing.Add($"what routes to '{named}'");
+            if (string.IsNullOrWhiteSpace(intent.Label)) missing.Add($"the button for '{named}'");
+            if (string.IsNullOrWhiteSpace(intent.DefaultValue)) missing.Add($"what pressing '{named}' sends");
+        }
+
+        return missing;
+    }
+
+    /// <summary>
+    /// What the agent IS: its Target and its Personality, and nothing about the intent.
+    /// </summary>
+    /// <remarks>
+    /// The intent is the map's, settled whole and not reopened here. This pass owns the agent alone,
+    /// which is why it has no tool that writes an intent — the two facts agree because they are the
+    /// same fact stated in the two places that enforce it.
+    /// </remarks>
     private List<string> MissingFunctional()
     {
         List<string> missing = [];
 
-        if (string.IsNullOrWhiteSpace(Intent.Name)) missing.Add("intentName");
-        if (string.IsNullOrWhiteSpace(Intent.Description)) missing.Add("intentDescription");
-        if (string.IsNullOrWhiteSpace(Intent.Label)) missing.Add("intentLabel");
-        if (string.IsNullOrWhiteSpace(Intent.DefaultValue)) missing.Add("intentDefaultValue");
         if (string.IsNullOrWhiteSpace(Agent.Target)) missing.Add("agentTarget");
         if (string.IsNullOrWhiteSpace(Agent.Personality)) missing.Add("agentPersonality");
 
