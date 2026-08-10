@@ -1,55 +1,48 @@
 @*
-    Where the interview stands — and nothing at all until there is somewhere to stand.
+    Where the interview stands, and what is still coming.
 
-    The rule here is that no part of this appears empty. On the first screen the domain has no
-    entries and no agent is being written, so the client sees the question and the box and nothing
-    else: a progress rail for work that has not started, labelled with words that mean nothing yet
-    (*what it reaches for*), is the surest way to make somebody feel lost on the screen where they
-    should feel invited.
+    The rail is the whole shape of the process and it is on the screen from the first question, lit
+    at step one. An interview that shows only the question is a black box: the client cannot tell
+    whether they are two minutes from the end or twenty, and the one thing every wizard owes them is
+    the answer to that. So the five steps are always visible, and the four that have not been reached
+    are dim rather than absent — words like *what it reaches for* mean little on the first screen,
+    but a step nobody can see means less.
 
-    So it arrives in two stages, each when it becomes true. The entries appear as they are named,
-    because by then they are the client's own words and worth seeing. The four steps appear when the
-    map is closed and one entry is actually being written.
+    Under it, the entries of the map appear as they are named, in the client's own words, and carry
+    the second fact the rail cannot: steps two to five run once per entry, so which entry is under
+    way is what says how far along the whole thing is.
 
-    Neither of them explains itself in prose. Three tiers of paragraph above a question is a wall of
-    text however carefully each tier is worded, and the three things here are three kinds of thing —
-    what the domain holds, where the work is, what is being asked — so the eye can tell them apart
-    without being told.
+    Neither part explains itself in prose. They are two kinds of thing — the shape of the work, and
+    what the domain holds — and the eye tells them apart without being told.
 *@
 
-@if (Anything)
-{
-    <div class="journey">
+<div class="journey">
 
-        @if (Entries.Any())
+    <ol class="stations">
+        @foreach ((string label, int index) in Steps.Select((step, index) => (step, index)))
         {
-            <div class="domain">
-                <span class="what">what your Morgana takes care of</span>
-
-                <div class="kinds">
-                    @foreach ((IntentDraft intent, string standing) in Entries)
-                    {
-                        <span class="@standing">@Named(intent)</span>
-                    }
-                </div>
-            </div>
+            <li class="station @Standing(index)">
+                <span class="mark">@(index + 1)</span>
+                <span class="name">@label</span>
+            </li>
         }
+    </ol>
 
-        @if (!Drawing)
-        {
-            <ol class="stations">
-                @foreach ((string label, int index) in Steps.Select((s, i) => (s, i)))
+    @if (Entries.Any())
+    {
+        <div class="domain">
+            <span class="what">@Caption</span>
+
+            <div class="kinds">
+                @foreach ((IntentDraft intent, string standing) in Entries)
                 {
-                    <li class="station @Standing(index)">
-                        <span class="mark">@(index + 1)</span>
-                        <span class="name">@label</span>
-                    </li>
+                    <span class="@standing">@Named(intent)</span>
                 }
-            </ol>
-        }
+            </div>
+        </div>
+    }
 
-    </div>
-}
+</div>
 
 @code {
     /// <summary>
@@ -71,12 +64,13 @@
     public bool Written { get; set; }
 
     /// <summary>
-    /// What happens to every entry of the map, in order. Four steps, not five: the map itself is the
-    /// strip above, and the last of these is not a pass at all but the moment the client lets the
-    /// agent into the domain.
+    /// The whole interview, in the client's words: the map once, then four steps per entry of it.
     /// </summary>
+    // The last is not a pass at all but the moment the client lets the agent into the domain, and it
+    // is on the rail because from the outside it is simply the step where an entry is finished.
     private static readonly string[] Steps =
     [
+        "what she takes care of",
         "what it is",
         "what it reaches for",
         "how it works",
@@ -89,9 +83,13 @@
     private bool Drawing => State.Pass == InterviewPass.DomainMapper;
 
     /// <summary>
-    /// Whether there is anything true to show yet.
+    /// What the strip of entries is, which changes once the map is closed and they start being
+    /// worked through one at a time.
     /// </summary>
-    private bool Anything => !Drawing || Entries.Any();
+    private string Caption =>
+        Drawing || State.At < 0
+            ? "what your Morgana takes care of"
+            : $"what your Morgana takes care of — writing {State.At + 1} of {State.Map.Count}";
 
     /// <summary>
     /// Every entry the client can see, with how it stands: what earlier sittings left, then today's
@@ -110,15 +108,12 @@
     /// <summary>
     /// Where the rail is lit.
     /// </summary>
-    /// <remarks>
-    /// The pass is the index by construction — the enum and this list are in the same order, once
-    /// the mapping pass is subtracted. The last step is the exception in both directions: the
-    /// interview stands there only when everything is settled, and the third stays lit until then
-    /// even though its pass and the last step's are the same one.
-    /// </remarks>
+    // The pass is the index by construction: the enum and this list are in the same order, the map
+    // included. The last step is the exception — the interview stands there only once everything is
+    // settled and the agent is waiting for the client's word.
     private string Standing(int index)
     {
-        int here = Written ? Steps.Length - 1 : (int)State.Pass - 1;
+        int here = Written ? Steps.Length - 1 : (int)State.Pass;
 
         return index == here ? "here" : index < here ? "done" : string.Empty;
     }

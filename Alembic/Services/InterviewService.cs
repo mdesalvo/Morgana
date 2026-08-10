@@ -104,12 +104,12 @@ public class InterviewService : IInterviewService
     /// <inheritdoc />
     public async Task<InterviewState> AnswerAsync(string answer, CancellationToken cancellationToken = default)
     {
-        InterviewState state = Current ?? await StartAsync(cancellationToken);
+        InterviewState interviewState = Current ?? await StartAsync(cancellationToken);
 
         if (string.IsNullOrWhiteSpace(answer))
-            return state;
+            return interviewState;
 
-        await ExchangeAsync(state, answer, cancellationToken);
+        await ExchangeAsync(interviewState, answer, cancellationToken);
 
         // The seam belongs to the model. Once the state machine has CONFIRMED the pass settled —
         // SetPassCompleted is checked against Missing(), never believed — the next one opens in the
@@ -124,23 +124,23 @@ public class InterviewService : IInterviewService
         //
         // The Return pass is where it stops, because what follows is the client's: letting the agent
         // into the domain is the one decision of the interview that is theirs.
-        while (state is { ReadyForReview: true, Error: null } && state.Pass != InterviewPass.AgentFinalizer)
+        while (interviewState is { ReadyForReview: true, Error: null } && interviewState.Pass != InterviewPass.AgentFinalizer)
         {
             // Leaving the map is also stepping onto its first entry. The mapping pass settles no
             // agent, so there would be nothing for the functional pass to be about otherwise.
-            if (state.Pass == InterviewPass.DomainMapper)
-                state.At = 0;
+            if (interviewState.Pass == InterviewPass.DomainMapper)
+                interviewState.At = 0;
 
-            await EnterPassAsync(state, state.Pass + 1, cancellationToken);
+            await EnterPassAsync(interviewState, interviewState.Pass + 1, cancellationToken);
         }
 
-        return state;
+        return interviewState;
     }
 
     /// <inheritdoc />
     public async Task<bool> CommitAsync(CancellationToken cancellationToken = default)
     {
-        if (Current is not { } state)
+        if (Current is not { } interviewState)
             return false;
 
         DomainDraft draft = draftStateService.Current ?? new DomainDraft();
@@ -151,20 +151,20 @@ public class InterviewService : IInterviewService
         // cover.
         draft.EnsureFallbackIntent();
 
-        state.Intent.Origin = Provenance.Authored;
-        state.Agent.Origin = Provenance.Authored;
-        state.Agent.ID = state.Intent.Name;
-        state.Agent.Code.Inferred = true;
-        state.Agent.Code.AgentClassName = ProposeClassName(state.Intent.Name, "Agent");
+        interviewState.Intent.Origin = Provenance.Authored;
+        interviewState.Agent.Origin = Provenance.Authored;
+        interviewState.Agent.ID = interviewState.Intent.Name;
+        interviewState.Agent.Code.Inferred = true;
+        interviewState.Agent.Code.AgentClassName = ProposeClassName(interviewState.Intent.Name, "Agent");
 
         // An agent with no native tools gets no tool class, and that is a legal shape rather than a
         // gap: an MCP-only agent's tools arrive at runtime and never appear in agents.json.
-        state.Agent.Code.ToolClassName = state.Agent.Tools.Count > 0
-            ? ProposeClassName(state.Intent.Name, "Tool")
+        interviewState.Agent.Code.ToolClassName = interviewState.Agent.Tools.Count > 0
+            ? ProposeClassName(interviewState.Intent.Name, "Tool")
             : null;
 
-        draft.Intents.Add(state.Intent);
-        draft.Agents.Add(state.Agent);
+        draft.Intents.Add(interviewState.Intent);
+        draft.Agents.Add(interviewState.Agent);
 
         // Re-setting the same instance is what raises Changed, so a page showing the Draft
         // re-renders whether or not the Draft object itself was new.
@@ -173,17 +173,84 @@ public class InterviewService : IInterviewService
         // Down the map, not out of the interview. The map is the promise the client made when they
         // said what their business gets asked, and an interview that stopped at the first agent
         // would leave them to remember the rest of their own list.
-        if (state.At + 1 < state.Map.Count)
+        if (interviewState.At + 1 < interviewState.Map.Count)
         {
-            state.At++;
-            state.Agent = new AgentDraft();
+            interviewState.At++;
+            interviewState.Agent = new AgentDraft();
 
-            await EnterPassAsync(state, InterviewPass.AgentModeler, cancellationToken);
+            await EnterPassAsync(interviewState, InterviewPass.AgentModeler, cancellationToken);
             return true;
         }
 
         Abandon();
         return false;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> BackAsync(CancellationToken cancellationToken = default)
+    {
+        if (Current is not { } interviewState)
+            return false;
+
+        // A finished agent steps back into its own last step rather than the one before it: what the
+        // client is looking at is the whole of what was written, and what they want is to change a
+        // line of it.
+        if (interviewState is { Pass: InterviewPass.AgentFinalizer, ReadyForReview: true })
+        {
+            await EnterPassAsync(interviewState, InterviewPass.AgentFinalizer, cancellationToken, revisiting: true);
+            return true;
+        }
+
+        switch (interviewState.Pass)
+        {
+            // The map is the first thing there is. Behind it is the landing, which is not a step.
+            case InterviewPass.DomainMapper:
+                return false;
+
+            // Out of the first entry is back onto the map itself. The entries survive — they are the
+            // map, not this pass's working copy — so the mapper reads its own list back and the
+            // client changes what they came to change.
+            case InterviewPass.AgentModeler when interviewState.At == 0:
+                interviewState.At = -1;
+                await EnterPassAsync(interviewState, InterviewPass.DomainMapper, cancellationToken, revisiting: true);
+                return true;
+
+            // Out of an entry into the one before it, which is in the domain already. It comes back
+            // out of the Draft and into the client's hands: an agent being revised must not also be
+            // sitting in the configuration, or committing it a second time would write it twice.
+            case InterviewPass.AgentModeler:
+                interviewState.At--;
+                Uncommit(interviewState);
+                await EnterPassAsync(interviewState, InterviewPass.AgentFinalizer, cancellationToken, revisiting: true);
+                return true;
+
+            default:
+                await EnterPassAsync(interviewState, interviewState.Pass - 1, cancellationToken, revisiting: true);
+                return true;
+        }
+    }
+
+    /// <summary>
+    /// Takes the entry the interview has just stepped back onto out of the Draft and back into hand.
+    /// </summary>
+    private void Uncommit(InterviewState interviewState)
+    {
+        if (draftStateService.Current is not { } draft)
+            return;
+
+        AgentDraft? committed = draft.Agents.FirstOrDefault(a =>
+            string.Equals(a.ID, interviewState.Intent.Name, StringComparison.OrdinalIgnoreCase));
+
+        if (committed is not null)
+        {
+            draft.Agents.Remove(committed);
+            interviewState.Agent = committed;
+        }
+
+        draft.Intents.RemoveAll(i =>
+            string.Equals(i.Name, interviewState.Intent.Name, StringComparison.OrdinalIgnoreCase));
+
+        draftStateService.Set(draft);
     }
 
     /// <inheritdoc />
@@ -205,13 +272,18 @@ public class InterviewService : IInterviewService
     /// settled fact rather than replayed as a conversation. The client's transcript is untouched:
     /// they are having one interview, and only the model starts again.
     /// </remarks>
-    private async Task EnterPassAsync(InterviewState state, InterviewPass pass, CancellationToken cancellationToken)
+    private async Task EnterPassAsync(
+        InterviewState interviewState,
+        InterviewPass interviewPass,
+        CancellationToken cancellationToken,
+        bool revisiting = false)
     {
-        state.Pass = pass;
-        state.ReadyForReview = false;
+        interviewState.Pass = interviewPass;
+        interviewState.ReadyForReview = false;
+        interviewState.PassOpenedAt = interviewState.Exchanges;
 
-        await BuildAgentAsync(state, PassPromptIds[pass]);
-        await ExchangeAsync(state, Bootstrap(state, pass), cancellationToken);
+        await BuildAgentAsync(interviewState, PassPromptIds[interviewPass]);
+        await ExchangeAsync(interviewState, Bootstrap(interviewState, interviewPass, revisiting), cancellationToken);
     }
 
     /// <summary>
@@ -222,12 +294,25 @@ public class InterviewService : IInterviewService
     /// entry of the map, and which entry is a fact the state machine holds. Telling it here costs
     /// one line and saves the pass a tool call to find out where it is standing.
     /// </remarks>
-    private static string Bootstrap(InterviewState state, InterviewPass pass) =>
-        pass == InterviewPass.AgentModeler
-            ? $"The map is settled and you are on entry {state.At + 1} of {state.Map.Count}: the intent "
-              + $"'{state.Intent.Name}', which the map describes as: {state.Intent.Description}. "
+    private static string Bootstrap(InterviewState interviewState, InterviewPass interviewPass, bool revisiting)
+    {
+        string opening = interviewPass == InterviewPass.AgentModeler
+            ? $"The map is settled and you are on entry {interviewState.At + 1} of {interviewState.Map.Count}: the intent "
+              + $"'{interviewState.Intent.Name}', which the map describes as: {interviewState.Intent.Description}. "
               + "Write its agent."
-            : BootstrapMessages[pass];
+            : BootstrapMessages[interviewPass];
+
+        // Arriving on a step the client chose to come back to is not the same as arriving on a step
+        // that has just opened, and the difference is what the first question should be. Everything
+        // this step settled is still written, so opening it as if nothing were there would ask them
+        // to dictate their own answers a second time — which is the circling this whole interview is
+        // built to avoid, only this time Alembic starts it.
+        return revisiting
+            ? "The client has stepped back to this part of the interview to change something already "
+              + "settled. Read what is there before you say anything, then ask in one sentence what "
+              + "they want different — never open it again from nothing. " + opening
+            : opening;
+    }
 
     /// <summary>
     /// Assembles the agent for one pass: its prompt, and only the tools that pass is allowed.
@@ -238,14 +323,14 @@ public class InterviewService : IInterviewService
     /// abstain. The functional pass has no tool for an agent's instructions or formatting, and that
     /// is the whole of the constraint.
     /// </remarks>
-    private async Task BuildAgentAsync(InterviewState state, string interviewerId)
+    private async Task BuildAgentAsync(InterviewState interviewState, string interviewerId)
     {
         Records.Prompt interviewer = alembicPromptService.Resolve(interviewerId);
 
         List<Records.ToolDefinition> definitions =
             interviewer.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>("Tools", []);
 
-        InterviewTools tools = new InterviewTools(state, draftStateService, draftValidationService, recapService);
+        InterviewTools tools = new InterviewTools(interviewState, draftStateService, draftValidationService, recapService);
         MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);
 
         // The delegate map is the one place a tool's name, its declaration and its implementation
@@ -304,27 +389,27 @@ public class InterviewService : IInterviewService
 
     /// <summary>
     /// One round trip: the client's words in, Alembic's words out, and whatever its tools wrote
-    /// along the way already in the state.
+    /// along the way already in the interviewState.
     /// </summary>
-    private async Task ExchangeAsync(InterviewState state, string message, CancellationToken cancellationToken)
+    private async Task ExchangeAsync(InterviewState interviewState, string message, CancellationToken cancellationToken)
     {
         if (agent is null || session is null)
             return;
 
-        state.Error = null;
-        state.PendingChoices.Clear();
-        state.Changed.Clear();
+        interviewState.Error = null;
+        interviewState.PendingChoices.Clear();
+        interviewState.Changed.Clear();
 
-        Dictionary<string, string?> before = state.Snapshot();
+        Dictionary<string, string?> before = interviewState.Snapshot();
 
         try
         {
             AgentResponse response = await agent.RunAsync(
                 new ChatMessage(ChatRole.User, message), session, cancellationToken: cancellationToken);
 
-            foreach ((string field, string? value) in state.Snapshot())
+            foreach ((string field, string? value) in interviewState.Snapshot())
                 if (!string.Equals(value, before[field], StringComparison.Ordinal))
-                    state.Changed.Add(field);
+                    interviewState.Changed.Add(field);
 
             string said = response.Text?.Trim() ?? string.Empty;
 
@@ -333,16 +418,16 @@ public class InterviewService : IInterviewService
             // question already on the screen simply stands.
             if (said.Length > 0)
             {
-                state.Question = said;
-                state.Choices = [.. state.PendingChoices];
-                state.ChosenId = null;
-                state.Exchanges++;
+                interviewState.Question = said;
+                interviewState.Choices = [.. interviewState.PendingChoices];
+                interviewState.ChosenId = null;
+                interviewState.Exchanges++;
             }
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "The interview turn failed");
-            state.Error = $"The turn could not be completed: {ex.Message}";
+            interviewState.Error = $"The turn could not be completed: {ex.Message}";
         }
     }
 

@@ -58,7 +58,7 @@ public class InterviewTools
     /// </summary>
     private const string RequestScope = "request";
 
-    private readonly InterviewState state;
+    private readonly InterviewState interviewState;
     private readonly IDraftStateService draftStateService;
     private readonly IDraftValidationService draftValidationService;
     private readonly IRecapService recapService;
@@ -66,17 +66,17 @@ public class InterviewTools
     /// <summary>
     /// Binds the toolset to one interview.
     /// </summary>
-    /// <param name="state">The interview these tools write into.</param>
+    /// <param name="interviewState">The interview these tools write into.</param>
     /// <param name="draftStateService">The domain being built or evolved.</param>
     /// <param name="draftValidationService">The deterministic checks.</param>
     /// <param name="recapService">Composes the prompt the authored agent will really read.</param>
     public InterviewTools(
-        InterviewState state,
+        InterviewState interviewState,
         IDraftStateService draftStateService,
         IDraftValidationService draftValidationService,
         IRecapService recapService)
     {
-        this.state = state;
+        this.interviewState = interviewState;
         this.draftStateService = draftStateService;
         this.draftValidationService = draftValidationService;
         this.recapService = recapService;
@@ -116,7 +116,7 @@ public class InterviewTools
             return $"Nothing recorded: '{cleanName}' is already an intent of this domain, written before today. "
                    + "Two agents answering the same intent is a startup failure. Name what is different about this one.";
 
-        IntentDraft? existing = state.Map.FirstOrDefault(i =>
+        IntentDraft? existing = interviewState.Map.FirstOrDefault(i =>
             string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase));
 
         bool revision = existing is not null;
@@ -134,7 +134,7 @@ public class InterviewTools
             intent.DefaultValue = defaultValue.Trim();
 
         if (!revision)
-            state.Map.Add(intent);
+            interviewState.Map.Add(intent);
 
         List<string> complaints = [];
 
@@ -147,7 +147,7 @@ public class InterviewTools
         if (string.IsNullOrWhiteSpace(intent.Label) || string.IsNullOrWhiteSpace(intent.DefaultValue))
             complaints.Add("It has no button yet: the map is not settled until every entry carries the words a user reads and the sentence pressing them sends.");
 
-        return (revision ? $"'{cleanName}' revised on the map." : $"'{cleanName}' is on the map, in position {state.Map.Count}.")
+        return (revision ? $"'{cleanName}' revised on the map." : $"'{cleanName}' is on the map, in position {interviewState.Map.Count}.")
                + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty);
     }
 
@@ -156,7 +156,7 @@ public class InterviewTools
     /// </summary>
     public string DropIntent(string name)
     {
-        int removed = state.Map.RemoveAll(i =>
+        int removed = interviewState.Map.RemoveAll(i =>
             string.Equals(i.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase));
 
         return removed > 0
@@ -174,12 +174,12 @@ public class InterviewTools
     /// </remarks>
     public string GetDomainMap()
     {
-        if (state.Map.Count == 0)
+        if (interviewState.Map.Count == 0)
             return "The map is empty: no kind of request has been named yet.";
 
         return "The domain map as it stands. The descriptions are weighed against each other by the classifier, "
                + "and the buttons are read side by side by a user:\n"
-               + string.Join("\n", state.Map.Select((i, n) =>
+               + string.Join("\n", interviewState.Map.Select((i, n) =>
                    $"{n + 1}. {i.Name}: {i.Description ?? "(nothing said about what routes here)"}"
                    + $"\n    button: {i.Label ?? "(none)"} → \"{i.DefaultValue ?? "(nothing)"}\""));
     }
@@ -189,7 +189,7 @@ public class InterviewTools
     /// </summary>
     public string SetAgentTarget(string target)
     {
-        state.Agent.Target = Marked(TargetMarker, target);
+        interviewState.Agent.Target = Marked(TargetMarker, target);
         return Shaped("Target", target, 2, 4);
     }
 
@@ -198,7 +198,7 @@ public class InterviewTools
     /// </summary>
     public string SetAgentPersonality(string personality)
     {
-        state.Agent.Personality = Marked(PersonalityMarker, personality);
+        interviewState.Agent.Personality = Marked(PersonalityMarker, personality);
         return Shaped("Personality", personality, 2, 3);
     }
 
@@ -207,7 +207,7 @@ public class InterviewTools
     /// </summary>
     public string SetAgentInstructions(string instructions)
     {
-        state.Agent.Instructions = Marked(InstructionsMarker, instructions);
+        interviewState.Agent.Instructions = Marked(InstructionsMarker, instructions);
         return Shaped("Instructions", instructions, 4, 12);
     }
 
@@ -216,7 +216,7 @@ public class InterviewTools
     /// </summary>
     public string SetAgentFormatting(string formatting)
     {
-        state.Agent.Formatting = Marked(FormattingMarker, formatting);
+        interviewState.Agent.Formatting = Marked(FormattingMarker, formatting);
         return Shaped("Formatting", formatting, 2, 5);
     }
 
@@ -242,7 +242,7 @@ public class InterviewTools
         tool.Description = description?.Trim();
 
         if (!revision)
-            state.Agent.Tools.Add(tool);
+            interviewState.Agent.Tools.Add(tool);
 
         // Reported, never rewritten: the name is domain vocabulary, and a silent correction leaves
         // Alembic telling the client one word while the configuration carries another.
@@ -340,7 +340,7 @@ public class InterviewTools
     /// </summary>
     public string DropTool(string toolName)
     {
-        int removed = state.Agent.Tools.RemoveAll(t =>
+        int removed = interviewState.Agent.Tools.RemoveAll(t =>
             string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
 
         return removed > 0
@@ -353,11 +353,11 @@ public class InterviewTools
     /// </summary>
     public string GetToolkit()
     {
-        if (state.Agent.Tools.Count == 0)
-            return "This agent declares no tools yet. That is a legal end state — an agent whose tools "
+        if (interviewState.Agent.Tools.Count == 0)
+            return "This agent declares no tools yet. That is a legal end interviewState — an agent whose tools "
                    + "all arrive from an MCP server declares none here — but it must be a conclusion you reached by asking.";
 
-        IEnumerable<string> rendered = state.Agent.Tools.Select(t =>
+        IEnumerable<string> rendered = interviewState.Agent.Tools.Select(t =>
             $"- {t.Name}: {t.Description ?? "(no description)"}"
             + (t.Parameters.Count == 0
                 ? "\n    (takes nothing)"
@@ -381,22 +381,22 @@ public class InterviewTools
     /// </remarks>
     public string GetAgentSoFar()
     {
-        if (string.IsNullOrWhiteSpace(state.Intent.Name))
+        if (string.IsNullOrWhiteSpace(interviewState.Intent.Name))
             return "Nothing settled yet: this agent has no intent.";
 
         List<string> sections =
         [
-            $"Intent '{state.Intent.Name}': {state.Intent.Description}",
-            $"Opening sentence a user would send: {state.Intent.DefaultValue}",
-            state.Agent.Target ?? "(no target)",
-            state.Agent.Personality ?? "(no personality)"
+            $"Intent '{interviewState.Intent.Name}': {interviewState.Intent.Description}",
+            $"Opening sentence a user would send: {interviewState.Intent.DefaultValue}",
+            interviewState.Agent.Target ?? "(no target)",
+            interviewState.Agent.Personality ?? "(no personality)"
         ];
 
-        if (!string.IsNullOrWhiteSpace(state.Agent.Instructions))
-            sections.Add(state.Agent.Instructions);
+        if (!string.IsNullOrWhiteSpace(interviewState.Agent.Instructions))
+            sections.Add(interviewState.Agent.Instructions);
 
-        if (!string.IsNullOrWhiteSpace(state.Agent.Formatting))
-            sections.Add(state.Agent.Formatting);
+        if (!string.IsNullOrWhiteSpace(interviewState.Agent.Formatting))
+            sections.Add(interviewState.Agent.Formatting);
 
         return "Settled in the earlier passes, and not yours to reopen:\n\n"
                + string.Join("\n\n", sections);
@@ -415,8 +415,8 @@ public class InterviewTools
             if (parsed is not { Count: > 0 })
                 return "No choices recorded: the payload held no buttons.";
 
-            state.PendingChoices.Clear();
-            state.PendingChoices.AddRange(parsed);
+            interviewState.PendingChoices.Clear();
+            interviewState.PendingChoices.AddRange(parsed);
 
             return $"{parsed.Count} choices will be drawn under your question. "
                    + "The text box stays open, so the answer may still come in its own words.";
@@ -438,11 +438,11 @@ public class InterviewTools
     public string GetExistingIntents()
     {
         IEnumerable<string> written = (draftStateService.Current?.Intents ?? [])
-            .Where(i => !string.Equals(i.Name, state.Intent.Name, StringComparison.OrdinalIgnoreCase))
+            .Where(i => !string.Equals(i.Name, interviewState.Intent.Name, StringComparison.OrdinalIgnoreCase))
             .Select(i => $"- {i.Name}: {i.Description} (already in the domain)");
 
-        IEnumerable<string> planned = state.Map
-            .Where(i => !ReferenceEquals(i, state.Intent))
+        IEnumerable<string> planned = interviewState.Map
+            .Where(i => !ReferenceEquals(i, interviewState.Intent))
             .Select(i => $"- {i.Name}: {i.Description} (on the map, not written yet)");
 
         List<string> all = [.. written, .. planned];
@@ -457,10 +457,10 @@ public class InterviewTools
     /// </summary>
     public async Task<string> GetComposedPrompt()
     {
-        if (string.IsNullOrWhiteSpace(state.Agent.Target))
+        if (string.IsNullOrWhiteSpace(interviewState.Agent.Target))
             return "Nothing to compose yet: the agent has no target.";
 
-        AgentRecap recap = await recapService.ComposeAsync(state.Agent);
+        AgentRecap recap = await recapService.ComposeAsync(interviewState.Agent);
 
         return "This is the whole of what this agent's model will read:\n\n" + recap.SystemPrompt;
     }
@@ -477,18 +477,18 @@ public class InterviewTools
     /// </remarks>
     public string GetFindings()
     {
-        if (string.IsNullOrWhiteSpace(state.Intent.Name))
+        if (string.IsNullOrWhiteSpace(interviewState.Intent.Name))
             return "Nothing to check yet: the intent has no name.";
 
         DomainDraft existing = draftStateService.Current ?? new DomainDraft();
 
         DomainDraft probe = new DomainDraft
         {
-            Intents = [.. existing.Intents, state.Intent],
-            Agents = [.. existing.Agents, state.Agent]
+            Intents = [.. existing.Intents, interviewState.Intent],
+            Agents = [.. existing.Agents, interviewState.Agent]
         };
 
-        string mine = state.Intent.Name!;
+        string mine = interviewState.Intent.Name!;
 
         List<ValidationFinding> findings =
             [.. draftValidationService.Validate(probe)
@@ -510,18 +510,18 @@ public class InterviewTools
     /// </remarks>
     public string SetPassCompleted()
     {
-        IReadOnlyList<string> missing = state.Missing();
+        IReadOnlyList<string> missing = interviewState.Missing();
 
         if (missing.Count > 0)
             return $"Not completed: {string.Join(", ", missing)} still unset. "
                    + (missing.Count == 1 ? "Set it and call this again." : "Set them and call this again.");
 
-        state.ReadyForReview = true;
+        interviewState.ReadyForReview = true;
 
         return "This pass is settled. Say it is done and what comes next: "
-               + state.Pass switch
+               + interviewState.Pass switch
                {
-                   InterviewPass.DomainMapper => $"the first of the {state.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.",
+                   InterviewPass.DomainMapper => $"the first of the {interviewState.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.",
                    InterviewPass.AgentModeler => "the toolkit — what this agent has to reach for outside the conversation.",
                    InterviewPass.ToolkitModeler => "the agent's own instructions and the way it presents what its tools return.",
                    _ => "the agent joins the domain, and they can review or export it."
@@ -537,7 +537,7 @@ public class InterviewTools
     /// at startup, which is a finding rather than something to paper over by matching loosely.
     /// </remarks>
     private ToolDraft? Find(string? toolName) =>
-        state.Agent.Tools.FirstOrDefault(t =>
+        interviewState.Agent.Tools.FirstOrDefault(t =>
             string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
 
     /// <summary>

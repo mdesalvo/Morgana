@@ -85,9 +85,21 @@ public sealed class InterviewState
     public string? ChosenId { get; set; }
 
     /// <summary>
-    /// How many exchanges have happened. The caret follows it, and nothing else does.
+    /// How many exchanges have happened, over the whole interview. The caret follows it.
     /// </summary>
     public int Exchanges { get; set; }
+
+    /// <summary>
+    /// What <see cref="Exchanges"/> stood at when the pass now running opened.
+    /// </summary>
+    public int PassOpenedAt { get; set; }
+
+    /// <summary>
+    /// Whether the question on the table is the first one this pass has asked.
+    /// </summary>
+    // The worked example in the answer box is for somebody who has not yet said anything about this
+    // step. From the second question on it contradicts the short follow-up above it.
+    public bool PassJustOpened => Exchanges <= PassOpenedAt + 1;
 
     /// <summary>
     /// The domain map: every kind of request this business gets, in the order they were named.

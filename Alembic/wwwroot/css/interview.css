@@ -15,8 +15,10 @@
     margin: 2.2rem 0 2.6rem;
 }
 
+/* Under the rail, and clear of it: the station names sit on their own line and a strip pulled up
+   against them reads as a caption belonging to whichever step is nearest. */
 .journey .domain {
-    margin: 0 0 1.8rem;
+    margin: 2.2rem 0 0;
     text-align: center;
 }
 
@@ -88,12 +90,6 @@
     list-style: none;
 }
 
-/* While the map is being drawn, the four steps are what will happen to each entry once it is
-   closed — every one of them ahead, and the caption below says so. */
-.stations.waiting {
-    opacity: 0.55;
-}
-
 .station {
     flex: 1 1 0;
     max-width: 11rem;
@@ -128,8 +124,12 @@
     background: transparent !important;
 }
 
+/* Over the rail, not on it. Both halves of the line are pseudo-elements of the same station and the
+   trailing one paints after this, so without a layer of its own the segment runs into the circle and
+   out the other side of the number. */
 .station .mark {
     position: absolute;
+    z-index: 1;
     top: 0;
     left: 50%;
     translate: -50% 0;
@@ -260,6 +260,15 @@
     border-radius: 0.6rem;
 }
 
+/* The example answer sits in the box until the client types over it, so it has to read as somebody
+   else's writing at a glance — dimmer and slanted — or it is mistaken for an answer already given. */
+.reply textarea::placeholder {
+    color: var(--alembic-muted);
+    opacity: 0.62;
+    font-style: italic;
+    line-height: 1.5;
+}
+
 .reply-actions {
     display: flex;
     justify-content: flex-end;
@@ -282,6 +291,29 @@ textarea:focus {
     outline: none;
     border-color: var(--alembic-border-lit);
     box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+/* The way back: a line of text, not a button, because it competes with nothing. */
+.step-back {
+    max-width: 34rem;
+    margin: 0.9rem auto 0;
+}
+
+.step-back button {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 0.82rem;
+    color: var(--alembic-muted);
+    cursor: pointer;
+    opacity: 0.75;
+    transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.step-back button:hover {
+    color: var(--alembic-accent);
+    opacity: 1;
 }
 
 /* ============================ what has been distilled ============================ */

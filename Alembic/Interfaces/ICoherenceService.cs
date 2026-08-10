@@ -18,8 +18,9 @@ namespace Alembic.Interfaces;
 /// It runs over the domain and never over one agent. Every defect it looks for is <b>relational</b>
 /// and therefore invisible to the interview, which settles one agent at a time by construction: two
 /// agents that both claim to cancel something, a value one agent publishes as <c>userId</c> and
-/// another expects as <c>customerCode</c>, an agent whose Target promises what a neighbour owns.
-/// No per-agent pass can see any of it.
+/// another expects as <c>customerCode</c>, an agent whose Target promises what a neighbour owns,
+/// two toolkits that reach the same system for the same purpose under two different shapes. No
+/// per-agent pass can see any of it.
 /// </para>
 /// <para>
 /// It is advisory, and stays advisory. Nothing here blocks an export: a judgement about meaning is

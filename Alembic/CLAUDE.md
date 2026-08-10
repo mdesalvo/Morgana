@@ -335,7 +335,8 @@ Two consequences that look like details and are not:
   alone, and the only thing they can say about it is yes. `IInterviewService` therefore has no
   `Advance`: the loop terminates because entering a pass clears the flag, and a pass that settles
   the moment it opens (a toolkit the client already described in full) moves on instead of stranding
-  the interview one question short.
+  the interview one question short. It does have `BackAsync`, and the asymmetry is the whole point —
+  see *One question, one step* below.
 - The **section labels** (`[TARGET]`, `[PERSONALITY]`, `[INSTRUCTIONS]`, `[FORMATTING]`) are
   guaranteed in code, not asked of the
   model. Both composed layers use the same four labels — precisely why the framework fences them —
@@ -359,21 +360,48 @@ finished saying. The strip appears once the map is drawn — until then there is
 about, and nine rows reading *not yet* would report nothing achieved at the moment the interview is
 deciding everything else.
 
-Above it, **one block says where the work stands**, and it is one block because it is one fact: the
-entries of the domain across the top — what earlier sittings left, then today's, written, being
-written, still ahead — and under them the four steps (*what it is*, *what it reaches for*, *how it
-works*, *into the domain*) each entry goes through in turn. The map is not a caption above the
-journey; it is the journey's first step and its subject.
+Above it, **one block says where the work stands**, and it is one block because it is one fact: five
+steps on a rail — *what she takes care of*, then *what it is*, *what it reaches for*, *how it works*,
+*into the domain* — and under them the entries of the domain, what earlier sittings left and then
+today's, written, being written, still ahead. The map is not a caption above the journey; it is the
+journey's first step and its subject, which is why it is on the rail rather than beside it.
 
-**Nothing appears empty, and nothing is explained in prose.** On the first screen there is no
-domain and no agent, so that block is not rendered at all: the client meets one question, one box
-and one button, and nothing else. The entries appear as they are named, the steps when an entry is
-actually being written. A rail labelled *what it reaches for* over work that has not started is the
-surest way to lose somebody on the screen where they should feel invited, and a paragraph explaining
-each tier is a wall of text however carefully it is worded — the three things on the screen are
-three kinds of thing, and the eye tells them apart without being told. There is no standing hint
-under the box either: a line promising that half an answer will do is furniture from the second turn
-on, and Alembic says it better by inferring the rest and showing what it inferred.
+**The rail is on the screen from the first question, and dim is not absent.** An interview that
+shows only a question is a black box: the client cannot tell whether they are two minutes from the
+end or twenty, and that is the one thing every wizard owes them. So the four steps not yet reached
+are visible and faint. Words like *what it reaches for* mean little on the first screen — a step
+nobody can see means less, and the caption under the rail carries what the rail cannot, since steps
+two to five run once per entry: *writing 1 of 3*.
+
+**Nothing is explained in prose.** The entries appear as they are named, in the client's own words,
+and a paragraph explaining each tier would be a wall of text however carefully it is worded — the
+things on the screen are different kinds of thing, and the eye tells them apart without being told.
+There is no standing hint under the box either: a line promising that half an answer will do is
+furniture from the second turn on, and Alembic says it better by inferring the rest and showing what
+it inferred.
+
+**What is in the box is a worked example, on the first question of a step and no other.** A label
+naming the material — *the parts of your work you would like Morgana to take on* — restates the
+question and teaches nothing, so each step's placeholder is instead a fifty-word answer somebody
+else might have given, in a trade the client does not have: it shows the register, the length and
+the level of detail at once, which is the whole of what a first-time client is missing. The four are
+one story told once — the first draws the boundary (*the site sells; she handles what comes after
+the order*), the others pick up where the last stopped without repeating it — so a client answering
+in that register hands over material that does not overlap with itself, which is the defect the
+coherence pass would otherwise be left to find at the end. From the second question of a step the
+box is empty: the question there is a short follow-up, and a fifty-word story under it answers
+something nobody asked.
+
+**Backwards is the client's, where forwards is not.** Going on is a claim that a step is settled,
+which the state machine decides; going back is a claim that something needs changing, which only
+they can make — so `BackAsync` is the one movement of the interview they drive, and `StepBack` names
+where it lands (*back to what it is*, *back to 📦 Delivery date*) rather than saying "back", because
+a step of this wizard is not numbered on the screen. It costs nothing to allow: a step is re-entered
+exactly the way it was entered the first time, a fresh agent and a fresh session reading the
+configuration as settled fact, with one line telling it the client came back to change something so
+it does not open from nothing. **The memory is the configuration, not the conversation** — the same
+thing that crosses a pass boundary going forwards. Stepping out of an entry into the one before it
+takes that agent back out of the Draft and into hand, so no second copy of it can ever be committed.
 
 The questions themselves are held to the same rule in `alembic.json`: **one sentence, one question
 mark, nothing after it**. A question carrying three sub-questions joined by dashes is answered on
@@ -392,9 +420,14 @@ first in every sense — the mapping pass produces the whole `Intents` section a
 is the ground the rest is planted in. Only then does it walk that list, three passes per entry, until
 every intent has its agent.
 
-An intent missing from the map is a capability the domain will never have; an intent nobody could
-tell from the one beside it is a user meeting the wrong agent. Both are settled while the client is
-still choosing words, which is the only moment either is cheap.
+**A domain is a choice, not an inventory**, and the mapping pass is worded to elicit that: the map
+is the subset of the client's own processes they are installing Morgana to run, not a description of
+their business. What they keep never appears on it, and asking for their work exhaustively turns the
+pass into a confession — the interview goes long, the list pads, and half of it is capability nobody
+asked for. What they do hand over has to be complete, because an intent missing from the map is a
+process the domain will never take and an intent nobody could tell from the one beside it is a user
+meeting the wrong agent. Both are settled while the client is still choosing words, which is the
+only moment either is cheap.
 
 **All four of an intent's fields are written there, and that is the same argument twice.** A
 description is read by the classifier *against every other description*, and a label with the
@@ -594,8 +627,16 @@ settles the map together, so the classifier collisions visible *there* are caugh
 are still being chosen, but it writes each agent's prose alone. Overlapping intents; two agents claiming the
 same capability; a value one publishes as `userId` that another expects as `customerCode`; ground
 the domain's own descriptions imply and no agent covers; an agent promising what no tool of its
-backs. It is handed the domain's exact words, never a summary, because a summary is precisely the
-step that would smooth an overlap away before the model saw it.
+backs; two toolkits reaching the same system for the same purpose under two different shapes. It is
+handed the domain's exact words, never a summary, because a summary is precisely the step that would
+smooth an overlap away before the model saw it.
+
+The last of those is stated with its exception attached, because without one it fires on every
+domain: an agent reaches only through its own tools, so two agents needing the same lookup is the
+ordinary shape and not a defect. What is a defect is the same work under two shapes — different
+names, different parameters, descriptions that would have the model call either for the same reason
+— because each shape is a separate integration to keep true and they diverge the first time one is
+fixed. It is also the cheapest early sign that the two intents above them were always one.
 
 It answers JSON — the one place in Alembic that does, because this output is a list to be sorted and
 tabulated rather than writing to be read. And it **advises, never blocks**: a domain expert who
@@ -648,8 +689,9 @@ Alembic/
   Shared/MainLayout.razor             # Layout wrapper; carries the alembic as a mark on every page but the landing
   Shared/Back.razor                   # The way back, and it is the way you came
   Shared/Interview/                   # The wizard's pieces, one component each
-    Journey.razor                     #   the domain, the four steps each entry goes through, and what is asked for here
+    Journey.razor                     #   the five steps of the whole interview, and the entries under them
     Question.razor                    #   the question, the choices, the box
+    StepBack.razor                    #   the way back, named after where it lands
     AgentSoFar.razor                  #   the agent's own rows along the foot
     AgentWritten.razor                #   the one decision that is the client's, and the join to the next entry
   wwwroot/css/                        # Six files, cascade order set in _Host.cshtml

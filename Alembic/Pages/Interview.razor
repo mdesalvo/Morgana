@@ -26,7 +26,7 @@
 
 <div class="alembic-page">
 
-    @if (InterviewService.Current is not { } state)
+    @if (InterviewService.Current is not { } interviewState)
     {
         <div class="scene">
             <div class="thinking"><span>&bull;</span><span>&bull;</span><span>&bull;</span></div>
@@ -34,26 +34,31 @@
     }
     else
     {
-        <Journey State="state" Established="Established" Written="Written(state)" />
+        <Journey State="interviewState" Established="Established" Written="Written(interviewState)" />
 
-        @if (Written(state))
+        @if (Written(interviewState))
         {
-            <AgentWritten State="state" Busy="isBusy" OnCommit="CommitAsync" />
+            <AgentWritten State="interviewState" Busy="isBusy" OnCommit="CommitAsync" />
         }
         else
         {
-            <Question Asked="@(state.Question ?? "…")"
-                      Prompting="@Prompting(state)"
-                      Choices="Offered(state)"
+            <Question Asked="@(interviewState.Question ?? "…")"
+                      Prompting="@Prompting(interviewState)"
+                      Choices="Offered(interviewState)"
                       Busy="isBusy"
-                      Turn="state.Exchanges"
+                      Turn="interviewState.Exchanges"
                       OnAnswer="SendAsync"
                       OnChoose="ChooseAsync" />
         }
 
-        @if (state.Error is not null)
+        @if (!isBusy)
         {
-            <p class="severity-error">@state.Error</p>
+            <StepBack State="interviewState" Busy="isBusy" OnBack="BackAsync" />
+        }
+
+        @if (interviewState.Error is not null)
+        {
+            <p class="severity-error">@interviewState.Error</p>
         }
 
         @*
@@ -61,9 +66,9 @@
             be about, and nine rows reading "not yet" would report nothing achieved at the moment the
             interview is deciding everything else.
         *@
-        @if (state.Pass != InterviewPass.DomainMapper)
+        @if (interviewState.Pass != InterviewPass.DomainMapper)
         {
-            <AgentSoFar State="state" />
+            <AgentSoFar State="interviewState" />
         }
     }
 
@@ -91,25 +96,47 @@
     /// <summary>
     /// Whether every section is settled and the agent is waiting to be let into the domain.
     /// </summary>
-    private static bool Written(InterviewState state) =>
-        state is { Pass: InterviewPass.AgentFinalizer, ReadyForReview: true };
+    private static bool Written(InterviewState interviewState) =>
+        interviewState is { Pass: InterviewPass.AgentFinalizer, ReadyForReview: true };
 
     /// <summary>
-    /// What the empty answer box asks for: the material this step is short of, said in the words a
-    /// client would use for their own work.
+    /// The worked example in the answer box, shown on the first question of a step and no other.
     /// </summary>
-    /// <remarks>
-    /// A placeholder is read by somebody who has just been asked a question and does not yet know
-    /// what a good answer looks like, so it has to be a plain sentence about their business — not a
-    /// clipped phrase in Alembic's vocabulary, which reads as a label for a field they cannot see.
-    /// </remarks>
-    private static string Prompting(InterviewState state) => state.Pass switch
-    {
-        InterviewPass.DomainMapper => "What people write to you about, as many kinds as come to mind",
-        InterviewPass.AgentModeler => "What happens when a request like this arrives, and what must never happen",
-        InterviewPass.ToolkitModeler => "What you have to look up, change or send to answer one of these",
-        _ => "In what order the work is done, and anything that should stay unsaid"
-    };
+    // An example rather than a label: somebody who has just been asked a question does not yet know
+    // what a good answer looks like, and naming the material only restates the question. Each shows
+    // the register, the length and the detail at once, in a trade the client does not have.
+    //
+    // The four are one story, told once. The first draws the boundary — the shop sells, Morgana
+    // handles what comes after the order — and the others pick up where the last stopped without
+    // repeating it, so a client answering in this register hands over material that does not
+    // overlap with itself.
+    private static string Prompting(InterviewState interviewState)
+        => !interviewState.PassJustOpened ? string.Empty : interviewState.Pass switch
+            {
+                InterviewPass.DomainMapper =>
+                    "We sell coffee online, a dozen blends, mostly on subscription. Selling is not what I "
+                    + "want her for — the site does that, and roasting stays with us. It is what comes "
+                    + "after the order: people writing to move a delivery, to swap what is in the next box, "
+                    + "or to ask for an invoice.",
+
+                InterviewPass.AgentModeler =>
+                    "Someone wants their delivery moved, usually giving a date and their order number. We "
+                    + "find their subscription, shift it, and tell them the new day. We never change the "
+                    + "payment or the blend in the same breath, and we never promise a date before we know "
+                    + "it can be held.",
+
+                InterviewPass.ToolkitModeler =>
+                    "To do that we look the subscription up in our order system by the customer's email, "
+                    + "then check with the warehouse whether the next box has already been packed. If it "
+                    + "has not, we set the new date on it and a confirmation goes out by email. The packing "
+                    + "status is theirs, not ours.",
+
+                _ =>
+                    "We check the subscription first, then say what can be done, then do it — never confirm "
+                    + "before the change is made. One short line back, with the new day written out in "
+                    + "full. We keep back which courier we use and what the shipping costs us; if the box "
+                    + "has already gone, we say so and offer the one after."
+            };
 
     /// <summary>
     /// The choices attached to the question being asked right now, if any.
@@ -119,8 +146,8 @@
     /// pressed: what stands after that is the next question, and offering an answer to something
     /// already settled is worse than offering nothing.
     /// </remarks>
-    private static IReadOnlyList<QuickReply>? Offered(InterviewState state) =>
-        state.ChosenId is null ? state.Choices : null;
+    private static IReadOnlyList<QuickReply>? Offered(InterviewState interviewState) =>
+        interviewState.ChosenId is null ? interviewState.Choices : null;
 
     /// <summary>
     /// Sends a choice as the answer, and records which one was pressed.
@@ -132,8 +159,8 @@
     /// </remarks>
     private Task ChooseAsync(QuickReply choice)
     {
-        if (InterviewService.Current is { } state)
-            state.ChosenId = choice.Id;
+        if (InterviewService.Current is { } interviewState)
+            interviewState.ChosenId = choice.Id;
 
         return SendAsync(choice.Value);
     }
@@ -142,6 +169,16 @@
     {
         isBusy = true;
         try { await InterviewService.AnswerAsync(said); }
+        finally { isBusy = false; }
+    }
+
+    /// <summary>
+    /// Steps back to the previous part of the interview.
+    /// </summary>
+    private async Task BackAsync()
+    {
+        isBusy = true;
+        try { await InterviewService.BackAsync(); }
         finally { isBusy = false; }
     }
 

@@ -40,6 +40,21 @@ public interface IInterviewService
     // transcript is continuous — they are having one interview, and the restart is the model's alone.
 
     /// <summary>
+    /// Steps the interview back one step of the journey, keeping everything already written.
+    /// </summary>
+    /// <returns><c>true</c> if it moved, <c>false</c> when there is nothing behind it.</returns>
+    // Backwards is the client's where forwards is not: going on is a claim that a step is settled,
+    // which the state machine decides, and going back is a claim that something needs changing,
+    // which only they can make.
+    //
+    // The memory is the configuration, not the conversation. A step is re-entered the way it was
+    // entered the first time — fresh agent, fresh session, reading what is written as settled fact
+    // — so the client changes what they came to change instead of dictating it again. Stepping out
+    // of an entry into the one before takes that agent back out of the domain, so no second copy of
+    // it can be committed.
+    Task<bool> BackAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Folds the agent just finished into the Draft, creating a Draft if there is none, and moves
     /// the interview to the next entry of the domain map.
     /// </summary>
