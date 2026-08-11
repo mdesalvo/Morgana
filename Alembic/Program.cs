@@ -39,18 +39,11 @@ builder.Services.AddSingleton<ILogger>(sp =>
 // ==============================================================================
 // Alembic reuses the framework's own prompt stack rather than reimplementing it.
 //
-// - IAgentConfigurationService: scans loaded assemblies for embedded agents.json. Alembic embeds
-//   none and none is expected to be found: the service degrades to agentless mode, which is the
-//   correct state here, because the domain Alembic works on is the one the CLIENT uploads, never
-//   one compiled into this process.
-// - IPromptResolverService: resolves the framework prompts from morgana.json, embedded in
-//   Morgana.AI and therefore available for free through the project reference.
-// - IPromptComposerService: assembles what the model reads. This is what lets Alembic show a
-//   real composed prompt as the interview recap instead of a summary of the client's answers —
-//   ComposeAgentInstructionsAsync takes the domain prompt as a parameter, so the Records.Prompt
-//   can be built in memory from a Draft that exists nowhere on disk yet.
+// - IAgentConfigurationService: the domain half of the prompt stack, empty by construction here
+// - IPromptResolverService: resolves the framework prompts from morgana.json, embedded in Morgana.AI
+// - IPromptComposerService: assembles what the model reads
 
-builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
+builder.Services.AddSingleton<IAgentConfigurationService, AgentlessConfigurationService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptComposerService>();
 
