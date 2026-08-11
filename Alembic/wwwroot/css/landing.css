@@ -11,6 +11,9 @@
     aspect-ratio: 1;
 }
 
+/* On its own layer. A blurred radial gradient is repainted every time anything over it changes, and
+   the image over it changes exactly once — at the handoff from the prerendered page to the live
+   circuit — which is where the flicker was coming from. Composited once, it stops being redrawn. */
 .vessel::before {
     content: "";
     position: absolute;
@@ -18,6 +21,7 @@
     border-radius: 50%;
     background: radial-gradient(circle, rgba(192, 132, 252, 0.35), transparent 68%);
     filter: blur(1.4rem);
+    transform: translateZ(0);
 }
 
 .vessel img {
@@ -25,6 +29,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    background: var(--alembic-bg-deep);
     border-radius: 50%;
     border: 1px solid var(--alembic-border-lit);
     box-shadow: 0 0 3rem rgba(139, 92, 246, 0.35);
