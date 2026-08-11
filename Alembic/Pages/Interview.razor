@@ -26,6 +26,17 @@
 
 <div class="alembic-page">
 
+    @*
+        Taking the work away sits on the band that says where you are — under the mark, over the rail,
+        on the line the eye already travels down before it reaches the question. It is not part of
+        answering, so it does not stand in the line of it; and it is not off in a corner of the
+        window either, because a thing pinned away from everything else is a thing nobody meets. It is
+        there from the first turn: a map dictated and lost is the same afternoon gone.
+    *@
+    <div class="whereabouts">
+        <SaveWork />
+    </div>
+
     @if (InterviewService.Current is not { } interviewState)
     {
         <div class="scene">
@@ -71,22 +82,16 @@
         }
 
         @*
-            The foot: what has been written about the agent in hand, and the way to take the whole of
-            it home. They belong on one line because they are the same subject seen twice — this is
-            what you have, and this is how you keep it.
-
-            The rows appear from the second step on. While the map is being drawn there is no agent
-            for them to be about, and nine reading "not yet" would report nothing achieved at the
-            moment the interview is deciding everything else. The save link is there from the first
-            question: a map dictated and lost is the same afternoon gone.
+            The foot: what has been written about the agent in hand. It appears from the second step
+            on — while the map is being drawn there is no agent for it to be about, and nine rows
+            reading "not yet" would report nothing achieved at the moment the interview is deciding
+            everything else.
         *@
         <div class="foot">
             @if (interviewState.Pass != InterviewPass.DomainMapper)
             {
                 <AgentSoFar State="interviewState" />
             }
-
-            <SaveWork />
         </div>
     }
 
