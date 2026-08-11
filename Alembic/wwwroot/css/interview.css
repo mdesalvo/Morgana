@@ -354,9 +354,13 @@
     width: 100%;
 }
 
+/* The answer is written at the size it is read at. A paragraph about somebody's own work, typed into
+   a box set two sizes under the question that asked for it, reads as a form field for a reference
+   number — and it is the material the whole interview exists to collect. */
 .reply textarea {
-    font-size: 1rem;
-    padding: 0.85rem 1rem;
+    font-size: 1.12rem;
+    line-height: 1.6;
+    padding: 1rem 1.2rem;
     border-radius: 0.6rem;
 }
 
@@ -366,7 +370,7 @@
     color: var(--alembic-muted);
     opacity: 0.62;
     font-style: italic;
-    line-height: 1.5;
+    line-height: 1.6;
 }
 
 /* The two movements of the interview, on one row and at one size. Going on and going back are not
