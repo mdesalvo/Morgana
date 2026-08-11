@@ -419,6 +419,12 @@ lines and the box became a slot. The page is wide now, and the reading measures 
 where a measure means something — the question, the answer box, the cloud of words — rather than once
 around everything.
 
+The type went up with it, once, at the root: everything here is sized in rem, so a single step keeps
+every proportion already chosen. A surface given more room and left at the same size does not read as
+roomy, it reads as a small interface in a large window. The answer box got a second step of its own —
+a paragraph about somebody's own work, typed two sizes under the question that asked for it, reads as
+a field for a reference number, and it is the material the whole interview exists to collect.
+
 **One question is the whole screen**, and that is the same argument made in layout: a page of
 requirements is answered the way anybody answers one, by getting shorter. So the question stands
 alone and large, and what the answers have become is folded away at the foot behind the name of the

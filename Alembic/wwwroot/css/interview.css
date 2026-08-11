@@ -28,7 +28,7 @@
     color: var(--alembic-muted);
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    font-size: 0.7rem;
+    font-size: 0.76rem;
 }
 
 .journey .domain .kinds {
@@ -101,7 +101,7 @@
     position: relative;
     padding-top: 1.9rem;
     text-align: center;
-    font-size: 0.8rem;
+    font-size: 0.86rem;
     line-height: 1.35;
     color: var(--alembic-muted);
     opacity: 0.55;
@@ -162,7 +162,7 @@
     padding: 0 0.7rem;
     background: var(--alembic-bg);
     color: var(--alembic-accent);
-    font-size: 0.78rem;
+    font-size: 0.84rem;
     letter-spacing: 0.04em;
     white-space: nowrap;
     overflow: hidden;
@@ -495,7 +495,7 @@ a.keep {
 }
 
 .rows-open .drop .what {
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: var(--alembic-muted);
@@ -505,7 +505,7 @@ a.keep {
    four fifths of a sentence and an ellipsis, has answered nothing — the client opens it for the part
    that got cut. */
 .rows-open .drop .value {
-    font-size: 0.88rem;
+    font-size: 0.95rem;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }

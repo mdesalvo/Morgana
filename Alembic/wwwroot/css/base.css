@@ -35,6 +35,14 @@
     box-sizing: border-box;
 }
 
+/* The whole surface is set one step up. Everything here is sized in rem against this, so the step is
+   taken once and the proportions between a question, a station name and a row label are the ones
+   already chosen — a page given more room and left at the same type size reads as a small interface
+   in a large window, which is the state it was in. */
+html {
+    font-size: 106.25%;
+}
+
 html, body {
     margin: 0;
     padding: 0;
