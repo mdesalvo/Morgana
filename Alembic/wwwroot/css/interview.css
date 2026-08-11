@@ -1,8 +1,8 @@
 /* ==========================================================================
    The interview: the map across the top, the journey, the question that is the whole scene, the
    transcript folded away, and the agent's own rows along the foot. One file per component would
-   scatter a language that has to agree with itself - gold behind, accent for here, faint for
-   ahead - so the interview is one file and the agreement is visible in it.
+   scatter a language that has to agree with itself - deep violet behind, the bright accent for here,
+   faint for ahead - so the interview is one file and the agreement is visible in it.
    ========================================================================== */
 
 /* Where the interview stands: the domain, the four steps each entry of it goes through, and one
@@ -73,13 +73,18 @@
     box-shadow: 0 0 1.4rem rgba(192, 132, 252, 0.25);
 }
 
-/* The stepper: the four steps every entry of the map goes through, numbered, in the client's own
-   words — never "pass", which is a fact
-   about how Alembic is built and none of theirs. Three states, and the palette carries them so
-   nobody has to read a legend: gold behind, because gold is what is finished; the accent lit and
-   ringed for where the work is now; hollow and faint for what has not been reached. The rail fills
-   gold up to the step in hand, so the journey reads left to right at a glance. It reports and
-   controls nothing — none of these steps is the client's to advance. */
+/* The rail: every step the interview goes through, the two that happen once on the line itself and
+   the four of an entry's lap inside it. Three states, and the palette carries them so nobody has to
+   read a legend, and all three are the one violet the page is lit by: the deep accent, solid, for what
+   is behind; the bright accent lit and ringed for where the work is now; the plain border colour,
+   faint, for what has not been reached. The rail fills deep violet up to the step in hand, so the
+   journey reads left to right at a glance.
+
+   Not gold. Gold is the warm note this room keeps for a thing that is finished and closed, and a step
+   of six behind you is neither — on the rail it read as a second hue arguing with the violet rather
+   than as the same journey earlier along. It also puts the rail in one language with the entries under
+   it, where what is already written has been deep violet all along. It reports and controls nothing —
+   none of these steps is the client's to advance. */
 .stations {
     display: flex;
     align-items: flex-start;
@@ -94,7 +99,7 @@
     flex: 1 1 0;
     max-width: 11rem;
     position: relative;
-    padding-top: 3rem;
+    padding-top: 1.9rem;
     text-align: center;
     font-size: 0.8rem;
     line-height: 1.35;
@@ -103,65 +108,161 @@
     transition: color 0.3s, opacity 0.3s;
 }
 
+/* The lap: the steps every entry of the map goes through, drawn as one thing because they are one
+   thing that happens again. What says so is not a caption but the shape — a bordered run with the
+   entry's own name on its edge, stacked like sheets while entries remain, and the line of the
+   journey passing in one side and out the other.
+
+   Acceptance is inside it. It closes an entry's turn and the next turn opens on the step after the
+   map, so a rail that put it outside would light its last step and then jump the light backwards,
+   which is the one thing a left-to-right rail cannot do. */
+.stations > .lap {
+    flex: 5 1 0;
+    max-width: 52rem;
+    position: relative;
+    margin-top: 1.5rem;
+    padding: 1.4rem 0.9rem 0.7rem;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.7rem;
+    background: rgba(23, 17, 48, 0.35);
+}
+
+/* The sheets behind it, and there is one only while there is another entry to come. Two offset
+   outlines are the plainest way a surface says "again" without a word or an arrow on it. */
+.stations > .lap.stacked::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    translate: 0.34rem 0.34rem;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.7rem;
+    opacity: 0.7;
+}
+
+.stations > .lap.stacked::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    translate: 0.68rem 0.68rem;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.7rem;
+    opacity: 0.35;
+}
+
+/* The entry being written, on the edge of its own lap the way a legend sits on a fieldset: it names
+   what this run is a run of, and it is the same phrase the strip below lights and the panel at the
+   foot is tabbed with. */
+.stations > .lap .lap-head {
+    position: absolute;
+    top: -0.72rem;
+    left: 50%;
+    translate: -50% 0;
+    padding: 0 0.7rem;
+    background: var(--alembic-bg);
+    color: var(--alembic-accent);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100% - 2.4rem);
+}
+
+.lap-steps {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* The two steps outside the lap stand level with the four inside it, so the line through them all is
+   one line: the lap's own top border and padding are what they are pushed down by. */
+.stations > .station {
+    margin-top: calc(1.5rem + 1.4rem + 1px);
+}
+
+/* And the line does not stop at the border it crosses. Each of the outer stations reaches its half
+   segment into the lap's padding, which is what makes the journey pass through the run rather than
+   arrive at a box and start again inside it.
+
+   Only the far end moves. The end at the mark stays where every other segment's does — 0.85rem short
+   of the centre — because a width measured from the middle of the station is a line drawn through the
+   disc standing there. */
+.stations > .station:first-child::after {
+    width: calc(50% - 0.85rem + 0.9rem);
+    right: -0.9rem;
+}
+
+.stations > .station:last-child::before {
+    width: calc(50% - 0.85rem + 0.9rem);
+    left: -0.9rem;
+}
+
 /* The rail, drawn as two half-segments per station so the first and last ends stop at their own
-   mark instead of hanging off the row. */
+   mark instead of hanging off the row.
+
+   Each segment stops short of the mark rather than running under it. Hiding a line behind an opaque
+   disc only works while the disc and what is behind it are the same colour, and behind this one there
+   is a gradient — so the line reappeared inside the circle as soon as the page was lit. A line that is
+   not drawn there cannot show through. Its centre is the circle's centre, one pixel up for the
+   segment's own thickness. */
 .station::before,
 .station::after {
     content: "";
     position: absolute;
-    top: 1.1rem;
+    top: calc(0.75rem - 1px);
     height: 2px;
     border-radius: 2px;
     background: var(--alembic-border);
     transition: background 0.3s;
 }
 
-.station::before { left: 0; width: 50%; }
-.station::after { right: 0; width: 50%; }
+.station::before { left: 0; width: calc(50% - 0.85rem); }
+.station::after { right: 0; width: calc(50% - 0.85rem); }
 
-.station:first-child::before,
-.station:last-child::after {
+/* Only the two ends of the whole journey stop. Inside the lap every station keeps both halves, or
+   the line would break at the very place it is meant to be shown passing through. */
+.stations > .station:first-child::before,
+.stations > .station:last-child::after {
     background: transparent !important;
 }
 
-/* Over the rail, not on it. Both halves of the line are pseudo-elements of the same station and the
-   trailing one paints after this, so without a layer of its own the segment runs into the circle and
-   out the other side of the number. */
+/* A disc and no number. Four of the six steps happen once per entry of the map, so a count running
+   one to six would claim an order that only the two outside the lap actually have.
+
+   Filled, not outlined: at this size a ring is a hairline around a hole, and the hole takes the shape
+   of whatever rounding the browser gives it rather than the shape of a circle. Solid, the three states
+   are three colours and nothing else has to be read. */
 .station .mark {
     position: absolute;
-    z-index: 1;
-    top: 0;
+    top: 0.35rem;
     left: 50%;
     translate: -50% 0;
-    display: grid;
-    place-items: center;
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 0.8rem;
+    height: 0.8rem;
     border-radius: 50%;
-    border: 1px solid var(--alembic-border);
-    background: var(--alembic-bg);
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--alembic-muted);
-    transition: background 0.3s, box-shadow 0.3s, border-color 0.3s, color 0.3s;
+    background: var(--alembic-border);
+    transition: background 0.3s, box-shadow 0.3s;
 }
 
-/* Behind: finished, and gold says so. The rail behind it is gold too, which is the progress bar
-   this stepper would otherwise need drawing separately. */
+/* Behind. The rail behind it is filled too, which is the progress bar this stepper would otherwise
+   need drawing separately. */
 .station.done {
     opacity: 1;
 }
 
 .station.done .mark {
-    border-color: var(--alembic-gold);
-    background: rgba(244, 197, 106, 0.14);
-    color: var(--alembic-gold);
+    background: var(--alembic-accent-deep);
 }
 
 .station.done::before,
 .station.done::after,
 .station.here::before {
-    background: var(--alembic-gold);
+    background: var(--alembic-accent-deep);
 }
 
 /* Here: the only lit thing on the rail. */
@@ -172,42 +273,41 @@
 }
 
 .station.here .mark {
-    border-color: transparent;
     background: linear-gradient(140deg, var(--alembic-accent), var(--alembic-accent-deep));
-    color: #14082b;
-    box-shadow: 0 0 0 0.3rem rgba(192, 132, 252, 0.18), 0 0 1.6rem rgba(192, 132, 252, 0.6);
+    box-shadow: 0 0 0 0.32rem rgba(192, 132, 252, 0.18), 0 0 1.4rem rgba(192, 132, 252, 0.7);
 }
 
-@media (max-width: 44rem) {
+/* Narrow: the lap keeps its shape, since the shape is the whole of what it says, and the words are
+   what gives way. */
+@media (max-width: 52rem) {
     .station {
-        font-size: 0.72rem;
+        font-size: 0.7rem;
     }
 
-    .station .mark {
-        width: 1.8rem;
-        height: 1.8rem;
+    .stations > .lap {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+
+    .stations > .station:first-child::after {
+        width: calc(50% - 0.85rem + 0.5rem);
+        right: -0.5rem;
+    }
+
+    .stations > .station:last-child::before {
+        width: calc(50% - 0.85rem + 0.5rem);
+        left: -0.5rem;
     }
 }
 
 /* The scene: one question, alone, because that is what the client is being asked to do right
    now. Everything else on the page is either what they already said or what it has become. */
 .scene {
-    min-height: 16rem;
+    min-height: 12rem;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 2.5rem 0 1rem;
-}
-
-/* What is being asked for at this step. It sits under the steps, not over the question, so the
-   client has one voice to answer and one to read. */
-.journey .after {
-    max-width: 36rem;
-    margin: 1.6rem auto 0;
-    color: var(--alembic-muted);
-    font-size: 0.92rem;
-    line-height: 1.5;
-    text-align: center;
+    padding: 1.6rem 0 0.6rem;
 }
 
 .asked {
@@ -269,10 +369,20 @@
     line-height: 1.5;
 }
 
+/* The two movements of the interview, on one row and at one size. Going on and going back are not
+   the same gesture — one is answering, the other is changing something already answered — but they
+   are equally the client's to make, and a line of prose under the box said the second was an
+   afterthought. The primary is pushed right on its own, so the row is unchanged where there is
+   nothing behind to go back to. */
 .reply-actions {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    gap: 0.8rem;
     margin-top: 0.8rem;
+}
+
+.reply-actions .primary {
+    margin-left: auto;
 }
 
 textarea {
@@ -293,51 +403,148 @@ textarea:focus {
     box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
 }
 
-/* The way back: a line of text, not a button, because it competes with nothing. */
-.step-back {
-    max-width: 34rem;
-    margin: 0.9rem auto 0;
-}
-
-.step-back button {
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    font-size: 0.82rem;
-    color: var(--alembic-muted);
-    cursor: pointer;
-    opacity: 0.75;
-    transition: color 0.2s ease, opacity 0.2s ease;
-}
-
-.step-back button:hover {
-    color: var(--alembic-accent);
-    opacity: 1;
-}
+/* The way back sits in the same row as the answer and is styled in controls.css as a secondary
+   button: same height, same type size, one outlined instead of filled. */
 
 /* ============================ what has been distilled ============================ */
 
-/* The strip along the foot. It is the second column of the old layout, flattened: the client
-   should be able to see their domain being written without it competing with the question. */
-.distilled {
-    border-top: 1px solid rgba(53, 41, 107, 0.7);
-    padding-top: 1.2rem;
-    margin-top: 2rem;
+/* ============================ the foot ============================ */
+
+/* Two things on one line: what has been written about the agent in hand, and the way to take the
+   whole of it home. Pinned to the foot of the window, because both are things a client reaches for
+   without having gone looking — and unpinned the moment the rows are opened, since a panel that
+   size held against the window covers the box they are meant to be typing in. The answer box wins:
+   that is the rule, and :has is how the row hears about it. */
+.foot {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 2.6rem;
+    padding-bottom: 0.9rem;
 }
 
-.distilled h2 {
-    margin: 0 0 0.8rem;
+.foot:has(details[open]) {
+    position: static;
+}
+
+/* Taking the work away. Quiet — it is not what anybody came to do — but never hidden, and the line
+   under it is the whole instruction: there is no account to log back into, so the file IS the way
+   back and a client who does not know that loses the afternoon. */
+.keep {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.15rem;
+    text-align: right;
+}
+
+.keep .take {
+    color: var(--alembic-muted);
+    text-decoration: none;
+    border-bottom: 1px dashed var(--alembic-border-lit);
+    font-size: 0.9rem;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.keep .take:hover {
+    color: var(--alembic-accent);
+    border-color: var(--alembic-accent);
+}
+
+.keep .how {
+    color: var(--alembic-muted);
+    opacity: 0.7;
     font-size: 0.72rem;
+}
+
+/* What the answers have become, folded behind the name of the agent they are about. It is the same
+   pill the rail is headed with and the same one lit in the map — one object in three places, which is
+   what makes it obvious whose rows these are without a word of explanation.
+
+   Closed, it is pinned to the foot of the window: below the question there is a rail, a map, a
+   question set large and a box five rows deep, so a tab left at the foot of the PAGE was under the
+   fold on an ordinary screen and nobody learns about a thing they have to go looking for.
+
+   Open, it is not pinned at all. A panel this size held against the window covers the box the client
+   is meant to be typing in, which is the one thing on the screen that must never be covered — so
+   opening it puts it back in the flow of the page, where it pushes instead of overlapping. Two
+   states, one rule, and the rule is that the answer box wins. */
+.distilled > summary {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.45rem 1.1rem;
+    border: 1px solid var(--alembic-accent);
+    border-radius: 1.4rem;
+    background: rgba(192, 132, 252, 0.16);
+    box-shadow: 0 0 1.4rem rgba(192, 132, 252, 0.25);
+    color: var(--alembic-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    list-style: none;
+    transition: box-shadow 0.2s, background 0.2s;
+}
+
+.distilled > summary::-webkit-details-marker {
+    display: none;
+}
+
+.distilled > summary:hover {
+    background: rgba(192, 132, 252, 0.24);
+}
+
+/* Open, the pill gives up its lower half to the panel it heads, so the two are one shape rather than
+   a badge sitting on a box. */
+.distilled[open] > summary {
+    position: relative;
+    z-index: 1;
+    margin-bottom: -1px;
+    border-bottom-color: transparent;
+    border-radius: 1.4rem 1.4rem 0 0;
+    box-shadow: none;
+}
+
+.distilled .whose {
+    color: var(--alembic-text);
+    font-size: 0.95rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
+}
+
+/* How much of this one is written, and what the last exchange moved: the whole of what an unopened
+   tab has to say, so a client who has not opened it is not missing the fact that something moved. */
+.distilled .counted {
     color: var(--alembic-muted);
 }
 
+.distilled .lately {
+    color: var(--alembic-accent);
+}
+
+.distilled > summary::after {
+    content: "▾";
+    font-size: 0.75rem;
+    transition: rotate 0.2s ease;
+}
+
+.distilled[open] > summary::after {
+    rotate: 180deg;
+}
+
+.distilled .rows {
+    border: 1px solid var(--alembic-accent);
+    border-radius: 0 1.1rem 1.1rem 1.1rem;
+    background: var(--alembic-panel);
+    padding: 1.1rem;
+}
+
 .drops {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    align-items: start;
     gap: 0.5rem;
 }
 
@@ -346,7 +553,6 @@ textarea:focus {
     border-radius: 0.5rem;
     padding: 0.45rem 0.75rem;
     background: rgba(23, 17, 48, 0.7);
-    max-width: 22rem;
     transition: border-color 0.4s, box-shadow 0.4s;
 }
 
@@ -358,14 +564,15 @@ textarea:focus {
     color: var(--alembic-muted);
 }
 
+/* Whole, never clipped. A panel opened on purpose to read what has been written down about this
+   agent, that then shows four fifths of a sentence and an ellipsis, has answered nothing — the client
+   opens it precisely for the part that got cut. It grows instead, and it can: open, it is in the flow
+   of the page. */
 .drop .value {
     display: block;
     font-size: 0.88rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .drop.empty {

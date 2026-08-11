@@ -38,6 +38,7 @@ public class InterviewService : IInterviewService
     {
         [InterviewPass.DomainMapper] = "DomainMapper",
         [InterviewPass.AgentModeler] = "AgentModeler",
+        [InterviewPass.AgentVoicer] = "AgentVoicer",
         [InterviewPass.ToolkitModeler] = "ToolkitModeler",
         [InterviewPass.AgentFinalizer] = "AgentFinalizer"
     };
@@ -49,6 +50,7 @@ public class InterviewService : IInterviewService
     private static readonly Dictionary<InterviewPass, string> BootstrapMessages = new()
     {
         [InterviewPass.DomainMapper] = "Begin the interview.",
+        [InterviewPass.AgentVoicer] = "The client is still here and what this agent is for is settled. Begin this one.",
         [InterviewPass.ToolkitModeler] = "The client is still here and the previous pass is settled. Begin this one.",
         [InterviewPass.AgentFinalizer] = "The client is still here and the toolkit is settled. Begin the last pass."
     };
@@ -96,6 +98,21 @@ public class InterviewService : IInterviewService
     {
         Current = new InterviewState();
 
+        // An interview brought back in a save file resumes where it stopped, and resumes the way a
+        // step back does: the step is re-entered with a fresh agent and a fresh session reading what
+        // is already written as settled fact. The conversation is not restored because it was never
+        // the memory — the configuration is.
+        if (draftStateService.Current?.Sitting is { } sitting)
+        {
+            Current.Map.AddRange(sitting.Map);
+            Current.At = sitting.At;
+            Current.Agent = sitting.Agent;
+
+            await EnterPassAsync(Current, sitting.Pass, cancellationToken, revisiting: true);
+
+            return Current;
+        }
+
         await EnterPassAsync(Current, InterviewPass.DomainMapper, cancellationToken);
 
         return Current;
@@ -110,6 +127,7 @@ public class InterviewService : IInterviewService
             return interviewState;
 
         await ExchangeAsync(interviewState, answer, cancellationToken);
+        Keep(interviewState);
 
         // The seam belongs to the model. Once the state machine has CONFIRMED the pass settled —
         // SetPassCompleted is checked against Missing(), never believed — the next one opens in the
@@ -134,11 +152,13 @@ public class InterviewService : IInterviewService
             await EnterPassAsync(interviewState, interviewState.Pass + 1, cancellationToken);
         }
 
+        Keep(interviewState);
+
         return interviewState;
     }
 
     /// <inheritdoc />
-    public async Task<bool> CommitAsync(CancellationToken cancellationToken = default)
+    public async Task<bool> AcceptAsync(CancellationToken cancellationToken = default)
     {
         if (Current is not { } interviewState)
             return false;
@@ -165,6 +185,18 @@ public class InterviewService : IInterviewService
 
         draft.Intents.Add(interviewState.Intent);
         draft.Agents.Add(interviewState.Agent);
+
+        // The map is spent the moment this was the last of it, and an interview nobody is having is
+        // not something to resume into.
+        draft.Sitting = interviewState.At + 1 < interviewState.Map.Count
+            ? new InterviewSitting
+            {
+                Pass = InterviewPass.AgentModeler,
+                At = interviewState.At + 1,
+                Map = [.. interviewState.Map],
+                Agent = new AgentDraft()
+            }
+            : null;
 
         // Re-setting the same instance is what raises Changed, so a page showing the Draft
         // re-renders whether or not the Draft object itself was new.
@@ -228,6 +260,30 @@ public class InterviewService : IInterviewService
                 await EnterPassAsync(interviewState, interviewState.Pass - 1, cancellationToken, revisiting: true);
                 return true;
         }
+    }
+
+    /// <summary>
+    /// Writes where the interview stands into the Draft, so the save file is never out of date.
+    /// </summary>
+    /// <remarks>
+    /// Every turn, rather than on a button. A "save now" the client has to remember is a save they
+    /// remember after the tab is gone; keeping the Draft current at every exchange makes the download
+    /// beside the question true whenever it is taken, which is the only version of this that helps
+    /// somebody who closed a window by accident.
+    /// </remarks>
+    private void Keep(InterviewState interviewState)
+    {
+        DomainDraft draft = draftStateService.Current ?? new DomainDraft();
+
+        draft.Sitting = new InterviewSitting
+        {
+            Pass = interviewState.Pass,
+            At = interviewState.At,
+            Map = [.. interviewState.Map],
+            Agent = interviewState.Agent
+        };
+
+        draftStateService.Set(draft);
     }
 
     /// <summary>
@@ -353,6 +409,7 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.GetToolkit)] = tools.GetToolkit,
             [nameof(InterviewTools.GetAgentSoFar)] = tools.GetAgentSoFar,
             [nameof(InterviewTools.SetChoices)] = tools.SetChoices,
+            [nameof(InterviewTools.SetTraits)] = tools.SetTraits,
             [nameof(InterviewTools.GetExistingIntents)] = tools.GetExistingIntents,
             [nameof(InterviewTools.GetComposedPrompt)] = tools.GetComposedPrompt,
             [nameof(InterviewTools.GetFindings)] = tools.GetFindings,
@@ -398,6 +455,7 @@ public class InterviewService : IInterviewService
 
         interviewState.Error = null;
         interviewState.PendingChoices.Clear();
+        interviewState.PendingTraits.Clear();
         interviewState.Changed.Clear();
 
         Dictionary<string, string?> before = interviewState.Snapshot();
@@ -420,6 +478,7 @@ public class InterviewService : IInterviewService
             {
                 interviewState.Question = said;
                 interviewState.Choices = [.. interviewState.PendingChoices];
+                interviewState.Traits = [.. interviewState.PendingTraits];
                 interviewState.ChosenId = null;
                 interviewState.Exchanges++;
             }

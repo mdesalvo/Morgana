@@ -28,6 +28,32 @@ button.primary:disabled {
     cursor: default;
 }
 
+/* The way back. Same height and same type size as the primary beside it, outlined instead of
+   filled: going back is as much the client's move as going on — it is the only one of the two they
+   decide — and only one of them can be what the eye lands on first. */
+button.secondary {
+    background: transparent;
+    color: var(--alembic-muted);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.5rem;
+    padding: 0.6rem 1.2rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.95rem;
+    letter-spacing: 0.01em;
+    transition: color 0.18s, border-color 0.18s;
+}
+
+button.secondary:hover:not(:disabled) {
+    color: var(--alembic-text);
+    border-color: var(--alembic-border-lit);
+}
+
+button.secondary:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
 button.quiet {
     background: transparent;
     color: var(--alembic-muted);
@@ -96,6 +122,48 @@ button.choice:disabled {
     color: var(--alembic-accent);
 }
 
+/* The cloud of words for a voice. Deliberately not the choices above: those are laid out as a row of
+   offers where one is taken and the row is spent, and these are a field to graze — several taken at
+   once, weightless until picked, and nothing spent by taking one. So they are quieter than a button
+   when idle and unmistakably held when picked, and their sizes vary a little because a cloud that
+   lines up is a menu again. */
+.traits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    justify-content: center;
+    max-width: 34rem;
+    margin: 0 auto 1.2rem;
+}
+
+button.trait {
+    background: transparent;
+    color: var(--alembic-muted);
+    border: 1px dashed var(--alembic-border);
+    border-radius: 1.4rem;
+    padding: 0.35rem 0.9rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+button.trait:nth-child(3n) { font-size: 0.96rem; }
+button.trait:nth-child(4n) { font-size: 0.85rem; }
+
+button.trait:hover {
+    color: var(--alembic-text);
+    border-color: var(--alembic-border-lit);
+}
+
+button.trait.picked {
+    border-style: solid;
+    border-color: var(--alembic-accent);
+    background: rgba(192, 132, 252, 0.16);
+    color: var(--alembic-text);
+    box-shadow: 0 0 1rem rgba(192, 132, 252, 0.25);
+}
+
 /* The last station: the agent is written and joins the domain. Centred and alone, because it
    is the only moment of the interview where the client decides something. */
 .sealed {
@@ -116,6 +184,16 @@ button.choice:disabled {
     color: var(--alembic-muted);
     max-width: 32rem;
     margin: 0 auto 1.8rem;
+}
+
+/* The two moves available here, on one row: let it into the domain, or go back and change
+   something in it. */
+.sealed .sealed-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.8rem;
 }
 
 /* ============================ odds and ends ============================ */

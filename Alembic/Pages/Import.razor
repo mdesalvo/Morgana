@@ -87,8 +87,21 @@
                     <path d="M17.6 12.4H20a1 1 0 0 1 1 1v4" />
                 </svg>
 
-                <h2>Add another to it</h2>
-                <span class="go">Begin &rarr;</span>
+                @*
+                    A file with an interview in it is not an invitation to start one: it is the one
+                    the client left, and the door has to say so or they will read "begin" as losing
+                    what they came back with.
+                *@
+                @if (draft?.Sitting is not null)
+                {
+                    <h2>Carry on where you left off</h2>
+                    <span class="go">Continue &rarr;</span>
+                }
+                else
+                {
+                    <h2>Add another to it</h2>
+                    <span class="go">Begin &rarr;</span>
+                }
             </a>
 
             <a class="gateway" href="review">
@@ -219,10 +232,24 @@
     {
         int tools = draft.Agents.Sum(a => a.Tools.Count);
 
-        return $"I have read it: {Count(draft.Agents.Count, "creature", "creatures")}, "
-               + $"{Count(draft.Intents.Count, "calling", "callings")}, "
-               + $"{Count(tools, "thing they can do", "things they can do")}.";
+        string read = $"I have read it: {Count(draft.Agents.Count, "creature", "creatures")}, "
+                      + $"{Count(draft.Intents.Count, "calling", "callings")}, "
+                      + $"{Count(tools, "thing they can do", "things they can do")}.";
+
+        // An interview left half-finished is the first thing the client wants to hear about: they
+        // closed the tab on it, and everything else on this page is what was already behind them.
+        return draft.Sitting is { } sitting
+            ? read + $" And the one you were in the middle of, {Named(sitting)}, is still here."
+            : read;
     }
+
+    /// <summary>
+    /// What the interrupted interview was about, in the client's own words.
+    /// </summary>
+    private static string Named(InterviewSitting sitting) =>
+        sitting.At >= 0 && sitting.At < sitting.Map.Count
+            ? sitting.Map[sitting.At].Label ?? sitting.Map[sitting.At].Name ?? "the one you were writing"
+            : "the map itself";
 
     /// <summary>
     /// Both forms given, because English plurals are not a suffix and the nouns here are phrases.

@@ -6,7 +6,7 @@ namespace Alembic.Model;
 /// Which pass of the interview is running.
 /// </summary>
 /// <remarks>
-/// The mapping pass runs once and the other three run once per intent it produced. That order is
+/// The mapping pass runs once and the other four run once per intent it produced. That order is
 /// forced twice over. The intents are what a classifier weighs against each other, so they are
 /// designed together or they collide — an intent settled alone is a description nobody compared to
 /// anything. And within an agent, Instructions and Formatting speak about its tools, so they cannot
@@ -21,11 +21,21 @@ public enum InterviewPass
     DomainMapper,
 
     /// <summary>
-    /// What the agent is for, where it stops, how it sounds, and the intent that routes to it.
-    /// Writes the intent's four fields plus the agent's Target and Personality — and deliberately
-    /// not its Instructions or Formatting.
+    /// What the agent is for and where it stops: its Target, and nothing else.
     /// </summary>
     AgentModeler,
+
+    /// <summary>
+    /// How the agent sounds: its Personality, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Its own pass rather than the second half of the one before, because what it asks for is a
+    /// different kind of thing. A Target is dictated — the client knows what the work is — while a
+    /// voice is recognised: they are shown what this one could sound like and say which of it is
+    /// them. Joined to the Target, that recognition arrived as an afterthought at the end of a turn
+    /// already spent on the work, and was answered 'yes, fine'.
+    /// </remarks>
+    AgentVoicer,
 
     /// <summary>
     /// The toolkit: one tool at a time, its contract and its parameters.
@@ -143,6 +153,22 @@ public sealed class InterviewState
     public List<QuickReply> PendingChoices { get; } = [];
 
     /// <summary>
+    /// Words offered for the agent's voice, and the ones Alembic is about to offer.
+    /// </summary>
+    /// <remarks>
+    /// A cloud rather than buttons, and the difference is not decoration: a button is one answer and
+    /// these are picked several at a time, so the shape has to say 'take what fits' rather than
+    /// 'choose one'. It is the one question of the interview the client cannot dictate — nobody has
+    /// a ready sentence about how their own staff should sound — and recognition is what they can do
+    /// instead. The words are the model's, written for this domain and this agent after reading
+    /// Morgana's own voice, so none of them can contradict her.
+    /// </remarks>
+    public IReadOnlyList<string> Traits { get; set; } = [];
+
+    /// <inheritdoc cref="Traits" />
+    public List<string> PendingTraits { get; } = [];
+
+    /// <summary>
     /// Why the last exchange failed, when it did. Null on a healthy interview.
     /// </summary>
     public string? Error { get; set; }
@@ -195,7 +221,8 @@ public sealed class InterviewState
     public IReadOnlyList<string> Missing() => Pass switch
     {
         InterviewPass.DomainMapper => MissingMap(),
-        InterviewPass.AgentModeler => MissingFunctional(),
+        InterviewPass.AgentModeler => MissingTarget(),
+        InterviewPass.AgentVoicer => MissingVoice(),
         InterviewPass.ToolkitModeler => MissingToolkit(),
         InterviewPass.AgentFinalizer => MissingReturn(),
         _ => []
@@ -231,22 +258,21 @@ public sealed class InterviewState
     }
 
     /// <summary>
-    /// What the agent IS: its Target and its Personality, and nothing about the intent.
+    /// What the agent IS: its Target, and nothing else at all.
     /// </summary>
     /// <remarks>
-    /// The intent is the map's, settled whole and not reopened here. This pass owns the agent alone,
-    /// which is why it has no tool that writes an intent — the two facts agree because they are the
-    /// same fact stated in the two places that enforce it.
+    /// The intent is the map's, settled whole and not reopened here; the voice is the next pass's.
+    /// This pass owns one field, which is why it has one tool that writes — the two facts agree
+    /// because they are the same fact stated in the two places that enforce it.
     /// </remarks>
-    private List<string> MissingFunctional()
-    {
-        List<string> missing = [];
+    private List<string> MissingTarget() =>
+        string.IsNullOrWhiteSpace(Agent.Target) ? ["agentTarget"] : [];
 
-        if (string.IsNullOrWhiteSpace(Agent.Target)) missing.Add("agentTarget");
-        if (string.IsNullOrWhiteSpace(Agent.Personality)) missing.Add("agentPersonality");
-
-        return missing;
-    }
+    /// <summary>
+    /// How the agent sounds.
+    /// </summary>
+    private List<string> MissingVoice() =>
+        string.IsNullOrWhiteSpace(Agent.Personality) ? ["agentPersonality"] : [];
 
     /// <summary>
     /// Tools that were opened and never finished. A tool with no parameters is not one of them: a

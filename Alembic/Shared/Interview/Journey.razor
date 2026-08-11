@@ -1,31 +1,52 @@
 @*
     Where the interview stands, and what is still coming.
 
-    The rail is the whole shape of the process and it is on the screen from the first question, lit
-    at step one. An interview that shows only the question is a black box: the client cannot tell
+    The rail is the whole shape of the process and it is on the screen from the first question, lit at
+    the step in hand. An interview that shows only the question is a black box: the client cannot tell
     whether they are two minutes from the end or twenty, and the one thing every wizard owes them is
-    the answer to that. So the five steps are always visible, and the four that have not been reached
-    are dim rather than absent — words like *what it reaches for* mean little on the first screen,
-    but a step nobody can see means less.
+    the answer to that. So every step is visible, and the ones not reached are dim rather than absent.
 
-    Under it, the entries of the map appear as they are named, in the client's own words, and carry
-    the second fact the rail cannot: steps two to five run once per entry, so which entry is under
-    way is what says how far along the whole thing is.
+    Its shape is the process's shape. Two steps happen once — the map is drawn, and at the end the
+    finished domain is read and taken away — and everything between them happens again for every entry
+    of that map, so those five are drawn inside a lap: bordered, stacked like sheets while entries
+    remain, and headed by the entry it is a lap of.
 
-    Neither part explains itself in prose. They are two kinds of thing — the shape of the work, and
-    what the domain holds — and the eye tells them apart without being told.
+    Under it, the entries of the map appear as they are named, in the client's own words.
+
+    Nothing here explains itself in prose, and nothing here restates the question. A line under the
+    rail saying what the step is after was tried and removed twice over: the question that opens a
+    step already says it, in the model's own words and about this client's own work, so the line was
+    either the same fact in a second wording — which reads as two facts to reconcile — or, once it had
+    been made short enough not to be, a sentence true of any interview about any business.
+
+    The rail and the entries are two kinds of thing — the shape of the work, and what the domain
+    holds — and the eye tells them apart without being told.
 *@
 
 <div class="journey">
 
+    @*
+        Two steps on the line and five inside the lap, because that is the shape of the process: the
+        map is drawn once and the finished domain is read once, and everything between them happens
+        again for every entry of that map. A flat row of six would say the opposite, and would have the
+        light jump backwards from the last step to the second every time an agent was accepted.
+    *@
     <ol class="stations">
-        @foreach ((string label, int index) in Steps.Select((step, index) => (step, index)))
-        {
-            <li class="station @Standing(index)">
-                <span class="mark">@(index + 1)</span>
-                <span class="name">@label</span>
-            </li>
-        }
+        @Station(0)
+
+        <li class="lap @(Remaining > 0 ? "stacked" : null)">
+            <span class="lap-head">@LapHead</span>
+
+            <ol class="lap-steps">
+                @Station(1)
+                @Station(2)
+                @Station(3)
+                @Station(4)
+                @Station(5)
+            </ol>
+        </li>
+
+        @Station(6)
     </ol>
 
     @if (Entries.Any())
@@ -64,18 +85,67 @@
     public bool Written { get; set; }
 
     /// <summary>
-    /// The whole interview, in the client's words: the map once, then four steps per entry of it.
+    /// The whole interview, in the client's words: the map once, then the lap every entry of it goes
+    /// through, then the finished domain.
     /// </summary>
-    // The last is not a pass at all but the moment the client lets the agent into the domain, and it
-    // is on the rail because from the outside it is simply the step where an entry is finished.
+    // Each names its phase and nothing else, in one register: a rail is read at a glance, and a step
+    // whose name is a whole clause is read as a sentence the eye has to finish. What the client is
+    // actually being asked for is a different job and belongs to a different line — the one under the
+    // rail, which names the entry and says in their own words what this phase wants and what it does
+    // not want yet. Names above, meaning below: neither has to do both.
+    //
+    // The last of the lap is not a pass at all but the moment the client lets the agent into the
+    // domain. It is inside the lap because that is what it is: the close of one entry's turn, after
+    // which the lap starts again on the next. The last step is outside because it is the only other
+    // thing that happens once — the whole domain, read and taken away, which is the page the client
+    // lands on when the map is spent.
     private static readonly string[] Steps =
     [
-        "what she takes care of",
-        "what it is",
-        "what it reaches for",
-        "how it works",
-        "into the domain"
+        "Domain Exploration",
+        /*Agent Modeling*/ "Target",
+        /*Agent Modeling*/ "Personality",
+        /*Agent Modeling*/ "Toolkit",
+        /*Agent Modeling*/ "Instructions, Formatting",
+        "Agent Acceptance",
+        "Domain Finalization"
     ];
+
+    /// <summary>
+    /// What the lap is a lap of, on its own edge.
+    /// </summary>
+    // The run is named once, on the border that encloses it, rather than three times inside it. A
+    // prefix repeated on every station buries the part that tells them apart — which is the whole of
+    // what a rail is read for — at the end of the line, where the eye arrives last.
+    private const string Lap = "Agent Modeling";
+
+    /// <summary>
+    /// One step of the rail, wherever it sits.
+    /// </summary>
+    // The marks carry no number: two of them are outside the lap and five are inside it, so a count
+    // running 1 to 7 would be claiming an order that only two of the steps actually have.
+    private RenderFragment Station(int index) =>@<li class="station @Standing(index)">
+        <span class="mark"></span>
+        <span class="name">@Steps[index]</span>
+    </li>;
+
+    /// <summary>
+    /// What the lap is a lap of: the entry being written and how far along the map it is, or what is
+    /// about to start once the map exists.
+    /// </summary>
+    // Before the map exists the run has nothing to be a run of, and the head says only what it is.
+    // Saying that it will come round for each entry would be describing a list the client is still
+    // dictating, in the one moment they are deciding what goes on it.
+    //
+    // No count either. The strip under the rail is the map itself, with this entry lit among the
+    // others, so a number here says in arithmetic what the entries say in the client's own words —
+    // and a bare "1 of 4" a finger's width from four steps in a row invites being read as the steps.
+    private string LapHead => About is { } about ? $"{Lap} · {about}" : Lap;
+
+    /// <summary>
+    /// How many entries of the map still have no agent, the one in hand excluded. The lap is drawn as
+    /// a stack while any remain, which is what says it comes round again.
+    /// </summary>
+    private int Remaining => Drawing || State.At < 0 ? 1 : Math.Max(0, State.Map.Count - State.At - 1);
 
     /// <summary>
     /// Whether the map is still being drawn, in which case no entry is being written yet.
@@ -83,13 +153,20 @@
     private bool Drawing => State.Pass == InterviewPass.DomainMapper;
 
     /// <summary>
-    /// What the strip of entries is, which changes once the map is closed and they start being
-    /// worked through one at a time.
+    /// What the strip of entries is: the first step's own material.
     /// </summary>
-    private string Caption =>
-        Drawing || State.At < 0
-            ? "what your Morgana takes care of"
-            : $"what your Morgana takes care of — writing {State.At + 1} of {State.Map.Count}";
+    // Said plainly rather than repeating the rail's name for the phase: the rail is a label and this
+    // is a heading over the list itself. How far along the map the work is belongs to the lap's own
+    // head, which is where the entry being written is named — here it would be the same fact twice,
+    // once under a list where the entries already say it by being lit.
+    private const string Caption = "the work you hand over";
+
+    /// <summary>
+    /// Which entry the lap in hand is a lap of, or <c>null</c> while the map is being drawn and it is
+    /// about to be a lap of all of them.
+    /// </summary>
+    private string? About =>
+        Drawing || State.At < 0 || State.At >= State.Map.Count ? null : Named(State.Map[State.At]);
 
     /// <summary>
     /// Every entry the client can see, with how it stands: what earlier sittings left, then today's
@@ -109,12 +186,18 @@
     /// Where the rail is lit.
     /// </summary>
     // The pass is the index by construction: the enum and this list are in the same order, the map
-    // included. The last step is the exception — the interview stands there only once everything is
-    // settled and the agent is waiting for the client's word.
+    // included. Acceptance is the exception — no pass conducts it, and the interview stands there only
+    // once everything is settled and the agent is waiting for the client's word. The last step is
+    // never lit here: reaching it means leaving this page for the finished domain.
     private string Standing(int index)
     {
-        int here = Written ? Steps.Length - 1 : (int)State.Pass;
+        int here = Written ? Accepting : (int)State.Pass;
 
         return index == here ? "here" : index < here ? "done" : string.Empty;
     }
+
+    /// <summary>
+    /// Where acceptance sits on the rail: the last step of the lap.
+    /// </summary>
+    private const int Accepting = 5;
 }

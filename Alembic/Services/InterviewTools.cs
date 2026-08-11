@@ -403,6 +403,39 @@ public class InterviewTools
     }
 
     /// <summary>
+    /// Offers words for the agent's voice, to be picked from freely.
+    /// </summary>
+    /// <remarks>
+    /// Not buttons, and the tool is separate for the same reason the shape is: a button is one whole
+    /// answer and these are taken several at a time, none of them an answer on its own. The words
+    /// come from the model because they have to be about this domain and this agent and to sit
+    /// inside Morgana's own voice, which it has read and a template has not.
+    /// </remarks>
+    public string SetTraits(string traits)
+    {
+        try
+        {
+            List<string>? parsed = JsonSerializer.Deserialize<List<string>>(
+                traits, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            List<string> words = [.. (parsed ?? []).Select(w => w.Trim()).Where(w => w.Length > 0)];
+
+            if (words.Count == 0)
+                return "No words offered: the payload held none.";
+
+            interviewState.PendingTraits.Clear();
+            interviewState.PendingTraits.AddRange(words);
+
+            return $"{words.Count} words will be drawn under your question, to be picked from freely. "
+                   + "The text box stays open, so the answer may still come in the client's own words.";
+        }
+        catch (JsonException ex)
+        {
+            return $"No words offered: the payload is not a JSON array of words ({ex.Message}).";
+        }
+    }
+
+    /// <summary>
     /// Attaches buttons to the question about to be asked.
     /// </summary>
     public string SetChoices(string choices)
@@ -522,7 +555,8 @@ public class InterviewTools
                + interviewState.Pass switch
                {
                    InterviewPass.DomainMapper => $"the first of the {interviewState.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.",
-                   InterviewPass.AgentModeler => "the toolkit — what this agent has to reach for outside the conversation.",
+                   InterviewPass.AgentModeler => "how this agent should sound to the people who write in.",
+                   InterviewPass.AgentVoicer => "the toolkit — what this agent has to reach for outside the conversation.",
                    InterviewPass.ToolkitModeler => "the agent's own instructions and the way it presents what its tools return.",
                    _ => "the agent joins the domain, and they can review or export it."
                };

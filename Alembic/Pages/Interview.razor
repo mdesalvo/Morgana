@@ -36,24 +36,33 @@
     {
         <Journey State="interviewState" Established="Established" Written="Written(interviewState)" />
 
+        @*
+            The way back travels with whatever is on the table — the answer or the commit — and is a
+            button of the same size beside it, because going back is the one movement of the interview
+            the client decides.
+        *@
         @if (Written(interviewState))
         {
-            <AgentWritten State="interviewState" Busy="isBusy" OnCommit="CommitAsync" />
+            <AgentWritten State="interviewState" Busy="isBusy" OnAccept="AcceptAsync">
+                <Back>
+                    <StepBack State="interviewState" Busy="isBusy" OnBack="BackAsync" />
+                </Back>
+            </AgentWritten>
         }
         else
         {
             <Question Asked="@(interviewState.Question ?? "…")"
                       Prompting="@Prompting(interviewState)"
                       Choices="Offered(interviewState)"
+                      Traits="interviewState.Traits"
                       Busy="isBusy"
                       Turn="interviewState.Exchanges"
                       OnAnswer="SendAsync"
-                      OnChoose="ChooseAsync" />
-        }
-
-        @if (!isBusy)
-        {
-            <StepBack State="interviewState" Busy="isBusy" OnBack="BackAsync" />
+                      OnChoose="ChooseAsync">
+                <Back>
+                    <StepBack State="interviewState" Busy="isBusy" OnBack="BackAsync" />
+                </Back>
+            </Question>
         }
 
         @if (interviewState.Error is not null)
@@ -62,14 +71,23 @@
         }
 
         @*
-            From the second step on. While the map is being drawn there is no agent for this strip to
-            be about, and nine rows reading "not yet" would report nothing achieved at the moment the
-            interview is deciding everything else.
+            The foot: what has been written about the agent in hand, and the way to take the whole of
+            it home. They belong on one line because they are the same subject seen twice — this is
+            what you have, and this is how you keep it.
+
+            The rows appear from the second step on. While the map is being drawn there is no agent
+            for them to be about, and nine reading "not yet" would report nothing achieved at the
+            moment the interview is deciding everything else. The save link is there from the first
+            question: a map dictated and lost is the same afternoon gone.
         *@
-        @if (interviewState.Pass != InterviewPass.DomainMapper)
-        {
-            <AgentSoFar State="interviewState" />
-        }
+        <div class="foot">
+            @if (interviewState.Pass != InterviewPass.DomainMapper)
+            {
+                <AgentSoFar State="interviewState" />
+            }
+
+            <SaveWork />
+        </div>
     }
 
 </div>
@@ -124,6 +142,11 @@
                     + "find their subscription, shift it, and tell them the new day. We never change the "
                     + "payment or the blend in the same breath, and we never promise a date before we know "
                     + "it can be held.",
+
+                // The voice step has none, and that is not an omission. Its question is answered by
+                // picking from the words offered under it, and a fifty-word story in the box beside
+                // them would be an example of an answer nobody is being asked for.
+                InterviewPass.AgentVoicer => string.Empty,
 
                 InterviewPass.ToolkitModeler =>
                     "To do that we look the subscription up in our order system by the customer's email, "
@@ -213,13 +236,13 @@
     /// weighing against the others once the others exist, and a report between every two entries of
     /// the map turns one interview into a series of errands.
     /// </remarks>
-    private async Task CommitAsync()
+    private async Task AcceptAsync()
     {
         isBusy = true;
 
         try
         {
-            if (!await InterviewService.CommitAsync())
+            if (!await InterviewService.AcceptAsync())
                 NavigationManager.NavigateTo("review");
         }
         finally { isBusy = false; }

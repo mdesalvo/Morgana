@@ -34,13 +34,36 @@
             </div>
         }
 
+        @*
+            The cloud, on the one question the client cannot dictate: nobody has a ready sentence
+            about how their own staff should sound, and recognising a word is what they can do
+            instead. Several at a time, or none — which is why these are not buttons: a button is a
+            whole answer, and one of these is not.
+        *@
+        @if (Traits is { Count: > 0 })
+        {
+            <div class="traits">
+                @foreach (string trait in Traits)
+                {
+                    <button class="trait @(picked.Contains(trait) ? "picked" : null)"
+                            @onclick="() => Toggle(trait)">@trait</button>
+                }
+            </div>
+        }
+
         <div class="reply">
             <textarea @bind="answer" @bind:event="oninput" rows="5"
                       placeholder="@Prompting" aria-label="Your answer"></textarea>
 
+            @*
+                The two movements, on one row: the way back is the client's decision as much as the
+                answer is, and it is rendered here rather than under the box so it is one.
+            *@
             <div class="reply-actions">
+                @Back
+
                 <button class="primary" @onclick="SendAsync"
-                        disabled="@string.IsNullOrWhiteSpace(answer)">Answer &rarr;</button>
+                        disabled="@Empty">Answer &rarr;</button>
             </div>
         </div>
     }
@@ -49,6 +72,7 @@
 @code {
     private string answer = string.Empty;
     private int focusedOn = -1;
+    private readonly HashSet<string> picked = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The question on the table.
@@ -67,6 +91,18 @@
     /// </summary>
     [Parameter]
     public IReadOnlyList<QuickReply>? Choices { get; set; }
+
+    /// <summary>
+    /// Words offered for the agent's voice, if this is the question that asks for it.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<string>? Traits { get; set; }
+
+    /// <summary>
+    /// The way back, beside the answer.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Back { get; set; }
 
     /// <summary>
     /// Whether Alembic is composing, in which case there is nothing to answer yet.
@@ -93,12 +129,37 @@
     public EventCallback<QuickReply> OnChoose { get; set; }
 
     /// <summary>
+    /// Whether there is nothing to send: no words picked and nothing typed.
+    /// </summary>
+    private bool Empty => picked.Count == 0 && string.IsNullOrWhiteSpace(answer);
+
+    /// <summary>
+    /// Takes a word for the voice, or gives it back.
+    /// </summary>
+    private void Toggle(string trait)
+    {
+        if (!picked.Remove(trait))
+            picked.Add(trait);
+    }
+
+    /// <summary>
     /// Sends the answer and empties the box, so the next question is not met by the last answer.
     /// </summary>
+    /// <remarks>
+    /// Picked words go as a sentence rather than as a list, because what reaches the model is one
+    /// person's answer either way and a bare enumeration reads as a form return. Anything typed
+    /// stays first: it is the client's own account, and the words are what they recognised in it.
+    /// </remarks>
     private async Task SendAsync()
     {
-        string said = answer;
+        string typed = answer.Trim();
+        string said = picked.Count == 0
+            ? typed
+            : (typed.Length > 0 ? typed + " " : string.Empty)
+              + $"The voice I would want here: {string.Join(", ", picked)}.";
+
         answer = string.Empty;
+        picked.Clear();
 
         await OnAnswer.InvokeAsync(said);
     }

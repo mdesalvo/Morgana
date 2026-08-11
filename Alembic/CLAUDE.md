@@ -65,7 +65,7 @@ own framework layer — but hers is *glue*, binding the global policies to the m
 machinery, and there is nothing here for such a layer to bind. **The structure is what carries the
 semantics**: the four sections say what they always say.
 
-**The second layer is stored twice-over deduplicated, and read as one.** The four passes differ only
+**The second layer is stored twice-over deduplicated, and read as one.** The five passes differ only
 in which tools they hold, so four copies of the conducting rules, the voice and the output format
 were four places to edit one rule and three chances to leave one behind — 22 000 characters of which
 half was duplication, and one of the copies had already drifted into contradicting the voice it was
@@ -207,7 +207,27 @@ not lose it. `Provenance` alone could not serve: it says an element was revised,
 
 An interview over a real domain does not fit in one sitting and Alembic has no database, so
 `alembic-draft.json` is the whole of its memory: provenance, the C# facts a configuration cannot
-express, half-answered elements, and the baseline. Both it and an `agents.json` arrive through the
+express, half-answered elements, the baseline — and `DomainDraft.Sitting`, the interview itself as it
+stood.
+
+**The sitting is what makes closing the tab survivable.** Without it the file held only what had been
+accepted into the domain, so a client interrupted while an agent was half written lost that agent and
+the map they had dictated to reach it — which is exactly the moment somebody actually stops, since
+everything accepted is already behind them. What is saved is the configuration in hand and never the
+conversation: the map, which entry, which step of it, and what has been written so far. Resuming
+re-enters that step the way `BackAsync` does — a fresh agent and a fresh session reading what is there
+as settled fact — which needs no new machinery, because the memory of this interview has always been
+the configuration rather than the transcript.
+
+**And there is no Save button.** `InterviewService.Keep` writes the sitting into the Draft on every
+exchange, so the file behind the link beside the question is already true when it is clicked. A save
+the client has to remember is a save they remember once the tab is gone. What the interview shows is
+therefore a plain download and one line under it — *bring this file back to the first screen to carry
+on* — because there is no account to log back into and a client who has not understood that the file
+**is** the way back loses the afternoon. On the other side, a file that carries a sitting changes what
+the import page says: the door reads *carry on where you left off*, and the page names the entry they
+were in the middle of, since "begin" in front of somebody holding their own unfinished work reads as
+losing it. Both it and an `agents.json` arrive through the
 **same upload control**, because to the client they are one gesture — *here is where I am* — and
 which one it is is decided **by reading the file, never by its name**: a serialized Draft carries
 `CreatedAt` at the root and a configuration never does. A renamed file still lands where it belongs.
@@ -346,32 +366,107 @@ Two consequences that look like details and are not:
   is idempotent and applies only to prose the interview authored; an imported agent's prose is the
   client's and is never rewritten.
 
-The client never writes prose and is never shown a field name. They answer questions about their
-work; Alembic writes the configuration and says what it understood. That asymmetry is the whole
-arrangement, and it is what spares a domain expert from having to become a prompt author.
+The client never writes prose. They answer questions about their work; Alembic writes the
+configuration and says what it understood. That asymmetry is the whole arrangement, and it is what
+spares a domain expert from having to become a prompt author.
+
+**A section is named when its own question arrives.** *I am asking you to settle this agent's
+`Target` — what it exists to do and where it stops.* That is the plainest possible answer to *what am
+I being asked here*, and where the name carries something the client could not have inferred it is
+said with it: `Personality` is **differential**, what marks this agent out against Morgana's own,
+since every agent of hers already speaks with one — and nobody guesses that from the word.
+
+**One section per question, never two.** A step that settles two of them opens on the first and turns
+to the second only once the first is written. Joined, they were one question carrying two subjects,
+which is answered on one of them with nothing on the screen saying which — the same defect the
+one-sentence-one-question-mark rule exists to prevent, arriving through the door marked *efficiency*.
+
+**Said once, and never explained twice.** A name is stated; prose written to say what a section
+*means* drifts, one revision at a time, into something true of every section — *what the agent is
+able to do* — which says nothing and which nobody ever converges on. So the rule has two halves and
+both are enforced in `alembic.json`: the opening question names the sections it settles, and
+**every question after it is about their work, in their words** — never intent, tool, parameter,
+scope, context, domain or configuration, because each of those costs a beat of translation and what
+comes back after that beat is the client's guess at Alembic's vocabulary instead of their own
+account of how they work.
+
+This is also why the rail can be named `Target`, `Personality`, `Toolkit`, `Instructions,
+Formatting`: those labels are read at a glance rather than answered, and the question that opens the
+step has already said what they are.
+
+**And nothing else on the screen says it a second time.** A line under the rail restating what the
+step was after was built and then removed, twice: while it was specific it was the opening question
+in a second wording — and the same fact twice on one screen does not read as a repetition, it reads
+as two facts to reconcile, which is the overload a wizard cannot afford at the moment it is asking
+for its hardest answer. Cut short enough to stop being that, what was left was true of any interview
+about any business, which is the register nothing here is allowed to reach. The question carries it,
+alone. Not knowing whether the thing you are about to say
+belongs here or three steps on is the commonest way to be lost in a wizard. If that line ever starts
+growing, it has turned into a glossary and is wrong.
 
 **One question is the whole screen**, and that is the same argument made in layout: a page of
 requirements is answered the way anybody answers one, by getting shorter. So the question stands
-alone and large, and what the answers have become runs along the foot as a strip lit where the last
-exchange moved a row. There is no transcript on the screen: remembering the conversation is the
+alone and large, and what the answers have become is folded away at the foot behind the name of the
+agent they are about. There is no transcript on the screen: remembering the conversation is the
 agent's job and it has a live `AgentSession` doing it, so a second copy would be a log to keep in
 step with one that already exists — bought with a panel telling the client what they have just
-finished saying. The strip appears once the map is drawn — until then there is no agent for it to be
-about, and nine rows reading *not yet* would report nothing achieved at the moment the interview is
-deciding everything else.
+finished saying. What is at the foot appears once the map is drawn — until then there is no agent
+for it to be about, and nine rows reading *not yet* would report nothing achieved at the moment the
+interview is deciding everything else.
 
-Above it, **one block says where the work stands**, and it is one block because it is one fact: five
-steps on a rail — *what she takes care of*, then *what it is*, *what it reaches for*, *how it works*,
-*into the domain* — and under them the entries of the domain, what earlier sittings left and then
-today's, written, being written, still ahead. The map is not a caption above the journey; it is the
-journey's first step and its subject, which is why it is on the rail rather than beside it.
+**Those rows are a tab and its panel, not a strip.** Laid open they were a second screen of small
+print competing with the one thing the client is meant to be doing, and none of it is read at the
+moment it appears — it is *looked up*, when they wonder what has been written down about this one so
+far. So the whole of it is folded behind the entry's own name, drawn as the very pill the lap on the
+rail is headed with and the map below it lights: three places, one object, and no second badge
+repeating the name inside. What an unopened tab still has to say is on the tab — how many rows are
+written, and what the last exchange moved.
+
+Two rules the first version got wrong, both of them the same rule. **Nothing in it is clipped**: a
+panel opened on purpose to read what has been written down, that then shows four fifths of a sentence
+and an ellipsis, has answered nothing — the client opened it for the part that got cut. And **it is
+pinned to the window only while it is closed**: open, a panel that size held against the viewport
+covers the box they are meant to be typing in, so opening it puts it back into the flow of the page
+where it pushes instead of overlapping. The answer box wins. The rows also drop the `[TARGET]` fence
+before showing prose: that marker is guaranteed in code for the model that reads the composed prompt,
+and a panel written for the client is the wrong place to meet it.
+
+Above it, **one block says where the work stands**, and it is one block because it is one fact: the
+rail, and under it the entries of the domain, what earlier sittings left and then today's, written,
+being written, still ahead. The map is not a caption above the journey; it is the journey's first
+step and its subject, which is why it is on the rail rather than beside it.
+
+**The rail has the shape of the process, and that shape is a loop.** Two steps happen once —
+`Domain Exploration`, where the map is drawn, and `Domain Finalization`, the finished domain read and
+taken away — and the five between them happen again for every entry of that map: `Target`,
+`Personality`, `Toolkit`, `Instructions, Formatting`, `Agent Acceptance`. So those five
+are drawn inside a lap: bordered, headed on its edge
+`Agent Modeling · 📦 Delivery date`, and stacked like sheets while entries remain. No count in that
+head: the strip under the rail is the map itself with this entry lit among the others, so a number
+would say in arithmetic what the entries say in the client's own words — and a bare *1 of 4* a
+finger's width from four steps in a row is read as the steps. Nothing
+says *this repeats* in words; the surface says it. The run is named once, on the border that encloses
+it, rather than three times inside it: a prefix repeated on every station buries the part that tells
+them apart — which is the whole of what a rail is read for — at the end of the line, where the eye
+arrives last.
+
+Acceptance is **inside** the lap, and that is what settles a question a flat row could not answer.
+It closes one entry's turn and the next turn opens on the step after the map, so a rail that put it
+outside would light its last step and then jump the light backwards — the one thing a rail read left
+to right cannot do. What is genuinely outside and last is the only other thing that happens once: the
+whole domain, on the page the client lands on when the map is spent.
 
 **The rail is on the screen from the first question, and dim is not absent.** An interview that
 shows only a question is a black box: the client cannot tell whether they are two minutes from the
-end or twenty, and that is the one thing every wizard owes them. So the four steps not yet reached
-are visible and faint. Words like *what it reaches for* mean little on the first screen — a step
-nobody can see means less, and the caption under the rail carries what the rail cannot, since steps
-two to five run once per entry: *writing 1 of 3*.
+end or twenty, and that is the one thing every wizard owes them. So the steps not yet reached are
+visible and faint.
+
+**The names above are labels; the meaning is the line below them** — the division of labour set out
+under *the interview* above, where the exception for field names and the rule that comes with it are
+stated. What earned it was the alternative: names like *what it is* and *how it works* were true of
+every step of every wizard ever built and told the client nothing about which part of their own work
+was about to be asked for. The marks on the rail carry no numbers, for the same reason the lap
+exists: a count running one to seven would claim an order that only two of the seven actually have.
 
 **Nothing is explained in prose.** The entries appear as they are named, in the client's own words,
 and a paragraph explaining each tier would be a wall of text however carefully it is worded — the
@@ -395,8 +490,11 @@ something nobody asked.
 **Backwards is the client's, where forwards is not.** Going on is a claim that a step is settled,
 which the state machine decides; going back is a claim that something needs changing, which only
 they can make — so `BackAsync` is the one movement of the interview they drive, and `StepBack` names
-where it lands (*back to what it is*, *back to 📦 Delivery date*) rather than saying "back", because
-a step of this wizard is not numbered on the screen. It costs nothing to allow: a step is re-entered
+where it lands (*back to Target, Personality*, *back to 📦 Delivery date*) in the rail's own
+words rather than saying "back", because a step of this wizard is not numbered on the screen. It is
+also a button of the same size as *Answer* and on the same row, not a line of small print under the
+box: the two are the movements of the interview, and the one the client actually decides is the one
+that was set in eleven-point grey. It costs nothing to allow: a step is re-entered
 exactly the way it was entered the first time, a fresh agent and a fresh session reading the
 configuration as settled fact, with one line telling it the client came back to change something so
 it does not open from nothing. **The memory is the configuration, not the conversation** — the same
@@ -417,7 +515,7 @@ teaching.
 **Alembic edits a domain, not an agent**, and a domain is a configuration of two halves: the
 `Intents`, and the `Agents` that answer them one each. So the interview opens on the half that comes
 first in every sense — the mapping pass produces the whole `Intents` section and nothing else, which
-is the ground the rest is planted in. Only then does it walk that list, three passes per entry, until
+is the ground the rest is planted in. Only then does it walk that list, four passes per entry, until
 every intent has its agent.
 
 **A domain is a choice, not an inventory**, and the mapping pass is worded to elicit that: the map
@@ -436,10 +534,10 @@ side, so both belong to the pass that has the whole set in view. The buttons com
 go, once the list is closed: written by Alembic from what it was told, stated back as a set, and
 corrected. Never asked for one at a time, and never asked of the client at all.
 
-That is also why no later pass can write an intent: `SetIntent` does not exist. The functional pass
-declares `SetAgentTarget` and `SetAgentPersonality` and nothing else that writes, so "the map is not
-reopened" is a fact about which tools exist rather than a sentence asking for restraint — and
-`InterviewState.MissingFunctional` names the same two fields, because it is the same fact.
+That is also why no later pass can write an intent: `SetIntent` does not exist. `AgentModeler`
+declares `SetAgentTarget` and nothing else that writes, so "the map is not reopened" is a fact about
+which tools exist rather than a sentence asking for restraint — and `InterviewState.MissingTarget`
+names the same single field, because it is the same fact.
 
 The order is forced twice over. The intent descriptions are what the classifier weighs *against each
 other*, so an intent settled alone is a description nobody compared to anything: the map has to be
@@ -449,15 +547,36 @@ the toolkit exists.
 
 | Pass | Runs | Settles | Cannot touch |
 |---|---|---|---|
-| `Mapping` | once | the whole `Intents` section: every name, description, label and opening sentence | everything about every agent |
-| `Functional` | per entry | the agent's `Target` and `Personality` | the intents, tools, `Instructions`, `Formatting` |
-| `Toolkit` | per entry | the tools, their descriptions, their parameters, scopes and sharing | what the agent *is*, `Instructions`, `Formatting` |
-| `Return` | per entry | `Instructions` and `Formatting` | everything already settled |
+| `DomainMapper` | once | the whole `Intents` section: every name, description, label and opening sentence | everything about every agent |
+| `AgentModeler` | per entry | the agent's `Target` | the intents, its voice, tools, `Instructions`, `Formatting` |
+| `AgentVoicer` | per entry | the agent's `Personality` | everything else, the `Target` included |
+| `ToolkitModeler` | per entry | the tools, their descriptions, their parameters, scopes and sharing | what the agent *is*, `Instructions`, `Formatting` |
+| `AgentFinalizer` | per entry | `Instructions` and `Formatting` | everything already settled |
 
-The `Return` pass is the one place the loop stops for the client: letting a finished agent into the
-domain is the single decision of the interview that is theirs, and `CommitAsync` reports whether the
-map has another entry — if it has, the next `Functional` pass opens on the same screen, and the
-client never goes back to a menu to remember their own list.
+**`Target` and `Personality` are two passes, not two questions of one.** What they ask for is not the
+same kind of thing: a `Target` is *dictated* — the client knows what the work is and can say it —
+while a voice is *recognised*, since nobody has a ready sentence about how their own staff should
+sound. Joined, the voice arrived as an afterthought at the end of a turn already spent on the work,
+and was answered *yes, fine*. So the voice gets its own pass, its own screen, and a form of asking
+the rest of the interview never uses.
+
+**The cloud of words is that form.** `SetTraits` puts eight to fourteen adjectives under the question,
+picked several at a time or not at all, with the text box open beside them as always. They are the
+model's, not a fixed list: they have to be about this domain and this agent — a counter where someone
+is angry about money and one where someone's pet is ill are not the same counter — and they have to
+sit inside Morgana's own voice, which the composing model has read at the top of its prompt and a
+template has not. What comes back is words, and words are not a section: the pass writes the prose
+itself, names which facet of her this agent is, and reads it back composed, where a voice that argues
+with hers is visible and nowhere else.
+
+They are deliberately not `SetChoices`. A quick reply is one whole answer and spends the row when
+pressed; one of these is not an answer at all until it is joined by the others the client keeps. Same
+plumbing, different gesture, and the rendering says which: dashed and weightless until taken.
+
+The `AgentFinalizer` pass is the one place the loop stops for the client: letting a finished agent
+into the domain is the single decision of the interview that is theirs, and `AcceptAsync` reports
+whether the map has another entry — if it has, the next `AgentModeler` pass opens on the same screen,
+and the client never goes back to a menu to remember their own list.
 
 **The fallback intent is not on the map and never was.** `other` is where the classifier sends what
 it cannot place; `DomainDraft.EnsureFallbackIntent` puts it in every domain — greenfield at commit,
@@ -485,7 +604,7 @@ last, and the client stops answering. It appeared first in the functional pass o
 boundaries, and again in the toolkit pass — where the shape of the work invites it, because the
 naive reading asks each parameter's scope separately and four tools carry a dozen parameters.
 
-The fix is doctrine, high in Alembic's own `Instructions` where all three passes read it, rather
+The fix is doctrine, high in Alembic's own `Instructions` where every pass reads it, rather
 than a patch per pass: every question is a step, and an answer advances it if **anything can be
 written down**. Adequate is not complete and never ideal — half an answer advances the step, and the
 other half is inferred, proposed, and corrected rather than asked again. Asking twice tells the
@@ -689,10 +808,11 @@ Alembic/
   Shared/MainLayout.razor             # Layout wrapper; carries the alembic as a mark on every page but the landing
   Shared/Back.razor                   # The way back, and it is the way you came
   Shared/Interview/                   # The wizard's pieces, one component each
-    Journey.razor                     #   the five steps of the whole interview, and the entries under them
+    Journey.razor                     #   the rail and its lap, the entries under them, what this step asks
     Question.razor                    #   the question, the choices, the box
-    StepBack.razor                    #   the way back, named after where it lands
-    AgentSoFar.razor                  #   the agent's own rows along the foot
+    StepBack.razor                    #   the way back, named after where it lands, beside the way on
+    AgentSoFar.razor                  #   the agent's own rows, folded behind its name
+    SaveWork.razor                    #   the work so far, in one file, taken away in one click
     AgentWritten.razor                #   the one decision that is the client's, and the join to the next entry
   wwwroot/css/                        # Six files, cascade order set in _Host.cshtml
     base.css                          #   palette, reset, page shells, the mark

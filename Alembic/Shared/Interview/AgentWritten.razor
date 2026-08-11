@@ -25,9 +25,13 @@
         }
     </p>
 
-    <button class="primary" @onclick="() => OnCommit.InvokeAsync()" disabled="@Busy">
-        @(Remaining > 0 ? "Into the domain, then the next" : "Into the domain")
-    </button>
+    <div class="sealed-actions">
+        @Back
+
+        <button class="primary" @onclick="() => OnAccept.InvokeAsync()" disabled="@Busy">
+            @(Remaining > 0 ? "Into the domain, then the next" : "Into the domain")
+        </button>
+    </div>
 </div>
 
 @code {
@@ -36,6 +40,12 @@
     /// </summary>
     [Parameter, EditorRequired]
     public InterviewState State { get; set; } = default!;
+
+    /// <summary>
+    /// The way back into the agent, beside the button that lets it out.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Back { get; set; }
 
     /// <summary>
     /// Whether the commit is already under way.
@@ -47,7 +57,7 @@
     /// Raised when the client lets the agent into the domain.
     /// </summary>
     [Parameter]
-    public EventCallback OnCommit { get; set; }
+    public EventCallback OnAccept { get; set; }
 
     /// <summary>
     /// What to call the finished agent: its button, which is the client's own phrase for it.

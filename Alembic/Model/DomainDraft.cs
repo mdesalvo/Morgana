@@ -62,6 +62,24 @@ public sealed class DomainDraft
     public DomainDraft? Baseline { get; set; }
 
     /// <summary>
+    /// The interview as it stood when this file was written, or <c>null</c> when none was under way.
+    /// </summary>
+    /// <remarks>
+    /// Without this the save file holds only what has been let into the domain, so a client who
+    /// closes the tab while an agent is half written loses that agent and the map they dictated to
+    /// get to it — which is precisely the moment somebody has to stop, since the accepted ones are
+    /// the ones already behind them.
+    /// <para>
+    /// What is saved is the configuration in hand, never the conversation: the map, which entry is
+    /// being written, which step of it, and what has been written so far. Resuming re-enters that
+    /// step the way stepping back into it does — a fresh agent and a fresh session reading what is
+    /// there as settled fact — because the memory of this interview has always been the
+    /// configuration rather than the transcript.
+    /// </para>
+    /// </remarks>
+    public InterviewSitting? Sitting { get; set; }
+
+    /// <summary>
     /// The name the classifier falls back to when it cannot place a message at all.
     /// </summary>
     public const string FallbackIntent = "other";
@@ -92,6 +110,38 @@ public sealed class DomainDraft
             Origin = Provenance.Authored
         });
     }
+}
+
+/// <summary>
+/// An interview interrupted: where it had got to, and what it had in hand.
+/// </summary>
+/// <remarks>
+/// Everything here is a fact the state machine owns, which is why it is exactly what has to survive
+/// a closed tab. The entries already accepted are not here — they are in the domain itself, which is
+/// where they belong the moment the client lets them in.
+/// </remarks>
+public sealed class InterviewSitting
+{
+    /// <summary>
+    /// Which step of an entry the interview stood on.
+    /// </summary>
+    public InterviewPass Pass { get; set; }
+
+    /// <summary>
+    /// Which entry of the map it stood on, or -1 while the map was still being drawn.
+    /// </summary>
+    public int At { get; set; } = -1;
+
+    /// <summary>
+    /// The map as dictated, entries already accepted included: it is one list and the interview walks
+    /// it, so half of it would resume as a different domain.
+    /// </summary>
+    public List<IntentDraft> Map { get; set; } = [];
+
+    /// <summary>
+    /// The agent in hand, however far it had got.
+    /// </summary>
+    public AgentDraft Agent { get; set; } = new();
 }
 
 /// <summary>

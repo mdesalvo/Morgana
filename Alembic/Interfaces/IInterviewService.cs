@@ -67,7 +67,7 @@ public interface IInterviewService
     /// file, and the migration report has to be able to say so. The fallback intent is put in the
     /// same Draft if it is not there — it belongs to every domain and to no interview.
     /// </remarks>
-    Task<bool> CommitAsync(CancellationToken cancellationToken = default);
+    Task<bool> AcceptAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Discards the interview without touching the Draft.

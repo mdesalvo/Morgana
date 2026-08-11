@@ -1,0 +1,35 @@
+@inject IDraftStateService DraftStateService
+@inject IDraftSerializationService DraftSerializationService
+
+@*
+    Taking the work away, in one gesture and one file.
+
+    Alembic has no database and no account: the interview lives in a Blazor circuit, and a closed tab
+    is the end of it. So the save file is not a feature for the tidy — it is the only thing standing
+    between a client and losing an afternoon, which is why it sits beside the question rather than on
+    a settings page, and why it says what it does in words nobody has to interpret.
+
+    It needs no button that saves. The Draft is written on every exchange, so the file behind this
+    link is already what the client has done up to and including the answer they just gave; the link
+    only hands it over. A "save now" they have to remember is a save they remember once the tab is
+    gone.
+*@
+
+<div class="keep">
+    <a class="take" download="alembic-draft.json" href="@Saved">Save my work</a>
+    <span class="how">bring this file back to the first screen to carry on</span>
+</div>
+
+@code {
+    /// <summary>
+    /// The whole of the work so far, as the file the client takes away.
+    /// </summary>
+    /// <remarks>
+    /// A plain anchor over a <c>data:</c> URI, as everywhere else Alembic hands a file over: no JS
+    /// interop, no download endpoint, and nothing on the server that has to still be there when the
+    /// click happens.
+    /// </remarks>
+    private string Saved =>
+        "data:application/json;base64,"
+        + Convert.ToBase64String(DraftSerializationService.Serialize(DraftStateService.Current ?? new DomainDraft()));
+}
