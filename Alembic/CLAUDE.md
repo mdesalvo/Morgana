@@ -802,7 +802,7 @@ Alembic/
   Services/                           # Default implementations of the above
     InterviewTools.cs                 # The tools Alembic calls while conducting a pass
   Pages/_Host.cshtml                  # Blazor Server host page (ServerPrerendered)
-  Pages/Index.razor                   # Landing: the alembic, and the two ways in — begin, or bring a file back
+  Pages/Index.razor                   # Landing: the alembic, and the two ways in — distil a new domain, or continue one
   Pages/Import.razor                  # Upload an agents.json, see the parsed Draft, download it back
   Pages/Review.razor                  # Findings, then the composed prompts
   Pages/Interview.razor               # The wizard: drives the state machine, owns none of the pieces
