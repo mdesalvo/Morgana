@@ -460,6 +460,18 @@ was there anyway — and the rows drop out of it, directly under it, where the c
 looking. `AgentRows` computes them once for both, so the count on the tag cannot disagree with the
 rows behind it.
 
+The panel is exactly as wide as the lap above it — five sevenths of the rail, which is what the flex
+ratio of one station to the run gives — so its width says whose rows these are before a word is read.
+Full width it was a slab related to nothing.
+
+Its labels are **nouns**, and for the four sections they are the rail's own: `Target`, `Personality`,
+`Toolkit`, `Instructions`, `Formatting`, over `name`, `routing description`, `button`, `the button's
+request`. What was there before — *it is theirs when*, *how it meets them*, *what it reaches for* —
+was a column of sentences with pronouns in them, which is read as prose instead of scanned as labels:
+the client had to work out what *them* was before they could find the line they wanted. Naming a row
+exactly as the step that settles it is named also closes the loop the other way, since what was just
+asked for is the row that just filled in.
+
 Two rules about what they show. **Nothing is clipped**: a panel opened on purpose to read what has
 been written, that then shows four fifths of a sentence and an ellipsis, has answered nothing — the
 client opened it for the part that got cut. And they are **rows of one table, not a scatter of

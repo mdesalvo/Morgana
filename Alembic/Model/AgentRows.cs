@@ -14,7 +14,7 @@ public static class AgentRows
     /// <summary>
     /// One row.
     /// </summary>
-    /// <param name="What">The client's name for it. Never a field name.</param>
+    /// <param name="What">What it is, as a noun — the rail's own for the four sections it names.</param>
     /// <param name="Value">What has been written, or <c>null</c> while it is still unasked.</param>
     /// <param name="Moved">Whether the last exchange is what put it there.</param>
     public sealed record Row(string What, string? Value, bool Moved);
@@ -24,25 +24,31 @@ public static class AgentRows
     /// </summary>
     public static IReadOnlyList<Row> Of(InterviewState interviewState)
     {
+        // Nouns, and for the four sections the rail's own nouns. "It is theirs when", "how it meets
+        // them", "what it reaches for" were sentences with pronouns in them, and a column of those is
+        // read as prose rather than scanned as labels — the client has to work out what "them" is
+        // before they can find the line they are looking for. Naming the sections exactly as the step
+        // that settles them is named makes the panel and the rail the same vocabulary: what you were
+        // just asked for is the row that just filled in.
         List<Row> rows =
         [
-            new Row("it is called", interviewState.Intent.Name, interviewState.Changed.Contains("intentName")),
-            new Row("it is theirs when", interviewState.Intent.Description, interviewState.Changed.Contains("intentDescription")),
-            new Row("its button", interviewState.Intent.Label, interviewState.Changed.Contains("intentLabel")),
-            new Row("it opens with", interviewState.Intent.DefaultValue, interviewState.Changed.Contains("intentDefaultValue")),
-            new Row("what it is for", Plain(interviewState.Agent.Target), interviewState.Changed.Contains("agentTarget")),
-            new Row("how it meets them", Plain(interviewState.Agent.Personality), interviewState.Changed.Contains("agentPersonality"))
+            new Row("name", interviewState.Intent.Name, interviewState.Changed.Contains("intentName")),
+            new Row("routing description", interviewState.Intent.Description, interviewState.Changed.Contains("intentDescription")),
+            new Row("button", interviewState.Intent.Label, interviewState.Changed.Contains("intentLabel")),
+            new Row("the button's request", interviewState.Intent.DefaultValue, interviewState.Changed.Contains("intentDefaultValue")),
+            new Row("Target", Plain(interviewState.Agent.Target), interviewState.Changed.Contains("agentTarget")),
+            new Row("Personality", Plain(interviewState.Agent.Personality), interviewState.Changed.Contains("agentPersonality"))
         ];
 
         bool toolsMoved = interviewState.Changed.Contains("tools");
 
         if (interviewState.Agent.Tools.Count == 0)
-            rows.Add(new Row("what it reaches for", null, toolsMoved));
+            rows.Add(new Row("Toolkit", null, toolsMoved));
         else
-            rows.AddRange(interviewState.Agent.Tools.Select(t => new Row("it can", t.Name, toolsMoved)));
+            rows.AddRange(interviewState.Agent.Tools.Select(t => new Row("tool", t.Name, toolsMoved)));
 
-        rows.Add(new Row("the order of the work", Plain(interviewState.Agent.Instructions), interviewState.Changed.Contains("agentInstructions")));
-        rows.Add(new Row("how it shows what it finds", Plain(interviewState.Agent.Formatting), interviewState.Changed.Contains("agentFormatting")));
+        rows.Add(new Row("Instructions", Plain(interviewState.Agent.Instructions), interviewState.Changed.Contains("agentInstructions")));
+        rows.Add(new Row("Formatting", Plain(interviewState.Agent.Formatting), interviewState.Changed.Contains("agentFormatting")));
 
         return rows;
     }

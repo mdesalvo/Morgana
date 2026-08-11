@@ -476,9 +476,13 @@ a.keep {
     rotate: 180deg;
 }
 
-/* What the tag opens, directly under it and reaching the width of the page: near enough to belong to
-   the tag, wide enough to be read. */
+/* What the tag opens: directly under it, and exactly as wide as the lap above — five sevenths of the
+   rail, which is what the flex ratio of one station to the run gives. Full width it was a slab with
+   no relation to anything; on the lap's own measure it reads as what it is, everything written down
+   about the entry that lap is a lap of. */
 .rows-open {
+    width: calc(100% * 5 / 7);
+    max-width: 66rem;
     margin: 1rem auto 0;
     border: 1px solid var(--alembic-border-lit);
     border-radius: 0.6rem;
@@ -524,6 +528,14 @@ a.keep {
 .rows-open .drop.empty .value {
     color: var(--alembic-muted);
     opacity: 0.55;
+}
+
+/* Narrow, the rail's own lap gives up its shape too, so the panel stops measuring itself against it
+   and takes the room there is. */
+@media (max-width: 52rem) {
+    .rows-open {
+        width: 100%;
+    }
 }
 
 @media (max-width: 40rem) {
