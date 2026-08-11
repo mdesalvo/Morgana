@@ -412,6 +412,13 @@ alone. Not knowing whether the thing you are about to say
 belongs here or three steps on is the commonest way to be lost in a wizard. If that line ever starts
 growing, it has turned into a glossary and is wrong.
 
+**And the workbench takes the room it needs.** The pages were built inside a column meant for prose,
+which is the wrong measure for what is actually on this screen: a rail of seven steps, the map of a
+domain, and a box somebody is asked to write a paragraph into. Squeezed, the rail wrapped onto four
+lines and the box became a slot. The page is wide now, and the reading measures are set per element,
+where a measure means something — the question, the answer box, the cloud of words — rather than once
+around everything.
+
 **One question is the whole screen**, and that is the same argument made in layout: a page of
 requirements is answered the way anybody answers one, by getting shorter. So the question stands
 alone and large, and what the answers have become is folded away at the foot behind the name of the
@@ -422,22 +429,27 @@ finished saying. What is at the foot appears once the map is drawn — until the
 for it to be about, and nine rows reading *not yet* would report nothing achieved at the moment the
 interview is deciding everything else.
 
-**Those rows are a tab and its panel, not a strip.** Laid open they were a second screen of small
+**The entry's own tag on the map is what opens them.** Laid open they were a second screen of small
 print competing with the one thing the client is meant to be doing, and none of it is read at the
 moment it appears — it is *looked up*, when they wonder what has been written down about this one so
-far. So the whole of it is folded behind the entry's own name, drawn as the very pill the lap on the
-rail is headed with and the map below it lights: three places, one object, and no second badge
-repeating the name inside. What an unopened tab still has to say is on the tab — how many rows are
-written, and what the last exchange moved.
+far. So it folds; the question is behind what. Two answers were wrong before this one, and both were
+wrong the same way: a panel at the foot of the page under its own copy of the agent's name, pinned to
+the window or not, is **two objects where there is one thing**, sitting in the least looked-at place
+on the screen. The eye does not go there, and nothing in a wizard should have to be looked for.
 
-Two rules the first version got wrong, both of them the same rule. **Nothing in it is clipped**: a
-panel opened on purpose to read what has been written down, that then shows four fifths of a sentence
-and an ellipsis, has answered nothing — the client opened it for the part that got cut. And **it is
-pinned to the window only while it is closed**: open, a panel that size held against the viewport
-covers the box they are meant to be typing in, so opening it puts it back into the flow of the page
-where it pushes instead of overlapping. The answer box wins. The rows also drop the `[TARGET]` fence
-before showing prose: that marker is guaranteed in code for the model that reads the composed prompt,
-and a panel written for the client is the wrong place to meet it.
+The tag on the map is already the agent, already lit among its neighbours, and already the phrase the
+lap on the rail is headed with. So it *is* the trigger — a caret and a count added to the object that
+was there anyway — and the rows drop out of it, directly under it, where the client is already
+looking. `AgentRows` computes them once for both, so the count on the tag cannot disagree with the
+rows behind it.
+
+Two rules about what they show. **Nothing is clipped**: a panel opened on purpose to read what has
+been written, that then shows four fifths of a sentence and an ellipsis, has answered nothing — the
+client opened it for the part that got cut. And they are **rows of one table, not a scatter of
+cards**: nine boxes each as tall as its own contents is precisely the layout that defeats running an
+eye down a column to find one thing. The rows also drop the `[TARGET]` fence before showing prose:
+that marker is guaranteed in code for the model that reads the composed prompt, and a panel written
+for the client is the wrong place to meet it.
 
 Above it, **one block says where the work stands**, and it is one block because it is one fact: the
 rail, and under it the entries of the domain, what earlier sittings left and then today's, written,

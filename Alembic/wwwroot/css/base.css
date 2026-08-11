@@ -60,8 +60,13 @@ html, body {
     padding: 3rem 1.5rem 4rem;
 }
 
+/* The workbench takes the room it needs. A wizard is not an article: what is on the screen is a rail
+   of seven steps, a map of the domain, a question and the box it is answered in, and squeezing all of
+   that into a column meant for prose wrapped the rail onto four lines and made a slot of the box the
+   client is asked to write a paragraph into. Wide, with the reading measures set per element where a
+   measure actually matters. */
 .alembic-page {
-    max-width: 62rem;
+    max-width: 84rem;
 }
 
 .alembic-wide {

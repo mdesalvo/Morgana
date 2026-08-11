@@ -134,7 +134,7 @@ button.choice:disabled {
     flex-wrap: wrap;
     gap: 0.45rem;
     justify-content: center;
-    max-width: 34rem;
+    max-width: 48rem;
     margin: 0 auto 1.2rem;
 }
 

@@ -97,7 +97,7 @@
 
 .station {
     flex: 1 1 0;
-    max-width: 11rem;
+    max-width: 13rem;
     position: relative;
     padding-top: 1.9rem;
     text-align: center;
@@ -118,7 +118,7 @@
    which is the one thing a left-to-right rail cannot do. */
 .stations > .lap {
     flex: 5 1 0;
-    max-width: 52rem;
+    max-width: 66rem;
     position: relative;
     margin-top: 1.5rem;
     padding: 1.4rem 0.9rem 0.7rem;
@@ -311,13 +311,13 @@
 }
 
 .asked {
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     font-weight: 300;
     line-height: 1.45;
     letter-spacing: 0.01em;
     white-space: pre-wrap;
     margin: 0 auto 2rem;
-    max-width: 34rem;
+    max-width: 48rem;
     text-align: center;
 }
 
@@ -349,7 +349,7 @@
 }
 
 .reply {
-    max-width: 34rem;
+    max-width: 52rem;
     margin: 0 auto;
     width: 100%;
 }
@@ -408,34 +408,11 @@ textarea:focus {
 
 /* ============================ what has been distilled ============================ */
 
-/* ============================ the foot ============================ */
-
-/* Two things on one line: what has been written about the agent in hand, and the way to take the
-   whole of it home. Pinned to the foot of the window, because both are things a client reaches for
-   without having gone looking — and unpinned the moment the rows are opened, since a panel that
-   size held against the window covers the box they are meant to be typing in. The answer box wins:
-   that is the rule, and :has is how the row hears about it. */
-.foot {
-    position: sticky;
-    bottom: 0;
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-top: 2.6rem;
-    padding-bottom: 0.9rem;
-}
-
-.foot:has(details[open]) {
-    position: static;
-}
-
 /* The band that says where you are: the rail below it, the mark above it, and on its right the one
    action that belongs to neither — taking the work home. Continuity is the whole point. Fixed in a
-   corner of the window it was pinned away from everything, and at the foot beside the agent's rows
-   it was in the least looked-at place on the page and read as part of that panel; here it is on the
-   line the eye already travels down before it reaches the question. */
+   corner of the window it was pinned away from everything, and at the foot of the page it was in the
+   least looked-at place there is; here it is on the line the eye already travels down before it
+   reaches the question. */
 .whereabouts {
     display: flex;
     justify-content: flex-end;
@@ -453,191 +430,100 @@ a.keep {
     font-size: 0.85rem;
 }
 
-/* ============================ the foot ============================ */
+/* ============================ what has been written down ============================ */
 
-/* Two things on one line: what has been written about the agent in hand, and the way to take the
-   whole of it home. Pinned to the foot of the window, because both are things a client reaches for
-   without having gone looking — and unpinned the moment the rows are opened, since a panel that
-   size held against the window covers the box they are meant to be typing in. The answer box wins:
-   that is the rule, and :has is how the row hears about it. */
-.foot {
-    position: sticky;
-    bottom: 0;
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-top: 2.6rem;
-    padding-bottom: 0.9rem;
-}
-
-.foot:has(details[open]) {
-    position: static;
-}
-
-/* Taking the work away: a button of the same family as the two the client already knows — same
-   height, same corners, same outline as the way back — in the corner where every screen anybody uses
-   keeps its save.
-
-   Fixed, and top right for a reason on each axis. It is not part of answering, so it must not stand
-   in the line of it; and the answer box is centred and low, so this is the one corner that can be
-   held permanently without ever covering what is being typed. At the foot, beside the agent's rows,
-   it was in the least looked-at place on the screen and reading as part of the panel it stood next
-   to. It carries the panel's own dark so it stays legible over whatever scrolls beneath it. */
-a.keep {
-    position: fixed;
-    z-index: 20;
-    top: 1.1rem;
-    right: 1.3rem;
-    display: inline-flex;
-    align-items: center;
-    background: var(--alembic-panel);
-    text-decoration: none;
-    white-space: nowrap;
-    padding: 0.5rem 1rem;
-    font-size: 0.88rem;
-}
-
-/* Narrow: the mark is centred on the same band, so the button gives way rather than crowd it. */
-@media (max-width: 34rem) {
-    a.keep {
-        top: 0.6rem;
-        right: 0.6rem;
-        padding: 0.4rem 0.7rem;
-        font-size: 0.8rem;
-    }
-}
-
-/* What the answers have become, folded behind the name of the agent they are about. It is the same
-   pill the rail is headed with and the same one lit in the map — one object in three places, which is
-   what makes it obvious whose rows these are without a word of explanation.
-
-   Closed, it is pinned to the foot of the window: below the question there is a rail, a map, a
-   question set large and a box five rows deep, so a tab left at the foot of the PAGE was under the
-   fold on an ordinary screen and nobody learns about a thing they have to go looking for.
-
-   Open, it is not pinned at all. A panel this size held against the window covers the box the client
-   is meant to be typing in, which is the one thing on the screen that must never be covered — so
-   opening it puts it back in the flow of the page, where it pushes instead of overlapping. Two
-   states, one rule, and the rule is that the answer box wins. */
-.distilled > summary {
+/* The entry being written is a tag that opens, so it is drawn as the tag it already is with one
+   thing added: a caret, and the count of what is written. Everything else about it — the accent
+   border, the lit fill — it had before, because it must stay the same object the map lights and the
+   lap is headed with. */
+.journey .domain button.under-way {
     display: inline-flex;
     align-items: baseline;
-    gap: 0.6rem;
-    padding: 0.45rem 1.1rem;
-    border: 1px solid var(--alembic-accent);
-    border-radius: 1.4rem;
-    background: rgba(192, 132, 252, 0.16);
-    box-shadow: 0 0 1.4rem rgba(192, 132, 252, 0.25);
-    color: var(--alembic-muted);
-    font-size: 0.85rem;
+    gap: 0.5rem;
+    font: inherit;
+    font-size: 1rem;
     cursor: pointer;
-    list-style: none;
-    transition: box-shadow 0.2s, background 0.2s;
 }
 
-.distilled > summary::-webkit-details-marker {
-    display: none;
-}
-
-.distilled > summary:hover {
-    background: rgba(192, 132, 252, 0.24);
-}
-
-/* Open, the pill gives up its lower half to the panel it heads, so the two are one shape rather than
-   a badge sitting on a box. */
-.distilled[open] > summary {
-    position: relative;
-    z-index: 1;
-    margin-bottom: -1px;
-    border-bottom-color: transparent;
-    border-radius: 1.4rem 1.4rem 0 0;
-    box-shadow: none;
-}
-
-.distilled .whose {
-    color: var(--alembic-text);
-    font-size: 0.95rem;
-    font-weight: 600;
-}
-
-/* How much of this one is written, and what the last exchange moved: the whole of what an unopened
-   tab has to say, so a client who has not opened it is not missing the fact that something moved. */
-.distilled .counted {
+.journey .domain button.under-way .counted {
     color: var(--alembic-muted);
-}
-
-.distilled .lately {
-    color: var(--alembic-accent);
-}
-
-.distilled > summary::after {
-    content: "▾";
     font-size: 0.75rem;
+}
+
+.journey .domain button.under-way::after {
+    content: "▾";
+    font-size: 0.7rem;
+    color: var(--alembic-accent);
     transition: rotate 0.2s ease;
 }
 
-.distilled[open] > summary::after {
+.journey .domain button.under-way.open::after {
     rotate: 180deg;
 }
 
-.distilled .rows {
-    border: 1px solid var(--alembic-accent);
-    border-radius: 0 1.1rem 1.1rem 1.1rem;
+/* What the tag opens, directly under it and reaching the width of the page: near enough to belong to
+   the tag, wide enough to be read. */
+.rows-open {
+    margin: 1rem auto 0;
+    border: 1px solid var(--alembic-border-lit);
+    border-radius: 0.6rem;
     background: var(--alembic-panel);
-    padding: 1.1rem;
+    text-align: left;
+    overflow: hidden;
 }
 
-.drops {
+/* Rows of one table, not a scatter of cards. Each is a label and a value on one line, every line the
+   same height it needs and no more, separated by a hairline: what the client is doing here is running
+   an eye down a column to find one thing, and nine boxes each as tall as its own contents is the one
+   layout that makes that impossible. */
+.rows-open .drop {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-    align-items: start;
-    gap: 0.5rem;
+    grid-template-columns: 11rem 1fr;
+    gap: 0 1rem;
+    align-items: baseline;
+    padding: 0.6rem 1rem;
+    border-top: 1px solid rgba(53, 41, 107, 0.55);
+    transition: background 0.4s;
 }
 
-.drop {
-    border: 1px solid var(--alembic-border);
-    border-radius: 0.5rem;
-    padding: 0.45rem 0.75rem;
-    background: rgba(23, 17, 48, 0.7);
-    transition: border-color 0.4s, box-shadow 0.4s;
+.rows-open .drop:first-child {
+    border-top: none;
 }
 
-.drop .what {
-    display: block;
+.rows-open .drop .what {
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
     color: var(--alembic-muted);
 }
 
-/* Whole, never clipped. A panel opened on purpose to read what has been written down about this
-   agent, that then shows four fifths of a sentence and an ellipsis, has answered nothing — the client
-   opens it precisely for the part that got cut. It grows instead, and it can: open, it is in the flow
-   of the page. */
-.drop .value {
-    display: block;
+/* Whole, never clipped. A panel opened on purpose to read what has been written down, that then shows
+   four fifths of a sentence and an ellipsis, has answered nothing — the client opens it for the part
+   that got cut. */
+.rows-open .drop .value {
     font-size: 0.88rem;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 
-.drop.empty {
-    opacity: 0.45;
-}
-
-.drop.empty .value {
+.rows-open .drop.empty .value {
     color: var(--alembic-muted);
+    opacity: 0.55;
 }
 
-/* Just written. The whole reason this strip exists is to be caught out of the corner of an
-   eye, so a drop the last exchange moved is lit and then settles. */
-.drop.moved {
-    border-color: var(--alembic-accent);
-    box-shadow: 0 0 1.2rem rgba(192, 132, 252, 0.35);
+@media (max-width: 40rem) {
+    .rows-open .drop {
+        grid-template-columns: 1fr;
+        gap: 0.15rem;
+    }
 }
 
-.drop.moved .what {
+/* Just written. A row the last exchange moved is lit, so a client who opens the panel finds what has
+   changed rather than reading all of it to see. */
+.rows-open .drop.moved {
+    background: rgba(192, 132, 252, 0.1);
+}
+
+.rows-open .drop.moved .what {
     color: var(--alembic-accent);
 }

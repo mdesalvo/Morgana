@@ -49,6 +49,14 @@
         @Station(6)
     </ol>
 
+    @*
+        The map, and the entry being written is a tag that opens. What has been written down about an
+        agent belongs to that agent, and the agent is already named here, lit among its neighbours —
+        so this tag is the trigger and the panel drops out of it. Kept at the foot of the page instead,
+        under its own copy of the same name, it was two objects where there is one thing, in the least
+        looked-at place on the screen. The eye does not go down there, and nothing in a wizard should
+        need looking for.
+    *@
     @if (Entries.Any())
     {
         <div class="domain">
@@ -57,9 +65,25 @@
             <div class="kinds">
                 @foreach ((IntentDraft intent, string standing) in Entries)
                 {
-                    <span class="@standing">@Named(intent)</span>
+                    if (standing == "under-way")
+                    {
+                        <button class="under-way opens @(Showing ? "open" : null)" @onclick="() => Showing = !Showing"
+                                title="What has been written down about this one so far">
+                            @Named(intent)
+                            <span class="counted">@AgentRows.Written(Rows) of @Rows.Count</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <span class="@standing">@Named(intent)</span>
+                    }
                 }
             </div>
+
+            @if (Showing)
+            {
+                <AgentSoFar State="State" />
+            }
         </div>
     }
 
@@ -200,4 +224,18 @@
     /// Where acceptance sits on the rail: the last step of the lap.
     /// </summary>
     private const int Accepting = 5;
+
+    /// <summary>
+    /// Whether the rows behind the entry's tag are open.
+    /// </summary>
+    // Held here rather than in the panel, because the thing that opens is the tag and the tag is
+    // drawn here. It survives a turn: a client who opened it to watch the agent fill in did not ask
+    // to have it shut again every time they answer.
+    private bool Showing { get; set; }
+
+    /// <summary>
+    /// What has been written down about the agent in hand: the count on the tag, and the panel's own
+    /// rows, from the one projection so the two cannot disagree.
+    /// </summary>
+    private IReadOnlyList<AgentRows.Row> Rows => AgentRows.Of(State);
 }

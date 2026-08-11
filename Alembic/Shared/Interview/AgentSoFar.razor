@@ -1,42 +1,28 @@
 @*
-    What the answers have become, folded behind the name of the agent they are about. The name is the
-    tab and the rows are its panel, which is the whole of the gestalt: these are that one's rows, and
-    the same phrase is lit on the rail above.
+    What the answers have become: the panel that opens under the entry's own tag on the map.
 
-    Folded, because these rows are not read — they are looked up, when the client wonders what has
-    been written down about this one so far, and nine of them laid open under the question were a
-    second screen of small print beside the one thing they are being asked to do. What an unopened tab
-    still has to say is on the tab: how much is written, and what the last exchange moved.
+    It has no heading and no name of its own, because the thing it belongs to is directly above it and
+    already lit — the tag is the trigger, this is what the trigger opens, and anything here repeating
+    the name would make two objects out of one.
+
+    Folded away by default, because these rows are not read but looked up, when the client wonders
+    what has been written down about this one so far. Laid open under the question they were a second
+    screen of small print beside the one thing they are being asked to do.
 
     What is still empty is shown faint rather than hidden — a panel that grows a new row every few
     turns reads as a form growing under the client, where one that fills in place reads as their own
     domain taking shape.
 *@
 
-<details class="distilled">
-
-    <summary>
-        <span class="whose">@Whose</span>
-        <span class="counted">@Written of @Total written</span>
-        @if (Lately is { } lately)
-        {
-            <span class="lately">just now: @lately</span>
-        }
-    </summary>
-
-    <div class="rows">
-        <div class="drops">
-            @foreach (Row row in Rows())
-            {
-                <div class="drop @(row.Value is null ? "empty" : "") @(row.Moved ? "moved" : "")">
-                    <span class="what">@row.What</span>
-                    <span class="value">@(row.Value ?? "not yet")</span>
-                </div>
-            }
+<div class="rows-open">
+    @foreach (AgentRows.Row row in AgentRows.Of(State))
+    {
+        <div class="drop @(row.Value is null ? "empty" : "") @(row.Moved ? "moved" : "")">
+            <span class="what">@row.What</span>
+            <span class="value">@(row.Value ?? "not yet")</span>
         </div>
-    </div>
-
-</details>
+    }
+</div>
 
 @code {
     /// <summary>
@@ -44,70 +30,4 @@
     /// </summary>
     [Parameter, EditorRequired]
     public InterviewState State { get; set; } = default!;
-
-    /// <summary>
-    /// One row of the panel.
-    /// </summary>
-    /// <param name="What">The client's name for it. Never a field name.</param>
-    /// <param name="Value">What has been written, or null while it is still unasked.</param>
-    /// <param name="Moved">Whether the last exchange is what put it there.</param>
-    private sealed record Row(string What, string? Value, bool Moved);
-
-    /// <summary>
-    /// The client's own word for the agent in hand: its button once it has one, its name until then.
-    /// </summary>
-    private string Whose => State.Intent.Label ?? State.Intent.Name ?? "this one";
-
-    /// <summary>
-    /// How many rows have something in them, and how many there are.
-    /// </summary>
-    private int Written => Rows().Count(row => row.Value is not null);
-
-    private int Total => Rows().Count();
-
-    /// <summary>
-    /// What the last exchange moved, or <c>null</c> when it moved nothing.
-    /// </summary>
-    // Named rather than counted: "just now: what it is for" is the one thing worth saying about rows
-    // nobody has opened, and a badge saying "1 changed" would send them looking for which.
-    private string? Lately => Rows().FirstOrDefault(row => row.Moved)?.What;
-
-    /// <summary>
-    /// Everything this agent is made of, in the order it gets written.
-    /// </summary>
-    private IEnumerable<Row> Rows()
-    {
-        yield return new Row("it is called", State.Intent.Name, State.Changed.Contains("intentName"));
-        yield return new Row("it is theirs when", State.Intent.Description, State.Changed.Contains("intentDescription"));
-        yield return new Row("its button", State.Intent.Label, State.Changed.Contains("intentLabel"));
-        yield return new Row("it opens with", State.Intent.DefaultValue, State.Changed.Contains("intentDefaultValue"));
-        yield return new Row("what it is for", Plain(State.Agent.Target), State.Changed.Contains("agentTarget"));
-        yield return new Row("how it meets them", Plain(State.Agent.Personality), State.Changed.Contains("agentPersonality"));
-
-        bool toolsMoved = State.Changed.Contains("tools");
-
-        if (State.Agent.Tools.Count == 0)
-        {
-            yield return new Row("what it reaches for", null, toolsMoved);
-        }
-        else
-        {
-            foreach (ToolDraft tool in State.Agent.Tools)
-                yield return new Row("it can", tool.Name, toolsMoved);
-        }
-
-        yield return new Row("the order of the work", Plain(State.Agent.Instructions), State.Changed.Contains("agentInstructions"));
-        yield return new Row("how it shows what it finds", Plain(State.Agent.Formatting), State.Changed.Contains("agentFormatting"));
-    }
-
-    /// <summary>
-    /// A written section as the client should read it: without the label the framework fences it in.
-    /// </summary>
-    // [TARGET] is a marker for the model that reads the composed prompt, guaranteed in code precisely
-    // because it must not depend on anyone remembering it. It is not a word of this client's, and a
-    // panel written for them is the wrong place to meet it.
-    private static string? Plain(string? section) =>
-        section is null ? null : LabelledSection.Replace(section, string.Empty).TrimStart();
-
-    private static readonly Regex LabelledSection = new(@"^\s*\[[A-Z]+\]\s*", RegexOptions.Compiled);
 }
