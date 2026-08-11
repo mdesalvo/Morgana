@@ -222,9 +222,10 @@ the configuration rather than the transcript.
 **And there is no Save button.** `InterviewService.Keep` writes the sitting into the Draft on every
 exchange, so the file behind the link beside the question is already true when it is clicked. A save
 the client has to remember is a save they remember once the tab is gone. What the interview shows is
-therefore a plain download and one line under it — *bring this file back to the first screen to carry
-on* — because there is no account to log back into and a client who has not understood that the file
-**is** the way back loses the afternoon. On the other side, a file that carries a sitting changes what
+therefore a **button**, of the same family as the two the client already knows — same height, same
+outline as the way back, quieter than the answer. Not a link with a line of prose under it: this is
+one of the three things they can do on that screen, and it is reached for in a hurry or not at all,
+so it has to be found where buttons are found rather than read. On the other side, a file that carries a sitting changes what
 the import page says: the door reads *carry on where you left off*, and the page names the entry they
 were in the middle of, since "begin" in front of somebody holding their own unfinished work reads as
 losing it. Both it and an `agents.json` arrive through the

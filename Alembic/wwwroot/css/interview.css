@@ -431,34 +431,15 @@ textarea:focus {
     position: static;
 }
 
-/* Taking the work away. Quiet — it is not what anybody came to do — but never hidden, and the line
-   under it is the whole instruction: there is no account to log back into, so the file IS the way
-   back and a client who does not know that loses the afternoon. */
-.keep {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.15rem;
-    text-align: right;
-}
-
-.keep .take {
-    color: var(--alembic-muted);
+/* Taking the work away, as a button of the same family as the two the client already knows — same
+   height, same corners, same outline as the way back. It is quieter than the answer and louder than
+   nothing, which is where it belongs: not what they came to do, and the only thing standing between
+   them and losing an afternoon. */
+a.keep {
+    display: inline-flex;
+    align-items: center;
     text-decoration: none;
-    border-bottom: 1px dashed var(--alembic-border-lit);
-    font-size: 0.9rem;
-    transition: color 0.15s, border-color 0.15s;
-}
-
-.keep .take:hover {
-    color: var(--alembic-accent);
-    border-color: var(--alembic-accent);
-}
-
-.keep .how {
-    color: var(--alembic-muted);
-    opacity: 0.7;
-    font-size: 0.72rem;
+    white-space: nowrap;
 }
 
 /* What the answers have become, folded behind the name of the agent they are about. It is the same

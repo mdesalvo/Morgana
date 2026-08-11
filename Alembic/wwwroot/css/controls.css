@@ -31,7 +31,8 @@ button.primary:disabled {
 /* The way back. Same height and same type size as the primary beside it, outlined instead of
    filled: going back is as much the client's move as going on — it is the only one of the two they
    decide — and only one of them can be what the eye lands on first. */
-button.secondary {
+button.secondary,
+a.secondary {
     background: transparent;
     color: var(--alembic-muted);
     border: 1px solid var(--alembic-border);
@@ -44,7 +45,8 @@ button.secondary {
     transition: color 0.18s, border-color 0.18s;
 }
 
-button.secondary:hover:not(:disabled) {
+button.secondary:hover:not(:disabled),
+a.secondary:hover {
     color: var(--alembic-text);
     border-color: var(--alembic-border-lit);
 }
