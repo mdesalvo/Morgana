@@ -263,6 +263,26 @@ public class InterviewService : IInterviewService
     }
 
     /// <summary>
+    /// What Alembic actually said to the client this turn: the last thing it said, not everything.
+    /// </summary>
+    /// <remarks>
+    /// A run can hold several assistant messages — the model writes its question, calls a tool, and
+    /// writes again — and <c>AgentResponse.Text</c> is all of them joined. A model that repeats its
+    /// question after a tool call, which is the ordinary shape when the tool is <c>SetChoices</c>,
+    /// therefore reached the screen twice over. What the client is owed is the last thing said; the
+    /// rest is the model working, and the session keeps it either way.
+    /// </remarks>
+    private static string LastSaid(AgentResponse response)
+    {
+        string? said = response.Messages
+            .Where(m => m.Role == ChatRole.Assistant)
+            .Select(m => m.Text?.Trim())
+            .LastOrDefault(t => !string.IsNullOrWhiteSpace(t));
+
+        return said ?? response.Text?.Trim() ?? string.Empty;
+    }
+
+    /// <summary>
     /// Writes where the interview stands into the Draft, so the save file is never out of date.
     /// </summary>
     /// <remarks>
@@ -469,7 +489,7 @@ public class InterviewService : IInterviewService
                 if (!string.Equals(value, before[field], StringComparison.Ordinal))
                     interviewState.Changed.Add(field);
 
-            string said = response.Text?.Trim() ?? string.Empty;
+            string said = LastSaid(response);
 
             // A turn that spent itself entirely on tool calls is legitimate — reading findings or a
             // composed prompt takes a round trip that has nothing to say to the client — and the
