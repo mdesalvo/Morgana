@@ -343,6 +343,15 @@ The functional pass rarely uses them, and correctly so — nearly every question
 question. Observed across a full three-pass run: **two turns out of eighteen**, both of them
 confirmations, which is the right frequency rather than a shortfall.
 
+Where they do appear they are now **required**, and the label has to answer the question as it was
+put: *That's everything* against a positive question, *Nothing missing* against one put the other
+way. A confirming turn is one Alembic asked for its own reasons, and making the client type a
+sentence to agree with work they can already see is charging them for it. Which is the same argument
+as the one below about how many confirmations a step may spend — **one** — since a step that asks
+three times has stopped interviewing and started interrogating: nothing here is irreversible, every
+step can be walked back into, and the pass after this one reads what was written and can be told it
+is wrong.
+
 Rich cards have no equivalent here and are not missed: the persistent configuration panel beside the
 transcript is the better surface. A card is richness *per turn* that scrolls away with the
 conversation; the panel updates on every proposal and stays.
