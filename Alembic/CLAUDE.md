@@ -958,7 +958,7 @@ Parsing an uploaded `agents.json` is therefore free: there is no parallel repres
 | Section | Purpose |
 |---|---|
 | `Morgana:LLM:Provider` | `Anthropic`, `AzureOpenAI`, `Ollama`, `OpenAI` |
-| `Morgana:LLM:{Provider}:Tiers:Performance` | `Options` (`ModelId`, `MaxOutputTokens`) + `MagicDust`. Only `Performance` is declared — Alembic never uses the Efficiency die. `MagicDust` is present because `Records.TierDefinition` requires it, not because Alembic meters anything: there is no conversation here to charge a budget to |
+| `Morgana:LLM:{Provider}:Tiers:Performance` | `Options` (`ModelId`, `MaxOutputTokens`) + `MagicDust`. Only `Performance` is declared — Alembic never uses the Efficiency die. `MagicDust` is declared **empty**, `{}`, and that is the whole of what it should say: `Records.TierDefinition` requires the key, and Alembic meters nothing — there is no conversation here to charge a budget to. It never even reads it, since dust accounting is applied by `MorganaAgentAdapter` and Alembic goes to `GetChatClient(Performance)` directly. A calibrated tariff would be a claim about pricing nobody consults, ageing against whichever model the tier is pointed at |
 
 The section is named `Morgana:` and not `Alembic:` because `MorganaLLM` reads that path. In-repo,
 Alembic declares the **same `UserSecretsId` as Morgana.Web** (the same trick PromptHarness uses), so
