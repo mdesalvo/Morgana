@@ -465,7 +465,7 @@ ratio of one station to the run gives — so its width says whose rows these are
 Full width it was a slab related to nothing.
 
 Its labels are **nouns**, and for the four sections they are the rail's own: `Target`, `Personality`,
-`Toolkit`, `Instructions`, `Formatting`, over `name`, `routing description`, `button`, `the button's
+`Toolkit`, `Instructions`, `Formatting`, over `name`, `description`, `button`, `the button's
 request`. What was there before — *it is theirs when*, *how it meets them*, *what it reaches for* —
 was a column of sentences with pronouns in them, which is read as prose instead of scanned as labels:
 the client had to work out what *them* was before they could find the line they wanted. Naming a row

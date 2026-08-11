@@ -33,9 +33,9 @@ public static class AgentRows
         List<Row> rows =
         [
             new Row("name", interviewState.Intent.Name, interviewState.Changed.Contains("intentName")),
-            new Row("routing description", interviewState.Intent.Description, interviewState.Changed.Contains("intentDescription")),
-            new Row("button", interviewState.Intent.Label, interviewState.Changed.Contains("intentLabel")),
-            new Row("the button's request", interviewState.Intent.DefaultValue, interviewState.Changed.Contains("intentDefaultValue")),
+            new Row("description", interviewState.Intent.Description, interviewState.Changed.Contains("intentDescription")),
+            new Row("button", Button(interviewState.Intent),
+                interviewState.Changed.Contains("intentLabel") || interviewState.Changed.Contains("intentDefaultValue")),
             new Row("Target", Plain(interviewState.Agent.Target), interviewState.Changed.Contains("agentTarget")),
             new Row("Personality", Plain(interviewState.Agent.Personality), interviewState.Changed.Contains("agentPersonality"))
         ];
@@ -52,6 +52,17 @@ public static class AgentRows
 
         return rows;
     }
+
+    /// <summary>
+    /// A quick reply as the user will meet it: what is written on it, and what pressing it sends.
+    /// </summary>
+    // One row, because it is one thing. A button whose label is read apart from the sentence it sends
+    // is half of a button, and the half that is missing is the one that decides whether pressing it
+    // does what it looked like it would.
+    private static string? Button(IntentDraft intent) =>
+        intent.Label is null && intent.DefaultValue is null
+            ? null
+            : $"{intent.Label ?? "…"}  |  {intent.DefaultValue ?? "…"}";
 
     /// <summary>
     /// How many rows have something in them.
