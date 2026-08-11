@@ -26,17 +26,6 @@
 
 <div class="alembic-page">
 
-    @*
-        Taking the work away sits on the band that says where you are — under the mark, over the rail,
-        on the line the eye already travels down before it reaches the question. It is not part of
-        answering, so it does not stand in the line of it; and it is not off in a corner of the
-        window either, because a thing pinned away from everything else is a thing nobody meets. It is
-        there from the first turn: a map dictated and lost is the same afternoon gone.
-    *@
-    <div class="whereabouts">
-        <SaveWork />
-    </div>
-
     @if (InterviewService.Current is not { } interviewState)
     {
         <div class="scene">
@@ -45,6 +34,18 @@
     }
     else
     {
+        @*
+            Taking the work away stands on the band the mark is on, level with it and out at the
+            page's edge: page furniture, which is what it is — not part of answering, and not part of
+            the rail either, which is why it must not sit against the rail's own last step.
+
+            Only once there is an interview. Before that there is nothing to save and nobody has said
+            anything, so a button offering to keep the work is a button hanging in an empty room.
+        *@
+        <div class="whereabouts">
+            <SaveWork />
+        </div>
+
         <Journey State="interviewState" Established="Established" Written="Written(interviewState)" />
 
         @*

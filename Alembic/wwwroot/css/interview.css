@@ -418,9 +418,20 @@ textarea:focus {
    least looked-at place there is; here it is on the line the eye already travels down before it
    reaches the question. */
 .whereabouts {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: -0.6rem;
+    position: absolute;
+    top: 3.2rem;
+    right: 2rem;
+}
+
+/* Narrow: the mark is centred on this band and the page is not wide enough to hold both, so the
+   button comes back into the flow above the rail rather than sitting on top of it. */
+@media (max-width: 60rem) {
+    .whereabouts {
+        position: static;
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 1.4rem;
+    }
 }
 
 /* A button of the same family as the two the client already knows — same corners, same outline as

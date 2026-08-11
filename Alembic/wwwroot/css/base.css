@@ -57,6 +57,12 @@ html, body {
     line-height: 1.55;
 }
 
+/* Positioned, so page furniture — the one action that belongs to the page rather than to anything
+   on it — can be placed against its edges instead of squeezed into the column. */
+.page {
+    position: relative;
+}
+
 .page, main {
     min-height: 100vh;
 }
