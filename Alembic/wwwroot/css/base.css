@@ -12,10 +12,14 @@
    ========================================================================== */
 
 :root {
-    --alembic-bg: #0c0917;
-    --alembic-bg-deep: #070510;
-    --alembic-panel: #171130;
-    --alembic-panel-lit: #1e1740;
+    /* The four grounds, one step apart each, in the order they stack: what is recessed into the
+       page, the page itself, what sits on it, what is lit on top. The room is a lit one — the
+       violet is in the ground rather than only in the glow above it, so a panel reads as standing
+       in the light rather than as the one thing visible in the dark. */
+    --alembic-bg: #15102b;
+    --alembic-bg-deep: #0d0920;
+    --alembic-panel: #1e1740;
+    --alembic-panel-lit: #271e52;
     --alembic-border: #35296b;
     --alembic-border-lit: #5a44b0;
     --alembic-text: #ece8f8;
@@ -47,9 +51,12 @@ html, body {
     margin: 0;
     padding: 0;
     min-height: 100%;
+    /* Three layers of one light: a wide violet wash from above the page, the cold cyan the
+       distillate throws in the far corner, and the ground under both. The wash is broad and weak
+       rather than narrow and strong — a soft light fills a room, a hard one draws a spotlight. */
     background:
-        radial-gradient(ellipse 60rem 40rem at 50% -10%, rgba(139, 92, 246, 0.16), transparent 70%),
-        radial-gradient(ellipse 40rem 30rem at 85% 100%, rgba(103, 232, 249, 0.07), transparent 70%),
+        radial-gradient(ellipse 75rem 48rem at 50% -12%, rgba(167, 139, 250, 0.20), transparent 72%),
+        radial-gradient(ellipse 40rem 30rem at 85% 100%, rgba(103, 232, 249, 0.08), transparent 70%),
         var(--alembic-bg);
     background-attachment: fixed;
     color: var(--alembic-text);
