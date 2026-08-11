@@ -209,9 +209,11 @@
     /// Lights the burner on arrival.
     /// </summary>
     /// <remarks>
-    /// Here rather than in <c>OnInitializedAsync</c> because the host prerenders, so that one runs
-    /// twice and the first turn of an interview is a model call on the Performance tier. This runs
-    /// only once the circuit is live, and the flag keeps a re-render from starting a second one.
+    /// Here rather than in <c>OnInitializedAsync</c> because the first turn of an interview is a
+    /// model call on the Performance tier, and this is the first place the circuit is known to be
+    /// live and the screen already drawn — so the client sees the burner lit rather than a page that
+    /// arrives once the model has finished thinking. The flag keeps a re-render from starting a
+    /// second one.
     /// </remarks>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

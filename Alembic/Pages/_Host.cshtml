@@ -32,12 +32,9 @@
     </head>
     <body>
         <!--
-            Blazor Server root component: UI state lives on the server, DOM diffs travel over SignalR.
-            ServerPrerendered rather than Server: the first paint carries real content instead of an
-            empty shell. It also means the page is inspectable without a browser, which is how the
-            scaffold proves the prompt stack resolves.
+            Blazor Server root component: UI state lives on the server, DOM diffs travel over SignalR
         -->
-        <component type="typeof(App)" render-mode="ServerPrerendered" />
+        <component type="typeof(App)" render-mode="Server" />
 
         <div id="blazor-error-ui" style="display: none;">
             An error has occurred.
