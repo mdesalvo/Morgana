@@ -50,9 +50,14 @@ public class InterviewService : IInterviewService
     private static readonly Dictionary<InterviewPass, string> BootstrapMessages = new()
     {
         [InterviewPass.DomainMapper] = "Begin the interview.",
-        [InterviewPass.AgentVoicer] = "The client is still here and what this agent is for is settled. Begin this one.",
-        [InterviewPass.ToolkitModeler] = "The client is still here and the previous pass is settled. Begin this one.",
-        [InterviewPass.AgentFinalizer] = "The client is still here and the toolkit is settled. Begin the last pass."
+        [InterviewPass.AgentModeler] = "Nothing of its agent is written yet. This step settles its Target, "
+                                       + "which gives it everything it will be able to take on.",
+        [InterviewPass.AgentVoicer] = "Its Target is settled. This step settles its Personality, which gives "
+                                      + "it the voice it meets people with.",
+        [InterviewPass.ToolkitModeler] = "Its Target and its Personality are settled. This step settles its "
+                                         + "Toolkit, which gives it everything it can reach outside the conversation.",
+        [InterviewPass.AgentFinalizer] = "Its Target, its Personality and its Toolkit are settled. This last "
+                                         + "step settles its Instructions and its Formatting, which give it how it works."
     };
 
     private readonly IAlembicPromptService alembicPromptService;
@@ -263,23 +268,32 @@ public class InterviewService : IInterviewService
     }
 
     /// <summary>
-    /// What Alembic actually said to the client this turn: the last thing it said, not everything.
+    /// What Alembic actually asked the client this turn: the last question, not everything it wrote.
     /// </summary>
     /// <remarks>
     /// A run can hold several assistant messages — the model writes its question, calls a tool, and
-    /// writes again — and <c>AgentResponse.Text</c> is all of them joined. A model that repeats its
-    /// question after a tool call, which is the ordinary shape when the tool is <c>SetChoices</c>,
-    /// therefore reached the screen twice over. What the client is owed is the last thing said; the
-    /// rest is the model working, and the session keeps it either way.
+    /// writes again — and <c>AgentResponse.Text</c> is all of them joined, so a question repeated
+    /// after a tool call reached the screen twice over. The last message is not the answer either:
+    /// the tail of a run is often the model narrating its own work ("I'll wait for their answer
+    /// before setting the Target"), which leaves the client facing a box under a sentence that asks
+    /// them nothing while the real question scrolls out of existence.
+    ///
+    /// So what is shown is the last message that actually asks something. The test is the question
+    /// mark, which is the same law the interviewer is held to in prose — one sentence, one question
+    /// mark — and this is the screen that law exists for. The fallback is still the last thing said:
+    /// a turn that asks nothing at all is a defect, and showing it is how anyone finds out.
     /// </remarks>
-    private static string LastSaid(AgentResponse response)
+    private static string LastAsked(AgentResponse response)
     {
-        string? said = response.Messages
+        string[] said = [.. response.Messages
             .Where(m => m.Role == ChatRole.Assistant)
             .Select(m => m.Text?.Trim())
-            .LastOrDefault(t => !string.IsNullOrWhiteSpace(t));
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t!)];
 
-        return said ?? response.Text?.Trim() ?? string.Empty;
+        string? asked = said.LastOrDefault(t => t.Contains('?'));
+
+        return asked ?? said.LastOrDefault() ?? response.Text?.Trim() ?? string.Empty;
     }
 
     /// <summary>
@@ -366,17 +380,21 @@ public class InterviewService : IInterviewService
     /// What the agent is sent to open a pass.
     /// </summary>
     /// <remarks>
-    /// The functional pass is the one that cannot be opened with a fixed sentence: it runs once per
-    /// entry of the map, and which entry is a fact the state machine holds. Telling it here costs
-    /// one line and saves the pass a tool call to find out where it is standing.
+    /// Every pass past the map runs once per entry, and where it is standing is a fact the state
+    /// machine holds: which entry of how many, which intent, what is already written on that agent
+    /// and what this step is about to give it. All of it goes in the opening message, because a pass
+    /// that has to work it out either spends a tool call on it or guesses — and the client is owed a
+    /// first sentence that names their agent and says what this stage is for, which is not something
+    /// to be reconstructed from context.
     /// </remarks>
     private static string Bootstrap(InterviewState interviewState, InterviewPass interviewPass, bool revisiting)
     {
-        string opening = interviewPass == InterviewPass.AgentModeler
-            ? $"The map is settled and you are on entry {interviewState.At + 1} of {interviewState.Map.Count}: the intent "
-              + $"'{interviewState.Intent.Name}', which the map describes as: {interviewState.Intent.Description}. "
-              + "Write its agent."
-            : BootstrapMessages[interviewPass];
+        string opening = interviewPass == InterviewPass.DomainMapper
+            ? BootstrapMessages[interviewPass]
+            : $"The map is settled and the client is still here. You are on entry {interviewState.At + 1} "
+              + $"of {interviewState.Map.Count}: the intent '{interviewState.Intent.Name}', which the map "
+              + $"describes as: {interviewState.Intent.Description}. "
+              + BootstrapMessages[interviewPass];
 
         // Arriving on a step the client chose to come back to is not the same as arriving on a step
         // that has just opened, and the difference is what the first question should be. Everything
@@ -428,7 +446,7 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.DropTool)] = tools.DropTool,
             [nameof(InterviewTools.GetToolkit)] = tools.GetToolkit,
             [nameof(InterviewTools.GetAgentSoFar)] = tools.GetAgentSoFar,
-            [nameof(InterviewTools.SetChoices)] = tools.SetChoices,
+            [nameof(InterviewTools.SetChoice)] = tools.SetChoice,
             [nameof(InterviewTools.SetTraits)] = tools.SetTraits,
             [nameof(InterviewTools.GetExistingIntents)] = tools.GetExistingIntents,
             [nameof(InterviewTools.GetComposedPrompt)] = tools.GetComposedPrompt,
@@ -474,7 +492,7 @@ public class InterviewService : IInterviewService
             return;
 
         interviewState.Error = null;
-        interviewState.PendingChoices.Clear();
+        interviewState.PendingChoice = null;
         interviewState.PendingTraits.Clear();
         interviewState.Changed.Clear();
 
@@ -489,17 +507,17 @@ public class InterviewService : IInterviewService
                 if (!string.Equals(value, before[field], StringComparison.Ordinal))
                     interviewState.Changed.Add(field);
 
-            string said = LastSaid(response);
+            string asked = LastAsked(response);
 
             // A turn that spent itself entirely on tool calls is legitimate — reading findings or a
             // composed prompt takes a round trip that has nothing to say to the client — and the
             // question already on the screen simply stands.
-            if (said.Length > 0)
+            if (asked.Length > 0)
             {
-                interviewState.Question = said;
-                interviewState.Choices = [.. interviewState.PendingChoices];
+                interviewState.Question = asked;
+                interviewState.Choice = interviewState.PendingChoice;
                 interviewState.Traits = [.. interviewState.PendingTraits];
-                interviewState.ChosenId = null;
+                interviewState.Chosen = false;
                 interviewState.Exchanges++;
             }
         }

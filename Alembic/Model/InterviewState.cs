@@ -83,16 +83,18 @@ public sealed class InterviewState
     public string? Question { get; set; }
 
     /// <summary>
-    /// Buttons attached to the question on the table, and the one that was pressed.
+    /// The button attached to the question on the table, and whether it was pressed.
     /// </summary>
     /// <remarks>
-    /// The pressed id is held because a button's label and the answer it sends are deliberately
-    /// different things, so a row that stays lit is the only sign the gesture happened at all.
+    /// One button, never a row: the only answer worth a press is the one that agrees, since
+    /// disagreement is a sentence saying what to change and the box it is typed into never closes.
+    /// The pressed flag is held because a button's label and the answer it sends are deliberately
+    /// different things, so a button that stays lit is the only sign the gesture happened at all.
     /// </remarks>
-    public IReadOnlyList<QuickReply> Choices { get; set; } = [];
+    public QuickReply? Choice { get; set; }
 
-    /// <inheritdoc cref="Choices" />
-    public string? ChosenId { get; set; }
+    /// <inheritdoc cref="Choice" />
+    public bool Chosen { get; set; }
 
     /// <summary>
     /// How many exchanges have happened, over the whole interview. The caret follows it.
@@ -148,9 +150,9 @@ public sealed class InterviewState
     public bool ReadyForReview { get; set; }
 
     /// <summary>
-    /// Buttons Alembic attached to the question it is asking right now, cleared when answered.
+    /// The button Alembic attached to the question it is asking right now, cleared when answered.
     /// </summary>
-    public List<QuickReply> PendingChoices { get; } = [];
+    public QuickReply? PendingChoice { get; set; }
 
     /// <summary>
     /// Words offered for the agent's voice, and the ones Alembic is about to offer.

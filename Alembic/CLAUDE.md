@@ -321,7 +321,7 @@ call the tool is only visible when the toolkit is read back whole.
 
 ### Choices: a channel's contract, an interviewer's doctrine
 
-Alembic has no `IChannelService` and needs none — it *is* its own UI. `SetChoices` attaches buttons
+Alembic has no `IChannelService` and needs none — it *is* its own UI. `SetChoice` attaches a button
 to a question, carried by `Morgana.Contracts.QuickReply`, so the shape the client sees in Alembic is
 literally the shape their own agents will emit. The component is **not** borrowed from Cauldron:
 same contract, own rendering, exactly as Rune and Grimoire relate to it.
@@ -334,9 +334,11 @@ while they are live. Alembic's only ever ask a **closed** question:
   and a menu replaces them with Alembic's — an expert clicking a button you wrote is an expert who
   has stopped telling you how they work.
 - Only where the answer set is closed and known to Alembic rather than to the client — in practice
-  that is **confirming an inference Alembic has just stated back**. Not the framework's vocabulary
-  asked raw: "is this parameter context-scoped?" is a closed question the client cannot answer,
-  which is why scope is inferred rather than offered.
+  that is **the answer that adds nothing**: agreement with an inference Alembic has just stated
+  back, or that there is nothing to add where it asked whether anything was missing, or whether
+  there is something the agent should never do. Not the framework's vocabulary asked raw: "is this
+  parameter context-scoped?" is a closed question the client cannot answer, which is why scope is
+  inferred rather than offered.
 - **The text box never closes.** A choice is an offer, never a gate, so the escape is structural
   rather than an extra button. A spent row is shown inert rather than removed: the transcript
   should still say what was offered.
@@ -345,10 +347,31 @@ The functional pass rarely uses them, and correctly so — nearly every question
 question. Observed across a full three-pass run: **two turns out of eighteen**, both of them
 confirmations, which is the right frequency rather than a shortfall.
 
-Where they do appear they are now **required**, and the label has to answer the question as it was
-put: *That's everything* against a positive question, *Nothing missing* against one put the other
-way. A confirming turn is one Alembic asked for its own reasons, and making the client type a
-sentence to agree with work they can already see is charging them for it. Which is the same argument
+Where they do appear they are **required**, and the label has to answer the question as it was put:
+*That's everything* against a positive question, *Nothing missing* against one put the other way,
+*No, nothing like that* where the question was whether the agent should be kept off something. A
+confirming turn is one Alembic asked for its own reasons, and making the client type a sentence to
+agree with work they can already see is charging them for it.
+
+**There is exactly one button, and what it carries is the answer that adds nothing.** That is the
+invariant, not "a confirming turn": agreement and *nothing missing* and *nothing to avoid* are the
+same answer wearing three faces — the client has nothing to contribute this turn — and it is worth
+a button precisely because it is the one answer Alembic already knows the whole of. Everything they
+actually contribute is a sentence only they can write. So the button is a **short circuit**: where
+Alembic has got it right, or where there is genuinely nothing on the other side of the question, the
+turn settles with a press instead of a typed sentence and the interview skips a round trip nobody
+learns anything from.
+
+A second button would carry the opposite, which is never an answer: *something's missing* is the
+announcement of an answer, and the answer itself still has to be typed. It spends a press to say
+what the next sentence will say, and turns a single gesture into a choice between two.
+
+The count is therefore in the **signature**, not in prose asking for restraint and not in a check
+that trims what arrived: `SetChoice(label, value)` takes two plain strings, so a second button is
+not expressible. A schema admitting a list would have the model compose the button that gets
+dropped, which costs the tokens whether or not it is ever drawn — and every pass's declaration would
+carry a sentence saying *one*, which is five places to edit one rule. The id is Alembic's, since
+nothing tells two buttons apart when there is only one. Which is the same argument
 as the one below about how many confirmations a step may spend — **one** — since a step that asks
 three times has stopped interviewing and started interrogating: nothing here is irreversible, every
 step can be walked back into, and the pass after this one reads what was written and can be told it
@@ -389,11 +412,27 @@ The client never writes prose. They answer questions about their work; Alembic w
 configuration and says what it understood. That asymmetry is the whole arrangement, and it is what
 spares a domain expert from having to become a prompt author.
 
-**A section is named when its own question arrives.** *I am asking you to settle this agent's
-`Target` — what it exists to do and where it stops.* That is the plainest possible answer to *what am
-I being asked here*, and where the name carries something the client could not have inferred it is
-said with it: `Personality` is **differential**, what marks this agent out against Morgana's own,
-since every agent of hers already speaks with one — and nobody guesses that from the word.
+**Every step says where it is before it asks anything**: which agent, by the name its entry carries
+on the map; which section is being settled; and what that section gives the agent. *Starting on
+Billing — its Target first: everything Billing will handle for you.*
+
+What earns it is that **the process is Alembic's alone**. The client sees one question on an
+otherwise empty screen: the five steps an agent is built in, and what each hands it, are not on that
+screen and are not inferable from it. So the shared layer teaches the model the *process* rather than
+Alembic — the map, then per entry `Target`, `Personality`, `Toolkit`, `Instructions`/`Formatting`,
+acceptance, each named with what it confers — and the opening sentence is where that reaches the
+client. An agent nobody named, at a stage nobody announced, gets an answer to a different question.
+
+Two rules keep that sentence from becoming a lecture, both in `alembic.json`: it is said in the
+**second person** about their own business, and a question asks **what happens, never what a word
+means**. The failure they exist against is real prose from a live run — *What a typical customer
+means by "good" here — resolved on the spot, or pointed to what handles it — shapes where this
+stops?* — which asks the client to define an abstraction of Alembic's, buries the point of the step
+in an aside, and reaches nobody.
+
+Where a section's name carries something the client could not have inferred, it is said with it:
+`Personality` is **differential**, what marks this agent out against Morgana's own, since every agent
+of hers already speaks with one — and nobody guesses that from the word.
 
 **One section per question, never two.** A step that settles two of them opens on the first and turns
 to the second only once the first is written. Joined, they were one question carrying two subjects,
@@ -403,7 +442,8 @@ one-sentence-one-question-mark rule exists to prevent, arriving through the door
 **Said once, and never explained twice.** A name is stated; prose written to say what a section
 *means* drifts, one revision at a time, into something true of every section — *what the agent is
 able to do* — which says nothing and which nobody ever converges on. So the rule has two halves and
-both are enforced in `alembic.json`: the opening question names the sections it settles, and
+both are enforced in `alembic.json`: the opening sentence names the section and says what it gives
+the agent — never what the section *is* — and
 **every question after it is about their work, in their words** — never intent, tool, parameter,
 scope, context, domain or configuration, because each of those costs a beat of translation and what
 comes back after that beat is the client's guess at Alembic's vocabulary instead of their own
@@ -618,7 +658,7 @@ template has not. What comes back is words, and words are not a section: the pas
 itself, names which facet of her this agent is, and reads it back composed, where a voice that argues
 with hers is visible and nowhere else.
 
-They are deliberately not `SetChoices`. A quick reply is one whole answer and spends the row when
+They are deliberately not `SetChoice`. A quick reply is one whole answer and spends the row when
 pressed; one of these is not an answer at all until it is joined by the others the client keeps. Same
 plumbing, different gesture, and the rendering says which: dashed and weightless until taken.
 
@@ -638,6 +678,13 @@ decisions already taken, and pays for that context on every turn thereafter. Wha
 boundary is the *configuration*, handed over by `GetAgentSoFar` and `GetToolkit` — read as settled
 fact rather than replayed as a conversation. The client's transcript is continuous: they are having
 one interview, and the seam belongs to the model alone.
+
+**Where a pass is standing is told, never inferred.** The opening message carries the facts the state
+machine already holds — which entry of how many, which intent and its description, what is already
+written on that agent, and what this step is about to give it — for every pass past the map, not just
+the first one on an entry. A pass left to work that out either spends a tool call on it or supposes,
+and both land on the client: the first sentence they read has to name their agent and say what this
+stage is for, and neither is reconstructable from a fresh session's context.
 
 The right-hand column is enforced structurally. A pass's toolset is its own `Tools` declaration in
 `alembic.json`, so the mapping pass has no `SetAgentTarget` and no `DeclareTool`, the toolkit pass

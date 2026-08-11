@@ -65,7 +65,7 @@
         {
             <Question Asked="@(interviewState.Question ?? "…")"
                       Prompting="@Prompting(interviewState)"
-                      Choices="Offered(interviewState)"
+                      Choice="Offered(interviewState)"
                       Traits="interviewState.Traits"
                       Busy="isBusy"
                       Turn="interviewState.Exchanges"
@@ -163,8 +163,8 @@
     /// pressed: what stands after that is the next question, and offering an answer to something
     /// already settled is worse than offering nothing.
     /// </remarks>
-    private static IReadOnlyList<QuickReply>? Offered(InterviewState interviewState) =>
-        interviewState.ChosenId is null ? interviewState.Choices : null;
+    private static QuickReply? Offered(InterviewState interviewState) =>
+        interviewState.Chosen ? null : interviewState.Choice;
 
     /// <summary>
     /// Sends a choice as the answer, and records which one was pressed.
@@ -177,7 +177,7 @@
     private Task ChooseAsync(QuickReply choice)
     {
         if (InterviewService.Current is { } interviewState)
-            interviewState.ChosenId = choice.Id;
+            interviewState.Chosen = true;
 
         return SendAsync(choice.Value);
     }

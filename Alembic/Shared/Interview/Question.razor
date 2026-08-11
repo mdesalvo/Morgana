@@ -20,17 +20,16 @@
         <p class="asked">@Asked</p>
 
         @*
-            Choices are an offer and never a gate: the box below stays open, because the client's own
-            words are the material and a menu would replace them with Alembic's. They only ever
-            confirm an inference it has just stated back.
+            One button, and it is a short circuit: it carries the answer that adds nothing — that is
+            everything, nothing missing, nothing the agent should avoid — so a client in that
+            position settles the turn with a press instead of a typed sentence and a round trip
+            nobody learns anything from. An offer and never a gate: the box below stays open,
+            because everything they actually contribute is a sentence only they can write.
         *@
-        @if (Choices is { Count: > 0 })
+        @if (Choice is { } choice)
         {
             <div class="choices">
-                @foreach (QuickReply choice in Choices)
-                {
-                    <button class="choice" @onclick="() => OnChoose.InvokeAsync(choice)">@choice.Label</button>
-                }
+                <button class="choice" @onclick="() => OnChoose.InvokeAsync(choice)">@choice.Label</button>
             </div>
         }
 
@@ -87,10 +86,10 @@
     public string Prompting { get; set; } = string.Empty;
 
     /// <summary>
-    /// Buttons attached to this question, if any.
+    /// The agreeing button attached to this question, if it has one.
     /// </summary>
     [Parameter]
-    public IReadOnlyList<QuickReply>? Choices { get; set; }
+    public QuickReply? Choice { get; set; }
 
     /// <summary>
     /// Words offered for the agent's voice, if this is the question that asks for it.

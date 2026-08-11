@@ -436,28 +436,29 @@ public class InterviewTools
     }
 
     /// <summary>
-    /// Attaches buttons to the question about to be asked.
+    /// Attaches to the question about to be asked the one button that answers it without adding anything.
     /// </summary>
-    public string SetChoices(string choices)
+    /// <remarks>
+    /// An acknowledgement the client may take or leave: where the model is already right — everything
+    /// stated back stands, nothing is missing, there is nothing the agent should be kept off — the
+    /// turn settles with a press instead of a typed sentence and a refining exchange nobody learns
+    /// anything from. Two plain strings rather than an array of buttons, because that answer is the
+    /// only one Alembic knows the whole of; everything the client actually contributes is a sentence
+    /// only they can write, and they write it in the box, which never closes. A schema admitting a
+    /// list would have the model compose a second button before anything could drop it, which costs
+    /// the tokens whether or not it is ever drawn.
+    /// The id is Alembic's: nothing downstream tells two buttons apart when there is only one, and
+    /// asking for it would be a third string with no reader.
+    /// </remarks>
+    public string SetChoice(string label, string value)
     {
-        try
-        {
-            List<QuickReply>? parsed = JsonSerializer.Deserialize<List<QuickReply>>(
-                choices, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        if (string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(value))
+            return "No button attached: it needs both a label to read and the answer it sends.";
 
-            if (parsed is not { Count: > 0 })
-                return "No choices recorded: the payload held no buttons.";
+        interviewState.PendingChoice = new QuickReply("agree", label.Trim(), value.Trim());
 
-            interviewState.PendingChoices.Clear();
-            interviewState.PendingChoices.AddRange(parsed);
-
-            return $"{parsed.Count} choices will be drawn under your question. "
-                   + "The text box stays open, so the answer may still come in its own words.";
-        }
-        catch (JsonException ex)
-        {
-            return $"No choices recorded: the payload is not a JSON array of buttons ({ex.Message}).";
-        }
+        return "The button will be drawn under your question. "
+               + "The text box stays open, so the answer may still come in the client's own words.";
     }
 
     /// <summary>
