@@ -5,13 +5,13 @@
     <div class="landing-head">
         <div class="vessel">
             @*
-                Its own size, declared. Between the prerendered page and the live circuit the image is
-                painted twice, and an image the browser has to measure before it can draw leaves the
-                disc empty across that seam — which is the flicker, since what shows through the hole
-                is the blurred glow behind it.
+                No width or height on it: the vessel around it has a size and an aspect ratio of its
+                own and the image fills that box, so declaring the intrinsic one would prevent a
+                layout shift that cannot happen here. What the image needs against the flicker is in
+                the CSS — a dark of its own while it decodes, over a glow that no longer repaints —
+                and in the preload beside the document.
             *@
-            <img src="images/alembic.jpg" alt="Morgana's alembic, lit from within"
-                 width="829" height="768" decoding="sync" fetchpriority="high" />
+            <img src="images/alembic.jpg" alt="Morgana's alembic, lit from within" />
         </div>
 
         <h1>Alembic</h1>
