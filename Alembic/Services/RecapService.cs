@@ -16,12 +16,6 @@ namespace Alembic.Services;
 public class RecapService : IRecapService
 {
     /// <summary>
-    /// The scope marking a parameter resolved from the session's context variables — the ones that
-    /// would appear in a held-context declaration if the session held them.
-    /// </summary>
-    private const string ContextScope = "context";
-
-    /// <summary>
     /// The framework's prompt composer.
     /// </summary>
     private readonly IPromptComposerService promptComposerService;
@@ -57,20 +51,6 @@ public class RecapService : IRecapService
                     string.IsNullOrWhiteSpace(p.Scope) ? null : p.Scope))]));
         }
 
-        // The supposition: every context-scoped parameter across the toolkit is populated at once.
-        // Ordered ordinally because that is how MorganaAIContextProvider renders the names it hands
-        // the template — the point of showing this at all is that it matches, not that it is likely.
-        string[] heldVariables =
-            [.. agent.Tools
-                    .SelectMany(t => t.Parameters)
-                    .Where(p => string.Equals(p.Scope, ContextScope, StringComparison.OrdinalIgnoreCase))
-                    .Select(p => p.Name)
-                    .OfType<string>()
-                    .Distinct(StringComparer.Ordinal)
-                    .Order(StringComparer.Ordinal)];
-
-        string? heldContext = await promptComposerService.ComposeHeldContextDeclarationAsync(heldVariables);
-
-        return new AgentRecap(agent.ID ?? string.Empty, systemPrompt, tools, heldContext, heldVariables);
+        return new AgentRecap(agent.ID ?? string.Empty, systemPrompt, tools);
     }
 }

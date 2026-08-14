@@ -57,13 +57,12 @@
             <div class="panel">
                 <h2>What agents.json cannot say</h2>
                 <p class="muted">
-                    A namespace, a die per agent, and the class names. None of it is in a
-                    configuration, so an imported domain arrives without it &mdash; and morganizing
-                    it needs that stated rather than guessed.
+                    A project namespace, a die per agent, and the class names. None of it is in a
+                    configuration, so an imported domain arrives without it.
                 </p>
 
                 <p>
-                    <label>Namespace <input @bind="rootNamespace" @bind:event="oninput" /></label>
+                    <label>Project Namespace <input @bind="rootNamespace" @bind:event="oninput" /></label>
                 </p>
 
                 <table>
@@ -150,7 +149,7 @@
             </div>
 
             <div class="panel">
-                <h2>Download</h2>
+                <h2>Code Generation</h2>
                 <p class="muted">
                     One archive: <code>agents.json</code>, the generated <code>*.g.cs</code>, a
                     working mock per toolkit, the migration report and the save file. The mocks are
@@ -160,7 +159,7 @@
                 <p>
                     <label>
                         <input type="checkbox" @bind="includeScenarios" />
-                        Generate PromptHarness scenarios
+                        Generate PromptHarness
                     </label>
                     <span class="muted">
                         &mdash; one more call per agent. A domain agent <em>is</em> its prose, and

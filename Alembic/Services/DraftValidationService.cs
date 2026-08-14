@@ -187,16 +187,20 @@ public class DraftValidationService : IDraftValidationService
                 "The agent has no Formatting.",
                 "Formatting is where an agent says how its own tools' output should be presented, which no global policy can know for it."));
 
-        if (agent.Tools.Count == 0)
-            findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
-                "The agent declares no native tools.",
-                "Legal and expected for an MCP-only agent, whose tools arrive at runtime from its servers and never appear in agents.json."));
+        // Deliberately not a finding, for the same reason as Code.Inferred below: whether zero
+        // native tools means "MCP-only, genuinely nothing to declare" or "the author forgot" is
+        // undecidable without knowing which MCP servers the agent reaches at runtime, and that is a
+        // C# fact — AgentCodeFacts.MCPServers — that is nowhere in an agents.json import, and no
+        // more decided in an alembic-draft.json save file that has not been through Morganize yet
+        // either. A warning that fires identically on both cases teaches neither apart.
 
-        if (agent.Code.Inferred)
-            findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
-                $"The class names ({agent.Code.AgentClassName}, {agent.Code.ToolClassName ?? "no tool class"}) are still Alembic's guess, and no die is chosen yet.",
-                "Neither lives in agents.json, so nothing before this page could know them. Not missed here — settled on Morganize, where every agent gets a namespace and a die before the archive is built.",
-                "morganize", "Morganize"));
+        // Deliberately not a finding: agent.Code.Inferred is true of every agent that has not yet
+        // visited Morganize — imported from agents.json, resumed from an alembic-draft.json saved
+        // before that page, or freshly authored this minute, with no exception among the three — so
+        // a warning here would fire on the very first Review after any of them, teaching nothing
+        // ("of course I don't have a die, I haven't been to Morganize") and never once discriminating
+        // a domain that needs attention from one that does not. Morganize's own panel already
+        // surfaces and resolves this directly, where it is actionable rather than tautological.
 
         ValidateIdentifier(agent.Code.AgentClassName, $"{where} class name", "class name", findings);
         ValidateIdentifier(agent.Code.ToolClassName, $"{where} tool class name", "class name", findings);

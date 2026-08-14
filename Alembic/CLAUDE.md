@@ -288,18 +288,14 @@ client's answers — a summary would be Alembic grading its own homework. This i
 `IPromptComposerService.ComposeAgentInstructionsAsync` takes the domain prompt as a parameter: the
 `Records.Prompt` is built in memory from the Draft and needs to exist nowhere on disk.
 
-It is shown as **three separate blocks, never concatenated**, because that is the framework's
-placement ladder and each rung is read at a different moment of the turn:
+It is shown as **two separate blocks, never concatenated**, because each is read by the model at a
+different moment of the turn:
 
 1. the composed two-layer system prompt — read once, before anything else;
 2. each tool description as the model weighs it, with `ToolDescriptionContextGuidance` already
    spliced in where the tool declares context-scoped parameters, plus the parameter descriptions
    exactly as authored (the framework splices no template at that rung, and an undescribed
-   parameter is emitted bare);
-3. the per-turn held-context declaration — **hypothetical by construction**, and labelled as such
-   in the UI. That injection states which variables the session holds *right now*, and no session
-   exists while authoring. The template and the splice are real; the supposition is that every
-   context-scoped parameter in the toolkit happens to be populated at once.
+   parameter is emitted bare).
 
 **What the recap is true of.** The framework layer comes from the `morgana.json` embedded in the
 Morgana.AI this Alembic was built against, and the framework offers no override for it anywhere —
@@ -771,9 +767,14 @@ the classifier, or whether an agent's `Instructions` contradict its `Formatting`
 here. That is the cross-agent coherence pass, it needs a model, and nothing in this service guesses
 at it.
 
-Against the shipped `Examples` domain the pass reports **0 errors and 5 warnings**, all of them
-true statements about an *imported* domain: four agents whose class names are Alembic's guess and
-whose tier is unknown, and one agent with no native tools (legal — `Monkeys` is MCP-only).
+Two checks that once ran here were removed rather than kept as "true but expected": whether an
+agent's C# facts (class names, tier) are still Alembic's guess, and whether an agent declares no
+native tools. Both are true of *every* freshly imported or freshly authored agent without a single
+exception — Code.Inferred is unset until Morganize, and a bare tool count of zero cannot be told
+apart from a legitimate MCP-only agent without C# facts agents.json never carries — so neither ever
+discriminates a domain that needs attention from one that does not, and a warning that always fires
+teaches nothing. Morganize's own panel already surfaces and resolves the first directly; the second
+has no analogue there because there is nothing to resolve.
 
 ### The starter scenarios: templates in, one domain out
 
@@ -918,7 +919,7 @@ Alembic/
     AgentsConfigurationFile.cs        # The on-disk shape of an agents.json (Morgana's own Records inside)
     DraftProjection.cs                # Draft → Records, shared by the exporter and the recap
     ValidationFinding.cs              # Severity, Where, Message, Because
-    AgentRecap.cs                     # The three rungs of the placement ladder
+    AgentRecap.cs                     # System prompt and tools, the two rungs shown apart
     InterviewState.cs                 # The interview's C# state machine: the map, where it stands on it, the pass
     Provenance.cs                     # Imported / Revised / Authored
   Interfaces/

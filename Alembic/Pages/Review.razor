@@ -67,10 +67,6 @@
                                 <td>
                                     @finding.Message
                                     <div class="because">@finding.Because</div>
-                                    @if (finding.ResolvedOnRoute is { } route)
-                                    {
-                                        <a class="resolved-on" href="@route">Go to @finding.ResolvedOnLabel &rarr;</a>
-                                    }
                                 </td>
                             </tr>
                         }
@@ -226,22 +222,6 @@
                             </div>
                         }
                         </details>
-                    }
-
-                    @if (recap.HypotheticalHeldContext is not null)
-                    {
-                        <h3>Held-context declaration</h3>
-                        <p class="muted">
-                            Read <em>before any tool is weighed</em> &mdash; the top rung of the ladder,
-                            and the one an agent activated mid-conversation depends on.
-                            <strong>Hypothetical by construction</strong>: this injection states which
-                            variables the session holds right now, and no session exists while you are
-                            authoring. The template and the splice are real; the supposition is that
-                            every context-scoped parameter in this toolkit
-                            (<code>@string.Join(", ", recap.HypotheticalHeldVariables)</code>)
-                            happens to be populated at once.
-                        </p>
-                        <pre class="prompt">@recap.HypotheticalHeldContext</pre>
                     }
                 </div>
             }

@@ -6,9 +6,15 @@ namespace Alembic.Model;
 /// </summary>
 /// <remarks>
 /// Not a summary of the client's answers: the same service, the same fences, the same policy
-/// ordering the running agent gets. The three parts below are the framework's placement ladder,
-/// which is why they are shown apart rather than concatenated — each is read by the model at a
-/// different moment, and seeing them merged is exactly the confusion the ladder exists to prevent.
+/// ordering the running agent gets. The two parts below are shown apart rather than concatenated —
+/// each is read by the model at a different moment, and seeing them merged would blur that.
+/// <para>
+/// What is deliberately absent is the framework's per-turn held-context declaration. It is a global
+/// policy's own injection template, not anything Alembic or the domain author wrote, and it can only
+/// ever be shown here against a supposed session that does not exist at authoring time — showing a
+/// framework policy body in Alembic is exactly the layering violation the two-layer composition
+/// exists to avoid everywhere else.
+/// </para>
 /// </remarks>
 /// <param name="AgentId">Which agent this is.</param>
 /// <param name="SystemPrompt">
@@ -19,20 +25,10 @@ namespace Alembic.Model;
 /// Each tool as the model weighs it, with the framework's context guidance already spliced in
 /// where the tool declares context-scoped parameters.
 /// </param>
-/// <param name="HypotheticalHeldContext">
-/// The per-turn held-context declaration, rendered against <paramref name="HypotheticalHeldVariables"/>.
-/// <b>Hypothetical by construction</b>: this injection states which variables the session holds
-/// <em>right now</em>, and no such session exists at authoring time. The template and the splice
-/// are real; only the variable set is a supposition — the one where every context-scoped parameter
-/// in the agent's toolkit happens to be populated.
-/// </param>
-/// <param name="HypotheticalHeldVariables">The supposed variable set, in the order the provider would render it.</param>
 public sealed record AgentRecap(
     string AgentId,
     string SystemPrompt,
-    IReadOnlyList<ToolRecap> Tools,
-    string? HypotheticalHeldContext,
-    IReadOnlyList<string> HypotheticalHeldVariables);
+    IReadOnlyList<ToolRecap> Tools);
 
 /// <summary>
 /// One tool as the model reads it.

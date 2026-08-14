@@ -153,3 +153,13 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* One doorway, for the moment there is only ever one honest next step: into the interview. A single
+   child left inside .gateways' own two-column grid would sit flush left with an empty column beside
+   it, so this is its own layout rather than a degenerate case of the other two. */
+.gateways-one {
+    grid-template-columns: 1fr;
+    max-width: 22rem;
+    margin-left: auto;
+    margin-right: auto;
+}

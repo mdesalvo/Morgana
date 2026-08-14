@@ -103,6 +103,14 @@ public class CoherenceService : ICoherenceService
 
         sb.AppendLine();
         sb.AppendLine("# Agents");
+        sb.AppendLine();
+        // Every agent below is described by its native tools alone. A Morgana agent may also be
+        // hybrid — native tools of its own plus arbitrary MCP tools reached at runtime — and which
+        // MCP servers an agent reaches is a C# fact (AgentCodeFacts.MCPServers) agents.json never
+        // carries, whether that agent's own tool count here is zero or not. So a capability a
+        // Target or Instructions promises with no native tool listed for it is not evidence of
+        // PROMISES WITHOUT TOOLS on its own — it may be MCP-backed, invisibly to this description.
+        sb.AppendLine("Native tools only, below: an agent may also reach further capability through MCP servers this description cannot see, whether or not it lists any native tools of its own.");
 
         foreach (AgentDraft agent in draft.Agents)
         {

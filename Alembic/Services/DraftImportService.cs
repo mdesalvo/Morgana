@@ -100,9 +100,6 @@ public class DraftImportService : IDraftImportService
             notices.Add($"This configuration had no '{DomainDraft.FallbackIntent}' intent, so one is in place: "
                         + "it is where the classifier sends everything the domain does not cover, and it is the one intent no agent may claim.");
 
-        notices.Insert(0, $"Read {draft.Intents.Count} intents and {draft.Agents.Count} agents, "
-                          + $"carrying {draft.Agents.Sum(a => a.Tools.Count)} tools.");
-
         logger.LogInformation(
             "Imported {IntentCount} intents and {AgentCount} agents from {FileName}",
             draft.Intents.Count, draft.Agents.Count, fileName);

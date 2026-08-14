@@ -5,7 +5,6 @@
 @using System.IO.Compression
 @using Alembic.Model
 @inject IDraftImportService DraftImportService
-@inject IDraftExportService DraftExportService
 @inject IDraftSerializationService DraftSerializationService
 @inject IDraftStateService DraftStateService
 
@@ -21,8 +20,11 @@
     and bury the only one that matters, which is what to do next.
 
     So the three things that CAN be done next are the loudest thing on the page, in the same shape
-    as the doorways on the landing. Getting the file back out again is real and is one quiet line:
-    it proves the round-trip invariant, and nobody arrives wanting it.
+    as the doorways on the landing. Getting the file back out again bare was tried and dropped: its
+    only reason was proving the round-trip invariant, which automated tests already do without
+    asking a client to click for it, and what it offered duplicated Morganize's fuller archive and
+    the interview's own "Save my work" — a line nobody arrived wanting, kept only for what it once
+    demonstrated to whoever was building this page.
 *@
 
 <div class="alembic-page">
@@ -77,52 +79,60 @@
             </ul>
         }
 
-        @*
-            What came in, as the client's own business, and it leads: this is the evidence the
-            client uploaded a file to see, and it is what "what now" below is a response to. An
-            agent is shown by the intent that reaches it and the things it can do — the two facts
-            they would recognise. Everything else the Draft holds is true and belongs on Review.
-        *@
-        <h2 class="what-now">Agents found in this domain</h2>
-
-        @foreach (AgentDraft agent in draft.Agents)
+        @if (HasAgents)
         {
-            IntentDraft? intent = draft.Intents.FirstOrDefault(i => i.Name == agent.ID);
+            @*
+                What came in, as the client's own business, and it leads: this is the evidence the
+                client uploaded a file to see, and it is what "what now" below is a response to. An
+                agent is shown by the intent that reaches it and the things it can do — the two
+                facts they would recognise. Everything else the Draft holds is true and belongs on
+                Review.
+            *@
+            <h2 class="what-now">Agents found in this domain</h2>
 
-            <div class="agent-card">
-                <div class="agent-card-name">@(intent?.Label ?? agent.ID)</div>
+            @foreach (AgentDraft agent in draft.Agents)
+            {
+                IntentDraft? intent = draft.Intents.FirstOrDefault(i => i.Name == agent.ID);
 
-                @if (intent?.Description is { Length: > 0 } description)
-                {
-                    <p class="agent-card-when">Comes when someone asks about @Lower(description)</p>
-                }
+                <div class="agent-card">
+                    <div class="agent-card-name">@(intent?.Label ?? agent.ID)</div>
 
-                @if (agent.Tools.Count == 0)
-                {
-                    <p class="muted">
-                        It carries nothing of its own &mdash; whatever it reaches for arrives from
-                        elsewhere at the moment it is needed.
-                    </p>
-                }
-                else
-                {
-                    <p class="agent-card-can">
-                        It can
-                        @foreach ((ToolDraft tool, int index) in agent.Tools.Select((t, i) => (t, i)))
-                        {
-                            <span class="can">@Humanise(tool.Name)</span>@(index < agent.Tools.Count - 1 ? " " : "")
-                        }
-                    </p>
-                }
-            </div>
+                    @if (intent?.Description is { Length: > 0 } description)
+                    {
+                        <p class="agent-card-when">Comes when someone asks about @Lower(description)</p>
+                    }
+
+                    @if (agent.Tools.Count == 0)
+                    {
+                        <p class="muted">
+                            It carries nothing of its own &mdash; whatever it reaches for arrives from
+                            elsewhere at the moment it is needed.
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="agent-card-can">
+                            It can
+                            @foreach ((ToolDraft tool, int index) in agent.Tools.Select((t, i) => (t, i)))
+                            {
+                                <span class="can">@Humanise(tool.Name)</span>@(index < agent.Tools.Count - 1 ? " " : "")
+                            }
+                        </p>
+                    }
+                </div>
+            }
         }
-
-        @if (draft.Intents.FirstOrDefault(i => draft.Agents.All(a => a.ID != i.Name)) is not null)
+        else
         {
-            <p class="orphan-intents">
-                Some intents in this file have no agent to handle them: Morgana would refuse
-                to start until every one does. <strong>Validate this domain before doing anything
-                else with it.</strong>
+            @*
+                A Draft can exist with no agent at all — an interview kept the moment it opened, with
+                nothing accepted into it yet. That is not "a domain", and showing it as one — cards
+                with nothing in them, doors to validate or morganize nothing — would be answering a
+                question the client never asked with a lie dressed as evidence.
+            *@
+            <p class="muted">
+                Nothing has been added to this domain yet &mdash; the interview is open, but no agent
+                has been accepted into it.
             </p>
         }
 
@@ -139,9 +149,15 @@
         *@
         <h2 class="what-now">What you can do</h2>
 
-        <div class="gateways gateways-three">
+        @*
+            Validate and Morganize both presuppose a domain worth reading — a validator with nothing
+            to check and an archive with nothing to package are not quieter versions of themselves,
+            they are doors to an action that cannot mean anything yet. So with no agent in hand there
+            is exactly one door: into the interview that is the only way to get one.
+        *@
+        <div class="gateways @(HasAgents ? "gateways-three" : "gateways-one")">
 
-            <a class="gateway @(arrivedAsArchive ? null : "primary-gateway")" href="interview">
+            <a class="gateway @(!HasAgents || arrivedAsArchive ? null : "primary-gateway")" href="interview">
                 <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M9.3 3h5.4M10.6 3.4v5.2M13.4 3.4v5.2" />
@@ -167,38 +183,34 @@
                 }
             </a>
 
-            <a class="gateway @(arrivedAsArchive ? "primary-gateway" : null)" href="review">
-                <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <circle cx="10.5" cy="10.5" r="6.6" />
-                    <path d="M15.4 15.4 21 21" />
-                    <path d="M7.6 9h5.8M7.6 12h3.8" />
-                </svg>
+            @if (HasAgents)
+            {
+                <a class="gateway @(arrivedAsArchive ? "primary-gateway" : null)" href="review">
+                    <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="10.5" cy="10.5" r="6.6" />
+                        <path d="M15.4 15.4 21 21" />
+                        <path d="M7.6 9h5.8M7.6 12h3.8" />
+                    </svg>
 
-                <h2>Validate this domain</h2>
-                <span class="go">Look &rarr;</span>
-            </a>
+                    <h2>Validate this domain</h2>
+                    <span class="go">Look &rarr;</span>
+                </a>
 
-            <a class="gateway" href="morganize">
-                <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M3 6.4h18v3.4H3z" />
-                    <path d="M4.6 9.8v8.4A1.8 1.8 0 0 0 6.4 20h11.2a1.8 1.8 0 0 0 1.8-1.8V9.8" />
-                    <path d="M12 12v4.4M9.8 14.4 12 16.6l2.2-2.2" />
-                </svg>
+                <a class="gateway" href="morganize">
+                    <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6.4h18v3.4H3z" />
+                        <path d="M4.6 9.8v8.4A1.8 1.8 0 0 0 6.4 20h11.2a1.8 1.8 0 0 0 1.8-1.8V9.8" />
+                        <path d="M12 12v4.4M9.8 14.4 12 16.6l2.2-2.2" />
+                    </svg>
 
-                <h2>Morganize it</h2>
-                <span class="go">Package &rarr;</span>
-            </a>
+                    <h2>Morganize it</h2>
+                    <span class="go">Package &rarr;</span>
+                </a>
+            }
 
         </div>
-
-        <p class="give-back">
-            Or take the file itself back:
-            <a download="agents.json" href="@DataUri(DraftExportService.Export(draft))">agents.json</a>
-            &middot;
-            <a download="alembic-draft.json" href="@DataUri(DraftSerializationService.Serialize(draft))">alembic-draft.json</a>
-        </p>
     }
 
     <Back />
@@ -243,16 +255,10 @@
     private DomainDraft? Draft => DraftStateService.Current;
 
     /// <summary>
-    /// Renders bytes as a downloadable <c>data:</c> URI.
+    /// Whether the Draft is an actual domain rather than an interview kept the moment it opened,
+    /// with nothing accepted into it yet.
     /// </summary>
-    /// <remarks>
-    /// A plain anchor rather than JS interop or a download endpoint, and the reason is the same one
-    /// that shapes the rest of Alembic: the Draft lives in the circuit, so no stateless endpoint
-    /// can reach it, and a configuration is tens of kilobytes — small enough that the simplest
-    /// mechanism with no moving parts is also the right one.
-    /// </remarks>
-    private static string DataUri(byte[] content) =>
-        $"data:application/json;charset=utf-8;base64,{Convert.ToBase64String(content)}";
+    private bool HasAgents => Draft?.Agents.Count > 0;
 
     /// <summary>
     /// The interrupted interview, if the file carried one worth reporting — the single most

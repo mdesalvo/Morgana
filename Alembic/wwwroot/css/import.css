@@ -90,11 +90,3 @@ h2.what-now {
     background: rgba(30, 23, 64, 0.6);
 }
 
-/* The round-trip, which is real and which nobody arrives wanting. */
-.give-back {
-    margin-top: 2.5rem;
-    padding-top: 1.2rem;
-    border-top: 1px solid rgba(53, 41, 107, 0.6);
-    font-size: 0.85rem;
-    color: var(--alembic-muted);
-}
