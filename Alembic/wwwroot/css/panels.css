@@ -197,6 +197,37 @@ code {
     font-size: 0.9rem;
 }
 
+/* One glyph and one short line, not a paragraph: what this says has to be read every time the
+   panel opens, which is exactly the case a wall of text loses. The bolt is drawn, not an emoji —
+   the alchemical characters this room once used had no font on most Linux desktops and landed as
+   tofu, which is the one thing worse than no icon at all. */
+.power-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    margin: 0.6rem 0;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--alembic-gold);
+    border-radius: 0.5rem;
+    background: rgba(244, 197, 106, 0.1);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.power-notice .sigil {
+    width: 1.3rem;
+    height: 1.3rem;
+    flex: none;
+    margin-top: 0.1rem;
+    color: var(--alembic-gold);
+}
+
+.power-notice strong {
+    display: block;
+    color: var(--alembic-text);
+    font-weight: 600;
+}
+
 /* A finding whose only fix is another page names that page as a real destination, not as a clause
    inside .because the client has to notice and act on unprompted. */
 .resolved-on {

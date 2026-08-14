@@ -85,6 +85,24 @@
                 that disagree between agents.
             </p>
 
+            @*
+                Running the pass itself is optional and cheap to try; it is "Apply" that writes directly
+                into the domain the interview built, possibly across more than one agent, and the whole
+                loop is iterative with no guarantee it ends on its own...
+            *@
+            <div class="power-notice">
+                <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M13 2 5 14h6l-1 8 9-13h-6z" />
+                </svg>
+                <div>
+                    <strong>100% AI-driven, applying its suggestions will modify what the interview built.</strong>
+                    Running it is optional &mdash; good practice, to see what it finds. Applying is
+                    where it acts: prose or tools, sometimes more than one agent, iterative, and it
+                    can cost more than one round.
+                </div>
+            </div>
+
             @if (coherence is null)
             {
                 <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || draft.Agents.Count < 2)">
@@ -191,9 +209,9 @@
                            Past a few rounds the honest thing is to say so plainly, not to keep
                            lighting the button as if one more press were the one that finishes it. *@
                         <p class="chase-warning">
-                            @coherenceRuns passes this sitting. Coherence advises, it does not owe
-                            you zero &mdash; a fix's own ripple can always surface something new to
-                            chase. Weigh what is left yourself before running it again.
+                            @coherenceRuns passes this sitting, each one landing another change on
+                            the domain the interview built. Weigh what is left yourself before
+                            running it again &mdash; the loop is not going to tell you when to stop.
                         </p>
                         <button class="agent-pick" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue || applyingAll)">Run it again anyway</button>
                     }
