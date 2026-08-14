@@ -34,18 +34,6 @@
     }
     else
     {
-        @*
-            Taking the work away stands on the band the mark is on, level with it and out at the
-            page's edge: page furniture, which is what it is — not part of answering, and not part of
-            the rail either, which is why it must not sit against the rail's own last step.
-
-            Only once there is an interview. Before that there is nothing to save and nobody has said
-            anything, so a button offering to keep the work is a button hanging in an empty room.
-        *@
-        <div class="whereabouts">
-            <SaveWork />
-        </div>
-
         <Journey State="interviewState" Established="Established" Written="Written(interviewState)" />
 
         @*
@@ -59,6 +47,9 @@
                 <Back>
                     <StepBack State="interviewState" Busy="isBusy" OnBack="BackAsync" />
                 </Back>
+                <Keep>
+                    <SaveWork Busy="isBusy" />
+                </Keep>
             </AgentWritten>
         }
         else
@@ -74,6 +65,9 @@
                 <Back>
                     <StepBack State="interviewState" Busy="isBusy" OnBack="BackAsync" />
                 </Back>
+                <Keep>
+                    <SaveWork Busy="isBusy" />
+                </Keep>
             </Question>
         }
 
@@ -109,51 +103,39 @@
     /// Whether every section is settled and the agent is waiting to be let into the domain.
     /// </summary>
     private static bool Written(InterviewState interviewState) =>
-        interviewState is { Pass: InterviewPass.AgentFinalizer, ReadyForReview: true };
+        interviewState is { Pass: InterviewPass.AgentFormatter, ReadyForReview: true };
 
     /// <summary>
-    /// The worked example in the answer box, shown on the first question of a step and no other.
+    /// The worked example in the answer box: the model's, or the house one on the very first question.
     /// </summary>
     // An example rather than a label: somebody who has just been asked a question does not yet know
-    // what a good answer looks like, and naming the material only restates the question. Each shows
-    // the register, the length and the detail at once, in a trade the client does not have.
+    // what a good answer looks like, and naming the material only restates the question. What it
+    // shows is the register, the length and the level of detail at once.
     //
-    // The four are one story, told once. The first draws the boundary — the shop sells, Morgana
-    // handles what comes after the order — and the others pick up where the last stopped without
-    // repeating it, so a client answering in this register hands over material that does not
-    // overlap with itself.
-    private static string Prompting(InterviewState interviewState)
-        => !interviewState.PassJustOpened ? string.Empty : interviewState.Pass switch
-            {
-                InterviewPass.DomainMapper =>
-                    "We sell coffee online, a dozen blends, mostly on subscription. Selling is not what I "
-                    + "want her for — the site does that, and roasting stays with us. It is what comes "
-                    + "after the order: people writing to move a delivery, to swap what is in the next box, "
-                    + "or to ask for an invoice.",
+    // Every example past the first is the model's, because by then it has read the map and can write
+    // one in the client's own trade about the agent being built — which is what makes it something
+    // to cut about rather than a stranger's business quoted at them.
+    //
+    // The opening question of the map is the exception, and the one below is deliberately not the
+    // model's. Nothing is known about this client yet, so it would be inventing a hypothetical
+    // domain exactly as this does — but differently every run, unverifiable, on the screen that sets
+    // the register for the whole interview. And this one teaches the pass's own lesson: the shop
+    // sells, Morgana handles what comes after the order. A domain is a choice, not an inventory, and
+    // a model asked for a plausible domain writes the inventory.
+    //
+    // It stands only while nothing is known: a client who arrived with an agents.json has a trade on
+    // the table, the mapping pass can call SetExample from it, and what it writes wins here.
+    private const string HouseExample =
+        "We sell coffee online, a dozen blends, mostly on subscription. Selling is not what I "
+        + "want her for — the site does that, and roasting stays with us. It is what comes "
+        + "after the order: people writing to move a delivery, to swap what is in the next box, "
+        + "or to ask for an invoice.";
 
-                InterviewPass.AgentModeler =>
-                    "Someone wants their delivery moved, usually giving a date and their order number. We "
-                    + "find their subscription, shift it, and tell them the new day. We never change the "
-                    + "payment or the blend in the same breath, and we never promise a date before we know "
-                    + "it can be held.",
-
-                // The voice step has none, and that is not an omission. Its question is answered by
-                // picking from the words offered under it, and a fifty-word story in the box beside
-                // them would be an example of an answer nobody is being asked for.
-                InterviewPass.AgentVoicer => string.Empty,
-
-                InterviewPass.ToolkitModeler =>
-                    "To do that we look the subscription up in our order system by the customer's email, "
-                    + "then check with the warehouse whether the next box has already been packed. If it "
-                    + "has not, we set the new date on it and a confirmation goes out by email. The packing "
-                    + "status is theirs, not ours.",
-
-                _ =>
-                    "We check the subscription first, then say what can be done, then do it — never confirm "
-                    + "before the change is made. One short line back, with the new day written out in "
-                    + "full. We keep back which courier we use and what the shipping costs us; if the box "
-                    + "has already gone, we say so and offer the one after."
-            };
+    private static string Prompting(InterviewState interviewState) =>
+        interviewState.Example
+        ?? (interviewState is { Pass: InterviewPass.DomainMapper, PassJustOpened: true }
+                ? HouseExample
+                : string.Empty);
 
     /// <summary>
     /// The choices attached to the question being asked right now, if any.

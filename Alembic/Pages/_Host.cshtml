@@ -56,6 +56,19 @@
             // this the client reads the question and then has to go and find where to reply, every
             // single turn — the one piece of friction a one-question-at-a-time interview cannot
             // afford, because it is paid on every question rather than once.
+            // Handing a file over. The bytes arrive when the button is pressed and are released the
+            // moment the download starts, so nothing about the work is sitting in the page waiting
+            // to go stale — which is exactly what carrying the file in the link's href did.
+            window.alembicSave = (name, base64) => {
+                const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+                const url = URL.createObjectURL(new Blob([bytes], { type: 'application/json' }));
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = name;
+                link.click();
+                URL.revokeObjectURL(url);
+            };
+
             window.alembicFocusReply = () => {
                 const box = document.querySelector('.reply textarea');
                 if (box) box.focus();

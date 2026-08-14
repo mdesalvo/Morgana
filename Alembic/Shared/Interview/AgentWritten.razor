@@ -28,6 +28,8 @@
     <div class="sealed-actions">
         @Back
 
+        @Keep
+
         <button class="primary" @onclick="() => OnAccept.InvokeAsync()" disabled="@Busy">
             @(Remaining > 0 ? "Into the domain, then the next" : "Into the domain")
         </button>
@@ -46,6 +48,12 @@
     /// </summary>
     [Parameter]
     public RenderFragment? Back { get; set; }
+
+    /// <summary>
+    /// Taking the work away, beside the button that lets the agent into the domain.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Keep { get; set; }
 
     /// <summary>
     /// Whether the commit is already under way.

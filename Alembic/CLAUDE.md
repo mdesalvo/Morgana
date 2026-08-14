@@ -65,7 +65,7 @@ own framework layer — but hers is *glue*, binding the global policies to the m
 machinery, and there is nothing here for such a layer to bind. **The structure is what carries the
 semantics**: the four sections say what they always say.
 
-**The second layer is stored twice-over deduplicated, and read as one.** The five passes differ only
+**The second layer is stored twice-over deduplicated, and read as one.** The six passes differ only
 in which tools they hold, so four copies of the conducting rules, the voice and the output format
 were four places to edit one rule and three chances to leave one behind — 22 000 characters of which
 half was duplication, and one of the copies had already drifted into contradicting the voice it was
@@ -219,20 +219,46 @@ re-enters that step the way `BackAsync` does — a fresh agent and a fresh sessi
 as settled fact — which needs no new machinery, because the memory of this interview has always been
 the configuration rather than the transcript.
 
-**And there is no Save button.** `InterviewService.Keep` writes the sitting into the Draft on every
-exchange, so the file behind the link beside the question is already true when it is clicked. A save
-the client has to remember is a save they remember once the tab is gone. What the interview shows is
-therefore a **button**, of the same family as the two the client already knows — same corners, same
-outline as the way back, one size down. Not a link with a line of prose under it: this is one of the
-three things they can do on that screen, and it is reached for in a hurry or not at all, so it has to
-be found where buttons are found rather than read.
+**The work is written down without being asked.** `InterviewService.Keep` runs at the end of every
+`ExchangeAsync` — the one place every turn passes through, the turn that *opens* a pass included — so
+the Draft in the circuit is current from the first question rather than from the first answer. On top
+of that `DraftStateService` snapshots it into the memory cache every `Alembic:Work:AutosaveSeconds`,
+and once more when the circuit is disposed.
 
-It stands level with the mark, out at the page's edge, and that position was arrived at by
-elimination. At the foot beside the agent's rows it sat in the least looked-at place on the page and
-read as belonging to that panel. Fixed in a corner of the window it belonged to nothing at all. Tucked
-just above the rail it read as attached to the rail's last step, which is a step of the interview and
-not a thing anybody can press. On the mark's band it is what it actually is — page furniture, beside
-the one other piece of page furniture there is — and it is out of the line of the answer entirely.
+**That snapshot is not about tidiness, it is about how a circuit ends.** Blazor Server holds the
+interview in a live connection, and connections end for reasons the client never chose: a suspended
+laptop, a proxy closing an idle socket, a deploy. What they see is the reload banner, and reloading
+means a new circuit that knows nothing. So the snapshot is picked back up on the way in — the key
+under which it is cached lives in the browser's `ProtectedLocalStorage`, the way Cauldron keeps its
+conversation id: a pointer in the browser, the work on the server, and nothing in the HTTP path.
+The window that can be lost is the autosave interval, and nothing else.
+
+**Save my work hands over this moment, or the last one it has.** The button serializes the Draft when
+it is pressed and falls back to the newest snapshot if that cannot be had, then passes the bytes to
+the browser through one JS call. It was a `data:` URI holding the whole file in the anchor's href,
+which is the shape that produced the worst bug this project has had: the href *is* the file, so one
+computed before the Draft existed was an empty save — hours of interview downloaded as `{}` — and one
+recomputed every turn sent the entire configuration across the wire on every answer. A save button
+that silently hands back nothing is found out by the one person who needed it.
+
+A save the client has to remember is a save they remember once the tab is gone. What the interview
+shows is therefore a **button**, of the same family as the two the client already knows.
+
+It stands **on the row with the answer and the way back**, at their size, which reverses where it
+used to be. On the mark's band it was page furniture — which is what it looked like and what it was
+treated as, and page furniture is the wrong genus for the only thing standing between a client and
+losing an afternoon. Nothing here is persisted and nothing is resumed, so that file is the whole of
+what survives the tab: it belongs among the things the client actually does, where the hands already
+are. Back on the left, then keep and answer together on the right, because going back is about what
+is behind them and the other two are about what is in front.
+
+**And it reads the file back.** After the press a receipt says what is in the bytes that just landed
+in the client's downloads — kinds of request mapped, agents finished, which one is in hand and at
+which step, how big the file is — parsed out of the downloaded document rather than reported from the
+interview's own state. That distinction is the whole of it: the save that handed back an empty file
+did so while the interview on screen was perfectly healthy, so any reassurance drawn from the
+interview would have confirmed the lie. Only the file can say what is in the file.
+
 It appears only once there is an interview: before that nobody has said anything, and a button
 offering to keep the work is a button hanging in an empty room. On the other side, a file that carries a sitting changes what
 the import page says: the door reads *carry on where you left off*, and the page names the entry they
@@ -527,8 +553,8 @@ step and its subject, which is why it is on the rail rather than beside it.
 
 **The rail has the shape of the process, and that shape is a loop.** Two steps happen once —
 `Domain Exploration`, where the map is drawn, and `Domain Finalization`, the finished domain read and
-taken away — and the five between them happen again for every entry of that map: `Target`,
-`Personality`, `Toolkit`, `Instructions, Formatting`, `Agent Acceptance`. So those five
+taken away — and the six between them happen again for every entry of that map: `Target`,
+`Personality`, `Toolkit`, `Instructions`, `Formatting`, `Agent Acceptance`. So those six
 are drawn inside a lap: bordered, headed on its edge
 `Agent Modeling · 📦 Delivery date`, and stacked like sheets while entries remain. No count in that
 head: the strip under the rail is the map itself with this entry lit among the others, so a number
@@ -566,15 +592,29 @@ it inferred.
 
 **What is in the box is a worked example, on the first question of a step and no other.** A label
 naming the material — *the parts of your work you would like Morgana to take on* — restates the
-question and teaches nothing, so each step's placeholder is instead a fifty-word answer somebody
-else might have given, in a trade the client does not have: it shows the register, the length and
-the level of detail at once, which is the whole of what a first-time client is missing. The four are
-one story told once — the first draws the boundary (*the site sells; she handles what comes after
-the order*), the others pick up where the last stopped without repeating it — so a client answering
-in that register hands over material that does not overlap with itself, which is the defect the
-coherence pass would otherwise be left to find at the end. From the second question of a step the
-box is empty: the question there is a short follow-up, and a fifty-word story under it answers
-something nobody asked.
+question and teaches nothing, so what stands there instead is a fifty-word answer somebody else might
+have given: it shows the register, the length and the level of detail at once, which is the whole of
+what a first-time client is missing. From the second question of a step the box is empty, since the
+question there is a short follow-up and a fifty-word story under it answers something nobody asked.
+
+**All but the first are written by the model, in the turn that opens the step**, through `SetExample`
+— and that is the point at which it finally can: it has read the map, so the example is in the
+client's own trade and about the agent being built, rather than a stranger's business quoted at them
+while they are asked about their own. The prose asks for one close enough to be worth editing and
+too specific to be agreed with as it stands, because an example that fits exactly is one they press
+past without adding what only they know. It clears itself every exchange, so it cannot outlive its
+question; `AgentVoicer` has no such tool, since that step is answered by picking words and a story
+beside them would be an example of an answer nobody asked for.
+
+**The opening question of the map keeps a written one, and that is not an inconsistency.** Nothing is
+known about this client yet, so a model there would be inventing a hypothetical domain exactly as the
+house example does — but differently on every run, unverifiable, on the screen that sets the register
+for the whole interview. And the house example is *calibrated*: the shop sells, Morgana handles what
+comes after the order. That draws the boundary the mapping pass exists to teach — a domain is a
+choice, not an inventory — and a model asked for a plausible domain writes the inventory. The one
+case where the pass does know their trade is an uploaded `agents.json`: the intents already say what
+the business does, so `SetExample` is declared there too, conditioned on `GetExistingIntents`
+returning something, and what it writes wins over the house example.
 
 **Backwards is the client's, where forwards is not.** Going on is a claim that a step is settled,
 which the state machine decides; going back is a claim that something needs changing, which only
@@ -640,7 +680,8 @@ the toolkit exists.
 | `AgentModeler` | per entry | the agent's `Target` | the intents, its voice, tools, `Instructions`, `Formatting` |
 | `AgentVoicer` | per entry | the agent's `Personality` | everything else, the `Target` included |
 | `ToolkitModeler` | per entry | the tools, their descriptions, their parameters, scopes and sharing | what the agent *is*, `Instructions`, `Formatting` |
-| `AgentFinalizer` | per entry | `Instructions` and `Formatting` | everything already settled |
+| `AgentInstructor` | per entry | `Instructions` | everything already settled, `Formatting` included |
+| `AgentFormatter` | per entry | `Formatting` | everything else, all of it settled |
 
 **`Target` and `Personality` are two passes, not two questions of one.** What they ask for is not the
 same kind of thing: a `Target` is *dictated* — the client knows what the work is and can say it —
@@ -662,7 +703,7 @@ They are deliberately not `SetChoice`. A quick reply is one whole answer and spe
 pressed; one of these is not an answer at all until it is joined by the others the client keeps. Same
 plumbing, different gesture, and the rendering says which: dashed and weightless until taken.
 
-The `AgentFinalizer` pass is the one place the loop stops for the client: letting a finished agent
+The `AgentFormatter` pass is the one place the loop stops for the client: letting a finished agent
 into the domain is the single decision of the interview that is theirs, and `AcceptAsync` reports
 whether the map has another entry — if it has, the next `AgentModeler` pass opens on the same screen,
 and the client never goes back to a menu to remember their own list.
@@ -888,7 +929,8 @@ Alembic/
     IRecapService.cs                  # Draft → the prompt the model really reads
     IAlembicPromptService.cs          # Alembic's own prose + tool declarations, from alembic.json
     IInterviewService.cs              # Conducts the passes, folds each finished agent into the Draft
-    IDraftStateService.cs             # The Draft under construction (per circuit)
+    IDraftStateService.cs             # The Draft under construction, snapshotted against a dead circuit
+    IWorkKey.cs                       # Which work this browser is doing — a pointer in ProtectedLocalStorage
   Harness/                            # Alembic's own harness component — owes PromptHarness nothing
     Templates/*.yaml                  # One behavioural use-case each, domain words left as placeholders
     ScenarioTemplate.cs               # A template: its `#@` brief and the scenario shape below it
@@ -990,7 +1032,8 @@ against the `Examples` domain it proposes `MonkeysAgent` where the real class is
 | `IRecapService` | Singleton | `RecapService` — drives `IPromptComposerService` over the Draft. Deliberately almost empty: anything Alembic added on top would be a claim about the prompt rather than the prompt |
 | `IAlembicPromptService` | Singleton | `AlembicPromptService` — loads `alembic.json` from this assembly, the way `ConfigurationPromptResolverService` loads `morgana.json`. Unlike it, refuses to degrade to an empty set: an interviewer with no prose is not diminished, it is silent |
 | `IInterviewService` | **Scoped** | `InterviewService` — one interview per circuit. Builds a Microsoft.Agents.AI agent via `MorganaToolAdapter` + `AsAIAgent`, on `GetChatClient(Performance)` directly rather than `CompleteWithSystemPromptAsync`, which always takes the cheapest tier |
-| `IDraftStateService` | **Scoped** | `DraftStateService` — the Draft under construction. One per Blazor circuit: two tabs are two separate interviews, and the state dies with the connection |
+| `IDraftStateService` | **Scoped** | `DraftStateService` — the Draft under construction, in the circuit as before, and snapshotted into `IMemoryCache` on a timer so a dropped connection costs at most one autosave interval |
+| `IWorkKey` | **Scoped** | `WorkKey` — which work this browser is doing. A guid in `ProtectedLocalStorage`, exactly as Cauldron keeps its conversation id: the pointer is in the browser, the work is on the server |
 
 ## Why the project reference is Morgana.AI, not Morgana.Contracts
 
@@ -1004,6 +1047,8 @@ Parsing an uploaded `agents.json` is therefore free: there is no parallel repres
 
 | Section | Purpose |
 |---|---|
+| `Alembic:Work:AutosaveSeconds` | How often the Draft in the circuit is snapshotted into the memory cache. It is the size of the window a dead connection can cost, and the only reason it is not smaller is that each snapshot serializes the whole Draft |
+| `Alembic:Work:IdleMinutes` | How long an untouched snapshot survives. The whole retention policy: work nobody comes back to lets go of itself, and the file behind Save my work is what outlives it |
 | `Morgana:LLM:Provider` | `Anthropic`, `AzureOpenAI`, `Ollama`, `OpenAI` |
 | `Morgana:LLM:{Provider}:Tiers:Performance` | `Options` (`ModelId`, `MaxOutputTokens`) + `MagicDust`. Only `Performance` is declared — Alembic never uses the Efficiency die. `MagicDust` carries **both axes at zero and nothing else**: metering off, which is the truth here — dust accounting is applied by `MorganaAgentAdapter`, and Alembic goes to `GetChatClient(Performance)` directly, so the pricing is never read at all. A calibrated tariff would be a claim about a price nobody consults, ageing against whichever model the tier is pointed at. It cannot be shortened to `{}`: the JSON configuration provider reads an empty object as `null`, `Records.TierDefinition` takes `MagicDust` as a non-nullable constructor parameter, and the dictionary binder drops an element it cannot construct **without raising anything** — so the whole tier disappears and the failure surfaces, one page later, as `No tiers configured` |
 

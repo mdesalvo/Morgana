@@ -8,7 +8,7 @@
 
     Its shape is the process's shape. Two steps happen once — the map is drawn, and at the end the
     finished domain is read and taken away — and everything between them happens again for every entry
-    of that map, so those five are drawn inside a lap: bordered, stacked like sheets while entries
+    of that map, so those six are drawn inside a lap: bordered, stacked like sheets while entries
     remain, and headed by the entry it is a lap of.
 
     Under it, the entries of the map appear as they are named, in the client's own words.
@@ -26,10 +26,10 @@
 <div class="journey">
 
     @*
-        Two steps on the line and five inside the lap, because that is the shape of the process: the
+        Two steps on the line and six inside the lap, because that is the shape of the process: the
         map is drawn once and the finished domain is read once, and everything between them happens
-        again for every entry of that map. A flat row of six would say the opposite, and would have the
-        light jump backwards from the last step to the second every time an agent was accepted.
+        again for every entry of that map. A flat row of eight would say the opposite, and would have
+        the light jump backwards from the last step to the second every time an agent was accepted.
     *@
     <ol class="stations">
         @Station(0)
@@ -43,10 +43,11 @@
                 @Station(3)
                 @Station(4)
                 @Station(5)
+                @Station(6)
             </ol>
         </li>
 
-        @Station(6)
+        @Station(7)
     </ol>
 
     @*
@@ -129,7 +130,8 @@
         /*Agent Modeling*/ "Target",
         /*Agent Modeling*/ "Personality",
         /*Agent Modeling*/ "Toolkit",
-        /*Agent Modeling*/ "Instructions, Formatting",
+        /*Agent Modeling*/ "Instructions",
+        /*Agent Modeling*/ "Formatting",
         "Agent Acceptance",
         "Domain Finalization"
     ];
@@ -145,8 +147,8 @@
     /// <summary>
     /// One step of the rail, wherever it sits.
     /// </summary>
-    // The marks carry no number: two of them are outside the lap and five are inside it, so a count
-    // running 1 to 7 would be claiming an order that only two of the steps actually have.
+    // The marks carry no number: two of them are outside the lap and six are inside it, so a count
+    // running 1 to 8 would be claiming an order that only two of the steps actually have.
     private RenderFragment Station(int index) =>@<li class="station @Standing(index)">
         <span class="mark"></span>
         <span class="name">@Steps[index]</span>
@@ -223,7 +225,7 @@
     /// <summary>
     /// Where acceptance sits on the rail: the last step of the lap.
     /// </summary>
-    private const int Accepting = 5;
+    private const int Accepting = 6;
 
     /// <summary>
     /// Whether the rows behind the entry's tag are open.

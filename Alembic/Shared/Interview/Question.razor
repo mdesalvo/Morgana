@@ -55,11 +55,18 @@
                       placeholder="@Prompting" aria-label="Your answer"></textarea>
 
             @*
-                The two movements, on one row: the way back is the client's decision as much as the
-                answer is, and it is rendered here rather than under the box so it is one.
+                Everything the client can do, on one row. The way back is their decision as much as
+                the answer is, and keeping the work is the only defence they have against losing the
+                afternoon — so all three are here, at one size, where the hands already are. The
+                gap holds the way back on the left: going back is about what is behind, the other
+                two are about what is in front.
             *@
             <div class="reply-actions">
                 @Back
+
+                <span class="apart"></span>
+
+                @Keep
 
                 <button class="primary" @onclick="SendAsync"
                         disabled="@Empty">Answer &rarr;</button>
@@ -72,6 +79,12 @@
     private string answer = string.Empty;
     private int focusedOn = -1;
     private readonly HashSet<string> picked = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Taking the work away, beside the two movements of the interview.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Keep { get; set; }
 
     /// <summary>
     /// The question on the table.

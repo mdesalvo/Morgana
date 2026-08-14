@@ -43,13 +43,14 @@
     // entry instead: it is a bigger move than stepping between two steps of one.
     private string? Behind => State switch
     {
-        { Pass: InterviewPass.AgentFinalizer, ReadyForReview: true } => "Change something in this one",
+        { Pass: InterviewPass.AgentFormatter, ReadyForReview: true } => "Change something in this one",
         { Pass: InterviewPass.DomainMapper } => null,
         { Pass: InterviewPass.AgentModeler, At: 0 } => "Back to Domain Exploration",
         { Pass: InterviewPass.AgentModeler } => $"Back to {Named(State.Map[State.At - 1])}",
         { Pass: InterviewPass.AgentVoicer } => "Back to Target",
         { Pass: InterviewPass.ToolkitModeler } => "Back to Personality",
-        _ => "Back to Toolkit"
+        { Pass: InterviewPass.AgentInstructor } => "Back to Toolkit",
+        _ => "Back to Instructions"
     };
 
     /// <summary>

@@ -43,9 +43,21 @@ public enum InterviewPass
     ToolkitModeler,
 
     /// <summary>
-    /// Back to Instructions and Formatting, now that there is a toolkit for them to speak about.
+    /// How the agent goes about the work: its Instructions, now that there is a toolkit for them to
+    /// speak about.
     /// </summary>
-    AgentFinalizer
+    AgentInstructor,
+
+    /// <summary>
+    /// How the agent lays out what its tools return: its Formatting, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Its own step rather than the second question of the one before, for the reason every other
+    /// step is its own: a step opens with a worked example of the answer it wants, and a step
+    /// settling two sections can only carry the example for the first of them. The second arrived
+    /// under an empty box, which is the screen this interview shows to nobody else.
+    /// </remarks>
+    AgentFormatter
 }
 
 /// <summary>
@@ -83,6 +95,18 @@ public sealed class InterviewState
     public string? Question { get; set; }
 
     /// <summary>
+    /// The worked example standing in the answer box under the question on the table.
+    /// </summary>
+    /// <remarks>
+    /// Written by the model in the turn that opens a step, not held as a fixed string per pass: by
+    /// then it has read the map, so the example can be an answer somebody in THEIR trade might have
+    /// given, about the agent being built, rather than a stranger's business quoted at them while
+    /// they are being asked about their own. Cleared every exchange, so it belongs to the question
+    /// it was written for and never stands under the short follow-up that comes after it.
+    /// </remarks>
+    public string? Example { get; set; }
+
+    /// <summary>
     /// The button attached to the question on the table, and whether it was pressed.
     /// </summary>
     /// <remarks>
@@ -109,8 +133,9 @@ public sealed class InterviewState
     /// <summary>
     /// Whether the question on the table is the first one this pass has asked.
     /// </summary>
-    // The worked example in the answer box is for somebody who has not yet said anything about this
-    // step. From the second question on it contradicts the short follow-up above it.
+    // Read by the house example alone: it belongs to the opening question of the mapping pass and to
+    // nothing after it. Every other example is the model's and clears itself with the turn it was
+    // written for.
     public bool PassJustOpened => Exchanges <= PassOpenedAt + 1;
 
     /// <summary>
@@ -153,6 +178,9 @@ public sealed class InterviewState
     /// The button Alembic attached to the question it is asking right now, cleared when answered.
     /// </summary>
     public QuickReply? PendingChoice { get; set; }
+
+    /// <inheritdoc cref="Example" />
+    public string? PendingExample { get; set; }
 
     /// <summary>
     /// Words offered for the agent's voice, and the ones Alembic is about to offer.
@@ -226,7 +254,8 @@ public sealed class InterviewState
         InterviewPass.AgentModeler => MissingTarget(),
         InterviewPass.AgentVoicer => MissingVoice(),
         InterviewPass.ToolkitModeler => MissingToolkit(),
-        InterviewPass.AgentFinalizer => MissingReturn(),
+        InterviewPass.AgentInstructor => MissingInstructions(),
+        InterviewPass.AgentFormatter => MissingFormatting(),
         _ => []
     };
 
@@ -286,15 +315,20 @@ public sealed class InterviewState
                 .Select(t => $"description of {t.Name ?? "(unnamed tool)"}")];
 
     /// <summary>
-    /// The two sections that speak about the toolkit, and could not be written before it existed.
+    /// How the agent goes about the work, which could not be written before the toolkit existed.
     /// </summary>
-    private List<string> MissingReturn()
+    private List<string> MissingInstructions()
     {
         List<string> missing = [];
 
         if (string.IsNullOrWhiteSpace(Agent.Instructions)) missing.Add("agentInstructions");
-        if (string.IsNullOrWhiteSpace(Agent.Formatting)) missing.Add("agentFormatting");
 
         return missing;
     }
+
+    /// <summary>
+    /// How the agent lays out what its tools return.
+    /// </summary>
+    private List<string> MissingFormatting() =>
+        string.IsNullOrWhiteSpace(Agent.Formatting) ? ["agentFormatting"] : [];
 }

@@ -412,37 +412,54 @@ textarea:focus {
 
 /* ============================ what has been distilled ============================ */
 
-/* The band that says where you are: the rail below it, the mark above it, and on its right the one
-   action that belongs to neither — taking the work home. Continuity is the whole point. Fixed in a
-   corner of the window it was pinned away from everything, and at the foot of the page it was in the
-   least looked-at place there is; here it is on the line the eye already travels down before it
-   reaches the question. */
-.whereabouts {
-    position: absolute;
-    top: 3.2rem;
-    right: 2rem;
+/* Everything the client can do is on one row, and the gap is the argument: the way back is about
+   what is behind them, keeping the work and answering are about what is in front. */
+.reply-actions .apart {
+    margin-left: auto;
 }
 
-/* Narrow: the mark is centred on this band and the page is not wide enough to hold both, so the
-   button comes back into the flow above the rail rather than sitting on top of it. */
-@media (max-width: 60rem) {
-    .whereabouts {
-        position: static;
-        display: flex;
-        justify-content: flex-end;
-        margin-bottom: 1.4rem;
-    }
+/* Keeping the work is not a footnote any more. It is the only thing standing between an afternoon
+   and losing it, so it is the same size as the two movements beside it — and it holds its receipt,
+   which is why it is a column rather than a button on its own. */
+.keeping {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
 }
 
-/* A button of the same family as the two the client already knows — same corners, same outline as
-   the way back — one size down, because it is not what they came here to do. */
-a.keep {
-    display: inline-flex;
-    align-items: center;
-    text-decoration: none;
+button.keep {
     white-space: nowrap;
-    padding: 0.42rem 0.9rem;
-    font-size: 0.85rem;
+}
+
+/* The receipt hangs above the row rather than pushing it down: a row that grows when a button is
+   pressed moves the button out from under the cursor that pressed it. */
+.receipt {
+    position: absolute;
+    bottom: calc(100% + 0.5rem);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--alembic-border-lit);
+    border-radius: 0.5rem;
+    background: var(--alembic-panel-lit);
+    box-shadow: var(--alembic-glow);
+    white-space: nowrap;
+    text-align: right;
+}
+
+.receipt .what {
+    color: var(--alembic-text);
+    font-size: 0.9rem;
+}
+
+.receipt .where,
+.receipt .how-big {
+    color: var(--alembic-muted);
+    font-size: 0.8rem;
 }
 
 /* ============================ what has been written down ============================ */

@@ -73,6 +73,10 @@ builder.Services.AddSingleton<IRecapService, RecapService>();
 builder.Services.AddSingleton<IDraftSerializationService, DraftSerializationService>();
 builder.Services.AddScoped<IDraftStateService, DraftStateService>();
 
+// The Draft is snapshotted every Alembic:Work:AutosaveSeconds, and that copy never leaves the
+// circuit: it is what Save my work falls back on when serializing the live Draft fails, and nothing
+// else. Coming back to unfinished work is the file's job, brought to the landing page by hand.
+
 // - IAlembicPromptService: Alembic's own prose, from alembic.json embedded here the same way
 //   morgana.json is embedded in Morgana.AI — same shape, same four sections. Alembic is an agent
 //   of Morgana that produces agents of Morgana, so it is composed the way one is: her Personality

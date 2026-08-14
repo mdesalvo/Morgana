@@ -48,7 +48,7 @@ public interface IAlembicPromptService
     /// merged section by section under one set of labels, so what the model reads is still the four
     /// sections an agent prompt always is, with no seam in it.
     /// </remarks>
-    /// <param name="interviewerId">Which interviewer conducts this step: <c>DomainMapper</c>, <c>AgentModeler</c>, <c>ToolkitModeler</c>, <c>AgentFinalizer</c>.</param>
+    /// <param name="interviewerId">Which interviewer conducts this step: <c>DomainMapper</c>, <c>AgentModeler</c>, <c>ToolkitModeler</c>, <c>AgentInstructor</c>, <c>AgentFormatter</c>.</param>
     /// <returns>The system prompt.</returns>
     Task<string> ComposeAsync(string interviewerId);
 }

@@ -40,7 +40,8 @@ public class InterviewService : IInterviewService
         [InterviewPass.AgentModeler] = "AgentModeler",
         [InterviewPass.AgentVoicer] = "AgentVoicer",
         [InterviewPass.ToolkitModeler] = "ToolkitModeler",
-        [InterviewPass.AgentFinalizer] = "AgentFinalizer"
+        [InterviewPass.AgentInstructor] = "AgentInstructor",
+        [InterviewPass.AgentFormatter] = "AgentFormatter"
     };
 
     /// <summary>
@@ -56,8 +57,10 @@ public class InterviewService : IInterviewService
                                       + "it the voice it meets people with.",
         [InterviewPass.ToolkitModeler] = "Its Target and its Personality are settled. This step settles its "
                                          + "Toolkit, which gives it everything it can reach outside the conversation.",
-        [InterviewPass.AgentFinalizer] = "Its Target, its Personality and its Toolkit are settled. This last "
-                                         + "step settles its Instructions and its Formatting, which give it how it works."
+        [InterviewPass.AgentInstructor] = "Its Target, its Personality and its Toolkit are settled. This step "
+                                          + "settles its Instructions, which give it how it goes about the work.",
+        [InterviewPass.AgentFormatter] = "Everything else about this agent is settled. This last step settles its "
+                                         + "Formatting, which gives it how what it finds reaches the person reading it."
     };
 
     private readonly IAlembicPromptService alembicPromptService;
@@ -132,7 +135,6 @@ public class InterviewService : IInterviewService
             return interviewState;
 
         await ExchangeAsync(interviewState, answer, cancellationToken);
-        Keep(interviewState);
 
         // The seam belongs to the model. Once the state machine has CONFIRMED the pass settled —
         // SetPassCompleted is checked against Missing(), never believed — the next one opens in the
@@ -147,7 +149,7 @@ public class InterviewService : IInterviewService
         //
         // The Return pass is where it stops, because what follows is the client's: letting the agent
         // into the domain is the one decision of the interview that is theirs.
-        while (interviewState is { ReadyForReview: true, Error: null } && interviewState.Pass != InterviewPass.AgentFinalizer)
+        while (interviewState is { ReadyForReview: true, Error: null } && interviewState.Pass != InterviewPass.AgentFormatter)
         {
             // Leaving the map is also stepping onto its first entry. The mapping pass settles no
             // agent, so there would be nothing for the functional pass to be about otherwise.
@@ -156,8 +158,6 @@ public class InterviewService : IInterviewService
 
             await EnterPassAsync(interviewState, interviewState.Pass + 1, cancellationToken);
         }
-
-        Keep(interviewState);
 
         return interviewState;
     }
@@ -232,9 +232,9 @@ public class InterviewService : IInterviewService
         // A finished agent steps back into its own last step rather than the one before it: what the
         // client is looking at is the whole of what was written, and what they want is to change a
         // line of it.
-        if (interviewState is { Pass: InterviewPass.AgentFinalizer, ReadyForReview: true })
+        if (interviewState is { Pass: InterviewPass.AgentFormatter, ReadyForReview: true })
         {
-            await EnterPassAsync(interviewState, InterviewPass.AgentFinalizer, cancellationToken, revisiting: true);
+            await EnterPassAsync(interviewState, InterviewPass.AgentFormatter, cancellationToken, revisiting: true);
             return true;
         }
 
@@ -258,7 +258,7 @@ public class InterviewService : IInterviewService
             case InterviewPass.AgentModeler:
                 interviewState.At--;
                 Uncommit(interviewState);
-                await EnterPassAsync(interviewState, InterviewPass.AgentFinalizer, cancellationToken, revisiting: true);
+                await EnterPassAsync(interviewState, InterviewPass.AgentFormatter, cancellationToken, revisiting: true);
                 return true;
 
             default:
@@ -447,6 +447,7 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.GetToolkit)] = tools.GetToolkit,
             [nameof(InterviewTools.GetAgentSoFar)] = tools.GetAgentSoFar,
             [nameof(InterviewTools.SetChoice)] = tools.SetChoice,
+            [nameof(InterviewTools.SetExample)] = tools.SetExample,
             [nameof(InterviewTools.SetTraits)] = tools.SetTraits,
             [nameof(InterviewTools.GetExistingIntents)] = tools.GetExistingIntents,
             [nameof(InterviewTools.GetComposedPrompt)] = tools.GetComposedPrompt,
@@ -493,6 +494,7 @@ public class InterviewService : IInterviewService
 
         interviewState.Error = null;
         interviewState.PendingChoice = null;
+        interviewState.PendingExample = null;
         interviewState.PendingTraits.Clear();
         interviewState.Changed.Clear();
 
@@ -516,6 +518,7 @@ public class InterviewService : IInterviewService
             {
                 interviewState.Question = asked;
                 interviewState.Choice = interviewState.PendingChoice;
+                interviewState.Example = interviewState.PendingExample;
                 interviewState.Traits = [.. interviewState.PendingTraits];
                 interviewState.Chosen = false;
                 interviewState.Exchanges++;
@@ -526,6 +529,14 @@ public class InterviewService : IInterviewService
             logger.LogError(ex, "The interview turn failed");
             interviewState.Error = $"The turn could not be completed: {ex.Message}";
         }
+
+        // Here, rather than after an answer, because the turn that OPENS a pass is a turn like any
+        // other and the file behind Save my work has to be true the moment it is on the screen —
+        // including on the very first question, before the client has said anything, which is the
+        // one point at which the Draft did not exist yet and the download handed back an empty one.
+        // Outside the catch too: an interview that has just failed a turn is precisely one somebody
+        // wants to take away.
+        Keep(interviewState);
     }
 
     /// <summary>

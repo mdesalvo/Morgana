@@ -188,8 +188,9 @@ button.trait.picked {
     margin: 0 auto 1.8rem;
 }
 
-/* The two moves available here, on one row: let it into the domain, or go back and change
-   something in it. */
+/* What is available here, on one row: let the agent into the domain, go back and change something
+   in it, or take the work away. Centred rather than spread — this screen has no answer box for the
+   row to belong to, so the row is the screen's own. */
 .sealed .sealed-actions {
     display: flex;
     align-items: center;
