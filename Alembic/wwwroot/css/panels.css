@@ -50,6 +50,28 @@
     font-weight: 500;
 }
 
+.panel h4 {
+    margin: 1rem 0 0.3rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--alembic-muted);
+}
+
+/*
+    What a picked agent's own recap sits inside, nested under the buttons that chose it rather than
+    as separate panels further down the page. A left rule reads as "belongs to the row above" the
+    way a fresh panel never could.
+*/
+.nested-recap {
+    margin-top: 1rem;
+    padding-left: 1.1rem;
+    border-left: 2px solid var(--alembic-border);
+}
+
+.nested-recap h3:first-child {
+    margin-top: 0;
+}
+
 .panel table {
     width: 100%;
     border-collapse: collapse;
@@ -96,6 +118,20 @@ code {
     color: var(--alembic-muted);
     font-size: 0.85rem;
     margin-top: 0.2rem;
+}
+
+.panel details {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+}
+
+.panel details summary {
+    cursor: pointer;
+    color: var(--alembic-muted);
+}
+
+.panel details ul {
+    margin-top: 0.5rem;
 }
 
 .severity-error {

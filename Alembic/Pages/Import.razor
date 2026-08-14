@@ -2,6 +2,7 @@
 @using Alembic.Interfaces
 @using System.Text
 @using System.Text.Json
+@using System.IO.Compression
 @using Alembic.Model
 @inject IDraftImportService DraftImportService
 @inject IDraftExportService DraftExportService
@@ -36,11 +37,12 @@
 
     <div class="panel">
         <h2>@(Draft is null ? "The file" : "Bring another")</h2>
-        <InputFile OnChange="OnFileSelectedAsync" accept=".json" disabled="@isReading" />
+        <InputFile OnChange="OnFileSelectedAsync" accept=".json,.zip" disabled="@isReading" />
         <p class="muted">
-            An <code>agents.json</code> Morgana already runs, or an <code>alembic-draft.json</code> I
-            saved for you last time. I tell them apart by reading them, never by their name, so a file
-            you renamed still lands where it belongs.
+            An <code>agents.json</code> Morgana already runs, an <code>alembic-draft.json</code> I
+            saved for you last time, or the whole archive Emit handed you &mdash; I read inside it for
+            the sitting first and the configuration second. I tell all three apart by reading them,
+            never by their name, so a file you renamed still lands where it belongs.
         </p>
         @if (isReading)
         {
@@ -309,6 +311,34 @@
 
             buffer.Position = 0;
 
+            if (IsZip(buffer))
+            {
+                await using MemoryStream? inner = await ExtractFromZipAsync(buffer);
+
+                if (inner is null)
+                {
+                    error = $"{file.Name} is a zip archive, but I could not find an "
+                             + "alembic-draft.json or an agents.json inside it.";
+                    return;
+                }
+
+                if (IsSaveFile(inner))
+                {
+                    inner.Position = 0;
+                    await ResumeAsync(inner, file.Name);
+                    return;
+                }
+
+                inner.Position = 0;
+
+                DraftImportResult zipResult = await DraftImportService.ImportAsync(inner, file.Name);
+
+                notices = zipResult.Notices;
+                error = zipResult.Error;
+                DraftStateService.Set(zipResult.Draft);
+                return;
+            }
+
             if (IsSaveFile(buffer))
             {
                 buffer.Position = 0;
@@ -372,6 +402,46 @@
                 : $"{authored} of them we distilled together.");
 
         notices = read;
+    }
+
+    /// <summary>
+    /// Whether the upload is the archive Emit hands back, rather than either bare JSON shape.
+    /// </summary>
+    /// <remarks>
+    /// By the file's own magic bytes, the same way <see cref="IsSaveFile"/> reads content over
+    /// name: a local file header starts <c>PK</c>, whatever the client renamed the file to.
+    /// </remarks>
+    private static bool IsZip(MemoryStream buffer) =>
+        buffer.Length >= 2 && buffer.GetBuffer()[0] == 0x50 && buffer.GetBuffer()[1] == 0x4B;
+
+    /// <summary>
+    /// Pulls the one file inside the archive that carries the domain, preferring the sitting.
+    /// </summary>
+    /// <remarks>
+    /// The archive Emit produces holds both <c>alembic-draft.json</c> and <c>agents.json</c>, and
+    /// they are not equivalent here: the save file is the richer of the two — provenance, the
+    /// baseline, a half-finished sitting — so continuing a distillation from the archive has to read
+    /// the same file the landing's own "carry on" gesture reads. <c>agents.json</c> is the fallback
+    /// for an archive built before phase 5, or one whose save file a client deleted by hand.
+    /// </remarks>
+    private static async Task<MemoryStream?> ExtractFromZipAsync(MemoryStream buffer)
+    {
+        buffer.Position = 0;
+        using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
+
+        ZipArchiveEntry? entry =
+            archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "alembic-draft.json", StringComparison.OrdinalIgnoreCase))
+            ?? archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "agents.json", StringComparison.OrdinalIgnoreCase));
+
+        if (entry is null)
+            return null;
+
+        MemoryStream copy = new MemoryStream();
+        await using (Stream entryStream = entry.Open())
+            await entryStream.CopyToAsync(copy);
+
+        copy.Position = 0;
+        return copy;
     }
 
     /// <summary>

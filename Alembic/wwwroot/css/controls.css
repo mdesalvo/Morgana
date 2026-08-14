@@ -241,16 +241,71 @@ dl.fields dd {
     font-size: 0.85rem;
 }
 
+/* Placement only — the look is button.secondary/a.secondary, the same family StepBack uses. A page
+   without a Journey rail still owes the client a way back that reads as a control, not a stray link
+   at the foot of the page. */
 .back {
     display: inline-block;
     margin-top: 2.5rem;
-    color: var(--alembic-muted);
     text-decoration: none;
-    font-size: 0.9rem;
 }
 
-.back:hover {
+/* The vessel filling while the archive is built: an alembic in the page's own hand rather than a
+   generic spinner or a bullet list nobody was meant to read as it grows. */
+.distillation {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.5rem 0;
+}
+
+.distillation-vessel {
+    width: 4rem;
+    height: 5.5rem;
+    flex-shrink: 0;
+}
+
+.distillation-status {
+    flex: 1;
+    min-width: 0;
+}
+
+.distillation-phase {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+}
+
+.distillation-bar {
+    height: 0.5rem;
+    border-radius: 0.3rem;
+    background: var(--alembic-panel-lit);
+    overflow: hidden;
+}
+
+.distillation-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--alembic-accent-deep), var(--alembic-accent));
+    transition: width 0.4s ease;
+}
+
+.distillation-percent {
+    margin: 0.35rem 0 0;
+    font-size: 0.8rem;
+}
+
+.distillation-done {
+    animation: distillation-arrive 0.4s ease;
+}
+
+.distillation-done-headline {
+    margin: 0 0 0.6rem;
     color: var(--alembic-accent);
+    font-weight: 600;
+}
+
+@keyframes distillation-arrive {
+    from { opacity: 0; transform: translateY(0.4rem); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* Blazor's own unhandled-exception banner */

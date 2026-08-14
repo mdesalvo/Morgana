@@ -5,6 +5,7 @@
 @inject IRecapService RecapService
 @inject IDraftStateService DraftStateService
 @inject ICoherenceService CoherenceService
+@inject ICoherenceApplyService CoherenceApplyService
 
 @*
     The first thing in Alembic that is useful on its own. Two panels, in this order
@@ -103,11 +104,13 @@
             {
                 <table>
                     <thead>
-                        <tr><th>Kind</th><th>Where</th><th>What, and what it costs</th></tr>
+                        <tr><th>Kind</th><th>Where</th><th>What, and what it costs</th><th></th></tr>
                     </thead>
                     <tbody>
-                        @foreach (CoherenceFinding finding in coherence.Findings)
+                        @for (int i = 0; i < coherence.Findings.Count; i++)
                         {
+                            CoherenceFinding finding = coherence.Findings[i];
+                            int index = i;
                             <tr>
                                 <td class="severity-warning">@finding.Kind</td>
                                 <td><code>@finding.Where</code></td>
@@ -115,12 +118,24 @@
                                     @finding.What
                                     <div class="because">@finding.Why</div>
                                     <div class="because"><strong>Proposed:</strong> @finding.Fix</div>
+                                    @if (applyResults.TryGetValue(index, out CoherenceApplyResult? result))
+                                    {
+                                        <div class="because @(result.Applied ? "" : "severity-warning")">@result.Summary</div>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!applyResults.TryGetValue(index, out CoherenceApplyResult? applied) || !applied.Applied)
+                                    {
+                                        <button class="agent-pick" @onclick="() => ApplyAsync(index, finding)" disabled="@applyingIndex.HasValue">
+                                            @(applyingIndex == index ? "Applying…" : "Apply suggestion")
+                                        </button>
+                                    }
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
-                <button class="agent-pick" @onclick="ReviewAsync" disabled="@isReviewing">Run it again</button>
+                <button class="agent-pick" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue)">Run it again</button>
             }
         </div>
 
@@ -140,74 +155,70 @@
                             @onclick="() => SelectAsync(agent)">@agent.ID</button>
                 }
             </p>
-        </div>
 
-        @if (recap is not null)
-        {
-            <div class="panel">
-                <h2>@recap.AgentId &mdash; system prompt</h2>
-                <p class="muted">Read once, before anything else in the turn.</p>
-                <pre class="prompt">@recap.SystemPrompt</pre>
-            </div>
-
-            @if (recap.Tools.Count > 0)
+            @if (recap is not null)
             {
-                <div class="panel">
-                    <h2>@recap.AgentId &mdash; tools, as the model weighs them</h2>
-                    <p class="muted">
-                        Read when the model decides whether to call the tool at all. Where a tool
-                        declares context-scoped parameters, the framework has already spliced its
-                        context guidance onto the authored description.
-                    </p>
-                    @foreach (ToolRecap tool in recap.Tools)
+                <div class="nested-recap">
+                    <h3>System prompt</h3>
+                    <p class="muted">Read once, before anything else in the turn.</p>
+                    <pre class="prompt">@recap.SystemPrompt</pre>
+
+                    @if (recap.Tools.Count > 0)
                     {
-                        <h3><code>@tool.Name</code></h3>
-                        <pre class="prompt">@tool.Description</pre>
-                        @if (tool.Parameters.Count > 0)
+                        <h3>Tools, as the model weighs them</h3>
+                        <p class="muted">
+                            Read when the model decides whether to call the tool at all. Where a tool
+                            declares context-scoped parameters, the framework has already spliced its
+                            context guidance onto the authored description.
+                        </p>
+                        @foreach (ToolRecap tool in recap.Tools)
                         {
-                            <table>
-                                <thead>
-                                    <tr><th>Parameter</th><th>Scope</th><th>Required</th><th>Description, as the schema carries it</th></tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (ParameterRecap parameter in tool.Parameters)
-                                    {
-                                        <tr>
-                                            <td><code>@parameter.Name</code></td>
-                                            <td>@(parameter.Scope ?? "—")</td>
-                                            <td>@(parameter.Required ? "yes" : "no")</td>
-                                            <td class="description">
-                                                @(string.IsNullOrWhiteSpace(parameter.Description)
-                                                    ? "(emitted bare — no description reaches the model)"
-                                                    : parameter.Description)
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
+                            <h4><code>@tool.Name</code></h4>
+                            <pre class="prompt">@tool.Description</pre>
+                            @if (tool.Parameters.Count > 0)
+                            {
+                                <table>
+                                    <thead>
+                                        <tr><th>Parameter</th><th>Scope</th><th>Required</th><th>Description, as the schema carries it</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (ParameterRecap parameter in tool.Parameters)
+                                        {
+                                            <tr>
+                                                <td><code>@parameter.Name</code></td>
+                                                <td>@(parameter.Scope ?? "—")</td>
+                                                <td>@(parameter.Required ? "yes" : "no")</td>
+                                                <td class="description">
+                                                    @(string.IsNullOrWhiteSpace(parameter.Description)
+                                                        ? "(emitted bare — no description reaches the model)"
+                                                        : parameter.Description)
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
                         }
+                    }
+
+                    @if (recap.HypotheticalHeldContext is not null)
+                    {
+                        <h3>Held-context declaration</h3>
+                        <p class="muted">
+                            Read <em>before any tool is weighed</em> &mdash; the top rung of the ladder,
+                            and the one an agent activated mid-conversation depends on.
+                            <strong>Hypothetical by construction</strong>: this injection states which
+                            variables the session holds right now, and no session exists while you are
+                            authoring. The template and the splice are real; the supposition is that
+                            every context-scoped parameter in this toolkit
+                            (<code>@string.Join(", ", recap.HypotheticalHeldVariables)</code>)
+                            happens to be populated at once.
+                        </p>
+                        <pre class="prompt">@recap.HypotheticalHeldContext</pre>
                     }
                 </div>
             }
-
-            @if (recap.HypotheticalHeldContext is not null)
-            {
-                <div class="panel">
-                    <h2>@recap.AgentId &mdash; held-context declaration</h2>
-                    <p class="muted">
-                        Read <em>before any tool is weighed</em> &mdash; the top rung of the ladder,
-                        and the one an agent activated mid-conversation depends on.
-                        <strong>Hypothetical by construction</strong>: this injection states which
-                        variables the session holds right now, and no session exists while you are
-                        authoring. The template and the splice are real; the supposition is that
-                        every context-scoped parameter in this toolkit
-                        (<code>@string.Join(", ", recap.HypotheticalHeldVariables)</code>)
-                        happens to be populated at once.
-                    </p>
-                    <pre class="prompt">@recap.HypotheticalHeldContext</pre>
-                </div>
-            }
-        }
+        </div>
     }
 
     @*
@@ -240,6 +251,8 @@
     private bool isReviewing;
     private AgentRecap? recap;
     private string? selectedAgentId;
+    private int? applyingIndex;
+    private readonly Dictionary<int, CoherenceApplyResult> applyResults = [];
 
     protected override void OnInitialized()
     {
@@ -253,6 +266,7 @@
             return;
 
         isReviewing = true;
+        applyResults.Clear();
         try { coherence = await CoherenceService.ReviewAsync(draft); }
         finally { isReviewing = false; }
     }
@@ -261,5 +275,34 @@
     {
         selectedAgentId = agent.ID;
         recap = await RecapService.ComposeAsync(agent);
+    }
+
+    private async Task ApplyAsync(int index, CoherenceFinding finding)
+    {
+        if (DraftStateService.Current is not { } draft || applyingIndex is not null)
+            return;
+
+        applyingIndex = index;
+
+        try
+        {
+            CoherenceApplyResult result = await CoherenceApplyService.ApplyAsync(draft, finding);
+            applyResults[index] = result;
+
+            if (result.Applied)
+            {
+                // The agent whose prose or toolkit just changed is worth re-reading; a stale recap
+                // on screen from before the fix would show the client the wrong prompt.
+                findings = DraftValidationService.Validate(draft);
+                DraftStateService.Set(draft);
+
+                if (selectedAgentId is not null && draft.Agents.FirstOrDefault(a => a.ID == selectedAgentId) is { } selected)
+                    recap = await RecapService.ComposeAsync(selected);
+            }
+        }
+        finally
+        {
+            applyingIndex = null;
+        }
     }
 }

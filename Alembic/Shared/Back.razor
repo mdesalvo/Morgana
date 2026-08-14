@@ -13,7 +13,7 @@
     Alembic altogether.
 *@
 
-<a class="back" href="" @onclick="GoBackAsync" @onclick:preventDefault>&larr; back</a>
+<a class="secondary back" href="" @onclick="GoBackAsync" @onclick:preventDefault>&larr; Back</a>
 
 @code {
     private async Task GoBackAsync() => await JS.InvokeVoidAsync("alembicBack");

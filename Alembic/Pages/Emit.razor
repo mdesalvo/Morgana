@@ -169,29 +169,65 @@
                     </span>
                 </p>
 
-                @if (package is null)
+                @if (package is null && !isBuilding)
                 {
-                    <button class="primary" @onclick="BuildAsync" disabled="@isBuilding">
-                        @(isBuilding ? "Distilling…" : "Build the archive")
-                    </button>
+                    <button class="primary" @onclick="BuildAsync">Build the archive</button>
+                }
+                else if (isBuilding)
+                {
+                    <div class="distillation">
+                        <svg class="distillation-vessel" viewBox="0 0 64 88" role="img" aria-label="Distilling">
+                            <defs>
+                                <clipPath id="belly-clip">
+                                    <circle cx="29" cy="55" r="15.2" />
+                                </clipPath>
+                            </defs>
+
+                            <path d="M25.2 24 V13 M32.8 24 V13" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
+                            <rect x="21.8" y="10" width="14.4" height="4.8" rx="2.4" fill="var(--alembic-border-lit)" />
+                            <path d="M40 20.5 H49 A3.2 3.2 0 0 1 52 23.7 V33" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
+
+                            <g clip-path="url(#belly-clip)">
+                                <rect x="10" width="38"
+                                      y="@((70.2 - FillHeight).ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                                      height="@(FillHeight.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                                      style="fill:var(--alembic-accent); transition: y 0.5s ease, height 0.5s ease;" />
+                            </g>
+
+                            <circle cx="29" cy="55" r="15.2" fill="none" stroke="var(--alembic-border-lit)" stroke-width="1.8" />
+                        </svg>
+
+                        <div class="distillation-status">
+                            <p class="distillation-phase">@PhaseLabel</p>
+                            <div class="distillation-bar">
+                                <div class="distillation-bar-fill" style="width:@(Percent)%"></div>
+                            </div>
+                            <p class="muted distillation-percent">@Percent%</p>
+                        </div>
+                    </div>
                 }
                 else
                 {
-                    <p>
-                        <a download="@ArchiveName" href="@DataUri(package)">@ArchiveName</a>
-                        <span class="muted"> &mdash; @(package.Length / 1024) KB, @written.Count files</span>
-                    </p>
-                    <button class="agent-pick" @onclick="Reset" disabled="@isBuilding">Build it again</button>
+                    <div class="distillation-done">
+                        <p class="distillation-done-headline">✓ Distilled &mdash; @written.Count files, @(package!.Length / 1024) KB.</p>
+                        <p>
+                            <a download="@ArchiveName" href="@DataUri(package)">@ArchiveName</a>
+                        </p>
+                        <button class="agent-pick" @onclick="Reset">Build it again</button>
+                    </div>
                 }
 
                 @if (written.Count > 0)
                 {
-                    <ul class="muted">
-                        @foreach (string path in written)
-                        {
-                            <li><code>@path</code></li>
-                        }
-                    </ul>
+                    <details class="muted">
+                        <summary>@written.Count files written</summary>
+                        <ul>
+                            @foreach (string path in written)
+                            {
+                                <li><code>@path</code></li>
+                            }
+                        </ul>
+                    </details>
                 }
 
                 @if (error is not null)
@@ -258,6 +294,103 @@
         written.Clear();
     }
 
+    /// <summary>
+    /// One thing the archive is built toward: the fixed configuration files, or one agent's code,
+    /// mock, or starter scenarios. Marked done on the first file that matches it, which slightly
+    /// overcounts a multi-file step — acceptable, because the bar exists to show the client this is
+    /// moving and where, not to meter it to the file.
+    /// </summary>
+    private sealed class Step
+    {
+        public required string AgentId { get; init; }
+        public required string Kind { get; init; }
+        public required string Label { get; init; }
+        public bool Done { get; set; }
+    }
+
+    private readonly List<Step> plan = [];
+
+    /// <summary>
+    /// The step currently in front of the client, kept even after it is marked done so the label
+    /// does not blank out between two files of the same slow step.
+    /// </summary>
+    private Step? currentStep;
+
+    private int Percent => plan.Count == 0 ? 0 : plan.Count(s => s.Done) * 100 / plan.Count;
+
+    /// <summary>
+    /// The belly is a circle of radius 15.2 centred at y=55, so a full pour is its diameter, 30.4.
+    /// </summary>
+    private double FillHeight => 30.4 * Percent / 100.0;
+
+    private string PhaseLabel => currentStep?.Kind switch
+    {
+        null => "Preparing the configuration…",
+        "structure" => "Preparing the configuration…",
+        "code" => $"Distilling {currentStep.Label} — writing its generated C#…",
+        "mock" => $"Distilling {currentStep.Label} — a live model is writing its working mock, so this can take a moment…",
+        "scenarios" => $"Distilling {currentStep.Label} — a live model is watching its behaviour for PromptHarness, this is the slowest part…",
+        _ => "Distilling…"
+    };
+
+    /// <summary>
+    /// Builds the plan in the same order <see cref="AssetPackageService"/> actually writes: the
+    /// four fixed files, then every agent's code and mock together, then every agent's scenarios —
+    /// a second pass over the same agents, because that pass runs after the first has finished for
+    /// all of them.
+    /// </summary>
+    private static List<Step> BuildPlan(DomainDraft draft, bool includeScenarios)
+    {
+        List<AgentDraft> agents = [.. draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID))];
+        List<Step> steps = [new Step { AgentId = "", Kind = "structure", Label = "the configuration" }];
+
+        foreach (AgentDraft agent in agents)
+        {
+            string label = char.ToUpperInvariant(agent.ID![0]) + agent.ID[1..];
+            steps.Add(new Step { AgentId = agent.ID, Kind = "code", Label = label });
+
+            if (agent.Tools.Count > 0)
+                steps.Add(new Step { AgentId = agent.ID, Kind = "mock", Label = label });
+        }
+
+        if (includeScenarios)
+            foreach (AgentDraft agent in agents)
+            {
+                string label = char.ToUpperInvariant(agent.ID![0]) + agent.ID[1..];
+                steps.Add(new Step { AgentId = agent.ID, Kind = "scenarios", Label = label });
+            }
+
+        return steps;
+    }
+
+    /// <summary>
+    /// Which step one written path belongs to, by the same naming <see cref="CodeEmitService"/>,
+    /// <see cref="ToolMockService"/> and <see cref="ScenarioAuthorService"/> use.
+    /// </summary>
+    private Step? MatchStep(string path, DomainDraft draft)
+    {
+        if (path is "agents.json" or "alembic-draft.json" or "MIGRATION.md" or "README.md")
+            return plan.FirstOrDefault(s => s.Kind == "structure");
+
+        foreach (AgentDraft agent in draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)))
+        {
+            string id = agent.ID!;
+            string agentClass = agent.Code.AgentClassName ?? $"{char.ToUpperInvariant(id[0])}{id[1..]}Agent";
+            string toolClass = agent.Code.ToolClassName ?? $"{char.ToUpperInvariant(id[0])}{id[1..]}Tool";
+
+            if (path == $"Agents/{agentClass}.g.cs" || path == $"Tools/{toolClass}.g.cs")
+                return plan.FirstOrDefault(s => s.AgentId == id && s.Kind == "code");
+
+            if (path == $"Tools/{toolClass}.cs" || path == $"Tools/{toolClass}.cs.FAILED.txt")
+                return plan.FirstOrDefault(s => s.AgentId == id && s.Kind == "mock");
+
+            if (path.StartsWith($"Scenarios/{id}-", StringComparison.Ordinal) || path == $"Scenarios/{id}.FAILED.txt")
+                return plan.FirstOrDefault(s => s.AgentId == id && s.Kind == "scenarios");
+        }
+
+        return null;
+    }
+
     private async Task BuildAsync()
     {
         if (DraftStateService.Current is not { } draft)
@@ -266,6 +399,9 @@
         isBuilding = true;
         error = null;
         written.Clear();
+        plan.Clear();
+        plan.AddRange(BuildPlan(draft, includeScenarios));
+        currentStep = plan[0];
 
         try
         {
@@ -275,10 +411,22 @@
             Progress<string> progress = new Progress<string>(path =>
             {
                 written.Add(path);
+
+                if (MatchStep(path, draft) is { } step)
+                {
+                    step.Done = true;
+                    currentStep = step;
+                }
+
                 InvokeAsync(StateHasChanged);
             });
 
             package = await AssetPackageService.BuildAsync(draft, includeScenarios, progress);
+
+            // The archive is whole the moment this returns, even if the last agent's slow step only
+            // reported its first file — the bar owes the client a full vessel, not a nearly-full one.
+            foreach (Step step in plan)
+                step.Done = true;
         }
         catch (Exception ex)
         {

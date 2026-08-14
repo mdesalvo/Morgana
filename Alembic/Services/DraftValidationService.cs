@@ -194,8 +194,8 @@ public class DraftValidationService : IDraftValidationService
 
         if (agent.Code.Inferred)
             findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
-                $"The class names ({agent.Code.AgentClassName}, {agent.Code.ToolClassName ?? "no tool class"}) are Alembic's guess, and the tier is unknown.",
-                "agents.json carries none of this, so an imported domain arrives without it; the emit needs it stated, not guessed."));
+                $"The class names ({agent.Code.AgentClassName}, {agent.Code.ToolClassName ?? "no tool class"}) are still Alembic's guess, and no die is chosen yet.",
+                "Neither lives in agents.json, so nothing before this page could know them. Both are settled on the Emit page, not missed here — visit it before you download."));
 
         ValidateIdentifier(agent.Code.AgentClassName, $"{where} class name", "class name", findings);
         ValidateIdentifier(agent.Code.ToolClassName, $"{where} tool class name", "class name", findings);

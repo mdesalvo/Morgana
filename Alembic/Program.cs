@@ -116,9 +116,13 @@ builder.Services.AddSingleton<IMigrationReportService, MigrationReportService>()
 //   defect it looks for is a relation between agents — overlapping intent descriptions, contested
 //   capabilities, a shared value published under two names — and the interview settles one agent at
 //   a time by construction, so no per-agent pass can see any of it. Advisory, never blocking.
+// - ICoherenceApplyService: the one place a coherence finding stops being advisory. Reached only
+//   when the client presses Apply, having already read the finding and decided to act on it — this
+//   is the hand that carries out an instruction already given, not a second opinion.
 
 builder.Services.AddSingleton<IScenarioAuthorService, ScenarioAuthorService>();
 builder.Services.AddSingleton<ICoherenceService, CoherenceService>();
+builder.Services.AddSingleton<ICoherenceApplyService, CoherenceApplyService>();
 builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
 
 // ==============================================================================

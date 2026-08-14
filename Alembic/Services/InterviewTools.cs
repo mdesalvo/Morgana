@@ -31,16 +31,16 @@ namespace Alembic.Services;
 public class InterviewTools
 {
     /// <summary>Section label carried by an agent's Target.</summary>
-    private const string TargetMarker = "[TARGET]";
+    internal const string TargetMarker = "[TARGET]";
 
     /// <summary>Section label carried by an agent's Personality.</summary>
-    private const string PersonalityMarker = "[PERSONALITY]";
+    internal const string PersonalityMarker = "[PERSONALITY]";
 
     /// <summary>Section label carried by an agent's Instructions.</summary>
-    private const string InstructionsMarker = "[INSTRUCTIONS]";
+    internal const string InstructionsMarker = "[INSTRUCTIONS]";
 
     /// <summary>Section label carried by an agent's Formatting.</summary>
-    private const string FormattingMarker = "[FORMATTING]";
+    internal const string FormattingMarker = "[FORMATTING]";
 
     /// <summary>
     /// The intent name the framework reserves for the classifier's fallback. No authored agent may
@@ -612,7 +612,12 @@ public class InterviewTools
     /// is worth stating: the generated method and the declaration have to read like the framework's
     /// own.
     /// </remarks>
-    private static string IdentifierComplaint(string name, string what, bool pascalCase)
+    /// <remarks>
+    /// Internal rather than private: <see cref="CoherenceApplyTools"/> writes into agents that are
+    /// no longer the one interview state under construction, but the identifier it writes still has
+    /// to survive into the same C#, by the same rule.
+    /// </remarks>
+    internal static string IdentifierComplaint(string name, string what, bool pascalCase)
     {
         bool shapeOk = name.Length > 0
                        && (char.IsAsciiLetter(name[0]) || name[0] == '_')
@@ -632,7 +637,7 @@ public class InterviewTools
     /// <summary>
     /// Guarantees a section carries its label. Idempotent.
     /// </summary>
-    private static string? Marked(string marker, string? value) =>
+    internal static string? Marked(string marker, string? value) =>
         string.IsNullOrWhiteSpace(value) || value.StartsWith(marker, StringComparison.Ordinal)
             ? value?.Trim()
             : $"{marker} {value.Trim()}";
