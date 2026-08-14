@@ -130,17 +130,9 @@
             }
             else
             {
-                int pending = coherence.Findings.Count - applyResults.Values.Count(r => r.Applied);
-
-                @if (pending > 1)
-                {
-                    <p>
-                        <button class="primary" @onclick="ApplyAllAsync" disabled="@(applyingIndex.HasValue || applyingAll)">
-                            @(applyingAll ? "Applying…" : $"Apply all {pending} suggestions")
-                        </button>
-                    </p>
-                }
-
+                @* No bulk apply: the notice above says this is powerful and asks for care applying
+                   one at a time, and a button that fires every suggestion unread is the opposite of
+                   that — especially once a fix can touch more than one agent on its own. *@
                 <table>
                     <thead>
                         <tr><th>Kind</th><th>Where</th><th>What, and what it costs</th><th></th></tr>
@@ -186,7 +178,7 @@
                                     }
                                     else
                                     {
-                                        <button class="agent-pick" @onclick="() => ApplyAsync(index, finding)" disabled="@(applyingIndex.HasValue || applyingAll)">
+                                        <button class="agent-pick" @onclick="() => ApplyAsync(index, finding)" disabled="@applyingIndex.HasValue">
                                             Apply suggestion
                                         </button>
                                     }
@@ -213,11 +205,11 @@
                             the domain the interview built. Weigh what is left yourself before
                             running it again &mdash; the loop is not going to tell you when to stop.
                         </p>
-                        <button class="agent-pick" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue || applyingAll)">Run it again anyway</button>
+                        <button class="agent-pick" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue)">Run it again anyway</button>
                     }
                     else
                     {
-                        <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue || applyingAll)">Run it again</button>
+                        <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue)">Run it again</button>
                     }
                 }
             }
@@ -315,7 +307,6 @@
     private AgentRecap? recap;
     private string? selectedAgentId;
     private int? applyingIndex;
-    private bool applyingAll;
     private readonly Dictionary<int, CoherenceApplyResult> applyResults = [];
 
     /// <summary>
@@ -384,52 +375,13 @@
 
     private async Task ApplyAsync(int index, CoherenceFinding finding)
     {
-        if (DraftStateService.Current is not { } draft || applyingIndex is not null || applyingAll)
+        if (DraftStateService.Current is not { } draft || applyingIndex is not null)
             return;
 
         applyingIndex = index;
 
         try { await ApplyOneAsync(draft, index, finding); }
         finally { applyingIndex = null; }
-
-        await RefreshAfterApplyAsync(draft);
-    }
-
-    /// <summary>
-    /// Applies every coherence finding not already applied, one at a time.
-    /// </summary>
-    /// <remarks>
-    /// Sequential rather than parallel: every fix reads and writes the same Draft, and two applies
-    /// racing each other is exactly the kind of relational defect this pass exists to catch, turned
-    /// on itself. The whole point of the button is that the client presses it once and stops
-    /// thinking about the row-by-row queue underneath.
-    /// </remarks>
-    private async Task ApplyAllAsync()
-    {
-        if (DraftStateService.Current is not { } draft || applyingIndex is not null
-            || applyingAll || coherence is null)
-            return;
-
-        applyingAll = true;
-
-        try
-        {
-            for (int i = 0; i < coherence.Findings.Count; i++)
-            {
-                if (applyResults.TryGetValue(i, out CoherenceApplyResult? already) && already.Applied)
-                    continue;
-
-                applyingIndex = i;
-                await ApplyOneAsync(draft, i, coherence.Findings[i]);
-                applyingIndex = null;
-                StateHasChanged();
-            }
-        }
-        finally
-        {
-            applyingAll = false;
-            applyingIndex = null;
-        }
 
         await RefreshAfterApplyAsync(draft);
     }
