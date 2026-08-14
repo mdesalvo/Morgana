@@ -40,9 +40,7 @@
         <InputFile OnChange="OnFileSelectedAsync" accept=".json,.zip" disabled="@isReading" />
         <p class="muted">
             An <code>agents.json</code> Morgana already runs, an <code>alembic-draft.json</code> I
-            saved for you last time, or the whole archive Emit handed you &mdash; I read inside it for
-            the sitting first and the configuration second. I tell all three apart by reading them,
-            never by their name, so a file you renamed still lands where it belongs.
+            saved for you last time, or a <code>zip archive</code> I already packaged.
         </p>
         @if (isReading)
         {
@@ -60,7 +58,14 @@
 
     @if (Draft is { } draft)
     {
-        <p class="read">@Read(draft)</p>
+        @*
+            An interview left half-finished is the first thing the client wants to hear about — they
+            closed the tab on it, and it is why they are back.
+        *@
+        @if (Resuming(draft) is { } resuming)
+        {
+            <p class="resuming">@resuming</p>
+        }
 
         @if (notices.Count > 0)
         {
@@ -73,14 +78,70 @@
         }
 
         @*
-            The point of the page. Same shape as the landing's doorways, because they are the same
-            kind of thing: a way on, not a description.
+            What came in, as the client's own business, and it leads: this is the evidence the
+            client uploaded a file to see, and it is what "what now" below is a response to. An
+            agent is shown by the intent that reaches it and the things it can do — the two facts
+            they would recognise. Everything else the Draft holds is true and belongs on Review.
+        *@
+        <h2 class="what-now">What I found in it</h2>
+
+        @foreach (AgentDraft agent in draft.Agents)
+        {
+            IntentDraft? intent = draft.Intents.FirstOrDefault(i => i.Name == agent.ID);
+
+            <div class="agent-card">
+                <div class="agent-card-name">@(intent?.Label ?? agent.ID)</div>
+
+                @if (intent?.Description is { Length: > 0 } description)
+                {
+                    <p class="agent-card-when">Comes when someone asks about @Lower(description)</p>
+                }
+
+                @if (agent.Tools.Count == 0)
+                {
+                    <p class="muted">
+                        It carries nothing of its own &mdash; whatever it reaches for arrives from
+                        elsewhere at the moment it is needed.
+                    </p>
+                }
+                else
+                {
+                    <p class="agent-card-can">
+                        It can
+                        @foreach ((ToolDraft tool, int index) in agent.Tools.Select((t, i) => (t, i)))
+                        {
+                            <span class="can">@Humanise(tool.Name)</span>@(index < agent.Tools.Count - 1 ? " " : "")
+                        }
+                    </p>
+                }
+            </div>
+        }
+
+        @if (draft.Intents.FirstOrDefault(i => draft.Agents.All(a => a.ID != i.Name)) is not null)
+        {
+            <p class="orphan-intents">
+                Some intents in this file have no agent to handle them: Morgana would refuse
+                to start until every one does. <strong>Validate this domain before doing anything
+                else with it.</strong>
+            </p>
+        }
+
+        @*
+            The point of the page, and it follows the evidence rather than leading it: what to do
+            next only means something once the client has seen what came in. Same shape as the
+            landing's doorways, because they are the same kind of thing: a way on, not a description.
+
+            Which door is loudest is not fixed. An archive Emit already built has been through this
+            once — checking that it still stands is at least as natural a next move as adding to it,
+            and that is true only of an archive: a bare agents.json never went through Alembic, and
+            a resumed sitting is mid-answer, so it is the interview's own door that stays loudest
+            there. Weighing is always reachable either way; it is only the loud one here.
         *@
         <h2 class="what-now">What now</h2>
 
         <div class="gateways gateways-three">
 
-            <a class="gateway primary-gateway" href="interview">
+            <a class="gateway @(arrivedAsArchive ? null : "primary-gateway")" href="interview">
                 <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M9.3 3h5.4M10.6 3.4v5.2M13.4 3.4v5.2" />
@@ -101,12 +162,12 @@
                 }
                 else
                 {
-                    <h2>Add another to it</h2>
+                    <h2>Distil a new agent</h2>
                     <span class="go">Begin &rarr;</span>
                 }
             </a>
 
-            <a class="gateway" href="review">
+            <a class="gateway @(arrivedAsArchive ? "primary-gateway" : null)" href="review">
                 <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <circle cx="10.5" cy="10.5" r="6.6" />
@@ -114,11 +175,11 @@
                     <path d="M7.6 9h5.8M7.6 12h3.8" />
                 </svg>
 
-                <h2>Weigh what you have</h2>
+                <h2>Validate this domain</h2>
                 <span class="go">Look &rarr;</span>
             </a>
 
-            <a class="gateway" href="emit">
+            <a class="gateway" href="morganize">
                 <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M3 6.4h18v3.4H3z" />
@@ -126,57 +187,11 @@
                     <path d="M12 12v4.4M9.8 14.4 12 16.6l2.2-2.2" />
                 </svg>
 
-                <h2>Carry it off</h2>
-                <span class="go">Download &rarr;</span>
+                <h2>Morganize it</h2>
+                <span class="go">Package &rarr;</span>
             </a>
 
         </div>
-
-        @*
-            What came in, as the client's own business. An agent is shown by the calling that
-            reaches it and the things it can do — the two facts they would recognise. Everything
-            else the Draft holds is true and belongs on Review.
-        *@
-        <h2 class="what-now">What I found in it</h2>
-
-        @foreach (AgentDraft agent in draft.Agents)
-        {
-            IntentDraft? intent = draft.Intents.FirstOrDefault(i => i.Name == agent.ID);
-
-            <div class="creature">
-                <div class="creature-name">@(intent?.Label ?? agent.ID)</div>
-
-                @if (intent?.Description is { Length: > 0 } description)
-                {
-                    <p class="creature-when">Comes when someone asks about @Lower(description)</p>
-                }
-
-                @if (agent.Tools.Count == 0)
-                {
-                    <p class="muted">
-                        It carries nothing of its own &mdash; whatever it reaches for arrives from
-                        elsewhere at the moment it is needed.
-                    </p>
-                }
-                else
-                {
-                    <p class="creature-can">
-                        It can
-                        @foreach ((ToolDraft tool, int index) in agent.Tools.Select((t, i) => (t, i)))
-                        {
-                            <span class="can">@Humanise(tool.Name)</span>@(index < agent.Tools.Count - 1 ? " " : "")
-                        }
-                    </p>
-                }
-            </div>
-        }
-
-        @if (draft.Intents.FirstOrDefault(i => draft.Agents.All(a => a.ID != i.Name)) is not null)
-        {
-            <p class="muted">
-                Some callings in this file reach no creature I can see. Weigh it and I will name them.
-            </p>
-        }
 
         <p class="give-back">
             Or take the file itself back:
@@ -213,6 +228,18 @@
     private string? error;
     private bool isReading;
 
+    /// <summary>
+    /// Whether the file just read was the whole archive Emit hands back, rather than a bare
+    /// <c>agents.json</c> or <c>alembic-draft.json</c>.
+    /// </summary>
+    /// <remarks>
+    /// Read from the upload's own shape (a zip), not from what turned out to be inside it: an
+    /// archive with its save file deleted still arrived as the archive, and the client's next
+    /// question is the same either way &mdash; does what I already built still stand? A bare
+    /// configuration never went through Alembic, so it has no such question to answer first.
+    /// </remarks>
+    private bool arrivedAsArchive;
+
     private DomainDraft? Draft => DraftStateService.Current;
 
     /// <summary>
@@ -228,36 +255,36 @@
         $"data:application/json;charset=utf-8;base64,{Convert.ToBase64String(content)}";
 
     /// <summary>
-    /// What arrived, counted in the client's nouns rather than the configuration's.
+    /// The interrupted interview, if the file carried one worth reporting — the single most
+    /// actionable fact on this page when it exists, since it says why the client came back rather
+    /// than what merely arrived.
     /// </summary>
-    private static string Read(DomainDraft draft)
+    private static string? Resuming(DomainDraft draft) =>
+        draft.Sitting is { } sitting && Named(sitting) is { } named
+            ? $"{named} — still here, right where you left it."
+            : null;
+
+    /// <summary>
+    /// What the interrupted interview was about, read strictly off what the sitting itself holds —
+    /// never a placeholder standing in for it. An entry in progress is named from the sitting's own
+    /// Map; short of that, the map's own entry count is said instead. <c>null</c> when the sitting
+    /// carries neither — nothing was ever declared, so there is nothing true left to report.
+    /// </summary>
+    private static string? Named(InterviewSitting sitting)
     {
-        int tools = draft.Agents.Sum(a => a.Tools.Count);
+        if (sitting.At >= 0 && sitting.At < sitting.Map.Count)
+        {
+            IntentDraft entry = sitting.Map[sitting.At];
+            return $"You were in the middle of {entry.Label ?? entry.Name ?? "an entry of the map"}";
+        }
 
-        string read = $"I have read it: {Count(draft.Agents.Count, "creature", "creatures")}, "
-                      + $"{Count(draft.Intents.Count, "calling", "callings")}, "
-                      + $"{Count(tools, "thing they can do", "things they can do")}.";
-
-        // An interview left half-finished is the first thing the client wants to hear about: they
-        // closed the tab on it, and everything else on this page is what was already behind them.
-        return draft.Sitting is { } sitting
-            ? read + $" And the one you were in the middle of, {Named(sitting)}, is still here."
-            : read;
+        return sitting.Map.Count switch
+        {
+            0 => null,
+            1 => "You were drawing the map, one entry declared so far",
+            var n => $"You were drawing the map, {n} entries declared so far"
+        };
     }
-
-    /// <summary>
-    /// What the interrupted interview was about, in the client's own words.
-    /// </summary>
-    private static string Named(InterviewSitting sitting) =>
-        sitting.At >= 0 && sitting.At < sitting.Map.Count
-            ? sitting.Map[sitting.At].Label ?? sitting.Map[sitting.At].Name ?? "the one you were writing"
-            : "the map itself";
-
-    /// <summary>
-    /// Both forms given, because English plurals are not a suffix and the nouns here are phrases.
-    /// </summary>
-    private static string Count(int n, string one, string many) =>
-        n == 1 ? $"one {one}" : $"{n} {many}";
 
     /// <summary>
     /// Turns a tool's method name into something a domain expert reads rather than parses.
@@ -297,6 +324,7 @@
         isReading = true;
         error = null;
         notices = [];
+        arrivedAsArchive = false;
 
         try
         {
@@ -313,6 +341,11 @@
 
             if (IsZip(buffer))
             {
+                // Trusted only on the marker's say-so, not on the upload's own shape: anyone can
+                // zip up a bare agents.json, and Import's own next-step doors read differently for
+                // an archive Alembic built than for a bare configuration someone else packed.
+                arrivedAsArchive = HasMarker(buffer);
+
                 await using MemoryStream? inner = await ExtractFromZipAsync(buffer);
 
                 if (inner is null)
@@ -386,22 +419,6 @@
         }
 
         DraftStateService.Set(draft);
-
-        List<string> read =
-        [
-            draft.Baseline is null
-                ? "We started this one from nothing, so everything in it is ours."
-                : $"It still carries the domain as it arrived from {draft.Baseline.ImportedFrom}, so I can still tell you what changed."
-        ];
-
-        int authored = draft.Agents.Count(a => a.Origin == Provenance.Authored);
-
-        if (authored > 0)
-            read.Add(authored == 1
-                ? "One of them we distilled together."
-                : $"{authored} of them we distilled together.");
-
-        notices = read;
     }
 
     /// <summary>
@@ -413,6 +430,24 @@
     /// </remarks>
     private static bool IsZip(MemoryStream buffer) =>
         buffer.Length >= 2 && buffer.GetBuffer()[0] == 0x50 && buffer.GetBuffer()[1] == 0x4B;
+
+    /// <summary>
+    /// Whether the archive carries the marker only Alembic's own emit writes.
+    /// </summary>
+    /// <remarks>
+    /// A zip holding an <c>agents.json</c> is not evidence Alembic built it: anyone can zip up a
+    /// bare configuration by hand, and this is the one entry a zip built anywhere else would have
+    /// no reason to contain. Checked by presence alone, never by its content — the marker carries
+    /// nothing worth reading, only the fact of itself.
+    /// </remarks>
+    private static bool HasMarker(MemoryStream buffer)
+    {
+        buffer.Position = 0;
+        using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
+
+        return archive.Entries.Any(entry => string.Equals(
+            entry.Name, Alembic.Services.AssetPackageService.MarkerFileName, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>
     /// Pulls the one file inside the archive that carries the domain, preferring the sitting.

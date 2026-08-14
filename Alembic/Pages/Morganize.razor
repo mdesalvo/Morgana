@@ -1,4 +1,4 @@
-@page "/emit"
+@page "/morganize"
 @using Alembic.Interfaces
 @using Alembic.Model
 @using Morgana.AI
@@ -8,7 +8,7 @@
 @inject IAssetPackageService AssetPackageService
 
 @*
-    The emit. The turnkey end of the workbench: the whole domain leaves as one archive,
+    Morganize. The turnkey end of the workbench: the whole domain leaves as one archive,
     because the pieces are only correct together.
 
     Three things settle before it can be built, and none of them is in agents.json: the namespace,
@@ -18,13 +18,12 @@
 
 <div class="alembic-page">
 
-    <h1>Emit</h1>
-    <p class="tagline">The configuration, the C# behind it, and what it changes.</p>
+    <FinalizationRail At="1" />
 
     @if (DraftStateService.Current is not { } draft)
     {
         <div class="panel">
-            <h2>Nothing to emit</h2>
+            <h2>Nothing to morganize</h2>
             <p>Import an <code>agents.json</code> or run an interview first.</p>
             <p><a href="import">Go to import &rarr;</a></p>
         </div>
@@ -59,8 +58,8 @@
                 <h2>What agents.json cannot say</h2>
                 <p class="muted">
                     A namespace, a die per agent, and the class names. None of it is in a
-                    configuration, so an imported domain arrives without it &mdash; and the emit
-                    needs it stated rather than guessed.
+                    configuration, so an imported domain arrives without it &mdash; and morganizing
+                    it needs that stated rather than guessed.
                 </p>
 
                 <p>
@@ -77,7 +76,7 @@
                             <tr>
                                 <td><code>@agent.ID</code></td>
                                 <td>
-                                    <select value="@(agent.Code.Tier ?? Records.LLMTier.Efficiency)"
+                                    <select value="@agent.Code.Tier"
                                             @onchange="e => SetTier(agent, e)">
                                         <option value="@Records.LLMTier.Efficiency">Efficiency</option>
                                         <option value="@Records.LLMTier.Performance">Performance</option>
@@ -161,7 +160,7 @@
                 <p>
                     <label>
                         <input type="checkbox" @bind="includeScenarios" />
-                        Starter PromptHarness scenarios
+                        Generate PromptHarness scenarios
                     </label>
                     <span class="muted">
                         &mdash; one more call per agent. A domain agent <em>is</em> its prose, and
@@ -183,7 +182,10 @@
                                 </clipPath>
                             </defs>
 
-                            <path d="M25.2 24 V13 M32.8 24 V13" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
+                            @* The neck: extended all the way down to where each line meets the belly's own
+                               outline (x=25.2/32.8 crosses the r=15.2 circle at y≈40.3), so the cap sits on
+                               a continuous vessel rather than floating over a gap above the belly. *@
+                            <path d="M25.2 40.3 V13 M32.8 40.3 V13" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
                             <rect x="21.8" y="10" width="14.4" height="4.8" rx="2.4" fill="var(--alembic-border-lit)" />
                             <path d="M40 20.5 H49 A3.2 3.2 0 0 1 52 23.7 V33" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
 
@@ -238,10 +240,6 @@
         }
     }
 
-    <p class="phase-note">
-        The turnkey end: one archive, and what it changes against what you uploaded.
-    </p>
-
     <Back />
 
 </div>
@@ -269,6 +267,17 @@
     {
         if (DraftStateService.Current is not { } draft)
             return;
+
+        // The die select shows Efficiency the moment nothing is chosen, so the model has to actually
+        // hold that the instant the page does — a control bound to a value the client never asked
+        // for and never confirmed is a control lying about its own state. Committing it here, before
+        // anything is read or built, is what makes "visit the Emit page" in the validator's own
+        // warning literally true rather than true only once the select is clicked.
+        foreach (AgentDraft agent in draft.Agents)
+        {
+            agent.Code.Tier ??= Records.LLMTier.Efficiency;
+            agent.Code.Inferred = false;
+        }
 
         errors = [.. DraftValidationService.Validate(draft).Where(f => f.Severity == FindingSeverity.Error)];
         report = MigrationReportService.Build(draft);
@@ -328,8 +337,8 @@
         null => "Preparing the configuration…",
         "structure" => "Preparing the configuration…",
         "code" => $"Distilling {currentStep.Label} — writing its generated C#…",
-        "mock" => $"Distilling {currentStep.Label} — a live model is writing its working mock, so this can take a moment…",
-        "scenarios" => $"Distilling {currentStep.Label} — a live model is watching its behaviour for PromptHarness, this is the slowest part…",
+        "mock" => $"Distilling {currentStep.Label} — AI is writing its working mock, so this can take a moment…",
+        "scenarios" => $"Distilling {currentStep.Label} — AI is watching its behaviour for PromptHarness, this is the slowest part…",
         _ => "Distilling…"
     };
 
@@ -369,7 +378,8 @@
     /// </summary>
     private Step? MatchStep(string path, DomainDraft draft)
     {
-        if (path is "agents.json" or "alembic-draft.json" or "MIGRATION.md" or "README.md")
+        if (path is "agents.json" or "alembic-draft.json" or "MIGRATION.md" or "README.md"
+            or Alembic.Services.AssetPackageService.MarkerFileName)
             return plan.FirstOrDefault(s => s.Kind == "structure");
 
         foreach (AgentDraft agent in draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)))
@@ -405,6 +415,8 @@
 
         try
         {
+            // The die is already bound to a real value by OnInitialized — nothing left to default
+            // here.
             foreach (AgentDraft agent in draft.Agents)
                 agent.Code.Namespace = rootNamespace;
 

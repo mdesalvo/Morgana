@@ -59,7 +59,7 @@
                 typing the same character back is enough to match the example again and the tilt
                 returns, because "unedited" is a fact about the text, not a flag that was tripped once.
             *@
-            <textarea @bind="answer" @bind:event="oninput" rows="5"
+            <textarea @bind="answer" @bind:event="oninput" rows="4"
                       class="@(Pristine ? "example" : null)"
                       aria-label="Your answer"></textarea>
 

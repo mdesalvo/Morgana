@@ -57,6 +57,61 @@
     color: var(--alembic-muted);
 }
 
+/* A collapsible major section of the recap — System prompt, Tools — as opposed to the small
+   "N files written" aside .panel details already styles: this one carries the section's real
+   content, so its summary reads at the same weight .panel h3 always has, not shrunk and muted the
+   way a footnote list is. Open by default: collapsing is for a client who already knows this part
+   and wants it out of the way, not the state a first read should start from. */
+.panel .recap-section {
+    margin: 1.25rem 0 0;
+    font-size: 1rem;
+}
+
+.panel .recap-section > summary {
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--alembic-text);
+}
+
+.panel .recap-section > summary::marker {
+    color: var(--alembic-muted);
+}
+
+.panel .recap-section[open] > summary {
+    margin-bottom: 0.4rem;
+}
+
+/* One tool, boxed on its own: stacking every tool's description in the same monospace block one
+   after another read as a single undifferentiated wall, because a description is prose and a
+   monospace font is for code. Each tool gets its own card instead — its own edge, its own
+   breathing room — so the eye can tell where one tool's business ends and the next one's begins. */
+.tool-card {
+    margin: 1rem 0;
+    padding: 0.9rem 1.1rem;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.6rem;
+    background: rgba(23, 17, 48, 0.35);
+}
+
+.tool-card h4 {
+    margin-top: 0;
+}
+
+/* Read as the sentence it is, not as code: the model reads this description in prose, and a domain
+   expert reviewing it should be able to as well, at the same size and weight as anything else here. */
+.tool-desc {
+    margin: 0 0 0.7rem;
+    color: var(--alembic-text);
+    font-size: 0.92rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.tool-card table {
+    margin-top: 0.3rem;
+}
+
 /*
     What a picked agent's own recap sits inside, nested under the buttons that chose it rather than
     as separate panels further down the page. A left rule reads as "belongs to the row above" the
@@ -118,6 +173,16 @@ code {
     color: var(--alembic-muted);
     font-size: 0.85rem;
     margin-top: 0.2rem;
+}
+
+/* A finding whose only fix is another page names that page as a real destination, not as a clause
+   inside .because the client has to notice and act on unprompted. */
+.resolved-on {
+    display: inline-block;
+    margin-top: 0.4rem;
+    color: var(--alembic-accent);
+    font-size: 0.85rem;
+    font-weight: 600;
 }
 
 .panel details {

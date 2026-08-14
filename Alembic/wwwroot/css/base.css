@@ -29,6 +29,7 @@
     --alembic-cyan: #67e8f9;
     --alembic-gold: #f4c56a;
     --alembic-error: #ff8a8a;
+    --alembic-success: #4ade80;
 
     /* The glow the vessel throws on everything near it. One shadow, reused, so the page reads
        as lit from a single source rather than as a set of independently glowing boxes. */
@@ -70,15 +71,11 @@ html, body {
     position: relative;
 }
 
-.page, main {
-    min-height: 100vh;
-}
-
 .alembic-landing,
 .alembic-page {
     max-width: 46rem;
     margin: 0 auto;
-    padding: 3rem 1.5rem 4rem;
+    padding: 1.4rem 1.5rem 2.5rem;
 }
 
 /* The workbench takes the room it needs. A wizard is not an article: what is on the screen is a rail
@@ -117,8 +114,8 @@ html, body {
    grey reads as decoration and this one is the alembic still lit while you work. It is the way home. */
 .alembic-mark {
     display: block;
-    width: 10rem;
-    margin: 2rem auto 0;
+    width: 4.4rem;
+    margin: 10px auto;
     text-align: center;
     text-decoration: none;
     opacity: 0.85;

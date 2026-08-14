@@ -2,11 +2,37 @@
    What came in: the parsed configuration after an upload, and the way back out.
    ========================================================================== */
 
-.read {
-    font-size: 1.15rem;
-    font-weight: 300;
+/* The one fact worth a callout on this page: an interview left mid-answer is why the client came
+   back, and the evidence itself is read in full just below, under "What I found in it". */
+.resuming {
+    margin: 1.4rem 0 0;
+    padding: 0.7rem 1.1rem;
+    border: 1px solid var(--alembic-border-lit);
+    border-radius: 0.5rem;
+    background: rgba(192, 132, 252, 0.12);
+    box-shadow: var(--alembic-glow);
     color: var(--alembic-text);
-    margin: 2rem 0 0.5rem;
+    font-size: 1rem;
+}
+
+/* Same weight of callout as .resuming, in the error palette rather than the accent one: this is an
+   Error-severity finding read back from the Draft (an intent no agent answers, which stops Morgana
+   from starting at all), so a muted grey aside would undersell exactly the fact worth heeding. The
+   recommendation inside it is bold rather than a link, because the door it points at is already the
+   loudest thing further down the page — repeating it here as a shortcut would be a second way to do
+   the same click, not a second piece of information. */
+.orphan-intents {
+    margin: 1.4rem 0 0;
+    padding: 0.7rem 1.1rem;
+    border: 1px solid var(--alembic-error);
+    border-radius: 0.5rem;
+    background: rgba(255, 138, 138, 0.1);
+    color: var(--alembic-text);
+    font-size: 1rem;
+}
+
+.orphan-intents strong {
+    color: var(--alembic-error);
 }
 
 .notices {
@@ -28,24 +54,24 @@ h2.what-now {
 /* One agent as its owner would recognise it: what brings it, and what it can do. The scope of a
    parameter, whether it is shared, and the class name Alembic guessed are all true and all
    Review's business — here they would answer a question nobody asked. */
-.creature {
+.agent-card {
     border-left: 2px solid var(--alembic-border);
     padding: 0.1rem 0 0.1rem 1rem;
     margin-bottom: 1.4rem;
 }
 
-.creature-name {
+.agent-card-name {
     font-size: 1.1rem;
     color: var(--alembic-accent);
 }
 
-.creature-when {
+.agent-card-when {
     margin: 0.2rem 0 0.5rem;
     color: var(--alembic-muted);
     font-size: 0.9rem;
 }
 
-.creature-can {
+.agent-card-can {
     margin: 0;
     display: flex;
     flex-wrap: wrap;

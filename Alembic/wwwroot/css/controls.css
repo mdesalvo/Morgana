@@ -115,13 +115,41 @@ button.choice:disabled {
     font-size: 0.9rem;
 }
 
-.agent-pick:hover {
+.agent-pick:hover:not(:disabled) {
     border-color: var(--alembic-border-lit);
+}
+
+/* Without this, a disabled .agent-pick kept the pointer cursor and the hover it can no longer act
+   on — a control that looks exactly as pressable as before still invites the click it will refuse. */
+.agent-pick:disabled {
+    opacity: 0.45;
+    cursor: default;
 }
 
 .agent-pick.picked {
     border-color: var(--alembic-accent);
     color: var(--alembic-accent);
+}
+
+/* What stands where a button was, while nothing can be pressed: plain text, deliberately not a
+   button, because the one thing worse than a disabled control is one still dressed as active. */
+.applying {
+    color: var(--alembic-muted);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+/* A finding whose fix has landed, marked solved rather than removed: the row stays so the client
+   can still read what was found and what was done about it, but nothing here asks to be clicked
+   again. */
+.badge-solved {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--alembic-success);
+    border-radius: 1rem;
+    color: var(--alembic-success);
+    font-size: 0.85rem;
+    font-weight: 600;
 }
 
 /* The cloud of words for a voice. Deliberately not the choices above: those are laid out as a row of

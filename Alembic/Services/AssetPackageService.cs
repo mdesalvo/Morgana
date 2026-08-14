@@ -15,6 +15,18 @@ namespace Alembic.Services;
 /// </remarks>
 public class AssetPackageService : IAssetPackageService
 {
+    /// <summary>
+    /// The one file in the archive that says Alembic built it.
+    /// </summary>
+    /// <remarks>
+    /// A zip carrying an <c>agents.json</c> is not evidence of that on its own: anyone can zip up a
+    /// bare configuration, and Import's own next-step doors read differently for an archive than for
+    /// a bare upload. This is the fact that check is allowed to trust, because it is the one thing a
+    /// zip built anywhere else would have no reason to contain. Content over name, as everywhere else
+    /// Alembic tells files apart: what matters is that the entry exists, not what is written in it.
+    /// </remarks>
+    public const string MarkerFileName = "alembic-emit.marker";
+
     private readonly IDraftExportService draftExportService;
     private readonly IDraftSerializationService draftSerializationService;
     private readonly ICodeEmitService codeEmitService;
@@ -55,6 +67,11 @@ public class AssetPackageService : IAssetPackageService
 
         using (ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
         {
+            await WriteAsync(archive, MarkerFileName,
+                "This file marks an archive Alembic built. It carries no information of its own and "
+                + "is not part of the domain — safe to delete once you have unpacked the rest.",
+                progress, cancellationToken);
+
             await WriteAsync(archive, "agents.json", Encoding.UTF8.GetString(draftExportService.Export(draft)), progress, cancellationToken);
             await WriteAsync(archive, "alembic-draft.json", Encoding.UTF8.GetString(draftSerializationService.Serialize(draft)), progress, cancellationToken);
             await WriteAsync(archive, "MIGRATION.md", migrationReportService.Build(draft).Markdown, progress, cancellationToken);
@@ -86,7 +103,7 @@ public class AssetPackageService : IAssetPackageService
                     await WriteAsync(archive, $"Tools/{toolClass}.cs.FAILED.txt",
                         $"Alembic could not write this mock: {ex.Message}\n\n"
                         + $"Everything else in the archive is complete. Implement the partial methods declared in {toolClass}.g.cs by hand,\n"
-                        + "or run the emit again.",
+                        + "or morganize it again.",
                         progress, cancellationToken);
                 }
             }
@@ -114,7 +131,7 @@ public class AssetPackageService : IAssetPackageService
                     await WriteAsync(archive, $"Scenarios/{agent.ID}.FAILED.txt",
                         $"Alembic could not write starter scenarios for this agent: {ex.Message}\n\n"
                         + "Nothing else in the archive depends on them. Write them by hand against the harness's own\n"
-                        + "Scenarios directory, or run the emit again.",
+                        + "Scenarios directory, or morganize it again.",
                         progress, cancellationToken);
                 }
             }
@@ -155,6 +172,7 @@ public class AssetPackageService : IAssetPackageService
         | `MIGRATION.md` | what this differs from, if anything was uploaded |
         | `Scenarios/*.yaml` | starter PromptHarness scenarios — yours from here |
         | `alembic-draft.json` | the interview's save file — upload it to carry on |
+        | `alembic-emit.marker` | Alembic's own — lets a re-upload of this archive be recognised as one, nothing else |
 
         ## The two halves
 

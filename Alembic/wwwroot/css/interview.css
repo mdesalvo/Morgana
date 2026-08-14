@@ -12,13 +12,13 @@
    The entries are big enough to read as the work: a strip of tiny grey pills reads as a progress
    ornament, and this is the list the client is dictating. */
 .journey {
-    margin: 2.2rem 0 2.6rem;
+    margin: 1.1rem 0 1.4rem;
 }
 
 /* Under the rail, and clear of it: the station names sit on their own line and a strip pulled up
    against them reads as a caption belonging to whichever step is nearest. */
 .journey .domain {
-    margin: 2.2rem 0 0;
+    margin: 1.1rem 0 0;
     text-align: center;
 }
 
@@ -99,7 +99,7 @@
     flex: 1 1 0;
     max-width: 13rem;
     position: relative;
-    padding-top: 1.9rem;
+    padding-top: 1.3rem;
     text-align: center;
     font-size: 0.86rem;
     line-height: 1.35;
@@ -120,8 +120,8 @@
     flex: 5 1 0;
     max-width: 66rem;
     position: relative;
-    margin-top: 1.5rem;
-    padding: 1.4rem 0.9rem 0.7rem;
+    margin-top: 1rem;
+    padding: 1rem 0.9rem 0.5rem;
     border: 1px solid var(--alembic-border);
     border-radius: 0.7rem;
     background: rgba(23, 17, 48, 0.35);
@@ -182,7 +182,13 @@
 /* The two steps outside the lap stand level with the four inside it, so the line through them all is
    one line: the lap's own top border and padding are what they are pushed down by. */
 .stations > .station {
-    margin-top: calc(1.5rem + 1.4rem + 1px);
+    margin-top: calc(1rem + 1rem + 1px);
+}
+
+/* The finalization rail has no lap to stand level with — two stations and nothing between them —
+   so the offset above belongs only to a rail that draws one. */
+.stations.flat > .station {
+    margin-top: 0;
 }
 
 /* And the line does not stop at the border it crosses. Each of the outer stations reaches its half
@@ -303,21 +309,21 @@
 /* The scene: one question, alone, because that is what the client is being asked to do right
    now. Everything else on the page is either what they already said or what it has become. */
 .scene {
-    min-height: 12rem;
+    min-height: 6rem;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 1.6rem 0 0.6rem;
+    padding: 0.8rem 0 0.4rem;
 }
 
 .asked {
     font-size: 1.6rem;
     font-weight: 300;
-    line-height: 1.45;
+    line-height: 1.50;
     letter-spacing: 0.01em;
     white-space: pre-wrap;
-    margin: 0 auto 2rem;
-    max-width: 48rem;
+    margin: 0 auto 1.2rem;
+    max-width: 54rem;
     text-align: center;
 }
 

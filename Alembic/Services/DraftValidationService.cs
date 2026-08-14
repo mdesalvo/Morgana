@@ -195,7 +195,8 @@ public class DraftValidationService : IDraftValidationService
         if (agent.Code.Inferred)
             findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                 $"The class names ({agent.Code.AgentClassName}, {agent.Code.ToolClassName ?? "no tool class"}) are still Alembic's guess, and no die is chosen yet.",
-                "Neither lives in agents.json, so nothing before this page could know them. Both are settled on the Emit page, not missed here — visit it before you download."));
+                "Neither lives in agents.json, so nothing before this page could know them. Not missed here — settled on Morganize, where every agent gets a namespace and a die before the archive is built.",
+                "morganize", "Morganize"));
 
         ValidateIdentifier(agent.Code.AgentClassName, $"{where} class name", "class name", findings);
         ValidateIdentifier(agent.Code.ToolClassName, $"{where} tool class name", "class name", findings);

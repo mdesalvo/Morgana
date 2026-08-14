@@ -35,8 +35,16 @@ public enum FindingSeverity
 /// <param name="Because">
 /// Which rule of Morgana's makes it so — named, so the finding teaches rather than just refuses.
 /// </param>
+/// <param name="ResolvedOnRoute">
+/// Where this finding is actually settled, if it is not settled here — a route within Alembic, or
+/// <c>null</c> when the fix is this Draft itself. A finding whose only remedy is another page should
+/// say so as a real link, not as a sentence the client has to notice and act on unprompted.
+/// </param>
+/// <param name="ResolvedOnLabel">The name of that destination, in the client's own vocabulary.</param>
 public sealed record ValidationFinding(
     FindingSeverity Severity,
     string Where,
     string Message,
-    string Because);
+    string Because,
+    string? ResolvedOnRoute = null,
+    string? ResolvedOnLabel = null);

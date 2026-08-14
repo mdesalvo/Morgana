@@ -16,8 +16,7 @@
 
 <div class="alembic-page">
 
-    <h1>Review</h1>
-    <p class="tagline">What would stop this domain, and what its models really read.</p>
+    <FinalizationRail At="0" />
 
     @if (DraftStateService.Current is not { } draft)
     {
@@ -29,8 +28,19 @@
     }
     else
     {
+        @*
+            One panel, not two: a deterministic check and a relational one are the same job seen at
+            two depths, not two different jobs. The first is decidable by reading the Draft alone —
+            no model is asked, and none would help. The second needs the whole domain read at once,
+            because whether two intents collide or two agents claim the same ground is invisible one
+            agent at a time, which is exactly how the interview writes them. Together they are what
+            "would stop this domain, or should give you pause" means in full.
+        *@
         <div class="panel">
-            <h2>Findings</h2>
+            <h2>Domain Validation</h2>
+            <p class="muted">What would stop this domain, and what only reading it whole reveals.</p>
+
+            <h3>Deterministic checks</h3>
             @if (findings.Count == 0)
             {
                 <p>Nothing to report. Every deterministic check passes.</p>
@@ -57,24 +67,25 @@
                                 <td>
                                     @finding.Message
                                     <div class="because">@finding.Because</div>
+                                    @if (finding.ResolvedOnRoute is { } route)
+                                    {
+                                        <a class="resolved-on" href="@route">Go to @finding.ResolvedOnLabel &rarr;</a>
+                                    }
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
             }
-        </div>
 
-        <div class="panel">
-            <h2>Coherence</h2>
+            <h3>Coherence</h3>
             <p class="muted">
-                The other half of reviewing a domain, and the half no deterministic check reaches:
-                whether two intent descriptions overlap enough to collide in the classifier, whether
-                two agents claim the same ground, whether a value one publishes is the value another
-                expects. Every defect here is a <em>relation</em> between agents, and the interview
-                settles one agent at a time by construction &mdash; so nothing before this point
-                could have seen any of it. It costs one call on the Performance die, and it advises
-                rather than blocks.
+                The other half, and the half no deterministic check reaches: whether two intent
+                descriptions overlap enough to collide in the classifier, whether two agents claim
+                the same ground, whether a value one publishes is the value another expects. Every
+                defect here is a <em>relation</em> between agents, and the interview settles one
+                agent at a time by construction &mdash; so nothing above could have seen any of it.
+                It costs one call on the Performance die, and it advises rather than blocks.
             </p>
 
             @if (coherence is null)
@@ -102,6 +113,17 @@
             }
             else
             {
+                int pending = coherence.Findings.Count - applyResults.Values.Count(r => r.Applied);
+
+                @if (pending > 1)
+                {
+                    <p>
+                        <button class="primary" @onclick="ApplyAllAsync" disabled="@(applyingIndex.HasValue || applyingAll)">
+                            @(applyingAll ? "Applying…" : $"Apply all {pending} suggestions")
+                        </button>
+                    </p>
+                }
+
                 <table>
                     <thead>
                         <tr><th>Kind</th><th>Where</th><th>What, and what it costs</th><th></th></tr>
@@ -124,10 +146,21 @@
                                     }
                                 </td>
                                 <td>
-                                    @if (!applyResults.TryGetValue(index, out CoherenceApplyResult? applied) || !applied.Applied)
+                                    @if (applyResults.TryGetValue(index, out CoherenceApplyResult? applied) && applied.Applied)
                                     {
-                                        <button class="agent-pick" @onclick="() => ApplyAsync(index, finding)" disabled="@applyingIndex.HasValue">
-                                            @(applyingIndex == index ? "Applying…" : "Apply suggestion")
+                                        <span class="badge-solved">&check; Solved</span>
+                                    }
+                                    else if (applyingIndex == index)
+                                    {
+                                        @* Not a button: a control the client cannot press is a control that
+                                           should not look pressable, and a disabled button with the same
+                                           chrome as an active one still invites the click it will refuse. *@
+                                        <span class="applying">Applying&hellip;</span>
+                                    }
+                                    else
+                                    {
+                                        <button class="agent-pick" @onclick="() => ApplyAsync(index, finding)" disabled="@(applyingIndex.HasValue || applyingAll)">
+                                            Apply suggestion
                                         </button>
                                     }
                                 </td>
@@ -135,19 +168,12 @@
                         }
                     </tbody>
                 </table>
-                <button class="agent-pick" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue)">Run it again</button>
+                <button class="agent-pick" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue || applyingAll)">Run it again</button>
             }
         </div>
 
         <div class="panel">
             <h2>Composed prompts</h2>
-            <p class="muted">
-                Produced by the framework's own <code>IPromptComposerService</code> &mdash; the same
-                service, fences and policy ordering a running agent gets. The framework layer comes
-                from the <code>morgana.json</code> embedded in the Morgana.AI this Alembic was built
-                against; it has no override anywhere in the framework, so what follows is true for
-                that version and says nothing about a different one.
-            </p>
             <p>
                 @foreach (AgentDraft agent in draft.Agents)
                 {
@@ -159,46 +185,47 @@
             @if (recap is not null)
             {
                 <div class="nested-recap">
-                    <h3>System prompt</h3>
-                    <p class="muted">Read once, before anything else in the turn.</p>
-                    <pre class="prompt">@recap.SystemPrompt</pre>
+                    <details class="recap-section" open>
+                        <summary>System prompt</summary>
+                        <p class="muted">Read once, before anything else in the turn.</p>
+                        <pre class="prompt">@recap.SystemPrompt</pre>
+                    </details>
 
                     @if (recap.Tools.Count > 0)
                     {
-                        <h3>Tools, as the model weighs them</h3>
-                        <p class="muted">
-                            Read when the model decides whether to call the tool at all. Where a tool
-                            declares context-scoped parameters, the framework has already spliced its
-                            context guidance onto the authored description.
-                        </p>
+                        <details class="recap-section" open>
+                        <summary>Toolkit</summary>
                         @foreach (ToolRecap tool in recap.Tools)
                         {
-                            <h4><code>@tool.Name</code></h4>
-                            <pre class="prompt">@tool.Description</pre>
-                            @if (tool.Parameters.Count > 0)
-                            {
-                                <table>
-                                    <thead>
-                                        <tr><th>Parameter</th><th>Scope</th><th>Required</th><th>Description, as the schema carries it</th></tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (ParameterRecap parameter in tool.Parameters)
-                                        {
-                                            <tr>
-                                                <td><code>@parameter.Name</code></td>
-                                                <td>@(parameter.Scope ?? "—")</td>
-                                                <td>@(parameter.Required ? "yes" : "no")</td>
-                                                <td class="description">
-                                                    @(string.IsNullOrWhiteSpace(parameter.Description)
-                                                        ? "(emitted bare — no description reaches the model)"
-                                                        : parameter.Description)
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            }
+                            <div class="tool-card">
+                                <h4><code>@tool.Name</code></h4>
+                                <p class="tool-desc">@tool.Description</p>
+                                @if (tool.Parameters.Count > 0)
+                                {
+                                    <table>
+                                        <thead>
+                                            <tr><th>Parameter</th><th>Scope</th><th>Required</th><th>Description, as the schema carries it</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (ParameterRecap parameter in tool.Parameters)
+                                            {
+                                                <tr>
+                                                    <td><code>@parameter.Name</code></td>
+                                                    <td>@(parameter.Scope ?? "—")</td>
+                                                    <td>@(parameter.Required ? "yes" : "no")</td>
+                                                    <td class="description">
+                                                        @(string.IsNullOrWhiteSpace(parameter.Description)
+                                                            ? "(emitted bare — no description reaches the model)"
+                                                            : parameter.Description)
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </div>
                         }
+                        </details>
                     }
 
                     @if (recap.HypotheticalHeldContext is not null)
@@ -224,7 +251,7 @@
     @*
         Where the domain goes next. A review that ends in a dead end reads as a verdict on one
         finished agent; the two things a client does after reading it are add the next agent and
-        take the whole domain away, so both are here rather than behind the front door.
+        morganize the whole domain, so both are here rather than behind the front door.
     *@
     @if (DraftStateService.Current is not null)
     {
@@ -234,8 +261,8 @@
                 <span class="go">Begin &rarr;</span>
             </a>
 
-            <a class="gateway" href="emit">
-                <h2>Take the domain away</h2>
+            <a class="gateway" href="morganize">
+                <h2>Morganize it</h2>
                 <span class="go">Package &rarr;</span>
             </a>
         </div>
@@ -252,6 +279,7 @@
     private AgentRecap? recap;
     private string? selectedAgentId;
     private int? applyingIndex;
+    private bool applyingAll;
     private readonly Dictionary<int, CoherenceApplyResult> applyResults = [];
 
     protected override void OnInitialized()
@@ -271,38 +299,98 @@
         finally { isReviewing = false; }
     }
 
+    /// <summary>
+    /// Picks an agent's recap, or lets it go if it is already the one showing.
+    /// </summary>
+    /// <remarks>
+    /// A picker with no way back to "nothing picked" is not a toggle, it is a one-way door: the tag
+    /// stays lit and the only way to stop reading this agent's prompt is to read another's instead.
+    /// </remarks>
     private async Task SelectAsync(AgentDraft agent)
     {
+        if (selectedAgentId == agent.ID)
+        {
+            selectedAgentId = null;
+            recap = null;
+            return;
+        }
+
         selectedAgentId = agent.ID;
         recap = await RecapService.ComposeAsync(agent);
     }
 
     private async Task ApplyAsync(int index, CoherenceFinding finding)
     {
-        if (DraftStateService.Current is not { } draft || applyingIndex is not null)
+        if (DraftStateService.Current is not { } draft || applyingIndex is not null || applyingAll)
             return;
 
         applyingIndex = index;
 
+        try { await ApplyOneAsync(draft, index, finding); }
+        finally { applyingIndex = null; }
+
+        await RefreshAfterApplyAsync(draft);
+    }
+
+    /// <summary>
+    /// Applies every coherence finding not already applied, one at a time.
+    /// </summary>
+    /// <remarks>
+    /// Sequential rather than parallel: every fix reads and writes the same Draft, and two applies
+    /// racing each other is exactly the kind of relational defect this pass exists to catch, turned
+    /// on itself. The whole point of the button is that the client presses it once and stops
+    /// thinking about the row-by-row queue underneath.
+    /// </remarks>
+    private async Task ApplyAllAsync()
+    {
+        if (DraftStateService.Current is not { } draft || applyingIndex is not null
+            || applyingAll || coherence is null)
+            return;
+
+        applyingAll = true;
+
         try
         {
-            CoherenceApplyResult result = await CoherenceApplyService.ApplyAsync(draft, finding);
-            applyResults[index] = result;
-
-            if (result.Applied)
+            for (int i = 0; i < coherence.Findings.Count; i++)
             {
-                // The agent whose prose or toolkit just changed is worth re-reading; a stale recap
-                // on screen from before the fix would show the client the wrong prompt.
-                findings = DraftValidationService.Validate(draft);
-                DraftStateService.Set(draft);
+                if (applyResults.TryGetValue(i, out CoherenceApplyResult? already) && already.Applied)
+                    continue;
 
-                if (selectedAgentId is not null && draft.Agents.FirstOrDefault(a => a.ID == selectedAgentId) is { } selected)
-                    recap = await RecapService.ComposeAsync(selected);
+                applyingIndex = i;
+                await ApplyOneAsync(draft, i, coherence.Findings[i]);
+                applyingIndex = null;
+                StateHasChanged();
             }
         }
         finally
         {
+            applyingAll = false;
             applyingIndex = null;
         }
+
+        await RefreshAfterApplyAsync(draft);
+    }
+
+    private async Task ApplyOneAsync(DomainDraft draft, int index, CoherenceFinding finding)
+    {
+        CoherenceApplyResult result = await CoherenceApplyService.ApplyAsync(draft, finding);
+        applyResults[index] = result;
+    }
+
+    /// <summary>
+    /// Re-reads the Draft after one or more fixes have landed on it.
+    /// </summary>
+    /// <remarks>
+    /// Run even after a declared failure: the applier's own tool calls can land on the Draft before
+    /// it stops without confirming, so a stale findings list or a stale recap would show the client
+    /// less than what may already have changed.
+    /// </remarks>
+    private async Task RefreshAfterApplyAsync(DomainDraft draft)
+    {
+        findings = DraftValidationService.Validate(draft);
+        DraftStateService.Set(draft);
+
+        if (selectedAgentId is not null && draft.Agents.FirstOrDefault(a => a.ID == selectedAgentId) is { } selected)
+            recap = await RecapService.ComposeAsync(selected);
     }
 }
