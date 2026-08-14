@@ -139,6 +139,14 @@ button.choice:disabled {
     font-style: italic;
 }
 
+/* "Nothing to report" is good news and should read as good news: a plain paragraph says the same
+   words a warning would, in the same colour, and the client has to read the sentence to know which
+   one they got. */
+.all-clear {
+    color: var(--alembic-success);
+    font-weight: 600;
+}
+
 /* A finding whose fix has landed, marked solved rather than removed: the row stays so the client
    can still read what was found and what was done about it, but nothing here asks to be clicked
    again. */

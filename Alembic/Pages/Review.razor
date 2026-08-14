@@ -40,48 +40,48 @@
             <h2>Domain Validation</h2>
             <p class="muted">What would stop this domain, and what only reading it whole reveals.</p>
 
-            <h3>Deterministic checks</h3>
-            @if (findings.Count == 0)
-            {
-                <p>Nothing to report. Every deterministic check passes.</p>
-            }
-            else
-            {
-                <p class="muted">
-                    @findings.Count(f => f.Severity == FindingSeverity.Error) errors,
-                    @findings.Count(f => f.Severity == FindingSeverity.Warning) warnings.
-                    Each one restates a rule Morgana enforces later and more expensively.
-                </p>
-                <table>
-                    <thead>
-                        <tr><th></th><th>Where</th><th>What</th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (ValidationFinding finding in findings)
-                        {
-                            <tr>
-                                <td class="@(finding.Severity == FindingSeverity.Error ? "severity-error" : "severity-warning")">
-                                    @(finding.Severity == FindingSeverity.Error ? "error" : "warning")
-                                </td>
-                                <td><code>@finding.Where</code></td>
-                                <td>
-                                    @finding.Message
-                                    <div class="because">@finding.Because</div>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            }
+            <details class="recap-section" open>
+                <summary>Deterministic checks</summary>
+                <p class="muted">What Morgana would refuse to start on &mdash; reads off the Draft alone, no model involved.</p>
+                @if (findings.Count == 0)
+                {
+                    <p class="all-clear">&check; Nothing to report. Every deterministic check passes.</p>
+                }
+                else
+                {
+                    <p class="muted">
+                        @findings.Count(f => f.Severity == FindingSeverity.Error) errors,
+                        @findings.Count(f => f.Severity == FindingSeverity.Warning) warnings.
+                        Each one restates a rule Morgana enforces later and more expensively.
+                    </p>
+                    <table>
+                        <thead>
+                            <tr><th></th><th>Where</th><th>What</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (ValidationFinding finding in findings)
+                            {
+                                <tr>
+                                    <td class="@(finding.Severity == FindingSeverity.Error ? "severity-error" : "severity-warning")">
+                                        @(finding.Severity == FindingSeverity.Error ? "error" : "warning")
+                                    </td>
+                                    <td><code>@finding.Where</code></td>
+                                    <td>
+                                        @finding.Message
+                                        <div class="because">@finding.Because</div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </details>
 
-            <h3>Coherence</h3>
+            <details class="recap-section" open>
+                <summary>Coherence</summary>
             <p class="muted">
-                The other half, and the half no deterministic check reaches: whether two intent
-                descriptions overlap enough to collide in the classifier, whether two agents claim
-                the same ground, whether a value one publishes is the value another expects. Every
-                defect here is a <em>relation</em> between agents, and the interview settles one
-                agent at a time by construction &mdash; so nothing above could have seen any of it.
-                It costs one call on the Performance die, and it advises rather than blocks.
+                What only reading every agent at once reveals: overlaps, contested ground, values
+                that disagree between agents. Advisory, not a block.
             </p>
 
             @if (coherence is null)
@@ -104,7 +104,7 @@
             }
             else if (coherence.Findings.Count == 0)
             {
-                <p>Nothing to report. No overlap, no contested capability, no value that disagrees with itself.</p>
+                <p class="all-clear">&check; Nothing to report. No overlap, no contested capability, no value that disagrees with itself.</p>
                 <button class="agent-pick" @onclick="ReviewAsync" disabled="@isReviewing">Run it again</button>
             }
             else
@@ -166,6 +166,7 @@
                 </table>
                 <button class="agent-pick" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue || applyingAll)">Run it again</button>
             }
+            </details>
         </div>
 
         <div class="panel">
