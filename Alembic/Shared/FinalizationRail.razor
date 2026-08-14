@@ -1,0 +1,35 @@
+@*
+    Where the domain stands once the map is spent: the same rail the interview draws, at the same
+    two stations the interview's own last step folds together — Domain Finalization is one word on
+    the interview's rail because it is one destination, but it is two pages once you are actually
+    there, so it earns its own rail here. First the domain is read back and checked; then it leaves
+    as an archive.
+
+    Flat, unlike the interview's: nothing here repeats, so there is no lap to draw and no count to
+    withhold. Two stations, one line, the same marks and the same three states — behind, here, ahead
+    — in the same violet the rest of the workbench is lit by.
+*@
+
+<div class="journey">
+    <ol class="stations flat">
+        <li class="station @Standing(0)">
+            <span class="mark"></span>
+            <span class="name">Domain Validation</span>
+        </li>
+        <li class="station @Standing(1)">
+            <span class="mark"></span>
+            <span class="name">Morganization</span>
+        </li>
+    </ol>
+</div>
+
+@code {
+    /// <summary>
+    /// Which of the two stations the client is standing on: 0 for Domain Validation, 1 for
+    /// Morganization.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public int At { get; set; }
+
+    private string Standing(int index) => index == At ? "here" : index < At ? "done" : string.Empty;
+}
