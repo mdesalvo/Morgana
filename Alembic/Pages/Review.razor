@@ -1,6 +1,7 @@
 @page "/review"
 @using Alembic.Interfaces
 @using Alembic.Model
+@using System.Text.RegularExpressions
 @inject IDraftValidationService DraftValidationService
 @inject IRecapService RecapService
 @inject IDraftStateService DraftStateService
@@ -81,7 +82,7 @@
                 <summary>Coherence</summary>
             <p class="muted">
                 What only reading every agent at once reveals: overlaps, contested ground, values
-                that disagree between agents. Advisory, not a block.
+                that disagree between agents.
             </p>
 
             @if (coherence is null)
@@ -104,8 +105,10 @@
             }
             else if (coherence.Findings.Count == 0)
             {
+                @* No "Run it again" here: nothing in the domain can have changed since this same
+                   pass just read it clean, so a re-run would face the exact same domain and spend
+                   another Performance call to say the same thing again. *@
                 <p class="all-clear">&check; Nothing to report. No overlap, no contested capability, no value that disagrees with itself.</p>
-                <button class="agent-pick" @onclick="ReviewAsync" disabled="@isReviewing">Run it again</button>
             }
             else
             {
@@ -133,6 +136,16 @@
                                 <td class="severity-warning">@finding.Kind</td>
                                 <td><code>@finding.Where</code></td>
                                 <td>
+                                    @if (RelatedFix(finding) is { } related)
+                                    {
+                                        @* Shares an agent with something just fixed: read at a glance this
+                                           looks like the same problem back, and it is not — it is what the
+                                           fix touched, seen from a different angle. Say so before the client
+                                           has to work that out from the Kind alone. *@
+                                        <div class="consequence-of">
+                                            &darr; surfaced by the @related.Finding.Kind fix on <code>@related.Finding.Where</code>
+                                        </div>
+                                    }
                                     @finding.What
                                     <div class="because">@finding.Why</div>
                                     <div class="because"><strong>Proposed:</strong> @finding.Fix</div>
@@ -164,7 +177,31 @@
                         }
                     </tbody>
                 </table>
-                <button class="agent-pick" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue || applyingAll)">Run it again</button>
+
+                @* Only once something has actually changed: re-running against a domain nobody
+                   touched since the last pass would hand the model the exact same cards and spend
+                   a call to hear the exact same findings back. *@
+                @if (AnyApplied)
+                {
+                    @if (coherenceRuns >= ChaseWarningThreshold)
+                    {
+                        @* Nothing here stops the client — it advises, never blocks, same as every
+                           finding it reports — but a fix's own ripple can surface a fresh finding
+                           every time, and nothing about this loop guarantees it ever reaches zero.
+                           Past a few rounds the honest thing is to say so plainly, not to keep
+                           lighting the button as if one more press were the one that finishes it. *@
+                        <p class="chase-warning">
+                            @coherenceRuns passes this sitting. Coherence advises, it does not owe
+                            you zero &mdash; a fix's own ripple can always surface something new to
+                            chase. Weigh what is left yourself before running it again.
+                        </p>
+                        <button class="agent-pick" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue || applyingAll)">Run it again anyway</button>
+                    }
+                    else
+                    {
+                        <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue || applyingAll)">Run it again</button>
+                    }
+                }
             }
             </details>
         </div>
@@ -263,6 +300,32 @@
     private bool applyingAll;
     private readonly Dictionary<int, CoherenceApplyResult> applyResults = [];
 
+    /// <summary>
+    /// Every finding successfully applied this sitting, across every coherence run — not cleared
+    /// alongside <see cref="applyResults"/>, because carrying it forward is the whole point.
+    /// </summary>
+    private readonly List<ResolvedCoherenceFinding> resolvedThisSitting = [];
+
+    /// <summary>
+    /// Whether at least one coherence finding has actually landed on the Draft since this pass last
+    /// ran — the one condition under which running it again could tell the client anything new.
+    /// </summary>
+    private bool AnyApplied => applyResults.Values.Any(r => r.Applied);
+
+    /// <summary>
+    /// How many times the coherence pass has run this sitting. Nothing here guarantees it ever
+    /// reaches zero findings — a fix's own ripple can surface a fresh one every round — so this is
+    /// what lets the client see the loop they are in rather than infer it from memory.
+    /// </summary>
+    private int coherenceRuns;
+
+    /// <summary>
+    /// Past this many rounds, "Run it again" stops being the obvious next click and starts asking
+    /// for a second thought instead. Two, not three: one fix revealing one more finding is already
+    /// the cherries-out-of-the-bowl pattern this exists to interrupt, not an exception to wait out.
+    /// </summary>
+    private const int ChaseWarningThreshold = 2;
+
     protected override void OnInitialized()
     {
         if (DraftStateService.Current is { } draft)
@@ -275,8 +338,9 @@
             return;
 
         isReviewing = true;
+        coherenceRuns++;
         applyResults.Clear();
-        try { coherence = await CoherenceService.ReviewAsync(draft); }
+        try { coherence = await CoherenceService.ReviewAsync(draft, resolvedThisSitting); }
         finally { isReviewing = false; }
     }
 
@@ -352,10 +416,36 @@
         await RefreshAfterApplyAsync(draft);
     }
 
+    /// <summary>
+    /// The already-applied fix this finding most plausibly follows from, if its Where shares ground
+    /// with one — the case that reads, at a glance, like the same problem come back.
+    /// </summary>
+    private ResolvedCoherenceFinding? RelatedFix(CoherenceFinding finding) =>
+        resolvedThisSitting.FirstOrDefault(r => SharesGround(finding.Where, r.Finding.Where));
+
+    /// <summary>
+    /// Whether two Where strings name at least one of the same agents — a word of four letters or
+    /// more in common, which a comma-separated list of agent and intent names almost never produces
+    /// by coincidence.
+    /// </summary>
+    private static bool SharesGround(string a, string b)
+    {
+        HashSet<string> wordsA = new(Regex.Split(a.ToLowerInvariant(), @"[^a-z0-9]+").Where(w => w.Length > 3));
+        HashSet<string> wordsB = new(Regex.Split(b.ToLowerInvariant(), @"[^a-z0-9]+").Where(w => w.Length > 3));
+
+        return wordsA.Overlaps(wordsB);
+    }
+
     private async Task ApplyOneAsync(DomainDraft draft, int index, CoherenceFinding finding)
     {
         CoherenceApplyResult result = await CoherenceApplyService.ApplyAsync(draft, finding);
         applyResults[index] = result;
+
+        // Carried forward across every coherence run this sitting, never cleared with applyResults:
+        // its whole job is to be there the next time ReviewAsync runs, so that run can tell a finding
+        // it already dealt with apart from one still genuinely present.
+        if (result.Applied)
+            resolvedThisSitting.Add(new ResolvedCoherenceFinding(finding, result.Summary));
     }
 
     /// <summary>

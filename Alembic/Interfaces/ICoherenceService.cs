@@ -33,9 +33,19 @@ public interface ICoherenceService
     /// Reviews the whole domain.
     /// </summary>
     /// <param name="draft">The domain as it stands.</param>
+    /// <param name="resolved">
+    /// Findings already applied earlier this sitting, if any. Each run is otherwise a one-shot read
+    /// with no memory of the last one, so a client who fixed something and pressed "Run it again"
+    /// would face a pass with no way to tell "still there" from "looks the same as something I
+    /// already dealt with" — this is what lets it tell the difference instead of re-reporting on
+    /// sight.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>What the pass found, or an empty report when it found nothing.</returns>
-    Task<CoherenceReport> ReviewAsync(DomainDraft draft, CancellationToken cancellationToken = default);
+    Task<CoherenceReport> ReviewAsync(
+        DomainDraft draft,
+        IReadOnlyList<ResolvedCoherenceFinding>? resolved = null,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -59,3 +69,10 @@ public sealed record CoherenceFinding(
     string What,
     string Why,
     string Fix);
+
+/// <summary>
+/// A finding from an earlier pass this sitting, and what the client's own applier said it did.
+/// </summary>
+/// <param name="Finding">What the earlier pass reported.</param>
+/// <param name="Resolution">What <see cref="ICoherenceApplyService"/> said it changed.</param>
+public sealed record ResolvedCoherenceFinding(CoherenceFinding Finding, string Resolution);

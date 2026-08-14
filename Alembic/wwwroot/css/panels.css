@@ -175,6 +175,28 @@ code {
     margin-top: 0.2rem;
 }
 
+/* Reads before .what, not after: a finding sharing an agent with a fix just applied looks, at a
+   glance, exactly like that fix having failed. Saying so first is what stops the client reading the
+   rest of the row already assuming that. */
+.consequence-of {
+    margin-bottom: 0.3rem;
+    color: var(--alembic-accent);
+    font-size: 0.8rem;
+}
+
+/* Past a few rounds of the same loop, the honest thing is to say the loop may not end on its own —
+   in the gold this room already keeps for "worth a second thought", never the error red: nothing
+   here is wrong, it is only no longer the obvious next click. */
+.chase-warning {
+    margin: 0.6rem 0;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--alembic-gold);
+    border-radius: 0.5rem;
+    background: rgba(244, 197, 106, 0.1);
+    color: var(--alembic-text);
+    font-size: 0.9rem;
+}
+
 /* A finding whose only fix is another page names that page as a real destination, not as a clause
    inside .because the client has to notice and act on unprompted. */
 .resolved-on {

@@ -41,7 +41,10 @@ public class CoherenceService : ICoherenceService
     }
 
     /// <inheritdoc />
-    public async Task<CoherenceReport> ReviewAsync(DomainDraft draft, CancellationToken cancellationToken = default)
+    public async Task<CoherenceReport> ReviewAsync(
+        DomainDraft draft,
+        IReadOnlyList<ResolvedCoherenceFinding>? resolved = null,
+        CancellationToken cancellationToken = default)
     {
         // Two agents is the floor: with one there is nothing for a relational pass to relate, and
         // running it anyway would spend a Performance call to say so.
@@ -59,7 +62,7 @@ public class CoherenceService : ICoherenceService
         try
         {
             string answer = await StreamedCompletion.RunAsync(
-                chatClient, system, Describe(draft),
+                chatClient, system, Describe(draft, resolved),
                 length => logger.LogInformation("The coherence pass was cut at {Length} characters; resuming", length),
                 cancellationToken);
 
@@ -91,9 +94,26 @@ public class CoherenceService : ICoherenceService
     /// two descriptions that overlap do so in their phrasing, and a summary is precisely the step
     /// that would smooth the overlap away before the model ever sees it.
     /// </remarks>
-    private static string Describe(DomainDraft draft)
+    private static string Describe(DomainDraft draft, IReadOnlyList<ResolvedCoherenceFinding>? resolved)
     {
         StringBuilder sb = new StringBuilder();
+
+        // Read first, and named as what it is: this pass has no memory of its own last run, so
+        // without this a client who fixed something and asked to run it again would face a pass
+        // with no way to tell "still there" from "reads like something already dealt with" — it
+        // would just see the domain and say what it always says about it.
+        if (resolved is { Count: > 0 })
+        {
+            sb.AppendLine("# Already addressed this sitting");
+            sb.AppendLine();
+            sb.AppendLine("Do not report these again on sight. Read the current text below first: report one only if it is genuinely still true of it, not because it once resembled this.");
+            sb.AppendLine();
+
+            foreach (ResolvedCoherenceFinding r in resolved)
+                sb.AppendLine($"- {r.Finding.Kind} ({r.Finding.Where}): {r.Finding.What} — addressed: {r.Resolution}");
+
+            sb.AppendLine();
+        }
 
         sb.AppendLine("# Intents, as the classifier reads them");
         sb.AppendLine();
