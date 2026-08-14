@@ -19,7 +19,7 @@
 *@
 
 <div class="keeping">
-    <button type="button" class="secondary keep" @onclick="HandOver" disabled="@(Busy || kept is not null)"
+    <button type="button" class="primary keep" @onclick="HandOver" disabled="@(Busy || kept is not null)"
             title="Downloads alembic-draft.json. Bring it back to the first screen to carry on where you left off.">
         @(kept is null ? "Save my work" : "Saved")
     </button>

@@ -160,7 +160,7 @@
     left: 50%;
     translate: -50% 0;
     padding: 0 0.7rem;
-    background: var(--alembic-bg);
+    background: color-mix(in srgb, var(--alembic-bg) 25%, transparent);
     color: var(--alembic-accent);
     font-size: 0.84rem;
     letter-spacing: 0.04em;
@@ -401,6 +401,14 @@ textarea {
     resize: vertical;
 }
 
+/* The worked example, sitting in the box as real text rather than ghost placeholder. Italic says
+   it is still exactly what was offered; one character away and it is the client's own words, so
+   the tilt drops the moment the text stops matching and returns the moment it matches again. */
+textarea.example {
+    font-style: italic;
+    color: var(--alembic-muted);
+}
+
 textarea:focus {
     outline: none;
     border-color: var(--alembic-border-lit);
@@ -427,6 +435,9 @@ textarea:focus {
     flex-direction: column;
     align-items: flex-end;
     gap: 0.4rem;
+    /* The row's own flex gap already puts 0.8rem between it and the Answer button beside it; this
+       tops that up to a flat 20px rather than leaving the gap to whatever 0.8rem happens to be. */
+    margin-left: calc(20px - 0.8rem);
 }
 
 button.keep {

@@ -119,17 +119,13 @@
     // The opening question of the map is the exception, and the one below is deliberately not the
     // model's. Nothing is known about this client yet, so it would be inventing a hypothetical
     // domain exactly as this does — but differently every run, unverifiable, on the screen that sets
-    // the register for the whole interview. And this one teaches the pass's own lesson: the shop
-    // sells, Morgana handles what comes after the order. A domain is a choice, not an inventory, and
-    // a model asked for a plausible domain writes the inventory.
+    // the register for the whole interview.
     //
     // It stands only while nothing is known: a client who arrived with an agents.json has a trade on
     // the table, the mapping pass can call SetExample from it, and what it writes wins here.
     private const string HouseExample =
-        "We sell coffee online, a dozen blends, mostly on subscription. Selling is not what I "
-        + "want her for — the site does that, and roasting stays with us. It is what comes "
-        + "after the order: people writing to move a delivery, to swap what is in the next box, "
-        + "or to ask for an invoice.";
+        "We run a small bike repair shop. Customers bring in the bike, we give them a quote, "
+        + "then we repair it and let them know when it's ready.";
 
     private static string Prompting(InterviewState interviewState) =>
         interviewState.Example

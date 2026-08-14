@@ -142,6 +142,15 @@ public sealed class InterviewSitting
     /// The agent in hand, however far it had got.
     /// </summary>
     public AgentDraft Agent { get; set; } = new();
+
+    /// <summary>
+    /// The worked example standing in the answer box, if the question it belongs to still is.
+    /// </summary>
+    /// <remarks>
+    /// Carried only as a fallback for the turn that reopens this step: if that turn's own exchange
+    /// writes a fresh one, the fresh one wins, exactly as it would have without a save in between.
+    /// </remarks>
+    public string? Example { get; set; }
 }
 
 /// <summary>

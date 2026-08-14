@@ -118,6 +118,12 @@ public class InterviewService : IInterviewService
 
             await EnterPassAsync(Current, sitting.Pass, cancellationToken, revisiting: true);
 
+            // The reopening turn writes its own example when it has one, and that fresh one wins.
+            // Only when it stayed silent does the one standing at save time come back, so the box
+            // a client saved with does not go empty just because the model saw no reason to repeat
+            // itself.
+            Current.Example ??= sitting.Example;
+
             return Current;
         }
 
@@ -314,7 +320,8 @@ public class InterviewService : IInterviewService
             Pass = interviewState.Pass,
             At = interviewState.At,
             Map = [.. interviewState.Map],
-            Agent = interviewState.Agent
+            Agent = interviewState.Agent,
+            Example = interviewState.Example
         };
 
         draftStateService.Set(draft);
@@ -373,8 +380,37 @@ public class InterviewService : IInterviewService
         interviewState.PassOpenedAt = interviewState.Exchanges;
 
         await BuildAgentAsync(interviewState, PassPromptIds[interviewPass]);
+
+        // The opening question of the whole interview is nobody's to phrase but the client's own:
+        // there is nothing yet for a model to be reading back, so a model asked for it is either
+        // repeating the one sentence that fits or drifting off it. Fixed rather than composed —
+        // and the session still needs building above, since the client's first answer lands on it.
+        if (interviewPass == InterviewPass.DomainMapper && !revisiting)
+        {
+            interviewState.Question = OpeningQuestion;
+            interviewState.Choice = null;
+            interviewState.Example = null;
+            interviewState.Traits = [];
+            interviewState.Chosen = false;
+            interviewState.Exchanges++;
+
+            // ExchangeAsync always ends in Keep, precisely so the Draft behind Save my work is true
+            // the moment a question is on screen — including the very first one, before the client
+            // has said anything. Skipping the model here must not also skip that.
+            Keep(interviewState);
+            return;
+        }
+
         await ExchangeAsync(interviewState, Bootstrap(interviewState, interviewPass, revisiting), cancellationToken);
     }
+
+    /// <summary>
+    /// The one question every interview opens on, fixed rather than composed: the client has said
+    /// nothing yet, so there is nothing for a model to phrase differently from one run to the next.
+    /// </summary>
+    private const string OpeningQuestion =
+        "Morgana takes on a handful of your own processes, one entry each becoming its own agent — "
+        + "what would you like her to handle for you?";
 
     /// <summary>
     /// What the agent is sent to open a pass.

@@ -261,8 +261,9 @@ dl.fields dd {
     right: 0;
     z-index: 1000;
     padding: 0.75rem 1.25rem;
-    background: var(--alembic-error);
-    color: #2a0d0d;
+    background: var(--alembic-bg-deep);
+    border-top: 1px solid var(--alembic-error);
+    color: var(--alembic-error);
 }
 
 #blazor-error-ui .dismiss {

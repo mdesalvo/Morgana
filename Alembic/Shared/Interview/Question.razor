@@ -51,8 +51,17 @@
         }
 
         <div class="reply">
+            @*
+                The worked example is real text in the box, not a ghost placeholder: it is a whole
+                answer somebody could send as it stands, so it starts already there rather than typed
+                first. Italic marks it as still exactly what was offered — the moment one character
+                differs it reads as their own words and loses the tilt, and it is not a one-way door:
+                typing the same character back is enough to match the example again and the tilt
+                returns, because "unedited" is a fact about the text, not a flag that was tripped once.
+            *@
             <textarea @bind="answer" @bind:event="oninput" rows="5"
-                      placeholder="@Prompting" aria-label="Your answer"></textarea>
+                      class="@(Pristine ? "example" : null)"
+                      aria-label="Your answer"></textarea>
 
             @*
                 Everything the client can do, on one row. The way back is their decision as much as
@@ -66,10 +75,10 @@
 
                 <span class="apart"></span>
 
-                @Keep
-
                 <button class="primary" @onclick="SendAsync"
-                        disabled="@Empty">Answer &rarr;</button>
+                        disabled="@Empty">@(Pristine ? "Accept Answer" : "Answer") &rarr;</button>
+
+                @Keep
             </div>
         </div>
     }
@@ -93,7 +102,8 @@
     public string Asked { get; set; } = string.Empty;
 
     /// <summary>
-    /// What the empty box asks for: the material this step is short of, named.
+    /// The worked example for this question, if there is one. Loaded into the box as real text
+    /// rather than shown as a ghost — a whole answer the client can send as it stands.
     /// </summary>
     [Parameter, EditorRequired]
     public string Prompting { get; set; } = string.Empty;
@@ -144,6 +154,29 @@
     /// Whether there is nothing to send: no words picked and nothing typed.
     /// </summary>
     private bool Empty => picked.Count == 0 && string.IsNullOrWhiteSpace(answer);
+
+    /// <summary>
+    /// Whether the box still reads exactly as the worked example was written — not "untouched
+    /// since it loaded", but "matches it right now", so undoing an edit back to the same text
+    /// restores it too.
+    /// </summary>
+    private bool Pristine => !string.IsNullOrEmpty(Prompting) && answer == Prompting;
+
+    private int primedOn = -1;
+
+    /// <summary>
+    /// Loads the worked example into the box, once per question. Answered the same way the caret
+    /// is: keyed on the turn, so a client mid-edit never has their own words replaced back under
+    /// them by a render that changed nothing about the question.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        if (Turn == primedOn)
+            return;
+
+        primedOn = Turn;
+        answer = Prompting;
+    }
 
     /// <summary>
     /// Takes a word for the voice, or gives it back.
