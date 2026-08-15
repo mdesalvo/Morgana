@@ -26,8 +26,7 @@ public class SolutionEmitService : ISolutionEmitService
         string ns = draft.Agents.FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.Code.Namespace))?.Code.Namespace
                     ?? CodeEmitService.DefaultNamespace;
 
-        // One version for both: Morgana.AI and Morgana.Contracts are built and released together
-        // from the same Directory.Build.props, and never drift apart from one another.
+        // The version of Morgana drives package references 
         string version = PackageVersion(typeof(Morgana.AI.Records));
 
         string csproj = $"""
@@ -43,19 +42,11 @@ public class SolutionEmitService : ISolutionEmitService
                 </PropertyGroup>
 
                 <ItemGroup>
-                    <!-- MorganaAgentAdapter reads this back out of the plugin's own assembly at startup. -->
                     <EmbeddedResource Include="agents.json" />
                 </ItemGroup>
 
                 <ItemGroup>
                     <PackageReference Include="Morgana.AI" Version="{version}" />
-                    <!--
-                      Arrives transitively through Morgana.AI already, but named here explicitly:
-                      QuickReply, RichCard and the rest of the wire contracts a tool body or a
-                      Formatting-shaped reply may want to construct directly are types the client
-                      should see and navigate to, not ones they discover only when the compiler
-                      resolves them.
-                    -->
                     <PackageReference Include="Morgana.Contracts" Version="{version}" />
                 </ItemGroup>
 
