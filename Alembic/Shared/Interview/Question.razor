@@ -59,7 +59,7 @@
                 typing the same character back is enough to match the example again and the tilt
                 returns, because "unedited" is a fact about the text, not a flag that was tripped once.
             *@
-            <textarea @bind="answer" @bind:event="oninput" rows="4"
+            <textarea @bind="answer" @bind:event="oninput" @onblur="RestoreIfEmptied" rows="4"
                       class="@(Pristine ? "example" : null)"
                       aria-label="Your answer"></textarea>
 
@@ -195,6 +195,22 @@
 
         primedOn = Turn;
         answer = Prompting;
+    }
+
+    /// <summary>
+    /// Puts the worked example back if the client cleared the box down to nothing and looked away.
+    /// </summary>
+    /// <remarks>
+    /// Only on blur, not on every keystroke: restoring it the instant the last character is deleted
+    /// would fight the delete gesture itself, snapping text back under a backspace still in flight.
+    /// An empty box has no valid answer anyway — <see cref="Empty"/> already keeps Send disabled for
+    /// it — so there is nothing this loses and it is the only way back to the example that does not
+    /// require retyping it from memory.
+    /// </remarks>
+    private void RestoreIfEmptied()
+    {
+        if (string.IsNullOrEmpty(answer) && !string.IsNullOrEmpty(Prompting))
+            answer = Prompting;
     }
 
     /// <summary>
