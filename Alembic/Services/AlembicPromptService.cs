@@ -71,11 +71,20 @@ public class AlembicPromptService : IAlembicPromptService
     }
 
     /// <inheritdoc />
+    /// <param name="promptId">A prompt's <c>ID</c> in <c>alembic.json</c> — one of the six pass ids
+    /// (<c>DomainMapper</c>, <c>AgentModeler</c>, …) or a standalone one like <c>DomainValidator</c>
+    /// or <c>CodeMocker</c>. Matched case-insensitively.</param>
+    /// <returns>The prompt's four sections, as authored — unmerged with Morgana's or Alembic's shared layer.</returns>
     public Records.Prompt Resolve(string promptId) =>
         alembicPrompts.Value.FirstOrDefault(p => string.Equals(p.ID, promptId, StringComparison.OrdinalIgnoreCase))
         ?? throw new KeyNotFoundException($"Prompt '{promptId}' is not declared in alembic.json.");
 
     /// <inheritdoc />
+    /// <param name="interviewerId">The pass whose own half of the second layer to fold in — e.g.
+    /// <c>AgentModeler</c> or <c>ToolkitModeler</c>. Resolved through <see cref="Resolve"/>, so an
+    /// unknown id fails the same way here as it would calling that method directly.</param>
+    /// <returns>The whole composed system prompt this pass's model will read: Morgana's layer, then
+    /// Alembic's shared prose and this pass's own, merged section by section under one set of labels.</returns>
     public async Task<string> ComposeAsync(string interviewerId)
     {
         StringBuilder sb = new StringBuilder();

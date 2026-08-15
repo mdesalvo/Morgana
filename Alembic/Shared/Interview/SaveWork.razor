@@ -40,12 +40,24 @@
 </div>
 
 @code {
+    /// <summary>
+    /// The circuit's own Draft under construction, and the autosave snapshots taken of it — the
+    /// two sources <see cref="HandOver"/> falls back between.
+    /// </summary>
     [Inject]
     private IDraftStateService DraftStateService { get; set; } = default!;
 
+    /// <summary>
+    /// Used only by <see cref="ReadBack"/>, to parse the just-downloaded bytes back into a Draft
+    /// for the receipt — never to produce the bytes handed to the browser, which come from
+    /// <see cref="DraftStateService"/> already serialized.
+    /// </summary>
     [Inject]
     private IDraftSerializationService DraftSerializationService { get; set; } = default!;
 
+    /// <summary>
+    /// Carries the file to the browser via the <c>alembicSave</c> interop function.
+    /// </summary>
     [Inject]
     private IJSRuntime JS { get; set; } = default!;
 
@@ -70,6 +82,11 @@
     /// </summary>
     private record Receipt(string What, string Where, string HowBig);
 
+    /// <summary>
+    /// The receipt for the file most recently handed over, shown for <see cref="Shown"/> and then
+    /// cleared so the button goes back to offering to save. <c>null</c> both before the first save
+    /// and once the receipt has timed out.
+    /// </summary>
     private Receipt? kept;
 
     /// <summary>
@@ -126,8 +143,8 @@
             ? "Nothing of the domain yet"
             : $"{Counted(mapped, "kind of request", "kinds of request")} mapped, {Counted(written, "agent", "agents")} finished";
 
-        string where = sitting is { At: >= 0 } standing && standing.At < standing.Map.Count
-            ? $"in hand: {Named(standing.Map[standing.At])}, at {Step(standing.Pass)}"
+        string where = sitting is { At: >= 0 } && sitting.At < sitting.Map.Count
+            ? $"in hand: {Named(sitting.Map[sitting.At])}, at {Step(sitting.Pass)}"
             : "in hand: the map itself";
 
         return new Receipt(what, where, Sized(work.Length));

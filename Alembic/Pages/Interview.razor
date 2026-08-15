@@ -160,6 +160,9 @@
         return SendAsync(choice.Value);
     }
 
+    /// <summary>
+    /// Sends a typed answer for the current question and waits for the next turn of the interview.
+    /// </summary>
     private async Task SendAsync(string said)
     {
         isBusy = true;

@@ -30,6 +30,9 @@ public class CoherenceService : ICoherenceService
     /// <summary>
     /// Initializes the coherence service.
     /// </summary>
+    /// <param name="alembicPromptService">Resolves the <c>DomainValidator</c> prompt from <c>alembic.json</c>.</param>
+    /// <param name="llmService">Supplies the chat client, always on the Performance tier.</param>
+    /// <param name="logger">Used to record parse and provider failures — both surface to the caller too.</param>
     public CoherenceService(
         IAlembicPromptService alembicPromptService,
         ILLMService llmService,
@@ -41,6 +44,18 @@ public class CoherenceService : ICoherenceService
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Never throws on a model or parsing failure — every catch below returns a <see cref="CoherenceReport"/>
+    /// carrying an explanatory <see cref="CoherenceReport.Error"/> instead, because this pass is
+    /// advisory: a client who cannot run it this once should still be able to keep working with the
+    /// deterministic checks <c>DraftValidationService</c> already gave them.
+    /// </remarks>
+    /// <param name="draft">The whole domain to read at once — every intent and every agent's full prose and toolkit.</param>
+    /// <param name="resolved">Findings already fixed earlier this sitting, so a re-run does not
+    /// report the same defect back the moment its own fix lands in front of the model again.</param>
+    /// <param name="cancellationToken">Cancels the underlying completion.</param>
+    /// <returns>The findings the model reports, or an empty list with an <see cref="CoherenceReport.Error"/>
+    /// explaining why none could be produced.</returns>
     public async Task<CoherenceReport> ReviewAsync(
         DomainDraft draft,
         IReadOnlyList<ResolvedCoherenceFinding>? resolved = null,
@@ -94,6 +109,9 @@ public class CoherenceService : ICoherenceService
     /// two descriptions that overlap do so in their phrasing, and a summary is precisely the step
     /// that would smooth the overlap away before the model ever sees it.
     /// </remarks>
+    /// <param name="draft">The domain to render — read whole, never summarized.</param>
+    /// <param name="resolved">Prior fixes this sitting, rendered first and by name so the model can
+    /// tell a lingering defect from one it already dealt with.</param>
     private static string Describe(DomainDraft draft, IReadOnlyList<ResolvedCoherenceFinding>? resolved)
     {
         StringBuilder sb = new StringBuilder();

@@ -77,6 +77,10 @@ public static class ScenarioTemplateLibrary
             using Stream stream = assembly.GetManifestResourceStream(resource)!;
             using StreamReader reader = new StreamReader(stream);
 
+            // An embedded resource's manifest name is the assembly's default namespace, the folder
+            // path and the file name joined with dots (e.g. "Alembic.Harness.Templates.foo.yaml"), so
+            // the template's own name is what is left after slicing off the shared folder prefix and
+            // the extension — never the resource name whole, which would carry the namespace too.
             int start = resource.IndexOf(Folder, StringComparison.Ordinal) + Folder.Length;
             string name = resource[start..^".yaml".Length];
 

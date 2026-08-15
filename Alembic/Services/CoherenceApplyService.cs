@@ -12,6 +12,12 @@ namespace Alembic.Services;
 /// Default <see cref="ICoherenceApplyService"/>: a one-shot tool-calling agent, built the same way
 /// an interview pass is, whose tools write directly into the agents the finding named.
 /// </summary>
+/// <remarks>
+/// One <see cref="AIAgent"/> per call rather than a reused one: the tool set is rebuilt against
+/// this call's <see cref="DomainDraft"/> instance every time (<see cref="CoherenceApplyTools"/>
+/// closes over it), and a finding is a single, self-contained instruction with no turn after it to
+/// keep an agent alive for.
+/// </remarks>
 public class CoherenceApplyService : ICoherenceApplyService
 {
     /// <summary>
@@ -27,6 +33,10 @@ public class CoherenceApplyService : ICoherenceApplyService
     /// <summary>
     /// Initializes the apply service.
     /// </summary>
+    /// <param name="alembicPromptService">Resolves the <c>CoherenceApplier</c> prompt and its tool declarations from <c>alembic.json</c>.</param>
+    /// <param name="promptComposerService">Passed through to <see cref="MorganaToolAdapter"/> — the framework's own tool-schema machinery.</param>
+    /// <param name="llmService">Supplies the chat client, always on the Performance tier.</param>
+    /// <param name="logger">Records a failed apply — the caller also sees it, via the returned result.</param>
     public CoherenceApplyService(
         IAlembicPromptService alembicPromptService,
         IPromptComposerService promptComposerService,
@@ -40,6 +50,14 @@ public class CoherenceApplyService : ICoherenceApplyService
     }
 
     /// <inheritdoc />
+    /// <param name="draft">The domain to fix, mutated in place by whichever tools the model calls —
+    /// there is no copy: a successful apply is the caller's own Draft with the fix already on it.</param>
+    /// <param name="finding">The one coherence finding to act on, rendered into the opening user
+    /// message below (Kind/Where/What/Why/Fix) rather than left for the model to re-derive.</param>
+    /// <param name="cancellationToken">Cancels the underlying run.</param>
+    /// <returns>Whether the pass declared the fix applied (via <c>ApplyCompleted</c>) and a one-line
+    /// summary of what changed — or, on failure, an explanation of what could not be done. A
+    /// declared-false-but-tool-calls-may-have-landed result is possible: see the final return below.</returns>
     public async Task<CoherenceApplyResult> ApplyAsync(DomainDraft draft, CoherenceFinding finding, CancellationToken cancellationToken = default)
     {
         Records.Prompt prompt = alembicPromptService.Resolve(PromptId);
@@ -49,6 +67,9 @@ public class CoherenceApplyService : ICoherenceApplyService
         CoherenceApplyTools tools = new CoherenceApplyTools(draft);
         MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);
 
+        // Maps each tool's name in alembic.json to the CoherenceApplyTools method that implements
+        // it. The lookup below turns a declaration with no matching method into a startup-time
+        // failure instead of a schema the model is offered and can never actually call.
         Dictionary<string, Delegate> implementations = new(StringComparer.Ordinal)
         {
             [nameof(CoherenceApplyTools.GetAgent)] = tools.GetAgent,

@@ -77,9 +77,7 @@ public sealed record ScenarioTemplate(
     /// load, so it already states its vocabulary by using it, and a second statement of the same
     /// thing is a second thing to keep in step.
     /// </remarks>
-    public IReadOnlySet<string> Keys => keys ??= ScenarioDerivation.KeysOf(Body);
-
-    private IReadOnlySet<string>? keys;
+    public IReadOnlySet<string> Keys => field ??= ScenarioDerivation.KeysOf(Body);
 
     /// <summary>
     /// Reads one template file.
@@ -131,6 +129,9 @@ public sealed record ScenarioTemplate(
             current?.AppendLine().Append(content);
         }
 
+        // Local rather than a private method: it closes over `directives` and `name`, both of which
+        // only exist for the duration of this one parse, so lifting it out would mean threading both
+        // through as parameters for no reader's benefit.
         string Directive(string key) =>
             directives.TryGetValue(key, out StringBuilder? value) && value.Length > 0
                 ? value.ToString().Trim()
@@ -147,6 +148,9 @@ public sealed record ScenarioTemplate(
                     $"Scenario template '{name}' requires '{requires}', which is not one of "
                     + string.Join(", ", Enum.GetNames<TemplateRequirement>())),
             Directive("derive"),
+            // Trailing newline restored after Trim() so the body still ends the way a YAML document
+            // is expected to — Trim() only exists to drop the leading/trailing blank lines the header
+            // parsing loop can leave behind, not to change the shape of the scenario itself.
             body.ToString().Trim() + "\n");
     }
 }

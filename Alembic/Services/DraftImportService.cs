@@ -50,6 +50,18 @@ public class DraftImportService : IDraftImportService
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// This method only ever handles the configuration shape — a bare <c>agents.json</c>. Telling
+    /// it apart from a resumed interview's own save file is the caller's job (by content, not by
+    /// file name: a serialized Draft carries <c>CreatedAt</c> at the root and a configuration never
+    /// does), and a zip archive is unwrapped by the caller before either service sees it.
+    /// </remarks>
+    /// <param name="agentsJson">The uploaded file's raw bytes, positioned at its start.</param>
+    /// <param name="fileName">The name the client uploaded it under, kept only for the Draft's own
+    /// <see cref="DomainDraft.ImportedFrom"/> and for log messages — never parsed for meaning.</param>
+    /// <param name="cancellationToken">Cancels the deserialization.</param>
+    /// <returns>The parsed Draft plus any notices worth surfacing, or a Draft-less result carrying
+    /// one explanatory error when the file could not be read at all.</returns>
     public async Task<DraftImportResult> ImportAsync(
         Stream agentsJson,
         string fileName,
@@ -77,17 +89,16 @@ public class DraftImportService : IDraftImportService
         {
             ImportedFrom = fileName,
             Intents = [.. configuration.Intents.Select(ToIntentDraft)],
-            Agents = [.. configuration.Agents.Select(agent => ToAgentDraft(agent, notices))]
-        };
-
-        // Frozen here, before anything can touch it, and by a second projection of the same parsed
-        // configuration rather than a copy of what was just built: the baseline is the file, and
-        // deriving it the same way guarantees the migration report can only ever show a real edit.
-        draft.Baseline = new DomainDraft
-        {
-            ImportedFrom = fileName,
-            Intents = [.. configuration.Intents.Select(ToIntentDraft)],
-            Agents = [.. configuration.Agents.Select(agent => ToAgentDraft(agent, []))]
+            Agents = [.. configuration.Agents.Select(agent => ToAgentDraft(agent, notices))],
+            // Frozen here, before anything can touch it, and by a second projection of the same parsed
+            // configuration rather than a copy of what was just built: the baseline is the file, and
+            // deriving it the same way guarantees the migration report can only ever show a real edit.
+            Baseline = new DomainDraft
+            {
+                ImportedFrom = fileName,
+                Intents = [.. configuration.Intents.Select(ToIntentDraft)],
+                Agents = [.. configuration.Agents.Select(agent => ToAgentDraft(agent, []))]
+            }
         };
 
         // On the working draft only. The baseline is the file as it arrived, so a domain that came
@@ -110,6 +121,7 @@ public class DraftImportService : IDraftImportService
     /// <summary>
     /// Projects an intent definition onto its Draft element.
     /// </summary>
+    /// <param name="intent">One entry of the uploaded configuration's <c>Intents</c> array.</param>
     private static IntentDraft ToIntentDraft(Records.IntentDefinition intent) => new()
     {
         Name = intent.Name,
@@ -123,6 +135,11 @@ public class DraftImportService : IDraftImportService
     /// Projects an agent prompt onto its Draft element, splitting the toolkit out of
     /// AdditionalProperties and keeping whatever else was in there untouched.
     /// </summary>
+    /// <param name="prompt">One entry of the uploaded configuration's <c>Agents</c> array, in the
+    /// framework's own record shape.</param>
+    /// <param name="notices">Import notices are appended here for keys Alembic does not model —
+    /// pass an empty list to suppress them, as the baseline projection below does, since the same
+    /// unmodelled keys would otherwise be reported twice for one upload.</param>
     private AgentDraft ToAgentDraft(Records.Prompt prompt, List<string> notices)
     {
         List<Records.ToolDefinition> tools =
@@ -161,6 +178,7 @@ public class DraftImportService : IDraftImportService
     /// <summary>
     /// Projects a tool definition onto its Draft element.
     /// </summary>
+    /// <param name="tool">One tool of an agent's toolkit, in the framework's own record shape.</param>
     private static ToolDraft ToToolDraft(Records.ToolDefinition tool) => new()
     {
         Name = tool.Name,
@@ -186,6 +204,10 @@ public class DraftImportService : IDraftImportService
     /// Everything here is flagged <see cref="AgentCodeFacts.Inferred"/> — a proposal for the client
     /// to confirm, never a finding.
     /// </remarks>
+    /// <param name="agentId">The intent name this agent answers — its <c>Prompt.ID</c>, the only thing
+    /// the naming convention has to go on.</param>
+    /// <param name="hasTools">Whether the agent's toolkit is non-empty; a tool class is only proposed
+    /// when there would be one to hold.</param>
     private static AgentCodeFacts InferCodeFacts(string agentId, bool hasTools)
     {
         string bareName = agentId.Trim();

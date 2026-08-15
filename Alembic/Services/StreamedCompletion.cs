@@ -81,6 +81,11 @@ public static class StreamedCompletion
 
             onResume?.Invoke(answer.Length);
 
+            // Rebuilt to exactly three messages every round rather than appended to: the assistant's
+            // cut-off reply never re-enters the conversation (that would be the assistant-prefill
+            // shape the class-level remarks rule out), and a prior continuation request is replaced
+            // rather than accumulated, so the provider always sees system + original request + one
+            // "here is everything so far, keep going" turn, however many rounds this takes.
             conversation =
             [
                 conversation[0],

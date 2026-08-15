@@ -37,8 +37,16 @@ public class AssetPackageService : IAssetPackageService
     private readonly ILogger logger;
 
     /// <summary>
-    /// Initializes the package service.
+    /// Initializes the package service with the emitters and reports that <see cref="BuildAsync"/> drives.
     /// </summary>
+    /// <param name="draftExportService">Writes the Draft back out as <c>agents.json</c>.</param>
+    /// <param name="draftSerializationService">Writes the Draft's own save file, <c>alembic-draft.json</c>.</param>
+    /// <param name="solutionEmitService">Writes the project and solution files the generated sources live in.</param>
+    /// <param name="codeEmitService">Writes the deterministic <c>.g.cs</c> half of each agent and tool class.</param>
+    /// <param name="toolMockService">Writes the authored mock half of each tool class — the one call that can fail.</param>
+    /// <param name="scenarioAuthorService">Writes the starter PromptHarness scenarios per agent.</param>
+    /// <param name="migrationReportService">Builds <c>MIGRATION.md</c> from the Draft's diff against its baseline.</param>
+    /// <param name="logger">Used to record per-agent mock/scenario failures that the archive still ships around.</param>
     public AssetPackageService(
         IDraftExportService draftExportService,
         IDraftSerializationService draftSerializationService,
@@ -60,6 +68,13 @@ public class AssetPackageService : IAssetPackageService
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Entries are written in the order a client would want to trust them: the marker and the
+    /// configuration first, then the project scaffolding, then the generated and authored C# per
+    /// agent, then scenarios last — the one thing whose absence is least likely to matter on the
+    /// day the archive is opened. The whole method runs inside one <see cref="ZipArchive"/>, so a
+    /// failure past the marker still yields a partial-but-openable zip rather than nothing.
+    /// </remarks>
     public async Task<byte[]> BuildAsync(
         DomainDraft draft,
         bool includeScenarios = true,
@@ -68,7 +83,10 @@ public class AssetPackageService : IAssetPackageService
     {
         using MemoryStream buffer = new MemoryStream();
 
-        using (ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        // The archive lives entirely in this using block: ZipArchive buffers entries and writes the
+        // central directory only on Dispose, so nothing after this point may return early — a buffer
+        // read before that point is bytes no unzip program will recognise as a zip.
+        await using (ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
         {
             await WriteAsync(archive, MarkerFileName,
                 "This file marks an archive Alembic built. It carries no information of its own and "
@@ -109,6 +127,9 @@ public class AssetPackageService : IAssetPackageService
                 {
                     logger.LogError(ex, "Could not author the mock for {AgentId}", agent.ID);
 
+                    // A sibling file rather than a silently missing one: the client sees exactly
+                    // which class has no body yet and what to do about it, in the same folder they
+                    // would have looked in for the mock itself.
                     await WriteAsync(archive, $"Tools/{toolClass}.cs.FAILED.txt",
                         $"Alembic could not write this mock: {ex.Message}\n\n"
                         + $"Everything else in the archive is complete. Implement the partial methods declared in {toolClass}.g.cs by hand,\n"
@@ -152,12 +173,17 @@ public class AssetPackageService : IAssetPackageService
     /// <summary>
     /// Writes one entry and announces it.
     /// </summary>
+    /// <param name="archive">The archive under construction.</param>
+    /// <param name="path">The entry's path inside the archive, forward-slash separated.</param>
+    /// <param name="content">The entry's whole text content, encoded as UTF-8 without a byte-order mark.</param>
+    /// <param name="progress">Reported the entry's path once it is written, for the caller's own status line.</param>
+    /// <param name="cancellationToken">Cancels the write mid-entry.</param>
     private static async Task WriteAsync(
         ZipArchive archive, string path, string content, IProgress<string>? progress, CancellationToken cancellationToken)
     {
         ZipArchiveEntry entry = archive.CreateEntry(path, CompressionLevel.Optimal);
 
-        await using (Stream stream = entry.Open())
+        await using (Stream stream = await entry.OpenAsync(cancellationToken))
         await using (StreamWriter writer = new StreamWriter(stream, new UTF8Encoding(false)))
             await writer.WriteAsync(content.AsMemory(), cancellationToken);
 

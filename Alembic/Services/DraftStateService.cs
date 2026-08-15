@@ -19,6 +19,13 @@ namespace Alembic.Services;
 /// cannot — a Draft caught mid-write, a serialization that throws. The client gets a file either way,
 /// at worst <c>AutosaveSeconds</c> behind what is on their screen.
 /// </para>
+/// <para>
+/// The service is registered <b>Scoped</b>, so its lifetime is exactly one Blazor Server circuit:
+/// one instance per browser tab, created when the circuit opens and disposed when it closes —
+/// whether that is a clean navigation away or the connection dropping (a suspended laptop, a proxy
+/// closing an idle socket). <see cref="Dispose"/> stops the timer either way, so a dead circuit
+/// never leaves a snapshot loop running against a Draft nobody can reach any more.
+/// </para>
 /// </remarks>
 public sealed class DraftStateService : IDraftStateService, IDisposable
 {
@@ -46,6 +53,10 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
 
         TimeSpan autosave = TimeSpan.FromSeconds(configuration.GetValue("Alembic:Work:AutosaveSeconds", 20));
 
+        // Same interval for the due time and the period: the first snapshot fires one AutosaveSeconds
+        // after the circuit opens (there is nothing to snapshot before then anyway — Current starts
+        // null), and every one after that on the same cadence, on the .NET thread pool rather than
+        // the circuit's own synchronization context.
         timer = new Timer(_ => Snapshot(), null, autosave, autosave);
     }
 
@@ -63,6 +74,13 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Called both by the timer, on its own cadence, and directly by <c>SaveWork</c>'s own handler
+    /// for an up-to-the-second copy at the moment the client actually presses the button — the timer
+    /// is a floor under that call, not a replacement for it.
+    /// </remarks>
+    /// <returns>The freshly serialized bytes, or <c>null</c> when there is no Draft yet or serialization
+    /// failed — in the latter case <see cref="latest"/> is left holding whatever snapshot preceded it.</returns>
     public byte[]? Snapshot()
     {
         // Read into a local first: the timer's thread and the circuit's own both arrive here, and a
@@ -83,6 +101,8 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
     }
 
     /// <inheritdoc />
+    /// <returns>The most recent snapshot taken, by timer or by an explicit <see cref="Snapshot"/>
+    /// call — never re-serializes on its own, so this is a cheap read even mid-turn.</returns>
     public byte[]? Latest() => latest;
 
     /// <inheritdoc />

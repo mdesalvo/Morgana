@@ -161,6 +161,7 @@ public sealed class IntentDraft
     /// <summary>
     /// Intent name. Matches the agent ID and the <c>[HandlesIntent]</c> argument.
     /// </summary>
+    /// <remarks><c>null</c> until the mapping pass names this entry — never "no name".</remarks>
     public string? Name { get; set; }
 
     /// <summary>
@@ -168,16 +169,24 @@ public sealed class IntentDraft
     /// collision-prone field in a domain: two descriptions that overlap produce a classifier
     /// collision, which is why the cross-agent coherence pass exists.
     /// </summary>
+    /// <remarks><c>null</c> until asked, per the Draft-wide nullable convention — see the class
+    /// remarks on <see cref="DomainDraft"/>.</remarks>
     public string? Description { get; set; }
 
     /// <summary>
     /// Human-facing label, used for the presenter's quick reply buttons.
     /// </summary>
+    /// <remarks>
+    /// <c>null</c> until the mapping pass writes the whole button set in one pass, once the intent
+    /// list is closed — never written one intent at a time, because a label only reads correctly
+    /// next to the labels of every other intent on the map.
+    /// </remarks>
     public string? Label { get; set; }
 
     /// <summary>
     /// Text sent on the user's behalf when the presenter's button for this intent is pressed.
     /// </summary>
+    /// <remarks><c>null</c> until written alongside <see cref="Label"/>, for the same reason.</remarks>
     public string? DefaultValue { get; set; }
 
     /// <summary>
@@ -195,6 +204,7 @@ public sealed class AgentDraft
     /// <summary>
     /// Agent ID, matching an intent name.
     /// </summary>
+    /// <remarks><c>null</c> until the entry is opened against a named intent from the map.</remarks>
     public string? ID { get; set; }
 
     /// <summary>
@@ -210,21 +220,30 @@ public sealed class AgentDraft
     /// <summary>
     /// What the agent is for: its scope and its boundaries.
     /// </summary>
+    /// <remarks><c>null</c> until the <c>AgentModeler</c> pass settles it — the field
+    /// <see cref="InterviewState.MissingTarget"/> tests to decide whether that pass may close.</remarks>
     public string? Target { get; set; }
 
     /// <summary>
     /// Domain-specific behavioural rules. Written after the toolkit, because they speak about it.
     /// </summary>
+    /// <remarks><c>null</c> until the <c>AgentInstructor</c> pass runs, which is why the pass order
+    /// puts the toolkit before it — instructions about tools cannot be asked for before the tools
+    /// they describe exist.</remarks>
     public string? Instructions { get; set; }
 
     /// <summary>
     /// How the agent presents its own tools' output. Written after the toolkit, for the same reason.
     /// </summary>
+    /// <remarks><c>null</c> until the <c>AgentFormatter</c> pass, the last one an entry goes
+    /// through before <see cref="AcceptAsync"/>-style acceptance.</remarks>
     public string? Formatting { get; set; }
 
     /// <summary>
     /// Tone and voice. Optional in the framework, and optional here.
     /// </summary>
+    /// <remarks><c>null</c> until the <c>AgentVoicer</c> pass; unlike <see cref="Target"/> etc. this
+    /// one may legitimately stay <c>null</c> even once accepted, since a voice is optional.</remarks>
     public string? Personality { get; set; }
 
     /// <summary>
@@ -269,6 +288,8 @@ public sealed class ToolDraft
     /// Tool name. Must match the C# method name exactly — <c>MorganaToolAdapter.AddTool</c>
     /// validates the pair and fails startup on a mismatch.
     /// </summary>
+    /// <remarks><c>null</c> until the <c>ToolkitModeler</c> pass declares this tool via
+    /// <c>DeclareTool</c>.</remarks>
     public string? Name { get; set; }
 
     /// <summary>
@@ -316,6 +337,13 @@ public sealed class ToolParameterDraft
     /// (obtained from the user). A parameter carrying a value the model itself authors declares
     /// no scope at all.
     /// </summary>
+    /// <remarks>
+    /// Never asked per parameter — inferred once from a single question about the client's setup
+    /// (what the system already knows about a user the moment they arrive), then applied to every
+    /// parameter of the toolkit: everything on that answer is <c>"context"</c>, everything else
+    /// <c>"request"</c>. A bare <c>null</c> here is a third, legitimate value, not an unanswered
+    /// question.
+    /// </remarks>
     public string? Scope { get; set; }
 
     /// <summary>
@@ -340,6 +368,11 @@ public sealed class AgentCodeFacts
     /// <summary>
     /// Namespace of the generated classes.
     /// </summary>
+    /// <remarks>
+    /// Left <c>null</c> on import rather than guessed, unlike <see cref="AgentClassName"/> and
+    /// <see cref="ToolClassName"/>: a namespace follows from nothing in <c>agents.json</c>, and a
+    /// confident wrong value here is worse than one the interview will still ask about.
+    /// </remarks>
     public string? Namespace { get; set; }
 
     /// <summary>

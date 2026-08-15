@@ -5,7 +5,6 @@ using Microsoft.Extensions.AI;
 using Morgana.AI;
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;
-using Morgana.Contracts;
 
 namespace Alembic.Services;
 
@@ -63,18 +62,54 @@ public class InterviewService : IInterviewService
                                          + "Formatting, which gives it how what it finds reaches the person reading it."
     };
 
+    /// <summary>
+    /// Loads <c>alembic.json</c> and composes the two-layer prompt each pass runs on.
+    /// </summary>
     private readonly IAlembicPromptService alembicPromptService;
+
+    /// <summary>
+    /// Splices <see cref="Morgana.AI.Records.ToolDescriptionContextGuidance"/> into a tool's
+    /// description where it declares context-scoped parameters — needed here only to hand
+    /// <see cref="MorganaToolAdapter"/> the same composer the rest of the framework uses.
+    /// </summary>
     private readonly IPromptComposerService promptComposerService;
+
+    /// <summary>
+    /// Every check decidable by reading the Draft alone, consulted by <c>GetFindings</c> so a pass
+    /// can see the same deterministic findings Review shows, filtered to its own business.
+    /// </summary>
     private readonly IDraftValidationService draftValidationService;
+
+    /// <summary>
+    /// Composes the prompt an authored agent's model will actually read, consulted by
+    /// <c>GetComposedPrompt</c> so a pass can check its own prose before handing it over.
+    /// </summary>
     private readonly IRecapService recapService;
+
+    /// <summary>
+    /// Resolves the chat client every pass runs on — always <see cref="Records.LLMTier.Performance"/>,
+    /// never the tier a domain agent itself will run on.
+    /// </summary>
     private readonly ILLMService llmService;
+
+    /// <summary>
+    /// The Draft under construction for this circuit, and the sitting <see cref="Keep"/> writes into
+    /// it every turn so the save file is never behind what is on screen.
+    /// </summary>
     private readonly IDraftStateService draftStateService;
+
     private readonly ILogger logger;
 
     /// <summary>
-    /// The agent conducting the current pass, and the session carrying its history.
+    /// The agent conducting the current pass. Rebuilt by <see cref="BuildAgentAsync"/> every time a
+    /// pass is entered, since the toolset itself changes from one pass to the next.
     /// </summary>
     private AIAgent? agent;
+
+    /// <summary>
+    /// The session carrying <see cref="agent"/>'s history for the pass in progress. Never carried
+    /// across a pass boundary — see the remarks on <see cref="EnterPassAsync"/> for why.
+    /// </summary>
     private AgentSession? session;
 
     /// <inheritdoc />
@@ -534,6 +569,9 @@ public class InterviewService : IInterviewService
         interviewState.PendingTraits.Clear();
         interviewState.Changed.Clear();
 
+        // A before/after diff of every field Snapshot exposes, rather than trusting the tools
+        // themselves to report what they touched: a tool answers the model, it does not report to
+        // the UI, so this is the one place that knows which panel rows actually changed this turn.
         Dictionary<string, string?> before = interviewState.Snapshot();
 
         try

@@ -58,9 +58,16 @@ public class InterviewTools
     /// </summary>
     private const string RequestScope = "request";
 
+    /// <summary>The interview these tools write into — see the constructor.</summary>
     private readonly InterviewState interviewState;
+
+    /// <summary>The domain being built or evolved — see the constructor.</summary>
     private readonly IDraftStateService draftStateService;
+
+    /// <summary>The deterministic checks — see the constructor.</summary>
     private readonly IDraftValidationService draftValidationService;
+
+    /// <summary>Composes the prompt the authored agent will really read — see the constructor.</summary>
     private readonly IRecapService recapService;
 
     /// <summary>
@@ -100,6 +107,10 @@ public class InterviewTools
     /// compared to anything.
     /// </para>
     /// </remarks>
+    /// <param name="name">Bare lowercase word — becomes a C# attribute argument and a prompt ID.</param>
+    /// <param name="description">What routes here, weighed by the classifier against every other intent's.</param>
+    /// <param name="label">The quick-reply button text a user reads, if this call is also settling it.</param>
+    /// <param name="defaultValue">The sentence pressing that button sends, as if the user had typed it.</param>
     public string DeclareIntent(string name, string description, string? label = null, string? defaultValue = null)
     {
         string cleanName = (name ?? string.Empty).Trim();
@@ -187,6 +198,13 @@ public class InterviewTools
     /// <summary>
     /// Records the agent's Target section.
     /// </summary>
+    /// <remarks>
+    /// Overwrites whatever was there — a pass may call this more than once as the client's answer
+    /// sharpens, and the last call is the one that stands. <see cref="Marked"/> guarantees the
+    /// section carries <see cref="TargetMarker"/> before it is stored, and the returned sentence
+    /// tells the model whether the prose it just wrote fits this section's shape — never blocking,
+    /// only informing, so the model can tighten a Target that ran long before moving on.
+    /// </remarks>
     public string SetAgentTarget(string target)
     {
         interviewState.Agent.Target = Marked(TargetMarker, target);
@@ -196,6 +214,11 @@ public class InterviewTools
     /// <summary>
     /// Records the agent's Personality section.
     /// </summary>
+    /// <remarks>
+    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
+    /// <see cref="PersonalityMarker"/> instead. Only the <c>AgentVoicer</c> pass declares this tool,
+    /// so it is the one place in the interview a voice can be written.
+    /// </remarks>
     public string SetAgentPersonality(string personality)
     {
         interviewState.Agent.Personality = Marked(PersonalityMarker, personality);
@@ -205,6 +228,12 @@ public class InterviewTools
     /// <summary>
     /// Records the agent's Instructions section.
     /// </summary>
+    /// <remarks>
+    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
+    /// <see cref="InstructionsMarker"/>. Declared only from the <c>AgentInstructor</c> pass on, once
+    /// the toolkit exists — Instructions speaks about the agent's tools, so nothing earlier may
+    /// write it.
+    /// </remarks>
     public string SetAgentInstructions(string instructions)
     {
         interviewState.Agent.Instructions = Marked(InstructionsMarker, instructions);
@@ -214,6 +243,11 @@ public class InterviewTools
     /// <summary>
     /// Records the agent's Formatting section.
     /// </summary>
+    /// <remarks>
+    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
+    /// <see cref="FormattingMarker"/>. Declared only in the last pass, <c>AgentFormatter</c>, since
+    /// everything else about the agent — the toolkit included — is settled by the time it runs.
+    /// </remarks>
     public string SetAgentFormatting(string formatting)
     {
         interviewState.Agent.Formatting = Marked(FormattingMarker, formatting);
@@ -263,6 +297,15 @@ public class InterviewTools
     /// that order becomes the C# method's parameter order, and C# cannot declare a required
     /// parameter after an optional one.
     /// </remarks>
+    /// <param name="toolName">The already-declared tool this parameter belongs to.</param>
+    /// <param name="name">camelCase — becomes the C# method's parameter name, matched by name not position.</param>
+    /// <param name="description">What the model reads when deciding what to pass here.</param>
+    /// <param name="scope">
+    /// <c>"context"</c> if Morgana resolves it from the session, <c>"request"</c> if the agent must
+    /// obtain it in conversation, or empty/<c>"none"</c> for a value the agent authors itself.
+    /// </param>
+    /// <param name="required">Whether the call fails without it — required parameters must precede optional ones.</param>
+    /// <param name="shared">Whether a resolved context value is published for other agents to hydrate from; meaningful only with scope <c>"context"</c>.</param>
     public string SetToolParameter(string toolName, string name, string description, string scope, bool required, bool shared)
     {
         if (Find(toolName) is not { } tool)

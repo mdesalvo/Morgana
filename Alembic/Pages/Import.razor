@@ -1,9 +1,7 @@
 @page "/import"
-@using Alembic.Interfaces
 @using System.Text
 @using System.Text.Json
 @using System.IO.Compression
-@using Alembic.Model
 @inject IDraftImportService DraftImportService
 @inject IDraftSerializationService DraftSerializationService
 @inject IDraftStateService DraftStateService
@@ -247,7 +245,7 @@
     /// <remarks>
     /// Read from the upload's own shape (a zip), not from what turned out to be inside it: an
     /// archive with its save file deleted still arrived as the archive, and the client's next
-    /// question is the same either way &mdash; does what I already built still stand? A bare
+    /// question is the same either way - does what I already built still stand? A bare
     /// configuration never went through Alembic, so it has no such question to answer first.
     /// </remarks>
     private bool arrivedAsArchive;
@@ -313,7 +311,7 @@
             if (char.IsUpper(c) && sb.Length > 0)
                 sb.Append(' ');
 
-            sb.Append(sb.Length == 0 ? char.ToLowerInvariant(c) : char.ToLowerInvariant(c));
+            sb.Append(char.ToLowerInvariant(c));
         }
 
         return sb.ToString();
@@ -325,6 +323,15 @@
     private static string Lower(string description) =>
         char.ToLowerInvariant(description[0]) + description[1..];
 
+    /// <summary>
+    /// Reads the uploaded file, works out which of the three shapes it is (a save file, a bare
+    /// <c>agents.json</c>, or a zip wrapping one of those two), and hands it to the matching path.
+    /// </summary>
+    /// <remarks>
+    /// Content decides the shape, never the file name or extension — see <see cref="IsZip"/>,
+    /// <see cref="IsSaveFile"/> and <see cref="HasMarker"/>, all of which read bytes rather than
+    /// trust what the client called the file.
+    /// </remarks>
     private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
     {
         isReading = true;
@@ -468,7 +475,7 @@
     private static async Task<MemoryStream?> ExtractFromZipAsync(MemoryStream buffer)
     {
         buffer.Position = 0;
-        using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
+        await using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
 
         ZipArchiveEntry? entry =
             archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "alembic-draft.json", StringComparison.OrdinalIgnoreCase))
@@ -478,7 +485,7 @@
             return null;
 
         MemoryStream copy = new MemoryStream();
-        await using (Stream entryStream = entry.Open())
+        await using (Stream entryStream = await entry.OpenAsync())
             await entryStream.CopyToAsync(copy);
 
         copy.Position = 0;

@@ -85,8 +85,23 @@
 </div>
 
 @code {
+    /// <summary>
+    /// What is currently in the reply box: either the worked example, still untouched, or the
+    /// client's own words.
+    /// </summary>
     private string answer = string.Empty;
+
+    /// <summary>
+    /// The <see cref="Turn"/> the caret was last placed for, so <see cref="OnAfterRenderAsync"/>
+    /// moves it at most once per question.
+    /// </summary>
     private int focusedOn = -1;
+
+    /// <summary>
+    /// Voice words the client has picked from <see cref="Traits"/> so far this question.
+    /// Case-insensitive, since the words come back from the model verbatim and a client re-picking
+    /// one should toggle it off rather than add a near-duplicate.
+    /// </summary>
     private readonly HashSet<string> picked = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -162,6 +177,10 @@
     /// </summary>
     private bool Pristine => !string.IsNullOrEmpty(Prompting) && answer == Prompting;
 
+    /// <summary>
+    /// The <see cref="Turn"/> the box was last primed for, so <see cref="OnParametersSet"/> loads
+    /// the worked example at most once per question.
+    /// </summary>
     private int primedOn = -1;
 
     /// <summary>

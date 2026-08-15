@@ -31,5 +31,9 @@
     [Parameter, EditorRequired]
     public int At { get; set; }
 
+    /// <summary>
+    /// The CSS state class for the station at <paramref name="index"/> — <c>"here"</c> for the
+    /// one the client is on, <c>"done"</c> for one already passed, empty for one still ahead.
+    /// </summary>
     private string Standing(int index) => index == At ? "here" : index < At ? "done" : string.Empty;
 }

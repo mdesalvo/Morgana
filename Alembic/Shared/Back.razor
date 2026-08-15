@@ -16,5 +16,14 @@
 <a class="secondary back" href="" @onclick="GoBackAsync" @onclick:preventDefault>&larr; Back</a>
 
 @code {
+    /// <summary>
+    /// Steps back one entry in the browser's own history, or to the landing page when there is
+    /// none to step back to.
+    /// </summary>
+    /// <remarks>
+    /// Delegates to the <c>alembicBack</c> JS interop function rather than calling
+    /// <c>history.back()</c> inline, so the landing fallback lives in one place shared by every
+    /// page that renders this component.
+    /// </remarks>
     private async Task GoBackAsync() => await JS.InvokeVoidAsync("alembicBack");
 }

@@ -36,10 +36,22 @@ public class DraftSerializationService : IDraftSerializationService
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Serializes the Draft model directly — every field, including provenance, code facts, the
+    /// baseline and the in-progress <see cref="DomainDraft.Sitting"/> — unlike <see cref="DraftExportService"/>,
+    /// which projects onto Morgana's own record types. This file is Alembic's alone; nothing else
+    /// reads it, so nothing constrains its shape but round-tripping cleanly.
+    /// </remarks>
+    /// <param name="draft">The Draft to serialize, whole — this is the interview's own save file.</param>
+    /// <returns>The whole <c>alembic-draft.json</c>, UTF-8 encoded and indented for a client who opens it by hand.</returns>
     public byte[] Serialize(DomainDraft draft) =>
         JsonSerializer.SerializeToUtf8Bytes(draft, DraftOptions);
 
     /// <inheritdoc />
+    /// <param name="draftJson">The uploaded file's raw bytes, positioned at its start.</param>
+    /// <param name="cancellationToken">Cancels the deserialization.</param>
+    /// <returns>The resumed Draft, or <c>null</c> if the file could not be parsed as one — the
+    /// caller falls back to treating the upload as a bare configuration in that case.</returns>
     public async Task<DomainDraft?> DeserializeAsync(Stream draftJson, CancellationToken cancellationToken = default)
     {
         try

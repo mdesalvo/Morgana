@@ -133,6 +133,11 @@ public class CoherenceApplyTools
     /// <summary>
     /// Opens a tool on the named agent, or revises the description of one already open.
     /// </summary>
+    /// <remarks>
+    /// Touches only the tool's name and description. Parameters are a separate concern reached
+    /// through <see cref="SetToolParameter"/> — a revision here never disturbs a parameter list
+    /// already recorded on the same tool, whether the tool is new or already existed.
+    /// </remarks>
     public string DeclareTool(string agentId, string name, string description)
     {
         if (Find(agentId) is not { } agent)
@@ -160,6 +165,11 @@ public class CoherenceApplyTools
     /// <summary>
     /// Adds a parameter to a declared tool of the named agent, or revises one already there.
     /// </summary>
+    /// <remarks>
+    /// Touches exactly the one parameter named — every other parameter already on the tool, and
+    /// the tool's own name and description, are left as they stand. The tool itself must already
+    /// exist: this never creates one, since a coherence finding names a tool it has already read.
+    /// </remarks>
     public string SetToolParameter(string agentId, string toolName, string name, string description, string scope, bool required, bool shared)
     {
         if (Find(agentId) is not { } agent)
@@ -172,6 +182,10 @@ public class CoherenceApplyTools
         if (cleanName.Length == 0)
             return "No parameter recorded: a parameter must have a name.";
 
+        // "none"/"null" are read back as the empty scope, the same value a value the model itself
+        // authors (a quick reply, a rich card) legitimately declares — anything else passes through
+        // verbatim so an unrecognised scope surfaces as a validation finding rather than being
+        // silently coerced into one of the two known ones.
         string cleanScope = (scope ?? string.Empty).Trim().ToLowerInvariant();
         string? resolvedScope = cleanScope switch
         {
@@ -257,9 +271,17 @@ public class CoherenceApplyTools
             agent.Origin = Provenance.Revised;
     }
 
+    /// <summary>
+    /// Looks up an agent already committed to the Draft, by its intent ID — case-insensitively,
+    /// since that is how the finding's own <c>Where</c> names it.
+    /// </summary>
     private AgentDraft? Find(string? agentId) =>
         draft.Agents.FirstOrDefault(a => string.Equals(a.ID, agentId?.Trim(), StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Looks up one of an agent's already-declared tools, by name — ordinally, the same comparison
+    /// <see cref="DraftValidationService"/> holds tool names to.
+    /// </summary>
     private static ToolDraft? FindTool(AgentDraft agent, string? toolName) =>
         agent.Tools.FirstOrDefault(t => string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
 }

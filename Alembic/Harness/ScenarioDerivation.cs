@@ -170,7 +170,7 @@ public static class ScenarioDerivation
     /// </summary>
     private static YamlMappingNode? Read(string yaml)
     {
-        YamlStream stream = new YamlStream();
+        YamlStream stream = [];
         stream.Load(new StringReader(yaml));
 
         return stream.Documents.Count > 0 ? stream.Documents[0].RootNode as YamlMappingNode : null;
@@ -219,6 +219,9 @@ public static class ScenarioDerivation
                         Walk(child);
 
                     break;
+
+                // A YamlScalarNode (a leaf value) contributes no key and needs no recursion — the
+                // switch simply falls through and the walk on this branch ends here.
             }
         }
 

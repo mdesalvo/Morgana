@@ -21,12 +21,20 @@ public class SolutionEmitService : ISolutionEmitService
     private const string TargetFramework = "net10.0";
 
     /// <inheritdoc />
+    /// <param name="draft">The domain the project is being emitted for — only its agents' namespace
+    /// is read here; the sources themselves come from <see cref="ICodeEmitService"/> separately.</param>
+    /// <returns>The <c>.csproj</c> and <c>.slnx</c>, named after the resolved namespace, both marked
+    /// <see cref="FileOwnership.Generated"/> — a client editing them by hand loses the edit on the
+    /// next Morganize, same as any other <c>.g.cs</c>.</returns>
     public IReadOnlyList<EmittedFile> Emit(DomainDraft draft)
     {
+        // The first agent that carries one, since every agent of one domain is emitted into the same
+        // namespace — there is nothing to reconcile if several agents agree, and nothing sensible to
+        // do if they disagree, so the first one found stands for all of them.
         string ns = draft.Agents.FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.Code.Namespace))?.Code.Namespace
                     ?? CodeEmitService.DefaultNamespace;
 
-        // The version of Morgana drives package references 
+        // The version of Morgana drives package references
         string version = PackageVersion(typeof(Morgana.AI.Records));
 
         string csproj = $"""

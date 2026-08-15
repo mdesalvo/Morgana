@@ -1,7 +1,4 @@
 @page "/review"
-@using Alembic.Interfaces
-@using Alembic.Model
-@using System.Text.RegularExpressions
 @inject IDraftValidationService DraftValidationService
 @inject IRecapService RecapService
 @inject IDraftStateService DraftStateService
@@ -301,12 +298,25 @@
 </div>
 
 @code {
+    /// <summary>Deterministic findings for the current Draft, refreshed by <see cref="OnInitialized"/> and after every applied fix.</summary>
     private IReadOnlyList<ValidationFinding> findings = [];
+
+    /// <summary><c>null</c> until the client runs the coherence pass at least once this visit.</summary>
     private CoherenceReport? coherence;
+
+    /// <summary>Whether the coherence pass is in flight, so the button reads "Reading the domain…" and cannot be pressed twice.</summary>
     private bool isReviewing;
+
+    /// <summary>The composed prompt for <see cref="selectedAgentId"/>, or <c>null</c> when no agent is picked.</summary>
     private AgentRecap? recap;
+
+    /// <summary>Which agent's prompt is currently shown; <c>null</c> means none is.</summary>
     private string? selectedAgentId;
+
+    /// <summary>The coherence finding currently being applied, so only one Apply can run at a time.</summary>
     private int? applyingIndex;
+
+    /// <summary>The outcome of every applied fix this sitting, keyed by the finding's position in <see cref="coherence"/>.</summary>
     private readonly Dictionary<int, CoherenceApplyResult> applyResults = [];
 
     /// <summary>
@@ -335,12 +345,21 @@
     /// </summary>
     private const int ChaseWarningThreshold = 2;
 
+    /// <summary>
+    /// Runs the deterministic checks against whatever Draft is already in the circuit — the
+    /// coherence pass is never run here, since it costs a model call and the client has not asked
+    /// for it yet.
+    /// </summary>
     protected override void OnInitialized()
     {
         if (DraftStateService.Current is { } draft)
             findings = DraftValidationService.Validate(draft);
     }
 
+    /// <summary>
+    /// Runs (or re-runs) the coherence pass and clears any per-finding apply results from the run
+    /// before it — they described findings this fresh read may not even repeat.
+    /// </summary>
     private async Task ReviewAsync()
     {
         if (DraftStateService.Current is not { } draft)
@@ -373,6 +392,10 @@
         recap = await RecapService.ComposeAsync(agent);
     }
 
+    /// <summary>
+    /// Applies one coherence finding and refreshes both the deterministic findings and the open
+    /// recap, since a fix can touch more than one agent.
+    /// </summary>
     private async Task ApplyAsync(int index, CoherenceFinding finding)
     {
         if (DraftStateService.Current is not { } draft || applyingIndex is not null)
@@ -390,21 +413,24 @@
     /// The already-applied fix this finding most plausibly follows from, if its Where shares ground
     /// with one — the case that reads, at a glance, like the same problem come back.
     /// </summary>
-    private ResolvedCoherenceFinding? RelatedFix(CoherenceFinding finding) =>
-        resolvedThisSitting.FirstOrDefault(r => SharesGround(finding.Where, r.Finding.Where));
+    private ResolvedCoherenceFinding? RelatedFix(CoherenceFinding finding)
+    {
+        HashSet<string> words = GroundWords(finding.Where);
+        return resolvedThisSitting.FirstOrDefault(r => words.Overlaps(GroundWords(r.Finding.Where)));
+    }
 
     /// <summary>
-    /// Whether two Where strings name at least one of the same agents — a word of four letters or
-    /// more in common, which a comma-separated list of agent and intent names almost never produces
-    /// by coincidence.
+    /// A pattern compiled once rather than re-parsed on every <see cref="GroundWords"/> call.
     /// </summary>
-    private static bool SharesGround(string a, string b)
-    {
-        HashSet<string> wordsA = new(Regex.Split(a.ToLowerInvariant(), @"[^a-z0-9]+").Where(w => w.Length > 3));
-        HashSet<string> wordsB = new(Regex.Split(b.ToLowerInvariant(), @"[^a-z0-9]+").Where(w => w.Length > 3));
+    private static readonly Regex NonWordRun = new Regex("[^a-z0-9]+", RegexOptions.Compiled);
 
-        return wordsA.Overlaps(wordsB);
-    }
+    /// <summary>
+    /// The words of four letters or more in a Where string, lowercased — the vocabulary
+    /// <see cref="RelatedFix"/> compares two findings' Where strings by, since a comma-separated
+    /// list of agent and intent names sharing one almost never happens by coincidence.
+    /// </summary>
+    private static HashSet<string> GroundWords(string where) =>
+        [.. NonWordRun.Split(where.ToLowerInvariant()).Where(w => w.Length > 3)];
 
     private async Task ApplyOneAsync(DomainDraft draft, int index, CoherenceFinding finding)
     {

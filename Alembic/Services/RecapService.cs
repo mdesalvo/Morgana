@@ -30,6 +30,14 @@ public class RecapService : IRecapService
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Composed as two separate blocks rather than concatenated, because that is how the model
+    /// itself reads them at runtime — the whole system prompt once, before the conversation starts,
+    /// then each tool description as it is weighed mid-turn. <see cref="AgentRecap"/> keeps that
+    /// same split so what the client is shown here matches the two moments it actually happens.
+    /// </remarks>
+    /// <param name="agent">The agent to recap, projected into the framework's own <see cref="Records.Prompt"/> shape.</param>
+    /// <returns>The system prompt this agent's model will read, plus one <see cref="ToolRecap"/> per declared tool.</returns>
     public async Task<AgentRecap> ComposeAsync(AgentDraft agent)
     {
         string systemPrompt = await promptComposerService.ComposeAgentInstructionsAsync(

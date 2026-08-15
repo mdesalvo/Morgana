@@ -54,6 +54,9 @@ public class DraftExportService : IDraftExportService
     };
 
     /// <inheritdoc />
+    /// <param name="draft">The domain to serialize — every intent and agent, projected through
+    /// <see cref="DraftProjection"/> into the framework's own record types before serialization.</param>
+    /// <returns>The whole <c>agents.json</c>, UTF-8 encoded, indented, ready to write to disk or to an archive entry as is.</returns>
     public byte[] Export(DomainDraft draft)
     {
         AgentsConfigurationFile file = new AgentsConfigurationFile(

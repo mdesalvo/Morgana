@@ -1,7 +1,5 @@
 @page "/morganize"
-@using Alembic.Interfaces
-@using Alembic.Model
-@using Morgana.AI
+@using Alembic.Services
 @inject IDraftStateService DraftStateService
 @inject IDraftValidationService DraftValidationService
 @inject IMigrationReportService MigrationReportService
@@ -270,11 +268,18 @@
 </div>
 
 @code {
+    /// <summary>Blocking findings against the current Draft; a non-empty list keeps the whole page behind the "Not yet" panel.</summary>
     private IReadOnlyList<ValidationFinding> errors = [];
+
+    /// <summary>What this Draft differs from, computed once in <see cref="OnInitialized"/> and shown in the Migration panel.</summary>
     private MigrationReport report = new(null, [], string.Empty);
+
+    /// <summary>Every path the last <see cref="AssetPackageService.BuildAsync"/> call reported through its <see cref="Progress{T}"/> callback.</summary>
     private readonly List<string> written = [];
 
     private string rootNamespace = Alembic.Services.CodeEmitService.DefaultNamespace;
+
+    /// <summary>The finished archive, non-null only between a successful <see cref="BuildAsync"/> and the next <see cref="Reset"/>.</summary>
     private byte[]? package;
     private bool includeScenarios;
     private bool isBuilding;
@@ -312,6 +317,10 @@
             rootNamespace = stated.Code.Namespace!;
     }
 
+    /// <summary>
+    /// Applies the client's choice from the die <c>&lt;select&gt;</c> and invalidates any archive
+    /// already built, since it was built against the previous tier.
+    /// </summary>
     private void SetTier(AgentDraft agent, ChangeEventArgs e)
     {
         if (Enum.TryParse(e.Value?.ToString(), out Records.LLMTier tier))
@@ -322,6 +331,10 @@
         package = null;
     }
 
+    /// <summary>
+    /// Clears the built archive so the panel falls back to the build button — used by "Build it
+    /// again" rather than a full page reload, since the die choices and namespace are worth keeping.
+    /// </summary>
     private void Reset()
     {
         package = null;
@@ -403,8 +416,7 @@
     /// </summary>
     private Step? MatchStep(string path, DomainDraft draft)
     {
-        if (path is "agents.json" or "alembic-draft.json" or "MIGRATION.md" or "README.md"
-            or Alembic.Services.AssetPackageService.MarkerFileName)
+        if (path is "agents.json" or "alembic-draft.json" or "MIGRATION.md" or "README.md" or Alembic.Services.AssetPackageService.MarkerFileName)
             return plan.FirstOrDefault(s => s.Kind == "structure");
 
         foreach (AgentDraft agent in draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)))
@@ -426,6 +438,10 @@
         return null;
     }
 
+    /// <summary>
+    /// Runs <see cref="AssetPackageService.BuildAsync"/> and drives the distillation bar off its
+    /// progress callback, matching each reported path back to the <see cref="Step"/> it belongs to.
+    /// </summary>
     private async Task BuildAsync()
     {
         if (DraftStateService.Current is not { } draft)

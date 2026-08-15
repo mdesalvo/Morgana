@@ -149,10 +149,14 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine($"    public {toolClass}(ILogger toolLogger, Func<ToolContext> getToolContext)");
         sb.AppendLine("        : base(toolLogger, getToolContext) { }");
 
+        // A tool with no name failed ValidateTool as an error, so this loop's filter only ever
+        // skips a Draft the client has not yet fixed — the emit itself never blocks on it.
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)))
         {
             sb.AppendLine();
 
+            // The description becomes the XML doc the client's IDE shows over the partial method
+            // they implement — the only place that description survives past agents.json.
             foreach (string line in Wrap(tool.Description))
                 sb.AppendLine($"    /// {line}");
 
@@ -184,8 +188,16 @@ public class CodeEmitService : ICodeEmitService
     /// <summary>
     /// Wraps a description into an XML doc comment, escaped.
     /// </summary>
+    /// <remarks>
+    /// Escaping is XML-only, not Markdown: a description is authored prose, not C#, and stray
+    /// <c>&lt;</c>/<c>&amp;</c> characters in it would otherwise be read as XML doc markup by any
+    /// tool that later parses the emitted file.
+    /// </remarks>
     private static IEnumerable<string> Wrap(string? description)
     {
+        // Line endings become spaces rather than being dropped: a description authored as several
+        // sentences on several lines must still read as one continuous <summary>, since XML doc
+        // comments have no paragraph break of their own short of a second <para>.
         string text = (description ?? string.Empty)
             .Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
             .ReplaceLineEndings(" ")

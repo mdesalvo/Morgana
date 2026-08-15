@@ -31,6 +31,10 @@ public class ToolMockService : IToolMockService
     /// <summary>
     /// Initializes the mock service.
     /// </summary>
+    /// <param name="alembicPromptService">Resolves the <c>CodeMocker</c> prompt from <c>alembic.json</c>.</param>
+    /// <param name="codeEmitService">Supplies the generated tool signatures the mock must implement.</param>
+    /// <param name="llmService">Supplies the chat client, always on the Performance tier.</param>
+    /// <param name="logger">Records a resumed (cut-off) generation — the caller's own progress signal.</param>
     public ToolMockService(
         IAlembicPromptService alembicPromptService,
         ICodeEmitService codeEmitService,
@@ -44,6 +48,12 @@ public class ToolMockService : IToolMockService
     }
 
     /// <inheritdoc />
+    /// <param name="agent">The agent whose toolkit needs a mock body — read for its Target, Formatting and tools.</param>
+    /// <param name="intentName">The intent this agent answers, passed through to <see cref="ICodeEmitService.Emit"/>
+    /// to regenerate the same tool signatures the caller already has, rather than threading them through as a parameter.</param>
+    /// <param name="cancellationToken">Cancels the underlying completion.</param>
+    /// <returns>The whole <c>Tools/*.cs</c> source file, fence-stripped and ready to write to the archive.</returns>
+    /// <exception cref="InvalidOperationException">The model returned no text at all — see the remarks below.</exception>
     public async Task<string> AuthorAsync(AgentDraft agent, string intentName, CancellationToken cancellationToken = default)
     {
         Records.Prompt mock = alembicPromptService.Resolve(MockPromptId);

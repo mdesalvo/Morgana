@@ -14,6 +14,11 @@
     domain taking shape.
 *@
 
+@* One row per field a section of the agent can carry — name, description, button, the button's
+   request — computed once by AgentRows.Of so this panel and the caret+count on the map's own tag
+   can never disagree about what is written down. A row with no value yet is shown faint rather
+   than omitted, so the panel reads as the client's own domain filling in rather than a form
+   growing new fields under them. *@
 <div class="rows-open">
     @foreach (AgentRows.Row row in AgentRows.Of(State))
     {
@@ -26,7 +31,9 @@
 
 @code {
     /// <summary>
-    /// The interview whose agent this is about.
+    /// The interview's live state, holding the agent currently under construction and every field
+    /// written into it so far. This component reads it purely — it renders a snapshot and never
+    /// mutates it.
     /// </summary>
     [Parameter, EditorRequired]
     public InterviewState State { get; set; } = default!;

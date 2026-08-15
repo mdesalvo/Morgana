@@ -17,6 +17,13 @@ namespace Alembic.Services;
 public class MigrationReportService : IMigrationReportService
 {
     /// <inheritdoc />
+    /// <remarks>
+    /// <paramref name="draft"/> is compared against its own <see cref="DomainDraft.Baseline"/> — the
+    /// domain as it stood at import, frozen the moment it arrived — never against the uploaded bytes
+    /// directly, so the comparison is Draft-to-Draft and every field means the same thing on both
+    /// sides. An empty baseline (nothing was uploaded this sitting) still compares cleanly: every
+    /// intent and agent in <paramref name="draft"/> reads as newly added.
+    /// </remarks>
     public MigrationReport Build(DomainDraft draft)
     {
         DomainDraft baseline = draft.Baseline ?? new DomainDraft();
@@ -35,6 +42,9 @@ public class MigrationReportService : IMigrationReportService
     /// <summary>
     /// Intents added, removed, or reworded.
     /// </summary>
+    /// <param name="draft">The domain as it stands now.</param>
+    /// <param name="baseline">The domain as it stood at import.</param>
+    /// <param name="entries">The report under construction — findings are appended, never returned.</param>
     private static void CompareIntents(DomainDraft draft, DomainDraft baseline, List<MigrationEntry> entries)
     {
         foreach (IntentDraft intent in draft.Intents.Where(i => !string.IsNullOrWhiteSpace(i.Name)))
@@ -64,6 +74,9 @@ public class MigrationReportService : IMigrationReportService
     /// <summary>
     /// Agents added or reworded, and every toolkit inside them.
     /// </summary>
+    /// <param name="draft">The domain as it stands now.</param>
+    /// <param name="baseline">The domain as it stood at import.</param>
+    /// <param name="entries">The report under construction — findings are appended, never returned.</param>
     private static void CompareAgents(DomainDraft draft, DomainDraft baseline, List<MigrationEntry> entries)
     {
         foreach (AgentDraft agent in draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)))
@@ -95,6 +108,11 @@ public class MigrationReportService : IMigrationReportService
     /// <summary>
     /// One agent's toolkit, with the signature comparison the compiled half depends on.
     /// </summary>
+    /// <param name="agent">The agent as it stands now.</param>
+    /// <param name="was">The same agent at baseline, or <c>null</c> if the agent itself is new — in
+    /// which case every tool it declares is reported as new too, folded into the agent's own entry
+    /// rather than repeated per tool (see the <c>was is not null</c> guard below).</param>
+    /// <param name="entries">The report under construction — findings are appended, never returned.</param>
     private static void CompareTools(AgentDraft agent, AgentDraft? was, List<MigrationEntry> entries)
     {
         List<ToolDraft> before = was?.Tools ?? [];
@@ -134,6 +152,9 @@ public class MigrationReportService : IMigrationReportService
     /// <summary>
     /// Renders the report as the <c>MIGRATION.md</c> in the archive.
     /// </summary>
+    /// <param name="draft">The domain the report is about — read here only for <see cref="DomainDraft.Baseline"/>,
+    /// to say what the comparison was against.</param>
+    /// <param name="entries">The findings <see cref="Build"/> collected, already ordered by cost to act on.</param>
     private static string Render(DomainDraft draft, IReadOnlyList<MigrationEntry> entries)
     {
         StringBuilder sb = new StringBuilder();
@@ -197,6 +218,12 @@ public class MigrationReportService : IMigrationReportService
     /// <summary>
     /// A tool's parameter list, exactly as the generated declaration will render it.
     /// </summary>
+    /// <remarks>
+    /// Kept independent of <see cref="CodeEmitService"/>'s own signature rendering rather than
+    /// sharing it: this one exists purely to compare two Drafts as strings, and coupling it to the
+    /// emitter would make an unrelated formatting change there silently start firing (or silently
+    /// stop firing) signature-changed findings here.
+    /// </remarks>
     private static string Signature(ToolDraft tool) =>
         string.Join(", ", tool.Parameters
             .Where(p => !string.IsNullOrWhiteSpace(p.Name))
@@ -208,9 +235,16 @@ public class MigrationReportService : IMigrationReportService
     private static string Prose(AgentDraft agent) =>
         string.Join("", agent.Target, agent.Instructions, agent.Personality, agent.Formatting);
 
+    /// <summary>
+    /// Finds an intent by name, case-insensitively — the same lookup the classifier is indifferent
+    /// to casing for.
+    /// </summary>
     private static IntentDraft? Find(List<IntentDraft> intents, string? name) =>
         intents.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Finds an agent by its intent id, case-insensitively.
+    /// </summary>
     private static AgentDraft? Find(List<AgentDraft> agents, string? id) =>
         agents.FirstOrDefault(a => string.Equals(a.ID, id, StringComparison.OrdinalIgnoreCase));
 }

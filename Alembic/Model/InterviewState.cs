@@ -73,12 +73,6 @@ public enum InterviewPass
 public sealed class InterviewState
 {
     /// <summary>
-    /// Somewhere for a tool called before the map exists to write, so a stray call is a wasted call
-    /// rather than a crash.
-    /// </summary>
-    private readonly IntentDraft nowhere = new();
-
-    /// <summary>
     /// Which pass is running.
     /// </summary>
     public InterviewPass Pass { get; set; } = InterviewPass.DomainMapper;
@@ -156,7 +150,16 @@ public sealed class InterviewState
     /// <summary>
     /// The intent being built: the map entry the interview stands on.
     /// </summary>
-    public IntentDraft Intent => At >= 0 && At < Map.Count ? Map[At] : nowhere;
+    /// <remarks>
+    /// Backed by the C# 13 <c>field</c> keyword rather than a named field: while <see cref="At"/> is
+    /// -1 (the map itself is still being drawn) there is no entry to index into, so the getter falls
+    /// back to the auto-property's own backing store — initialised once below to a fresh
+    /// <see cref="IntentDraft"/> — instead of throwing or returning <c>null</c>.
+    /// </remarks>
+    public IntentDraft Intent
+    {
+        get => At >= 0 && At < Map.Count ? Map[At] : field;
+    } = new();
 
     /// <summary>
     /// The agent being built for that intent. A fresh one each time the interview moves down the map.
