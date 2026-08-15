@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Standalone project, sibling of Alembic/ rather than a member of Alembic.slnx — the same
+    positioning PromptHarness takes relative to Morgana, and for the same reason: this is an
+    instrument pointed AT Alembic, not a part of it.
+
+    What it tests is deliberately narrow and never what PromptHarness tests. PromptHarness boots a
+    real Morgana host and asks "does the domain Alembic produced behave correctly at runtime" —
+    Alembic itself can never answer that, has no channel and no way to, and neither does this
+    project. AlembicHarness stays entirely on Alembic's own side of that boundary: it drives
+    IInterviewService with a scripted "domain expert" the same way a client's own typing would, and
+    asks "did Alembic's mapping, its interview conduct across passes, and its finalization emit —
+    Draft validation, the archive, the migration report — do what they are supposed to do." A
+    domain it interviews is a fixture chosen to exercise Alembic's own doctrine, never a product in
+    its own right.
+  -->
+
+  <PropertyGroup>
+    <!-- Common Build Settings -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!-- Version Information -->
+    <Version>0.28.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+
+    <!-- Package Metadata -->
+    <Title>AlembicHarness</Title>
+    <PackageId>AlembicHarness</PackageId>
+    <Authors>Marco De Salvo</Authors>
+    <Company>Marco De Salvo</Company>
+    <Copyright>Marco De Salvo</Copyright>
+    <Product>Morgana</Product>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
+
+    <Description>
+    AlembicHarness is the non-regression harness for Alembic itself — the sibling PromptHarness
+    is for Morgana. It drives IInterviewService with a scripted domain expert against fixture
+    domains chosen to exercise Alembic's own doctrine, and asserts on what Alembic's mapping,
+    interview conduct and finalization emit actually produce. It never tests the runtime behaviour
+    of a domain Alembic produced — that question belongs to PromptHarness, and Alembic has no
+    channel to answer it with in the first place.
+    </Description>
+
+    <!--
+      Same UserSecretsId as Alembic itself: the harness owns no secrets of its own and reads
+      provider, tiers and API keys from the very store that configures the Alembic under test, so
+      the suite always runs against whatever LLM Alembic is currently wired to.
+    -->
+    <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="3.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.*" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The one dependency that matters: Alembic's own services, driven in-process. -->
+    <ProjectReference Include="..\Alembic\Alembic.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Alembic\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
