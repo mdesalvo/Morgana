@@ -155,9 +155,13 @@
             <div class="panel">
                 <h2>Code Generation</h2>
                 <p class="muted">
-                    One archive: <code>agents.json</code>, the generated <code>*.g.cs</code>, a
-                    working mock per toolkit, the migration report and the save file. The mocks are
-                    written by a model, one call per agent, so this takes a moment.
+                    One archive: a ready .NET solution containing <code>agents.json</code>,
+                    the generated <code>*.g.cs</code>, a working mock per toolkit, the migration report
+                    and the save file, already inside a <code>.csproj</code>/<code>.slnx</code> that
+                    builds as it is. Unzip it, <code>dotnet build</code>, drop the assembly into your
+                    Morgana's plugins directory, and talk to the domain you just
+                    distilled on the first run. The mocks are written by AI, one call per agent,
+                    so this takes a moment.
                 </p>
 
                 <details class="harness-section">
@@ -166,7 +170,7 @@
                     <p>
                         <label>
                             <input type="checkbox" @bind="includeScenarios" />
-                            Include the starter scenarios
+                            Include the harness scenarios
                         </label>
                         <span class="muted">
                             &mdash; one more call per agent. An agent's whole behavior lives in the
