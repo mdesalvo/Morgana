@@ -90,6 +90,9 @@ builder.Services.AddScoped<IDraftStateService, DraftStateService>();
 builder.Services.AddSingleton<IAlembicPromptService, AlembicPromptService>();
 builder.Services.AddScoped<IInterviewService, InterviewService>();
 
+// - ISolutionEmitService: the .csproj and .slnx the generated sources live in, so the archive is a
+//   buildable project on arrival rather than loose files the client shelters inside one of their
+//   own first. Deterministic template, same discipline as ICodeEmitService, one level up.
 // - ICodeEmitService: the deterministic half of the generated C#. Same Draft, same bytes, so a
 //   re-run against an evolved domain diffs to exactly the change and nothing else — which is the
 //   only thing that makes a regenerated file safe to overwrite.
@@ -102,6 +105,7 @@ builder.Services.AddScoped<IInterviewService, InterviewService>();
 // - IAssetPackageService: one archive, because the pieces are only correct together — an
 //   agents.json whose toolkit has moved on from the C# beside it is a startup failure.
 
+builder.Services.AddSingleton<ISolutionEmitService, SolutionEmitService>();
 builder.Services.AddSingleton<ICodeEmitService, CodeEmitService>();
 builder.Services.AddSingleton<IToolMockService, ToolMockService>();
 builder.Services.AddSingleton<IMigrationReportService, MigrationReportService>();

@@ -168,8 +168,22 @@ what changed against the uploaded `agents.json`.
 
 The archive is one download because the pieces are only correct together: an `agents.json` whose
 toolkit has moved on from the C# beside it is a startup failure, and two downloads is an invitation
-to take one of them. Inside: the configuration, the generated sources, a working mock per toolkit,
-`MIGRATION.md`, `README.md` carrying the two-halves convention, and the interview's save file.
+to take one of them. Inside: a ready `.csproj`/`.slnx`, the configuration, the generated sources, a
+working mock per toolkit, `MIGRATION.md`, `README.md` carrying the two-halves convention, and the
+interview's save file.
+
+`ISolutionEmitService` writes the project and solution, the same string-template discipline as
+`ICodeEmitService` applied one level up. Without it the archive was loose sources — a client had to
+create a class library, add the `Morgana.AI` reference and embed `agents.json` by hand before
+anything built, work Alembic already knows the answer to. The `.csproj` references `Morgana.AI` and
+`Morgana.Contracts` by `PackageReference`, both pinned to whichever build this Alembic is running
+against (read off its own assemblies, never restated by hand where it would drift); `Morgana.Contracts`
+is named explicitly rather than left to arrive transitively, because `QuickReply`, `RichCard` and the
+rest of the wire contracts are types a tool body or a Formatting-shaped reply may want to construct
+directly, and a client should see and navigate to them, not discover them only when the compiler
+resolves them. The one thing this cannot see or guarantee is a NuGet feed on the client's machine
+that resolves those packages — where there is none yet, the archive still travels intact to a machine
+that has one.
 
 The split between `ICodeEmitService` and `IToolMockService` is the same split the file names carry.
 The emit is **string templates and nothing else** — no Roslyn — so the same Draft emits the same
@@ -193,7 +207,18 @@ like success and is not is the worst thing to hand a client at the end of an int
 
 Verified end to end against the shipped `Examples` domain: import → emit → unzip into a class library
 referencing `Morgana.AI` → **`dotnet build`, 0 errors**, four agents and three toolkits with 856 lines
-of mock behind them.
+of mock behind them. That verification predates `ISolutionEmitService` and still holds for the C# it
+covers.
+
+The generated `.csproj`/`.slnx` themselves were verified separately, against a real feed rather than
+against this working copy: `Examples`'s own sources and `agents.json`, dropped beside a `.csproj` of
+the exact shape `SolutionEmitService` emits but pinned to the newest `Morgana.AI` and
+`Morgana.Contracts` actually published to nuget.org — restored and built clean from nothing already
+on disk. `PackageVersion` pins whatever this very Alembic is itself built against, read off its own
+assemblies rather than restated anywhere by hand; the day that build is also the newest one published,
+the two verifications are the same verification. Until then the mechanism is proven and only that one
+version number has nothing to resolve against yet — never a fact worth a specific number in this
+file, since the gap between them is exactly the release lag and closes on its own.
 
 ### The migration report
 

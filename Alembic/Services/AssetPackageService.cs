@@ -29,6 +29,7 @@ public class AssetPackageService : IAssetPackageService
 
     private readonly IDraftExportService draftExportService;
     private readonly IDraftSerializationService draftSerializationService;
+    private readonly ISolutionEmitService solutionEmitService;
     private readonly ICodeEmitService codeEmitService;
     private readonly IToolMockService toolMockService;
     private readonly IScenarioAuthorService scenarioAuthorService;
@@ -41,6 +42,7 @@ public class AssetPackageService : IAssetPackageService
     public AssetPackageService(
         IDraftExportService draftExportService,
         IDraftSerializationService draftSerializationService,
+        ISolutionEmitService solutionEmitService,
         ICodeEmitService codeEmitService,
         IToolMockService toolMockService,
         IScenarioAuthorService scenarioAuthorService,
@@ -49,6 +51,7 @@ public class AssetPackageService : IAssetPackageService
     {
         this.draftExportService = draftExportService;
         this.draftSerializationService = draftSerializationService;
+        this.solutionEmitService = solutionEmitService;
         this.codeEmitService = codeEmitService;
         this.toolMockService = toolMockService;
         this.scenarioAuthorService = scenarioAuthorService;
@@ -76,6 +79,12 @@ public class AssetPackageService : IAssetPackageService
             await WriteAsync(archive, "alembic-draft.json", Encoding.UTF8.GetString(draftSerializationService.Serialize(draft)), progress, cancellationToken);
             await WriteAsync(archive, "MIGRATION.md", migrationReportService.Build(draft).Markdown, progress, cancellationToken);
             await WriteAsync(archive, "README.md", Readme, progress, cancellationToken);
+
+            // The project and solution the generated sources live in. Their absence used to mean
+            // the archive was loose files the client first had to shelter inside a project of their
+            // own; with them, the same unzip is already `dotnet build` or "open in the IDE".
+            foreach (EmittedFile file in solutionEmitService.Emit(draft))
+                await WriteAsync(archive, file.Path, file.Content, progress, cancellationToken);
 
             foreach (AgentDraft agent in draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)))
             {
@@ -165,6 +174,7 @@ public class AssetPackageService : IAssetPackageService
 
         | Path | Yours or Alembic's |
         |---|---|
+        | `*.csproj` / `*.slnx` | Alembic's. A ready project referencing the `Morgana.AI` package, named after your namespace |
         | `agents.json` | the configuration Morgana loads — intents and agent prose |
         | `Agents/*.g.cs` | Alembic's. Regenerated in full every time |
         | `Tools/*.g.cs` | Alembic's. Attributes, constructor, and one `partial` signature per tool |
@@ -191,10 +201,14 @@ public class AssetPackageService : IAssetPackageService
 
         ## Running it
 
-        1. Drop these into a class library referencing the `Morgana.AI` package.
-        2. Embed `agents.json` as a resource (`<EmbeddedResource Include="agents.json" />`).
-        3. Build it into the directory Morgana scans (`Morgana:Plugins:Directories`, default `plugins`).
-        4. Start Morgana. Startup validates the pairing in both directions, so a mismatch is a
+        Unzip and open the `.slnx`, or `dotnet build` from this folder — the project is already
+        wired to `Morgana.AI` (pinned to the version this archive was built against) and already
+        embeds `agents.json`. This assumes your machine can resolve that package from whatever NuGet
+        feed you deploy Morgana from; if it can't yet, the archive travels intact to one that can.
+
+        1. `dotnet build`.
+        2. Build it into the directory Morgana scans (`Morgana:Plugins:Directories`, default `plugins`).
+        3. Start Morgana. Startup validates the pairing in both directions, so a mismatch is a
            message and not a mystery.
 
         The mocks return plausible data of your domain, so you can talk to your agents on the first
