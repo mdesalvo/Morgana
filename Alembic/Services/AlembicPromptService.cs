@@ -116,10 +116,19 @@ public class AlembicPromptService : IAlembicPromptService
     }
 
     /// <summary>
+    /// The two policies where the exception below applies: their MECHANIC is fixed above the agent,
+    /// but which of a domain's own moments deserve one is not something the framework can know —
+    /// only the interview, having just heard the domain, can say whether a decision point is a
+    /// closed set of actions worth buttons, or a tool's output structured enough to want a card.
+    /// </summary>
+    private static readonly string[] ExpressivenessPolicies = ["QuickReplyDoctrine", "RichCardUsage"];
+
+    /// <summary>
     /// Names the policies already binding on every agent Alembic writes.
     /// </summary>
     /// <remarks>
-    /// Names only. What Alembic has to know is which subjects are settled above the agent, so that
+    /// Names only, for every policy except the two named in <see cref="ExpressivenessPolicies"/>.
+    /// What Alembic has to know for the rest is which subjects are settled above the agent, so that
     /// it writes none of them again; how they are settled is the agent's business at runtime and
     /// not the author's, and the bodies run to some 14 000 characters of turn mechanics Alembic has
     /// no turn to apply them to.
@@ -132,9 +141,32 @@ public class AlembicPromptService : IAlembicPromptService
         if (policies.Count == 0)
             return string.Empty;
 
-        return "ALREADY BINDING on every agent written here, stated above it and with more authority: "
-               + string.Join(", ", policies.Select(p => p.Name))
-               + ". Never write a rule about any of these subjects into an agent's own prose.";
+        string[] silent = [.. policies.Select(p => p.Name).Where(n => !ExpressivenessPolicies.Contains(n))];
+        string[] expressive = [.. policies.Select(p => p.Name).Where(n => ExpressivenessPolicies.Contains(n))];
+
+        StringBuilder sb = new StringBuilder();
+
+        if (silent.Length > 0)
+        {
+            sb.Append("ALREADY BINDING on every agent written here, stated above it and with more authority: ")
+              .Append(string.Join(", ", silent))
+              .Append(". Never write a rule about any of these subjects into an agent's own prose.");
+        }
+
+        if (expressive.Length > 0)
+        {
+            if (sb.Length > 0)
+                sb.Append(' ');
+
+            sb.Append("ALSO ALREADY BINDING, but not silently: ")
+              .Append(string.Join(", ", expressive))
+              .Append(". Their MECHANIC is fixed above the agent and never yours to restate — but which of ")
+              .Append("this domain's own moments earns a closed set of buttons, or a card, is exactly what an ")
+              .Append("agent's own author is expected to say. Where the agent being written has one, name it, ")
+              .Append("in its own Formatting, the way a hand-authored agent already does.");
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>

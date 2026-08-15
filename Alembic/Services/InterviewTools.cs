@@ -247,11 +247,18 @@ public class InterviewTools
     /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
     /// <see cref="FormattingMarker"/>. Declared only in the last pass, <c>AgentFormatter</c>, since
     /// everything else about the agent — the toolkit included — is settled by the time it runs.
+    /// <para>
+    /// The upper bound is wider than a plain presentation rule would need, on purpose: this section
+    /// is also where a quick-reply payload or a per-tool card shape gets named exactly, and a domain
+    /// with several tools each earning one runs well past a handful of sentences to say so precisely
+    /// — the alternative is a vaguer instruction the model has to improvise from at runtime, which is
+    /// exactly what naming the payload here exists to avoid.
+    /// </para>
     /// </remarks>
     public string SetAgentFormatting(string formatting)
     {
         interviewState.Agent.Formatting = Marked(FormattingMarker, formatting);
-        return Shaped("Formatting", formatting, 2, 5);
+        return Shaped("Formatting", formatting, 2, 10);
     }
 
     /// <summary>
