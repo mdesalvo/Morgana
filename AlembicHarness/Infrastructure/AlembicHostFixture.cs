@@ -87,6 +87,8 @@ public sealed class AlembicHostFixture : IAsyncLifetime
             };
         });
 
+        builder.Services.AddSingleton<Judge>();
+
         host = builder.Build();
         return ValueTask.CompletedTask;
     }
