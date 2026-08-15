@@ -5,6 +5,7 @@
 @inject IDraftImportService DraftImportService
 @inject IDraftSerializationService DraftSerializationService
 @inject IDraftStateService DraftStateService
+@inject IInterviewService InterviewService
 
 @*
     The only way an existing domain enters Alembic: there is no filesystem to read from, by design.
@@ -381,7 +382,7 @@
 
                 notices = zipResult.Notices;
                 error = zipResult.Error;
-                DraftStateService.Set(zipResult.Draft);
+                SetDraft(zipResult.Draft);
                 return;
             }
 
@@ -398,7 +399,7 @@
 
             notices = result.Notices;
             error = result.Error;
-            DraftStateService.Set(result.Draft);
+            SetDraft(result.Draft);
         }
         catch (IOException ex)
         {
@@ -431,6 +432,26 @@
             return;
         }
 
+        SetDraft(draft);
+    }
+
+    /// <summary>
+    /// Puts a freshly read Draft in the circuit, and discards any interview already running against
+    /// the one it replaces.
+    /// </summary>
+    /// <remarks>
+    /// <c>InterviewService</c> is Scoped: once a circuit has visited <c>/interview</c>, its
+    /// <c>Current</c> stays set for the rest of the circuit, and that page only ever calls
+    /// <c>StartAsync</c> when it finds none. Without this, a client who had already begun "Distil a
+    /// new domain" and then came back here to import a file instead would land back on the old,
+    /// empty interview — the import would sit in <see cref="DraftStateService"/> but never reach the
+    /// page that reads it, and there would be no way out short of reloading the tab. Abandoning here
+    /// is what makes the next visit to <c>/interview</c> call <c>StartAsync</c> again and pick up
+    /// what was just brought in, sitting included.
+    /// </remarks>
+    private void SetDraft(DomainDraft? draft)
+    {
+        InterviewService.Abandon();
         DraftStateService.Set(draft);
     }
 
