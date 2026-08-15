@@ -38,7 +38,7 @@
             <h2>Domain Validation</h2>
             <p class="muted">What would stop this domain, and what only reading it whole reveals.</p>
 
-            <details class="recap-section" open>
+            <details class="recap-section">
                 <summary>Deterministic checks</summary>
                 <p class="muted">What Morgana would refuse to start on &mdash; reads off the Draft alone, no model involved.</p>
                 @if (findings.Count == 0)
@@ -75,7 +75,7 @@
                 }
             </details>
 
-            <details class="recap-section" open>
+            <details class="recap-section">
                 <summary>Coherence</summary>
             <p class="muted">
                 What only reading every agent at once reveals: overlaps, contested ground, values
@@ -225,16 +225,38 @@
 
             @if (recap is not null)
             {
+                @* Two fenced blocks, split for the same reason they are fenced at all: they are
+                   read at two different moments of standing (Morgana's, then this agent's), and a
+                   client weighing one prose against the other should never have to find the seam
+                   by scrolling. The split point is the domain fence ComposeAgentInstructionsAsync
+                   always writes — see SplitSystemPrompt. *@
+                (string frameworkPrompt, string agentPrompt) = SplitSystemPrompt(recap.SystemPrompt);
+
                 <div class="nested-recap">
-                    <details class="recap-section" open>
+                    <details class="recap-section">
                         <summary>System prompt</summary>
-                        <p class="muted">Read once, before anything else in the turn.</p>
-                        <pre class="prompt">@recap.SystemPrompt</pre>
+                        <p class="muted">
+                            Morgana's own layer, read once before anything else and binding on every
+                            agent of hers &mdash; Alembic did not write a word of this and cannot: it
+                            is embedded in the Morgana.AI this Alembic was built against, and
+                            customising it means forking the framework, not editing this domain.
+                        </p>
+                        <pre class="prompt">@frameworkPrompt</pre>
+                    </details>
+
+                    <details class="recap-section">
+                        <summary>Agent prompt</summary>
+                        <p class="muted">
+                            This is Alembic's own work: what this agent's interview wrote, subordinate
+                            to the framework above on every point. If something here reads wrong, this
+                            is the half you can still change &mdash; go back into the interview.
+                        </p>
+                        <pre class="prompt">@agentPrompt</pre>
                     </details>
 
                     @if (recap.Tools.Count > 0)
                     {
-                        <details class="recap-section" open>
+                        <details class="recap-section">
                         <summary>Toolkit</summary>
                         @foreach (ToolRecap tool in recap.Tools)
                         {
@@ -350,10 +372,21 @@
     /// coherence pass is never run here, since it costs a model call and the client has not asked
     /// for it yet.
     /// </summary>
-    protected override void OnInitialized()
+    /// <remarks>
+    /// The composed-prompts panel opens on the domain's first agent rather than empty, so the
+    /// evidence a client came here to read is already on screen instead of behind a first click —
+    /// <see cref="SelectAsync"/> does the one composition this costs, same as picking it by hand
+    /// would.
+    /// </remarks>
+    protected override async Task OnInitializedAsync()
     {
-        if (DraftStateService.Current is { } draft)
-            findings = DraftValidationService.Validate(draft);
+        if (DraftStateService.Current is not { } draft)
+            return;
+
+        findings = DraftValidationService.Validate(draft);
+
+        if (draft.Agents.FirstOrDefault() is { } first)
+            await SelectAsync(first);
     }
 
     /// <summary>
@@ -370,6 +403,34 @@
         applyResults.Clear();
         try { coherence = await CoherenceService.ReviewAsync(draft, resolvedThisSitting); }
         finally { isReviewing = false; }
+    }
+
+    /// <summary>
+    /// The literal <c>ConfigurationPromptComposerService</c> writes to open the domain layer — see
+    /// its <c>DomainLayerHeader</c>. Duplicated here rather than exposed by the framework because
+    /// this is a display-only seam: nothing downstream of the model ever needs the two layers apart,
+    /// only this panel does, and the marker is fixed in code on both sides of the reference (the
+    /// framework's own remarks call the fences "glue... not domain-tunable prose", so it does not
+    /// move without the framework's prompt shape moving with it).
+    /// </summary>
+    private const string DomainLayerMarker = "======== DOMAIN AGENT";
+
+    /// <summary>
+    /// Splits a composed system prompt at the domain fence into Morgana's own layer and this
+    /// agent's, so the panel can show each on its own — read at two different moments of the turn,
+    /// as explained where they are rendered.
+    /// </summary>
+    /// <returns>
+    /// The framework half and the agent half; if the marker is not found (a composer from a build
+    /// this page was never tested against), everything falls back into the framework half rather
+    /// than silently dropping text — the client still sees the whole prompt, just not split.
+    /// </returns>
+    private static (string Framework, string Agent) SplitSystemPrompt(string systemPrompt)
+    {
+        int index = systemPrompt.IndexOf(DomainLayerMarker, StringComparison.Ordinal);
+        return index < 0
+            ? (systemPrompt, string.Empty)
+            : (systemPrompt[..index].TrimEnd(), systemPrompt[index..].TrimEnd());
     }
 
     /// <summary>
