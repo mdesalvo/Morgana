@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Alembic.Interfaces;
 using Alembic.Model;
 using Microsoft.Extensions.AI;
@@ -101,7 +102,25 @@ public class ToolMockService : IToolMockService
                 + "reasoning and no text. That is what a MaxOutputTokens too small for a source file produces — Alembic's "
                 + "own tier declares a generous one for exactly this reason, so check what the deployment configures.");
 
-        return authored;
+        return StripDuplicateToolAttribute(authored);
     }
 
+    /// <summary>
+    /// The <c>[ProvidesToolForIntent]</c> attribute the <c>.g.cs</c> half already carries on this
+    /// same partial class.
+    /// </summary>
+    /// <remarks>
+    /// <c>CodeMocker</c>'s own prompt already tells the model this is a compile error and to write
+    /// no attribute at all — and an observed run still wrote one anyway (<c>CS0579</c>, a duplicate
+    /// attribute across the two partial declarations). Prose that has already failed once empirically
+    /// is not made more reliable by restating it more emphatically; this is the deterministic backstop,
+    /// the same reasoning as <see cref="StreamedCompletion.Unfenced"/> stripping a markdown fence the
+    /// model was equally told not to add.
+    /// </remarks>
+    private static readonly Regex ProvidesToolForIntentLine =
+        new(@"^[ \t]*\[ProvidesToolForIntent\([^\n]*\)\][ \t]*\r?\n", RegexOptions.Multiline | RegexOptions.Compiled);
+
+    /// <inheritdoc cref="ProvidesToolForIntentLine" />
+    private static string StripDuplicateToolAttribute(string source) =>
+        ProvidesToolForIntentLine.Replace(source, string.Empty);
 }
