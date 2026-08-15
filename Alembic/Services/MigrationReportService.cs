@@ -47,7 +47,13 @@ public class MigrationReportService : IMigrationReportService
     /// <param name="entries">The report under construction — findings are appended, never returned.</param>
     private static void CompareIntents(DomainDraft draft, DomainDraft baseline, List<MigrationEntry> entries)
     {
-        foreach (IntentDraft intent in draft.Intents.Where(i => !string.IsNullOrWhiteSpace(i.Name)))
+        // The fallback intent is not on the map and no interview ever authors it — DomainDraft
+        // ensures it exists in every domain, baseline included where the baseline is a real upload,
+        // but a fresh baseline (nothing uploaded this sitting, see the remarks on Build) has none of
+        // its own yet. Reporting it as "Added" would say the interview did something it never did,
+        // to a client who cannot act on it: it needs no plugin registration and no agent answers it.
+        foreach (IntentDraft intent in draft.Intents.Where(i =>
+                     !string.IsNullOrWhiteSpace(i.Name) && !string.Equals(i.Name, DomainDraft.FallbackIntent, StringComparison.OrdinalIgnoreCase)))
         {
             IntentDraft? was = Find(baseline.Intents, intent.Name);
 
@@ -64,7 +70,9 @@ public class MigrationReportService : IMigrationReportService
         }
 
         foreach (IntentDraft gone in baseline.Intents.Where(i =>
-                     !string.IsNullOrWhiteSpace(i.Name) && Find(draft.Intents, i.Name) is null))
+                     !string.IsNullOrWhiteSpace(i.Name)
+                     && !string.Equals(i.Name, DomainDraft.FallbackIntent, StringComparison.OrdinalIgnoreCase)
+                     && Find(draft.Intents, i.Name) is null))
         {
             entries.Add(new MigrationEntry(MigrationKind.Intent, gone.Name!, MigrationChange.Removed,
                 "Removed. Any [HandlesIntent] agent still declaring it fails startup: HandlesIntentAgentRegistryService checks the pairing in both directions."));
