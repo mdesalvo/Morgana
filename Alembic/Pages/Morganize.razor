@@ -97,12 +97,18 @@
                     </tbody>
                 </table>
 
-                <p class="muted">
-                    <strong>Performance</strong> is not an upgrade. The framework reserves it for an
-                    agent whose author declares an existential need for deep reasoning, and there is
-                    no fallback between dies: an agent asking for a die the deployment does not
-                    configure fails startup.
-                </p>
+                <div class="power-notice">
+                    <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M13 2 5 14h6l-1 8 9-13h-6z" />
+                    </svg>
+                    <div>
+                        <strong>Performance is not an upgrade.</strong>
+                        The framework reserves it for an agent whose author declares an <b>existential
+                        need for deep reasoning</b>, and there is no fallback between dies: an agent
+                        asking for a die the deployment does not configure fails startup.
+                    </div>
+                </div>
             </div>
 
             <div class="panel">
@@ -162,8 +168,9 @@
                         Generate PromptHarness
                     </label>
                     <span class="muted">
-                        &mdash; one more call per agent. A domain agent <em>is</em> its prose, and
-                        prose gets edited: these are what will be watching when it does.
+                        &mdash; one more call per agent. An agent's whole behavior lives in the prose
+                        you just built; whenever someone edits it later, these are the test
+                        conversations that get replayed to catch what that edit broke.
                     </span>
                 </p>
 

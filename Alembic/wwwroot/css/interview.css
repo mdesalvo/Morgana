@@ -492,6 +492,14 @@ button.keep {
     font: inherit;
     font-size: 1rem;
     cursor: pointer;
+    appearance: none;
+    box-sizing: border-box;
+    padding: 0.4rem 1.1rem;
+    border-radius: 1.4rem;
+    border: 1px solid var(--alembic-accent);
+    background: rgba(192, 132, 252, 0.16);
+    box-shadow: 0 0 1.4rem rgba(192, 132, 252, 0.25);
+    color: var(--alembic-text);
 }
 
 .journey .domain button.under-way .counted {

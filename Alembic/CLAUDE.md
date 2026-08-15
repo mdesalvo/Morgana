@@ -358,9 +358,11 @@ while they are live. Alembic's only ever ask a **closed** question:
 - Only where the answer set is closed and known to Alembic rather than to the client — in practice
   that is **the answer that adds nothing**: agreement with an inference Alembic has just stated
   back, or that there is nothing to add where it asked whether anything was missing, or whether
-  there is something the agent should never do. Not the framework's vocabulary asked raw: "is this
-  parameter context-scoped?" is a closed question the client cannot answer, which is why scope is
-  inferred rather than offered.
+  there is something the agent should never do, or, on an ordinary domain question whose own wording
+  already names a minimal branch — "just X, or Y too" — the button for X, in the question's own
+  words, since choosing it is the same answer wearing a fourth face: nothing more than what was
+  named. Not the framework's vocabulary asked raw: "is this parameter context-scoped?" is a closed
+  question the client cannot answer, which is why scope is inferred rather than offered.
 - **The text box never closes.** A choice is an offer, never a gate, so the escape is structural
   rather than an extra button. A spent row is shown inert rather than removed: the transcript
   should still say what was offered.
@@ -371,13 +373,17 @@ confirmations, which is the right frequency rather than a shortfall.
 
 Where they do appear they are **required**, and the label has to answer the question as it was put:
 *That's everything* against a positive question, *Nothing missing* against one put the other way,
-*No, nothing like that* where the question was whether the agent should be kept off something. A
-confirming turn is one Alembic asked for its own reasons, and making the client type a sentence to
-agree with work they can already see is charging them for it.
+*No, nothing like that* where the question was whether the agent should be kept off something. Where
+the question named one specific case and asked whether it moves — *should it also hand off a
+complaint like this one* — the label speaks to that case, *No, that stays here too*, never a list the
+question never named: a label answering a different question than the one just asked is a label the
+client cannot trust. A confirming turn is one Alembic asked for its own reasons, and making the
+client type a sentence to agree with work they can already see is charging them for it.
 
 **There is exactly one button, and what it carries is the answer that adds nothing.** That is the
-invariant, not "a confirming turn": agreement and *nothing missing* and *nothing to avoid* are the
-same answer wearing three faces — the client has nothing to contribute this turn — and it is worth
+invariant, not "a confirming turn": agreement, *nothing missing*, *nothing to avoid*, and the named
+minimal branch of an ordinary question are the same answer wearing four faces — the client has
+nothing to contribute this turn — and it is worth
 a button precisely because it is the one answer Alembic already knows the whole of. Everything they
 actually contribute is a sentence only they can write. So the button is a **short circuit**: where
 Alembic has got it right, or where there is genuinely nothing on the other side of the question, the
@@ -434,9 +440,11 @@ The client never writes prose. They answer questions about their work; Alembic w
 configuration and says what it understood. That asymmetry is the whole arrangement, and it is what
 spares a domain expert from having to become a prompt author.
 
-**Every step says where it is before it asks anything**: which agent, by the name its entry carries
-on the map; which section is being settled; and what that section gives the agent. *Starting on
-Billing — its Target first: everything Billing will handle for you.*
+**Every step says where it is before it asks anything**, in one fixed shape rather than a worked
+example the model would otherwise reuse verbatim: *Agent — Step: what this step adds to the agent's
+capabilities.* Filled from the agent's name off the map, the step being settled, and what it adds —
+the same shape whether it is the agent's first step or its fifth, since opening and continuing are
+not worth telling apart.
 
 What earns it is that **the process is Alembic's alone**. The client sees one question on an
 otherwise empty screen: the five steps an agent is built in, and what each hands it, are not on that
@@ -548,7 +556,7 @@ being written, still ahead. The map is not a caption above the journey; it is th
 step and its subject, which is why it is on the rail rather than beside it.
 
 **The rail has the shape of the process, and that shape is a loop.** Two steps happen once —
-`Domain Exploration`, where the map is drawn, and `Domain Finalization`, the finished domain read and
+`Domain Mapping`, where the map is drawn, and `Domain Finalization`, the finished domain read and
 taken away — and the six between them happen again for every entry of that map: `Target`,
 `Personality`, `Toolkit`, `Instructions`, `Formatting`, `Agent Acceptance`. So those six
 are drawn inside a lap: bordered, headed on its edge

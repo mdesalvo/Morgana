@@ -44,9 +44,9 @@ public class AlembicPromptService : IAlembicPromptService
     // merged section by section here, under one set of labels, because the composed prompt must
     // still be the four sections an agent prompt always is: the model sees no seam.
     private const string MorganaLayerHeader =
-        "======== MORGANA — WHOSE VESSEL YOU ARE ========\n" +
+        "======== FENCE: MORGANA — WHOSE VESSEL YOU ARE ========\n" +
         "You are an instrument of Morgana. This is her voice, and it is yours: it is not a description of someone else, and it is not overridable.";
-    private const string MorganaLayerFooter = "======== END OF MORGANA ========";
+    private const string MorganaLayerFooter = "======== END OF FENCE ========";
     private const string AlembicLayerHeader =
         "======== ALEMBIC ========\n" +
         "What follows specialises Morgana's voice for the step of the interview you are conducting right now. It adds that and NOTHING ELSE, and it never contradicts the layer above.";
