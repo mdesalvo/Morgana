@@ -817,6 +817,15 @@ writes the **starting set and no more**: it knows what the agents were designed 
 a first scenario is made of, and nothing about what will actually go wrong, which is every scenario
 after it.
 
+**Running them needs a source checkout of Morgana, not a deployed one.** PromptHarness boots Morgana
+in-process to observe it (`..\Morgana\Morgana.Web` by `ProjectReference`) — unlike the `.csproj` this
+same archive now ships, it is not something a client with only a running Morgana (a container, a
+managed deployment) can point at anything. Making the harness observe a *remote* Morgana instead is a
+real redesign — it would trade the in-process `ActivityListener`/stdout tee for a shared OTLP
+collector and a pre-provisioned JWT issuer — and belongs to PromptHarness, not Alembic. Until that
+exists, the YAML is written and travels regardless, for the client who does have Morgana's source
+beside it.
+
 The split that makes this work is between **which behaviours are worth protecting** and **which
 words say them here**. The first is knowledge about agents, true before any client arrives, and it is
 settled once in this repository as `Harness/Templates/*.yaml`: one file per behavioural use-case,

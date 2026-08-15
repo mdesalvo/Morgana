@@ -162,17 +162,36 @@
                     written by a model, one call per agent, so this takes a moment.
                 </p>
 
-                <p>
-                    <label>
-                        <input type="checkbox" @bind="includeScenarios" />
-                        Generate PromptHarness
-                    </label>
-                    <span class="muted">
-                        &mdash; one more call per agent. An agent's whole behavior lives in the prose
-                        you just built; whenever someone edits it later, these are the test
-                        conversations that get replayed to catch what that edit broke.
-                    </span>
-                </p>
+                <details class="harness-section">
+                    <summary>Generate PromptHarness &mdash; optional</summary>
+
+                    <p>
+                        <label>
+                            <input type="checkbox" @bind="includeScenarios" />
+                            Include the starter scenarios
+                        </label>
+                        <span class="muted">
+                            &mdash; one more call per agent. An agent's whole behavior lives in the
+                            prose you just built; whenever someone edits it later, these are the test
+                            conversations that get replayed to catch what that edit broke.
+                        </span>
+                    </p>
+
+                    <div class="power-notice">
+                        <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                        </svg>
+                        <div>
+                            <strong>PromptHarness requires a local source checkout of Morgana to run.</strong>
+                            It cannot connect to deployed instances, containers, or managed environments.
+                            <ul>
+                                <li><strong>Check this box</strong> ONLY if your team hosts or customizes the Morgana source code directly within your own DevOps.</li>
+                                <li><strong>Leave it unchecked</strong> if you do not have the source code — no scenario files will be written this time. Come back and check it once your setup changes; nothing about the rest of this archive depends on it.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </details>
 
                 @if (package is null && !isBuilding)
                 {
@@ -257,7 +276,7 @@
 
     private string rootNamespace = Alembic.Services.CodeEmitService.DefaultNamespace;
     private byte[]? package;
-    private bool includeScenarios = true;
+    private bool includeScenarios;
     private bool isBuilding;
     private string? error;
 

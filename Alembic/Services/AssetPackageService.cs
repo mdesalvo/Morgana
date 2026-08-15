@@ -218,10 +218,21 @@ public class AssetPackageService : IAssetPackageService
         ## The scenarios
 
         A domain agent is its prose, and prose gets edited. `Scenarios/` holds the starting set:
-        drop the files into PromptHarness's own `Scenarios` directory and add a test that names each
-        one. They are a floor, never a suite — Alembic knows what your agents were designed to do,
-        which is what a first scenario is made of, and knows nothing about what will actually go
-        wrong, which is what every scenario after it is made of.
+        drop the files into PromptHarness's own `Scenarios` directory, point its plugin reference at
+        the project in this archive instead of Morgana's own example, and add a test that names each
+        scenario (one `[InlineData("scenario-id")]` per file, same shape PromptHarness's own tests
+        already use).
+
+        **This needs a source checkout of Morgana, not just a running one.** PromptHarness boots
+        Morgana in-process to observe it — it is not a client of a deployed instance the way this
+        plugin is. Unzipping this archive next to a Morgana you only run (a container, a managed
+        deployment) gives you nothing to point PromptHarness at; you need PromptHarness's own source
+        beside a source checkout of Morgana itself, on the same filesystem. Where that is not your
+        situation, keep the YAML — it costs nothing to hold onto — for the day it is.
+
+        They are a floor, never a suite — Alembic knows what your agents were designed to do, which
+        is what a first scenario is made of, and knows nothing about what will actually go wrong,
+        which is what every scenario after it is made of.
 
         They are **domain scenarios only**, and that is the whole of what they should be. The guard,
         the classifier, quick replies, turn continuation, rich cards, channel degradation, history

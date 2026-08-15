@@ -252,6 +252,10 @@ code {
     margin-top: 0.5rem;
 }
 
+.harness-section {
+    margin-bottom: 1rem;
+}
+
 .severity-error {
     color: var(--alembic-error);
     white-space: nowrap;
