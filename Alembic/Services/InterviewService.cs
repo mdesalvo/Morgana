@@ -587,16 +587,23 @@ public class InterviewService : IInterviewService
 
             // A turn that spent itself entirely on tool calls is legitimate — reading findings or a
             // composed prompt takes a round trip that has nothing to say to the client — and the
-            // question already on the screen simply stands.
+            // question already on the screen simply stands. Only the question text is gated on this:
+            // Choice, Example and Traits are promoted from their Pending* counterparts regardless,
+            // because a turn CAN legitimately call SetChoice (or SetExample, SetTraits) without also
+            // producing new question text — e.g. a validation round that decides the question already
+            // on screen now deserves a shortcut button — and gating all four on the same condition
+            // silently dropped a button the model genuinely offered, with no way for it to reappear on
+            // a later turn either, since PendingChoice is reset to null at the top of every exchange.
             if (asked.Length > 0)
             {
                 interviewState.Question = asked;
-                interviewState.Choice = interviewState.PendingChoice;
-                interviewState.Example = interviewState.PendingExample;
-                interviewState.Traits = [.. interviewState.PendingTraits];
-                interviewState.Chosen = false;
                 interviewState.Exchanges++;
             }
+
+            interviewState.Choice = interviewState.PendingChoice;
+            interviewState.Example = interviewState.PendingExample;
+            interviewState.Traits = [.. interviewState.PendingTraits];
+            interviewState.Chosen = false;
         }
         catch (Exception ex)
         {
