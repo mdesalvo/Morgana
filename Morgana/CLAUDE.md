@@ -37,10 +37,12 @@ Morgana/
   CHANGELOG.md
 ```
 
-Seven solutions, one per unit: `Morgana.slnx` (the framework — Contracts, AI, Web), one per channel,
-`Examples.slnx`, `PromptHarness.slnx` and `Alembic.slnx`. Only the framework's own projects live in
-`Morgana.slnx`; the plugin, the channels, the harness and the workbench each stand alone and reach it
-by project reference. That is what keeps every one of them replaceable by a customer's own.
+Eight solutions, one per unit: `Morgana.slnx` (the framework — Contracts, AI, Web), one per channel,
+`Examples.slnx`, `PromptHarness.slnx`, `Distiller.slnx` and, nested under `Alembic/` for Alembic's
+own non-regression harness, a second `PromptHarness.slnx`. Only the framework's own projects live
+in `Morgana.slnx`; the plugin, the channels, the harnesses and the workbench each stand alone and
+reach it by project reference. That is what keeps every one of them replaceable by a customer's
+own.
 
 ### Morgana.AI (core library)
 

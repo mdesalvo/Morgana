@@ -11,11 +11,13 @@ Grimoire the book, Rune the mark, PromptHarness the rig); an *alembic* is the ap
 distils, which is what this does to a rambling interview.
 
 Alembic lives at `Alembic/` in the repo root, alongside `Morgana/`, `Channels/`, `Examples/` and
-`PromptHarness/`, and has its own solution (`Alembic.slnx`). `Alembic/` is itself a container for
-two projects: `Distiller/`, the workbench described throughout this document, and
-`PromptHarness/`, its own non-regression harness — nested here for tidiness but deliberately
-outside `Alembic.slnx` and not a client of Distiller's own code, the same positioning the
-repo-root `PromptHarness/` has relative to `Morgana/`, which is why it carries the same name.
+`PromptHarness/`. `Alembic/` is itself a container for two projects, each with its own solution,
+the same way the repo-root `PromptHarness/` carries `PromptHarness.slnx` beside `Morgana.slnx`
+rather than joining it: `Distiller/`, the workbench described throughout this document, with
+`Distiller.slnx`; and `PromptHarness/`, its own non-regression harness, with its own
+`PromptHarness.slnx` — nested here for tidiness but deliberately not a client of Distiller's own
+code, the same positioning the repo-root `PromptHarness/` has relative to `Morgana/`, which is why
+it carries the same name.
 
 ## What Alembic is not
 
@@ -949,11 +951,11 @@ disagrees with it about their own business is usually right.
 
 ```
 Alembic/                              # Container: Distiller/ (the workbench) + PromptHarness/ (its own harness)
-  Alembic.slnx                        # Solution (sibling of Morgana.slnx, Cauldron.slnx, …); Distiller only
   Directory.Build.props               # Build settings, version, package metadata — shared by both projects
   Directory.Build.targets             # Regenerates the root .env.versions on each build
   Alembic.Dockerfile                  # Multi-stage container build (root context)
   Distiller/
+    Distiller.slnx                    # Solution (sibling of Morgana.slnx, Cauldron.slnx, …)
     Distiller.csproj                  # .NET 10 Web SDK, ProjectReference → Morgana.AI; AssemblyName Alembic
     appsettings.json                  # Morgana:LLM section (Performance tier only)
     alembic.json                      # Alembic's OWN prose AND tool declarations, embedded resource
@@ -1007,7 +1009,8 @@ Alembic/                              # Container: Distiller/ (the workbench) + 
       interview.css                   #   the interview, whose three states have to agree in one place
     wwwroot/favicon.svg               # The vessel at 16px: belly, neck, spout, one spark
     wwwroot/images/alembic.jpg        # Morgana's alembic — the landing's centrepiece
-  PromptHarness/                      # Non-regression harness for Alembic itself — not a member of Alembic.slnx
+  PromptHarness/                      # Non-regression harness for Alembic itself — own solution, not Distiller's
+    PromptHarness.slnx                # Solution of its own, the same way the repo-root PromptHarness/ has one
     PromptHarness.csproj              # xunit v3, ProjectReference → ..\Distiller\Distiller.csproj
     AssemblyInfo.cs                   # Assembly-wide fixture + serial test collection
     Infrastructure/                   # AlembicHostFixture, InterviewDriver, ArchiveCompiler, Judge

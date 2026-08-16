@@ -1,12 +1,13 @@
 <Project>
 
   <!--
-    Nested at Alembic/PromptHarness/, but not a member of Alembic.slnx and not a client of
-    Distiller's own code — the same positioning the repo-root PromptHarness/ takes relative to
-    Morgana, which is why this project carries the same name: an instrument pointed AT Distiller,
-    not a part of it. Before Alembic/ became a container for Distiller/ and this project, it sat
-    beside Alembic/ as a physical sibling named AlembicHarness; the relationship is unchanged, only
-    where it lives on disk is.
+    Nested at Alembic/PromptHarness/, with its own PromptHarness.slnx rather than joining
+    Distiller's, and not a client of Distiller's own code — the same positioning the repo-root
+    PromptHarness/ takes relative to Morgana (its own PromptHarness.slnx beside Morgana.slnx),
+    which is why this project carries the same name: an instrument pointed AT Distiller, not a
+    part of it. Before Alembic/ became a container for Distiller/ and this project, it sat beside
+    Alembic/ as a physical sibling named AlembicHarness; the relationship is unchanged, only where
+    it lives on disk is.
 
     What it tests is deliberately narrow and never what the repo-root PromptHarness tests. That one
     boots a real Morgana host and asks "does the domain Alembic produced behave correctly at
