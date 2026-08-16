@@ -246,11 +246,15 @@ Watch it distil a real domain end to end, then watch that exact domain running l
     <th>Morgana — "Bistro Luna", live</th>
   </tr>
   <tr>
-    <td>
-      <video src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/alembic.webm" controls="controls" width="100%"></video>
+    <td align="center">
+      <a href="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/alembic.webm">
+        <img src="https://img.shields.io/badge/%E2%96%B6-Watch_the_distillation-9f7aea?style=for-the-badge" alt="Watch: Alembic distilling Bistro Luna"/>
+      </a>
     </td>
-    <td>
-      <video src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/morgana.webm" controls="controls" width="100%"></video>
+    <td align="center">
+      <a href="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/morgana.webm">
+        <img src="https://img.shields.io/badge/%E2%96%B6-Watch_it_live-9f7aea?style=for-the-badge" alt="Watch: Morgana running Bistro Luna live"/>
+      </a>
     </td>
   </tr>
 </table>
