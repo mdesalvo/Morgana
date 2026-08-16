@@ -19,7 +19,9 @@ namespace PromptHarness.Tests;
 /// reflects the doctrine, and either way is worth seeing named, not folded into a single broad
 /// "does this look right" question a judge could pass by being right about only one section.
 /// </remarks>
-public sealed class DoctrineTests : IClassFixture<BistroLunaInterviewFixture>
+[Collection(BistroLunaCollection.Name)]
+[Trait("Stage", "Finalization")]
+public sealed class DoctrineTests
 {
     private readonly BistroLunaInterviewFixture interviewed;
     private AgentDraft Agent => interviewed.Draft.Agents[0];

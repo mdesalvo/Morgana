@@ -11,6 +11,12 @@ namespace PromptHarness.Tests;
 /// Tests Alembic's <c>DomainMapper</c> pass alone: does a scripted domain expert's description of
 /// their work come back as a well-formed map, before any agent exists.
 /// </summary>
+/// <remarks>
+/// Deliberately outside <see cref="Fixtures.BistroLunaCollection"/>: this pass alone needs nothing
+/// past its own two-turn script, and joining the collection would buy it nothing but a wait for a
+/// full interview it never reads.
+/// </remarks>
+[Trait("Stage", "Mapping")]
 public sealed class MappingTests
 {
     private readonly AlembicHostFixture fixture;

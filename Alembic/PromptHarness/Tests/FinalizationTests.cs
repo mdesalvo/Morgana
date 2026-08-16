@@ -9,8 +9,8 @@ namespace PromptHarness.Tests;
 
 /// <summary>
 /// Tests Alembic's finalization step — deterministic validation and the emitted archive — against
-/// the Draft one Bistro Luna interview leaves behind, shared across every test here by
-/// <see cref="BistroLunaInterviewFixture"/>.
+/// the Draft one Bistro Luna interview leaves behind, shared with every other class in
+/// <see cref="BistroLunaCollection"/> rather than driven again here.
 /// </summary>
 /// <remarks>
 /// This is the layer that would have caught, on its own and without a human noticing anything at
@@ -19,7 +19,9 @@ namespace PromptHarness.Tests;
 /// <c>[ProvidesToolForIntent]</c> attribute breaking the build. Both are asserted here directly, by
 /// name, so neither can regress silently.
 /// </remarks>
-public sealed class FinalizationTests : IClassFixture<BistroLunaInterviewFixture>
+[Collection(BistroLunaCollection.Name)]
+[Trait("Stage", "Finalization")]
+public sealed class FinalizationTests
 {
     private readonly BistroLunaInterviewFixture interviewed;
 

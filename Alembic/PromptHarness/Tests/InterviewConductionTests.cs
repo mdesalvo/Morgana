@@ -1,36 +1,37 @@
-using Distiller.Interfaces;
 using Distiller.Model;
 using PromptHarness.Fixtures;
 using PromptHarness.Infrastructure;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace PromptHarness.Tests;
 
 /// <summary>
 /// Tests Alembic's full interview conduct — every pass, for the one agent Bistro Luna's map
-/// produces — against the Draft it leaves behind.
+/// produces — against the Draft the shared <see cref="BistroLunaInterviewFixture"/> leaves behind.
 /// </summary>
+/// <remarks>
+/// Used to drive its own separate run through <c>InterviewDriver.RunFullAsync</c>, on top of the
+/// identical run <see cref="DoctrineTests"/> and <see cref="FinalizationTests"/> each drove through
+/// their own <c>BistroLunaInterviewFixture</c> — three live, ~15-turn interviews for the one Draft
+/// this suite actually needs. All three now read <see cref="BistroLunaCollection"/>'s single shared
+/// instance instead.
+/// </remarks>
+[Collection(BistroLunaCollection.Name)]
+[Trait("Stage", "Interview")]
 public sealed class InterviewConductionTests
 {
-    private readonly AlembicHostFixture fixture;
+    private readonly BistroLunaInterviewFixture interviewed;
 
-    public InterviewConductionTests(AlembicHostFixture fixture) => this.fixture = fixture;
+    public InterviewConductionTests(BistroLunaInterviewFixture interviewed) => this.interviewed = interviewed;
 
     [Fact]
-    public async Task Bistro_Luna_completes_with_every_section_settled()
+    public void Bistro_Luna_completes_with_every_section_settled()
     {
-        using IServiceScope scope = fixture.NewScope();
-        IInterviewService interview = scope.ServiceProvider.GetRequiredService<IInterviewService>();
-        IDraftStateService draftState = scope.ServiceProvider.GetRequiredService<IDraftStateService>();
-
-        DrivenInterview driven = await InterviewDriver.RunFullAsync(interview, BistroLunaFixture.FullScript());
-
+        DrivenInterview driven = interviewed.Driven;
         Assert.Null(driven.FinalState.Error);
 
-        DomainDraft? draft = draftState.Current;
-        Assert.True(draft is not null, $"No Draft was produced.\n{driven}");
-        Assert.True(draft!.Agents.Count == 1, $"Expected exactly one agent, found {draft.Agents.Count}.\n{driven}");
+        DomainDraft draft = interviewed.Draft;
+        Assert.True(draft.Agents.Count == 1, $"Expected exactly one agent, found {draft.Agents.Count}.\n{driven}");
 
         AgentDraft agent = draft.Agents[0];
 
