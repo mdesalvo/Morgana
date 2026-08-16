@@ -429,7 +429,7 @@
         <div class="pillar">
           <div class="icon">&#x1F5FA;</div>
           <h4>The Interview</h4>
-          <p>C# owns the facts, the model owns the conducting. A domain-mapping pass turns the client's own words into intents, then four passes per agent build its prose incrementally, each reading back only what is already settled.</p>
+          <p>C# owns the facts, the model owns the conducting. A domain-mapping pass turns the client's own words into intents, then five passes per agent build its prose incrementally, each reading back only what is already settled.</p>
         </div>
         <div class="pillar">
           <div class="icon">&#x2705;</div>
@@ -439,7 +439,7 @@
         <div class="pillar">
           <div class="icon">&#x1F4E6;</div>
           <h4>Turnkey Emit</h4>
-          <p>One archive: a ready .csproj/.slnx, generated <code>X.g.cs</code> sources split from a client-owned <code>X.cs</code> half, a working LLM-authored mock per toolkit, and an unconditional migration report.</p>
+          <p>One archive: a ready .csproj/.slnx, generated <code>AgentX.g.cs</code> sources split from a client-owned <code>AgentX.cs</code> half, a working LLM-authored mock per toolkit, and an unconditional migration report.</p>
         </div>
         <div class="pillar">
           <div class="icon">&#x1F9EA;</div>
@@ -474,7 +474,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="the-interview">
       <h2>The Interview</h2>
-      <p>A domain is a configuration of two halves &mdash; <code>Intents</code> and the <code>Agents</code> that answer them one each &mdash; so the interview opens on the half that comes first in every sense. Only then does it walk the map, four passes per entry, until every intent has its agent. Each pass is a <strong>fresh agent and a fresh session</strong>: what crosses the boundary is the configuration, read back as settled fact, never the conversation replayed.</p>
+      <p>A domain is a configuration of two halves &mdash; <code>Intents</code> and the <code>Agents</code> that answer them one each &mdash; so the interview opens on the half that comes first in every sense. Only then does it walk the map, five passes per entry, until every intent has its agent. Each pass is a <strong>fresh agent and a fresh session</strong>: what crosses the boundary is the configuration, read back as settled fact, never the conversation replayed.</p>
 
       <table>
         <thead><tr><th>Pass</th><th>Runs</th><th>Settles</th></tr></thead>
@@ -542,8 +542,8 @@
       <table>
         <thead><tr><th>File</th><th>Owner</th><th>Rule</th></tr></thead>
         <tbody>
-          <tr><td><code>X.g.cs</code></td><td>Alembic</td><td>Attributes, constructor, <code>partial</code> signatures &mdash; <strong>always overwritten</strong></td></tr>
-          <tr><td><code>X.cs</code></td><td>The client</td><td>The working mock body, then the client's real integration &mdash; <strong>written once, never touched again</strong></td></tr>
+          <tr><td><code>AgentX.g.cs</code></td><td>Alembic</td><td>Attributes, constructor, <code>partial</code> signatures &mdash; <strong>always overwritten</strong></td></tr>
+          <tr><td><code>AgentX.cs</code></td><td>The client</td><td>The working mock body, then the client's real integration &mdash; <strong>written once, never touched again</strong></td></tr>
         </tbody>
       </table>
 
@@ -573,7 +573,7 @@
       <ul>
         <li>A ready <code>.csproj</code> / <code>.slnx</code>, referencing <code>Morgana.AI</code> and <code>Morgana.Contracts</code> by <code>PackageReference</code>, pinned to the exact build Alembic itself runs against</li>
         <li>The domain configuration, <code>agents.json</code>, embedded as a resource</li>
-        <li>Generated sources following the <code>X.g.cs</code> / <code>X.cs</code> split, one pair per agent and per toolkit</li>
+        <li>Generated sources following the <code>AgentX.g.cs</code> / <code>AgentX.cs</code> split, one pair per agent and per toolkit</li>
         <li>A working, LLM-authored <strong>mock</strong> per toolkit &mdash; not a stub &mdash; so the client can talk to their agent on the first run and hear whether the interview's prose is right</li>
         <li>An unconditional <strong>migration report</strong>, diffing the domain against its own baseline &mdash; greenfield included, because a report that only appears when something is wrong is a report nobody has learned to read on the day it matters</li>
         <li><code>README.md</code> (carrying the two-halves convention), <code>MIGRATION.md</code>, and the interview's own save file</li>
