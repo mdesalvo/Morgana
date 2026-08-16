@@ -234,6 +234,29 @@ Some information, though, is meant to travel. A customer code given to BillingAg
 
 Conversations survive restarts and agent handoffs without losing this context. Users always see one coherent conversation, even when several specialized agents quietly took turns behind the scenes.
 
+## 🧪 Alembic — the Authoring Workbench
+
+Writing a Morgana domain by hand means writing prompts — a job that shouldn't fall on the person who actually knows the business. **Alembic** turns it into a conversation instead: it interviews a domain expert about their own work and distils the answers into a complete, ready-to-run Morgana domain — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — with no prompt ever authored by hand.
+
+Watch it distil a real domain end to end, then watch that exact domain running live on Morgana through Cauldron:
+
+<table style="border:none;">
+  <tr>
+    <th>Alembic — distilling "Bistro Luna"</th>
+    <th>Morgana — "Bistro Luna", live</th>
+  </tr>
+  <tr>
+    <td>
+      <video src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/alembic.webm" controls="controls" width="100%"></video>
+    </td>
+    <td>
+      <video src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/morgana.webm" controls="controls" width="100%"></video>
+    </td>
+  </tr>
+</table>
+
+Full walkthrough, configuration reference and doctrine in the **[Alembic Handbook](https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Alembic-Handbook.html)**.
+
 ---
 ## 🚀 Quick Start (Docker Hub)
 

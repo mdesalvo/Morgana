@@ -47,6 +47,7 @@ public class SolutionEmitService : ISolutionEmitService
                     <ImplicitUsings>enable</ImplicitUsings>
                     <RootNamespace>{ns}</RootNamespace>
                     <AssemblyName>{ns}</AssemblyName>
+                    <WarningsAsErrors>CS8618</WarningsAsErrors>
                 </PropertyGroup>
 
                 <ItemGroup>
