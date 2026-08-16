@@ -29,13 +29,13 @@ public static class ArchiveCompiler
 {
     /// <summary>
     /// This repository's root, derived from this very file's own compile-time path rather than a
-    /// hardcoded machine path — the harness lives at <c>{repo}/AlembicHarness/Infrastructure/</c>
+    /// hardcoded machine path — the harness lives at <c>{repo}/Alembic/PromptHarness/Infrastructure/</c>
     /// on every checkout, wherever that checkout happens to sit.
     /// </summary>
     private static readonly string RepoRoot = ComputeRepoRoot();
 
     private static string ComputeRepoRoot([CallerFilePath] string here = "") =>
-        Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(here)!)!)!;
+        Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(here)!)!)!)!;
 
     private static readonly string MorganaAIProject =
         Path.Combine(RepoRoot, "Morgana", "Morgana.AI", "Morgana.AI.csproj");
