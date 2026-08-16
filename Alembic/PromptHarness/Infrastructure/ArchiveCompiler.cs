@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
@@ -70,14 +71,18 @@ public static class ArchiveCompiler
         csproj = MorganaContractsPackageReference.Replace(csproj, $"""<ProjectReference Include="{MorganaContractsProject}" />""");
         await File.WriteAllTextAsync(csprojPath, csproj, cancellationToken);
 
-        System.Diagnostics.ProcessStartInfo psi = new("dotnet", "build -v quiet")
+        // UseSharedCompilation=false: this build's ProjectReferences point at live source under
+        // active development, not a restored package — the same machine is liable to have another
+        // build (the IDE, a concurrent test run) touching the very same VBCSCompiler pipe at the
+        // same moment.
+        ProcessStartInfo psi = new("dotnet", "build -v quiet -p:UseSharedCompilation=false")
         {
             WorkingDirectory = dir,
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
 
-        using System.Diagnostics.Process process = System.Diagnostics.Process.Start(psi)!;
+        using Process process = Process.Start(psi)!;
         string stdout = await process.StandardOutput.ReadToEndAsync(cancellationToken);
         string stderr = await process.StandardError.ReadToEndAsync(cancellationToken);
         await process.WaitForExitAsync(cancellationToken);
