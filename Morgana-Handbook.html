@@ -24,32 +24,33 @@
     
       * { margin: 0; padding: 0; box-sizing: border-box; }
     
-      @page {
-        size: A4;
-        margin: 0;
-      }
-    
+      html { -webkit-text-size-adjust: 100%; }
+
       body {
         font-family: 'Inter', sans-serif;
         background: var(--bg-dark);
         color: var(--text-primary);
-        line-height: 1.6;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
+        line-height: 1.65;
+        font-size: 17px;
+        padding: 48px 20px;
       }
-    
+
+      /* Screen-first: each "page" is a comfortably wide, naturally tall card that
+         stacks down the screen — nothing here is sized for a physical sheet of paper,
+         and nothing clips content to force it to fit one. */
       .page {
-        width: 210mm;
-        min-height: 297mm;
-        margin: 0 auto;
-        padding: 18mm 20mm;
+        max-width: 860px;
+        margin: 0 auto 40px;
+        padding: 48px 56px;
         position: relative;
         overflow: hidden;
-        page-break-after: always;
-        background: var(--bg-dark);
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.35);
       }
-      .page:last-child { page-break-after: auto; }
-    
+      .page:last-child { margin-bottom: 0; }
+
       /* Decorative glow orbs */
       .page::before {
         content: '';
@@ -69,9 +70,9 @@
         border-radius: 50%;
         pointer-events: none;
       }
-    
+
       h1, h2, h3 { font-family: 'Cinzel', serif; }
-    
+
       /* ── COVER PAGE ── */
       .cover {
         display: flex;
@@ -79,19 +80,20 @@
         align-items: center;
         justify-content: center;
         text-align: center;
-        min-height: 297mm;
-        padding: 30mm 25mm;
+        min-height: 70vh;
+        padding: 64px 40px;
       }
       .cover-avatar {
-        width: 180px; height: 180px;
-        border-radius: 50%;
+        width: min(100%, 460px);
+        border-radius: 16px;
         border: 3px solid var(--purple-mid);
         box-shadow: 0 0 40px rgba(147,51,234,0.4), 0 0 80px rgba(147,51,234,0.15);
         object-fit: cover;
-        margin-bottom: 28px;
+        aspect-ratio: 1376 / 768;
+        margin-bottom: 32px;
       }
       .cover h1 {
-        font-size: 48px;
+        font-size: 58px;
         font-weight: 700;
         background: linear-gradient(135deg, var(--purple-light), var(--magenta));
         -webkit-background-clip: text;
@@ -99,22 +101,22 @@
         background-clip: text;
         letter-spacing: 6px;
         text-transform: uppercase;
-        margin-bottom: 12px;
+        margin-bottom: 14px;
       }
       .cover .tagline {
-        font-size: 15px;
+        font-size: 19px;
         font-style: italic;
         color: var(--text-secondary);
-        max-width: 420px;
+        max-width: 460px;
         margin-bottom: 40px;
         line-height: 1.7;
       }
       .cover .version-badge {
         display: inline-block;
-        padding: 6px 20px;
+        padding: 7px 22px;
         border: 1px solid var(--purple-mid);
         border-radius: 20px;
-        font-size: 13px;
+        font-size: 15px;
         color: var(--purple-light);
         letter-spacing: 2px;
         margin-bottom: 50px;
@@ -126,21 +128,21 @@
         justify-content: center;
       }
       .cover .stack span {
-        font-size: 11px;
-        padding: 4px 12px;
-        background: var(--bg-card);
+        font-size: 13px;
+        padding: 5px 14px;
+        background: var(--bg-dark);
         border: 1px solid var(--border);
         border-radius: 12px;
         color: var(--text-secondary);
       }
-    
+
       /* ── SECTION HEADERS ── */
       h2 {
-        font-size: 22px;
+        font-size: 28px;
         font-weight: 600;
         color: var(--purple-light);
-        margin-bottom: 16px;
-        padding-bottom: 8px;
+        margin-bottom: 18px;
+        padding-bottom: 10px;
         border-bottom: 1px solid var(--border);
         position: relative;
       }
@@ -151,29 +153,29 @@
         width: 60px; height: 2px;
         background: linear-gradient(90deg, var(--purple-mid), transparent);
       }
-    
+
       h3 {
-        font-size: 16px;
+        font-size: 20px;
         font-weight: 600;
         color: var(--purple-glow);
-        margin: 18px 0 8px 0;
+        margin: 22px 0 10px 0;
       }
-    
-      p { font-size: 12.5px; margin-bottom: 10px; color: var(--text-primary); }
+
+      p { font-size: 17px; margin-bottom: 12px; color: var(--text-primary); }
       .muted { color: var(--text-secondary); }
-    
+
       /* ── PILLAR CARDS ── */
       .pillars {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 14px;
-        margin: 16px 0;
+        gap: 16px;
+        margin: 18px 0;
       }
       .pillar {
-        background: var(--bg-card);
+        background: var(--bg-dark);
         border: 1px solid var(--border);
         border-radius: 10px;
-        padding: 14px 16px;
+        padding: 16px 18px;
         position: relative;
         overflow: hidden;
       }
@@ -184,25 +186,25 @@
         height: 2px;
         background: linear-gradient(90deg, var(--purple-mid), var(--magenta));
       }
-      .pillar .icon { font-size: 22px; margin-bottom: 6px; }
+      .pillar .icon { font-size: 28px; margin-bottom: 8px; }
       .pillar h4 {
         font-family: 'Cinzel', serif;
-        font-size: 13px;
+        font-size: 16px;
         font-weight: 600;
         color: var(--purple-light);
-        margin-bottom: 6px;
+        margin-bottom: 8px;
       }
-      .pillar p { font-size: 12px; color: var(--text-secondary); margin: 0; }
-    
+      .pillar p { font-size: 15px; color: var(--text-secondary); margin: 0; }
+
       /* ── FLOW DIAGRAM ── */
       .flow-box {
-        background: var(--bg-card);
+        background: var(--bg-dark);
         border: 1px solid var(--border);
         border-radius: 10px;
-        padding: 16px 20px;
-        margin: 16px 0;
+        padding: 18px 22px;
+        margin: 18px 0;
         font-family: 'Inter', monospace;
-        font-size: 11.5px;
+        font-size: 15px;
         color: var(--text-secondary);
         line-height: 2;
         text-align: center;
@@ -211,18 +213,18 @@
       .flow-box .arrow { color: var(--purple-mid); font-weight: 600; }
       .flow-box .actor { color: var(--purple-light); font-weight: 500; }
       .flow-box .external { color: var(--magenta); font-weight: 500; }
-    
+
       /* ── CODE BLOCKS ── */
       .code-block {
         background: #0a0818;
         border: 1px solid var(--border);
         border-radius: 8px;
-        padding: 12px 16px;
+        padding: 14px 18px;
         font-family: 'Courier New', monospace;
-        font-size: 11px;
+        font-size: 14px;
         line-height: 1.7;
         color: var(--text-secondary);
-        margin: 10px 0;
+        margin: 12px 0;
         overflow-x: auto;
         white-space: pre;
       }
@@ -230,83 +232,86 @@
       .code-block .string { color: var(--accent-green); }
       .code-block .comment { color: var(--text-muted); }
       .code-block .attr { color: var(--magenta); }
-    
+
       /* ── TABLES ── */
       table {
         width: 100%;
         border-collapse: collapse;
-        margin: 12px 0;
-        font-size: 11.5px;
+        margin: 14px 0;
+        font-size: 15px;
       }
       thead th {
-        background: var(--bg-card);
+        background: var(--bg-dark);
         color: var(--purple-light);
         font-weight: 600;
         text-align: left;
-        padding: 8px 12px;
+        padding: 9px 14px;
         border-bottom: 2px solid var(--purple-deep);
         font-family: 'Cinzel', serif;
-        font-size: 11px;
+        font-size: 13px;
         letter-spacing: 1px;
       }
       tbody td {
-        padding: 7px 12px;
+        padding: 9px 14px;
         border-bottom: 1px solid var(--border);
         color: var(--text-primary);
       }
       tbody tr:nth-child(even) { background: rgba(21,18,40,0.5); }
-    
+
       /* ── LISTS ── */
-      ul { margin: 8px 0; padding-left: 18px; }
+      ul { margin: 10px 0; padding-left: 20px; }
       ul li {
-        font-size: 12px;
+        font-size: 16px;
         color: var(--text-primary);
-        margin-bottom: 5px;
+        margin-bottom: 7px;
       }
       ul li::marker { color: var(--purple-mid); }
-    
+
       /* ── SCREENSHOTS ── */
       .screenshots {
         display: flex;
-        gap: 8px;
-        margin: 14px 0;
+        gap: 10px;
+        margin: 16px 0;
         justify-content: center;
+        flex-wrap: wrap;
       }
       .screenshots img {
         width: 32%;
+        min-width: 200px;
+        flex: 1 1 200px;
         border-radius: 8px;
         border: 1px solid var(--border);
         box-shadow: 0 4px 20px rgba(0,0,0,0.4);
       }
-    
+
       /* ── INFO BOX ── */
       .info-box {
         background: linear-gradient(135deg, rgba(107,33,168,0.15), rgba(217,70,239,0.08));
         border: 1px solid var(--purple-deep);
         border-left: 3px solid var(--purple-mid);
         border-radius: 8px;
-        padding: 12px 16px;
-        margin: 14px 0;
-        font-size: 12px;
+        padding: 14px 18px;
+        margin: 16px 0;
+        font-size: 15.5px;
       }
       .info-box strong { color: var(--purple-light); }
-    
+
       /* ── SECURITY BADGE ROW ── */
       .badge-row {
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
-        margin: 12px 0;
+        margin: 14px 0;
       }
       .badge {
         display: flex;
         align-items: center;
         gap: 6px;
-        background: var(--bg-card);
+        background: var(--bg-dark);
         border: 1px solid var(--border);
         border-radius: 8px;
-        padding: 6px 12px;
-        font-size: 11px;
+        padding: 7px 14px;
+        font-size: 13.5px;
       }
       .badge .dot {
         width: 8px; height: 8px;
@@ -315,19 +320,24 @@
         display: inline-block;
       }
       .badge .dot.warn { background: #facc15; }
-    
+
       /* ── FOOTER ── */
       .page-footer {
-        position: absolute;
-        bottom: 12mm;
-        left: 20mm;
-        right: 20mm;
         display: flex;
         justify-content: space-between;
-        font-size: 9px;
+        font-size: 12px;
         color: var(--text-muted);
         border-top: 1px solid var(--border);
-        padding-top: 8px;
+        margin-top: 24px;
+        padding-top: 10px;
+      }
+
+      @media (max-width: 640px) {
+        body { padding: 24px 12px; }
+        .page { padding: 32px 22px; border-radius: 14px; }
+        .pillars { grid-template-columns: 1fr; }
+        .cover h1 { font-size: 40px; letter-spacing: 3px; }
+        h2 { font-size: 23px; }
       }
     </style>
   </head>
@@ -337,7 +347,7 @@
     <!-- PAGE 1 — COVER                                                         -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page cover">
-      <img src="Channels/Cauldron/wwwroot/images/morgana-animated.gif" class="cover-avatar" alt="Morgana"/>
+      <img src="Channels/Cauldron/Assets/Morgana-Banner.jpg" class="cover-avatar" alt="Morgana"/>
       <h1>Morgana</h1>
       <p class="tagline">A magical witch assistant equipped with an enchanted grimoire powered by AI, yet shaped by you: your agents, your prompts, your tools&hellip;woven into her spells</p>
       <div class="version-badge">HANDBOOK</div>
@@ -443,15 +453,15 @@
       <h3>Authentication Flow</h3>
       <div class="flow-box">
         <span class="actor">Channel</span>
-        <span style="font-size:10px;">(Cauldron <code>iss=cauldron</code> &middot; Grimoire <code>iss=grimoire</code> &middot; Rune <code>iss=rune</code> &mdash; each self-issues JWTs signed with its own shared key)</span>
+        <span style="font-size:14.5px;">(Cauldron <code>iss=cauldron</code> &middot; Grimoire <code>iss=grimoire</code> &middot; Rune <code>iss=rune</code> &mdash; each self-issues JWTs signed with its own shared key)</span>
         <span class="arrow">&rarr;</span><br/>
-        <span style="font-size:10px;">Bearer token in HTTP &amp; SignalR / Webhook</span>
+        <span style="font-size:14.5px;">Bearer token in HTTP &amp; SignalR / Webhook</span>
         <span class="arrow">&rarr;</span><br/>
         <span class="actor">Morgana</span>
-        <span style="font-size:10px;">(peeks <code>iss</code>, looks up the matching <code>Issuers[]</code> entry, validates signature + audience + lifetime; unknown issuers rejected outright)</span>
+        <span style="font-size:14.5px;">(peeks <code>iss</code>, looks up the matching <code>Issuers[]</code> entry, validates signature + audience + lifetime; unknown issuers rejected outright)</span>
       </div>
 
-      <p class="muted" style="font-size:12px; margin-top:10px;">Morgana uses a <strong>per-issuer trust model</strong>: each channel onboards with its own <code>{ Name, SymmetricKey }</code> entry in <code>Morgana:Authentication:Issuers[]</code>, so leaking one channel's key does not compromise the others. The <code>IAuthenticationService</code> extension point also allows deployers to replace JWT with any strategy (API keys, mTLS, OAuth with external IdP) without modifying the application.</p>
+      <p class="muted" style="font-size:15px; margin-top:10px;">Morgana uses a <strong>per-issuer trust model</strong>: each channel onboards with its own <code>{ Name, SymmetricKey }</code> entry in <code>Morgana:Authentication:Issuers[]</code>, so leaking one channel's key does not compromise the others. The <code>IAuthenticationService</code> extension point also allows deployers to replace JWT with any strategy (API keys, mTLS, OAuth with external IdP) without modifying the application.</p>
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
@@ -585,7 +595,7 @@
         { <span class="string">"Name"</span>: <span class="string">"otlp"</span>, <span class="string">"Enabled"</span>: <span class="keyword">true</span>, <span class="string">"Endpoint"</span>: <span class="string">"http://localhost:4317"</span> }
       ]
     }</div>
-      <p class="muted" style="font-size:11px;">Compatible with Jaeger, Grafana Tempo, Azure Monitor, Datadog, and any OTLP-compliant backend.</p>
+      <p class="muted" style="font-size:14.5px;">Compatible with Jaeger, Grafana Tempo, Azure Monitor, Datadog, and any OTLP-compliant backend.</p>
     
       <h2 style="margin-top: 26px;">Building Your Agents</h2>
       <p><strong>Morgana.AI</strong> is also distributed as a <strong>NuGet package</strong>. You build agents as standalone .NET libraries&mdash;no need to fork or modify the Morgana codebase.</p>
@@ -661,11 +671,11 @@
         <img src="Channels/Grimoire/Assets/Morgana-ChattingGRM.jpg" alt="Grimoire Chatting"/>
         <img src="Channels/Grimoire/Assets/Morgana-AgentGRM.jpg" alt="Grimoire Agent"/>
       </div>
-      <p class="muted" style="font-size:12px;">Grimoire is launched interactively (<code>docker compose run --rm --service-ports --use-aliases grimoire</code>, or <code>dotnet run</code> from <code>Channels/Grimoire/</code>) because the Spectre.Console Live UI needs to own the terminal. <code>--use-aliases</code> is mandatory: <code>compose run</code> skips network aliases by default, so without it Morgana's webhook callback to <code>http://grimoire:5004</code> fails DNS resolution.</p>
+      <p class="muted" style="font-size:14px;">Grimoire is launched interactively (<code>docker compose run --rm --service-ports --use-aliases grimoire</code>, or <code>dotnet run</code> from <code>Channels/Grimoire/</code>) because the Spectre.Console Live UI needs to own the terminal. <code>--use-aliases</code> is mandatory: <code>compose run</code> skips network aliases by default, so without it Morgana's webhook callback to <code>http://grimoire:5004</code> fails DNS resolution.</p>
 
       <h3 style="margin-top:18px;">Rune &mdash; TTY / Spectre.Console (poor)</h3>
       <p>Rune is a minimal command-line channel: a Kestrel-hosted console app with a Spectre.Console Live UI (sticky header, streaming-free rendering), exercising the <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) with lowest capability profile</strong> (all rich features off, <code>MaxMessageLength=500</code>). It is the contract surface <code>MorganaChannelAdapter</code> is supposed to degrade toward &mdash; a working proof that the channel abstraction holds, not just a demo.</p>
-      <p class="muted" style="font-size:12px;">Rune is launched interactively (<code>docker compose run --rm --service-ports --use-aliases rune</code>, or <code>dotnet run</code> from <code>Channels/Rune/</code>) because the Spectre.Console Live UI needs to own the terminal. <code>--use-aliases</code> is mandatory: <code>compose run</code> skips network aliases by default, so without it Morgana's webhook callback to <code>http://rune:5003</code> fails DNS resolution.</p>
+      <p class="muted" style="font-size:14px;">Rune is launched interactively (<code>docker compose run --rm --service-ports --use-aliases rune</code>, or <code>dotnet run</code> from <code>Channels/Rune/</code>) because the Spectre.Console Live UI needs to own the terminal. <code>--use-aliases</code> is mandatory: <code>compose run</code> skips network aliases by default, so without it Morgana's webhook callback to <code>http://rune:5003</code> fails DNS resolution.</p>
     
       <h2 style="margin-top: 24px;">Deployment Responsibility Model</h2>
       <p>Morgana draws a clear line between <strong>product responsibilities</strong> and <strong>deployer responsibilities</strong>, making it ready for enterprise deployment without prescribing infrastructure choices.</p>
