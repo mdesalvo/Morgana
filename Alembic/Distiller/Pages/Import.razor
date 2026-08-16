@@ -1,0 +1,538 @@
+@page "/import"
+@using System.Text
+@using System.Text.Json
+@using System.IO.Compression
+@inject IDraftImportService DraftImportService
+@inject IDraftSerializationService DraftSerializationService
+@inject IDraftStateService DraftStateService
+@inject IInterviewService InterviewService
+
+@*
+    The only way an existing domain enters Alembic: there is no filesystem to read from, by design.
+    Two kinds of file arrive through the same control, because to the client they are one gesture —
+    "here is where I am" — and which one it is is decided by reading it, never by its name.
+
+    What the page shows back is the domain, not a "file accepted" message: the client has to be able
+    to see that Alembic understood the same thing Morgana would load. But it shows it as their
+    business, not as the configuration — no scope column, no required/shared flags, no class names.
+    Those are true, and they are Review's business; here they would answer a question nobody asked
+    and bury the only one that matters, which is what to do next.
+
+    So the three things that CAN be done next are the loudest thing on the page, in the same shape
+    as the doorways on the landing. Getting the file back out again bare was tried and dropped: its
+    only reason was proving the round-trip invariant, which automated tests already do without
+    asking a client to click for it, and what it offered duplicated Morganize's fuller archive and
+    the interview's own "Save my work" — a line nobody arrived wanting, kept only for what it once
+    demonstrated to whoever was building this page.
+*@
+
+<div class="alembic-page">
+
+    @if (Draft is null)
+    {
+        <div class="landing-head">
+            <h1>Bring it here</h1>
+            <p class="tagline">A sitting left unfinished, or a domain already at work.</p>
+        </div>
+    }
+
+    <div class="panel">
+        <h2>@(Draft is null ? "The file" : "Bring another")</h2>
+        <InputFile OnChange="OnFileSelectedAsync" accept=".json,.zip" disabled="@isReading" />
+        <p class="muted">
+            An <code>agents.json</code> Morgana already runs, an <code>alembic-draft.json</code> I
+            saved for you last time, or a <code>zip archive</code> I already packaged.
+        </p>
+        @if (isReading)
+        {
+            <p class="muted">Reading&hellip;</p>
+        }
+    </div>
+
+    @if (error is not null)
+    {
+        <div class="panel panel-error">
+            <h2>I could not read it</h2>
+            <p>@error</p>
+        </div>
+    }
+
+    @if (Draft is { } draft)
+    {
+        @*
+            An interview left half-finished is the first thing the client wants to hear about — they
+            closed the tab on it, and it is why they are back.
+        *@
+        @if (Resuming(draft) is { } resuming)
+        {
+            <p class="resuming">@resuming</p>
+        }
+
+        @if (notices.Count > 0)
+        {
+            <ul class="notices">
+                @foreach (string notice in notices)
+                {
+                    <li>@notice</li>
+                }
+            </ul>
+        }
+
+        @if (HasAgents)
+        {
+            @*
+                What came in, as the client's own business, and it leads: this is the evidence the
+                client uploaded a file to see, and it is what "what now" below is a response to. An
+                agent is shown by the intent that reaches it and the things it can do — the two
+                facts they would recognise. Everything else the Draft holds is true and belongs on
+                Review.
+            *@
+            <h2 class="what-now">Agents found in this domain</h2>
+
+            @foreach (AgentDraft agent in draft.Agents)
+            {
+                IntentDraft? intent = draft.Intents.FirstOrDefault(i => i.Name == agent.ID);
+
+                <div class="agent-card">
+                    <div class="agent-card-name">@(intent?.Label ?? agent.ID)</div>
+
+                    @if (intent?.Description is { Length: > 0 } description)
+                    {
+                        <p class="agent-card-when">Comes when someone asks about @Lower(description)</p>
+                    }
+
+                    @if (agent.Tools.Count == 0)
+                    {
+                        <p class="muted">
+                            It carries nothing of its own &mdash; whatever it reaches for arrives from
+                            elsewhere at the moment it is needed.
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="agent-card-can">
+                            It can
+                            @foreach ((ToolDraft tool, int index) in agent.Tools.Select((t, i) => (t, i)))
+                            {
+                                <span class="can">@Humanise(tool.Name)</span>@(index < agent.Tools.Count - 1 ? " " : "")
+                            }
+                        </p>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            @*
+                A Draft can exist with no agent at all — an interview kept the moment it opened, with
+                nothing accepted into it yet. That is not "a domain", and showing it as one — cards
+                with nothing in them, doors to validate or morganize nothing — would be answering a
+                question the client never asked with a lie dressed as evidence.
+            *@
+            <p class="muted">
+                Nothing has been added to this domain yet &mdash; the interview is open, but no agent
+                has been accepted into it.
+            </p>
+        }
+
+        @*
+            The point of the page, and it follows the evidence rather than leading it: what to do
+            next only means something once the client has seen what came in. Same shape as the
+            landing's doorways, because they are the same kind of thing: a way on, not a description.
+
+            Which door is loudest is not fixed. An archive Emit already built has been through this
+            once — checking that it still stands is at least as natural a next move as adding to it,
+            and that is true only of an archive: a bare agents.json never went through Alembic, and
+            a resumed sitting is mid-answer, so it is the interview's own door that stays loudest
+            there. Weighing is always reachable either way; it is only the loud one here.
+        *@
+        <h2 class="what-now">What you can do</h2>
+
+        @*
+            Validate and Morganize both presuppose a domain worth reading — a validator with nothing
+            to check and an archive with nothing to package are not quieter versions of themselves,
+            they are doors to an action that cannot mean anything yet. So with no agent in hand there
+            is exactly one door: into the interview that is the only way to get one.
+        *@
+        <div class="gateways @(HasAgents ? "gateways-three" : "gateways-one")">
+
+            <a class="gateway @(!HasAgents || arrivedAsArchive ? null : "primary-gateway")" href="interview">
+                <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M9.3 3h5.4M10.6 3.4v5.2M13.4 3.4v5.2" />
+                    <circle cx="12" cy="14.6" r="5.9" />
+                    <path d="M6.6 15.4c1.8 1.4 9 1.4 10.8 0" />
+                    <path d="M17.6 12.4H20a1 1 0 0 1 1 1v4" />
+                </svg>
+
+                @*
+                    A file with an interview in it is not an invitation to start one: it is the one
+                    the client left, and the door has to say so or they will read "begin" as losing
+                    what they came back with.
+                *@
+                @if (draft?.Sitting is not null)
+                {
+                    <h2>Carry on where you left off</h2>
+                    <span class="go">Continue &rarr;</span>
+                }
+                else
+                {
+                    <h2>Distil a new agent</h2>
+                    <span class="go">Begin &rarr;</span>
+                }
+            </a>
+
+            @if (HasAgents)
+            {
+                <a class="gateway @(arrivedAsArchive ? "primary-gateway" : null)" href="review">
+                    <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="10.5" cy="10.5" r="6.6" />
+                        <path d="M15.4 15.4 21 21" />
+                        <path d="M7.6 9h5.8M7.6 12h3.8" />
+                    </svg>
+
+                    <h2>Validate this domain</h2>
+                    <span class="go">Look &rarr;</span>
+                </a>
+
+                <a class="gateway" href="morganize">
+                    <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6.4h18v3.4H3z" />
+                        <path d="M4.6 9.8v8.4A1.8 1.8 0 0 0 6.4 20h11.2a1.8 1.8 0 0 0 1.8-1.8V9.8" />
+                        <path d="M12 12v4.4M9.8 14.4 12 16.6l2.2-2.2" />
+                    </svg>
+
+                    <h2>Morganize it</h2>
+                    <span class="go">Package &rarr;</span>
+                </a>
+            }
+
+        </div>
+    }
+
+    <Back />
+
+</div>
+
+@code {
+    /// <summary>Maximum size accepted for an agents.json upload.</summary>
+    /// <remarks>
+    /// Generous by two orders of magnitude against any real configuration — the Examples domain,
+    /// four agents with full prose and toolkits, is a few tens of kilobytes. The cap exists so a
+    /// mistaken upload fails immediately instead of being read into the circuit's memory.
+    /// </remarks>
+    private const long MaxUploadBytes = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// The root property only a saved interview carries.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="DomainDraft.CreatedAt"/> is non-nullable, so a serialized Draft always has it and
+    /// an <c>agents.json</c> never does — the two shapes are told apart by a fact rather than by a
+    /// file name, which the client is free to change and often has.
+    /// </remarks>
+    private const string SaveFileMarker = "CreatedAt";
+
+    private IReadOnlyList<string> notices = [];
+    private string? error;
+    private bool isReading;
+
+    /// <summary>
+    /// Whether the file just read was the whole archive Emit hands back, rather than a bare
+    /// <c>agents.json</c> or <c>alembic-draft.json</c>.
+    /// </summary>
+    /// <remarks>
+    /// Read from the upload's own shape (a zip), not from what turned out to be inside it: an
+    /// archive with its save file deleted still arrived as the archive, and the client's next
+    /// question is the same either way - does what I already built still stand? A bare
+    /// configuration never went through Alembic, so it has no such question to answer first.
+    /// </remarks>
+    private bool arrivedAsArchive;
+
+    private DomainDraft? Draft => DraftStateService.Current;
+
+    /// <summary>
+    /// Whether the Draft is an actual domain rather than an interview kept the moment it opened,
+    /// with nothing accepted into it yet.
+    /// </summary>
+    private bool HasAgents => Draft?.Agents.Count > 0;
+
+    /// <summary>
+    /// The interrupted interview, if the file carried one worth reporting — the single most
+    /// actionable fact on this page when it exists, since it says why the client came back rather
+    /// than what merely arrived.
+    /// </summary>
+    private static string? Resuming(DomainDraft draft) =>
+        draft.Sitting is { } sitting && Named(sitting) is { } named
+            ? $"{named} — still here, right where you left it."
+            : null;
+
+    /// <summary>
+    /// What the interrupted interview was about, read strictly off what the sitting itself holds —
+    /// never a placeholder standing in for it. An entry in progress is named from the sitting's own
+    /// Map; short of that, the map's own entry count is said instead. <c>null</c> when the sitting
+    /// carries neither — nothing was ever declared, so there is nothing true left to report.
+    /// </summary>
+    private static string? Named(InterviewSitting sitting)
+    {
+        if (sitting.At >= 0 && sitting.At < sitting.Map.Count)
+        {
+            IntentDraft entry = sitting.Map[sitting.At];
+            return $"You were in the middle of {entry.Label ?? entry.Name ?? "an entry of the map"}";
+        }
+
+        return sitting.Map.Count switch
+        {
+            0 => null,
+            1 => "You were drawing the map, one entry declared so far",
+            var n => $"You were drawing the map, {n} entries declared so far"
+        };
+    }
+
+    /// <summary>
+    /// Turns a tool's method name into something a domain expert reads rather than parses.
+    /// </summary>
+    /// <remarks>
+    /// <c>GetInvoices</c> is a C# method name and will stay one — it is what
+    /// <c>MorganaToolAdapter.AddTool</c> pairs against the delegate. It is also the last thing the
+    /// person who described this business wants to read back at them, so it is spaced out and
+    /// lowered here. Display only: nothing downstream reads this.
+    /// </remarks>
+    private static string Humanise(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "—";
+
+        StringBuilder sb = new StringBuilder();
+
+        foreach (char c in name)
+        {
+            if (char.IsUpper(c) && sb.Length > 0)
+                sb.Append(' ');
+
+            sb.Append(char.ToLowerInvariant(c));
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Lowers an intent description's first letter so it reads on from "asks about".
+    /// </summary>
+    private static string Lower(string description) =>
+        char.ToLowerInvariant(description[0]) + description[1..];
+
+    /// <summary>
+    /// Reads the uploaded file, works out which of the three shapes it is (a save file, a bare
+    /// <c>agents.json</c>, or a zip wrapping one of those two), and hands it to the matching path.
+    /// </summary>
+    /// <remarks>
+    /// Content decides the shape, never the file name or extension — see <see cref="IsZip"/>,
+    /// <see cref="IsSaveFile"/> and <see cref="HasMarker"/>, all of which read bytes rather than
+    /// trust what the client called the file.
+    /// </remarks>
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        isReading = true;
+        error = null;
+        notices = [];
+        arrivedAsArchive = false;
+
+        try
+        {
+            IBrowserFile file = e.File;
+
+            // Buffered because it is read twice: once to decide what it is, once to parse it. A
+            // configuration is tens of kilobytes and the cap above is two orders of magnitude above
+            // any real one, so this costs nothing worth avoiding.
+            using MemoryStream buffer = new MemoryStream();
+            await using (Stream stream = file.OpenReadStream(MaxUploadBytes))
+                await stream.CopyToAsync(buffer);
+
+            buffer.Position = 0;
+
+            if (IsZip(buffer))
+            {
+                // Trusted only on the marker's say-so, not on the upload's own shape: anyone can
+                // zip up a bare agents.json, and Import's own next-step doors read differently for
+                // an archive Alembic built than for a bare configuration someone else packed.
+                arrivedAsArchive = HasMarker(buffer);
+
+                await using MemoryStream? inner = await ExtractFromZipAsync(buffer);
+
+                if (inner is null)
+                {
+                    error = $"{file.Name} is a zip archive, but I could not find an "
+                             + "alembic-draft.json or an agents.json inside it.";
+                    return;
+                }
+
+                if (IsSaveFile(inner))
+                {
+                    inner.Position = 0;
+                    await ResumeAsync(inner, file.Name);
+                    return;
+                }
+
+                inner.Position = 0;
+
+                DraftImportResult zipResult = await DraftImportService.ImportAsync(inner, file.Name);
+
+                notices = zipResult.Notices;
+                error = zipResult.Error;
+                SetDraft(zipResult.Draft);
+                return;
+            }
+
+            if (IsSaveFile(buffer))
+            {
+                buffer.Position = 0;
+                await ResumeAsync(buffer, file.Name);
+                return;
+            }
+
+            buffer.Position = 0;
+
+            DraftImportResult result = await DraftImportService.ImportAsync(buffer, file.Name);
+
+            notices = result.Notices;
+            error = result.Error;
+            SetDraft(result.Draft);
+        }
+        catch (IOException ex)
+        {
+            // Thrown by OpenReadStream when the upload exceeds MaxUploadBytes.
+            error = ex.Message;
+        }
+        finally
+        {
+            isReading = false;
+        }
+    }
+
+    /// <summary>
+    /// Restores a Draft saved in an earlier sitting.
+    /// </summary>
+    /// <remarks>
+    /// An interview over a real domain does not fit in one sitting and Alembic has no database, so
+    /// the save file is the whole of its memory. It carries what a configuration cannot: provenance,
+    /// the C# facts <c>agents.json</c> does not express, half-answered elements, and the baseline the
+    /// migration report diffs against — which is why the report still tells the truth on the second
+    /// day.
+    /// </remarks>
+    private async Task ResumeAsync(Stream saveFile, string fileName)
+    {
+        DomainDraft? draft = await DraftSerializationService.DeserializeAsync(saveFile);
+
+        if (draft is null)
+        {
+            error = $"{fileName} looks like a sitting of ours, but I could not read it.";
+            return;
+        }
+
+        SetDraft(draft);
+    }
+
+    /// <summary>
+    /// Puts a freshly read Draft in the circuit, and discards any interview already running against
+    /// the one it replaces.
+    /// </summary>
+    /// <remarks>
+    /// <c>InterviewService</c> is Scoped: once a circuit has visited <c>/interview</c>, its
+    /// <c>Current</c> stays set for the rest of the circuit, and that page only ever calls
+    /// <c>StartAsync</c> when it finds none. Without this, a client who had already begun "Distil a
+    /// new domain" and then came back here to import a file instead would land back on the old,
+    /// empty interview — the import would sit in <see cref="DraftStateService"/> but never reach the
+    /// page that reads it, and there would be no way out short of reloading the tab. Abandoning here
+    /// is what makes the next visit to <c>/interview</c> call <c>StartAsync</c> again and pick up
+    /// what was just brought in, sitting included.
+    /// </remarks>
+    private void SetDraft(DomainDraft? draft)
+    {
+        InterviewService.Abandon();
+        DraftStateService.Set(draft);
+    }
+
+    /// <summary>
+    /// Whether the upload is the archive Emit hands back, rather than either bare JSON shape.
+    /// </summary>
+    /// <remarks>
+    /// By the file's own magic bytes, the same way <see cref="IsSaveFile"/> reads content over
+    /// name: a local file header starts <c>PK</c>, whatever the client renamed the file to.
+    /// </remarks>
+    private static bool IsZip(MemoryStream buffer) =>
+        buffer.Length >= 2 && buffer.GetBuffer()[0] == 0x50 && buffer.GetBuffer()[1] == 0x4B;
+
+    /// <summary>
+    /// Whether the archive carries the marker only Alembic's own emit writes.
+    /// </summary>
+    /// <remarks>
+    /// A zip holding an <c>agents.json</c> is not evidence Alembic built it: anyone can zip up a
+    /// bare configuration by hand, and this is the one entry a zip built anywhere else would have
+    /// no reason to contain. Checked by presence alone, never by its content — the marker carries
+    /// nothing worth reading, only the fact of itself.
+    /// </remarks>
+    private static bool HasMarker(MemoryStream buffer)
+    {
+        buffer.Position = 0;
+        using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
+
+        return archive.Entries.Any(entry => string.Equals(
+            entry.Name, Distiller.Services.AssetPackageService.MarkerFileName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Pulls the one file inside the archive that carries the domain, preferring the sitting.
+    /// </summary>
+    /// <remarks>
+    /// The archive Emit produces holds both <c>alembic-draft.json</c> and <c>agents.json</c>, and
+    /// they are not equivalent here: the save file is the richer of the two — provenance, the
+    /// baseline, a half-finished sitting — so continuing a distillation from the archive has to read
+    /// the same file the landing's own "carry on" gesture reads. <c>agents.json</c> is the fallback
+    /// for an archive built before phase 5, or one whose save file a client deleted by hand.
+    /// </remarks>
+    private static async Task<MemoryStream?> ExtractFromZipAsync(MemoryStream buffer)
+    {
+        buffer.Position = 0;
+        await using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
+
+        ZipArchiveEntry? entry =
+            archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "alembic-draft.json", StringComparison.OrdinalIgnoreCase))
+            ?? archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "agents.json", StringComparison.OrdinalIgnoreCase));
+
+        if (entry is null)
+            return null;
+
+        MemoryStream copy = new MemoryStream();
+        await using (Stream entryStream = await entry.OpenAsync())
+            await entryStream.CopyToAsync(copy);
+
+        copy.Position = 0;
+        return copy;
+    }
+
+    /// <summary>
+    /// Decides which of the two shapes arrived, by reading the file.
+    /// </summary>
+    private static bool IsSaveFile(Stream json)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+
+            // Case-insensitively, because the reader that follows is case-insensitive too and this
+            // file is documented as hand-editable between sittings.
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.EnumerateObject().Any(p =>
+                       string.Equals(p.Name, SaveFileMarker, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (JsonException)
+        {
+            // Not JSON at all. Left to the importer, whose error message is about a configuration
+            // that could not be read — which is what the client was almost certainly uploading.
+            return false;
+        }
+    }
+}

@@ -11,7 +11,11 @@ Grimoire the book, Rune the mark, PromptHarness the rig); an *alembic* is the ap
 distils, which is what this does to a rambling interview.
 
 Alembic lives at `Alembic/` in the repo root, alongside `Morgana/`, `Channels/`, `Examples/` and
-`PromptHarness/`, and has its own solution (`Alembic.slnx`).
+`PromptHarness/`, and has its own solution (`Alembic.slnx`). `Alembic/` is itself a container for
+two projects: `Distiller/`, the workbench described throughout this document, and
+`PromptHarness/`, its own non-regression harness — nested here for tidiness but deliberately
+outside `Alembic.slnx` and not a client of Distiller's own code, the same positioning the
+repo-root `PromptHarness/` has relative to `Morgana/`, which is why it carries the same name.
 
 ## What Alembic is not
 
@@ -828,7 +832,7 @@ beside it.
 
 The split that makes this work is between **which behaviours are worth protecting** and **which
 words say them here**. The first is knowledge about agents, true before any client arrives, and it is
-settled once in this repository as `Harness/Templates/*.yaml`: one file per behavioural use-case,
+settled once in this repository as `Distiller/Harness/Templates/*.yaml`: one file per behavioural use-case,
 each a scenario the harness would load if its placeholders were real. The second is knowledge about
 the client's business, and only a model that has just read the whole domain can supply it. So the
 model derives — it replaces every `{{…}}` with this domain's own words and changes nothing else.
@@ -944,64 +948,71 @@ disagrees with it about their own business is usually right.
 ## Project Structure
 
 ```
-Alembic/
-  Alembic.slnx                        # Solution (sibling of Morgana.slnx, Cauldron.slnx, …)
-  Alembic.csproj                      # .NET 10 Web SDK, ProjectReference → Morgana.AI
-  Directory.Build.props               # Build settings, version, package metadata
+Alembic/                              # Container: Distiller/ (the workbench) + PromptHarness/ (its own harness)
+  Alembic.slnx                        # Solution (sibling of Morgana.slnx, Cauldron.slnx, …); Distiller only
+  Directory.Build.props               # Build settings, version, package metadata — shared by both projects
   Directory.Build.targets             # Regenerates the root .env.versions on each build
   Alembic.Dockerfile                  # Multi-stage container build (root context)
-  appsettings.json                    # Morgana:LLM section (Performance tier only)
-  alembic.json                        # Alembic's OWN prose AND tool declarations, embedded resource
-  Properties/launchSettings.json      # Dev profile: https://localhost:5005
-  Program.cs                          # DI wiring and app pipeline
-  App.razor                           # Blazor root component
-  _Imports.razor                      # Shared @using directives
-  Model/
-    DomainDraft.cs                    # The Draft: DomainDraft, IntentDraft, AgentDraft, ToolDraft, …
-    AgentsConfigurationFile.cs        # The on-disk shape of an agents.json (Morgana's own Records inside)
-    DraftProjection.cs                # Draft → Records, shared by the exporter and the recap
-    ValidationFinding.cs              # Severity, Where, Message, Because
-    AgentRecap.cs                     # System prompt and tools, the two rungs shown apart
-    InterviewState.cs                 # The interview's C# state machine: the map, where it stands on it, the pass
-    Provenance.cs                     # Imported / Revised / Authored
-  Interfaces/
-    IDraftImportService.cs            # Uploaded agents.json → Draft
-    IDraftExportService.cs            # Draft → agents.json (the round-trip invariant)
-    IDraftSerializationService.cs     # Draft ⇄ alembic-draft.json (the interview's save file)
-    IDraftValidationService.cs        # Everything decidable about a Draft without a model
-    IRecapService.cs                  # Draft → the prompt the model really reads
-    IAlembicPromptService.cs          # Alembic's own prose + tool declarations, from alembic.json
-    IInterviewService.cs              # Conducts the passes, folds each finished agent into the Draft
-    IDraftStateService.cs             # The Draft under construction, snapshotted against a dead circuit
-    IWorkKey.cs                       # Which work this browser is doing — a pointer in ProtectedLocalStorage
-  Harness/                            # Alembic's own harness component — owes PromptHarness nothing
-    Templates/*.yaml                  # One behavioural use-case each, domain words left as placeholders
-    ScenarioTemplate.cs               # A template: its `#@` brief and the scenario shape below it
-    ScenarioTemplateLibrary.cs        # The templates, embedded; which apply; the union vocabulary
-    ScenarioDerivation.cs             # A derivation checked against the vocabulary it was allowed
-  Services/                           # Default implementations of the above
-    InterviewTools.cs                 # The tools Alembic calls while conducting a pass
-  Pages/_Host.cshtml                  # Blazor Server host page (Server: prerendering mounts twice)
-  Pages/Index.razor                   # Landing: the alembic, and the two ways in — distil a new domain, or continue one
-  Pages/Import.razor                  # Upload an agents.json, see the parsed Draft, download it back
-  Pages/Review.razor                  # Findings, then the composed prompts
-  Pages/Interview.razor               # The wizard: drives the state machine, owns none of the pieces
-  Shared/MainLayout.razor             # Layout wrapper; carries the alembic as a mark on every page but the landing
-  Shared/Back.razor                   # The way back, and it is the way you came
-  Shared/Interview/                   # The wizard's pieces, one component each
-    Journey.razor                     #   the rail and its lap, the entries under them, what this step asks
-    Question.razor                    #   the question, the choices, the box
-    StepBack.razor                    #   the way back, named after where it lands, beside the way on
-    AgentSoFar.razor                  #   the agent's own rows, folded behind its name
-    SaveWork.razor                    #   the work so far, in one file, taken away in one click
-    AgentWritten.razor                #   the one decision that is the client's, and the join to the next entry
-  wwwroot/css/                        # Six files, cascade order set in _Host.cshtml
-    base.css                          #   palette, reset, page shells, the mark
-    landing.css / import.css          #   the two entrances
-    panels.css / controls.css         #   what is read in a panel; buttons and shared furniture
-    interview.css                     #   the interview, whose three states have to agree in one place
-  wwwroot/favicon.svg                 # The vessel at 16px: belly, neck, spout, one spark
-  wwwroot/images/alembic.jpg          # Morgana's alembic — the landing's centrepiece
+  Distiller/
+    Distiller.csproj                  # .NET 10 Web SDK, ProjectReference → Morgana.AI; AssemblyName Alembic
+    appsettings.json                  # Morgana:LLM section (Performance tier only)
+    alembic.json                      # Alembic's OWN prose AND tool declarations, embedded resource
+    Properties/launchSettings.json    # Dev profile: https://localhost:5005
+    Program.cs                        # DI wiring and app pipeline
+    App.razor                         # Blazor root component
+    _Imports.razor                    # Shared @using directives
+    Model/
+      DomainDraft.cs                  # The Draft: DomainDraft, IntentDraft, AgentDraft, ToolDraft, …
+      AgentsConfigurationFile.cs      # The on-disk shape of an agents.json (Morgana's own Records inside)
+      DraftProjection.cs              # Draft → Records, shared by the exporter and the recap
+      ValidationFinding.cs            # Severity, Where, Message, Because
+      AgentRecap.cs                   # System prompt and tools, the two rungs shown apart
+      InterviewState.cs               # The interview's C# state machine: the map, where it stands on it, the pass
+      Provenance.cs                   # Imported / Revised / Authored
+    Interfaces/
+      IDraftImportService.cs          # Uploaded agents.json → Draft
+      IDraftExportService.cs          # Draft → agents.json (the round-trip invariant)
+      IDraftSerializationService.cs   # Draft ⇄ alembic-draft.json (the interview's save file)
+      IDraftValidationService.cs      # Everything decidable about a Draft without a model
+      IRecapService.cs                # Draft → the prompt the model really reads
+      IAlembicPromptService.cs        # Alembic's own prose + tool declarations, from alembic.json
+      IInterviewService.cs            # Conducts the passes, folds each finished agent into the Draft
+      IDraftStateService.cs           # The Draft under construction, snapshotted against a dead circuit
+      IWorkKey.cs                     # Which work this browser is doing — a pointer in ProtectedLocalStorage
+    Harness/                          # Alembic's own harness component — owes PromptHarness nothing
+      Templates/*.yaml                # One behavioural use-case each, domain words left as placeholders
+      ScenarioTemplate.cs             # A template: its `#@` brief and the scenario shape below it
+      ScenarioTemplateLibrary.cs      # The templates, embedded; which apply; the union vocabulary
+      ScenarioDerivation.cs           # A derivation checked against the vocabulary it was allowed
+    Services/                         # Default implementations of the above
+      InterviewTools.cs               # The tools Alembic calls while conducting a pass
+    Pages/_Host.cshtml                # Blazor Server host page (Server: prerendering mounts twice)
+    Pages/Index.razor                 # Landing: the alembic, and the two ways in — distil a new domain, or continue one
+    Pages/Import.razor                # Upload an agents.json, see the parsed Draft, download it back
+    Pages/Review.razor                # Findings, then the composed prompts
+    Pages/Interview.razor             # The wizard: drives the state machine, owns none of the pieces
+    Shared/MainLayout.razor           # Layout wrapper; carries the alembic as a mark on every page but the landing
+    Shared/Back.razor                 # The way back, and it is the way you came
+    Shared/Interview/                 # The wizard's pieces, one component each
+      Journey.razor                   #   the rail and its lap, the entries under them, what this step asks
+      Question.razor                  #   the question, the choices, the box
+      StepBack.razor                  #   the way back, named after where it lands, beside the way on
+      AgentSoFar.razor                #   the agent's own rows, folded behind its name
+      SaveWork.razor                  #   the work so far, in one file, taken away in one click
+      AgentWritten.razor              #   the one decision that is the client's, and the join to the next entry
+    wwwroot/css/                      # Six files, cascade order set in _Host.cshtml
+      base.css                        #   palette, reset, page shells, the mark
+      landing.css / import.css        #   the two entrances
+      panels.css / controls.css       #   what is read in a panel; buttons and shared furniture
+      interview.css                   #   the interview, whose three states have to agree in one place
+    wwwroot/favicon.svg               # The vessel at 16px: belly, neck, spout, one spark
+    wwwroot/images/alembic.jpg        # Morgana's alembic — the landing's centrepiece
+  PromptHarness/                      # Non-regression harness for Alembic itself — not a member of Alembic.slnx
+    PromptHarness.csproj              # xunit v3, ProjectReference → ..\Distiller\Distiller.csproj
+    AssemblyInfo.cs                   # Assembly-wide fixture + serial test collection
+    Infrastructure/                   # AlembicHostFixture, InterviewDriver, ArchiveCompiler, Judge
+    Fixtures/                         # Scripted "domain expert" fixtures (e.g. Bistro Luna)
+    Tests/                            # DoctrineTests, MappingTests, InterviewConductionTests, FinalizationTests
 ```
 
 ## The Draft

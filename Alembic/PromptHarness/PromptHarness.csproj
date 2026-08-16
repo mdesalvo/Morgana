@@ -1,0 +1,100 @@
+<Project>
+
+  <!--
+    Nested at Alembic/PromptHarness/, but not a member of Alembic.slnx and not a client of
+    Distiller's own code — the same positioning the repo-root PromptHarness/ takes relative to
+    Morgana, which is why this project carries the same name: an instrument pointed AT Distiller,
+    not a part of it. Before Alembic/ became a container for Distiller/ and this project, it sat
+    beside Alembic/ as a physical sibling named AlembicHarness; the relationship is unchanged, only
+    where it lives on disk is.
+
+    What it tests is deliberately narrow and never what the repo-root PromptHarness tests. That one
+    boots a real Morgana host and asks "does the domain Alembic produced behave correctly at
+    runtime" — Alembic itself can never answer that, has no channel and no way to, and neither does
+    this project. This harness stays entirely on Distiller's own side of that boundary: it drives
+    IInterviewService with a scripted "domain expert" the same way a client's own typing would, and
+    asks "did Distiller's mapping, its interview conduct across passes, and its finalization emit —
+    Draft validation, the archive, the migration report — do what they are supposed to do." A
+    domain it interviews is a fixture chosen to exercise Alembic's own doctrine, never a product in
+    its own right.
+  -->
+
+  <!--
+    Explicit Sdk.props/Sdk.targets imports, rather than the usual <Project Sdk="..."> shorthand,
+    so ImportDirectoryBuildProps below actually takes effect: the shorthand form imports Sdk.props
+    (and with it any Directory.Build.props found by walking up) before this file's own
+    PropertyGroup is even parsed, which is too late to opt out. Nesting under Alembic/ means that
+    walk-up would otherwise reach Alembic's own Directory.Build.props/.targets — the
+    Docker-version-file generator among them — simply because this project now sits in a
+    subdirectory of Alembic/. That is an accidental coupling this project never had as a physical
+    sibling and should not gain as a side effect of the move.
+  -->
+  <PropertyGroup>
+    <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+    <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
+  </PropertyGroup>
+
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+  <PropertyGroup>
+    <!-- Common Build Settings -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!-- Version Information -->
+    <Version>0.28.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+
+    <!-- Package Metadata -->
+    <Title>PromptHarness</Title>
+    <PackageId>PromptHarness</PackageId>
+    <Authors>Marco De Salvo</Authors>
+    <Company>Marco De Salvo</Company>
+    <Copyright>Marco De Salvo</Copyright>
+    <Product>Morgana</Product>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
+
+    <Description>
+    This is the non-regression harness for Alembic itself — the repo-root PromptHarness is for
+    Morgana. It drives IInterviewService with a scripted domain expert against fixture domains
+    chosen to exercise Alembic's own doctrine, and asserts on what Distiller's mapping, interview
+    conduct and finalization emit actually produce. It never tests the runtime behaviour of a
+    domain Alembic produced — that question belongs to the repo-root PromptHarness, and Alembic has
+    no channel to answer it with in the first place.
+    </Description>
+
+    <!--
+      Same UserSecretsId as Distiller itself: the harness owns no secrets of its own and reads
+      provider, tiers and API keys from the very store that configures the Alembic under test, so
+      the suite always runs against whatever LLM Alembic is currently wired to.
+    -->
+    <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="3.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.*" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The one dependency that matters: Distiller's own services, driven in-process. -->
+    <ProjectReference Include="..\Distiller\Distiller.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Distiller\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+</Project>

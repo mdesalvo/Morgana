@@ -3,5 +3,5 @@
     <File Path="Directory.Build.props" />
     <File Path="CLAUDE.md" />
   </Folder>
-  <Project Path="Alembic.csproj" />
+  <Project Path="Distiller/Distiller.csproj" />
 </Solution>
