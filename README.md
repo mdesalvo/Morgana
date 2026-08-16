@@ -235,34 +235,7 @@ Some information, though, is meant to travel. A customer code given to BillingAg
 Conversations survive restarts and agent handoffs without losing this context. Users always see one coherent conversation, even when several specialized agents quietly took turns behind the scenes.
 
 ---
-## 🧪 Alembic — the Authoring Workbench
 
-Writing a Morgana domain by hand means writing prompts — a job that shouldn't fall on the person who actually knows the business. **Alembic** turns it into a conversation instead: it interviews a domain expert about their own work and distils the answers into a complete, ready-to-run Morgana domain — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — with no prompt ever authored by hand.
-
-Watch it distil a real domain end to end, then watch that domain running live on Morgana through Cauldron:
-
-<table style="border:none;">
-  <tr>
-    <th>Alembic — distilling "Bistro Luna"</th>
-    <th>Morgana — "Bistro Luna", live</th>
-  </tr>
-  <tr>
-    <td align="center">
-      <a href="https://cdn.jsdelivr.net/gh/mdesalvo/Morgana@main/Channels/Cauldron/Assets/alembic.webm">
-        <img src="https://img.shields.io/badge/%E2%96%B6-Watch_the_distillation-9f7aea?style=for-the-badge" alt="Watch: Alembic distilling Bistro Luna"/>
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://cdn.jsdelivr.net/gh/mdesalvo/Morgana@main/Channels/Cauldron/Assets/morgana.webm">
-        <img src="https://img.shields.io/badge/%E2%96%B6-Watch_it_live-9f7aea?style=for-the-badge" alt="Watch: Morgana running Bistro Luna live"/>
-      </a>
-    </td>
-  </tr>
-</table>
-
-Full walkthrough, configuration reference and doctrine in the **[Alembic Handbook](https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Alembic-Handbook.html)**.
-
----
 ## 🚀 Quick Start (Docker Hub)
 
 ```bash
