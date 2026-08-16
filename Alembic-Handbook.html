@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alembic Handbook</title>
+    <style type="text/css">
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+      :root {
+        --bg-dark: #0d0b1a;
+        --bg-card: #151228;
+        --purple-deep: #6b21a8;
+        --purple-mid: #9333ea;
+        --purple-light: #c084fc;
+        --purple-glow: #a855f7;
+        --magenta: #d946ef;
+        --text-primary: #e8e0f0;
+        --text-secondary: #a89ec4;
+        --text-muted: #6b6189;
+        --accent-green: #4ade80;
+        --border: #2d2654;
+      }
+
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+
+      @page {
+        size: A4;
+        margin: 0;
+      }
+
+      body {
+        font-family: 'Inter', sans-serif;
+        background: var(--bg-dark);
+        color: var(--text-primary);
+        line-height: 1.6;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .page {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0 auto;
+        padding: 18mm 20mm;
+        position: relative;
+        overflow: hidden;
+        page-break-after: always;
+        background: var(--bg-dark);
+      }
+      .page:last-child { page-break-after: auto; }
+
+      /* Decorative glow orbs */
+      .page::before {
+        content: '';
+        position: absolute;
+        top: -80px; right: -80px;
+        width: 300px; height: 300px;
+        background: radial-gradient(circle, rgba(147,51,234,0.15) 0%, transparent 70%);
+        border-radius: 50%;
+        pointer-events: none;
+      }
+      .page::after {
+        content: '';
+        position: absolute;
+        bottom: -60px; left: -60px;
+        width: 250px; height: 250px;
+        background: radial-gradient(circle, rgba(217,70,239,0.1) 0%, transparent 70%);
+        border-radius: 50%;
+        pointer-events: none;
+      }
+
+      h1, h2, h3 { font-family: 'Cinzel', serif; }
+
+      /* ── COVER PAGE ── */
+      .cover {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-height: 297mm;
+        padding: 30mm 25mm;
+      }
+      .cover-avatar {
+        width: 260px;
+        border-radius: 16px;
+        border: 3px solid var(--purple-mid);
+        box-shadow: 0 0 40px rgba(147,51,234,0.4), 0 0 80px rgba(147,51,234,0.15);
+        object-fit: cover;
+        aspect-ratio: 1376 / 768;
+        margin-bottom: 28px;
+      }
+      .cover h1 {
+        font-size: 48px;
+        font-weight: 700;
+        background: linear-gradient(135deg, var(--purple-light), var(--magenta));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: 6px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
+      .cover .tagline {
+        font-size: 15px;
+        font-style: italic;
+        color: var(--text-secondary);
+        max-width: 420px;
+        margin-bottom: 40px;
+        line-height: 1.7;
+      }
+      .cover .version-badge {
+        display: inline-block;
+        padding: 6px 20px;
+        border: 1px solid var(--purple-mid);
+        border-radius: 20px;
+        font-size: 13px;
+        color: var(--purple-light);
+        letter-spacing: 2px;
+        margin-bottom: 50px;
+      }
+      .cover .stack {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .cover .stack span {
+        font-size: 11px;
+        padding: 4px 12px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        color: var(--text-secondary);
+      }
+
+      /* ── SECTION HEADERS ── */
+      h2 {
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--purple-light);
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        position: relative;
+      }
+      h2::after {
+        content: '';
+        position: absolute;
+        bottom: -1px; left: 0;
+        width: 60px; height: 2px;
+        background: linear-gradient(90deg, var(--purple-mid), transparent);
+      }
+
+      h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--purple-glow);
+        margin: 18px 0 8px 0;
+      }
+
+      p { font-size: 12.5px; margin-bottom: 10px; color: var(--text-primary); }
+      .muted { color: var(--text-secondary); }
+
+      /* ── PILLAR CARDS ── */
+      .pillars {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin: 16px 0;
+      }
+      .pillar {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        position: relative;
+        overflow: hidden;
+      }
+      .pillar::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, var(--purple-mid), var(--magenta));
+      }
+      .pillar .icon { font-size: 22px; margin-bottom: 6px; }
+      .pillar h4 {
+        font-family: 'Cinzel', serif;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--purple-light);
+        margin-bottom: 6px;
+      }
+      .pillar p { font-size: 12px; color: var(--text-secondary); margin: 0; }
+
+      /* ── FLOW DIAGRAM ── */
+      .flow-box {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin: 16px 0;
+        font-family: 'Inter', monospace;
+        font-size: 11.5px;
+        color: var(--text-secondary);
+        line-height: 2;
+        text-align: center;
+        letter-spacing: 0.5px;
+      }
+      .flow-box .arrow { color: var(--purple-mid); font-weight: 600; }
+      .flow-box .actor { color: var(--purple-light); font-weight: 500; }
+      .flow-box .external { color: var(--magenta); font-weight: 500; }
+
+      /* ── CODE BLOCKS ── */
+      .code-block {
+        background: #0a0818;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+        line-height: 1.7;
+        color: var(--text-secondary);
+        margin: 10px 0;
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .code-block .keyword { color: var(--purple-light); }
+      .code-block .string { color: var(--accent-green); }
+      .code-block .comment { color: var(--text-muted); }
+      .code-block .attr { color: var(--magenta); }
+
+      /* ── TABLES ── */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 11.5px;
+      }
+      thead th {
+        background: var(--bg-card);
+        color: var(--purple-light);
+        font-weight: 600;
+        text-align: left;
+        padding: 8px 12px;
+        border-bottom: 2px solid var(--purple-deep);
+        font-family: 'Cinzel', serif;
+        font-size: 11px;
+        letter-spacing: 1px;
+      }
+      tbody td {
+        padding: 7px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text-primary);
+      }
+      tbody tr:nth-child(even) { background: rgba(21,18,40,0.5); }
+
+      /* ── LISTS ── */
+      ul { margin: 8px 0; padding-left: 18px; }
+      ul li {
+        font-size: 12px;
+        color: var(--text-primary);
+        margin-bottom: 5px;
+      }
+      ul li::marker { color: var(--purple-mid); }
+
+      /* ── SCREENSHOTS ── */
+      .screenshots {
+        display: flex;
+        gap: 8px;
+        margin: 14px 0;
+        justify-content: center;
+      }
+      .screenshots img {
+        width: 32%;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      }
+
+      /* ── INFO BOX ── */
+      .info-box {
+        background: linear-gradient(135deg, rgba(107,33,168,0.15), rgba(217,70,239,0.08));
+        border: 1px solid var(--purple-deep);
+        border-left: 3px solid var(--purple-mid);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin: 14px 0;
+        font-size: 12px;
+      }
+      .info-box strong { color: var(--purple-light); }
+
+      /* ── SECURITY BADGE ROW ── */
+      .badge-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 12px 0;
+      }
+      .badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 11px;
+      }
+      .badge .dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: var(--accent-green);
+        display: inline-block;
+      }
+      .badge .dot.warn { background: #facc15; }
+
+      /* ── FOOTER ── */
+      .page-footer {
+        position: absolute;
+        bottom: 12mm;
+        left: 20mm;
+        right: 20mm;
+        display: flex;
+        justify-content: space-between;
+        font-size: 9px;
+        color: var(--text-muted);
+        border-top: 1px solid var(--border);
+        padding-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 1 — COVER                                                         -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page cover">
+      <img src="Alembic/Distiller/wwwroot/images/Alembic-Banner.jpg" class="cover-avatar" alt="Alembic"/>
+      <h1>Alembic</h1>
+      <p class="tagline">Here Morgana takes life. Yours the shape, hers the spells &mdash; a functional interview with a domain expert, distilled into a complete, running Morgana domain</p>
+      <div class="version-badge">HANDBOOK</div>
+      <div class="stack">
+        <span>.NET 10</span>
+        <span>Blazor Server</span>
+        <span>Morgana.AI</span>
+        <span>PromptHarness</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 2 — ARCHITECTURE OVERVIEW                                         -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page">
+      <h2>Architecture Overview</h2>
+      <p>Alembic is Morgana's <strong>authoring workbench</strong>: an AI-conducted functional interview that distils a domain expert's own words into a complete Morgana domain &mdash; <strong>intents, agent prose, tool contracts, C# assets and non-regression scenarios</strong> &mdash; with no prompt ever written by hand. It is <strong>not a channel</strong>: it never calls a running Morgana, holds no JWT, joins no conversation pipeline &mdash; its only external dependency is an LLM. And it is <strong>not a filesystem tool</strong>: configuration arrives as an <strong>upload</strong> and leaves as a <strong>download</strong>, since at runtime Alembic can live anywhere &mdash; a cloud, an on-prem box beside Morgana, a laptop.</p>
+      <p>Alembic is itself <strong>an agent of Morgana</strong>: its own prompt is layered from an <code>alembic.json</code> of identical shape to a domain agent's (Target / Instructions / Personality / Formatting), composed with Morgana's own Personality resolved live from <code>morgana.json</code> &mdash; the same framework the domains it authors will run under.</p>
+
+      <div class="pillars">
+        <div class="pillar">
+          <div class="icon">&#x1F5FA;</div>
+          <h4>The Interview</h4>
+          <p>C# owns the facts, the model owns the conducting. A domain-mapping pass turns the client's own words into intents, then four passes per agent build its prose incrementally, each reading back only what is already settled.</p>
+        </div>
+        <div class="pillar">
+          <div class="icon">&#x2705;</div>
+          <h4>Deterministic Validation &amp; Recap</h4>
+          <p>Every rule the framework enforces later and more expensively is checked here first, for free. The recap is the real composed prompt &mdash; framework layer and domain layer &mdash; not a summary of what was said.</p>
+        </div>
+        <div class="pillar">
+          <div class="icon">&#x1F4E6;</div>
+          <h4>Turnkey Emit</h4>
+          <p>One archive: a ready .csproj/.slnx, generated <code>X.g.cs</code> sources split from a client-owned <code>X.cs</code> half, a working LLM-authored mock per toolkit, and an unconditional migration report.</p>
+        </div>
+        <div class="pillar">
+          <div class="icon">&#x1F9EA;</div>
+          <h4>Non-Regression from Day One</h4>
+          <p>A starter PromptHarness suite is derived from behavioural templates for the domain just authored, plus a cross-agent coherence pass that catches overlapping intents before the client leaves.</p>
+        </div>
+      </div>
+
+      <h3>System Topology</h3>
+      <table>
+        <thead><tr><th>Component</th><th>Role</th><th>Technology</th><th>Default Port</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Distiller</strong></td><td>The workbench itself &mdash; the interview, validation, emit</td><td>ASP.NET 10, Blazor Server</td><td>5005</td></tr>
+          <tr><td><strong>Morgana.AI</strong></td><td>Referenced project &mdash; domain model (<code>Records</code>) &amp; prompt composer, reused rather than reimplemented</td><td>.NET 10 library, project reference</td><td>&mdash;</td></tr>
+          <tr><td><strong>LLM</strong></td><td>Language model provider, <code>Performance</code> tier only</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>&mdash;</td></tr>
+          <tr><td><strong>PromptHarness</strong></td><td>Alembic's own non-regression suite &mdash; drives a scripted interview and asserts on what the interview conduct and finalization emit produce</td><td>xUnit v3, in-process</td><td>&mdash;</td></tr>
+        </tbody>
+      </table>
+
+      <div class="info-box">
+        <strong>Performance tier, non-negotiable:</strong> Alembic's whole job is writing dispositive prose that does not contradict itself &mdash; exactly the task where a cheaper die amplifies contradiction-following failures. It runs once, at onboarding, not per conversational turn: this is the wrong place to save.
+      </div>
+
+      <div class="page-footer">
+        <span>Alembic Handbook</span>
+        <span>2</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 3 — THE INTERVIEW & DOCTRINE                                      -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page">
+      <h2>The Interview</h2>
+      <p>A domain is a configuration of two halves &mdash; <code>Intents</code> and the <code>Agents</code> that answer them one each &mdash; so the interview opens on the half that comes first in every sense. Only then does it walk the map, four passes per entry, until every intent has its agent. Each pass is a <strong>fresh agent and a fresh session</strong>: what crosses the boundary is the configuration, read back as settled fact, never the conversation replayed.</p>
+
+      <table>
+        <thead><tr><th>Pass</th><th>Runs</th><th>Settles</th></tr></thead>
+        <tbody>
+          <tr><td><strong>DomainMapper</strong></td><td>once</td><td>The whole <code>Intents</code> section: every name, description, label and opening sentence</td></tr>
+          <tr><td><strong>AgentModeler</strong></td><td>per entry</td><td>The agent's <code>Target</code> &mdash; what it does, what it must never do</td></tr>
+          <tr><td><strong>AgentVoicer</strong></td><td>per entry</td><td>The agent's <code>Personality</code> &mdash; which facet of Morgana this agent is</td></tr>
+          <tr><td><strong>ToolkitModeler</strong></td><td>per entry</td><td>The tools, their descriptions, parameters, scopes and sharing</td></tr>
+          <tr><td><strong>AgentInstructor</strong></td><td>per entry</td><td><code>Instructions</code> &mdash; behavioural rules, written after the toolkit exists</td></tr>
+          <tr><td><strong>AgentFormatter</strong></td><td>per entry</td><td><code>Formatting</code> &mdash; how the agent presents its own tools' output</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Doctrine</h3>
+      <ul>
+        <li><strong>One question, one step.</strong> Every question is a step, and half an answer advances it &mdash; the rest is inferred, proposed and corrected rather than asked twice. Asking three times ends the interview whether the client says so or not.</li>
+        <li><strong>Closed questions only where the answer adds nothing.</strong> A quick-reply button never appears on a question about the client's domain &mdash; their words are the material being distilled. It appears only for the answer Alembic already knows the whole of: agreement, &ldquo;nothing missing&rdquo;, &ldquo;nothing to avoid&rdquo;.</li>
+        <li><strong>The client never writes prose.</strong> They answer questions about their own work, in their own words; Alembic writes the configuration and says back what it understood &mdash; sparing a domain expert from having to become a prompt author.</li>
+        <li><strong>Backwards is the client's, forwards is not.</strong> Going on is a claim a step is settled, decided by the state machine; going back is a claim something needs changing, and only the client can make that call.</li>
+      </ul>
+
+      <div class="info-box">
+        <strong>The map is a choice, not an inventory.</strong> The DomainMapper pass is worded to elicit the subset of the client's own processes they are installing Morgana to run &mdash; not a description of their whole business. What they keep off the map never appears on it.
+      </div>
+
+      <div class="page-footer">
+        <span>Alembic Handbook</span>
+        <span>3</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 4 — CONFIGURATION & REGENERATION CONTRACT                        -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page">
+      <h2>Configuration Reference</h2>
+      <p>Alembic follows the same ASP.NET configuration hierarchy every unit in the repository does: <code>appsettings.json</code> &rarr; environment variables &rarr; User Secrets. It shares its <code>UserSecretsId</code> with Morgana.Web, so in-repo it runs against whatever LLM provider and tiers the working copy is already wired to &mdash; nothing to configure twice.</p>
+
+      <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Morgana:LLM:Provider</td><td>LLM backend: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code></td></tr>
+          <tr><td>Morgana:LLM:{Provider}:Tiers:Performance</td><td>The <strong>only</strong> tier Alembic declares &mdash; it never uses the Efficiency die. <code>MagicDust</code> carries both axes at zero: pricing is never read, since Alembic calls <code>GetChatClient(Performance)</code> directly rather than going through the metered agent adapter</td></tr>
+          <tr><td>Alembic:Work:AutosaveSeconds</td><td>How often the Draft in the circuit is snapshotted as a fallback for &ldquo;Save my work&rdquo; &mdash; never a resumption path on its own, only a floor under that one button (default: 30)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="info-box">
+        <strong>No single-tier deployment:</strong> because Alembic declares only <code>Performance</code>, it does not run against a single-tier deployment (Ollama being the canonical case) until a <code>Performance</code> entry is configured &mdash; the same &ldquo;no cross-tier fallback&rdquo; rule the framework itself enforces.
+      </div>
+
+      <h2 style="margin-top: 24px;">The Regeneration Contract</h2>
+      <p>Generated C# is split across two files per class &mdash; the non-destructive-regeneration mechanism, and the line between what is templated (deterministic, so a re-run produces no spurious diff) and what is authored by the LLM.</p>
+
+      <table>
+        <thead><tr><th>File</th><th>Owner</th><th>Rule</th></tr></thead>
+        <tbody>
+          <tr><td><code>X.g.cs</code></td><td>Alembic</td><td>Attributes, constructor, <code>partial</code> signatures &mdash; <strong>always overwritten</strong></td></tr>
+          <tr><td><code>X.cs</code></td><td>The client</td><td>The working mock body, then the client's real integration &mdash; <strong>written once, never touched again</strong></td></tr>
+        </tbody>
+      </table>
+
+      <h3>Docker Deployment</h3>
+      <p>Alembic's Docker service is <strong>profile-gated</strong>, so an ordinary <code>compose up</code> skips it &mdash; it is an authoring-time tool, not part of the always-on runtime footprint.</p>
+
+      <div class="code-block"><span class="comment"># Run Alembic standalone</span>
+    docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
+
+    <span class="comment"># Or from source</span>
+    cd Alembic/Distiller
+    dotnet run   <span class="comment"># https://localhost:5005, no running Morgana required</span></div>
+
+      <div class="page-footer">
+        <span>Alembic Handbook</span>
+        <span>4</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 5 — THE EMIT & NON-REGRESSION                                     -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page">
+      <h2>The Emit</h2>
+      <p>The reviewed domain downloads as <strong>one archive</strong>, because the pieces are only correct together &mdash; an <code>agents.json</code> whose toolkit has moved on from the C# beside it is a startup failure waiting to happen.</p>
+
+      <ul>
+        <li>A ready <code>.csproj</code> / <code>.slnx</code>, referencing <code>Morgana.AI</code> and <code>Morgana.Contracts</code> by <code>PackageReference</code>, pinned to the exact build Alembic itself runs against</li>
+        <li>The domain configuration, <code>agents.json</code>, embedded as a resource</li>
+        <li>Generated sources following the <code>X.g.cs</code> / <code>X.cs</code> split, one pair per agent and per toolkit</li>
+        <li>A working, LLM-authored <strong>mock</strong> per toolkit &mdash; not a stub &mdash; so the client can talk to their agent on the first run and hear whether the interview's prose is right</li>
+        <li>An unconditional <strong>migration report</strong>, diffing the domain against its own baseline &mdash; greenfield included, because a report that only appears when something is wrong is a report nobody has learned to read on the day it matters</li>
+        <li><code>README.md</code> (carrying the two-halves convention), <code>MIGRATION.md</code>, and the interview's own save file</li>
+      </ul>
+
+      <h2 style="margin-top: 22px;">Starter Non-Regression Scenarios</h2>
+      <p>A domain agent <em>is</em> its prose, and prose gets edited &mdash; a client who leaves without scenarios has a domain nobody can revise safely. Alembic derives a starting <strong>PromptHarness</strong> suite from a library of behavioural templates, replacing every domain-word placeholder with this domain's own language.</p>
+
+      <table>
+        <thead><tr><th>Template</th><th>Protects</th></tr></thead>
+        <tbody>
+          <tr><td>capability-happy-path</td><td>The flow the agent exists for, end to end</td></tr>
+          <tr><td>prerequisite-before-action</td><td>It asks for what it needs instead of inventing it</td></tr>
+          <tr><td>confirmation-before-commit</td><td>Nothing irreversible happens before a yes</td></tr>
+          <tr><td>boundary-refusal</td><td>The edge its own Target commits it not to cross</td></tr>
+          <tr><td>tool-choice-under-ambiguity</td><td>A request between two tools reaches the right one</td></tr>
+          <tr><td>absent-subject</td><td>It says nothing was found instead of writing something plausible</td></tr>
+          <tr><td>withheld-detail</td><td>What its Formatting keeps back stays back</td></tr>
+          <tr><td>established-context-not-reasked</td><td>A value given once is not asked for twice</td></tr>
+        </tbody>
+      </table>
+
+      <div class="info-box">
+        <strong>Discretionary pass &amp; coherence pass:</strong> after the templated base, one further call may add up to two scenarios of its own for a rule that holds only in this domain. A separate <strong>cross-agent coherence pass</strong> then reviews the whole domain at once &mdash; overlapping intents, contested capabilities, a value published under two names &mdash; the relational defects no per-agent interview pass could ever see. It advises, never blocks: a domain expert who disagrees about their own business is usually right.
+      </div>
+
+      <div class="info-box">
+        <strong>Alembic tests itself, too:</strong> a dedicated <code>Alembic/PromptHarness</code> &mdash; distinct from the one shipped for Morgana &mdash; drives a scripted domain expert through a real interview and asserts on the mapping, the conduct across passes, and the finalization emit, so the workbench stays honest as it evolves.
+      </div>
+
+      <div class="page-footer">
+        <span>Alembic Handbook</span>
+        <span>5</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 6 — GETTING STARTED & QUICK REFERENCE                            -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page">
+      <h2>Getting Started</h2>
+      <p>Two doors, from the landing page: distil a brand-new domain, or continue one already in progress.</p>
+
+      <h3>A Fresh Domain</h3>
+      <ul>
+        <li><strong>1. Begin.</strong> One question at a time, on an otherwise empty screen &mdash; the process itself is Alembic's alone to know.</li>
+        <li><strong>2. Map it.</strong> The DomainMapper pass turns what the client is installing Morgana to handle into a set of intents &mdash; a choice, never an exhaustive inventory.</li>
+        <li><strong>3. Build each agent.</strong> Target, Personality, Toolkit, Instructions, Formatting &mdash; one lap per entry on the map, until the last one is accepted.</li>
+        <li><strong>4. Review.</strong> Deterministic findings first, then the real composed prompt &mdash; exactly what the running agent's own model will read.</li>
+        <li><strong>5. Morganize.</strong> Validate, then download: one archive, ready to <code>dotnet build</code> and drop into a Morgana <code>plugins/</code> folder.</li>
+      </ul>
+
+      <h3>Continuing One</h3>
+      <p>Nothing about an interview is lost to a closed tab past the last autosave interval: <strong>Save my work</strong> hands over a file at any point, and the import page reads it back &mdash; by content, never by filename &mdash; to resume exactly where the client left off, mid-agent included.</p>
+
+      <div class="info-box">
+        <strong>The client never uses the agent.</strong> The people who will are their customers &mdash; so everything Alembic writes is addressed to the agent <em>about</em> those people, never <em>to</em> the client conducting the interview.
+      </div>
+
+      <h2 style="margin-top: 24px;">Quick Reference</h2>
+      <table>
+        <thead><tr><th>Resource</th><th>Location</th></tr></thead>
+        <tbody>
+          <tr><td>Source code</td><td>github.com/mdesalvo/Morgana &mdash; <code>Alembic/</code></td></tr>
+          <tr><td>The workbench</td><td><code>Alembic/Distiller/</code>, own <code>Distiller.slnx</code></td></tr>
+          <tr><td>Alembic's own tests</td><td><code>Alembic/PromptHarness/</code>, own <code>PromptHarness.slnx</code></td></tr>
+          <tr><td>Local run</td><td>https://localhost:5005 &mdash; no running Morgana required</td></tr>
+          <tr><td>Design doctrine</td><td><code>Alembic/CLAUDE.md</code></td></tr>
+          <tr><td>Changelog</td><td>CHANGELOG.md in repository root</td></tr>
+        </tbody>
+      </table>
+
+      <div class="page-footer">
+        <span>Alembic Handbook</span>
+        <span>6</span>
+      </div>
+    </div>
+
+  </body>
+</html>
