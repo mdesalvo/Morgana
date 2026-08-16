@@ -296,14 +296,3 @@ docker compose --env-file .env --env-file .env.versions run --rm --service-ports
 # 🛑 Stop the containers
 docker compose --env-file .env --env-file .env.versions down
 ```
-
-## 🧩 Build your Morgana Agents
-
-`Morgana.AI` is also available as [NuGet](https://www.nuget.org/packages/Morgana.AI), so you can build your agents without touching Morgana at all.
-
-Just reference it in your project, model your agents (`MorganaAgent`) and tools (`MorganaTool`), prepare their prompts with an `agents.json` compiled as embedded resource, then build: the resulting assembly is a ready-to-use **Morgana plugin**!
-Drop it into the `plugins/` folder of your Morgana instance (or any of the configured plugin directories) and it will be automatically discovered and executed at startup, giving Morgana **new domain-driven capabilities and traits**.
-
-A concrete example is already in front of you: **Examples** is exactly such a plugin, defining 4 specialized agents which empower the production (showcase) Docker distribution of Morgana out of the box. Your agents will have the same standard structure. The only difference is the reference: because `Examples` ships inside this repository it points at `Morgana.AI` via a direct project reference, whereas your own plugins will reference the `Morgana.AI` as a NuGet package.
-
-This is the foundation of the **Morgana Agent Ecosystem**: independent, shareable, domain-specific plugin agents that can be developed, distributed and adopted across any Morgana-powered application.
