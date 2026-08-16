@@ -597,40 +597,11 @@
     }</div>
       <p class="muted" style="font-size:14.5px;">Compatible with Jaeger, Grafana Tempo, Azure Monitor, Datadog, and any OTLP-compliant backend.</p>
     
-      <h2 style="margin-top: 26px;">Building Your Agents</h2>
-      <p><strong>Morgana.AI</strong> is also distributed as a <strong>NuGet package</strong>. You build agents as standalone .NET libraries&mdash;no need to fork or modify the Morgana codebase.</p>
-    
-      <h3>Agent Development Workflow</h3>
-      <ul>
-        <li><strong>1. Reference</strong> the <code>Morgana.AI</code> NuGet package in your project</li>
-        <li><strong>2. Model</strong> your agents by inheriting <code>MorganaAgent</code> and decorating with <code>[HandlesIntent("...")]</code> <strong>and</strong> <code>[RequiresLLMTier(...)]</code> (mandatory &mdash; declares whether the agent runs on the <code>Efficiency</code> or <code>Performance</code> die; validated at startup against the active provider's <code>Tiers</code> map)</li>
-        <li><strong>3. Define tools</strong> by inheriting <code>MorganaTool</code> with <code>[ProvidesToolForIntent("...")]</code>, or point to an MCP server with <code>[UsesMCPServer("...")]</code></li>
-        <li><strong>4. Write prompts</strong> in an <code>agents.json</code> file compiled as embedded resource</li>
-        <li><strong>5. Build</strong> the DLL and <strong>drop it</strong> into Morgana's <code>plugins/</code> directory</li>
-      </ul>
-    
-      <div class="code-block"><span class="attr">[HandlesIntent("billing")]</span>
-    <span class="attr">[RequiresLLMTier(Records.LLMTier.Efficiency)]</span>
-    <span class="keyword">public class</span> BillingAgent : MorganaAgent { ... }
-
-    <span class="attr">[ProvidesToolForIntent("billing")]</span>
-    <span class="keyword">public class</span> BillingTool : MorganaTool
-    {
-        <span class="keyword">public async</span> Task&lt;string&gt; GetInvoices(string userId, int count) { ... }
-    }
-
-    <span class="comment">// Or acquire tools dynamically from an MCP server:</span>
-    <span class="attr">[HandlesIntent("monkeys")]</span>
-    <span class="attr">[RequiresLLMTier(Records.LLMTier.Efficiency)]</span>
-    <span class="attr">[UsesMCPServer("https://func-monkeymcp.azurewebsites.net/")]</span>
-    <span class="keyword">public class</span> MonkeyAgent : MorganaAgent { ... }</div>
+      <h2 style="margin-top: 26px;">Building Your Agents with Alembic</h2>
+      <p>Agents can still be authored entirely by hand&mdash;<code>agents.json</code> and C# against the <code>Morgana.AI</code> NuGet package, exactly as described throughout this handbook. But the <strong>preferred path</strong> is now <strong>Alembic</strong>, Morgana's authoring workbench: an AI-conducted interview that distills a <strong>new domain</strong> from scratch, or <strong>extends an existing one</strong>, into intents, agent prose, tool contracts and working C#&mdash;ready to drop into Morgana.</p>
 
       <div class="info-box">
-        <strong>Fail-fast validation:</strong> At startup Morgana validates bidirectional consistency between declared intents and classifier configuration, <strong>and</strong> that every agent's <code>[RequiresLLMTier]</code> declaration matches a tier actually configured for the active LLM provider (via <code>ILLMTierValidationService</code>). Mismatches are caught immediately, not in production.
-      </div>
-
-      <div class="info-box">
-        <strong>Automated behavioral testing:</strong> Morgana ships <strong>PromptHarness</strong>, a dedicated test suite that runs real conversations against live LLM calls and checks how agents actually behave&mdash;not just that the code compiles. Changing a prompt, a policy, or a personality becomes an ordinary, verifiable step instead of a guess, keeping one of the most delicate parts of an AI application easy to maintain over time.
+        <strong>See the <a href="Alembic-Handbook.html" style="color: var(--purple-light);">Alembic Handbook</a></strong> for the full workflow&mdash;from launching the interview to the generated assets.
       </div>
 
       <div class="page-footer">
