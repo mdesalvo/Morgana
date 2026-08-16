@@ -253,16 +253,18 @@ the configuration rather than the transcript.
 **The work is written down without being asked.** `InterviewService.Keep` runs at the end of every
 `ExchangeAsync` — the one place every turn passes through, the turn that *opens* a pass included — so
 the Draft in the circuit is current from the first question rather than from the first answer. On top
-of that `DraftStateService` snapshots it into the memory cache every `Alembic:Work:AutosaveSeconds`,
-and once more when the circuit is disposed.
+of that `DraftStateService` takes a snapshot every `Alembic:Work:AutosaveSeconds`, held nowhere but in
+the service's own field.
 
-**That snapshot is not about tidiness, it is about how a circuit ends.** Blazor Server holds the
-interview in a live connection, and connections end for reasons the client never chose: a suspended
-laptop, a proxy closing an idle socket, a deploy. What they see is the reload banner, and reloading
-means a new circuit that knows nothing. So the snapshot is picked back up on the way in — the key
-under which it is cached lives in the browser's `ProtectedLocalStorage`, the way Cauldron keeps its
-conversation id: a pointer in the browser, the work on the server, and nothing in the HTTP path.
-The window that can be lost is the autosave interval, and nothing else.
+**The snapshot is a floor under one button, not a resumption mechanism.** Nothing here is cached
+against a key, and nothing is picked back up on the way in: a workbench that silently resumed
+something the client had not asked to resume would be deciding for them what they had come to do. The
+circuit is exactly as disposable as Blazor Server makes it — a suspended laptop, a proxy closing an
+idle socket, a deploy end it the same way, and what the client sees is the reload banner, and reloading
+means a new circuit that knows nothing. What the timer buys is narrower and sufficient: `Save my work`
+serializes the live Draft on the press and falls back to this snapshot only when that throws or catches
+a Draft mid-write, so the client still gets bytes, at worst `AutosaveSeconds` behind the screen. The
+only way back into work a dead circuit took with it is the file, brought to the landing page by hand.
 
 **Save my work hands over this moment, or the last one it has.** The button serializes the Draft when
 it is pressed and falls back to the newest snapshot if that cannot be had, then passes the bytes to
@@ -969,32 +971,45 @@ Alembic/                              # Container: Distiller/ (the workbench) + 
       DraftProjection.cs              # Draft → Records, shared by the exporter and the recap
       ValidationFinding.cs            # Severity, Where, Message, Because
       AgentRecap.cs                   # System prompt and tools, the two rungs shown apart
+      AgentRows.cs                    # The written-so-far rows, computed once for the map tag and the panel
       InterviewState.cs               # The interview's C# state machine: the map, where it stands on it, the pass
       Provenance.cs                   # Imported / Revised / Authored
-    Interfaces/
-      IDraftImportService.cs          # Uploaded agents.json → Draft
-      IDraftExportService.cs          # Draft → agents.json (the round-trip invariant)
-      IDraftSerializationService.cs   # Draft ⇄ alembic-draft.json (the interview's save file)
-      IDraftValidationService.cs      # Everything decidable about a Draft without a model
-      IRecapService.cs                # Draft → the prompt the model really reads
-      IAlembicPromptService.cs        # Alembic's own prose + tool declarations, from alembic.json
-      IInterviewService.cs            # Conducts the passes, folds each finished agent into the Draft
-      IDraftStateService.cs           # The Draft under construction, snapshotted against a dead circuit
-      IWorkKey.cs                     # Which work this browser is doing — a pointer in ProtectedLocalStorage
+    Interfaces/                       # One per Services/ default below, same name minus "I"
     Harness/                          # Alembic's own harness component — owes PromptHarness nothing
       Templates/*.yaml                # One behavioural use-case each, domain words left as placeholders
       ScenarioTemplate.cs             # A template: its `#@` brief and the scenario shape below it
       ScenarioTemplateLibrary.cs      # The templates, embedded; which apply; the union vocabulary
       ScenarioDerivation.cs           # A derivation checked against the vocabulary it was allowed
-    Services/                         # Default implementations of the above
-      InterviewTools.cs               # The tools Alembic calls while conducting a pass
+    Services/                         # Default implementations
+      AgentlessConfigurationService.cs #  IAgentConfigurationService, empty by construction
+      DraftImportService.cs           #  Uploaded agents.json → Draft
+      DraftExportService.cs           #  Draft → agents.json (the round-trip invariant)
+      DraftSerializationService.cs    #  Draft ⇄ alembic-draft.json (the interview's save file)
+      DraftValidationService.cs       #  Everything decidable about a Draft without a model
+      DraftStateService.cs            #  The Draft under construction, one circuit, one fallback snapshot
+      RecapService.cs                 #  Draft → the prompt the model really reads
+      AlembicPromptService.cs         #  Alembic's own prose + tool declarations, from alembic.json
+      InterviewService.cs             #  Conducts the passes, folds each finished agent into the Draft
+      InterviewTools.cs               #  The tools Alembic calls while conducting a pass
+      SolutionEmitService.cs          #  The .csproj/.slnx the generated sources live in
+      CodeEmitService.cs              #  The deterministic half of the generated C#, X.g.cs
+      ToolMockService.cs              #  The authored half, X.cs — a working mock per toolkit
+      StreamedCompletion.cs           #  One completion, streamed and resumed until the model stops on its own
+      MigrationReportService.cs       #  What this domain changes against the one uploaded
+      ScenarioAuthorService.cs        #  Derives the starter PromptHarness suite from Harness/Templates
+      CoherenceService.cs             #  The relational defects no per-agent pass can see; advisory
+      CoherenceApplyService.cs        #  Carries out one accepted coherence finding
+      CoherenceApplyTools.cs          #  The tools the apply pass calls, narrower than InterviewTools
+      AssetPackageService.cs          #  The one archive: config, sources, mocks, reports, save file
     Pages/_Host.cshtml                # Blazor Server host page (Server: prerendering mounts twice)
     Pages/Index.razor                 # Landing: the alembic, and the two ways in — distil a new domain, or continue one
-    Pages/Import.razor                # Upload an agents.json, see the parsed Draft, download it back
+    Pages/Import.razor                # Upload an agents.json or a save file, see the parsed Draft, download it back
     Pages/Review.razor                # Findings, then the composed prompts
     Pages/Interview.razor             # The wizard: drives the state machine, owns none of the pieces
+    Pages/Morganize.razor             # The turnkey end: validate, then emit the one archive
     Shared/MainLayout.razor           # Layout wrapper; carries the alembic as a mark on every page but the landing
     Shared/Back.razor                 # The way back, and it is the way you came
+    Shared/FinalizationRail.razor     # The two-station rail for Domain Finalization: validate, then leave
     Shared/Interview/                 # The wizard's pieces, one component each
       Journey.razor                   #   the rail and its lap, the entries under them, what this step asks
       Question.razor                  #   the question, the choices, the box
@@ -1089,8 +1104,18 @@ against the `Examples` domain it proposes `MonkeysAgent` where the real class is
 | `IRecapService` | Singleton | `RecapService` — drives `IPromptComposerService` over the Draft. Deliberately almost empty: anything Alembic added on top would be a claim about the prompt rather than the prompt |
 | `IAlembicPromptService` | Singleton | `AlembicPromptService` — loads `alembic.json` from this assembly, the way `ConfigurationPromptResolverService` loads `morgana.json`. Unlike it, refuses to degrade to an empty set: an interviewer with no prose is not diminished, it is silent |
 | `IInterviewService` | **Scoped** | `InterviewService` — one interview per circuit. Builds a Microsoft.Agents.AI agent via `MorganaToolAdapter` + `AsAIAgent`, on `GetChatClient(Performance)` directly rather than `CompleteWithSystemPromptAsync`, which always takes the cheapest tier |
-| `IDraftStateService` | **Scoped** | `DraftStateService` — the Draft under construction, in the circuit as before, and snapshotted into `IMemoryCache` on a timer so a dropped connection costs at most one autosave interval |
-| `IWorkKey` | **Scoped** | `WorkKey` — which work this browser is doing. A guid in `ProtectedLocalStorage`, exactly as Cauldron keeps its conversation id: the pointer is in the browser, the work is on the server |
+| `IDraftStateService` | **Scoped** | `DraftStateService` — the Draft under construction, in the circuit and nowhere else; a timer keeps one snapshot as a fallback for `Save my work`, never as a resumption path — see *Two files, one gesture* |
+| `ISolutionEmitService` | Singleton | `SolutionEmitService` — the `.csproj`/`.slnx` the generated sources live in, string-templated with the same discipline as `ICodeEmitService` |
+| `ICodeEmitService` | Singleton | `CodeEmitService` — the deterministic half of the generated C#: same Draft, same bytes, so a re-run diffs to exactly the change |
+| `IToolMockService` | Singleton | `ToolMockService` — the half a template writes badly: a working mock per toolkit, streamed and resumed until the model stops of its own accord |
+| `IMigrationReportService` | Singleton | `MigrationReportService` — what this domain changes against the one uploaded, produced unconditionally, greenfield included |
+| `IScenarioAuthorService` | Singleton | `ScenarioAuthorService` — derives the starter PromptHarness suite from `Harness/Templates/*.yaml` against the domain just authored |
+| `ICoherenceService` | Singleton | `CoherenceService` — the relational defects no per-agent pass can see; advises, never blocks |
+| `ICoherenceApplyService` | Singleton | `CoherenceApplyService` — carries out one accepted coherence finding via `CoherenceApplyTools`, reached only on an explicit Apply |
+| `IAssetPackageService` | Singleton | `AssetPackageService` — the one archive: agents.json, generated sources, mocks, `MIGRATION.md`, `README.md`, the save file |
+
+Each registration in `Program.cs` carries its own reasoning in a comment beside it; this table is an
+index into those, not a second copy of them.
 
 ## Why the project reference is Morgana.AI, not Morgana.Contracts
 
@@ -1104,8 +1129,7 @@ Parsing an uploaded `agents.json` is therefore free: there is no parallel repres
 
 | Section | Purpose |
 |---|---|
-| `Alembic:Work:AutosaveSeconds` | How often the Draft in the circuit is snapshotted into the memory cache. It is the size of the window a dead connection can cost, and the only reason it is not smaller is that each snapshot serializes the whole Draft |
-| `Alembic:Work:IdleMinutes` | How long an untouched snapshot survives. The whole retention policy: work nobody comes back to lets go of itself, and the file behind Save my work is what outlives it |
+| `Alembic:Work:AutosaveSeconds` | How often `DraftStateService` refreshes its one fallback snapshot for `Save my work`. It is the size of the window a dead connection can cost, and the only reason it is not smaller is that each snapshot serializes the whole Draft. There is no retention setting beyond it: the snapshot dies with the circuit, and the file behind `Save my work` is the only thing meant to outlive it |
 | `Morgana:LLM:Provider` | `Anthropic`, `AzureOpenAI`, `Ollama`, `OpenAI` |
 | `Morgana:LLM:{Provider}:Tiers:Performance` | `Options` (`ModelId`, `MaxOutputTokens`) + `MagicDust`. Only `Performance` is declared — Alembic never uses the Efficiency die. `MagicDust` carries **both axes at zero and nothing else**: metering off, which is the truth here — dust accounting is applied by `MorganaAgentAdapter`, and Alembic goes to `GetChatClient(Performance)` directly, so the pricing is never read at all. A calibrated tariff would be a claim about a price nobody consults, ageing against whichever model the tier is pointed at. It cannot be shortened to `{}`: the JSON configuration provider reads an empty object as `null`, `Records.TierDefinition` takes `MagicDust` as a non-nullable constructor parameter, and the dictionary binder drops an element it cannot construct **without raising anything** — so the whole tier disappears and the failure surfaces, one page later, as `No tiers configured` |
 
@@ -1122,22 +1146,16 @@ configure twice. A standalone deployment supplies the section by environment var
 - **Docker**: profile-gated, so `compose up` skips it —
   `docker compose --env-file .env --env-file .env.versions --profile authoring up alembic`
 
-## Roadmap
+## History
 
-Eight complementary phases. The ordering principle is **deterministic ends first, the LLM in the
-middle last**: import → Draft → export is verifiable without a single model call, and once that loop
-closes it is a hard invariant the interview cannot break.
-
-| Phase | Content | State |
-|---|---|---|
-| 1 | Scaffold — solution, project, Blazor shell, Morgana.AI reference, LLM wiring, Docker | **done** |
-| 2 | Draft model + import of an uploaded `agents.json` (fixture: `Examples/agents.json`) | **done** |
-| 3 | Export + round-trip invariant (an untouched file comes back out intact) | **done** |
-| 4 | Deterministic validation + recap as the real composed prompt — *first shippable milestone: useful without any interview* | **done** |
-| 5 | Interview, functional pass (`alembic.json`, FSM, intent + agent prose) | **done** |
-| 6 | Interview, toolkit pass + return pass (`Instructions`/`Formatting` speak about tools, so they come last) | **done** |
-| 7 | C# asset emit + migration report — *turnkey* | **done** |
-| 8 | PromptHarness starter scenarios + cross-agent coherence pass | **done** |
+All eight phases shipped, in this order, on one principle: **deterministic ends first, the LLM in
+the middle last**. Import → Draft → export was verifiable without a single model call, and once that
+loop closed it became a hard invariant the interview could not break. Then came validation and the
+recap (the first shippable milestone — useful without any interview), the interview itself in two
+halves (functional pass, then toolkit + return pass, because `Instructions`/`Formatting` speak about
+tools and had to come last), the turnkey C# emit and migration report, and finally the PromptHarness
+starter scenarios and the cross-agent coherence pass. Nothing is currently in flight; new work starts
+as its own entry here rather than reopening this list.
 
 ## Conventions
 
