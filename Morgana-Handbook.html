@@ -321,6 +321,42 @@
       }
       .badge .dot.warn { background: #facc15; }
 
+      /* ── TABLE OF CONTENTS ── */
+      .toc { list-style: none; margin: 8px 0 0; padding: 0; }
+      .toc li { margin-bottom: 4px; }
+      .toc li::marker { content: none; }
+      .toc a {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        text-decoration: none;
+        color: var(--text-primary);
+        font-size: 17px;
+        padding: 11px 14px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .toc a:hover {
+        background: var(--bg-dark);
+        border-color: var(--border);
+      }
+      .toc .toc-num {
+        font-family: 'Cinzel', serif;
+        color: var(--purple-mid);
+        font-size: 14px;
+        min-width: 20px;
+      }
+      .toc .toc-title { color: var(--purple-light); font-weight: 500; flex: 1; }
+      .toc .toc-dots {
+        flex: 1;
+        border-bottom: 1px dotted var(--border);
+        margin: 0 4px;
+        height: 1px;
+        min-width: 20px;
+      }
+      .toc .toc-page { color: var(--text-muted); font-size: 14px; }
+
       /* ── FOOTER ── */
       .page-footer {
         display: flex;
@@ -358,11 +394,35 @@
         <span>OpenTelemetry</span>
       </div>
     </div>
-  
+
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 2 — ARCHITECTURE OVERVIEW                                         -->
+    <!-- PAGE 2 — TABLE OF CONTENTS                                             -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page">
+      <h2>Indice</h2>
+      <ul class="toc">
+        <li><a href="#architecture-overview"><span class="toc-num">01</span><span class="toc-title">Architecture Overview</span><span class="toc-dots"></span><span class="toc-page">3</span></a></li>
+        <li><a href="#extension-points"><span class="toc-num">02</span><span class="toc-title">Extension Points</span><span class="toc-dots"></span><span class="toc-page">4</span></a></li>
+        <li><a href="#security-model"><span class="toc-num">03</span><span class="toc-title">Security Model</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
+        <li><a href="#configuration-reference"><span class="toc-num">04</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
+        <li><a href="#docker-deployment"><span class="toc-num">05</span><span class="toc-title">Docker Deployment</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
+        <li><a href="#observability"><span class="toc-num">06</span><span class="toc-title">Observability (OpenTelemetry)</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
+        <li><a href="#building-your-agents"><span class="toc-num">07</span><span class="toc-title">Building Your Agents with Alembic</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
+        <li><a href="#reference-channels"><span class="toc-num">08</span><span class="toc-title">Reference Channels</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
+        <li><a href="#deployment-responsibility-model"><span class="toc-num">09</span><span class="toc-title">Deployment Responsibility Model</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
+        <li><a href="#quick-reference"><span class="toc-num">10</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">12</span></a></li>
+      </ul>
+
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>2</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 3 — ARCHITECTURE OVERVIEW                                         -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="architecture-overview">
       <h2>Architecture Overview</h2>
       <p>Morgana is a <strong>conversational AI framework</strong> built on a multi-agent, intent-driven architecture. It is <strong>multi-channel by design</strong>: the backend intelligence (<strong>Morgana</strong>) is decoupled from the channels users actually reach it through, and ships with <strong>three reference channels out-of-the-box</strong> &mdash; <strong>Cauldron</strong> (HTML / Blazor Server, rich UI over SignalR), <strong>Grimoire</strong> (TTY / Spectre.Console, rich CLI over webhook) and <strong>Rune</strong> (TTY / Spectre.Console, poor-but-honest CLI over webhook). Every channel advertises its <strong>capability budget</strong> at conversation start, Morgana adapts its outbound expressivity accordingly, and each channel authenticates with its own JWT issuer.</p>
       <p>Morgana <strong>reimagines conversational AI</strong> through 4 foundational pillars that <strong>work in harmony</strong> to deliver an <strong>orchestration framework</strong> that is powerful yet remarkably simple to configure.</p>
@@ -405,14 +465,14 @@
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>2</span>
+        <span>3</span>
       </div>
     </div>
   
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 3 — EXTENSION POINTS & SECURITY                                   -->
+    <!-- PAGE 4 — EXTENSION POINTS                                             -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page">
+    <div class="page" id="extension-points">
       <h2>Extension Points</h2>
       <p>Every behavioural concern in Morgana is independently overridable via Dependency Injection. The default implementations ship as sensible baselines&mdash;replace any of them without touching a single line of framework code.</p>
     
@@ -437,8 +497,18 @@
       <div class="info-box">
         <strong>Plugin Architecture:</strong> Build your agents as standalone .NET libraries referencing the <strong>Morgana.AI</strong> NuGet package. Drop the compiled DLL into the <code>plugins/</code> folder and Morgana discovers it at startup&mdash;zero configuration needed.
       </div>
-    
-      <h2 style="margin-top: 26px;">Security Model</h2>
+
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>4</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 5 — SECURITY MODEL                                                -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="security-model">
+      <h2>Security Model</h2>
       <p>Morgana implements a <strong>defence-in-depth</strong> strategy with security at every layer. The architecture is designed so that infrastructure-level concerns (TLS, vault, WAF) remain the deployer's responsibility, while the product guarantees application-level protection.</p>
     
       <div class="badge-row">
@@ -465,14 +535,14 @@
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>3</span>
+        <span>5</span>
       </div>
     </div>
-  
+
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 4 — CONFIGURATION & DOCKER                                        -->
+    <!-- PAGE 6 — CONFIGURATION REFERENCE                                       -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page">
+    <div class="page" id="configuration-reference">
       <h2>Configuration Reference</h2>
       <p>Morgana and its reference channels all follow the standard ASP.NET configuration hierarchy: <code>appsettings.json</code> &rarr; environment variables &rarr; User Secrets. In Docker, environment variables in <code>docker-compose.yml</code> override everything.</p>
 
@@ -532,8 +602,18 @@
           <tr><td>Rune:MaxMessageLength</td><td>Budget capability declared for maximum message length (default: <code>500</code>)</td></tr>
         </tbody>
       </table>
-    
-      <h2 style="margin-top: 24px;">Docker Deployment</h2>
+
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>6</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 7 — DOCKER DEPLOYMENT                                             -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="docker-deployment">
+      <h2>Docker Deployment</h2>
       <p>Morgana ships with a ready-to-use <code>docker-compose.yml</code> defining Morgana, Cauldron, Grimoire and Rune on a dedicated bridge network with persistent SQLite volume. <code>docker compose up</code> starts Morgana + Cauldron; Grimoire and Rune are TUIs that need their own terminal, so each is launched interactively on demand in a separate shell (and only one TTY channel can own stdin/stdout at a time).</p>
 
       <div class="code-block"><span class="comment"># Quick Start (production images from Docker Hub)</span>
@@ -563,14 +643,14 @@
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>4</span>
+        <span>7</span>
       </div>
     </div>
-  
+
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 5 — OBSERVABILITY & AGENTS DEVELOPMENT                            -->
+    <!-- PAGE 8 — OBSERVABILITY                                                 -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page">
+    <div class="page" id="observability">
       <h2>Observability (OpenTelemetry)</h2>
       <p>Morgana provides end-to-end distributed tracing across the entire conversation pipeline. Traces are structured to be meaningful both to <strong>IT operators</strong> (latencies, TTFT, errors) and <strong>non-technical stakeholders</strong> (intent, agent name, response preview).</p>
     
@@ -596,8 +676,18 @@
       ]
     }</div>
       <p class="muted" style="font-size:14.5px;">Compatible with Jaeger, Grafana Tempo, Azure Monitor, Datadog, and any OTLP-compliant backend.</p>
-    
-      <h2 style="margin-top: 26px;">Building Your Agents with Alembic</h2>
+
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>8</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 9 — BUILDING YOUR AGENTS WITH ALEMBIC                             -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="building-your-agents">
+      <h2>Building Your Agents with Alembic</h2>
       <p>Agents can still be authored entirely by hand&mdash;<code>agents.json</code> and C# against the <code>Morgana.AI</code> NuGet package. But the <strong>preferred path</strong> is now <strong>Alembic</strong>, Morgana's authoring workbench: an AI-conducted interview that distills a <strong>new domain</strong> from scratch, or <strong>extends an existing one</strong>, into intents, agent prose, tool contracts and working C#&mdash;ready to be compiled into a Morgana plugin.</p>
 
       <div class="info-box">
@@ -606,14 +696,14 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>5</span>
+        <span>9</span>
       </div>
     </div>
-  
+
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 6 — SCREENSHOTS & QUICK REFERENCE                                 -->
+    <!-- PAGE 10 — REFERENCE CHANNELS                                            -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page">
+    <div class="page" id="reference-channels">
       <h2>Reference Channels</h2>
       <p>Morgana ships with <strong>three reference channels out-of-the-box</strong>, chosen to populate the <strong>channel &times; capability matrix</strong> so the framework's multi-channel design is demonstrable without any extra work: a rich renderer in two different surfaces (HTML and TTY) plus a deliberately poor one that exercises the degradation path.</p>
 
@@ -647,8 +737,18 @@
       <h3 style="margin-top:18px;">Rune &mdash; TTY / Spectre.Console (poor)</h3>
       <p>Rune is a minimal command-line channel: a Kestrel-hosted console app with a Spectre.Console Live UI (sticky header, streaming-free rendering), exercising the <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) with lowest capability profile</strong> (all rich features off, <code>MaxMessageLength=500</code>). It is the contract surface <code>MorganaChannelAdapter</code> is supposed to degrade toward &mdash; a working proof that the channel abstraction holds, not just a demo.</p>
       <p class="muted" style="font-size:14px;">Rune is launched interactively (<code>docker compose run --rm --service-ports --use-aliases rune</code>, or <code>dotnet run</code> from <code>Channels/Rune/</code>) because the Spectre.Console Live UI needs to own the terminal. <code>--use-aliases</code> is mandatory: <code>compose run</code> skips network aliases by default, so without it Morgana's webhook callback to <code>http://rune:5003</code> fails DNS resolution.</p>
-    
-      <h2 style="margin-top: 24px;">Deployment Responsibility Model</h2>
+
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>10</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 11 — DEPLOYMENT RESPONSIBILITY MODEL                             -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="deployment-responsibility-model">
+      <h2>Deployment Responsibility Model</h2>
       <p>Morgana draws a clear line between <strong>product responsibilities</strong> and <strong>deployer responsibilities</strong>, making it ready for enterprise deployment without prescribing infrastructure choices.</p>
     
       <table>
@@ -665,8 +765,18 @@
           <tr><td>Key rotation</td><td><strong>Deployer</strong></td><td>Operational procedure for JWT_SYMMETRIC_KEY</td></tr>
         </tbody>
       </table>
-    
-      <h2 style="margin-top: 22px;">Quick Reference</h2>
+
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>11</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 12 — QUICK REFERENCE                                              -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="quick-reference">
+      <h2>Quick Reference</h2>
       <table>
         <thead><tr><th>Resource</th><th>Location</th></tr></thead>
         <tbody>
@@ -683,7 +793,7 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>6</span>
+        <span>12</span>
       </div>
     </div>
 

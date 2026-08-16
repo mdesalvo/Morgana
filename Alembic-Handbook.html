@@ -321,6 +321,42 @@
       }
       .badge .dot.warn { background: #facc15; }
 
+      /* ── TABLE OF CONTENTS ── */
+      .toc { list-style: none; margin: 8px 0 0; padding: 0; }
+      .toc li { margin-bottom: 4px; }
+      .toc li::marker { content: none; }
+      .toc a {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        text-decoration: none;
+        color: var(--text-primary);
+        font-size: 17px;
+        padding: 11px 14px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .toc a:hover {
+        background: var(--bg-dark);
+        border-color: var(--border);
+      }
+      .toc .toc-num {
+        font-family: 'Cinzel', serif;
+        color: var(--purple-mid);
+        font-size: 14px;
+        min-width: 20px;
+      }
+      .toc .toc-title { color: var(--purple-light); font-weight: 500; flex: 1; }
+      .toc .toc-dots {
+        flex: 1;
+        border-bottom: 1px dotted var(--border);
+        margin: 0 4px;
+        height: 1px;
+        min-width: 20px;
+      }
+      .toc .toc-page { color: var(--text-muted); font-size: 14px; }
+
       /* ── FOOTER ── */
       .page-footer {
         display: flex;
@@ -360,9 +396,31 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 2 — ARCHITECTURE OVERVIEW                                         -->
+    <!-- PAGE 2 — TABLE OF CONTENTS                                             -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page">
+      <h2>Indice</h2>
+      <ul class="toc">
+        <li><a href="#architecture-overview"><span class="toc-num">01</span><span class="toc-title">Architecture Overview</span><span class="toc-dots"></span><span class="toc-page">3</span></a></li>
+        <li><a href="#the-interview"><span class="toc-num">02</span><span class="toc-title">The Interview</span><span class="toc-dots"></span><span class="toc-page">4</span></a></li>
+        <li><a href="#configuration-reference"><span class="toc-num">03</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
+        <li><a href="#regeneration-contract"><span class="toc-num">04</span><span class="toc-title">The Regeneration Contract</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
+        <li><a href="#the-emit"><span class="toc-num">05</span><span class="toc-title">The Emit</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
+        <li><a href="#non-regression-scenarios"><span class="toc-num">06</span><span class="toc-title">Starter Non-Regression Scenarios</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
+        <li><a href="#getting-started"><span class="toc-num">07</span><span class="toc-title">Getting Started</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
+        <li><a href="#quick-reference"><span class="toc-num">08</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
+      </ul>
+
+      <div class="page-footer">
+        <span>Alembic Handbook</span>
+        <span>2</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 3 — ARCHITECTURE OVERVIEW                                         -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="architecture-overview">
       <h2>Architecture Overview</h2>
       <p>Alembic is Morgana's <strong>authoring workbench</strong>: an AI-conducted functional interview that distils a domain expert's own words into a complete Morgana domain &mdash; <strong>intents, agent prose, tool contracts, C# assets and non-regression scenarios</strong> &mdash; with no prompt ever written by hand. It is <strong>not a channel</strong>: it never calls a running Morgana, holds no JWT, joins no conversation pipeline &mdash; its only external dependency is an LLM. And it is <strong>not a filesystem tool</strong>: configuration arrives as an <strong>upload</strong> and leaves as a <strong>download</strong>, since at runtime Alembic can live anywhere &mdash; a cloud, an on-prem box beside Morgana, a laptop.</p>
       <p>Alembic is itself <strong>an agent of Morgana</strong>: its own prompt is layered from an <code>alembic.json</code> of identical shape to a domain agent's (Target / Instructions / Personality / Formatting), composed with Morgana's own Personality resolved live from <code>morgana.json</code> &mdash; the same framework the domains it authors will run under.</p>
@@ -407,14 +465,14 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>2</span>
+        <span>3</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 3 — THE INTERVIEW & DOCTRINE                                      -->
+    <!-- PAGE 4 — THE INTERVIEW                                              -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page">
+    <div class="page" id="the-interview">
       <h2>The Interview</h2>
       <p>A domain is a configuration of two halves &mdash; <code>Intents</code> and the <code>Agents</code> that answer them one each &mdash; so the interview opens on the half that comes first in every sense. Only then does it walk the map, four passes per entry, until every intent has its agent. Each pass is a <strong>fresh agent and a fresh session</strong>: what crosses the boundary is the configuration, read back as settled fact, never the conversation replayed.</p>
 
@@ -444,14 +502,14 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>3</span>
+        <span>4</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 4 — CONFIGURATION & REGENERATION CONTRACT                        -->
+    <!-- PAGE 5 — CONFIGURATION REFERENCE                                     -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page">
+    <div class="page" id="configuration-reference">
       <h2>Configuration Reference</h2>
       <p>Alembic follows the same ASP.NET configuration hierarchy every unit in the repository does: <code>appsettings.json</code> &rarr; environment variables &rarr; User Secrets. It shares its <code>UserSecretsId</code> with Morgana.Web, so in-repo it runs against whatever LLM provider and tiers the working copy is already wired to &mdash; nothing to configure twice.</p>
 
@@ -468,7 +526,17 @@
         <strong>No single-tier deployment:</strong> because Alembic declares only <code>Performance</code>, it does not run against a single-tier deployment (Ollama being the canonical case) until a <code>Performance</code> entry is configured &mdash; the same &ldquo;no cross-tier fallback&rdquo; rule the framework itself enforces.
       </div>
 
-      <h2 style="margin-top: 24px;">The Regeneration Contract</h2>
+      <div class="page-footer">
+        <span>Alembic Handbook</span>
+        <span>5</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 6 — THE REGENERATION CONTRACT                                   -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="regeneration-contract">
+      <h2>The Regeneration Contract</h2>
       <p>Generated C# is split across two files per class &mdash; the non-destructive-regeneration mechanism, and the line between what is templated (deterministic, so a re-run produces no spurious diff) and what is authored by the LLM.</p>
 
       <table>
@@ -491,14 +559,14 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>4</span>
+        <span>6</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 5 — THE EMIT & NON-REGRESSION                                     -->
+    <!-- PAGE 7 — THE EMIT                                                    -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page">
+    <div class="page" id="the-emit">
       <h2>The Emit</h2>
       <p>The reviewed domain downloads as <strong>one archive</strong>, because the pieces are only correct together &mdash; an <code>agents.json</code> whose toolkit has moved on from the C# beside it is a startup failure waiting to happen.</p>
 
@@ -511,7 +579,17 @@
         <li><code>README.md</code> (carrying the two-halves convention), <code>MIGRATION.md</code>, and the interview's own save file</li>
       </ul>
 
-      <h2 style="margin-top: 22px;">Starter Non-Regression Scenarios</h2>
+      <div class="page-footer">
+        <span>Alembic Handbook</span>
+        <span>7</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 8 — STARTER NON-REGRESSION SCENARIOS                            -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="non-regression-scenarios">
+      <h2>Starter Non-Regression Scenarios</h2>
       <p>A domain agent <em>is</em> its prose, and prose gets edited &mdash; a client who leaves without scenarios has a domain nobody can revise safely. Alembic derives a starting <strong>PromptHarness</strong> suite from a library of behavioural templates, replacing every domain-word placeholder with this domain's own language.</p>
 
       <table>
@@ -538,14 +616,14 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>5</span>
+        <span>8</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 6 — GETTING STARTED & QUICK REFERENCE                            -->
+    <!-- PAGE 9 — GETTING STARTED                                             -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page">
+    <div class="page" id="getting-started">
       <h2>Getting Started</h2>
       <p>Two doors, from the landing page: distil a brand-new domain, or continue one already in progress.</p>
 
@@ -565,7 +643,17 @@
         <strong>The client never uses the agent.</strong> The people who will are their customers &mdash; so everything Alembic writes is addressed to the agent <em>about</em> those people, never <em>to</em> the client conducting the interview.
       </div>
 
-      <h2 style="margin-top: 24px;">Quick Reference</h2>
+      <div class="page-footer">
+        <span>Alembic Handbook</span>
+        <span>9</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 10 — QUICK REFERENCE                                            -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="quick-reference">
+      <h2>Quick Reference</h2>
       <table>
         <thead><tr><th>Resource</th><th>Location</th></tr></thead>
         <tbody>
@@ -580,7 +668,7 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>6</span>
+        <span>10</span>
       </div>
     </div>
 
