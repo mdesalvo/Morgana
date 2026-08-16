@@ -65,7 +65,7 @@ ARG VERSION=latest
 
 # Metadata labels (OCI standard)
 LABEL org.opencontainers.image.title="Alembic"
-LABEL org.opencontainers.image.description="The authoring workbench that distils a domain interview into a Morgana agent"
+LABEL org.opencontainers.image.description="The authoring workbench that distils a domain interview into a Morgana domain"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.authors="Marco De Salvo"
 LABEL org.opencontainers.image.url="https://github.com/mdesalvo/Morgana"
