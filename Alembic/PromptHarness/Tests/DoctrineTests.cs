@@ -1,3 +1,4 @@
+using Distiller.Interfaces;
 using Distiller.Model;
 using PromptHarness.Fixtures;
 using PromptHarness.Infrastructure;
@@ -29,6 +30,7 @@ public sealed class DoctrineTests
     public DoctrineTests(BistroLunaInterviewFixture interviewed) => this.interviewed = interviewed;
 
     private Judge Judge => interviewed.Services.GetRequiredService<Judge>();
+    private IRecapService Recap => interviewed.Services.GetRequiredService<IRecapService>();
 
     /// <summary>Asserts a proposition must hold, with the judged prose in the failure message.</summary>
     private async Task AssertHoldsAsync(string proposition, string prose, string label)
@@ -46,12 +48,19 @@ public sealed class DoctrineTests
 
     // ---- Target ----------------------------------------------------------------------------
 
+    // Target's own job, per CLAUDE.md's doctrine table, is what the agent does and does not do —
+    // existentially, not who it is: naming which facet of Morgana this agent is belongs to
+    // Personality alone ("Personality names which facet she is here"), and testing Target for a
+    // named persona was testing it against a job it was never given. What Target must still never
+    // do is claim to BE one of the generic archetypes CLAUDE.md rules out — a virtual assistant, a
+    // chatbot, a helpful bot, neutral customer service staff — which is the actual anti-pattern
+    // this checks for, independently of whether Target happens to name Morgana at all.
     [Fact]
-    public Task Target_never_reads_as_a_generic_assistant() => AssertDoesNotHoldAsync(
-        "This text describes the agent in generic terms — a virtual assistant, a chatbot, a helpful "
-        + "bot, or neutral customer service staff — rather than as a specific persona belonging to Morgana.",
+    public Task Target_never_claims_to_be_a_generic_assistant() => AssertDoesNotHoldAsync(
+        "This text explicitly describes the agent as being a virtual assistant, a chatbot, a helpful "
+        + "bot, or neutral, faceless customer service staff.",
         Agent.Target ?? string.Empty,
-        "Target reads as a generic assistant rather than a persona of Morgana");
+        "Target claims to be a generic assistant archetype");
 
     [Fact]
     public Task Target_states_an_explicit_boundary() => AssertHoldsAsync(
@@ -59,6 +68,29 @@ public sealed class DoctrineTests
         + "do, in addition to describing what it is for.",
         Agent.Target ?? string.Empty,
         "Target states no explicit boundary");
+
+    // ---- Composed prompt ---------------------------------------------------------------------
+
+    // Self-awareness of being Morgana is real doctrine — "An authored agent is one agent of
+    // Morgana, never a separate creature" — but it is a property of what the agent's own model
+    // actually reads, and that is never Agent.Target alone. IRecapService.ComposeAsync produces the
+    // same two layers the running agent gets: Morgana's own framework layer (her Personality, her
+    // Target, resolved live from morgana.json) UNDER the domain layer this interview wrote. The
+    // framework layer is where her identity lives; asking the bare domain Target to carry it too,
+    // as the previous version of this test did, was demanding the same fact be stated twice and
+    // failing a correctly-scoped Target for not doing the framework layer's job.
+    [Fact]
+    public async Task Composed_prompt_reads_as_self_aware_of_being_Morgana()
+    {
+        AgentRecap recap = await Recap.ComposeAsync(Agent);
+
+        await AssertHoldsAsync(
+            "This text presents the agent as one agent of Morgana — part of a larger assistant "
+            + "named Morgana, not a standalone or separate creature of its own — rather than as "
+            + "generic, unaffiliated software with no such identity.",
+            recap.SystemPrompt,
+            "Composed prompt shows no self-awareness of being an agent of Morgana");
+    }
 
     // ---- Personality -------------------------------------------------------------------------
 

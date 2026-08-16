@@ -29,7 +29,8 @@ public sealed class MappingTests
         using IServiceScope scope = fixture.NewScope();
         IInterviewService interview = scope.ServiceProvider.GetRequiredService<IInterviewService>();
 
-        DrivenInterview driven = await InterviewDriver.RunMappingOnlyAsync(interview, BistroLunaFixture.MappingScript);
+        DrivenInterview driven = await InterviewDriver.RunMappingOnlyAsync(
+            interview, BistroLunaFixture.MappingScript, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Null(driven.FinalState.Error);
         Assert.True(driven.FinalState.Pass != InterviewPass.DomainMapper,

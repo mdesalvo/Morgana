@@ -6,10 +6,15 @@ using System.Text.RegularExpressions;
 namespace PromptHarness.Infrastructure;
 
 /// <summary>
-/// Whether the archive <see cref="ArchiveCompiler"/> extracted built, and the full <c>dotnet build</c>
-/// transcript either way.
+/// Whether the archive <see cref="ArchiveCompiler"/> extracted built, the full <c>dotnet build</c>
+/// transcript either way, and — on success — where the primary assembly landed.
 /// </summary>
-public sealed record ArchiveCompileResult(bool Succeeded, int ExitCode, string Output);
+/// <param name="AssemblyPath">
+/// The built <c>{ProjectName}.dll</c>, for a caller that wants to reflect over what actually got
+/// compiled rather than trust the exit code alone. <c>null</c> when the build failed or, past that
+/// point, the file still was not found where the project name says it should be.
+/// </param>
+public sealed record ArchiveCompileResult(bool Succeeded, int ExitCode, string Output, string? AssemblyPath);
 
 /// <summary>
 /// Unzips an archive <c>IAssetPackageService</c> produced into a throwaway directory and builds it
@@ -87,6 +92,16 @@ public static class ArchiveCompiler
         string stderr = await process.StandardError.ReadToEndAsync(cancellationToken);
         await process.WaitForExitAsync(cancellationToken);
 
-        return new ArchiveCompileResult(process.ExitCode == 0, process.ExitCode, stdout + stderr);
+        bool succeeded = process.ExitCode == 0;
+
+        // The project's own name, since SolutionEmitService names the .csproj after the resolved
+        // namespace and MSBuild defaults AssemblyName to the project name — the same file the build
+        // just produced, wherever under bin/ this SDK version happens to put it.
+        string expectedAssembly = Path.GetFileNameWithoutExtension(csprojPath) + ".dll";
+        string? assemblyPath = succeeded
+            ? Directory.GetFiles(dir, expectedAssembly, SearchOption.AllDirectories).FirstOrDefault()
+            : null;
+
+        return new ArchiveCompileResult(succeeded, process.ExitCode, stdout + stderr, assemblyPath);
     }
 }
