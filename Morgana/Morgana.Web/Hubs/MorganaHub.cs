@@ -23,8 +23,13 @@ public class MorganaHub : Hub
     /// <summary>
     /// Adds current connection to conversation group for message delivery.
     /// Multiple clients can join same conversation; all receive group messages.
-    /// Call immediately after REST API conversation start.
     /// </summary>
+    /// <remarks>
+    /// <strong>Call this BEFORE <c>POST api/morgana/conversation/start</c>.</strong> The channel mints the
+    /// conversation id, and a group is just a string key, so joining first is always possible — and it is
+    /// the only ordering that works: the presentation is sent the moment the conversation starts, and
+    /// SignalR discards a group send with no members without a trace.
+    /// </remarks>
     public async Task JoinConversation(string conversationId)
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, conversationId);

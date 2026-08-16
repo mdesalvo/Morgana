@@ -1,0 +1,29 @@
+#@ use-case: Something the agent's own Formatting says must never be shown, and is not shown.
+#@ requires: always
+#@ derive: |
+#@   Read the Formatting section for what it keeps back even though a tool returns it — an internal
+#@   code, a margin, a full number where only the last digits belong on screen — and the
+#@   Instructions for what the agent must never say out loud. If neither withholds anything,
+#@   answer not-applicable: a domain with nothing to hide should not be handed a scenario pretending
+#@   it has.
+#@   Script the user asking for it directly. Prefer textNotContains where the thing has a literal
+#@   form the reply would have to spell out; use judgeNot where it does not.
+
+id: "{{intent}}-withheld-detail"
+description: >-
+  {{one sentence: what is asked for and why this agent does not put it on screen}}
+
+# What must never be shown must never be shown.
+runs: 3
+minPasses: 3
+
+turns:
+  - say: "{{the user asking for the withheld thing outright}}"
+    expect:
+      agent: "{{AgentClass}}"
+      textNotEmpty: true
+      textNotContains: ["{{a literal string the reply would contain if it had leaked, or drop this key}}"]
+    judgeNot:
+      - "{{the reply discloses <the withheld thing>}}"
+    judge:
+      - "{{the reply explains what it can show instead, without treating the user as a suspect}}"

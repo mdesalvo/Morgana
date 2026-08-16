@@ -87,6 +87,11 @@ public class MorganaAgent : MorganaActor
     protected string AgentIdentifier => $"{AgentIntent}-{conversationId}";
 
     /// <summary>
+    /// Inserted between the text of two consecutive assistant messages of the same turn.
+    /// </summary>
+    private const string MessageSeparator = "\n\n";
+
+    /// <summary>
     /// Initializes the agent actor and wires message handlers for
     /// <see cref="Records.AgentRequest"/> and <see cref="Records.FailureContext"/>.
     /// </summary>
@@ -142,10 +147,6 @@ public class MorganaAgent : MorganaActor
     /// <para>The persistence-based model writes once and lets each interested agent read on
     /// demand at the start of its next turn. Agents that never become active in a conversation
     /// pay zero cost; a write reaches an agent only if and when that agent actually runs.</para>
-    /// <para>The persistence layer enforces first-write-wins via <c>INSERT OR IGNORE</c>, mirroring
-    /// the rule that <see cref="MorganaAIContextProvider.MergeSharedContext"/> applies on the
-    /// read side. The call is awaited synchronously inside the actor: SQLite writes are
-    /// sub-millisecond on local storage and the actor processes one message at a time anyway.</para>
     /// </remarks>
     /// <param name="key">Name of the shared variable.</param>
     /// <param name="value">Value to persist.</param>
@@ -241,11 +242,29 @@ public class MorganaAgent : MorganaActor
             {
                 Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
                 bool firstChunkEmitted = false;
+                string? lastTextMessageId = null;
 
                 await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(userMessage, aiAgentSession))
                 {
                     if (!string.IsNullOrEmpty(chunk.Text))
                     {
+                        // Two text chunks with different MessageIds come from different messages, and that
+                        // is where the separator belongs. Within one message the chunks are tokens and must
+                        // stay welded, so only text-carrying chunks update the id. A provider that never
+                        // sets MessageId reports no boundary and nothing is inserted.
+                        if (lastTextMessageId is not null
+                             && !string.Equals(chunk.MessageId, lastTextMessageId, StringComparison.Ordinal)
+                             && NeedsMessageSeparator(fullResponse, chunk.Text))
+                        {
+                            fullResponse.Append(MessageSeparator);
+
+                            // Streamed too, so the live text matches the final one the client is about to
+                            // overwrite it with, instead of showing the weld for the rest of the turn.
+                            senderRef.Tell(new Records.AgentStreamChunk(MessageSeparator));
+                        }
+
+                        lastTextMessageId = chunk.MessageId;
+
                         fullResponse.Append(chunk.Text);
                         senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
 
@@ -267,7 +286,21 @@ public class MorganaAgent : MorganaActor
                 Stopwatch responseStopwatch = Stopwatch.StartNew();
                 AgentResponse response = await aiAgent.RunAsync(userMessage, aiAgentSession);
                 responseStopwatch.Stop();
-                fullResponse.Append(response.Text);
+
+                // Assembled message by message rather than through AgentResponse.Text, which is
+                // documented to concatenate every message's text and so produces exactly the weld
+                // MessageSeparator exists to prevent. Here every element is a whole message, so the
+                // boundary needs no detecting — unlike the streaming path above.
+                foreach (ChatMessage responseMessage in response.Messages)
+                {
+                    if (string.IsNullOrEmpty(responseMessage.Text))
+                        continue;
+
+                    if (NeedsMessageSeparator(fullResponse, responseMessage.Text))
+                        fullResponse.Append(MessageSeparator);
+
+                    fullResponse.Append(responseMessage.Text);
+                }
 
                 long ttft = responseStopwatch.ElapsedMilliseconds;
                 agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
@@ -326,7 +359,13 @@ public class MorganaAgent : MorganaActor
             // very last assistant or, for some models (e.g. Haiku 4.5 after a closing tool_result),
             // on a slightly earlier one with the trailing assistant left empty. Picking the last
             // assistant *with text* covers both layouts: an empty trailing assistant is skipped,
-            // and the marker sits on the message whose text is what the user actually saw live.
+            // and exactly one message per turn survives the history filter — which is what keeps a
+            // turn rendering as one bubble instead of one per tool-calling round.
+            //
+            // That message carries only its own fragment, though, and the reply the user read is
+            // llmResponseText: every text-bearing message of the turn, joined. So the assembled text
+            // rides along with the marker rather than being reconstructed on the way out, and the
+            // filter keeps deciding *which* message survives while this decides *what it says*.
             ChatMessage? finalAssistantMessage = aiChatHistoryProvider
                 .GetMessages(aiAgentSession)
                 .LastOrDefault(m => m.Role == ChatRole.Assistant
@@ -335,6 +374,7 @@ public class MorganaAgent : MorganaActor
             {
                 finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
                 finalAssistantMessage.AdditionalProperties[MorganaChatHistoryProvider.UserFacingMarkerKey] = true;
+                finalAssistantMessage.AdditionalProperties[MorganaChatHistoryProvider.TurnTextKey] = llmResponseText;
             }
 
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
@@ -383,6 +423,18 @@ public class MorganaAgent : MorganaActor
 
         failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
     }
+
+    /// <summary>
+    /// Whether <see cref="MessageSeparator"/> has to be inserted before appending <paramref name="incoming"/>
+    /// to the text accumulated so far.
+    /// </summary>
+    /// <param name="accumulated">Response text assembled up to this point.</param>
+    /// <param name="incoming">Text of the message about to be appended; never empty.</param>
+    /// <returns><c>true</c> when the two would otherwise weld together.</returns>
+    private static bool NeedsMessageSeparator(StringBuilder accumulated, string incoming)
+        => accumulated.Length > 0
+           && !char.IsWhiteSpace(accumulated[^1])
+           && !char.IsWhiteSpace(incoming[0]);
 
     /// <summary>
     /// Collects, in call order, the names of the tools invoked during the current turn, for the <c>agent.tools_invoked</c> span attribute.

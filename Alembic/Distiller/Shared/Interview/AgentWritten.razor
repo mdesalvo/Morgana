@@ -1,0 +1,87 @@
+@*
+    The one moment of the interview that is genuinely the client's decision, and also the join
+    between two entries of the map: what follows the button is the next kind of request, asked
+    without leaving the page, until the map is spent.
+*@
+
+<div class="sealed">
+    <h2>@Named is written</h2>
+
+    <p>
+        What it is, what it reaches for, how it works &mdash; all settled.
+        @if (Remaining > 0)
+        {
+            <text>
+                Put it in the domain and we go on to @Next &mdash;
+                @(Remaining == 1 ? "the last one left" : $"{Remaining} left") on the map.
+            </text>
+        }
+        else
+        {
+            <text>
+                It is the last on the map. Put it in the domain and the whole of it is there to be
+                reviewed and taken away.
+            </text>
+        }
+    </p>
+
+    <div class="sealed-actions">
+        @Back
+
+        @Keep
+
+        <button class="primary" @onclick="() => OnAccept.InvokeAsync()" disabled="@Busy">
+            @(Remaining > 0 ? "Into the domain, then the next" : "Into the domain")
+        </button>
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// The interview whose agent has just been finished.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public InterviewState State { get; set; } = default!;
+
+    /// <summary>
+    /// The way back into the agent, beside the button that lets it out.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Back { get; set; }
+
+    /// <summary>
+    /// Taking the work away, beside the button that lets the agent into the domain.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Keep { get; set; }
+
+    /// <summary>
+    /// Whether the commit is already under way.
+    /// </summary>
+    [Parameter]
+    public bool Busy { get; set; }
+
+    /// <summary>
+    /// Raised when the client lets the agent into the domain.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnAccept { get; set; }
+
+    /// <summary>
+    /// What to call the finished agent: its button, which is the client's own phrase for it.
+    /// </summary>
+    private string Named => State.Intent.Label ?? State.Intent.Name ?? "This agent";
+
+    /// <summary>
+    /// How many entries of the map have no agent yet, this one excluded.
+    /// </summary>
+    private int Remaining => State.Map.Count - State.At - 1;
+
+    /// <summary>
+    /// What the next entry is called.
+    /// </summary>
+    private string Next =>
+        State.At + 1 < State.Map.Count
+            ? State.Map[State.At + 1].Label ?? State.Map[State.At + 1].Name ?? "the next one"
+            : "the next one";
+}

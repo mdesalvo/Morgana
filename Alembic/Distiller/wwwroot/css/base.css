@@ -1,0 +1,146 @@
+/* ==========================================================================
+   Alembic — the surface, in six files.
+
+   One file per part of the workbench, linked in this order by Pages/_Host.cshtml: base, landing,
+   import, panels, interview, controls. The palette is read off the alembic in wwwroot/images — a
+   night-violet room, the vessel lit magenta from inside, cyan where the distillate runs cold, and
+   one warm gold for what is finished — and it lives here, in base.css, because every other file
+   spends it and none of them defines it.
+
+   base.css — the tokens, the reset, the page shells, and the mark that carries the alembic onto
+   every page past the landing.
+   ========================================================================== */
+
+:root {
+    /* The four grounds, one step apart each, in the order they stack: what is recessed into the
+       page, the page itself, what sits on it, what is lit on top. The room is a lit one — the
+       violet is in the ground rather than only in the glow above it, so a panel reads as standing
+       in the light rather than as the one thing visible in the dark. */
+    --alembic-bg: #15102b;
+    --alembic-bg-deep: #0d0920;
+    --alembic-panel: #1e1740;
+    --alembic-panel-lit: #271e52;
+    --alembic-border: #35296b;
+    --alembic-border-lit: #5a44b0;
+    --alembic-text: #ece8f8;
+    --alembic-muted: #a396cd;
+    --alembic-accent: #c084fc;
+    --alembic-accent-deep: #8b5cf6;
+    --alembic-cyan: #67e8f9;
+    --alembic-gold: #f4c56a;
+    --alembic-error: #ff8a8a;
+    --alembic-success: #4ade80;
+
+    /* The glow the vessel throws on everything near it. One shadow, reused, so the page reads
+       as lit from a single source rather than as a set of independently glowing boxes. */
+    --alembic-glow: 0 0 2.5rem rgba(139, 92, 246, 0.18);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+/* The whole surface is set one step up. Everything here is sized in rem against this, so the step is
+   taken once and the proportions between a question, a station name and a row label are the ones
+   already chosen — a page given more room and left at the same type size reads as a small interface
+   in a large window, which is the state it was in. */
+html {
+    font-size: 106.25%;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    /* Three layers of one light: a wide violet wash from above the page, the cold cyan the
+       distillate throws in the far corner, and the ground under both. The wash is broad and weak
+       rather than narrow and strong — a soft light fills a room, a hard one draws a spotlight. */
+    background:
+        radial-gradient(ellipse 75rem 48rem at 50% -12%, rgba(167, 139, 250, 0.20), transparent 72%),
+        radial-gradient(ellipse 40rem 30rem at 85% 100%, rgba(103, 232, 249, 0.08), transparent 70%),
+        var(--alembic-bg);
+    background-attachment: fixed;
+    color: var(--alembic-text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.55;
+}
+
+/* Positioned, so page furniture — the one action that belongs to the page rather than to anything
+   on it — can be placed against its edges instead of squeezed into the column. */
+.page {
+    position: relative;
+}
+
+.alembic-landing,
+.alembic-page {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 1.4rem 1.5rem 2.5rem;
+}
+
+/* The workbench takes the room it needs. A wizard is not an article: what is on the screen is a rail
+   of seven steps, a map of the domain, a question and the box it is answered in, and squeezing all of
+   that into a column meant for prose wrapped the rail onto four lines and made a slot of the box the
+   client is asked to write a paragraph into. Wide, with the reading measures set per element where a
+   measure actually matters. */
+.alembic-page {
+    max-width: 84rem;
+}
+
+.alembic-wide {
+    max-width: 76rem;
+}
+
+.alembic-landing h1,
+.alembic-page h1 {
+    margin: 0;
+    font-size: 3rem;
+    font-weight: 200;
+    letter-spacing: 0.14em;
+    background: linear-gradient(100deg, var(--alembic-accent), var(--alembic-cyan) 85%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.tagline {
+    margin: 0.25rem 0 2.5rem;
+    color: var(--alembic-muted);
+}
+
+/* The vessel once you are past the landing: same image, same place — centred, over the top of the
+   page — only smaller. Central because the alembic is what the client stands in front of on every
+   page here; at the edge it would be a brand instead. It keeps its glow, because a mark that goes
+   grey reads as decoration and this one is the alembic still lit while you work. It is the way home. */
+.alembic-mark {
+    display: block;
+    width: 4.4rem;
+    margin: 10px auto;
+    text-align: center;
+    text-decoration: none;
+    opacity: 0.85;
+    transition: opacity 0.2s ease;
+}
+
+.alembic-mark:hover {
+    opacity: 1;
+}
+
+.alembic-mark img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 1px solid var(--alembic-border-lit);
+    box-shadow: 0 0 2.1rem rgba(139, 92, 246, 0.42);
+}
+
+.alembic-mark span {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--alembic-muted);
+}

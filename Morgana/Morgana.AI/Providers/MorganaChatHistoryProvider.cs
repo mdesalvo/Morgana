@@ -62,6 +62,25 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     public const string UserFacingMarkerKey = "morgana:user_facing";
 
     /// <summary>
+    /// Key written into <see cref="ChatMessage.AdditionalProperties"/> alongside
+    /// <see cref="UserFacingMarkerKey"/>, carrying the turn's reply exactly as it was delivered to
+    /// the channel. Read back by <c>SQLiteConversationPersistenceService.ExtractTextFromMessage</c>
+    /// so a resumed conversation renders what the user actually read.
+    /// </summary>
+    /// <remarks>
+    /// <para>The marker alone cannot reconstruct the reply. A turn that calls a tool leaves several
+    /// assistant messages carrying text, and the live reply is all of them joined; the marker lands on
+    /// the last one, because rendering every one of them would turn a single bubble into several. So
+    /// the surviving message holds only the closing fragment, and everything the model wrote before the
+    /// tool call disappears the moment the conversation is resumed.</para>
+    /// <para>Recording the assembled text removes the need to reconstruct it: it is the same string the
+    /// agent sent, stored on the same message that already survives the filter, so history and live
+    /// output cannot drift apart. Absent (older sessions, an agent that never marked a turn), the
+    /// reader falls back to the message's own content and behaves exactly as before.</para>
+    /// </remarks>
+    public const string TurnTextKey = "morgana:turn_text";
+
+    /// <summary>
     /// Initializes a new singleton instance of <see cref="MorganaChatHistoryProvider"/>.
     /// </summary>
     /// <param name="agentIntent">Agent intent label (e.g. "billing") used in log output.</param>

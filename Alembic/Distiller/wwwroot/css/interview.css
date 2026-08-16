@@ -1,0 +1,598 @@
+/* ==========================================================================
+   The interview: the map across the top, the journey, the question that is the whole scene, the
+   transcript folded away, and the agent's own rows along the foot. One file per component would
+   scatter a language that has to agree with itself - deep violet behind, the bright accent for here,
+   faint for ahead - so the interview is one file and the agreement is visible in it.
+   ========================================================================== */
+
+/* Where the interview stands: the domain, the four steps each entry of it goes through, and one
+   line saying what is being asked for here. One block, because it is one fact — the entries across
+   the top are the first step, not a caption above it.
+
+   The entries are big enough to read as the work: a strip of tiny grey pills reads as a progress
+   ornament, and this is the list the client is dictating. */
+.journey {
+    margin: 1.1rem 0 1.4rem;
+}
+
+/* Under the rail, and clear of it: the station names sit on their own line and a strip pulled up
+   against them reads as a caption belonging to whichever step is nearest. */
+.journey .domain {
+    margin: 1.1rem 0 0;
+    text-align: center;
+}
+
+.journey .domain .what {
+    display: block;
+    margin-bottom: 0.8rem;
+    color: var(--alembic-muted);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-size: 0.76rem;
+}
+
+.journey .domain .kinds {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+}
+
+.journey .domain .nothing {
+    color: var(--alembic-muted);
+    font-size: 1rem;
+    opacity: 0.8;
+}
+
+.journey .domain .already,
+.journey .domain .ahead,
+.journey .domain .under-way {
+    padding: 0.4rem 1.1rem;
+    border-radius: 1.4rem;
+    border: 1px solid var(--alembic-border);
+    color: var(--alembic-text);
+    font-size: 1rem;
+}
+
+/* Written already, being written, still to come — the three states of a map entry, told apart by
+   how solid they look rather than by a legend. */
+.journey .domain .already {
+    border-color: var(--alembic-accent-deep);
+    color: var(--alembic-muted);
+}
+
+.journey .domain .ahead {
+    border-style: dashed;
+    color: var(--alembic-muted);
+}
+
+.journey .domain .under-way {
+    border-color: var(--alembic-accent);
+    background: rgba(192, 132, 252, 0.16);
+    box-shadow: 0 0 1.4rem rgba(192, 132, 252, 0.25);
+}
+
+/* The rail: every step the interview goes through, the two that happen once on the line itself and
+   the four of an entry's lap inside it. Three states, and the palette carries them so nobody has to
+   read a legend, and all three are the one violet the page is lit by: the deep accent, solid, for what
+   is behind; the bright accent lit and ringed for where the work is now; the plain border colour,
+   faint, for what has not been reached. The rail fills deep violet up to the step in hand, so the
+   journey reads left to right at a glance.
+
+   Not gold. Gold is the warm note this room keeps for a thing that is finished and closed, and a step
+   of six behind you is neither — on the rail it read as a second hue arguing with the violet rather
+   than as the same journey earlier along. It also puts the rail in one language with the entries under
+   it, where what is already written has been deep violet all along. It reports and controls nothing —
+   none of these steps is the client's to advance. */
+.stations {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.station {
+    flex: 1 1 0;
+    max-width: 13rem;
+    position: relative;
+    padding-top: 1.3rem;
+    text-align: center;
+    font-size: 0.86rem;
+    line-height: 1.35;
+    color: var(--alembic-muted);
+    opacity: 0.55;
+    transition: color 0.3s, opacity 0.3s;
+}
+
+/* The lap: the steps every entry of the map goes through, drawn as one thing because they are one
+   thing that happens again. What says so is not a caption but the shape — a bordered run with the
+   entry's own name on its edge, stacked like sheets while entries remain, and the line of the
+   journey passing in one side and out the other.
+
+   Acceptance is inside it. It closes an entry's turn and the next turn opens on the step after the
+   map, so a rail that put it outside would light its last step and then jump the light backwards,
+   which is the one thing a left-to-right rail cannot do. */
+.stations > .lap {
+    flex: 5 1 0;
+    max-width: 66rem;
+    position: relative;
+    margin-top: 1rem;
+    padding: 1rem 0.9rem 0.5rem;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.7rem;
+    background: rgba(23, 17, 48, 0.35);
+}
+
+/* The sheets behind it, and there is one only while there is another entry to come. Two offset
+   outlines are the plainest way a surface says "again" without a word or an arrow on it. */
+.stations > .lap.stacked::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    translate: 0.34rem 0.34rem;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.7rem;
+    opacity: 0.7;
+}
+
+.stations > .lap.stacked::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    translate: 0.68rem 0.68rem;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.7rem;
+    opacity: 0.35;
+}
+
+/* The entry being written, on the edge of its own lap the way a legend sits on a fieldset: it names
+   what this run is a run of, and it is the same phrase the strip below lights and the panel at the
+   foot is tabbed with. */
+.stations > .lap .lap-head {
+    position: absolute;
+    top: -0.72rem;
+    left: 50%;
+    translate: -50% 0;
+    padding: 0 0.7rem;
+    background: color-mix(in srgb, var(--alembic-bg) 25%, transparent);
+    color: var(--alembic-accent);
+    font-size: 0.84rem;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100% - 2.4rem);
+}
+
+.lap-steps {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* The two steps outside the lap stand level with the four inside it, so the line through them all is
+   one line: the lap's own top border and padding are what they are pushed down by. */
+.stations > .station {
+    margin-top: calc(1rem + 1rem + 1px);
+}
+
+/* The finalization rail has no lap to stand level with — two stations and nothing between them —
+   so the offset above belongs only to a rail that draws one. */
+.stations.flat > .station {
+    margin-top: 0;
+}
+
+/* And the line does not stop at the border it crosses. Each of the outer stations reaches its half
+   segment into the lap's padding, which is what makes the journey pass through the run rather than
+   arrive at a box and start again inside it.
+
+   Only the far end moves. The end at the mark stays where every other segment's does — 0.85rem short
+   of the centre — because a width measured from the middle of the station is a line drawn through the
+   disc standing there. */
+.stations > .station:first-child::after {
+    width: calc(50% - 0.85rem + 0.9rem);
+    right: -0.9rem;
+}
+
+.stations > .station:last-child::before {
+    width: calc(50% - 0.85rem + 0.9rem);
+    left: -0.9rem;
+}
+
+/* The rail, drawn as two half-segments per station so the first and last ends stop at their own
+   mark instead of hanging off the row.
+
+   Each segment stops short of the mark rather than running under it. Hiding a line behind an opaque
+   disc only works while the disc and what is behind it are the same colour, and behind this one there
+   is a gradient — so the line reappeared inside the circle as soon as the page was lit. A line that is
+   not drawn there cannot show through. Its centre is the circle's centre, one pixel up for the
+   segment's own thickness. */
+.station::before,
+.station::after {
+    content: "";
+    position: absolute;
+    top: calc(0.75rem - 1px);
+    height: 2px;
+    border-radius: 2px;
+    background: var(--alembic-border);
+    transition: background 0.3s;
+}
+
+.station::before { left: 0; width: calc(50% - 0.85rem); }
+.station::after { right: 0; width: calc(50% - 0.85rem); }
+
+/* Only the two ends of the whole journey stop. Inside the lap every station keeps both halves, or
+   the line would break at the very place it is meant to be shown passing through. */
+.stations > .station:first-child::before,
+.stations > .station:last-child::after {
+    background: transparent !important;
+}
+
+/* A disc and no number. Four of the six steps happen once per entry of the map, so a count running
+   one to six would claim an order that only the two outside the lap actually have.
+
+   Filled, not outlined: at this size a ring is a hairline around a hole, and the hole takes the shape
+   of whatever rounding the browser gives it rather than the shape of a circle. Solid, the three states
+   are three colours and nothing else has to be read. */
+.station .mark {
+    position: absolute;
+    top: 0.35rem;
+    left: 50%;
+    translate: -50% 0;
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 50%;
+    background: var(--alembic-border);
+    transition: background 0.3s, box-shadow 0.3s;
+}
+
+/* Behind. The rail behind it is filled too, which is the progress bar this stepper would otherwise
+   need drawing separately. */
+.station.done {
+    opacity: 1;
+}
+
+.station.done .mark {
+    background: var(--alembic-accent-deep);
+}
+
+.station.done::before,
+.station.done::after,
+.station.here::before {
+    background: var(--alembic-accent-deep);
+}
+
+/* Here: the only lit thing on the rail. */
+.station.here {
+    opacity: 1;
+    color: var(--alembic-text);
+    font-weight: 600;
+}
+
+.station.here .mark {
+    background: linear-gradient(140deg, var(--alembic-accent), var(--alembic-accent-deep));
+    box-shadow: 0 0 0 0.32rem rgba(192, 132, 252, 0.18), 0 0 1.4rem rgba(192, 132, 252, 0.7);
+}
+
+/* Narrow: the lap keeps its shape, since the shape is the whole of what it says, and the words are
+   what gives way. */
+@media (max-width: 52rem) {
+    .station {
+        font-size: 0.7rem;
+    }
+
+    .stations > .lap {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+
+    .stations > .station:first-child::after {
+        width: calc(50% - 0.85rem + 0.5rem);
+        right: -0.5rem;
+    }
+
+    .stations > .station:last-child::before {
+        width: calc(50% - 0.85rem + 0.5rem);
+        left: -0.5rem;
+    }
+}
+
+/* The scene: one question, alone, because that is what the client is being asked to do right
+   now. Everything else on the page is either what they already said or what it has become. */
+.scene {
+    min-height: 6rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0.8rem 0 0.4rem;
+}
+
+.asked {
+    font-size: 1.6rem;
+    font-weight: 300;
+    line-height: 1.50;
+    letter-spacing: 0.01em;
+    white-space: pre-wrap;
+    margin: 0 auto 1.2rem;
+    max-width: 54rem;
+    text-align: center;
+}
+
+/* Alembic is thinking. Three dots that breathe, because a spinner says "loading" and this is
+   somebody composing a sentence. */
+.thinking {
+    text-align: center;
+    color: var(--alembic-muted);
+    font-size: 1.2rem;
+    letter-spacing: 0.5rem;
+}
+
+.thinking span {
+    animation: breathe 1.4s ease-in-out infinite;
+}
+
+.thinking span:nth-child(2) { animation-delay: 0.2s; }
+.thinking span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes breathe {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .thinking span { animation: none; opacity: 0.6; }
+    .gateway { transition: none; }
+    .gateway:hover { transform: none; }
+}
+
+.reply {
+    max-width: 52rem;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* The answer is written at the size it is read at. A paragraph about somebody's own work, typed into
+   a box set two sizes under the question that asked for it, reads as a form field for a reference
+   number — and it is the material the whole interview exists to collect. */
+.reply textarea {
+    font-size: 1.12rem;
+    line-height: 1.6;
+    padding: 1rem 1.2rem;
+    border-radius: 0.6rem;
+}
+
+/* The example answer sits in the box until the client types over it, so it has to read as somebody
+   else's writing at a glance — dimmer and slanted — or it is mistaken for an answer already given. */
+.reply textarea::placeholder {
+    color: var(--alembic-muted);
+    opacity: 0.62;
+    font-style: italic;
+    line-height: 1.6;
+}
+
+/* The two movements of the interview, on one row and at one size. Going on and going back are not
+   the same gesture — one is answering, the other is changing something already answered — but they
+   are equally the client's to make, and a line of prose under the box said the second was an
+   afterthought. The primary is pushed right on its own, so the row is unchanged where there is
+   nothing behind to go back to. */
+.reply-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-top: 0.8rem;
+}
+
+.reply-actions .primary {
+    margin-left: auto;
+}
+
+textarea {
+    width: 100%;
+    background: var(--alembic-bg-deep);
+    color: var(--alembic-text);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.35rem;
+    padding: 0.6rem 0.7rem;
+    font: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+/* The worked example, sitting in the box as real text rather than ghost placeholder. Italic says
+   it is still exactly what was offered; one character away and it is the client's own words, so
+   the tilt drops the moment the text stops matching and returns the moment it matches again. */
+textarea.example {
+    font-style: italic;
+    color: var(--alembic-muted);
+}
+
+textarea:focus {
+    outline: none;
+    border-color: var(--alembic-border-lit);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+/* The way back sits in the same row as the answer and is styled in controls.css as a secondary
+   button: same height, same type size, one outlined instead of filled. */
+
+/* ============================ what has been distilled ============================ */
+
+/* Everything the client can do is on one row, and the gap is the argument: the way back is about
+   what is behind them, keeping the work and answering are about what is in front. */
+.reply-actions .apart {
+    margin-left: auto;
+}
+
+/* Keeping the work is not a footnote any more. It is the only thing standing between an afternoon
+   and losing it, so it is the same size as the two movements beside it — and it holds its receipt,
+   which is why it is a column rather than a button on its own. */
+.keeping {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
+    /* The row's own flex gap already puts 0.8rem between it and the Answer button beside it; this
+       tops that up to a flat 20px rather than leaving the gap to whatever 0.8rem happens to be. */
+    margin-left: calc(20px - 0.8rem);
+}
+
+button.keep {
+    white-space: nowrap;
+}
+
+/* The receipt hangs above the row rather than pushing it down: a row that grows when a button is
+   pressed moves the button out from under the cursor that pressed it. */
+.receipt {
+    position: absolute;
+    bottom: calc(100% + 0.5rem);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--alembic-border-lit);
+    border-radius: 0.5rem;
+    background: var(--alembic-panel-lit);
+    box-shadow: var(--alembic-glow);
+    white-space: nowrap;
+    text-align: right;
+}
+
+.receipt .what {
+    color: var(--alembic-text);
+    font-size: 0.9rem;
+}
+
+.receipt .where,
+.receipt .how-big {
+    color: var(--alembic-muted);
+    font-size: 0.8rem;
+}
+
+/* ============================ what has been written down ============================ */
+
+/* The entry being written is a tag that opens, so it is drawn as the tag it already is with one
+   thing added: a caret, and the count of what is written. Everything else about it — the accent
+   border, the lit fill — it had before, because it must stay the same object the map lights and the
+   lap is headed with. */
+.journey .domain button.under-way {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    font: inherit;
+    font-size: 1rem;
+    cursor: pointer;
+    appearance: none;
+    box-sizing: border-box;
+    padding: 0.4rem 1.1rem;
+    border-radius: 1.4rem;
+    border: 1px solid var(--alembic-accent);
+    background: rgba(192, 132, 252, 0.16);
+    box-shadow: 0 0 1.4rem rgba(192, 132, 252, 0.25);
+    color: var(--alembic-text);
+}
+
+.journey .domain button.under-way .counted {
+    color: var(--alembic-muted);
+    font-size: 0.75rem;
+}
+
+.journey .domain button.under-way::after {
+    content: "▾";
+    font-size: 0.7rem;
+    color: var(--alembic-accent);
+    transition: rotate 0.2s ease;
+}
+
+.journey .domain button.under-way.open::after {
+    rotate: 180deg;
+}
+
+/* What the tag opens: directly under it, and exactly as wide as the lap above — five sevenths of the
+   rail, which is what the flex ratio of one station to the run gives. Full width it was a slab with
+   no relation to anything; on the lap's own measure it reads as what it is, everything written down
+   about the entry that lap is a lap of. */
+.rows-open {
+    width: calc(100% * 5 / 7);
+    max-width: 66rem;
+    margin: 1rem auto 0;
+    border: 1px solid var(--alembic-border-lit);
+    border-radius: 0.6rem;
+    background: var(--alembic-panel);
+    text-align: left;
+    overflow: hidden;
+}
+
+/* Rows of one table, not a scatter of cards. Each is a label and a value on one line, every line the
+   same height it needs and no more, separated by a hairline: what the client is doing here is running
+   an eye down a column to find one thing, and nine boxes each as tall as its own contents is the one
+   layout that makes that impossible. */
+.rows-open .drop {
+    display: grid;
+    grid-template-columns: 11rem 1fr;
+    gap: 0 1rem;
+    align-items: baseline;
+    padding: 0.6rem 1rem;
+    border-top: 1px solid rgba(53, 41, 107, 0.55);
+    transition: background 0.4s;
+}
+
+.rows-open .drop:first-child {
+    border-top: none;
+}
+
+.rows-open .drop .what {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--alembic-muted);
+}
+
+/* Whole, never clipped. A panel opened on purpose to read what has been written down, that then shows
+   four fifths of a sentence and an ellipsis, has answered nothing — the client opens it for the part
+   that got cut. */
+.rows-open .drop .value {
+    font-size: 0.95rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.rows-open .drop.empty .value {
+    color: var(--alembic-muted);
+    opacity: 0.55;
+}
+
+/* Narrow, the rail's own lap gives up its shape too, so the panel stops measuring itself against it
+   and takes the room there is. */
+@media (max-width: 52rem) {
+    .rows-open {
+        width: 100%;
+    }
+}
+
+@media (max-width: 40rem) {
+    .rows-open .drop {
+        grid-template-columns: 1fr;
+        gap: 0.15rem;
+    }
+}
+
+/* Just written. A row the last exchange moved is lit, so a client who opens the panel finds what has
+   changed rather than reading all of it to see. */
+.rows-open .drop.moved {
+    background: rgba(192, 132, 252, 0.1);
+}
+
+.rows-open .drop.moved .what {
+    color: var(--alembic-accent);
+}

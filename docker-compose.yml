@@ -191,6 +191,54 @@ services:
     networks:
       - morgana-network
 
+  # ============================================================================
+  # ALEMBIC - AUTHORING WORKBENCH (Blazor Server UI)
+  # ============================================================================
+  # Profile-gated: `compose up` does NOT start Alembic, and the reason is not the
+  # terminal-ownership one that gates the TUI channels. Alembic is not part of a
+  # running Morgana at all — it is the workbench where a domain is authored, it
+  # talks to no Morgana instance, and it joins no network here. Starting it
+  # alongside the pipeline would only occupy a port for an unrelated application.
+  #
+  # Usage:
+  #   docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
+  #
+  # Note the LLM block below declares Performance only: Alembic writes dispositive
+  # prose, which is exactly where the Efficiency die fails, and it runs once per
+  # onboarding rather than per turn. A single-tier deployment therefore does not
+  # serve it (no cross-tier fallback, by design).
+  alembic:
+    profiles: ["authoring"]
+    build:
+      context: .
+      dockerfile: Alembic/Alembic.Dockerfile
+      args:
+        VERSION: ${ALEMBIC_VERSION}
+    image: alembic:${ALEMBIC_VERSION}
+    container_name: alembic
+    ports:
+      - "5005:5005"
+    environment:
+      # ASP.NET Core
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5005
+
+      # LLM Provider — same section name as Morgana's (Morgana:LLM), because Alembic
+      # consumes the framework's own provider abstraction rather than reimplementing it.
+      # Same unset-variable caveat as the morgana service above: every value falls back
+      # to its appsettings.json sentinel placeholder so a missing override fails fast
+      # instead of injecting an empty string.
+      - Morgana__LLM__Provider=${LLM_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Anthropic__ApiKey=${ANTHROPIC_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Anthropic__Tiers__Performance__Options__ModelId=${ANTHROPIC_MODEL_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__AzureOpenAI__ApiKey=${AZUREOPENAI_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__AzureOpenAI__Endpoint=${AZUREOPENAI_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__AzureOpenAI__Tiers__Performance__Options__ModelId=${AZUREOPENAI_DEPLOYMENTNAME_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Ollama__Endpoint=${OLLAMA_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Ollama__Tiers__Performance__Options__ModelId=${OLLAMA_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__OpenAI__ApiKey=${OPENAI_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__OpenAI__Tiers__Performance__Options__ModelId=${OPENAI_MODEL_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
+
 # ==============================================================================
 # VOLUMES
 # ==============================================================================

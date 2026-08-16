@@ -1,0 +1,40 @@
+@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+
+@*
+    Minimal layout: no nav, no sidebar, no footer. The interview fills the viewport and everything
+    else is one page of one thing.
+
+    What the layout does own is the banner. It fills the landing and then stands over every page
+    after it, smaller and in the same place: the client is in front of Morgana at her alembic the
+    whole time they are here, and the same scene is what is doing the writing. It is the way home too.
+
+    Not on the landing itself, where the banner is already the largest thing on the screen and a
+    second one would only say the same thing twice.
+*@
+
+<div class="page">
+    @if (!IsLanding)
+    {
+        <a class="alembic-mark" href="" title="Alembic">
+            <img src="images/Alembic-Banner.jpg" alt="Morgana at her alembic — back to the front" />
+            <span>Alembic</span>
+        </a>
+    }
+
+    <main>
+        @Body
+    </main>
+</div>
+
+@code {
+    /// <summary>
+    /// Whether the landing is what is being rendered.
+    /// </summary>
+    /// <remarks>
+    /// Read at render rather than tracked, because the layout re-renders on every navigation: the
+    /// router hands it a new <c>Body</c>, which is the same event a subscription would be watching.
+    /// </remarks>
+    private bool IsLanding =>
+        NavigationManager.ToBaseRelativePath(NavigationManager.Uri).Split('?')[0].Trim('/').Length == 0;
+}

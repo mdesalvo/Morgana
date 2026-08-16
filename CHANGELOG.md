@@ -6,13 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.28.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Prompt Composition Extension Point
+This release introduces `IPromptComposerService`, opening the **innermost core of an AI application — how a prompt is assembled — to substitution**. It joins the suite of pluggable interfaces as the sibling of `IPromptResolverService`: the resolver abstracts *where prompts come from*, the composer *how they become what the model reads*.
+
 ### ✨ Added
+- Introduced `IPromptComposerService` as an **extension point for prompt composition**: `ConfigurationPromptComposerService` ships as the default implementation (two-layer fenced composition, global policies ordered by type and priority, injection templates spliced into tool descriptions and per-turn context declaration) and can be replaced in DI with any alternative prompt architecture without touching the agent adapter, the tool adapter or the context provider.
 
 ### 🔄 Changed
+- **`MorganaChatReducer` replacing `Microsoft.Extensions.AI.SummarizingChatReducer` as history reducer** — gaining complete control over history reduction strategies while maintaining backward compatibility.
+- A SignalR channel must now join its conversation group **before** starting the conversation, which its own minting of the conversation id makes possible.
 
 ### 🐛 Fixed
+- Text welded across tool calls — a turn that calls a tool writes several assistant messages, and their texts were concatenated with nothing in between.
+- History losing part of a reply on resume — only the last assistant message of a turn is marked user-facing, so everything written before a tool call vanished from the rendered history while the live reply had shown it.
+- Summarizer blind to tool activity — MEAI's SummarizingChatReducer drops every message carrying function-call or function-result content from the summarizer's input, so a tool-driven agent was summarized from a text-only skeleton and the model reported that no tool ran and no identifier existed.
+- **Cauldron (1)**
+  - SignalR presentation race — a fresh conversation's greeting could reach an empty group and be discarded without a trace, since Cauldron joined the group only after the start response returned.
 
 ### 🚀 Future Enablement
+- **Per-agent reduction policy** — the reducer is already built per agent and bound to that agent's own tier, so length and threshold can become properties of the agent rather than of the deployment: a dispositive agent holding order identifiers can be made to fold late and rarely, while a chatty informational one folds early and cheaply.
 
 ## [0.27.0] - 2026-08-06
 ### ✨ Added

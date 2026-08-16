@@ -1,0 +1,89 @@
+@page "/"
+@namespace Distiller.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <base href="~/" />
+
+        <title>Alembic - Morgana's Authoring Workbench</title>
+
+        @* SVG, so the vessel stays sharp at every size a browser asks for and there is one file
+           rather than a set of rasters to keep in step. *@
+        <link href="favicon.svg" rel="icon" type="image/svg+xml" />
+
+        @* One image, every page: the landing's own banner and the mark that stands over every page
+           past it are the same file now, so one preload serves both — asked for with the document
+           rather than when the body reaches it, so neither the first screen nor a client landing
+           straight on a deep link via a resumed session watches it pop in after its layout has
+           already settled. *@
+        <link href="images/Alembic-Banner.jpg" rel="preload" as="image" />
+
+        @* One file per part of the workbench, in cascade order: base defines the palette every
+           other file spends, and the rest never redefine what a file before them settled. Linked
+           rather than @imported, so they are fetched in parallel instead of one after another. *@
+        <link href="css/base.css" rel="stylesheet" asp-append-version="true" />
+        <link href="css/landing.css" rel="stylesheet" asp-append-version="true" />
+        <link href="css/import.css" rel="stylesheet" asp-append-version="true" />
+        <link href="css/panels.css" rel="stylesheet" asp-append-version="true" />
+        <link href="css/interview.css" rel="stylesheet" asp-append-version="true" />
+        <link href="css/controls.css" rel="stylesheet" asp-append-version="true" />
+    </head>
+    <body>
+        <!--
+            Blazor Server root component: UI state lives on the server, DOM diffs travel over SignalR
+        -->
+        <component type="typeof(App)" render-mode="Server" />
+
+        @*
+            Blazor Server's own banner, shown only when the circuit itself has died — a dropped
+            connection or an unhandled exception on the server, not anything the app can recover
+            from in place. Its own words, though: the boilerplate "An error has occurred" says
+            nothing the client can act on and nothing about what a reload costs them, when the
+            honest answer here is "less than you think" — the autosave snapshot is what a reload
+            picks back up from.
+        *@
+        <div id="blazor-error-ui" style="display: none;">
+            The connection to Alembic dropped. Reloading picks back up from the last autosave, not
+            from nothing.
+            <a href="" class="reload">Reload</a>
+            <a class="dismiss">🗙</a>
+        </div>
+
+        <script src="_framework/blazor.server.js"></script>
+        <script>
+            // Back means the page you came from, not the front door. history.length is 1 only when
+            // this tab has been nowhere else — a bookmark, a pasted URL — and there stepping back
+            // would leave Alembic entirely, so the landing is the honest destination instead.
+            window.alembicBack = () => {
+                if (window.history.length > 1) window.history.back();
+                else window.location.href = '/';
+            };
+
+            // A new question means a new answer, so the box that takes it gets the caret. Without
+            // this the client reads the question and then has to go and find where to reply, every
+            // single turn — the one piece of friction a one-question-at-a-time interview cannot
+            // afford, because it is paid on every question rather than once.
+            // Handing a file over. The bytes arrive when the button is pressed and are released the
+            // moment the download starts, so nothing about the work is sitting in the page waiting
+            // to go stale — which is exactly what carrying the file in the link's href did.
+            window.alembicSave = (name, base64) => {
+                const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+                const url = URL.createObjectURL(new Blob([bytes], { type: 'application/json' }));
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = name;
+                link.click();
+                URL.revokeObjectURL(url);
+            };
+
+            window.alembicFocusReply = () => {
+                const box = document.querySelector('.reply textarea');
+                if (box) box.focus();
+            };
+        </script>
+    </body>
+</html>

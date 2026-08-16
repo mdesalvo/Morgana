@@ -1,0 +1,56 @@
+@page "/"
+
+<div class="alembic-landing">
+
+    <div class="landing-head">
+        <div class="banner">
+            @*
+                No width or height on it, for the same reason the vessel it replaces had none: the
+                banner around it has a size and an aspect ratio of its own and the image fills that
+                box, so declaring the intrinsic one would prevent a layout shift that cannot happen
+                here. What the image needs against the flicker is in the CSS — a dark of its own
+                while it decodes, over a glow that no longer repaints — and in the preload beside
+                the document.
+            *@
+            <img src="images/Alembic-Banner.jpg" alt="Morgana at her alembic, agents rising from it as ghosts" />
+        </div>
+
+        <h1>Alembic</h1>
+        <p class="tagline">Here Morgana takes life. Yours the shape, hers the spells.</p>
+    </div>
+
+    @*
+        The icons are drawn here rather than typed. The alchemical characters this used to use
+        have no font on most Linux desktops, so they arrived as tofu or as nothing at all — and an
+        icon nobody can see is worse than none, because the space is still spent on it.
+    *@
+    <div class="gateways">
+
+        <a class="gateway primary-gateway" href="interview">
+            <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9.3 3h5.4M10.6 3.4v5.2M13.4 3.4v5.2" />
+                <circle cx="12" cy="14.6" r="5.9" />
+                <path d="M6.6 15.4c1.8 1.4 9 1.4 10.8 0" />
+                <path d="M17.6 12.4H20a1 1 0 0 1 1 1v4" />
+            </svg>
+
+            <h2>Distil a new domain</h2>
+            <span class="go">Begin &rarr;</span>
+        </a>
+
+        <a class="gateway" href="import">
+            <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1" />
+                <path d="M20.8 3.5V8h-4.5" />
+                <path d="M12 7.5V12l3 1.8" />
+            </svg>
+            
+            <h2>Continue a distillation</h2>
+            <span class="go">Resume &rarr;</span>
+        </a>
+
+    </div>
+
+</div>

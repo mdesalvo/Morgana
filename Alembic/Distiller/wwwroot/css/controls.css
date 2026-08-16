@@ -1,0 +1,363 @@
+/* ==========================================================================
+   Controls and the small shared furniture: buttons, quick replies, the finished-agent panel, the
+   way back, and Blazor's own error banner.
+   ========================================================================== */
+
+button.primary {
+    background: linear-gradient(135deg, var(--alembic-accent), var(--alembic-accent-deep));
+    color: #14082b;
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.6rem 1.5rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    box-shadow: 0 0 1.2rem rgba(139, 92, 246, 0.35);
+    transition: box-shadow 0.18s, opacity 0.18s;
+}
+
+button.primary:hover:not(:disabled) {
+    box-shadow: 0 0 1.8rem rgba(192, 132, 252, 0.6);
+}
+
+button.primary:disabled {
+    opacity: 0.4;
+    box-shadow: none;
+    cursor: default;
+}
+
+/* The way back. Same height and same type size as the primary beside it, outlined instead of
+   filled: going back is as much the client's move as going on — it is the only one of the two they
+   decide — and only one of them can be what the eye lands on first. */
+button.secondary,
+a.secondary {
+    background: transparent;
+    color: var(--alembic-muted);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.5rem;
+    padding: 0.6rem 1.2rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.95rem;
+    letter-spacing: 0.01em;
+    transition: color 0.18s, border-color 0.18s;
+}
+
+button.secondary:hover:not(:disabled),
+a.secondary:hover {
+    color: var(--alembic-text);
+    border-color: var(--alembic-border-lit);
+}
+
+button.secondary:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+button.quiet {
+    background: transparent;
+    color: var(--alembic-muted);
+    border: 1px solid transparent;
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.9rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.85rem;
+}
+
+button.quiet:hover:not(:disabled) {
+    color: var(--alembic-text);
+    border-color: var(--alembic-border);
+}
+
+/* Choices. Offers, never gates — the text box stays open beside them, so they are styled as
+   something you may take rather than as the row of buttons a form ends with. */
+.choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 1.2rem;
+}
+
+button.choice {
+    background: rgba(30, 23, 64, 0.8);
+    color: var(--alembic-accent);
+    border: 1px solid var(--alembic-border);
+    border-radius: 1.4rem;
+    padding: 0.45rem 1.1rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+button.choice:hover:not(:disabled) {
+    border-color: var(--alembic-accent);
+    background: rgba(192, 132, 252, 0.14);
+}
+
+button.choice:disabled {
+    cursor: default;
+}
+
+.agent-pick {
+    background: var(--alembic-panel);
+    color: var(--alembic-text);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    margin: 0 0.4rem 0.4rem 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+.agent-pick:hover:not(:disabled) {
+    border-color: var(--alembic-border-lit);
+}
+
+/* Without this, a disabled .agent-pick kept the pointer cursor and the hover it can no longer act
+   on — a control that looks exactly as pressable as before still invites the click it will refuse. */
+.agent-pick:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.agent-pick.picked {
+    border-color: var(--alembic-accent);
+    color: var(--alembic-accent);
+}
+
+/* What stands where a button was, while nothing can be pressed: plain text, deliberately not a
+   button, because the one thing worse than a disabled control is one still dressed as active. */
+.applying {
+    color: var(--alembic-muted);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+/* "Nothing to report" is good news and should read as good news: a plain paragraph says the same
+   words a warning would, in the same colour, and the client has to read the sentence to know which
+   one they got. */
+.all-clear {
+    color: var(--alembic-success);
+    font-weight: 600;
+}
+
+/* A finding whose fix has landed, marked solved rather than removed: the row stays so the client
+   can still read what was found and what was done about it, but nothing here asks to be clicked
+   again. */
+.badge-solved {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--alembic-success);
+    border-radius: 1rem;
+    color: var(--alembic-success);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* The cloud of words for a voice. Deliberately not the choices above: those are laid out as a row of
+   offers where one is taken and the row is spent, and these are a field to graze — several taken at
+   once, weightless until picked, and nothing spent by taking one. So they are quieter than a button
+   when idle and unmistakably held when picked, and their sizes vary a little because a cloud that
+   lines up is a menu again. */
+.traits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    justify-content: center;
+    max-width: 48rem;
+    margin: 0 auto 1.2rem;
+}
+
+button.trait {
+    background: transparent;
+    color: var(--alembic-muted);
+    border: 1px dashed var(--alembic-border);
+    border-radius: 1.4rem;
+    padding: 0.35rem 0.9rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+button.trait:nth-child(3n) { font-size: 0.96rem; }
+button.trait:nth-child(4n) { font-size: 0.85rem; }
+
+button.trait:hover {
+    color: var(--alembic-text);
+    border-color: var(--alembic-border-lit);
+}
+
+button.trait.picked {
+    border-style: solid;
+    border-color: var(--alembic-accent);
+    background: rgba(192, 132, 252, 0.16);
+    color: var(--alembic-text);
+    box-shadow: 0 0 1rem rgba(192, 132, 252, 0.25);
+}
+
+/* The last station: the agent is written and joins the domain. Centred and alone, because it
+   is the only moment of the interview where the client decides something. */
+.sealed {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.sealed h2 {
+    font-size: 1.6rem;
+    font-weight: 300;
+    color: var(--alembic-gold);
+    margin: 0 0 0.5rem;
+    text-transform: none;
+    letter-spacing: 0.02em;
+}
+
+.sealed p {
+    color: var(--alembic-muted);
+    max-width: 32rem;
+    margin: 0 auto 1.8rem;
+}
+
+/* What is available here, on one row: let the agent into the domain, go back and change something
+   in it, or take the work away. Centred rather than spread — this screen has no answer box for the
+   row to belong to, so the row is the screen's own. */
+.sealed .sealed-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+}
+
+/* ============================ odds and ends ============================ */
+
+a {
+    color: var(--alembic-accent);
+}
+
+input[type="file"] {
+    color: var(--alembic-muted);
+}
+
+.phase-note {
+    margin-top: 2rem;
+    color: var(--alembic-muted);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+dl.fields {
+    grid-template-columns: 10rem 1fr;
+}
+
+dl.fields dd {
+    white-space: pre-wrap;
+}
+
+.tool {
+    margin-bottom: 1rem;
+    padding-left: 0.7rem;
+    border-left: 2px solid var(--alembic-border);
+}
+
+.tool-name {
+    font-weight: 600;
+    color: var(--alembic-accent);
+}
+
+.tool dl.fields {
+    grid-template-columns: 12rem 1fr;
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+}
+
+/* Placement only — the look is button.secondary/a.secondary, the same family StepBack uses. A page
+   without a Journey rail still owes the client a way back that reads as a control, not a stray link
+   at the foot of the page. */
+.back {
+    display: inline-block;
+    margin-top: 2.5rem;
+    text-decoration: none;
+}
+
+/* The vessel filling while the archive is built: an alembic in the page's own hand rather than a
+   generic spinner or a bullet list nobody was meant to read as it grows. */
+.distillation {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.5rem 0;
+}
+
+.distillation-vessel {
+    width: 4rem;
+    height: 5.5rem;
+    flex-shrink: 0;
+}
+
+.distillation-status {
+    flex: 1;
+    min-width: 0;
+}
+
+.distillation-phase {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+}
+
+.distillation-bar {
+    height: 0.5rem;
+    border-radius: 0.3rem;
+    background: var(--alembic-panel-lit);
+    overflow: hidden;
+}
+
+.distillation-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--alembic-accent-deep), var(--alembic-accent));
+    transition: width 0.4s ease;
+}
+
+.distillation-percent {
+    margin: 0.35rem 0 0;
+    font-size: 0.8rem;
+}
+
+.distillation-done {
+    animation: distillation-arrive 0.4s ease;
+}
+
+.distillation-done-headline {
+    margin: 0 0 0.6rem;
+    color: var(--alembic-accent);
+    font-weight: 600;
+}
+
+@keyframes distillation-arrive {
+    from { opacity: 0; transform: translateY(0.4rem); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Blazor's own unhandled-exception banner */
+#blazor-error-ui {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 0.75rem 1.25rem;
+    background: var(--alembic-bg-deep);
+    border-top: 1px solid var(--alembic-error);
+    color: var(--alembic-error);
+}
+
+#blazor-error-ui .dismiss {
+    float: right;
+    cursor: pointer;
+}

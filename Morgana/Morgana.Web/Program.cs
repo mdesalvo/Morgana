@@ -122,6 +122,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IToolRegistryService: Discovers and registers tools provided by agents
 // - IAgentConfigurationService: Loads agent and intent configurations
 // - IPromptResolverService: Resolves prompt templates from configuration
+// - IPromptComposerService: Assembles what the model reads (composed prompt, tool descriptions, held-context declaration)
 // - IAgentRegistryService: Maps intents to agent types for routing
 // - IGuardRailService: Checks user messages for content safety and compliance
 // - IClassifierService: Classifies user messages for proper agent activation
@@ -132,6 +133,7 @@ builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryServic
 builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistryService>();
 builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
+builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptComposerService>();
 builder.Services.AddSingleton<ILLMTierValidationService, RequiresLLMTierValidationService>();
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
 builder.Services.AddSingleton<IGuardRailService, LLMGuardRailService>();
@@ -226,7 +228,7 @@ builder.Services.AddSingleton<IAuthenticationService, JWTAuthenticationService>(
 // ==============================================================================
 // Service for reducing history messages sent to LLM (configurable summarization)
 
-builder.Services.AddSingleton<SummarizingChatReducerService>();
+builder.Services.AddSingleton<HistoryReducerService>();
 
 // ==============================================================================
 // SECTION 8.2: Adapters

@@ -1,0 +1,29 @@
+@inject IJSRuntime JS
+
+@*
+    The way back, and it is the way you came.
+
+    Every page used to send you to the landing, which is only right when the landing is where you
+    were — and it usually is not: you reach the review from a finished sitting or from an import,
+    and being returned to the front door from there loses the domain's context and reads as being
+    thrown out. So this steps back through the history the client actually walked.
+
+    It falls back to the landing when there is nothing to step back to, which is the case that
+    matters for a page opened straight from a bookmark or a pasted URL: browser back would leave
+    Alembic altogether.
+*@
+
+<a class="secondary back" href="" @onclick="GoBackAsync" @onclick:preventDefault>&larr; Back</a>
+
+@code {
+    /// <summary>
+    /// Steps back one entry in the browser's own history, or to the landing page when there is
+    /// none to step back to.
+    /// </summary>
+    /// <remarks>
+    /// Delegates to the <c>alembicBack</c> JS interop function rather than calling
+    /// <c>history.back()</c> inline, so the landing fallback lives in one place shared by every
+    /// page that renders this component.
+    /// </remarks>
+    private async Task GoBackAsync() => await JS.InvokeVoidAsync("alembicBack");
+}

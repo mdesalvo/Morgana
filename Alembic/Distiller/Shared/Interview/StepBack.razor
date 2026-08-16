@@ -1,0 +1,60 @@
+@*
+    The way back, and it names where it lands rather than saying "back". A step of this wizard is not
+    numbered on the screen, so a bare arrow asks the client to remember what came before their own
+    answer.
+
+    It sits in the same row as the answer and at the same size, because the two are equally theirs to
+    make — and going back is in fact the only movement of the interview they decide, since going on is
+    a claim the state machine settles. A line of small print under the box said the opposite.
+
+    On the first screen it renders nothing at all: the map is the beginning, and behind it there is
+    only the landing.
+*@
+
+@if (Behind is { } behind)
+{
+    <button class="secondary" @onclick="() => OnBack.InvokeAsync()" disabled="@Busy">&larr; @behind</button>
+}
+
+@code {
+    /// <summary>
+    /// The interview being stepped back through.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public InterviewState State { get; set; } = default!;
+
+    /// <summary>
+    /// Whether a turn is already under way, in which case there is nothing to step back from yet.
+    /// </summary>
+    [Parameter]
+    public bool Busy { get; set; }
+
+    /// <summary>
+    /// Raised when the client asks to go back a step.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnBack { get; set; }
+
+    /// <summary>
+    /// Where the way back lands, in the client's own words, or <c>null</c> when nothing is behind.
+    /// </summary>
+    // Named exactly as the rail above names it, so the button and the step it lands on are the same
+    // words and the client can see where they are about to be. Leaving an entry says so by naming the
+    // entry instead: it is a bigger move than stepping between two steps of one.
+    private string? Behind => State switch
+    {
+        { Pass: InterviewPass.AgentFormatter, ReadyForReview: true } => "Change something in this one",
+        { Pass: InterviewPass.DomainMapper } => null,
+        { Pass: InterviewPass.AgentModeler, At: 0 } => "Back to Domain Mapping",
+        { Pass: InterviewPass.AgentModeler } => $"Back to {Named(State.Map[State.At - 1])}",
+        { Pass: InterviewPass.AgentVoicer } => "Back to Target",
+        { Pass: InterviewPass.ToolkitModeler } => "Back to Personality",
+        { Pass: InterviewPass.AgentInstructor } => "Back to Toolkit",
+        _ => "Back to Instructions"
+    };
+
+    /// <summary>
+    /// The client's own word for an entry: its button once it has one, its name until then.
+    /// </summary>
+    private static string Named(IntentDraft intent) => intent.Label ?? intent.Name ?? "the one before";
+}

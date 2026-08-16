@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Providers;
 
@@ -13,12 +14,6 @@ namespace Morgana.AI.Providers;
 /// </summary>
 public class MorganaAIContextProvider : AIContextProvider
 {
-    /// <summary>
-    /// Placeholder in the HeldContextDeclaration injection template, resolved per invocation to
-    /// the comma-separated names of the variables this session currently holds.
-    /// </summary>
-    private const string HeldVariablesPlaceholder = "((held_variables))";
-
     /// <summary>
     /// Reserved keys the framework writes into the same dictionary to carry a turn's presentation
     /// decisions (see <c>MorganaTool.SetTurnContinuation/SetQuickReplies/SetRichCard</c>, drained by
@@ -33,10 +28,11 @@ public class MorganaAIContextProvider : AIContextProvider
     private readonly ILogger logger;
 
     /// <summary>
-    /// The HeldContextDeclaration template from <c>morgana.json</c>, or <c>null</c> when the prompt
-    /// layer declares none — in which case nothing is injected and behaviour is unchanged.
+    /// Assembles the per-turn declaration naming the variables this session holds. Returns
+    /// <c>null</c> when nothing should be injected — no variables held, or no template declared by
+    /// the prompt layer — in which case behaviour is unchanged.
     /// </summary>
-    private readonly string? heldContextDeclaration;
+    private readonly IPromptComposerService? promptComposerService;
 
     /// <summary>
     /// Names of variables subject to cross-agent persistence in the conversation-scoped
@@ -75,20 +71,19 @@ public class MorganaAIContextProvider : AIContextProvider
     /// JSON serialization options for state persistence.
     /// Defaults to <c>AgentAbstractionsJsonUtilities.DefaultOptions</c>.
     /// </param>
-    /// <param name="heldContextDeclaration">
-    /// The HeldContextDeclaration injection template resolved from <c>morgana.json</c>, carrying the
-    /// <c>((held_variables))</c> placeholder. Left null, <see cref="ProvideAIContextAsync"/> injects
-    /// nothing.
+    /// <param name="promptComposerService">
+    /// Composes the per-turn held-context declaration. Left null,
+    /// <see cref="ProvideAIContextAsync"/> injects nothing.
     /// </param>
     public MorganaAIContextProvider(
         ILogger logger,
         IEnumerable<string>? sharedVariableNames = null,
         JsonSerializerOptions? jsonSerializerOptions = null,
-        string? heldContextDeclaration = null)
+        IPromptComposerService? promptComposerService = null)
     {
         this.logger = logger;
         this.sharedVariableNames = [.. sharedVariableNames ?? []];
-        this.heldContextDeclaration = string.IsNullOrWhiteSpace(heldContextDeclaration) ? null : heldContextDeclaration;
+        this.promptComposerService = promptComposerService;
 
         sessionState = new ProviderSessionState<MorganaContextState>(
             stateInitializer: _ => new MorganaContextState(),
@@ -193,12 +188,12 @@ public class MorganaAIContextProvider : AIContextProvider
     /// silent when empty, ordinal-sorted for cache stability). Critical for agents activated mid-conversation
     /// on empty per-agent history: hydrated shared variables from registry are invisible in history.
     /// </summary>
-    protected override ValueTask<AIContext> ProvideAIContextAsync(
+    protected override async ValueTask<AIContext> ProvideAIContextAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
-        if (heldContextDeclaration is null)
-            return ValueTask.FromResult(new AIContext());
+        if (promptComposerService is null)
+            return new AIContext();
 
         MorganaContextState contextState = sessionState.GetOrInitializeState(context.Session);
 
@@ -206,18 +201,16 @@ public class MorganaAIContextProvider : AIContextProvider
             .Where(name => !EphemeralVariableNames.Contains(name))
             .Order(StringComparer.Ordinal)];
 
-        if (heldVariables.Length == 0)
-            return ValueTask.FromResult(new AIContext());
+        string? declaration = await promptComposerService.ComposeHeldContextDeclarationAsync(heldVariables);
 
-        string names = string.Join(", ", heldVariables);
+        if (declaration is null)
+            return new AIContext();
 
         logger.LogInformation(
-            "{MorganaAiContextProviderName} DECLARED '{VariableNames}'", nameof(MorganaAIContextProvider), names);
+            "{MorganaAiContextProviderName} DECLARED '{VariableNames}'",
+            nameof(MorganaAIContextProvider), string.Join(", ", heldVariables));
 
-        return ValueTask.FromResult(new AIContext
-        {
-            Instructions = heldContextDeclaration.Replace(HeldVariablesPlaceholder, names)
-        });
+        return new AIContext { Instructions = declaration };
     }
 
     /// <summary>

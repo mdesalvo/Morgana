@@ -1,0 +1,524 @@
+@page "/review"
+@inject IDraftValidationService DraftValidationService
+@inject IRecapService RecapService
+@inject IDraftStateService DraftStateService
+@inject ICoherenceService CoherenceService
+@inject ICoherenceApplyService CoherenceApplyService
+
+@*
+    The first thing in Alembic that is useful on its own. Two panels, in this order
+    on purpose: what would stop this domain, then what its model actually reads. Showing a
+    beautifully composed prompt for a configuration that would not start is a way of lying to the
+    client with something that looks like evidence.
+*@
+
+<div class="alembic-page">
+
+    <FinalizationRail At="0" />
+
+    @if (DraftStateService.Current is not { } draft)
+    {
+        <div class="panel">
+            <h2>Nothing to review</h2>
+            <p>Import an <code>agents.json</code> first.</p>
+            <p><a href="import">Go to import &rarr;</a></p>
+        </div>
+    }
+    else
+    {
+        @*
+            One panel, not two: a deterministic check and a relational one are the same job seen at
+            two depths, not two different jobs. The first is decidable by reading the Draft alone —
+            no model is asked, and none would help. The second needs the whole domain read at once,
+            because whether two intents collide or two agents claim the same ground is invisible one
+            agent at a time, which is exactly how the interview writes them. Together they are what
+            "would stop this domain, or should give you pause" means in full.
+        *@
+        <div class="panel">
+            <h2>Domain Validation</h2>
+            <p class="muted">What would stop this domain, and what only reading it whole reveals.</p>
+
+            <details class="recap-section">
+                <summary>Deterministic checks</summary>
+                <p class="muted">What Morgana would refuse to start on &mdash; reads off the Draft alone, no model involved.</p>
+                @if (findings.Count == 0)
+                {
+                    <p class="all-clear">&check; Nothing to report. Every deterministic check passes.</p>
+                }
+                else
+                {
+                    <p class="muted">
+                        @findings.Count(f => f.Severity == FindingSeverity.Error) errors,
+                        @findings.Count(f => f.Severity == FindingSeverity.Warning) warnings.
+                        Each one restates a rule Morgana enforces later and more expensively.
+                    </p>
+                    <table>
+                        <thead>
+                            <tr><th></th><th>Where</th><th>What</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (ValidationFinding finding in findings)
+                            {
+                                <tr>
+                                    <td class="@(finding.Severity == FindingSeverity.Error ? "severity-error" : "severity-warning")">
+                                        @(finding.Severity == FindingSeverity.Error ? "error" : "warning")
+                                    </td>
+                                    <td><code>@finding.Where</code></td>
+                                    <td>
+                                        @finding.Message
+                                        <div class="because">@finding.Because</div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </details>
+
+            <details class="recap-section">
+                <summary>Coherence</summary>
+            <p class="muted">
+                What only reading every agent at once reveals: overlaps, contested ground, values
+                that disagree between agents.
+            </p>
+
+            @*
+                Running the pass itself is optional and cheap to try; it is "Apply" that writes directly
+                into the domain the interview built, possibly across more than one agent, and the whole
+                loop is iterative with no guarantee it ends on its own...
+            *@
+            <div class="power-notice">
+                <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M13 2 5 14h6l-1 8 9-13h-6z" />
+                </svg>
+                <div>
+                    <strong>100% AI-driven, applying its suggestions will modify what the interview built.</strong>
+                    Running it is optional &mdash; good practice, to see what it finds. Applying is
+                    where it acts: prose or tools, sometimes more than one agent, iterative, and it
+                    can cost more than one round.
+                </div>
+            </div>
+
+            @if (coherence is null)
+            {
+                <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || draft.Agents.Count < 2)">
+                    @(isReviewing ? "Reading the domain…" : "Run the coherence pass")
+                </button>
+
+                @if (draft.Agents.Count < 2)
+                {
+                    <p class="muted">
+                        One agent, so there is nothing to relate: this pass needs two.
+                    </p>
+                }
+            }
+            else if (coherence.Error is not null)
+            {
+                <p class="severity-warning">@coherence.Error</p>
+                <button class="agent-pick" @onclick="ReviewAsync" disabled="@isReviewing">Try again</button>
+            }
+            else if (coherence.Findings.Count == 0)
+            {
+                @* No "Run it again" here: nothing in the domain can have changed since this same
+                   pass just read it clean, so a re-run would face the exact same domain and spend
+                   another Performance call to say the same thing again. *@
+                <p class="all-clear">&check; Nothing to report. No overlap, no contested capability, no value that disagrees with itself.</p>
+            }
+            else
+            {
+                @* No bulk apply: the notice above says this is powerful and asks for care applying
+                   one at a time, and a button that fires every suggestion unread is the opposite of
+                   that — especially once a fix can touch more than one agent on its own. *@
+                <table>
+                    <thead>
+                        <tr><th>Kind</th><th>Where</th><th>What, and what it costs</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < coherence.Findings.Count; i++)
+                        {
+                            CoherenceFinding finding = coherence.Findings[i];
+                            int index = i;
+                            <tr>
+                                <td class="severity-warning">@finding.Kind</td>
+                                <td><code>@finding.Where</code></td>
+                                <td>
+                                    @if (RelatedFix(finding) is { } related)
+                                    {
+                                        @* Shares an agent with something just fixed: read at a glance this
+                                           looks like the same problem back, and it is not — it is what the
+                                           fix touched, seen from a different angle. Say so before the client
+                                           has to work that out from the Kind alone. *@
+                                        <div class="consequence-of">
+                                            &darr; surfaced by the @related.Finding.Kind fix on <code>@related.Finding.Where</code>
+                                        </div>
+                                    }
+                                    @finding.What
+                                    <div class="because">@finding.Why</div>
+                                    <div class="because"><strong>Proposed:</strong> @finding.Fix</div>
+                                    @if (applyResults.TryGetValue(index, out CoherenceApplyResult? result))
+                                    {
+                                        <div class="because @(result.Applied ? "" : "severity-warning")">@result.Summary</div>
+                                    }
+                                </td>
+                                <td>
+                                    @if (applyResults.TryGetValue(index, out CoherenceApplyResult? applied) && applied.Applied)
+                                    {
+                                        <span class="badge-solved">&check; Solved</span>
+                                    }
+                                    else if (applyingIndex == index)
+                                    {
+                                        @* Not a button: a control the client cannot press is a control that
+                                           should not look pressable, and a disabled button with the same
+                                           chrome as an active one still invites the click it will refuse. *@
+                                        <span class="applying">Applying&hellip;</span>
+                                    }
+                                    else
+                                    {
+                                        <button class="agent-pick" @onclick="() => ApplyAsync(index, finding)" disabled="@applyingIndex.HasValue">
+                                            Apply suggestion
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                @* Only once something has actually changed: re-running against a domain nobody
+                   touched since the last pass would hand the model the exact same cards and spend
+                   a call to hear the exact same findings back. *@
+                @if (AnyApplied)
+                {
+                    @if (coherenceRuns >= ChaseWarningThreshold)
+                    {
+                        @* Nothing here stops the client — it advises, never blocks, same as every
+                           finding it reports — but a fix's own ripple can surface a fresh finding
+                           every time, and nothing about this loop guarantees it ever reaches zero.
+                           Past a few rounds the honest thing is to say so plainly, not to keep
+                           lighting the button as if one more press were the one that finishes it. *@
+                        <p class="chase-warning">
+                            @coherenceRuns passes this sitting, each one landing another change on
+                            the domain the interview built. Weigh what is left yourself before
+                            running it again &mdash; the loop is not going to tell you when to stop.
+                        </p>
+                        <button class="agent-pick" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue)">Run it again anyway</button>
+                    }
+                    else
+                    {
+                        <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue)">Run it again</button>
+                    }
+                }
+            }
+            </details>
+        </div>
+
+        <div class="panel">
+            <h2>Composed prompts</h2>
+            <p>
+                @foreach (AgentDraft agent in draft.Agents)
+                {
+                    <button class="agent-pick @(selectedAgentId == agent.ID ? "picked" : "")"
+                            @onclick="() => SelectAsync(agent)">@agent.ID</button>
+                }
+            </p>
+
+            @if (recap is not null)
+            {
+                @* Two fenced blocks, split for the same reason they are fenced at all: they are
+                   read at two different moments of standing (Morgana's, then this agent's), and a
+                   client weighing one prose against the other should never have to find the seam
+                   by scrolling. The split point is the domain fence ComposeAgentInstructionsAsync
+                   always writes — see SplitSystemPrompt. *@
+                (string frameworkPrompt, string agentPrompt) = SplitSystemPrompt(recap.SystemPrompt);
+
+                <div class="nested-recap">
+                    <details class="recap-section">
+                        <summary>System prompt</summary>
+                        <p class="muted">
+                            Morgana's own layer, read once before anything else and binding on every
+                            agent of hers &mdash; Alembic did not write a word of this and cannot: it
+                            is embedded in the Morgana.AI this Alembic was built against, and
+                            customising it means forking the framework, not editing this domain.
+                        </p>
+                        <pre class="prompt">@frameworkPrompt</pre>
+                    </details>
+
+                    <details class="recap-section">
+                        <summary>Agent prompt</summary>
+                        <p class="muted">
+                            This is Alembic's own work: what this agent's interview wrote, subordinate
+                            to the framework above on every point. If something here reads wrong, this
+                            is the half you can still change &mdash; go back into the interview.
+                        </p>
+                        <pre class="prompt">@agentPrompt</pre>
+                    </details>
+
+                    @if (recap.Tools.Count > 0)
+                    {
+                        <details class="recap-section">
+                        <summary>Toolkit</summary>
+                        @foreach (ToolRecap tool in recap.Tools)
+                        {
+                            <div class="tool-card">
+                                <h4><code>@tool.Name</code></h4>
+                                <p class="tool-desc">@tool.Description</p>
+                                @if (tool.Parameters.Count > 0)
+                                {
+                                    <table>
+                                        <thead>
+                                            <tr><th>Parameter</th><th>Scope</th><th>Required</th><th>Description, as the schema carries it</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (ParameterRecap parameter in tool.Parameters)
+                                            {
+                                                <tr>
+                                                    <td><code>@parameter.Name</code></td>
+                                                    <td>@(parameter.Scope ?? "—")</td>
+                                                    <td>@(parameter.Required ? "yes" : "no")</td>
+                                                    <td class="description">
+                                                        @(string.IsNullOrWhiteSpace(parameter.Description)
+                                                            ? "(emitted bare — no description reaches the model)"
+                                                            : parameter.Description)
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </div>
+                        }
+                        </details>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @*
+        Where the domain goes next. A review that ends in a dead end reads as a verdict on one
+        finished agent; the two things a client does after reading it are add the next agent and
+        morganize the whole domain, so both are here rather than behind the front door.
+    *@
+    @if (DraftStateService.Current is not null)
+    {
+        <div class="gateways">
+            <a class="gateway primary-gateway" href="interview">
+                <h2>Distil a new agent</h2>
+                <span class="go">Begin &rarr;</span>
+            </a>
+
+            <a class="gateway" href="morganize">
+                <h2>Morganize it</h2>
+                <span class="go">Package &rarr;</span>
+            </a>
+        </div>
+    }
+
+    <Back />
+
+</div>
+
+@code {
+    /// <summary>Deterministic findings for the current Draft, refreshed by <see cref="OnInitialized"/> and after every applied fix.</summary>
+    private IReadOnlyList<ValidationFinding> findings = [];
+
+    /// <summary><c>null</c> until the client runs the coherence pass at least once this visit.</summary>
+    private CoherenceReport? coherence;
+
+    /// <summary>Whether the coherence pass is in flight, so the button reads "Reading the domain…" and cannot be pressed twice.</summary>
+    private bool isReviewing;
+
+    /// <summary>The composed prompt for <see cref="selectedAgentId"/>, or <c>null</c> when no agent is picked.</summary>
+    private AgentRecap? recap;
+
+    /// <summary>Which agent's prompt is currently shown; <c>null</c> means none is.</summary>
+    private string? selectedAgentId;
+
+    /// <summary>The coherence finding currently being applied, so only one Apply can run at a time.</summary>
+    private int? applyingIndex;
+
+    /// <summary>The outcome of every applied fix this sitting, keyed by the finding's position in <see cref="coherence"/>.</summary>
+    private readonly Dictionary<int, CoherenceApplyResult> applyResults = [];
+
+    /// <summary>
+    /// Every finding successfully applied this sitting, across every coherence run — not cleared
+    /// alongside <see cref="applyResults"/>, because carrying it forward is the whole point.
+    /// </summary>
+    private readonly List<ResolvedCoherenceFinding> resolvedThisSitting = [];
+
+    /// <summary>
+    /// Whether at least one coherence finding has actually landed on the Draft since this pass last
+    /// ran — the one condition under which running it again could tell the client anything new.
+    /// </summary>
+    private bool AnyApplied => applyResults.Values.Any(r => r.Applied);
+
+    /// <summary>
+    /// How many times the coherence pass has run this sitting. Nothing here guarantees it ever
+    /// reaches zero findings — a fix's own ripple can surface a fresh one every round — so this is
+    /// what lets the client see the loop they are in rather than infer it from memory.
+    /// </summary>
+    private int coherenceRuns;
+
+    /// <summary>
+    /// Past this many rounds, "Run it again" stops being the obvious next click and starts asking
+    /// for a second thought instead. Two, not three: one fix revealing one more finding is already
+    /// the cherries-out-of-the-bowl pattern this exists to interrupt, not an exception to wait out.
+    /// </summary>
+    private const int ChaseWarningThreshold = 2;
+
+    /// <summary>
+    /// Runs the deterministic checks against whatever Draft is already in the circuit — the
+    /// coherence pass is never run here, since it costs a model call and the client has not asked
+    /// for it yet.
+    /// </summary>
+    /// <remarks>
+    /// The composed-prompts panel opens on the domain's first agent rather than empty, so the
+    /// evidence a client came here to read is already on screen instead of behind a first click —
+    /// <see cref="SelectAsync"/> does the one composition this costs, same as picking it by hand
+    /// would.
+    /// </remarks>
+    protected override async Task OnInitializedAsync()
+    {
+        if (DraftStateService.Current is not { } draft)
+            return;
+
+        findings = DraftValidationService.Validate(draft);
+
+        if (draft.Agents.FirstOrDefault() is { } first)
+            await SelectAsync(first);
+    }
+
+    /// <summary>
+    /// Runs (or re-runs) the coherence pass and clears any per-finding apply results from the run
+    /// before it — they described findings this fresh read may not even repeat.
+    /// </summary>
+    private async Task ReviewAsync()
+    {
+        if (DraftStateService.Current is not { } draft)
+            return;
+
+        isReviewing = true;
+        coherenceRuns++;
+        applyResults.Clear();
+        try { coherence = await CoherenceService.ReviewAsync(draft, resolvedThisSitting); }
+        finally { isReviewing = false; }
+    }
+
+    /// <summary>
+    /// The literal <c>ConfigurationPromptComposerService</c> writes to open the domain layer — see
+    /// its <c>DomainLayerHeader</c>. Duplicated here rather than exposed by the framework because
+    /// this is a display-only seam: nothing downstream of the model ever needs the two layers apart,
+    /// only this panel does, and the marker is fixed in code on both sides of the reference (the
+    /// framework's own remarks call the fences "glue... not domain-tunable prose", so it does not
+    /// move without the framework's prompt shape moving with it).
+    /// </summary>
+    private const string DomainLayerMarker = "======== DOMAIN AGENT";
+
+    /// <summary>
+    /// Splits a composed system prompt at the domain fence into Morgana's own layer and this
+    /// agent's, so the panel can show each on its own — read at two different moments of the turn,
+    /// as explained where they are rendered.
+    /// </summary>
+    /// <returns>
+    /// The framework half and the agent half; if the marker is not found (a composer from a build
+    /// this page was never tested against), everything falls back into the framework half rather
+    /// than silently dropping text — the client still sees the whole prompt, just not split.
+    /// </returns>
+    private static (string Framework, string Agent) SplitSystemPrompt(string systemPrompt)
+    {
+        int index = systemPrompt.IndexOf(DomainLayerMarker, StringComparison.Ordinal);
+        return index < 0
+            ? (systemPrompt, string.Empty)
+            : (systemPrompt[..index].TrimEnd(), systemPrompt[index..].TrimEnd());
+    }
+
+    /// <summary>
+    /// Picks an agent's recap, or lets it go if it is already the one showing.
+    /// </summary>
+    /// <remarks>
+    /// A picker with no way back to "nothing picked" is not a toggle, it is a one-way door: the tag
+    /// stays lit and the only way to stop reading this agent's prompt is to read another's instead.
+    /// </remarks>
+    private async Task SelectAsync(AgentDraft agent)
+    {
+        if (selectedAgentId == agent.ID)
+        {
+            selectedAgentId = null;
+            recap = null;
+            return;
+        }
+
+        selectedAgentId = agent.ID;
+        recap = await RecapService.ComposeAsync(agent);
+    }
+
+    /// <summary>
+    /// Applies one coherence finding and refreshes both the deterministic findings and the open
+    /// recap, since a fix can touch more than one agent.
+    /// </summary>
+    private async Task ApplyAsync(int index, CoherenceFinding finding)
+    {
+        if (DraftStateService.Current is not { } draft || applyingIndex is not null)
+            return;
+
+        applyingIndex = index;
+
+        try { await ApplyOneAsync(draft, index, finding); }
+        finally { applyingIndex = null; }
+
+        await RefreshAfterApplyAsync(draft);
+    }
+
+    /// <summary>
+    /// The already-applied fix this finding most plausibly follows from, if its Where shares ground
+    /// with one — the case that reads, at a glance, like the same problem come back.
+    /// </summary>
+    private ResolvedCoherenceFinding? RelatedFix(CoherenceFinding finding)
+    {
+        HashSet<string> words = GroundWords(finding.Where);
+        return resolvedThisSitting.FirstOrDefault(r => words.Overlaps(GroundWords(r.Finding.Where)));
+    }
+
+    /// <summary>
+    /// A pattern compiled once rather than re-parsed on every <see cref="GroundWords"/> call.
+    /// </summary>
+    private static readonly Regex NonWordRun = new Regex("[^a-z0-9]+", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The words of four letters or more in a Where string, lowercased — the vocabulary
+    /// <see cref="RelatedFix"/> compares two findings' Where strings by, since a comma-separated
+    /// list of agent and intent names sharing one almost never happens by coincidence.
+    /// </summary>
+    private static HashSet<string> GroundWords(string where) =>
+        [.. NonWordRun.Split(where.ToLowerInvariant()).Where(w => w.Length > 3)];
+
+    private async Task ApplyOneAsync(DomainDraft draft, int index, CoherenceFinding finding)
+    {
+        CoherenceApplyResult result = await CoherenceApplyService.ApplyAsync(draft, finding);
+        applyResults[index] = result;
+
+        // Carried forward across every coherence run this sitting, never cleared with applyResults:
+        // its whole job is to be there the next time ReviewAsync runs, so that run can tell a finding
+        // it already dealt with apart from one still genuinely present.
+        if (result.Applied)
+            resolvedThisSitting.Add(new ResolvedCoherenceFinding(finding, result.Summary));
+    }
+
+    /// <summary>
+    /// Re-reads the Draft after one or more fixes have landed on it.
+    /// </summary>
+    /// <remarks>
+    /// Run even after a declared failure: the applier's own tool calls can land on the Draft before
+    /// it stops without confirming, so a stale findings list or a stale recap would show the client
+    /// less than what may already have changed.
+    /// </remarks>
+    private async Task RefreshAfterApplyAsync(DomainDraft draft)
+    {
+        findings = DraftValidationService.Validate(draft);
+        DraftStateService.Set(draft);
+
+        if (selectedAgentId is not null && draft.Agents.FirstOrDefault(a => a.ID == selectedAgentId) is { } selected)
+            recap = await RecapService.ComposeAsync(selected);
+    }
+}

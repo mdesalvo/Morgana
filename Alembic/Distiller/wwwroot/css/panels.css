@@ -1,0 +1,283 @@
+/* ==========================================================================
+   Panels, and everything read inside one: findings, tables, composed prompts.
+   ========================================================================== */
+
+.panel {
+    background: var(--alembic-panel);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.7rem;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.panel h2 {
+    margin: 0 0 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--alembic-muted);
+}
+
+.panel-error {
+    border-color: var(--alembic-error);
+}
+
+.panel-error pre {
+    margin: 0;
+    white-space: pre-wrap;
+    color: var(--alembic-error);
+}
+
+.panel dl {
+    display: grid;
+    grid-template-columns: 12rem 1fr;
+    gap: 0.4rem 1rem;
+    margin: 0;
+}
+
+.panel dt {
+    color: var(--alembic-muted);
+}
+
+.panel dd {
+    margin: 0;
+}
+
+.panel h3 {
+    margin: 1.25rem 0 0.4rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.panel h4 {
+    margin: 1rem 0 0.3rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--alembic-muted);
+}
+
+/* A collapsible major section of the recap — System prompt, Tools — as opposed to the small
+   "N files written" aside .panel details already styles: this one carries the section's real
+   content, so its summary reads at the same weight .panel h3 always has, not shrunk and muted the
+   way a footnote list is. Open by default: collapsing is for a client who already knows this part
+   and wants it out of the way, not the state a first read should start from. */
+.panel .recap-section {
+    margin: 1.25rem 0 0;
+    font-size: 1rem;
+}
+
+.panel .recap-section > summary {
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--alembic-text);
+}
+
+.panel .recap-section > summary::marker {
+    color: var(--alembic-muted);
+}
+
+.panel .recap-section[open] > summary {
+    margin-bottom: 0.4rem;
+}
+
+/* One tool, boxed on its own: stacking every tool's description in the same monospace block one
+   after another read as a single undifferentiated wall, because a description is prose and a
+   monospace font is for code. Each tool gets its own card instead — its own edge, its own
+   breathing room — so the eye can tell where one tool's business ends and the next one's begins. */
+.tool-card {
+    margin: 1rem 0;
+    padding: 0.9rem 1.1rem;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.6rem;
+    background: rgba(23, 17, 48, 0.35);
+}
+
+.tool-card h4 {
+    margin-top: 0;
+}
+
+/* Read as the sentence it is, not as code: the model reads this description in prose, and a domain
+   expert reviewing it should be able to as well, at the same size and weight as anything else here. */
+.tool-desc {
+    margin: 0 0 0.7rem;
+    color: var(--alembic-text);
+    font-size: 0.92rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.tool-card table {
+    margin-top: 0.3rem;
+}
+
+/*
+    What a picked agent's own recap sits inside, nested under the buttons that chose it rather than
+    as separate panels further down the page. A left rule reads as "belongs to the row above" the
+    way a fresh panel never could.
+*/
+.nested-recap {
+    margin-top: 1rem;
+    padding-left: 1.1rem;
+    border-left: 2px solid var(--alembic-border);
+}
+
+.nested-recap h3:first-child {
+    margin-top: 0;
+}
+
+.panel table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.panel th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--alembic-muted);
+    border-bottom: 1px solid var(--alembic-border);
+    padding: 0.35rem 0.6rem 0.35rem 0;
+}
+
+.panel td {
+    padding: 0.35rem 0.6rem 0.35rem 0;
+    border-bottom: 1px solid rgba(53, 41, 107, 0.5);
+    vertical-align: top;
+}
+
+.panel td.description {
+    color: var(--alembic-muted);
+}
+
+.panel ul {
+    margin: 0;
+    padding-left: 1.1rem;
+}
+
+.panel li {
+    margin-bottom: 0.3rem;
+}
+
+code {
+    font-family: "Cascadia Mono", "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.9em;
+}
+
+.muted {
+    color: var(--alembic-muted);
+}
+
+.because {
+    color: var(--alembic-muted);
+    font-size: 0.85rem;
+    margin-top: 0.2rem;
+}
+
+/* Reads before .what, not after: a finding sharing an agent with a fix just applied looks, at a
+   glance, exactly like that fix having failed. Saying so first is what stops the client reading the
+   rest of the row already assuming that. */
+.consequence-of {
+    margin-bottom: 0.3rem;
+    color: var(--alembic-accent);
+    font-size: 0.8rem;
+}
+
+/* Past a few rounds of the same loop, the honest thing is to say the loop may not end on its own —
+   in the gold this room already keeps for "worth a second thought", never the error red: nothing
+   here is wrong, it is only no longer the obvious next click. */
+.chase-warning {
+    margin: 0.6rem 0;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--alembic-gold);
+    border-radius: 0.5rem;
+    background: rgba(244, 197, 106, 0.1);
+    color: var(--alembic-text);
+    font-size: 0.9rem;
+}
+
+/* One glyph and one short line, not a paragraph: what this says has to be read every time the
+   panel opens, which is exactly the case a wall of text loses. The bolt is drawn, not an emoji —
+   the alchemical characters this room once used had no font on most Linux desktops and landed as
+   tofu, which is the one thing worse than no icon at all. */
+.power-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    margin: 0.6rem 0;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--alembic-gold);
+    border-radius: 0.5rem;
+    background: rgba(244, 197, 106, 0.1);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.power-notice .sigil {
+    width: 1.3rem;
+    height: 1.3rem;
+    flex: none;
+    margin-top: 0.1rem;
+    color: var(--alembic-gold);
+}
+
+.power-notice strong {
+    display: block;
+    color: var(--alembic-text);
+    font-weight: 600;
+}
+
+/* A finding whose only fix is another page names that page as a real destination, not as a clause
+   inside .because the client has to notice and act on unprompted. */
+.resolved-on {
+    display: inline-block;
+    margin-top: 0.4rem;
+    color: var(--alembic-accent);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.panel details {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+}
+
+.panel details summary {
+    cursor: pointer;
+    color: var(--alembic-muted);
+}
+
+.panel details ul {
+    margin-top: 0.5rem;
+}
+
+.harness-section {
+    margin-bottom: 1rem;
+}
+
+.severity-error {
+    color: var(--alembic-error);
+    white-space: nowrap;
+}
+
+.severity-warning {
+    color: var(--alembic-gold);
+    white-space: nowrap;
+}
+
+pre.prompt {
+    background: var(--alembic-bg-deep);
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.35rem;
+    padding: 0.9rem 1rem;
+    margin: 0 0 0.5rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: "Cascadia Mono", "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    max-height: 34rem;
+    overflow-y: auto;
+}

@@ -1,0 +1,263 @@
+@inject IJSRuntime JS
+
+@*
+    One question, alone, because that is the whole of what the client is being asked to do right now.
+
+    The question and the box it is answered in, and nothing else. No standing reassurance under the
+    box either — a line promising that half an answer will do is read once and is furniture from the
+    second turn on, and Alembic says the same thing better by actually inferring the rest and showing
+    what it inferred.
+*@
+
+<div class="scene">
+    @if (Busy)
+    {
+        @* Three dots that breathe: a spinner says "loading", and this is somebody composing. *@
+        <div class="thinking"><span>&bull;</span><span>&bull;</span><span>&bull;</span></div>
+    }
+    else
+    {
+        <p class="asked">@Asked</p>
+
+        @*
+            One button, and it is a short circuit: it carries the answer that adds nothing — that is
+            everything, nothing missing, nothing the agent should avoid — so a client in that
+            position settles the turn with a press instead of a typed sentence and a round trip
+            nobody learns anything from. An offer and never a gate: the box below stays open,
+            because everything they actually contribute is a sentence only they can write.
+        *@
+        @if (Choice is { } choice)
+        {
+            <div class="choices">
+                <button class="choice" @onclick="() => OnChoose.InvokeAsync(choice)">@choice.Label</button>
+            </div>
+        }
+
+        @*
+            The cloud, on the one question the client cannot dictate: nobody has a ready sentence
+            about how their own staff should sound, and recognising a word is what they can do
+            instead. Several at a time, or none — which is why these are not buttons: a button is a
+            whole answer, and one of these is not.
+        *@
+        @if (Traits is { Count: > 0 })
+        {
+            <div class="traits">
+                @foreach (string trait in Traits)
+                {
+                    <button class="trait @(picked.Contains(trait) ? "picked" : null)"
+                            @onclick="() => Toggle(trait)">@trait</button>
+                }
+            </div>
+        }
+
+        <div class="reply">
+            @*
+                The worked example is real text in the box, not a ghost placeholder: it is a whole
+                answer somebody could send as it stands, so it starts already there rather than typed
+                first. Italic marks it as still exactly what was offered — the moment one character
+                differs it reads as their own words and loses the tilt, and it is not a one-way door:
+                typing the same character back is enough to match the example again and the tilt
+                returns, because "unedited" is a fact about the text, not a flag that was tripped once.
+            *@
+            <textarea @bind="answer" @bind:event="oninput" @onblur="RestoreIfEmptied" rows="4"
+                      class="@(Pristine ? "example" : null)"
+                      aria-label="Your answer"></textarea>
+
+            @*
+                Everything the client can do, on one row. The way back is their decision as much as
+                the answer is, and keeping the work is the only defence they have against losing the
+                afternoon — so all three are here, at one size, where the hands already are. The
+                gap holds the way back on the left: going back is about what is behind, the other
+                two are about what is in front.
+            *@
+            <div class="reply-actions">
+                @Back
+
+                <span class="apart"></span>
+
+                <button class="primary" @onclick="SendAsync"
+                        disabled="@Empty">@(Pristine ? "Accept Proposal" : "Answer") &rarr;</button>
+
+                @Keep
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// What is currently in the reply box: either the worked example, still untouched, or the
+    /// client's own words.
+    /// </summary>
+    private string answer = string.Empty;
+
+    /// <summary>
+    /// The <see cref="Turn"/> the caret was last placed for, so <see cref="OnAfterRenderAsync"/>
+    /// moves it at most once per question.
+    /// </summary>
+    private int focusedOn = -1;
+
+    /// <summary>
+    /// Voice words the client has picked from <see cref="Traits"/> so far this question.
+    /// Case-insensitive, since the words come back from the model verbatim and a client re-picking
+    /// one should toggle it off rather than add a near-duplicate.
+    /// </summary>
+    private readonly HashSet<string> picked = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Taking the work away, beside the two movements of the interview.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Keep { get; set; }
+
+    /// <summary>
+    /// The question on the table.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public string Asked { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The worked example for this question, if there is one. Loaded into the box as real text
+    /// rather than shown as a ghost — a whole answer the client can send as it stands.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public string Prompting { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The agreeing button attached to this question, if it has one.
+    /// </summary>
+    [Parameter]
+    public QuickReply? Choice { get; set; }
+
+    /// <summary>
+    /// Words offered for the agent's voice, if this is the question that asks for it.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<string>? Traits { get; set; }
+
+    /// <summary>
+    /// The way back, beside the answer.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Back { get; set; }
+
+    /// <summary>
+    /// Whether Alembic is composing, in which case there is nothing to answer yet.
+    /// </summary>
+    [Parameter]
+    public bool Busy { get; set; }
+
+    /// <summary>
+    /// How many exchanges have happened. The caret follows it, and nothing else.
+    /// </summary>
+    [Parameter]
+    public int Turn { get; set; }
+
+    /// <summary>
+    /// Raised with what the client typed.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnAnswer { get; set; }
+
+    /// <summary>
+    /// Raised with the button they pressed instead.
+    /// </summary>
+    [Parameter]
+    public EventCallback<QuickReply> OnChoose { get; set; }
+
+    /// <summary>
+    /// Whether there is nothing to send: no words picked and nothing typed.
+    /// </summary>
+    private bool Empty => picked.Count == 0 && string.IsNullOrWhiteSpace(answer);
+
+    /// <summary>
+    /// Whether the box still reads exactly as the worked example was written — not "untouched
+    /// since it loaded", but "matches it right now", so undoing an edit back to the same text
+    /// restores it too.
+    /// </summary>
+    private bool Pristine => !string.IsNullOrEmpty(Prompting) && answer == Prompting;
+
+    /// <summary>
+    /// The <see cref="Turn"/> the box was last primed for, so <see cref="OnParametersSet"/> loads
+    /// the worked example at most once per question.
+    /// </summary>
+    private int primedOn = -1;
+
+    /// <summary>
+    /// Loads the worked example into the box, once per question. Answered the same way the caret
+    /// is: keyed on the turn, so a client mid-edit never has their own words replaced back under
+    /// them by a render that changed nothing about the question.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        if (Turn == primedOn)
+            return;
+
+        primedOn = Turn;
+        answer = Prompting;
+    }
+
+    /// <summary>
+    /// Puts the worked example back if the client cleared the box down to nothing and looked away.
+    /// </summary>
+    /// <remarks>
+    /// Only on blur, not on every keystroke: restoring it the instant the last character is deleted
+    /// would fight the delete gesture itself, snapping text back under a backspace still in flight.
+    /// An empty box has no valid answer anyway — <see cref="Empty"/> already keeps Send disabled for
+    /// it — so there is nothing this loses and it is the only way back to the example that does not
+    /// require retyping it from memory.
+    /// </remarks>
+    private void RestoreIfEmptied()
+    {
+        if (string.IsNullOrEmpty(answer) && !string.IsNullOrEmpty(Prompting))
+            answer = Prompting;
+    }
+
+    /// <summary>
+    /// Takes a word for the voice, or gives it back.
+    /// </summary>
+    private void Toggle(string trait)
+    {
+        if (!picked.Remove(trait))
+            picked.Add(trait);
+    }
+
+    /// <summary>
+    /// Sends the answer and empties the box, so the next question is not met by the last answer.
+    /// </summary>
+    /// <remarks>
+    /// Picked words go as a sentence rather than as a list, because what reaches the model is one
+    /// person's answer either way and a bare enumeration reads as a form return. Anything typed
+    /// stays first: it is the client's own account, and the words are what they recognised in it.
+    /// </remarks>
+    private async Task SendAsync()
+    {
+        string typed = answer.Trim();
+        string said = picked.Count == 0
+            ? typed
+            : (typed.Length > 0 ? typed + " " : string.Empty)
+              + $"The voice I would want here: {string.Join(", ", picked)}.";
+
+        answer = string.Empty;
+        picked.Clear();
+
+        await OnAnswer.InvokeAsync(said);
+    }
+
+    /// <summary>
+    /// Puts the caret where the next answer goes, once per question.
+    /// </summary>
+    /// <remarks>
+    /// Keyed on the turn count rather than run on every render, so the focus lands when a new
+    /// question arrives and never steals the caret back from a client who has clicked away
+    /// mid-sentence.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Busy || Turn == focusedOn)
+            return;
+
+        focusedOn = Turn;
+        await JS.InvokeVoidAsync("alembicFocusReply");
+    }
+}

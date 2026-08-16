@@ -1,0 +1,189 @@
+/* ==========================================================================
+   The landing: the alembic at full size, and the two ways in.
+   ========================================================================== */
+
+/* The banner, and the room it stands in. Rectangular rather than the vessel it replaces — the
+   scene it shows (Morgana at her alembic, a whole room) is composed for a wide frame, and forcing
+   it into a circle would crop the composition rather than frame it. The glow stays a sibling
+   rather than a shadow on the image, because a box-shadow would trace the image's own corners.
+   No max-width of its own: it fills the same column the two doors below it fill, so the banner
+   reads as standing over both rather than as a smaller thing centred above them.
+
+   The aspect-ratio sets its height from a full-width column, which on a short viewport is taller
+   than the landing has room for — a door row below it and a scrollbar earned is a worse trade than
+   a few more of the scene's own edges going under object-fit: cover's crop. max-height caps it
+   against the viewport rather than the column, so what gives first is the picture, never the page. */
+.banner {
+    position: relative;
+    width: 100%;
+    max-height: 34vh;
+    margin: 0 auto 1.5rem;
+    aspect-ratio: 1376 / 768;
+}
+
+/* On its own layer. A blurred radial gradient is repainted every time anything over it changes, and
+   the image over it changes exactly once — at the handoff from the prerendered page to the live
+   circuit — which is where the flicker was coming from. Composited once, it stops being redrawn. */
+.banner::before {
+    content: "";
+    position: absolute;
+    inset: -8%;
+    border-radius: 1.4rem;
+    background: radial-gradient(ellipse, rgba(192, 132, 252, 0.3), transparent 68%);
+    filter: blur(1.4rem);
+    transform: translateZ(0);
+}
+
+.banner img {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: var(--alembic-bg-deep);
+    border-radius: 0.9rem;
+    border: 1px solid var(--alembic-border-lit);
+    box-shadow: 0 0 3rem rgba(139, 92, 246, 0.35);
+}
+
+.landing-head {
+    text-align: center;
+    margin-bottom: 1.75rem;
+}
+
+.landing-head h1 {
+    font-size: 3.6rem;
+}
+
+.landing-head .tagline {
+    margin-bottom: 0;
+    font-size: 1.05rem;
+}
+
+/* The two ways in. Doors, not leaflets: a drawn sigil, the name of the thing, and the word for
+   going through — anything more and the client is reading instead of choosing. Side by side and
+   the same size, because they are the same kind of act; the first is lit because it is the one
+   most people want. What each actually involves is Morgana's to show once you are inside. */
+.gateways {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 3rem;
+}
+
+/* Tighter than the shared 3rem above: the landing is the one page this row has to fit under a
+   banner without earning a scrollbar, where Import's own use of .gateways has no banner above it
+   and can afford the room. */
+.alembic-landing .gateways {
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 44rem) {
+    .gateways {
+        grid-template-columns: 1fr;
+    }
+}
+
+.gateway {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.9rem;
+    padding: 2.2rem 1.5rem 1.8rem;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.9rem;
+    background: linear-gradient(160deg, var(--alembic-panel-lit), var(--alembic-panel));
+    color: var(--alembic-text);
+    text-align: center;
+    text-decoration: none;
+    transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+}
+
+.gateway:hover {
+    border-color: var(--alembic-border-lit);
+    transform: translateY(-2px);
+    box-shadow: var(--alembic-glow);
+}
+
+/* Drawn rather than typed. The alchemical characters this used to use (🜍, 🜚) have no font on
+   most Linux desktops and land as tofu or as nothing — an icon that depends on the reader
+   having a glyph is an icon that is sometimes absent, and the space is spent on it either way. */
+.gateway .sigil {
+    width: 3rem;
+    height: 3rem;
+    color: var(--alembic-accent);
+    flex: none;
+}
+
+.gateway h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    color: var(--alembic-text);
+    text-transform: none;
+}
+
+/* The action line: the difference between a panel about a thing and a way to go and do it. */
+.gateway .go {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--alembic-accent);
+    padding: 0.5rem 1.3rem;
+    border: 1px solid var(--alembic-border-lit);
+    border-radius: 1.4rem;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.gateway:hover .go {
+    background: rgba(192, 132, 252, 0.16);
+    border-color: var(--alembic-accent);
+}
+
+.gateway.primary-gateway {
+    border-color: var(--alembic-border-lit);
+    background:
+        radial-gradient(ellipse 22rem 12rem at 50% 0%, rgba(192, 132, 252, 0.24), transparent 72%),
+        linear-gradient(160deg, var(--alembic-panel-lit), var(--alembic-panel));
+}
+
+.gateway.primary-gateway .go {
+    background: linear-gradient(135deg, var(--alembic-accent), var(--alembic-accent-deep));
+    border-color: transparent;
+    color: #14082b;
+    box-shadow: 0 0 1.2rem rgba(139, 92, 246, 0.35);
+}
+
+.gateway.primary-gateway:hover .go {
+    box-shadow: 0 0 1.8rem rgba(192, 132, 252, 0.6);
+}
+
+/* Three doorways instead of two, for the page you land on after bringing a file: same shape as
+   the landing's, because they are the same kind of thing — a way on, not a description. */
+.gateways-three {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 52rem) {
+    .gateways-three {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* One doorway, for the moment there is only ever one honest next step: into the interview. A single
+   child left inside .gateways' own two-column grid would sit flush left with an empty column beside
+   it, so this is its own layout rather than a degenerate case of the other two. */
+.gateways-one {
+    grid-template-columns: 1fr;
+    max-width: 22rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* The last of what the banner's own shrinking above buys back: the container's own trailing
+   padding, tightened on the landing alone so the whole page — banner, title, doors — has a real
+   chance of fitting one viewport without a scrollbar. */
+.alembic-landing {
+    padding-bottom: 1.5rem;
+}

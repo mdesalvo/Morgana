@@ -1,0 +1,45 @@
+<Project>
+
+  <PropertyGroup>
+
+    <!-- Common Build Settings -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Version Information -->
+    <Version>0.28.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+
+    <!-- Package Metadata -->
+    <Authors>Marco De Salvo</Authors>
+    <Company>Marco De Salvo</Company>
+    <Product>Morgana</Product>
+    <Copyright>Marco De Salvo</Copyright>
+
+    <!-- Repository Information -->
+    <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mdesalvo/Morgana.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseUrl>https://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
+
+    <!-- Common Description -->
+    <Description>
+    Alembic is the authoring workbench of the Morgana conversational AI framework.
+    Built on cutting-edge .NET 10 and Blazor Server, it distils a functional interview
+    with a domain expert into a complete Morgana domain: intents, agent prose, tool
+    contracts, C# assets and non-regression scenarios. Alembic is not a channel and
+    never talks to a running Morgana instance — it needs only an LLM.
+    </Description>
+
+  </PropertyGroup>
+
+  <!--
+    NOTE: no runtime PackageReferences here. Alembic obtains everything it needs
+    (Microsoft.Extensions.AI, the LLM provider SDKs, the Records, the prompt
+    services) transitively through its ProjectReference to Morgana.AI.
+  -->
+
+</Project>

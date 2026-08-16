@@ -1,0 +1,504 @@
+@page "/morganize"
+@using Distiller.Services
+@inject IDraftStateService DraftStateService
+@inject IDraftValidationService DraftValidationService
+@inject IMigrationReportService MigrationReportService
+@inject IAssetPackageService AssetPackageService
+
+@*
+    Morganize. The turnkey end of the workbench: the whole domain leaves as one archive,
+    because the pieces are only correct together.
+
+    Three things settle before it can be built, and none of them is in agents.json: the namespace,
+    each agent's tier, and — where an agent has no native tools — nothing at all. The validator has
+    been calling these "Alembic's guess" since phase 4; this is the page that stops them being one.
+*@
+
+<div class="alembic-page">
+
+    <FinalizationRail At="1" />
+
+    @if (DraftStateService.Current is not { } draft)
+    {
+        <div class="panel">
+            <h2>Nothing to morganize</h2>
+            <p>Import an <code>agents.json</code> or run an interview first.</p>
+            <p><a href="import">Go to import &rarr;</a></p>
+        </div>
+    }
+    else
+    {
+        @if (errors.Count > 0)
+        {
+            <div class="panel">
+                <h2>Not yet</h2>
+                <p class="severity-error">
+                    @errors.Count @(errors.Count == 1 ? "error stops" : "errors stop") this domain from
+                    starting, so there is nothing worth generating from it.
+                </p>
+                <ul>
+                    @foreach (ValidationFinding finding in errors)
+                    {
+                        <li><code>@finding.Where</code> &mdash; @finding.Message</li>
+                    }
+                </ul>
+                <p class="muted">
+                    A required parameter behind an optional one is the one that would also emit C#
+                    that does not compile: the generated signature follows the configuration's own
+                    order, and never quietly reorders it.
+                </p>
+                <p><a href="review">See them all &rarr;</a></p>
+            </div>
+        }
+        else
+        {
+            <div class="panel">
+                <h2>What agents.json cannot say</h2>
+                <p class="muted">
+                    A project namespace, a die per agent, and the class names. None of it is in a
+                    configuration, so an imported domain arrives without it.
+                </p>
+
+                <p>
+                    <label>Namespace <input @bind="rootNamespace" @bind:event="oninput" /></label>
+                </p>
+
+                <table>
+                    <thead>
+                        <tr><th>Agent</th><th>Die</th><th>Classes</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (AgentDraft agent in draft.Agents)
+                        {
+                            <tr>
+                                <td><code>@agent.ID</code></td>
+                                <td>
+                                    <select value="@agent.Code.Tier"
+                                            @onchange="e => SetTier(agent, e)">
+                                        <option value="@Records.LLMTier.Efficiency">Efficiency</option>
+                                        <option value="@Records.LLMTier.Performance">Performance</option>
+                                    </select>
+                                </td>
+                                <td class="muted">
+                                    <code>@(agent.Code.AgentClassName ?? "—")</code>
+                                    @if (agent.Tools.Count > 0)
+                                    {
+                                        <text>, <code>@(agent.Code.ToolClassName ?? "—")</code></text>
+                                    }
+                                    else
+                                    {
+                                        <text> &mdash; no tool class: nothing native to back</text>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <div class="power-notice">
+                    <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M13 2 5 14h6l-1 8 9-13h-6z" />
+                    </svg>
+                    <div>
+                        <strong>Performance is not an upgrade.</strong>
+                        The framework reserves it for an agent whose author declares an <b>existential
+                        need for deep reasoning</b>, and there is no fallback between dies: an agent
+                        asking for a die the deployment does not configure fails startup.
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Migration</h2>
+                <p class="muted">
+                    @if (report.BaselineName is null)
+                    {
+                        <text>Nothing was uploaded into this session, so everything here is new.</text>
+                    }
+                    else
+                    {
+                        <text>
+                            Against <code>@report.BaselineName</code>. Alembic never sees your tree,
+                            so nothing is applied for you &mdash; this names every difference
+                            precisely enough to apply by hand.
+                        </text>
+                    }
+                </p>
+
+                @if (report.Entries.Count == 0)
+                {
+                    <p>Nothing changed.</p>
+                }
+                else
+                {
+                    <table>
+                        <thead>
+                            <tr><th></th><th>Where</th><th>What it costs you</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (MigrationEntry entry in report.Entries)
+                            {
+                                <tr>
+                                    <td class="@(Compiled(entry.Change) ? "severity-error" : "severity-warning")">
+                                        @entry.Change.ToString().ToLowerInvariant()
+                                    </td>
+                                    <td><code>@entry.Where</code></td>
+                                    <td>@entry.Detail</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <div class="panel">
+                <h2>Code Generation</h2>
+                <p class="muted">
+                    One archive: a ready .NET solution containing <code>agents.json</code>,
+                    the generated <code>*.g.cs</code>, a working mock per toolkit, the migration report
+                    and the save file, already inside a <code>.csproj</code>/<code>.slnx</code> that
+                    builds as it is. Unzip it, <code>dotnet build</code>, drop the assembly into your
+                    Morgana's plugins directory, and talk to the domain you just
+                    distilled on the first run. The mocks are written by AI, one call per agent,
+                    so this takes a moment.
+                </p>
+
+                <details class="harness-section">
+                    <summary>Generate PromptHarness &mdash; optional</summary>
+
+                    <p>
+                        <label>
+                            <input type="checkbox" @bind="includeScenarios" />
+                            Include the harness scenarios
+                        </label>
+                        <span class="muted">
+                            &mdash; one more call per agent. An agent's whole behavior lives in the
+                            prose you just built; whenever someone edits it later, these are the test
+                            conversations that get replayed to catch what that edit broke.
+                        </span>
+                    </p>
+
+                    <div class="power-notice">
+                        <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                        </svg>
+                        <div>
+                            <strong>PromptHarness requires a local source checkout of Morgana.</strong>
+                            It cannot connect to deployed instances, containers, or managed environments.
+                            <ul>
+                                <li><strong>Check this box</strong> ONLY if your team hosts or customizes the Morgana source code directly within your own DevOps.</li>
+                                <li><strong>Leave it unchecked</strong> if you do not have the source code — no scenario files will be written this time. Come back and check it once your setup changes; nothing about the rest of this archive depends on it.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </details>
+
+                @if (package is null && !isBuilding)
+                {
+                    <button class="primary" @onclick="BuildAsync">Build the archive</button>
+                }
+                else if (isBuilding)
+                {
+                    <div class="distillation">
+                        <svg class="distillation-vessel" viewBox="0 0 64 88" role="img" aria-label="Distilling">
+                            <defs>
+                                <clipPath id="belly-clip">
+                                    <circle cx="29" cy="55" r="15.2" />
+                                </clipPath>
+                            </defs>
+
+                            @* The neck: extended all the way down to where each line meets the belly's own
+                               outline (x=25.2/32.8 crosses the r=15.2 circle at y≈40.3), so the cap sits on
+                               a continuous vessel rather than floating over a gap above the belly. *@
+                            <path d="M25.2 40.3 V13 M32.8 40.3 V13" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
+                            <rect x="21.8" y="10" width="14.4" height="4.8" rx="2.4" fill="var(--alembic-border-lit)" />
+                            <path d="M40 20.5 H49 A3.2 3.2 0 0 1 52 23.7 V33" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
+
+                            <g clip-path="url(#belly-clip)">
+                                <rect x="10" width="38"
+                                      y="@((70.2 - FillHeight).ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                                      height="@(FillHeight.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                                      style="fill:var(--alembic-accent); transition: y 0.5s ease, height 0.5s ease;" />
+                            </g>
+
+                            <circle cx="29" cy="55" r="15.2" fill="none" stroke="var(--alembic-border-lit)" stroke-width="1.8" />
+                        </svg>
+
+                        <div class="distillation-status">
+                            <p class="distillation-phase">@PhaseLabel</p>
+                            <div class="distillation-bar">
+                                <div class="distillation-bar-fill" style="width:@(Percent)%"></div>
+                            </div>
+                            <p class="muted distillation-percent">@Percent%</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="distillation-done">
+                        <p class="distillation-done-headline">✓ Distilled &mdash; @written.Count files, @(package!.Length / 1024) KB.</p>
+                        <p>
+                            <a download="@ArchiveName" href="@DataUri(package)">@ArchiveName</a>
+                        </p>
+                        <button class="agent-pick" @onclick="Reset">Build it again</button>
+                    </div>
+                }
+
+                @if (written.Count > 0)
+                {
+                    <details class="muted">
+                        <summary>@written.Count files written</summary>
+                        <ul>
+                            @foreach (string path in written)
+                            {
+                                <li><code>@path</code></li>
+                            }
+                        </ul>
+                    </details>
+                }
+
+                @if (error is not null)
+                {
+                    <p class="severity-error">@error</p>
+                }
+            </div>
+        }
+    }
+
+    <Back />
+
+</div>
+
+@code {
+    /// <summary>Blocking findings against the current Draft; a non-empty list keeps the whole page behind the "Not yet" panel.</summary>
+    private IReadOnlyList<ValidationFinding> errors = [];
+
+    /// <summary>What this Draft differs from, computed once in <see cref="OnInitialized"/> and shown in the Migration panel.</summary>
+    private MigrationReport report = new(null, [], string.Empty);
+
+    /// <summary>Every path the last <see cref="AssetPackageService.BuildAsync"/> call reported through its <see cref="Progress{T}"/> callback.</summary>
+    private readonly List<string> written = [];
+
+    private string rootNamespace = Distiller.Services.CodeEmitService.DefaultNamespace;
+
+    /// <summary>The finished archive, non-null only between a successful <see cref="BuildAsync"/> and the next <see cref="Reset"/>.</summary>
+    private byte[]? package;
+    private bool includeScenarios;
+    private bool isBuilding;
+    private string? error;
+
+    private string ArchiveName => $"{rootNamespace.ToLowerInvariant().Replace('.', '-')}-morganized.zip";
+
+    /// <summary>
+    /// Whether acting on this change means touching code rather than re-reading a sentence.
+    /// </summary>
+    private static bool Compiled(MigrationChange change) =>
+        change is MigrationChange.Removed or MigrationChange.SignatureChanged;
+
+    protected override void OnInitialized()
+    {
+        if (DraftStateService.Current is not { } draft)
+            return;
+
+        // The die select shows Efficiency the moment nothing is chosen, so the model has to actually
+        // hold that the instant the page does — a control bound to a value the client never asked
+        // for and never confirmed is a control lying about its own state. Committing it here, before
+        // anything is read or built, is what makes "visit the Emit page" in the validator's own
+        // warning literally true rather than true only once the select is clicked.
+        foreach (AgentDraft agent in draft.Agents)
+        {
+            agent.Code.Tier ??= Records.LLMTier.Efficiency;
+            agent.Code.Inferred = false;
+        }
+
+        errors = [.. DraftValidationService.Validate(draft).Where(f => f.Severity == FindingSeverity.Error)];
+        report = MigrationReportService.Build(draft);
+
+        // A namespace already stated by one agent is the domain's, not a default to be re-typed.
+        if (draft.Agents.FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.Code.Namespace)) is { } stated)
+            rootNamespace = stated.Code.Namespace!;
+    }
+
+    /// <summary>
+    /// Applies the client's choice from the die <c>&lt;select&gt;</c> and invalidates any archive
+    /// already built, since it was built against the previous tier.
+    /// </summary>
+    private void SetTier(AgentDraft agent, ChangeEventArgs e)
+    {
+        if (Enum.TryParse(e.Value?.ToString(), out Records.LLMTier tier))
+            agent.Code.Tier = tier;
+
+        // Stated is no longer guessed, and the validator's warning about it should stop.
+        agent.Code.Inferred = false;
+        package = null;
+    }
+
+    /// <summary>
+    /// Clears the built archive so the panel falls back to the build button — used by "Build it
+    /// again" rather than a full page reload, since the die choices and namespace are worth keeping.
+    /// </summary>
+    private void Reset()
+    {
+        package = null;
+        written.Clear();
+    }
+
+    /// <summary>
+    /// One thing the archive is built toward: the fixed configuration files, or one agent's code,
+    /// mock, or starter scenarios. Marked done on the first file that matches it, which slightly
+    /// overcounts a multi-file step — acceptable, because the bar exists to show the client this is
+    /// moving and where, not to meter it to the file.
+    /// </summary>
+    private sealed class Step
+    {
+        public required string AgentId { get; init; }
+        public required string Kind { get; init; }
+        public required string Label { get; init; }
+        public bool Done { get; set; }
+    }
+
+    private readonly List<Step> plan = [];
+
+    /// <summary>
+    /// The step currently in front of the client, kept even after it is marked done so the label
+    /// does not blank out between two files of the same slow step.
+    /// </summary>
+    private Step? currentStep;
+
+    private int Percent => plan.Count == 0 ? 0 : plan.Count(s => s.Done) * 100 / plan.Count;
+
+    /// <summary>
+    /// The belly is a circle of radius 15.2 centred at y=55, so a full pour is its diameter, 30.4.
+    /// </summary>
+    private double FillHeight => 30.4 * Percent / 100.0;
+
+    private string PhaseLabel => currentStep?.Kind switch
+    {
+        null => "Preparing the configuration…",
+        "structure" => "Preparing the configuration…",
+        "code" => $"Distilling {currentStep.Label} — writing its generated C#…",
+        "mock" => $"Distilling {currentStep.Label} — AI is writing its working mock, so this can take a moment…",
+        "scenarios" => $"Distilling {currentStep.Label} — AI is watching its behaviour for PromptHarness, this is the slowest part…",
+        _ => "Distilling…"
+    };
+
+    /// <summary>
+    /// Builds the plan in the same order <see cref="AssetPackageService"/> actually writes: the
+    /// four fixed files, then every agent's code and mock together, then every agent's scenarios —
+    /// a second pass over the same agents, because that pass runs after the first has finished for
+    /// all of them.
+    /// </summary>
+    private static List<Step> BuildPlan(DomainDraft draft, bool includeScenarios)
+    {
+        List<AgentDraft> agents = [.. draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID))];
+        List<Step> steps = [new Step { AgentId = "", Kind = "structure", Label = "the configuration" }];
+
+        foreach (AgentDraft agent in agents)
+        {
+            string label = char.ToUpperInvariant(agent.ID![0]) + agent.ID[1..];
+            steps.Add(new Step { AgentId = agent.ID, Kind = "code", Label = label });
+
+            if (agent.Tools.Count > 0)
+                steps.Add(new Step { AgentId = agent.ID, Kind = "mock", Label = label });
+        }
+
+        if (includeScenarios)
+            foreach (AgentDraft agent in agents)
+            {
+                string label = char.ToUpperInvariant(agent.ID![0]) + agent.ID[1..];
+                steps.Add(new Step { AgentId = agent.ID, Kind = "scenarios", Label = label });
+            }
+
+        return steps;
+    }
+
+    /// <summary>
+    /// Which step one written path belongs to, by the same naming <see cref="CodeEmitService"/>,
+    /// <see cref="ToolMockService"/> and <see cref="ScenarioAuthorService"/> use.
+    /// </summary>
+    private Step? MatchStep(string path, DomainDraft draft)
+    {
+        if (path is "agents.json" or "alembic-draft.json" or "MIGRATION.md" or "README.md" or Distiller.Services.AssetPackageService.MarkerFileName)
+            return plan.FirstOrDefault(s => s.Kind == "structure");
+
+        foreach (AgentDraft agent in draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)))
+        {
+            string id = agent.ID!;
+            string agentClass = agent.Code.AgentClassName ?? $"{char.ToUpperInvariant(id[0])}{id[1..]}Agent";
+            string toolClass = agent.Code.ToolClassName ?? $"{char.ToUpperInvariant(id[0])}{id[1..]}Tool";
+
+            if (path == $"Agents/{agentClass}.g.cs" || path == $"Tools/{toolClass}.g.cs")
+                return plan.FirstOrDefault(s => s.AgentId == id && s.Kind == "code");
+
+            if (path == $"Tools/{toolClass}.cs" || path == $"Tools/{toolClass}.cs.FAILED.txt")
+                return plan.FirstOrDefault(s => s.AgentId == id && s.Kind == "mock");
+
+            if (path.StartsWith($"Scenarios/{id}-", StringComparison.Ordinal) || path == $"Scenarios/{id}.FAILED.txt")
+                return plan.FirstOrDefault(s => s.AgentId == id && s.Kind == "scenarios");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Runs <see cref="AssetPackageService.BuildAsync"/> and drives the distillation bar off its
+    /// progress callback, matching each reported path back to the <see cref="Step"/> it belongs to.
+    /// </summary>
+    private async Task BuildAsync()
+    {
+        if (DraftStateService.Current is not { } draft)
+            return;
+
+        isBuilding = true;
+        error = null;
+        written.Clear();
+        plan.Clear();
+        plan.AddRange(BuildPlan(draft, includeScenarios));
+        currentStep = plan[0];
+
+        try
+        {
+            // The die is already bound to a real value by OnInitialized — nothing left to default
+            // here.
+            foreach (AgentDraft agent in draft.Agents)
+                agent.Code.Namespace = rootNamespace;
+
+            Progress<string> progress = new Progress<string>(path =>
+            {
+                written.Add(path);
+
+                if (MatchStep(path, draft) is { } step)
+                {
+                    step.Done = true;
+                    currentStep = step;
+                }
+
+                InvokeAsync(StateHasChanged);
+            });
+
+            package = await AssetPackageService.BuildAsync(draft, includeScenarios, progress);
+
+            // The archive is whole the moment this returns, even if the last agent's slow step only
+            // reported its first file — the bar owes the client a full vessel, not a nearly-full one.
+            foreach (Step step in plan)
+                step.Done = true;
+        }
+        catch (Exception ex)
+        {
+            error = $"The archive could not be built: {ex.Message}";
+        }
+        finally
+        {
+            isBuilding = false;
+        }
+    }
+
+    /// <summary>
+    /// The archive as a downloadable <c>data:</c> URI, for the same reason the JSON downloads are:
+    /// the Draft lives in the circuit, so no stateless endpoint can reach it.
+    /// </summary>
+    private static string DataUri(byte[] content) =>
+        $"data:application/zip;base64,{Convert.ToBase64String(content)}";
+}

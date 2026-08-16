@@ -1,0 +1,40 @@
+@*
+    What the answers have become: the panel that opens under the entry's own tag on the map.
+
+    It has no heading and no name of its own, because the thing it belongs to is directly above it and
+    already lit — the tag is the trigger, this is what the trigger opens, and anything here repeating
+    the name would make two objects out of one.
+
+    Folded away by default, because these rows are not read but looked up, when the client wonders
+    what has been written down about this one so far. Laid open under the question they were a second
+    screen of small print beside the one thing they are being asked to do.
+
+    What is still empty is shown faint rather than hidden — a panel that grows a new row every few
+    turns reads as a form growing under the client, where one that fills in place reads as their own
+    domain taking shape.
+*@
+
+@* One row per field a section of the agent can carry — name, description, button, the button's
+   request — computed once by AgentRows.Of so this panel and the caret+count on the map's own tag
+   can never disagree about what is written down. A row with no value yet is shown faint rather
+   than omitted, so the panel reads as the client's own domain filling in rather than a form
+   growing new fields under them. *@
+<div class="rows-open">
+    @foreach (AgentRows.Row row in AgentRows.Of(State))
+    {
+        <div class="drop @(row.Value is null ? "empty" : "") @(row.Moved ? "moved" : "")">
+            <span class="what">@row.What</span>
+            <span class="value">@(row.Value ?? "not yet")</span>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// The interview's live state, holding the agent currently under construction and every field
+    /// written into it so far. This component reads it purely — it renders a snapshot and never
+    /// mutates it.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public InterviewState State { get; set; } = default!;
+}

@@ -57,6 +57,16 @@ public class ConversationLifecycleService : IConversationLifecycleService
         {
             _logger.LogInformation("Starting new conversation...");
 
+            // Joined before the conversation exists, not after it starts. The presentation is pushed
+            // the instant Morgana has a conversation, and a SignalR message sent to a group with no
+            // members is discarded without a trace — so a join issued after the start response is a
+            // race, lost every time the greeting skips the LLM (no agents configured, presenter
+            // failure) and therefore costs nothing to produce. Joining first removes the race instead
+            // of narrowing it: the id is minted here, and a group is joinable before anything is
+            // keyed on it. On the server side this is the documented ordering, see
+            // MorganaHub.JoinConversation.
+            await _signalR.JoinConversation(request.ConversationId);
+
             HttpResponseMessage response = await _http.PostAsJsonAsync(
                 "/api/morgana/conversation/start", request);
 
@@ -69,9 +79,18 @@ public class ConversationLifecycleService : IConversationLifecycleService
                 // and every SignalR group is keyed on.
                 _chatStateService.ConversationId = result?.ConversationId ?? string.Empty;
 
-                // Join before the presentation message is generated, or it arrives with nobody
-                // listening — the greeting is pushed, never polled.
-                await _signalR.JoinConversation(_chatStateService.ConversationId);
+                // Today the server echoes the id it was given, so the group joined above is already
+                // the right one. Should it ever hand back a different one, the pre-join landed on a
+                // group nobody publishes to: correct it here rather than silently receive nothing.
+                if (!string.Equals(_chatStateService.ConversationId, request.ConversationId, StringComparison.Ordinal))
+                {
+                    _logger.LogWarning("Server returned conversation id {ServerId} instead of the requested {RequestedId}; rejoining",
+                        _chatStateService.ConversationId, request.ConversationId);
+
+                    await _signalR.LeaveConversation(request.ConversationId);
+                    await _signalR.JoinConversation(_chatStateService.ConversationId);
+                }
+
                 await _storage.SaveConversationIdAsync(_chatStateService.ConversationId);
 
                 _logger.LogInformation("Conversation started: {ConversationId}", _chatStateService.ConversationId);
@@ -81,12 +100,19 @@ public class ConversationLifecycleService : IConversationLifecycleService
             string errorContent = await response.Content.ReadAsStringAsync();
             _logger.LogError("Failed to start conversation: {StatusCode} - {Error}", response.StatusCode, errorContent);
             _chatStateService.AddErrorBanner($"Failed to start conversation: {response.StatusCode}", "conversation_start_http_error", 12);
+
+            // The conversation never came into being, so the group joined above has nothing behind it.
+            // Harmless in itself, but a retry mints a new id and would leave this one behind for the
+            // life of the circuit.
+            await _signalR.LeaveConversation(request.ConversationId);
             return false;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "StartConversation exception");
             _chatStateService.AddErrorBanner($"Connection error: {ex.Message}", "conversation_start_exception", 20);
+
+            await _signalR.LeaveConversation(request.ConversationId);
             return false;
         }
     }

@@ -52,16 +52,8 @@ public class SignalRChannelService : IChannelService
             $"type={channelMessage.MessageType}, agent={channelMessage.AgentName}, completed={channelMessage.AgentCompleted}, " +
             $"#quickReplies={channelMessage.QuickReplies?.Count ?? 0}, hasRichCard={channelMessage.RichCard != null}");
 
-        // The presentation is the first message of a fresh conversation and races
-        // the client's JoinConversation call on the hub. If we send while the client
-        // has not joined its group yet, the message is dropped by SignalR into an
-        // empty audience. Sleeping 750 ms here is the pragmatic workaround inherited
-        // from commit cf55ed1 ("FIX SignalR still not joined during NoAgentsMessage
-        // presentation"). This delay is specific to SignalR group semantics and
-        // therefore lives here rather than in the channel-agnostic supervisor.
-        if (string.Equals(channelMessage.MessageType, "presentation", StringComparison.Ordinal))
-            await Task.Delay(750);
-
+        // No wait before the first message of a conversation: channels are required to join the group
+        // before starting it, so there is always someone listening. See MorganaHub.JoinConversation.
         await hubContext.Clients.Group(channelMessage.ConversationId)
             .SendAsync("ReceiveMessage", channelMessage);
     }

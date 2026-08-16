@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "morgana",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Morgana/Morgana.Web/Morgana.Web.csproj"],
+      "port": 5001,
+      "url": "https://localhost:5001"
+    },
+    {
+      "name": "cauldron",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Channels/Cauldron/Cauldron.csproj"],
+      "port": 5002,
+      "url": "https://localhost:5002"
+    }
+  ]
+}
