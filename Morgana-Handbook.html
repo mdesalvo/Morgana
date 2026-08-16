@@ -402,14 +402,14 @@
       <h2>Index</h2>
       <ul class="toc">
         <li><a href="#architecture-overview"><span class="toc-num">01</span><span class="toc-title">Architecture Overview</span><span class="toc-dots"></span><span class="toc-page">3</span></a></li>
-        <li><a href="#extension-points"><span class="toc-num">02</span><span class="toc-title">Extension Points</span><span class="toc-dots"></span><span class="toc-page">4</span></a></li>
-        <li><a href="#security-model"><span class="toc-num">03</span><span class="toc-title">Security Model</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
-        <li><a href="#configuration-reference"><span class="toc-num">04</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
-        <li><a href="#docker-deployment"><span class="toc-num">05</span><span class="toc-title">Docker Deployment</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
-        <li><a href="#observability"><span class="toc-num">06</span><span class="toc-title">Observability (OpenTelemetry)</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
-        <li><a href="#building-your-agents"><span class="toc-num">07</span><span class="toc-title">Building Your Agents with Alembic</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
-        <li><a href="#reference-channels"><span class="toc-num">08</span><span class="toc-title">Reference Channels</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
-        <li><a href="#deployment-responsibility-model"><span class="toc-num">09</span><span class="toc-title">Deployment Responsibility Model</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
+        <li><a href="#reference-channels"><span class="toc-num">02</span><span class="toc-title">Reference Channels</span><span class="toc-dots"></span><span class="toc-page">4</span></a></li>
+        <li><a href="#building-your-agents"><span class="toc-num">03</span><span class="toc-title">Building Your Agents with Alembic</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
+        <li><a href="#extension-points"><span class="toc-num">04</span><span class="toc-title">Extension Points</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
+        <li><a href="#security-model"><span class="toc-num">05</span><span class="toc-title">Security Model</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
+        <li><a href="#deployment-responsibility-model"><span class="toc-num">06</span><span class="toc-title">Deployment Responsibility Model</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
+        <li><a href="#configuration-reference"><span class="toc-num">07</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
+        <li><a href="#docker-deployment"><span class="toc-num">08</span><span class="toc-title">Docker Deployment</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
+        <li><a href="#observability"><span class="toc-num">09</span><span class="toc-title">Observability (OpenTelemetry)</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
         <li><a href="#quick-reference"><span class="toc-num">10</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">12</span></a></li>
       </ul>
 
@@ -420,7 +420,7 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 3 — ARCHITECTURE OVERVIEW                                         -->
+    <!-- PAGE 3 — ARCHITECTURE OVERVIEW                                              -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="architecture-overview">
       <h2>Architecture Overview</h2>
@@ -468,9 +468,70 @@
         <span>3</span>
       </div>
     </div>
-  
+
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 4 — EXTENSION POINTS                                             -->
+    <!-- PAGE 4 — REFERENCE CHANNELS                                                 -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="reference-channels">
+      <h2>Reference Channels</h2>
+      <p>Morgana ships with <strong>three reference channels out-of-the-box</strong>, chosen to populate the <strong>channel &times; capability matrix</strong> so the framework's multi-channel design is demonstrable without any extra work: a rich renderer in two different surfaces (HTML and TTY) plus a deliberately poor one that exercises the degradation path.</p>
+
+      <table style="width:60%; margin:10px auto 16px;">
+        <thead><tr><th>&nbsp;</th><th>HTML</th><th>TTY</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Full</strong></td><td>Cauldron</td><td><strong>Grimoire</strong></td></tr>
+          <tr><td><strong>Poor</strong></td><td>&mdash;</td><td>Rune</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="margin-top:14px;">Cauldron &mdash; HTML / Blazor Server (rich)</h3>
+      <p>Cauldron is a Blazor Server application providing a rich, real-time chat interface with streaming responses, quick replies, rich cards, and animated feedback. It communicates with Morgana over authenticated SignalR and REST (<code>deliveryMode=signalr</code>), with all capability flags on. It can be depicted as the <b>official Morgana's home</b>.</p>
+
+      <div class="screenshots">
+        <img src="Channels/Cauldron/Assets/Morgana-Presentation.jpg" alt="Cauldron Presentation"/>
+        <img src="Channels/Cauldron/Assets/Morgana-Chatting.jpg" alt="Cauldron Chatting"/>
+        <img src="Channels/Cauldron/Assets/Morgana-Agent.jpg" alt="Cauldron Agent"/>
+      </div>
+
+      <h3 style="margin-top:18px;">Grimoire &mdash; TTY / Spectre.Console (rich)</h3>
+      <p>Grimoire is the <strong>textual Cauldron</strong>: a Kestrel-hosted console app with a Spectre.Console Live UI that renders Morgana's <strong>full</strong> expressive surface inside the terminal &mdash; streaming responses, markdown, rich cards and quick replies, all capability flags on (<code>MaxMessageLength=null</code>). It uses the same <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) as Rune, proving the framework adapts on the <em>capability profile</em>, not the transport. Content arrives intact and is &ldquo;Spectrized&rdquo; locally: markdown via a Markdig&rarr;Spectre renderer, rich cards mapped to bordered boxes, quick replies into an inline arrow-key selector.</p>
+
+      <div class="screenshots">
+        <img src="Channels/Grimoire/Assets/Morgana-PresentationGRM.jpg" alt="Grimoire Presentation"/>
+        <img src="Channels/Grimoire/Assets/Morgana-ChattingGRM.jpg" alt="Grimoire Chatting"/>
+        <img src="Channels/Grimoire/Assets/Morgana-AgentGRM.jpg" alt="Grimoire Agent"/>
+      </div>
+      <p class="muted" style="font-size:14px;">Grimoire is launched interactively (<code>docker compose run --rm --service-ports --use-aliases grimoire</code>, or <code>dotnet run</code> from <code>Channels/Grimoire/</code>) because the Spectre.Console Live UI needs to own the terminal. <code>--use-aliases</code> is mandatory: <code>compose run</code> skips network aliases by default, so without it Morgana's webhook callback to <code>http://grimoire:5004</code> fails DNS resolution.</p>
+
+      <h3 style="margin-top:18px;">Rune &mdash; TTY / Spectre.Console (poor)</h3>
+      <p>Rune is a minimal command-line channel: a Kestrel-hosted console app with a Spectre.Console Live UI (sticky header, streaming-free rendering), exercising the <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) with lowest capability profile</strong> (all rich features off, <code>MaxMessageLength=500</code>). It is the contract surface <code>MorganaChannelAdapter</code> is supposed to degrade toward &mdash; a working proof that the channel abstraction holds, not just a demo.</p>
+      <p class="muted" style="font-size:14px;">Rune is launched interactively (<code>docker compose run --rm --service-ports --use-aliases rune</code>, or <code>dotnet run</code> from <code>Channels/Rune/</code>) because the Spectre.Console Live UI needs to own the terminal. <code>--use-aliases</code> is mandatory: <code>compose run</code> skips network aliases by default, so without it Morgana's webhook callback to <code>http://rune:5003</code> fails DNS resolution.</p>
+
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>4</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 5 — BUILDING YOUR AGENTS WITH ALEMBIC                                  -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="building-your-agents">
+      <h2>Building Your Agents with Alembic</h2>
+      <p>Agents can still be authored entirely by hand&mdash;<code>agents.json</code> and C# against the <code>Morgana.AI</code> NuGet package. But the <strong>preferred path</strong> is now <strong>Alembic</strong>, Morgana's authoring workbench: an AI-conducted interview that distills a <strong>new domain</strong> from scratch, or <strong>extends an existing one</strong>, into intents, agent prose, tool contracts and working C#&mdash;ready to be compiled into a Morgana plugin.</p>
+
+      <div class="info-box">
+        <strong>See the <a href="Alembic-Handbook.html" style="color: var(--purple-light);">Alembic Handbook</a></strong> for the full workflow&mdash;from launching the interview to the generated assets.
+      </div>
+
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>5</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 6 — EXTENSION POINTS                                                   -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="extension-points">
       <h2>Extension Points</h2>
@@ -500,12 +561,12 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>4</span>
+        <span>6</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 5 — SECURITY MODEL                                                -->
+    <!-- PAGE 7 — SECURITY MODEL                                                     -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="security-model">
       <h2>Security Model</h2>
@@ -535,12 +596,40 @@
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>5</span>
+        <span>7</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 6 — CONFIGURATION REFERENCE                                       -->
+    <!-- PAGE 8 — DEPLOYMENT RESPONSIBILITY MODEL                                    -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="deployment-responsibility-model">
+      <h2>Deployment Responsibility Model</h2>
+      <p>Morgana draws a clear line between <strong>product responsibilities</strong> and <strong>deployer responsibilities</strong>, making it ready for enterprise deployment without prescribing infrastructure choices.</p>
+    
+      <table>
+        <thead><tr><th>Concern</th><th>Owner</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Application authentication</td><td><strong>Product</strong></td><td>JWT HMAC-SHA256 &mdash; replaceable via IAuthenticationService</td></tr>
+          <tr><td>Content moderation</td><td><strong>Product</strong></td><td>LLM-based guard &mdash; replaceable via IGuardRailService</td></tr>
+          <tr><td>Rate limiting</td><td><strong>Product</strong></td><td>SQLite-backed &mdash; replaceable via IRateLimitService</td></tr>
+          <tr><td>Conversation persistence</td><td><strong>Product</strong></td><td>SQLite-backed &mdash; replaceable via IConversationPersistenceService</td></tr>
+          <tr><td>Secrets externalization</td><td><strong>Product</strong></td><td>Environment variables / User Secrets</td></tr>
+          <tr><td>TLS termination</td><td><strong>Deployer</strong></td><td>Reverse proxy (nginx, Traefik, ALB, App Gateway...)</td></tr>
+          <tr><td>Secrets vault</td><td><strong>Deployer</strong></td><td>Azure Key Vault, HashiCorp Vault, AWS Secrets Manager...</td></tr>
+          <tr><td>Network policies &amp; WAF</td><td><strong>Deployer</strong></td><td>Cloud/on-prem infrastructure</td></tr>
+          <tr><td>Key rotation</td><td><strong>Deployer</strong></td><td>Operational procedure for JWT_SYMMETRIC_KEY</td></tr>
+        </tbody>
+      </table>
+
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>8</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 9 — CONFIGURATION REFERENCE                                            -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="configuration-reference">
       <h2>Configuration Reference</h2>
@@ -605,12 +694,12 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>6</span>
+        <span>9</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 7 — DOCKER DEPLOYMENT                                             -->
+    <!-- PAGE 10 — DOCKER DEPLOYMENT                                                 -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="docker-deployment">
       <h2>Docker Deployment</h2>
@@ -643,12 +732,12 @@
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>7</span>
+        <span>10</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 8 — OBSERVABILITY                                                 -->
+    <!-- PAGE 11 — OBSERVABILITY                                                     -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="observability">
       <h2>Observability (OpenTelemetry)</h2>
@@ -679,101 +768,12 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>8</span>
-      </div>
-    </div>
-
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 9 — BUILDING YOUR AGENTS WITH ALEMBIC                             -->
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page" id="building-your-agents">
-      <h2>Building Your Agents with Alembic</h2>
-      <p>Agents can still be authored entirely by hand&mdash;<code>agents.json</code> and C# against the <code>Morgana.AI</code> NuGet package. But the <strong>preferred path</strong> is now <strong>Alembic</strong>, Morgana's authoring workbench: an AI-conducted interview that distills a <strong>new domain</strong> from scratch, or <strong>extends an existing one</strong>, into intents, agent prose, tool contracts and working C#&mdash;ready to be compiled into a Morgana plugin.</p>
-
-      <div class="info-box">
-        <strong>See the <a href="Alembic-Handbook.html" style="color: var(--purple-light);">Alembic Handbook</a></strong> for the full workflow&mdash;from launching the interview to the generated assets.
-      </div>
-
-      <div class="page-footer">
-        <span>Morgana Handbook</span>
-        <span>9</span>
-      </div>
-    </div>
-
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 10 — REFERENCE CHANNELS                                            -->
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page" id="reference-channels">
-      <h2>Reference Channels</h2>
-      <p>Morgana ships with <strong>three reference channels out-of-the-box</strong>, chosen to populate the <strong>channel &times; capability matrix</strong> so the framework's multi-channel design is demonstrable without any extra work: a rich renderer in two different surfaces (HTML and TTY) plus a deliberately poor one that exercises the degradation path.</p>
-
-      <table style="width:60%; margin:10px auto 16px;">
-        <thead><tr><th>&nbsp;</th><th>HTML</th><th>TTY</th></tr></thead>
-        <tbody>
-          <tr><td><strong>Full</strong></td><td>Cauldron</td><td><strong>Grimoire</strong></td></tr>
-          <tr><td><strong>Poor</strong></td><td>&mdash;</td><td>Rune</td></tr>
-        </tbody>
-      </table>
-
-      <h3 style="margin-top:14px;">Cauldron &mdash; HTML / Blazor Server (rich)</h3>
-      <p>Cauldron is a Blazor Server application providing a rich, real-time chat interface with streaming responses, quick replies, rich cards, and animated feedback. It communicates with Morgana over authenticated SignalR and REST (<code>deliveryMode=signalr</code>), with all capability flags on. It can be depicted as the <b>official Morgana's home</b>.</p>
-
-      <div class="screenshots">
-        <img src="Channels/Cauldron/Assets/Morgana-Presentation.jpg" alt="Cauldron Presentation"/>
-        <img src="Channels/Cauldron/Assets/Morgana-Chatting.jpg" alt="Cauldron Chatting"/>
-        <img src="Channels/Cauldron/Assets/Morgana-Agent.jpg" alt="Cauldron Agent"/>
-      </div>
-
-      <h3 style="margin-top:18px;">Grimoire &mdash; TTY / Spectre.Console (rich)</h3>
-      <p>Grimoire is the <strong>textual Cauldron</strong>: a Kestrel-hosted console app with a Spectre.Console Live UI that renders Morgana's <strong>full</strong> expressive surface inside the terminal &mdash; streaming responses, markdown, rich cards and quick replies, all capability flags on (<code>MaxMessageLength=null</code>). It uses the same <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) as Rune, proving the framework adapts on the <em>capability profile</em>, not the transport. Content arrives intact and is &ldquo;Spectrized&rdquo; locally: markdown via a Markdig&rarr;Spectre renderer, rich cards mapped to bordered boxes, quick replies into an inline arrow-key selector.</p>
-
-      <div class="screenshots">
-        <img src="Channels/Grimoire/Assets/Morgana-PresentationGRM.jpg" alt="Grimoire Presentation"/>
-        <img src="Channels/Grimoire/Assets/Morgana-ChattingGRM.jpg" alt="Grimoire Chatting"/>
-        <img src="Channels/Grimoire/Assets/Morgana-AgentGRM.jpg" alt="Grimoire Agent"/>
-      </div>
-      <p class="muted" style="font-size:14px;">Grimoire is launched interactively (<code>docker compose run --rm --service-ports --use-aliases grimoire</code>, or <code>dotnet run</code> from <code>Channels/Grimoire/</code>) because the Spectre.Console Live UI needs to own the terminal. <code>--use-aliases</code> is mandatory: <code>compose run</code> skips network aliases by default, so without it Morgana's webhook callback to <code>http://grimoire:5004</code> fails DNS resolution.</p>
-
-      <h3 style="margin-top:18px;">Rune &mdash; TTY / Spectre.Console (poor)</h3>
-      <p>Rune is a minimal command-line channel: a Kestrel-hosted console app with a Spectre.Console Live UI (sticky header, streaming-free rendering), exercising the <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) with lowest capability profile</strong> (all rich features off, <code>MaxMessageLength=500</code>). It is the contract surface <code>MorganaChannelAdapter</code> is supposed to degrade toward &mdash; a working proof that the channel abstraction holds, not just a demo.</p>
-      <p class="muted" style="font-size:14px;">Rune is launched interactively (<code>docker compose run --rm --service-ports --use-aliases rune</code>, or <code>dotnet run</code> from <code>Channels/Rune/</code>) because the Spectre.Console Live UI needs to own the terminal. <code>--use-aliases</code> is mandatory: <code>compose run</code> skips network aliases by default, so without it Morgana's webhook callback to <code>http://rune:5003</code> fails DNS resolution.</p>
-
-      <div class="page-footer">
-        <span>Morgana Handbook</span>
-        <span>10</span>
-      </div>
-    </div>
-
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 11 — DEPLOYMENT RESPONSIBILITY MODEL                             -->
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page" id="deployment-responsibility-model">
-      <h2>Deployment Responsibility Model</h2>
-      <p>Morgana draws a clear line between <strong>product responsibilities</strong> and <strong>deployer responsibilities</strong>, making it ready for enterprise deployment without prescribing infrastructure choices.</p>
-    
-      <table>
-        <thead><tr><th>Concern</th><th>Owner</th><th>Notes</th></tr></thead>
-        <tbody>
-          <tr><td>Application authentication</td><td><strong>Product</strong></td><td>JWT HMAC-SHA256 &mdash; replaceable via IAuthenticationService</td></tr>
-          <tr><td>Content moderation</td><td><strong>Product</strong></td><td>LLM-based guard &mdash; replaceable via IGuardRailService</td></tr>
-          <tr><td>Rate limiting</td><td><strong>Product</strong></td><td>SQLite-backed &mdash; replaceable via IRateLimitService</td></tr>
-          <tr><td>Conversation persistence</td><td><strong>Product</strong></td><td>SQLite-backed &mdash; replaceable via IConversationPersistenceService</td></tr>
-          <tr><td>Secrets externalization</td><td><strong>Product</strong></td><td>Environment variables / User Secrets</td></tr>
-          <tr><td>TLS termination</td><td><strong>Deployer</strong></td><td>Reverse proxy (nginx, Traefik, ALB, App Gateway...)</td></tr>
-          <tr><td>Secrets vault</td><td><strong>Deployer</strong></td><td>Azure Key Vault, HashiCorp Vault, AWS Secrets Manager...</td></tr>
-          <tr><td>Network policies &amp; WAF</td><td><strong>Deployer</strong></td><td>Cloud/on-prem infrastructure</td></tr>
-          <tr><td>Key rotation</td><td><strong>Deployer</strong></td><td>Operational procedure for JWT_SYMMETRIC_KEY</td></tr>
-        </tbody>
-      </table>
-
-      <div class="page-footer">
-        <span>Morgana Handbook</span>
         <span>11</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 12 — QUICK REFERENCE                                              -->
+    <!-- PAGE 12 — QUICK REFERENCE                                                   -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="quick-reference">
       <h2>Quick Reference</h2>
