@@ -403,11 +403,11 @@
       <ul class="toc">
         <li><a href="#architecture-overview"><span class="toc-num">01</span><span class="toc-title">Architecture Overview</span><span class="toc-dots"></span><span class="toc-page">3</span></a></li>
         <li><a href="#the-interview"><span class="toc-num">02</span><span class="toc-title">The Interview</span><span class="toc-dots"></span><span class="toc-page">4</span></a></li>
-        <li><a href="#configuration-reference"><span class="toc-num">03</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
+        <li><a href="#getting-started"><span class="toc-num">03</span><span class="toc-title">Getting Started</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
         <li><a href="#regeneration-contract"><span class="toc-num">04</span><span class="toc-title">The Regeneration Contract</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
         <li><a href="#the-emit"><span class="toc-num">05</span><span class="toc-title">The Emit</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
         <li><a href="#non-regression-scenarios"><span class="toc-num">06</span><span class="toc-title">Starter Non-Regression Scenarios</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
-        <li><a href="#getting-started"><span class="toc-num">07</span><span class="toc-title">Getting Started</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
+        <li><a href="#configuration-reference"><span class="toc-num">07</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
         <li><a href="#quick-reference"><span class="toc-num">08</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
       </ul>
 
@@ -418,7 +418,7 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 3 — ARCHITECTURE OVERVIEW                                         -->
+    <!-- PAGE 3 — ARCHITECTURE OVERVIEW                                              -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="architecture-overview">
       <h2>Architecture Overview</h2>
@@ -453,7 +453,6 @@
         <thead><tr><th>Component</th><th>Role</th><th>Technology</th><th>Default Port</th></tr></thead>
         <tbody>
           <tr><td><strong>Distiller</strong></td><td>The workbench itself &mdash; the interview, validation, emit</td><td>ASP.NET 10, Blazor Server</td><td>5005</td></tr>
-          <tr><td><strong>Morgana.AI</strong></td><td>Referenced project &mdash; domain model (<code>Records</code>) &amp; prompt composer, reused rather than reimplemented</td><td>.NET 10 library, project reference</td><td>&mdash;</td></tr>
           <tr><td><strong>LLM</strong></td><td>Language model provider, <code>Performance</code> tier only</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>&mdash;</td></tr>
           <tr><td><strong>PromptHarness</strong></td><td>Alembic's own non-regression suite &mdash; drives a scripted interview and asserts on what the interview conduct and finalization emit produce</td><td>xUnit v3, in-process</td><td>&mdash;</td></tr>
         </tbody>
@@ -470,7 +469,7 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 4 — THE INTERVIEW                                              -->
+    <!-- PAGE 4 — THE INTERVIEW                                                      -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="the-interview">
       <h2>The Interview</h2>
@@ -507,23 +506,26 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 5 — CONFIGURATION REFERENCE                                     -->
+    <!-- PAGE 5 — GETTING STARTED                                                    -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page" id="configuration-reference">
-      <h2>Configuration Reference</h2>
-      <p>Alembic follows the same ASP.NET configuration hierarchy every unit in the repository does: <code>appsettings.json</code> &rarr; environment variables &rarr; User Secrets. It shares its <code>UserSecretsId</code> with Morgana.Web, so in-repo it runs against whatever LLM provider and tiers the working copy is already wired to &mdash; nothing to configure twice.</p>
+    <div class="page" id="getting-started">
+      <h2>Getting Started</h2>
+      <p>Two doors, from the landing page: distil a brand-new domain, or continue one already in progress.</p>
 
-      <table>
-        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
-        <tbody>
-          <tr><td>Morgana:LLM:Provider</td><td>LLM backend: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code></td></tr>
-          <tr><td>Morgana:LLM:{Provider}:Tiers:Performance</td><td>The <strong>only</strong> tier Alembic declares &mdash; it never uses the Efficiency die. <code>MagicDust</code> carries both axes at zero: pricing is never read, since Alembic calls <code>GetChatClient(Performance)</code> directly rather than going through the metered agent adapter</td></tr>
-          <tr><td>Alembic:Work:AutosaveSeconds</td><td>How often the Draft in the circuit is snapshotted as a fallback for &ldquo;Save my work&rdquo; &mdash; never a resumption path on its own, only a floor under that one button (default: 30)</td></tr>
-        </tbody>
-      </table>
+      <h3>A Fresh Domain</h3>
+      <ul>
+        <li><strong>1. Begin.</strong> One question at a time, on an otherwise empty screen &mdash; the process itself is Alembic's alone to know.</li>
+        <li><strong>2. Map it.</strong> The DomainMapper pass turns what the client is installing Morgana to handle into a set of intents &mdash; a choice, never an exhaustive inventory.</li>
+        <li><strong>3. Build each agent.</strong> Target, Personality, Toolkit, Instructions, Formatting &mdash; one lap per entry on the map, until the last one is accepted.</li>
+        <li><strong>4. Review.</strong> Deterministic findings first, then the real composed prompt &mdash; exactly what the running agent's own model will read.</li>
+        <li><strong>5. Morganize.</strong> Validate, then download: one archive, ready to <code>dotnet build</code> and drop into a Morgana <code>plugins/</code> folder.</li>
+      </ul>
+
+      <h3>Continuing One</h3>
+      <p>Nothing about an interview is lost to a closed tab past the last autosave interval: <strong>Save my work</strong> hands over a file at any point, and the import page reads it back &mdash; by content, never by filename &mdash; to resume exactly where the client left off, mid-agent included.</p>
 
       <div class="info-box">
-        <strong>No single-tier deployment:</strong> because Alembic declares only <code>Performance</code>, it does not run against a single-tier deployment (Ollama being the canonical case) until a <code>Performance</code> entry is configured &mdash; the same &ldquo;no cross-tier fallback&rdquo; rule the framework itself enforces.
+        <strong>The client never uses the agent.</strong> The people who will are their customers &mdash; so everything Alembic writes is addressed to the agent <em>about</em> those people, never <em>to</em> the client conducting the interview.
       </div>
 
       <div class="page-footer">
@@ -533,7 +535,7 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 6 — THE REGENERATION CONTRACT                                   -->
+    <!-- PAGE 6 — THE REGENERATION CONTRACT                                          -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="regeneration-contract">
       <h2>The Regeneration Contract</h2>
@@ -564,7 +566,7 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 7 — THE EMIT                                                    -->
+    <!-- PAGE 7 — THE EMIT                                                           -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="the-emit">
       <h2>The Emit</h2>
@@ -586,7 +588,7 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 8 — STARTER NON-REGRESSION SCENARIOS                            -->
+    <!-- PAGE 8 — STARTER NON-REGRESSION SCENARIOS                                   -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="non-regression-scenarios">
       <h2>Starter Non-Regression Scenarios</h2>
@@ -621,26 +623,23 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 9 — GETTING STARTED                                             -->
+    <!-- PAGE 9 — CONFIGURATION REFERENCE                                            -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page" id="getting-started">
-      <h2>Getting Started</h2>
-      <p>Two doors, from the landing page: distil a brand-new domain, or continue one already in progress.</p>
+    <div class="page" id="configuration-reference">
+      <h2>Configuration Reference</h2>
+      <p>Alembic follows the same ASP.NET configuration hierarchy every unit in the repository does: <code>appsettings.json</code> &rarr; environment variables &rarr; User Secrets. It shares its <code>UserSecretsId</code> with Morgana.Web, so in-repo it runs against whatever LLM provider and tiers the working copy is already wired to &mdash; nothing to configure twice.</p>
 
-      <h3>A Fresh Domain</h3>
-      <ul>
-        <li><strong>1. Begin.</strong> One question at a time, on an otherwise empty screen &mdash; the process itself is Alembic's alone to know.</li>
-        <li><strong>2. Map it.</strong> The DomainMapper pass turns what the client is installing Morgana to handle into a set of intents &mdash; a choice, never an exhaustive inventory.</li>
-        <li><strong>3. Build each agent.</strong> Target, Personality, Toolkit, Instructions, Formatting &mdash; one lap per entry on the map, until the last one is accepted.</li>
-        <li><strong>4. Review.</strong> Deterministic findings first, then the real composed prompt &mdash; exactly what the running agent's own model will read.</li>
-        <li><strong>5. Morganize.</strong> Validate, then download: one archive, ready to <code>dotnet build</code> and drop into a Morgana <code>plugins/</code> folder.</li>
-      </ul>
-
-      <h3>Continuing One</h3>
-      <p>Nothing about an interview is lost to a closed tab past the last autosave interval: <strong>Save my work</strong> hands over a file at any point, and the import page reads it back &mdash; by content, never by filename &mdash; to resume exactly where the client left off, mid-agent included.</p>
+      <table>
+        <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Morgana:LLM:Provider</td><td>LLM backend: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code></td></tr>
+          <tr><td>Morgana:LLM:{Provider}:Tiers:Performance</td><td>The <strong>only</strong> tier Alembic declares &mdash; it never uses the Efficiency die. <code>MagicDust</code> carries both axes at zero: pricing is never read, since Alembic calls <code>GetChatClient(Performance)</code> directly rather than going through the metered agent adapter</td></tr>
+          <tr><td>Alembic:Work:AutosaveSeconds</td><td>How often the Draft in the circuit is snapshotted as a fallback for &ldquo;Save my work&rdquo; &mdash; never a resumption path on its own, only a floor under that one button (default: 30)</td></tr>
+        </tbody>
+      </table>
 
       <div class="info-box">
-        <strong>The client never uses the agent.</strong> The people who will are their customers &mdash; so everything Alembic writes is addressed to the agent <em>about</em> those people, never <em>to</em> the client conducting the interview.
+        <strong>No single-tier deployment:</strong> because Alembic declares only <code>Performance</code>, it does not run against a single-tier deployment (Ollama being the canonical case) until a <code>Performance</code> entry is configured &mdash; the same &ldquo;no cross-tier fallback&rdquo; rule the framework itself enforces.
       </div>
 
       <div class="page-footer">
@@ -650,7 +649,7 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 10 — QUICK REFERENCE                                            -->
+    <!-- PAGE 10 — QUICK REFERENCE                                                   -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="quick-reference">
       <h2>Quick Reference</h2>
