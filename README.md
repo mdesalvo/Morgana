@@ -72,7 +72,7 @@ Morgana **reimagines conversational AI** through 4 foundational pillars that **w
 <p align="center">
   <a href="#-morgana-actor-system">🎭 Actor System</a> |
   <a href="#-morgana-agent-system">🤖 Agent System</a> |
-  <a href="#-morgana-prompting-system">📝 Prompting System</a> |
+  <a href="#-morgana-prompt-system">📝 Prompt System</a> |
   <a href="#-morgana-context-system">💾 Context System</a>
 </p>
 
@@ -205,7 +205,7 @@ graph LR
   MA -. 5 Intent handling .-> LLM
 ```
 
-### 📝 Morgana Prompting System
+### 📝 Morgana Prompt System
 *First-class artifacts with layered personality architecture and structured behavioral policies*
 
 Prompts are not hardcoded strings in Morgana—they are **versioned, maintainable project artifacts** managed through the `IPromptResolverService`. This separation of concerns enables prompt engineering teams to iterate independently from application logic, supporting A/B testing, localization, and behavioral evolution without redeployment.
