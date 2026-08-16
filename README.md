@@ -237,32 +237,6 @@ Conversations survive restarts and agent handoffs without losing this context. U
 ---
 ## 🚀 Quick Start (Docker Hub)
 
-To use latest images from [Docker Hub](https://hub.docker.com/u/mdesalvo) (showcase for what Morgana **looks like** and **how it works**):
-```bash
-# 📋 Copy the production template
-cp production.env.template .env
-
-# ✏️ Configure your secrets
-nano .env  # or use your favorite editor
-
-# 🐳 Start the containers (Morgana + Cauldron)
-docker compose up
-
-# ✅ Open your browser at http://localhost:5002
-
-# 💬 (Optional) Chat with Morgana via Grimoire's TUI in a separate terminal
-#    Grimoire owns the terminal (Spectre.Console Live UI), so it must be launched
-#    interactively with `run --service-ports`, not via `up`. `--use-aliases`
-#    registers `grimoire` as a network alias so Morgana's webhook callback resolves.
-docker compose run --rm --service-ports --use-aliases grimoire
-
-# 🛑 Stop the containers
-docker compose down
-```
-
-## 🛠️ Development (Build from source)
-
-For developers who want to build from source code (recommended, since **you** will give Morgana **your** domain in terms of **intents, agents, prompts and tools**):
 ```bash
 # 📋 Copy the development template
 cp development.env.template .env
@@ -284,10 +258,7 @@ docker compose --env-file .env --env-file .env.versions up
 
 # ✅ Open your browser at http://localhost:5002
 
-# 💬 (Optional) Chat with Morgana via Grimoire's TUI in a separate terminal
-#    Grimoire owns the terminal (Spectre.Console Live UI), so it must be launched
-#    interactively with `run --service-ports`, not via `up`. `--use-aliases`
-#    registers `grimoire` as a network alias so Morgana's webhook callback resolves.
+# 💬 (Optional) Chat with Morgana via Grimoire's TUI
 docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases grimoire
 
 # 🛑 Stop the containers
