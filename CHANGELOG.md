@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🎯 Major Feature: Alembic — Turnkey Domain Onboarding
 This release introduces **Alembic**, a Blazor Server workbench that distils a live interview with a domain expert into a complete, ready-to-run **Morgana domain** — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — **with no prompt ever authored by hand**.
 A domain-mapping pass turns the client's own words into intents; five further passes per agent (Target, Personality, Toolkit, Instructions, Formatting) build its prose incrementally, each reading back only what is already settled.
-The result is deterministically validated, composed exactly as the running agent's own model will read it and packaged as **one downloadable archive**, taking a client from a description of their business to a running, testable Morgana plugin in one sitting.
+The result is deterministically validated, composed exactly as the running agent's own model will read it and packaged as **one downloadable C# archive** ready to be built, taking a client from a description of their business to a running, testable Morgana plugin in one sitting.
 ### 🎯 Major Feature: Prompt Composition Extension Point
 This release introduces `IPromptComposerService`, opening the **innermost core of an AI application — how a prompt is assembled — to substitution**. It joins the suite of pluggable interfaces as the sibling of `IPromptResolverService`: the resolver abstracts *where prompts come from*, the composer *how they become what the model reads*.
 
