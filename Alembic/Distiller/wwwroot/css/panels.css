@@ -266,6 +266,11 @@ code {
     white-space: nowrap;
 }
 
+.severity-ok {
+    color: var(--alembic-success);
+    white-space: nowrap;
+}
+
 pre.prompt {
     background: var(--alembic-bg-deep);
     border: 1px solid var(--alembic-border);

@@ -1,9 +1,12 @@
 @page "/morganize"
 @using Distiller.Services
+@using Morgana.AI.Attributes
+@using Morgana.AI.Services
 @inject IDraftStateService DraftStateService
 @inject IDraftValidationService DraftValidationService
 @inject IMigrationReportService MigrationReportService
 @inject IAssetPackageService AssetPackageService
+@inject ILogger Logger
 
 @*
     Morganize. The turnkey end of the workbench: the whole domain leaves as one archive,
@@ -12,6 +15,11 @@
     Three things settle before it can be built, and none of them is in agents.json: the namespace,
     each agent's tier, and — where an agent has no native tools — nothing at all. The validator has
     been calling these "Alembic's guess" since phase 4; this is the page that stops them being one.
+
+    A fourth belongs here for the same reason: which agents reach further capability through an MCP
+    server at runtime. That is a C# fact (AgentCodeFacts.MCPServers), never a domain question — the
+    interview never asks it, because "MCP server" is a concept from whoever configures Morgana, not
+    from the domain expert describing their work.
 *@
 
 <div class="alembic-page">
@@ -55,8 +63,9 @@
             <div class="panel">
                 <h2>What agents.json cannot say</h2>
                 <p class="muted">
-                    A project namespace, a die per agent, and the class names. None of it is in a
-                    configuration, so an imported domain arrives without it.
+                    A project namespace, a die per agent, the class names, and which agents reach
+                    further capability through MCP servers. None of it is in a configuration, so an
+                    imported domain arrives without it.
                 </p>
 
                 <p>
@@ -65,7 +74,7 @@
 
                 <table>
                     <thead>
-                        <tr><th>Agent</th><th>Die</th><th>Classes</th></tr>
+                        <tr><th>Agent</th><th>Die</th><th>Classes</th><th>MCP</th></tr>
                     </thead>
                     <tbody>
                         @foreach (AgentDraft agent in draft.Agents)
@@ -88,6 +97,61 @@
                                     else
                                     {
                                         <text> &mdash; no tool class: nothing native to back</text>
+                                    }
+                                </td>
+                                <td>
+                                    <label>
+                                        <input type="checkbox"
+                                               checked="@(agent.Code.MCPServers.Count > 0)"
+                                               @onchange="e => ToggleMcp(agent, e)" />
+                                        This agent connects to MCP servers to enhance its toolkit at runtime
+                                    </label>
+                                    @if (agent.Code.MCPServers.Count > 0)
+                                    {
+                                        <ul class="mcp-servers">
+                                            @for (int i = 0; i < agent.Code.MCPServers.Count; i++)
+                                            {
+                                                int index = i;
+                                                <li>
+                                                    <input type="url"
+                                                           value="@agent.Code.MCPServers[index]"
+                                                           placeholder="https://…"
+                                                           @oninput="e => SetMcpServer(agent, index, e)" />
+                                                    <button type="button" class="agent-pick"
+                                                            @onclick="() => RemoveMcpServer(agent, index)">
+                                                        Remove
+                                                    </button>
+                                                    <button type="button" class="agent-pick"
+                                                            disabled="@(GetMcpTest(agent, index).Status == McpTestStatus.Testing)"
+                                                            @onclick="() => TestMcpServer(agent, index)">
+                                                        Test
+                                                    </button>
+                                                    @{
+                                                        McpTestResult test = GetMcpTest(agent, index);
+                                                    }
+                                                    @if (test.Status == McpTestStatus.Testing)
+                                                    {
+                                                        <span class="muted">testing…</span>
+                                                    }
+                                                    else if (test.Status == McpTestStatus.Ok)
+                                                    {
+                                                        <span class="severity-ok" title="@test.Detail">✓ live</span>
+                                                    }
+                                                    else if (test.Status == McpTestStatus.Failed)
+                                                    {
+                                                        <span class="severity-error" title="@test.Detail">✗ unreachable</span>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(agent.Code.MCPServers[index])
+                                                            && !IsAbsoluteHttpUri(agent.Code.MCPServers[index]))
+                                                    {
+                                                        <span class="severity-error">not an absolute http(s) URI</span>
+                                                    }
+                                                </li>
+                                            }
+                                        </ul>
+                                        <button type="button" class="agent-pick" @onclick="() => AddMcpServer(agent)">
+                                            Add another server
+                                        </button>
                                     }
                                 </td>
                             </tr>
@@ -197,7 +261,15 @@
 
                 @if (package is null && !isBuilding)
                 {
-                    <button class="primary" @onclick="BuildAsync">Build the archive</button>
+                    <button class="primary" @onclick="BuildAsync" disabled="@HasInvalidMcpServer(draft)">
+                        Build the archive
+                    </button>
+                    @if (HasInvalidMcpServer(draft))
+                    {
+                        <p class="severity-error">
+                            Fix or remove the MCP server URLs above before building.
+                        </p>
+                    }
                 }
                 else if (isBuilding)
                 {
@@ -333,6 +405,144 @@
         // Stated is no longer guessed, and the validator's warning about it should stop.
         agent.Code.Inferred = false;
         package = null;
+    }
+
+    /// <summary>
+    /// Whether a string is a well-formed absolute HTTP or HTTPS URI — the shape
+    /// <c>UsesMCPServerAttribute</c>'s single-string constructor expects.
+    /// </summary>
+    private static bool IsAbsoluteHttpUri(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out Uri? uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+    /// <summary>
+    /// True while any agent's MCP list holds an empty or malformed entry — the build stays blocked
+    /// rather than silently dropping or emitting a broken attribute.
+    /// </summary>
+    private static bool HasInvalidMcpServer(DomainDraft draft) =>
+        draft.Agents.Any(a => a.Code.MCPServers.Any(s => !IsAbsoluteHttpUri(s)));
+
+    /// <summary>
+    /// Checking the box opens one empty row to fill in; unchecking clears the list outright, since
+    /// an unchecked box saying "no MCP" next to a stale URL would be a fact contradicting itself.
+    /// </summary>
+    private void ToggleMcp(AgentDraft agent, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+        {
+            if (agent.Code.MCPServers.Count == 0)
+                agent.Code.MCPServers.Add(string.Empty);
+        }
+        else
+        {
+            agent.Code.MCPServers.Clear();
+            mcpTests.Remove(agent);
+        }
+
+        package = null;
+    }
+
+    private void AddMcpServer(AgentDraft agent)
+    {
+        agent.Code.MCPServers.Add(string.Empty);
+        package = null;
+    }
+
+    private void RemoveMcpServer(AgentDraft agent, int index)
+    {
+        agent.Code.MCPServers.RemoveAt(index);
+
+        // Indices above the removed one just shifted down a slot, so any cached result would now
+        // be read against the wrong URL — drop the whole agent's cache rather than the one entry.
+        mcpTests.Remove(agent);
+        package = null;
+    }
+
+    private void SetMcpServer(AgentDraft agent, int index, ChangeEventArgs e)
+    {
+        agent.Code.MCPServers[index] = e.Value?.ToString() ?? string.Empty;
+
+        // The URL changed under it, so a stale ✓/✗ from the previous value would be a lie.
+        GetMcpTest(agent, index).Status = McpTestStatus.Idle;
+        package = null;
+    }
+
+    private enum McpTestStatus { Idle, Testing, Ok, Failed }
+
+    /// <summary>
+    /// One MCP URL's last live-test outcome. Kept only in this page's own memory, never on the
+    /// Draft: it says something about the network right now, not about the domain being authored.
+    /// </summary>
+    private sealed class McpTestResult
+    {
+        public McpTestStatus Status { get; set; } = McpTestStatus.Idle;
+        public string? Detail { get; set; }
+    }
+
+    /// <summary>Keyed by agent reference and list index — this page's scratch state, not the Draft's.</summary>
+    private readonly Dictionary<AgentDraft, Dictionary<int, McpTestResult>> mcpTests = new();
+
+    private McpTestResult GetMcpTest(AgentDraft agent, int index)
+    {
+        if (!mcpTests.TryGetValue(agent, out Dictionary<int, McpTestResult>? perAgent))
+        {
+            perAgent = new Dictionary<int, McpTestResult>();
+            mcpTests[agent] = perAgent;
+        }
+
+        if (!perAgent.TryGetValue(index, out McpTestResult? result))
+        {
+            result = new McpTestResult();
+            perAgent[index] = result;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Connects to the URL directly and calls ListTools once — the same handshake
+    /// <c>MorganaAgentAdapter</c> performs at startup for every <c>[UsesMCPServer]</c>, run here on
+    /// demand instead of on a deployed Morgana. Deliberately bypasses the shared connection pool
+    /// <c>MCPClientRegistryService</c> would keep for a live agent: this is a one-shot probe, so the
+    /// client is disposed the moment the answer is in, whichever it is.
+    /// </summary>
+    private async Task TestMcpServer(AgentDraft agent, int index)
+    {
+        string url = agent.Code.MCPServers[index];
+        McpTestResult result = GetMcpTest(agent, index);
+
+        if (!IsAbsoluteHttpUri(url))
+        {
+            result.Status = McpTestStatus.Failed;
+            result.Detail = "Not an absolute http(s) URI.";
+            return;
+        }
+
+        result.Status = McpTestStatus.Testing;
+        result.Detail = null;
+        StateHasChanged();
+
+        MCPClient? client = null;
+
+        try
+        {
+            UsesMCPServerAttribute attribute = new(url);
+            client = await MCPClient.ConnectAsync(attribute, Logger);
+            var tools = await client.DiscoverToolsAsync();
+
+            result.Status = McpTestStatus.Ok;
+            result.Detail = $"{tools.Count} tool{(tools.Count == 1 ? "" : "s")} advertised.";
+        }
+        catch (Exception ex)
+        {
+            result.Status = McpTestStatus.Failed;
+            result.Detail = ex.Message;
+        }
+        finally
+        {
+            if (client is not null)
+                await client.DisposeAsync();
+        }
     }
 
     /// <summary>
