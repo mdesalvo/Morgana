@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.28.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Alembic — Turnkey Domain Onboarding
-This release introduces **Alembic**, a Blazor Server workbench that distils a live interview with a domain expert into a complete, ready-to-run **Morgana domain** — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — with no prompt ever authored by hand.
+This release introduces **Alembic**, a Blazor Server workbench that distils a live interview with a domain expert into a complete, ready-to-run **Morgana domain** — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — **with no prompt ever authored by hand**.
 A domain-mapping pass turns the client's own words into intents; five further passes per agent (Target, Personality, Toolkit, Instructions, Formatting) build its prose incrementally, each reading back only what is already settled.
 The result is deterministically validated, composed exactly as the running agent's own model will read it, and packaged as one downloadable archive — project, generated sources, a working LLM-authored mock per toolkit, a migration report, and starter `PromptHarness` scenarios — taking a client from a description of their business to a running, testable Morgana plugin in one sitting.
 ### 🎯 Major Feature: Prompt Composition Extension Point
