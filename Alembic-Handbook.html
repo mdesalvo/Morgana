@@ -402,8 +402,8 @@
       <h2>Index</h2>
       <ul class="toc">
         <li><a href="#architecture-overview"><span class="toc-num">01</span><span class="toc-title">Architecture Overview</span><span class="toc-dots"></span><span class="toc-page">3</span></a></li>
-        <li><a href="#the-interview"><span class="toc-num">02</span><span class="toc-title">The Interview</span><span class="toc-dots"></span><span class="toc-page">4</span></a></li>
-        <li><a href="#getting-started"><span class="toc-num">03</span><span class="toc-title">Getting Started</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
+        <li><a href="#getting-started"><span class="toc-num">02</span><span class="toc-title">Getting Started</span><span class="toc-dots"></span><span class="toc-page">4</span></a></li>
+        <li><a href="#the-interview"><span class="toc-num">03</span><span class="toc-title">The Interview</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
         <li><a href="#morganization"><span class="toc-num">04</span><span class="toc-title">Morganization</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
         <li><a href="#non-regression-scenarios"><span class="toc-num">05</span><span class="toc-title">Prompt Harness: AI-driven Non-Regression Scenarios</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
         <li><a href="#configuration-reference"><span class="toc-num">06</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
@@ -468,36 +468,7 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 4 — THE INTERVIEW                                                      -->
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page" id="the-interview">
-      <h2>The Interview</h2>
-      <p>A Morgana domain has two halves: the <code>Intents</code> a client's customers can ask for, and one <code>Agent</code> per intent that answers it. The interview builds them in that order &mdash; intents first, since every agent maps to one &mdash; then walks the agent map five passes at a time, until each intent has its agent.</p>
-
-      <table>
-        <thead><tr><th>Step</th><th>Runs</th><th>Settles</th></tr></thead>
-        <tbody>
-          <tr><td><strong>Domain Mapping</strong></td><td>once</td><td>The whole <code>Intents</code> section: every name, description, label and opening sentence</td></tr>
-          <tr><td><strong>Target</strong></td><td>per entry</td><td>What the agent does, what it must never do</td></tr>
-          <tr><td><strong>Personality</strong></td><td>per entry</td><td>Which facet of Morgana this agent is</td></tr>
-          <tr><td><strong>Toolkit</strong></td><td>per entry</td><td>The tools, their descriptions, parameters, scopes and sharing</td></tr>
-          <tr><td><strong>Instructions</strong></td><td>per entry</td><td>Behavioural rules, written after the toolkit exists</td></tr>
-          <tr><td><strong>Formatting</strong></td><td>per entry</td><td>How the agent presents its own tools' output</td></tr>
-        </tbody>
-      </table>
-
-      <div class="info-box">
-        <strong>The map is a choice, not an inventory.</strong> The intents that make it into the domain are the ones that surface during the conversation with the domain expert &mdash; not necessarily every intent that characterizes their real-world business. What never comes up never makes the map.
-      </div>
-
-      <div class="page-footer">
-        <span>Alembic Handbook</span>
-        <span>4</span>
-      </div>
-    </div>
-
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 5 — GETTING STARTED                                                    -->
+    <!-- PAGE 4 — GETTING STARTED                                                    -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="getting-started">
       <h2>Getting Started</h2>
@@ -517,6 +488,35 @@
 
       <div class="info-box">
         <strong>The interviewee is not the agent's audience.</strong> The domain expert answering Alembic's questions will never talk to the agent themselves &mdash; their own customers will. So every piece of prose Alembic writes describes those customers to the agent; it is never addressed to the domain expert who supplied the answers.
+      </div>
+
+      <div class="page-footer">
+        <span>Alembic Handbook</span>
+        <span>4</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 5 — THE INTERVIEW                                                      -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="the-interview">
+      <h2>The Interview</h2>
+      <p>A Morgana domain has two halves: the <code>Intents</code> a client's customers can ask for, and one <code>Agent</code> per intent that answers it. The interview builds them in that order &mdash; intents first, since every agent maps to one &mdash; then walks the agent map five passes at a time, until each intent has its agent.</p>
+
+      <table>
+        <thead><tr><th>Step</th><th>Runs</th><th>Settles</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Domain Mapping</strong></td><td>once</td><td>The whole <code>Intents</code> section: every name, description, label and opening sentence</td></tr>
+          <tr><td><strong>Target</strong></td><td>per entry</td><td>What the agent does, what it must never do</td></tr>
+          <tr><td><strong>Personality</strong></td><td>per entry</td><td>Which facet of Morgana this agent is</td></tr>
+          <tr><td><strong>Toolkit</strong></td><td>per entry</td><td>The tools, their descriptions, parameters, scopes and sharing</td></tr>
+          <tr><td><strong>Instructions</strong></td><td>per entry</td><td>Behavioural rules, written after the toolkit exists</td></tr>
+          <tr><td><strong>Formatting</strong></td><td>per entry</td><td>How the agent presents its own tools' output</td></tr>
+        </tbody>
+      </table>
+
+      <div class="info-box">
+        <strong>The map is a choice, not an inventory.</strong> The intents that make it into the domain are the ones that surface during the conversation with the domain expert &mdash; not necessarily every intent that characterizes their real-world business. What never comes up never makes the map.
       </div>
 
       <div class="page-footer">
@@ -578,10 +578,6 @@
           <tr><td>established-context-not-reasked</td><td>A value given once is not asked for twice</td></tr>
         </tbody>
       </table>
-
-      <div class="info-box">
-        <strong>Discretionary pass &amp; coherence pass:</strong> after the templated base, one further call may add up to two scenarios of its own for a rule that holds only in this domain. A separate <strong>cross-agent coherence pass</strong> then reviews the whole domain at once &mdash; overlapping intents, contested capabilities, a value published under two names &mdash; the relational defects no per-agent interview pass could ever see. It advises, never blocks: a domain expert who disagrees about their own business is usually right.
-      </div>
 
       <div class="info-box">
         <strong>Alembic tests itself, too:</strong> a dedicated <code>Alembic/PromptHarness</code> &mdash; distinct from the one shipped for Morgana &mdash; drives a scripted domain expert through a real interview and asserts on the mapping, the conduct across passes, and the finalization emit, so the workbench stays honest as it evolves.
