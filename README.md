@@ -238,7 +238,7 @@ Conversations survive restarts and agent handoffs without losing this context. U
 
 Writing a Morgana domain by hand means writing prompts — a job that shouldn't fall on the person who actually knows the business. **Alembic** turns it into a conversation instead: it interviews a domain expert about their own work and distils the answers into a complete, ready-to-run Morgana domain — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — with no prompt ever authored by hand.
 
-Watch it distil a real domain end to end, then watch that exact domain running live on Morgana through Cauldron:
+Watch it distil a real domain end to end, then watch that domain running live on Morgana through Cauldron:
 
 <table style="border:none;">
   <tr>
