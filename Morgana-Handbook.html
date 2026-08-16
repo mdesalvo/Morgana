@@ -406,11 +406,10 @@
         <li><a href="#building-your-agents"><span class="toc-num">03</span><span class="toc-title">Building Your Agents with Alembic</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
         <li><a href="#extension-points"><span class="toc-num">04</span><span class="toc-title">Extension Points</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
         <li><a href="#security-model"><span class="toc-num">05</span><span class="toc-title">Security Model</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
-        <li><a href="#deployment-responsibility-model"><span class="toc-num">06</span><span class="toc-title">Deployment Responsibility Model</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
-        <li><a href="#configuration-reference"><span class="toc-num">07</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
-        <li><a href="#docker-deployment"><span class="toc-num">08</span><span class="toc-title">Docker Deployment</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
-        <li><a href="#observability"><span class="toc-num">09</span><span class="toc-title">Observability (OpenTelemetry)</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
-        <li><a href="#quick-reference"><span class="toc-num">10</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">12</span></a></li>
+        <li><a href="#configuration-reference"><span class="toc-num">06</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
+        <li><a href="#docker-deployment"><span class="toc-num">07</span><span class="toc-title">Docker Deployment</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
+        <li><a href="#observability"><span class="toc-num">08</span><span class="toc-title">Observability (OpenTelemetry)</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
+        <li><a href="#quick-reference"><span class="toc-num">09</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
       </ul>
 
       <div class="page-footer">
@@ -599,35 +598,7 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 8 — DEPLOYMENT RESPONSIBILITY MODEL                                    -->
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page" id="deployment-responsibility-model">
-      <h2>Deployment Responsibility Model</h2>
-      <p>Morgana draws a clear line between <strong>product responsibilities</strong> and <strong>deployer responsibilities</strong>, making it ready for enterprise deployment without prescribing infrastructure choices.</p>
-    
-      <table>
-        <thead><tr><th>Concern</th><th>Owner</th><th>Notes</th></tr></thead>
-        <tbody>
-          <tr><td>Application authentication</td><td><strong>Product</strong></td><td>JWT HMAC-SHA256 &mdash; replaceable via IAuthenticationService</td></tr>
-          <tr><td>Content moderation</td><td><strong>Product</strong></td><td>LLM-based guard &mdash; replaceable via IGuardRailService</td></tr>
-          <tr><td>Rate limiting</td><td><strong>Product</strong></td><td>SQLite-backed &mdash; replaceable via IRateLimitService</td></tr>
-          <tr><td>Conversation persistence</td><td><strong>Product</strong></td><td>SQLite-backed &mdash; replaceable via IConversationPersistenceService</td></tr>
-          <tr><td>Secrets externalization</td><td><strong>Product</strong></td><td>Environment variables / User Secrets</td></tr>
-          <tr><td>TLS termination</td><td><strong>Deployer</strong></td><td>Reverse proxy (nginx, Traefik, ALB, App Gateway...)</td></tr>
-          <tr><td>Secrets vault</td><td><strong>Deployer</strong></td><td>Azure Key Vault, HashiCorp Vault, AWS Secrets Manager...</td></tr>
-          <tr><td>Network policies &amp; WAF</td><td><strong>Deployer</strong></td><td>Cloud/on-prem infrastructure</td></tr>
-          <tr><td>Key rotation</td><td><strong>Deployer</strong></td><td>Operational procedure for JWT_SYMMETRIC_KEY</td></tr>
-        </tbody>
-      </table>
-
-      <div class="page-footer">
-        <span>Morgana Handbook</span>
-        <span>8</span>
-      </div>
-    </div>
-
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 9 — CONFIGURATION REFERENCE                                            -->
+    <!-- PAGE 8 — CONFIGURATION REFERENCE                                            -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="configuration-reference">
       <h2>Configuration Reference</h2>
@@ -692,12 +663,12 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>9</span>
+        <span>8</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 10 — DOCKER DEPLOYMENT                                                 -->
+    <!-- PAGE 9 — DOCKER DEPLOYMENT                                                  -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="docker-deployment">
       <h2>Docker Deployment</h2>
@@ -730,12 +701,12 @@
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>10</span>
+        <span>9</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 11 — OBSERVABILITY                                                     -->
+    <!-- PAGE 10 — OBSERVABILITY                                                     -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="observability">
       <h2>Observability (OpenTelemetry)</h2>
@@ -766,12 +737,12 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>11</span>
+        <span>10</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 12 — QUICK REFERENCE                                                   -->
+    <!-- PAGE 11 — QUICK REFERENCE                                                   -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="quick-reference">
       <h2>Quick Reference</h2>
@@ -791,7 +762,7 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>12</span>
+        <span>11</span>
       </div>
     </div>
 
