@@ -234,6 +234,7 @@ Some information, though, is meant to travel. A customer code given to BillingAg
 
 Conversations survive restarts and agent handoffs without losing this context. Users always see one coherent conversation, even when several specialized agents quietly took turns behind the scenes.
 
+---
 ## 🧪 Alembic — the Authoring Workbench
 
 Writing a Morgana domain by hand means writing prompts — a job that shouldn't fall on the person who actually knows the business. **Alembic** turns it into a conversation instead: it interviews a domain expert about their own work and distils the answers into a complete, ready-to-run Morgana domain — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — with no prompt ever authored by hand.
