@@ -75,6 +75,7 @@ public class ToolMockService : IToolMockService
         request.AppendLine("This is the generated half of the tool class. Write the other half.");
         request.AppendLine();
         request.AppendLine(signatures.Content);
+        AppendArgumentContract(request, agent);
         request.AppendLine();
         request.AppendLine($"The agent this toolkit belongs to exists for: {agent.Target}");
 
@@ -103,6 +104,29 @@ public class ToolMockService : IToolMockService
                 + "own tier declares a generous one for exactly this reason, so check what the deployment configures.");
 
         return StripDuplicateToolAttribute(authored);
+    }
+
+    /// <summary>
+    /// Restates each tool's parameters to the mock author in the words the running model will read.
+    /// </summary>
+    private static void AppendArgumentContract(StringBuilder request, AgentDraft agent)
+    {
+        foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)))
+        {
+            List<ToolParameterDraft> described =
+            [
+                .. tool.Parameters.Where(p => !string.IsNullOrWhiteSpace(p.Name) && !string.IsNullOrWhiteSpace(p.Description))
+            ];
+
+            if (described.Count == 0)
+                continue;
+
+            request.AppendLine();
+            request.AppendLine($"{tool.Name} — what the model is told to pass, and therefore what arrives:");
+
+            foreach (ToolParameterDraft parameter in described)
+                request.AppendLine($"  {parameter.Name}: {parameter.Description}");
+        }
     }
 
     /// <summary>
