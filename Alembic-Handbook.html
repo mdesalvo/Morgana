@@ -404,11 +404,10 @@
         <li><a href="#architecture-overview"><span class="toc-num">01</span><span class="toc-title">Architecture Overview</span><span class="toc-dots"></span><span class="toc-page">3</span></a></li>
         <li><a href="#the-interview"><span class="toc-num">02</span><span class="toc-title">The Interview</span><span class="toc-dots"></span><span class="toc-page">4</span></a></li>
         <li><a href="#getting-started"><span class="toc-num">03</span><span class="toc-title">Getting Started</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
-        <li><a href="#regeneration-contract"><span class="toc-num">04</span><span class="toc-title">The Regeneration Contract</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
-        <li><a href="#the-emit"><span class="toc-num">05</span><span class="toc-title">The Emit</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
-        <li><a href="#non-regression-scenarios"><span class="toc-num">06</span><span class="toc-title">Starter Non-Regression Scenarios</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
-        <li><a href="#configuration-reference"><span class="toc-num">07</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
-        <li><a href="#quick-reference"><span class="toc-num">08</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
+        <li><a href="#morganization"><span class="toc-num">04</span><span class="toc-title">Morganization</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
+        <li><a href="#non-regression-scenarios"><span class="toc-num">05</span><span class="toc-title">Prompt Harness: AI-driven Non-Regression Scenarios</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
+        <li><a href="#configuration-reference"><span class="toc-num">06</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
+        <li><a href="#quick-reference"><span class="toc-num">07</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
       </ul>
 
       <div class="page-footer">
@@ -527,11 +526,23 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 6 — THE REGENERATION CONTRACT                                          -->
+    <!-- PAGE 6 — MORGANIZATION                                                      -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page" id="regeneration-contract">
-      <h2>The Regeneration Contract</h2>
-      <p>Generated C# is split across two files per class &mdash; the non-destructive-regeneration mechanism, and the line between what is templated (deterministic, so a re-run produces no spurious diff) and what is authored by the LLM.</p>
+    <div class="page" id="morganization">
+      <h2>Morganization</h2>
+      <p>&ldquo;Morganizing&rdquo; a domain is Alembic's last step: once every intent has its agent, the reviewed domain downloads as <strong>one archive</strong>, because the pieces are only correct together &mdash; an <code>agents.json</code> whose toolkit has moved on from the C# beside it is a startup failure waiting to happen.</p>
+
+      <ul>
+        <li>A ready <code>.csproj</code> / <code>.slnx</code>, referencing <code>Morgana.AI</code> and <code>Morgana.Contracts</code> by <code>PackageReference</code>, pinned to the exact build Alembic itself runs against</li>
+        <li>The domain configuration, <code>agents.json</code>, embedded as a resource</li>
+        <li>Generated sources, one pair per agent and per toolkit &mdash; see the file split below</li>
+        <li>A working, LLM-authored <strong>mock</strong> per toolkit &mdash; not a stub &mdash; so the client can talk to their agent on the first run and hear whether the interview's prose is right</li>
+        <li>An unconditional <strong>migration report</strong>, diffing the domain against its own baseline &mdash; greenfield included, because a report that only appears when something is wrong is a report nobody has learned to read on the day it matters</li>
+        <li><code>README.md</code> (carrying the two-halves convention), <code>MIGRATION.md</code>, and the interview's own save file</li>
+      </ul>
+
+      <h3>The File Split</h3>
+      <p>Each agent and toolkit is generated as two files, so a later re-run of Alembic never clobbers the client's own code: what is templated (deterministic, so a re-run produces no spurious diff) stays separate from what is authored by the LLM.</p>
 
       <table>
         <thead><tr><th>File</th><th>Owner</th><th>Rule</th></tr></thead>
@@ -541,16 +552,6 @@
         </tbody>
       </table>
 
-      <h3>Docker Deployment</h3>
-      <p>Alembic's Docker service is <strong>profile-gated</strong>, so an ordinary <code>compose up</code> skips it &mdash; it is an authoring-time tool, not part of the always-on runtime footprint.</p>
-
-      <div class="code-block"><span class="comment"># Run Alembic standalone</span>
-    docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
-
-    <span class="comment"># Or from source</span>
-    cd Alembic/Distiller
-    dotnet run   <span class="comment"># https://localhost:5005, no running Morgana required</span></div>
-
       <div class="page-footer">
         <span>Alembic Handbook</span>
         <span>6</span>
@@ -558,32 +559,10 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 7 — THE EMIT                                                           -->
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page" id="the-emit">
-      <h2>The Emit</h2>
-      <p>The reviewed domain downloads as <strong>one archive</strong>, because the pieces are only correct together &mdash; an <code>agents.json</code> whose toolkit has moved on from the C# beside it is a startup failure waiting to happen.</p>
-
-      <ul>
-        <li>A ready <code>.csproj</code> / <code>.slnx</code>, referencing <code>Morgana.AI</code> and <code>Morgana.Contracts</code> by <code>PackageReference</code>, pinned to the exact build Alembic itself runs against</li>
-        <li>The domain configuration, <code>agents.json</code>, embedded as a resource</li>
-        <li>Generated sources following the <code>AgentX.g.cs</code> / <code>AgentX.cs</code> split, one pair per agent and per toolkit</li>
-        <li>A working, LLM-authored <strong>mock</strong> per toolkit &mdash; not a stub &mdash; so the client can talk to their agent on the first run and hear whether the interview's prose is right</li>
-        <li>An unconditional <strong>migration report</strong>, diffing the domain against its own baseline &mdash; greenfield included, because a report that only appears when something is wrong is a report nobody has learned to read on the day it matters</li>
-        <li><code>README.md</code> (carrying the two-halves convention), <code>MIGRATION.md</code>, and the interview's own save file</li>
-      </ul>
-
-      <div class="page-footer">
-        <span>Alembic Handbook</span>
-        <span>7</span>
-      </div>
-    </div>
-
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 8 — STARTER NON-REGRESSION SCENARIOS                                   -->
+    <!-- PAGE 7 — PROMPT HARNESS: AI-DRIVEN NON-REGRESSION SCENARIOS                 -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="non-regression-scenarios">
-      <h2>Starter Non-Regression Scenarios</h2>
+      <h2>Prompt Harness: AI-driven Non-Regression Scenarios</h2>
       <p>A domain agent <em>is</em> its prose, and prose gets edited &mdash; a client who leaves without scenarios has a domain nobody can revise safely. Alembic derives a starting <strong>PromptHarness</strong> suite from a library of behavioural templates, replacing every domain-word placeholder with this domain's own language.</p>
 
       <table>
@@ -610,12 +589,12 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>8</span>
+        <span>7</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 9 — CONFIGURATION REFERENCE                                            -->
+    <!-- PAGE 8 — CONFIGURATION REFERENCE                                            -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="configuration-reference">
       <h2>Configuration Reference</h2>
@@ -634,14 +613,24 @@
         <strong>No single-tier deployment:</strong> because Alembic declares only <code>Performance</code>, it does not run against a single-tier deployment (Ollama being the canonical case) until a <code>Performance</code> entry is configured &mdash; the same &ldquo;no cross-tier fallback&rdquo; rule the framework itself enforces.
       </div>
 
+      <h3>Running Alembic</h3>
+      <p>Alembic's Docker service is <strong>profile-gated</strong>, so an ordinary <code>compose up</code> skips it &mdash; it is an authoring-time tool, not part of the always-on runtime footprint.</p>
+
+      <div class="code-block"><span class="comment"># Run Alembic standalone</span>
+    docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
+
+    <span class="comment"># Or from source</span>
+    cd Alembic/Distiller
+    dotnet run   <span class="comment"># https://localhost:5005, no running Morgana required</span></div>
+
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>9</span>
+        <span>8</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 10 — QUICK REFERENCE                                                   -->
+    <!-- PAGE 9 — QUICK REFERENCE                                                    -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="quick-reference">
       <h2>Quick Reference</h2>
@@ -659,7 +648,7 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>10</span>
+        <span>9</span>
       </div>
     </div>
 
