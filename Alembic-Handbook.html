@@ -476,27 +476,19 @@
       <p>A Morgana domain has two halves: the <code>Intents</code> a client's customers can ask for, and one <code>Agent</code> per intent that answers it. The interview builds them in that order &mdash; intents first, since every agent maps to one &mdash; then walks the agent map five passes at a time, until each intent has its agent.</p>
 
       <table>
-        <thead><tr><th>Pass</th><th>Runs</th><th>Settles</th></tr></thead>
+        <thead><tr><th>Step</th><th>Runs</th><th>Settles</th></tr></thead>
         <tbody>
-          <tr><td><strong>DomainMapper</strong></td><td>once</td><td>The whole <code>Intents</code> section: every name, description, label and opening sentence</td></tr>
-          <tr><td><strong>AgentModeler</strong></td><td>per entry</td><td>The agent's <code>Target</code> &mdash; what it does, what it must never do</td></tr>
-          <tr><td><strong>AgentVoicer</strong></td><td>per entry</td><td>The agent's <code>Personality</code> &mdash; which facet of Morgana this agent is</td></tr>
-          <tr><td><strong>ToolkitModeler</strong></td><td>per entry</td><td>The tools, their descriptions, parameters, scopes and sharing</td></tr>
-          <tr><td><strong>AgentInstructor</strong></td><td>per entry</td><td><code>Instructions</code> &mdash; behavioural rules, written after the toolkit exists</td></tr>
-          <tr><td><strong>AgentFormatter</strong></td><td>per entry</td><td><code>Formatting</code> &mdash; how the agent presents its own tools' output</td></tr>
+          <tr><td><strong>Domain Mapping</strong></td><td>once</td><td>The whole <code>Intents</code> section: every name, description, label and opening sentence</td></tr>
+          <tr><td><strong>Target</strong></td><td>per entry</td><td>What the agent does, what it must never do</td></tr>
+          <tr><td><strong>Personality</strong></td><td>per entry</td><td>Which facet of Morgana this agent is</td></tr>
+          <tr><td><strong>Toolkit</strong></td><td>per entry</td><td>The tools, their descriptions, parameters, scopes and sharing</td></tr>
+          <tr><td><strong>Instructions</strong></td><td>per entry</td><td>Behavioural rules, written after the toolkit exists</td></tr>
+          <tr><td><strong>Formatting</strong></td><td>per entry</td><td>How the agent presents its own tools' output</td></tr>
         </tbody>
       </table>
 
-      <h3>Doctrine</h3>
-      <ul>
-        <li><strong>One question, one step.</strong> Every question is a step, and half an answer advances it &mdash; the rest is inferred, proposed and corrected rather than asked twice. Asking three times ends the interview whether the client says so or not.</li>
-        <li><strong>Closed questions only where the answer adds nothing.</strong> A quick-reply button never appears on a question about the client's domain &mdash; their words are the material being distilled. It appears only for the answer Alembic already knows the whole of: agreement, &ldquo;nothing missing&rdquo;, &ldquo;nothing to avoid&rdquo;.</li>
-        <li><strong>The client never writes prose.</strong> They answer questions about their own work, in their own words; Alembic writes the configuration and says back what it understood &mdash; sparing a domain expert from having to become a prompt author.</li>
-        <li><strong>Backwards is the client's, forwards is not.</strong> Going on is a claim a step is settled, decided by the state machine; going back is a claim something needs changing, and only the client can make that call.</li>
-      </ul>
-
       <div class="info-box">
-        <strong>The map is a choice, not an inventory.</strong> The DomainMapper pass is worded to elicit the subset of the client's own processes they are installing Morgana to run &mdash; not a description of their whole business. What they keep off the map never appears on it.
+        <strong>The map is a choice, not an inventory.</strong> Domain Mapping is worded to elicit the subset of the client's own processes they are installing Morgana to run &mdash; not a description of their whole business. What they keep off the map never appears on it.
       </div>
 
       <div class="page-footer">
@@ -515,7 +507,7 @@
       <h3>A Fresh Domain</h3>
       <ul>
         <li><strong>1. Begin.</strong> One question at a time, on an otherwise empty screen &mdash; the process itself is Alembic's alone to know.</li>
-        <li><strong>2. Map it.</strong> The DomainMapper pass turns what the client is installing Morgana to handle into a set of intents &mdash; a choice, never an exhaustive inventory.</li>
+        <li><strong>2. Map it.</strong> Domain Mapping turns what the client is installing Morgana to handle into a set of intents &mdash; a choice, never an exhaustive inventory.</li>
         <li><strong>3. Build each agent.</strong> Target, Personality, Toolkit, Instructions, Formatting &mdash; one lap per entry on the map, until the last one is accepted.</li>
         <li><strong>4. Review.</strong> Deterministic findings first, then the real composed prompt &mdash; exactly what the running agent's own model will read.</li>
         <li><strong>5. Morganize.</strong> Validate, then download: one archive, ready to <code>dotnet build</code> and drop into a Morgana <code>plugins/</code> folder.</li>
