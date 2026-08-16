@@ -61,12 +61,7 @@
         else
         {
             <div class="panel">
-                <h2>What agents.json cannot say</h2>
-                <p class="muted">
-                    A project namespace, a die per agent, the class names, and which agents reach
-                    further capability through MCP servers. None of it is in a configuration, so an
-                    imported domain arrives without it.
-                </p>
+                <h2>What the interview cannot say</h2>
 
                 <p>
                     <label>Namespace <input @bind="rootNamespace" @bind:event="oninput" /></label>
@@ -219,13 +214,9 @@
             <div class="panel">
                 <h2>Code Generation</h2>
                 <p class="muted">
-                    One archive: a ready .NET solution containing <code>agents.json</code>,
-                    the generated <code>*.g.cs</code>, a working mock per toolkit, the migration report
-                    and the save file, already inside a <code>.csproj</code>/<code>.slnx</code> that
-                    builds as it is. Unzip it, <code>dotnet build</code>, drop the assembly into your
-                    Morgana's plugins directory, and talk to the domain you just
-                    distilled on the first run. The mocks are written by AI, one call per agent,
-                    so this takes a moment.
+                    The domain will be distilled into a <b>zipped archive</b> containing a <b>.NET 10 solution</b>.
+                    Unzip it, build the solution by opening into your favourite IDE or by using .NET CLI, then
+                    drop the solution assembly into your Morgana's configured <b>plugins</b> directory.
                 </p>
 
                 <details class="harness-section">
