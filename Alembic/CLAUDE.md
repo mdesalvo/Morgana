@@ -1023,7 +1023,6 @@ Alembic/                              # Container: Distiller/ (the workbench) + 
       panels.css / controls.css       #   what is read in a panel; buttons and shared furniture
       interview.css                   #   the interview, whose three states have to agree in one place
     wwwroot/favicon.svg               # The vessel at 16px: belly, neck, spout, one spark
-    wwwroot/images/alembic.jpg        # Morgana's alembic — the landing's centrepiece
   PromptHarness/                      # Non-regression harness for Alembic itself — own solution, not Distiller's
     PromptHarness.slnx                # Solution of its own, the same way the repo-root PromptHarness/ has one
     PromptHarness.csproj              # xunit v3, ProjectReference → ..\Distiller\Distiller.csproj

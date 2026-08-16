@@ -2,42 +2,52 @@
    The landing: the alembic at full size, and the two ways in.
    ========================================================================== */
 
-/* The vessel, and the room it stands in. The glow is a sibling rather than a shadow on the
-   image, because the image is square with dark corners and a box-shadow would trace them. */
-.vessel {
+/* The banner, and the room it stands in. Rectangular rather than the vessel it replaces — the
+   scene it shows (Morgana at her alembic, a whole room) is composed for a wide frame, and forcing
+   it into a circle would crop the composition rather than frame it. The glow stays a sibling
+   rather than a shadow on the image, because a box-shadow would trace the image's own corners.
+   No max-width of its own: it fills the same column the two doors below it fill, so the banner
+   reads as standing over both rather than as a smaller thing centred above them.
+
+   The aspect-ratio sets its height from a full-width column, which on a short viewport is taller
+   than the landing has room for — a door row below it and a scrollbar earned is a worse trade than
+   a few more of the scene's own edges going under object-fit: cover's crop. max-height caps it
+   against the viewport rather than the column, so what gives first is the picture, never the page. */
+.banner {
     position: relative;
-    width: min(20rem, 62vw);
+    width: 100%;
+    max-height: 34vh;
     margin: 0 auto 1.5rem;
-    aspect-ratio: 1;
+    aspect-ratio: 1376 / 768;
 }
 
 /* On its own layer. A blurred radial gradient is repainted every time anything over it changes, and
    the image over it changes exactly once — at the handoff from the prerendered page to the live
    circuit — which is where the flicker was coming from. Composited once, it stops being redrawn. */
-.vessel::before {
+.banner::before {
     content: "";
     position: absolute;
-    inset: -12%;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(192, 132, 252, 0.35), transparent 68%);
+    inset: -8%;
+    border-radius: 1.4rem;
+    background: radial-gradient(ellipse, rgba(192, 132, 252, 0.3), transparent 68%);
     filter: blur(1.4rem);
     transform: translateZ(0);
 }
 
-.vessel img {
+.banner img {
     position: relative;
     width: 100%;
     height: 100%;
     object-fit: cover;
     background: var(--alembic-bg-deep);
-    border-radius: 50%;
+    border-radius: 0.9rem;
     border: 1px solid var(--alembic-border-lit);
     box-shadow: 0 0 3rem rgba(139, 92, 246, 0.35);
 }
 
 .landing-head {
     text-align: center;
-    margin-bottom: 3rem;
+    margin-bottom: 1.75rem;
 }
 
 .landing-head h1 {
@@ -58,6 +68,13 @@
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
     margin-bottom: 3rem;
+}
+
+/* Tighter than the shared 3rem above: the landing is the one page this row has to fit under a
+   banner without earning a scrollbar, where Import's own use of .gateways has no banner above it
+   and can afford the room. */
+.alembic-landing .gateways {
+    margin-bottom: 1rem;
 }
 
 @media (max-width: 44rem) {
@@ -162,4 +179,11 @@
     max-width: 22rem;
     margin-left: auto;
     margin-right: auto;
+}
+
+/* The last of what the banner's own shrinking above buys back: the container's own trailing
+   padding, tightened on the landing alone so the whole page — banner, title, doors — has a real
+   chance of fitting one viewport without a scrollbar. */
+.alembic-landing {
+    padding-bottom: 1.5rem;
 }

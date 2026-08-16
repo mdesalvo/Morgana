@@ -15,10 +15,12 @@
            rather than a set of rasters to keep in step. *@
         <link href="favicon.svg" rel="icon" type="image/svg+xml" />
 
-        @* The landing's one image, asked for with the document rather than when the body reaches it:
-           it is the first thing on the first screen, and a picture that arrives after the page it is
-           the centre of has already been seen arriving. *@
-        <link href="images/alembic.jpg" rel="preload" as="image" />
+        @* One image, every page: the landing's own banner and the mark that stands over every page
+           past it are the same file now, so one preload serves both — asked for with the document
+           rather than when the body reaches it, so neither the first screen nor a client landing
+           straight on a deep link via a resumed session watches it pop in after its layout has
+           already settled. *@
+        <link href="images/Alembic-Banner.jpg" rel="preload" as="image" />
 
         @* One file per part of the workbench, in cascade order: base defines the palette every
            other file spends, and the rest never redefine what a file before them settled. Linked
