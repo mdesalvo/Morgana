@@ -79,6 +79,7 @@ public class CoherenceService : ICoherenceService
             string answer = await StreamedCompletion.RunAsync(
                 chatClient, system, Describe(draft, resolved),
                 length => logger.LogInformation("The coherence pass was cut at {Length} characters; resuming", length),
+                length => logger.LogWarning("The coherence pass went silent after {Length} characters; retrying once", length),
                 cancellationToken);
 
             if (answer.Length == 0)

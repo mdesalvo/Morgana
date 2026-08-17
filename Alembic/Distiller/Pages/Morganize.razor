@@ -6,7 +6,10 @@
 @inject IDraftValidationService DraftValidationService
 @inject IMigrationReportService MigrationReportService
 @inject IAssetPackageService AssetPackageService
+@inject ICodeEmitService CodeEmitService
 @inject ILogger Logger
+@inject IJSRuntime JS
+@implements IDisposable
 
 @*
     Morganize. The turnkey end of the workbench: the whole domain leaves as one archive,
@@ -214,9 +217,7 @@
             <div class="panel">
                 <h2>Code Generation</h2>
                 <p class="muted">
-                    The domain will be distilled into a <b>zipped archive</b> containing a <b>.NET 10 solution</b>.
-                    Unzip it, build the solution by opening into your favourite IDE or by using .NET CLI, then
-                    drop the solution assembly into your Morgana's configured <b>plugins</b> directory.
+                    Your domain is ready to be distilled. Press the button below and wait for it to finish: depending on the domain's size, it may take up to several minutes.
                 </p>
 
                 <details class="harness-section">
@@ -252,6 +253,10 @@
 
                 @if (package is null && !isBuilding)
                 {
+                    @if (stoppedNotice is not null)
+                    {
+                        <p class="muted stopped-notice">@stoppedNotice</p>
+                    }
                     <button class="primary" @onclick="BuildAsync" disabled="@HasInvalidMcpServer(draft)">
                         Build the archive
                     </button>
@@ -294,32 +299,105 @@
                             <div class="distillation-bar">
                                 <div class="distillation-bar-fill" style="width:@(Percent)%"></div>
                             </div>
-                            <p class="muted distillation-percent">@Percent%</p>
+                            <p class="muted distillation-percent">
+                                @Progress(Percent)
+                                @if (StepElapsed is { } elapsed)
+                                {
+                                    <span> &middot; @elapsed on this step</span>
+                                }
+                            </p>
                         </div>
                     </div>
+
+                    @* Execution is actually two flat passes over every agent — every agent's code and
+                       mock, then, later, every agent's scenarios — never one agent finished start to
+                       finish before the next begins. A grid reads that truthfully without narrating
+                       it: each agent gets its own card and its own done/now/ahead marks, so the eye
+                       sees several agents in flight together rather than one linear sentence implying
+                       an order that was never real. *@
+                    <div class="distillation-agents">
+                        @foreach (IGrouping<string, Step> card in AgentCards)
+                        {
+                            <div class="agent-card">
+                                <p class="agent-card-name">@card.First().Label</p>
+                                <ul class="agent-card-steps">
+                                    @foreach (Step step in card)
+                                    {
+                                        <li class="@(step.Done ? "stage-done" : step == InProgress ? "stage-current" : "stage-todo")">
+                                            <span class="stage-mark @(step == InProgress ? "spin" : "")" aria-hidden="true">
+                                                @(step.Done ? "✓" : step == InProgress ? "⟳" : "○")
+                                            </span>
+                                            @StepKindLabel(step.Kind)
+                                        </li>
+                                    }
+                                </ul>
+                                <div class="agent-card-bar">
+                                    <div class="agent-card-bar-fill" style="width:@(CardPercent(card))%"></div>
+                                </div>
+                                <p class="muted agent-card-percent">@Progress(CardPercent(card))</p>
+                            </div>
+                        }
+                    </div>
+
+                    @* The percentage and the log are the same fact at two grains, so they live in the
+                       same panel: the bar says how far, this says exactly what just landed, oldest at
+                       the top and the newest line at the bottom — the order any log is read in — kept
+                       scrolled to that bottom by <c>ScrollLogAsync</c> so the client never has to. *@
+                    <ol class="distillation-log" aria-live="polite">
+                        @foreach (string path in written)
+                        {
+                            <li class="log-done">
+                                <span class="log-mark" aria-hidden="true">✓</span><code>@path</code>
+                            </li>
+                        }
+                        <li class="log-current">
+                            <span class="log-mark spin" aria-hidden="true">⟳</span>Writing @CurrentLogLabel&hellip;
+                        </li>
+                    </ol>
+
+                    <p class="distillation-stop">
+                        <button class="agent-pick" @onclick="Stop" disabled="@isStopping">
+                            @(isStopping ? "Stopping…" : "Stop")
+                        </button>
+                        <span class="muted">Discards everything written so far &mdash; nothing partial is kept.</span>
+                    </p>
                 }
                 else
                 {
                     <div class="distillation-done">
-                        <p class="distillation-done-headline">✓ Distilled &mdash; @written.Count files, @(package!.Length / 1024) KB.</p>
+                        <p class="distillation-done-headline">Your domain has been distilled with success!</p>
                         <p>
-                            <a download="@ArchiveName" href="@DataUri(package)">@ArchiveName</a>
+                            Unzip the archive, build the .NET solution in your favorite IDE or with .NET CLI,
+                            then drop the resulting assembly into the configured directory of your Morgana's
+                            plugins. That's it: Morgana will be ready to fly on this broomstick!
                         </p>
-                        <button class="agent-pick" @onclick="Reset">Build it again</button>
+                        <a class="download-archive" download="@ArchiveName" href="@DataUri(package!)">
+                            <svg class="download-archive-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                            </svg>
+                            <span class="download-archive-text">
+                                <strong>Download @ArchiveName</strong>
+                                <span>@written.Count files, @(package!.Length / 1024) KB</span>
+                            </span>
+                        </a>
+                        <p>
+                            <button class="agent-pick" @onclick="Reset">Build it again</button>
+                        </p>
                     </div>
-                }
 
-                @if (written.Count > 0)
-                {
-                    <details class="muted">
-                        <summary>@written.Count files written</summary>
-                        <ul>
-                            @foreach (string path in written)
-                            {
-                                <li><code>@path</code></li>
-                            }
-                        </ul>
-                    </details>
+                    @if (written.Count > 0)
+                    {
+                        <details class="muted">
+                            <summary>@written.Count files written</summary>
+                            <ul>
+                                @foreach (string path in written)
+                                {
+                                    <li><code>@path</code></li>
+                                }
+                            </ul>
+                        </details>
+                    }
                 }
 
                 @if (error is not null)
@@ -351,6 +429,15 @@
     private bool includeScenarios;
     private bool isBuilding;
     private string? error;
+
+    /// <summary>Cancels the running <see cref="AssetPackageService.BuildAsync"/> call, live only while <see cref="isBuilding"/> is.</summary>
+    private CancellationTokenSource? buildCts;
+
+    /// <summary>True between pressing Stop and the build actually unwinding, so a second press cannot fire a second cancel.</summary>
+    private bool isStopping;
+
+    /// <summary>What to say next to the button once a stop has actually landed — cleared the moment a fresh build starts.</summary>
+    private string? stoppedNotice;
 
     private string ArchiveName => $"{rootNamespace.ToLowerInvariant().Replace('.', '-')}-morganized.zip";
 
@@ -563,27 +650,188 @@
     private readonly List<Step> plan = [];
 
     /// <summary>
-    /// The step currently in front of the client, kept even after it is marked done so the label
-    /// does not blank out between two files of the same slow step.
+    /// The step actually being worked on: the first one not yet done.
     /// </summary>
-    private Step? currentStep;
+    /// <remarks>
+    /// Derived rather than assigned, because a step is only ever <em>reported</em> when it finishes
+    /// — the progress callback fires on a written file. Reading the last thing reported as the thing
+    /// happening names the step behind the one running, which is furthest from the truth exactly
+    /// where it matters most: while a toolkit's mock is being written, the slowest wait of the whole
+    /// emit, the mock would show as already ticked.
+    /// </remarks>
+    private Step? InProgress => plan.FirstOrDefault(s => !s.Done);
 
     private int Percent => plan.Count == 0 ? 0 : plan.Count(s => s.Done) * 100 / plan.Count;
 
     /// <summary>
-    /// The belly is a circle of radius 15.2 centred at y=55, so a full pour is its diameter, 30.4.
+    /// The plan's own steps, regrouped by agent for the card grid — the "structure" step has no
+    /// agent and is excluded, since it is already said once by <see cref="PhaseLabel"/>. Grouping
+    /// preserves each agent's own step order (code, then mock, then, from the later pass, scenarios)
+    /// even though those steps sit far apart inside <see cref="plan"/> itself.
     /// </summary>
-    private double FillHeight => 30.4 * Percent / 100.0;
+    private IEnumerable<IGrouping<string, Step>> AgentCards =>
+        plan.Where(s => s.Kind != "structure").GroupBy(s => s.AgentId);
 
-    private string PhaseLabel => currentStep?.Kind switch
+    /// <summary>An agent card's own completion — its steps only, never the whole plan's.</summary>
+    private static int CardPercent(IGrouping<string, Step> card) =>
+        card.Count(s => s.Done) * 100 / card.Count();
+
+    /// <summary>
+    /// A completion as the client reads it: a number while there is still something to count, and
+    /// the word for having arrived once there is not.
+    /// </summary>
+    private static string Progress(int percent) => percent == 100 ? "done" : $"{percent}%";
+
+    // Named for what the client gets, not for what Alembic writes: the agent class and its toolkit
+    // are the two halves of a Morgana agent, and "Code"/"Mock" named the emit's own vocabulary.
+    private static string StepKindLabel(string kind) => kind switch
     {
-        null => "Preparing the configuration…",
-        "structure" => "Preparing the configuration…",
-        "code" => $"Distilling {currentStep.Label} — writing its generated C#…",
-        "mock" => $"Distilling {currentStep.Label} — AI is writing its working mock, so this can take a moment…",
-        "scenarios" => $"Distilling {currentStep.Label} — AI is watching its behaviour for PromptHarness, this is the slowest part…",
-        _ => "Distilling…"
+        "code" => "Agent",
+        "mock" => "Tools",
+        "scenarios" => "Scenarios",
+        _ => kind
     };
+
+    /// <summary>
+    /// The belly is a circle of radius 15.2 centred at y=55, so a full pour is its diameter, 30.4.
+    /// Rounded to a tenth: the CSS transition already smooths the motion, and a long float in the
+    /// attribute string only invites the kind of sub-pixel rounding disagreement between browsers
+    /// that reads as the vessel trembling instead of pouring.
+    /// </summary>
+    private double FillHeight => Math.Round(30.4 * Percent / 100.0, 1);
+
+    /// <summary>When <see cref="InProgress"/> last changed, so a slow step can say how long it has been slow.</summary>
+    private DateTime stepEnteredAt = DateTime.UtcNow;
+
+    /// <summary>Redraws the page at a fixed cadence while the build runs; null whenever it is not running.</summary>
+    private Timer? heartbeat;
+
+    /// <summary>How many log rows had been drawn when the log was last scrolled, so it is only scrolled on growth.</summary>
+    private int scrolledThrough = -1;
+
+    /// <summary>
+    /// The one thing that draws this screen while the archive is being built.
+    /// </summary>
+    /// <remarks>
+    /// A timer rather than a redraw per reported file: it draws the last file of a burst as well as
+    /// the first, it bounds what a domain of any size costs in redraws, and it keeps ticking through
+    /// the long silence of a model call, where <see cref="StepElapsed"/> is what tells a slow step
+    /// apart from a dead page.
+    /// </remarks>
+    private void StartHeartbeat()
+    {
+        StopHeartbeat();
+        scrolledThrough = -1;
+        heartbeat = new Timer(
+            _ => Beat(),
+            null,
+            TimeSpan.FromMilliseconds(250),
+            TimeSpan.FromMilliseconds(250));
+    }
+
+    /// <summary>
+    /// One redraw, asked for from the timer's own thread and unable to fault the circuit.
+    /// </summary>
+    private void Beat() => _ = BeatAsync();
+
+    /// <summary>
+    /// The redraw itself, which swallows everything so the discarded task above cannot fault.
+    /// </summary>
+    /// <remarks>
+    /// Awaited rather than dropped, because <c>InvokeAsync</c> reports a dispatcher that is going
+    /// away by completing its task as <em>cancelled</em> — not by throwing. Pressing Stop unwinds
+    /// the build in the same instant a tick is in flight, so that is exactly when it happens, and a
+    /// dropped task cancelled after the fact is an unobserved <c>TaskCanceledException</c> the
+    /// client meets as an unhandled error.
+    /// </remarks>
+    private async Task BeatAsync()
+    {
+        try
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException)
+        {
+            // The dispatcher is going away; there is nothing left to draw on.
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
+        {
+            StopHeartbeat();
+        }
+    }
+
+    private void StopHeartbeat()
+    {
+        heartbeat?.Dispose();
+        heartbeat = null;
+    }
+
+    /// <summary>Disposes the heartbeat and cancels any build still running when the client leaves the page.</summary>
+    public void Dispose()
+    {
+        StopHeartbeat();
+
+        try
+        {
+            // The circuit is going away and nothing is left to receive the archive, so a build still
+            // in flight is work nobody will collect — and, when it is mid-completion, a model call
+            // still being paid for.
+            buildCts?.Cancel();
+        }
+        catch (Exception ex)
+        {
+            // Cancel runs its registrations inline and rethrows whatever they throw. Nothing here is
+            // worth failing a teardown over — least of all on the way out of the page.
+            Logger.LogDebug(ex, "Cancelling the build on dispose threw");
+        }
+
+        buildCts?.Dispose();
+        buildCts = null;
+    }
+
+    /// <summary>How long the step in hand has been running, shown once it is long enough to wonder about.</summary>
+    private string? StepElapsed
+    {
+        get
+        {
+            if (!isBuilding)
+                return null;
+
+            int seconds = (int)(DateTime.UtcNow - stepEnteredAt).TotalSeconds;
+
+            return seconds < 3 ? null : seconds < 60 ? $"{seconds}s" : $"{seconds / 60}m {seconds % 60:00}s";
+        }
+    }
+
+    /// <summary>
+    /// What the vessel is doing right now. The <c>null</c> arm is the moment every step is done and
+    /// the archive is being sealed.
+    /// </summary>
+    private string PhaseLabel => InProgress is not { } step
+        ? "Sealing the archive…"
+        : step.Kind switch
+        {
+            "structure" => "Writing the domain's configuration and reports…",
+            "code" => $"Distilling {step.Label} — writing its agent class…",
+            "mock" => $"Distilling {step.Label} — mocking its tool class (AI)…",
+            "scenarios" => $"Distilling {step.Label} — writing its harness scenarios (AI)…",
+            _ => "Distilling…"
+        };
+
+    /// <summary>
+    /// The log's own pinned "now" row — a noun phrase rather than <see cref="PhaseLabel"/>'s full
+    /// sentence, because it sits after the word "Writing" in the markup rather than standing alone.
+    /// </summary>
+    private string CurrentLogLabel => InProgress is not { } step
+        ? "the last of it"
+        : step.Kind switch
+        {
+            "structure" => "the configuration",
+            "code" => $"{step.Label}'s agent class",
+            "mock" => $"{step.Label}'s tool class",
+            "scenarios" => $"{step.Label}'s scenarios",
+            _ => step.Label
+        };
 
     /// <summary>
     /// Builds the plan in the same order <see cref="AssetPackageService"/> actually writes: the
@@ -616,8 +864,11 @@
     }
 
     /// <summary>
-    /// Which step one written path belongs to, by the same naming <see cref="CodeEmitService"/>,
-    /// <see cref="ToolMockService"/> and <see cref="ScenarioAuthorService"/> use.
+    /// Which step one written path belongs to. Asks <see cref="Distiller.Services.CodeEmitService"/>
+    /// itself for the agent's real paths rather than re-deriving the class names here — the same
+    /// formula duplicated in a second place is exactly the kind of thing that silently drifts, and
+    /// this way it cannot: whatever <see cref="AssetPackageService"/> actually wrote is what this
+    /// compares against.
     /// </summary>
     private Step? MatchStep(string path, DomainDraft draft)
     {
@@ -627,14 +878,21 @@
         foreach (AgentDraft agent in draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)))
         {
             string id = agent.ID!;
-            string agentClass = agent.Code.AgentClassName ?? $"{char.ToUpperInvariant(id[0])}{id[1..]}Agent";
-            string toolClass = agent.Code.ToolClassName ?? $"{char.ToUpperInvariant(id[0])}{id[1..]}Tool";
 
-            if (path == $"Agents/{agentClass}.g.cs" || path == $"Tools/{toolClass}.g.cs")
-                return plan.FirstOrDefault(s => s.AgentId == id && s.Kind == "code");
+            foreach (EmittedFile file in CodeEmitService.Emit(agent, id))
+            {
+                if (path == file.Path)
+                    return plan.FirstOrDefault(s => s.AgentId == id && s.Kind == "code");
 
-            if (path == $"Tools/{toolClass}.cs" || path == $"Tools/{toolClass}.cs.FAILED.txt")
-                return plan.FirstOrDefault(s => s.AgentId == id && s.Kind == "mock");
+                // The mock is the generated tool file's own client half — same path, ".g" dropped —
+                // so deriving it from that path is the X.g.cs/X.cs convention itself, not a guess.
+                if (file.Path.StartsWith("Tools/", StringComparison.Ordinal) && file.Path.EndsWith(".g.cs", StringComparison.Ordinal))
+                {
+                    string mockPath = file.Path[..^".g.cs".Length] + ".cs";
+                    if (path == mockPath || path == mockPath + ".FAILED.txt")
+                        return plan.FirstOrDefault(s => s.AgentId == id && s.Kind == "mock");
+                }
+            }
 
             if (path.StartsWith($"Scenarios/{id}-", StringComparison.Ordinal) || path == $"Scenarios/{id}.FAILED.txt")
                 return plan.FirstOrDefault(s => s.AgentId == id && s.Kind == "scenarios");
@@ -654,10 +912,13 @@
 
         isBuilding = true;
         error = null;
+        stoppedNotice = null;
         written.Clear();
         plan.Clear();
         plan.AddRange(BuildPlan(draft, includeScenarios));
-        currentStep = plan[0];
+        stepEnteredAt = DateTime.UtcNow;
+        buildCts = new CancellationTokenSource();
+        StartHeartbeat();
 
         try
         {
@@ -666,33 +927,121 @@
             foreach (AgentDraft agent in draft.Agents)
                 agent.Code.Namespace = rootNamespace;
 
+            // State only. Nothing here renders and nothing here reaches the browser: a callback that
+            // awaited JS interop had its Task discarded, and interop that outlives the circuit's own
+            // one-minute call timeout throws something JSDisconnectedException does not cover — an
+            // unobserved fault on a dispatched work item, which tears the circuit down and freezes
+            // the page while the build carries on invisibly. Drawing is the heartbeat's job.
             Progress<string> progress = new Progress<string>(path =>
             {
                 written.Add(path);
 
-                if (MatchStep(path, draft) is { } step)
-                {
-                    step.Done = true;
-                    currentStep = step;
-                }
+                if (MatchStep(path, draft) is not { } step)
+                    return;
 
-                InvokeAsync(StateHasChanged);
+                // Only a genuine handover restarts the clock: several files of one step must not
+                // keep resetting it, or a slow step would never look slow.
+                Step? before = InProgress;
+                step.Done = true;
+
+                if (!ReferenceEquals(InProgress, before))
+                    stepEnteredAt = DateTime.UtcNow;
             });
 
-            package = await AssetPackageService.BuildAsync(draft, includeScenarios, progress);
+            // Off the dispatcher, and that is load-bearing rather than tidy. An event handler runs on
+            // the renderer's synchronization context, and Progress<T> captures whatever context it is
+            // constructed on — so awaiting the build here queues every Report behind the build
+            // producing it, and the structure phase, whose MemoryStream writes all complete
+            // synchronously, never yields to let one through.
+            // The token goes to the build and NOT to Task.Run. On Task.Run it would only govern
+            // scheduling, and it lets the outer task report itself cancelled while the delegate is
+            // still unwinding — leaving the real work orphaned, and whatever it throws on the way
+            // out observed by nobody.
+            CancellationToken token = buildCts.Token;
+            package = await Task.Run(
+                () => AssetPackageService.BuildAsync(draft, includeScenarios, progress, token));
 
             // The archive is whole the moment this returns, even if the last agent's slow step only
             // reported its first file — the bar owes the client a full vessel, not a nearly-full one.
             foreach (Step step in plan)
                 step.Done = true;
         }
+        catch (OperationCanceledException)
+        {
+            // Stopped, not failed: nothing partial is worth keeping, since a client who asked to
+            // discard the run does not want half an archive quietly held onto behind the button.
+            package = null;
+            written.Clear();
+            plan.Clear();
+            stoppedNotice = "Build stopped — nothing was distilled.";
+        }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "The archive could not be built");
             error = $"The archive could not be built: {ex.Message}";
         }
         finally
         {
+            StopHeartbeat();
             isBuilding = false;
+            isStopping = false;
+            buildCts?.Dispose();
+            buildCts = null;
+        }
+    }
+
+    /// <summary>
+    /// Cancels the running build. <see cref="BuildAsync"/>'s own <c>catch</c> does the actual
+    /// discarding once the cancellation unwinds through <see cref="AssetPackageService.BuildAsync"/>
+    /// — this only asks for it, and guards against a second press firing a second cancel while the
+    /// first is still unwinding.
+    /// </summary>
+    private void Stop()
+    {
+        if (buildCts is null || isStopping)
+            return;
+
+        isStopping = true;
+
+        try
+        {
+            buildCts.Cancel();
+        }
+        catch (Exception ex)
+        {
+            // Cancel runs every registration inline on this thread and rethrows what they throw, so
+            // a press of Stop can surface somebody else's unwinding as an unhandled error on an
+            // event handler. The build's own catch does the work either way; this only asks.
+            Logger.LogDebug(ex, "Cancelling the build threw while stopping");
+        }
+    }
+
+    /// <summary>
+    /// Pins the emission log to its newest entry, at the bottom of the box. Nothing about the CSS
+    /// keeps an overflowing box scrolled to its own bottom as rows are appended, so it is asked for.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than beside a <c>StateHasChanged</c>, on two counts: this is the first moment the
+    /// rows being scrolled past are in the browser's DOM, and the interop's Task is awaited by the
+    /// framework instead of dropped — an unobserved failure on dispatched work takes the circuit
+    /// down with it.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!isBuilding || written.Count == scrolledThrough)
+            return;
+
+        scrolledThrough = written.Count;
+
+        try
+        {
+            await JS.InvokeVoidAsync("alembicScrollLogBottom");
+        }
+        catch (Exception ex)
+        {
+            // Never rethrown. Keeping the newest line in view is a courtesy, and losing it is not
+            // worth failing a build the client has been waiting minutes for.
+            Logger.LogDebug(ex, "Could not scroll the emission log");
         }
     }
 

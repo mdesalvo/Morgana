@@ -84,6 +84,14 @@
                 const box = document.querySelector('.reply textarea');
                 if (box) box.focus();
             };
+
+            // The emission log reads oldest to newest, top to bottom, so keeping the newest line in
+            // view means keeping the box scrolled to its own bottom — asked for on every batch of
+            // progress rather than assumed from the CSS alone.
+            window.alembicScrollLogBottom = () => {
+                const log = document.querySelector('.distillation-log');
+                if (log) log.scrollTop = log.scrollHeight;
+            };
         </script>
     </body>
 </html>

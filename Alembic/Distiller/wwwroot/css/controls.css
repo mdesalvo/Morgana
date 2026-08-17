@@ -329,14 +329,243 @@ dl.fields dd {
     font-size: 0.8rem;
 }
 
+/* Done, in hand, still ahead — the same three-way distinction the Journey rail draws for the
+   interview, drawn here on each agent's card. */
+.stage-mark {
+    width: 0.8rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.stage-done {
+    color: var(--alembic-success);
+}
+
+.stage-done .stage-mark {
+    color: var(--alembic-success);
+}
+
+.stage-current {
+    color: var(--alembic-text);
+    font-weight: 600;
+}
+
+.stage-current .stage-mark {
+    color: var(--alembic-accent);
+}
+
+.stage-todo {
+    color: var(--alembic-muted);
+}
+
+.stage-todo .stage-mark {
+    color: var(--alembic-muted);
+}
+
+/* One card per agent — the true execution order is two flat passes over every agent, never one
+   agent finished before the next starts, so a single linear sentence would either lie about the
+   order or bury it in prose. A grid says it by shape instead: several agents visibly in flight at
+   once, each honest about its own three steps. */
+.distillation-agents {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    gap: 0.6rem;
+    margin: 0.85rem 0 0;
+}
+
+/* A column, not a block: an agent with no tools has one step instead of two or three, and without
+   this its bar would sit wherever that shorter list happens to end — a row of cards where the bars
+   do not line up. margin-top:auto on the bar pushes it flush to the card's own bottom regardless of
+   how many step rows are above it, so every bar in a grid row aligns with its neighbours'. */
+.agent-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--alembic-panel-lit);
+}
+
+.agent-card-name {
+    margin: 0 0 0.4rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.agent-card-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin: 0 0 0.5rem;
+    padding: 0;
+    list-style: none;
+    font-size: 0.8rem;
+}
+
+.agent-card-steps li {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.agent-card-bar {
+    height: 0.3rem;
+    margin-top: auto;
+    margin-bottom: 0;
+    padding: 0;
+    border-radius: 0.2rem;
+    background: var(--alembic-panel);
+    overflow: hidden;
+}
+
+.agent-card-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--alembic-accent-deep), var(--alembic-accent));
+    transition: width 0.4s ease;
+}
+
+.agent-card-percent {
+    margin: 0.25rem 0 0;
+    font-size: 0.7rem;
+    text-align: right;
+}
+
+/* The artifact log, folded into the same panel as the bar it belongs to. Read the ordinary way any
+   log is read — oldest at the top, newest at the bottom — with the box itself kept scrolled to its
+   own bottom by <c>alembicScrollLogBottom</c> so the newest line stays in view without the client
+   ever touching it. */
+.distillation-log {
+    display: flex;
+    flex-direction: column;
+    max-height: 8rem;
+    overflow-y: auto;
+    margin: 0.85rem 0 0;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.4rem;
+    background: var(--alembic-panel-lit);
+    list-style: none;
+    font-size: 0.78rem;
+}
+
+.distillation-log li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.1rem 0;
+}
+
+.log-mark {
+    flex-shrink: 0;
+    width: 1rem;
+    text-align: center;
+}
+
+/* A finalized file, in the order they actually landed — every one of them is already a fact, so
+   every one already gets its tick rather than earning it on some later pass over the list. */
+.log-done {
+    opacity: 0.75;
+}
+
+.log-done .log-mark {
+    color: var(--alembic-success);
+}
+
+.log-done:last-of-type {
+    opacity: 1;
+    animation: distillation-arrive 0.3s ease;
+}
+
+/* The one row that is not yet a fact: last in the log, since it is the newest thing happening —
+   bold against the settled rows above it, and turning rather than ticked, because nothing has
+   landed for it yet. */
+.log-current {
+    font-weight: 600;
+}
+
+.log-current .log-mark {
+    color: var(--alembic-accent);
+}
+
+/* Shared by any mark standing in for "in progress right now" — the log's own current row and each
+   agent card's current step alike. */
+.spin {
+    display: inline-block;
+    animation: distillation-spin 1.1s linear infinite;
+}
+
+@keyframes distillation-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.distillation-stop {
+    margin: 0.85rem 0 0;
+}
+
+/* Said once and then out of the way: a stop is acknowledged, not a standing fact about the page,
+   so it holds for a breath and fades rather than sitting next to the button forever. Pure CSS —
+   nothing to clear from state, since the next BuildAsync already resets stoppedNotice on its own. */
+.stopped-notice {
+    animation: stopped-notice-fade 5.6s ease forwards;
+}
+
+@keyframes stopped-notice-fade {
+    0%, 89% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
 .distillation-done {
     animation: distillation-arrive 0.4s ease;
 }
 
 .distillation-done-headline {
     margin: 0 0 0.6rem;
-    color: var(--alembic-accent);
+    color: var(--alembic-success);
     font-weight: 600;
+}
+
+/* The reward at the end of the whole interview, and the one control on this page that has to be
+   unmistakable: not a link reading as a filename among paragraphs, but its own button — sized,
+   coloured apart from the purple used for "start an action" elsewhere, and carrying its own file
+   count and size so the client never has to look back up at the paragraph above it. */
+.download-archive {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.9rem;
+    margin: 0.75rem 0 1rem;
+    padding: 0.9rem 1.7rem;
+    border-radius: 0.6rem;
+    background: linear-gradient(135deg, var(--alembic-success), #22a35a);
+    color: #06240f;
+    text-decoration: none;
+    box-shadow: 0 0 0 rgba(74, 222, 128, 0);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.download-archive:hover {
+    box-shadow: 0 0 1.8rem rgba(74, 222, 128, 0.55);
+    transform: translateY(-1px);
+}
+
+.download-archive-icon {
+    width: 1.6rem;
+    height: 1.6rem;
+    flex-shrink: 0;
+}
+
+.download-archive-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+}
+
+.download-archive-text strong {
+    font-size: 1.05rem;
+}
+
+.download-archive-text span:last-child {
+    font-size: 0.8rem;
+    opacity: 0.75;
 }
 
 @keyframes distillation-arrive {

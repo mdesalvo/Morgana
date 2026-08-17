@@ -76,18 +76,50 @@ public class ScenarioAuthorService : IScenarioAuthorService
 
         List<EmittedFile> files = [];
 
+        // A template that fails is dropped the way one that does not apply is dropped, rather than
+        // taking the agent's whole set with it: each is a separate request about a separate
+        // use-case, so the ones that answered are worth keeping. The list is abandoned after the
+        // second failure all the same — one template failing is a template, two is the provider,
+        // and walking the rest to time out against it twice apiece serves nobody. Whether that
+        // leaves the client anything is what decides how it ends, below.
+        int failures = 0;
+
         foreach (ScenarioTemplate template in ScenarioTemplateLibrary.For(agent))
         {
             string id = $"{intentName}-{template.Name}";
+            string answer;
 
-            string answer = await StreamedCompletion.RunAsync(
-                chatClient,
-                system,
-                Request(template, domain),
-                length => logger.LogInformation(
-                    "The {Template} derivation for {AgentId} was cut at the provider's limit after {Length} characters; resuming",
-                    template.Name, agent.ID, length),
-                cancellationToken);
+            try
+            {
+                answer = await StreamedCompletion.RunAsync(
+                    chatClient,
+                    system,
+                    Request(template, domain),
+                    length => logger.LogInformation(
+                        "The {Template} derivation for {AgentId} was cut at the provider's limit after {Length} characters; resuming",
+                        template.Name, agent.ID, length),
+                    length => logger.LogWarning(
+                        "The {Template} derivation for {AgentId} went silent after {Length} characters; retrying once",
+                        template.Name, agent.ID, length),
+                    cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex,
+                    "The {Template} derivation for {AgentId} could not be run", template.Name, agent.ID);
+
+                if (++failures <= 1)
+                    continue;
+
+                // Nothing derived means nothing to hand over, and a client who asked for scenarios
+                // and silently received none has been told nothing: that case is worth the caller's
+                // FAILED.txt. With something in hand it is not, since a template dropping out is
+                // already how a use-case this domain has no instance of leaves the set.
+                if (files.Count == 0)
+                    throw;
+
+                break;
+            }
 
             DerivedScenario derivation = ScenarioDerivation.Check(template.Keys, id, answer);
 
@@ -165,6 +197,9 @@ public class ScenarioAuthorService : IScenarioAuthorService
             DiscretionaryRequest(domain, baseline),
             length => logger.LogInformation(
                 "The discretionary scenarios for {AgentId} were cut at the provider's limit after {Length} characters; resuming",
+                agent.ID, length),
+            length => logger.LogWarning(
+                "The discretionary scenarios for {AgentId} went silent after {Length} characters; retrying once",
                 agent.ID, length),
             cancellationToken);
 

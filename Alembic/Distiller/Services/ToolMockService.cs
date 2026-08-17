@@ -92,6 +92,9 @@ public class ToolMockService : IToolMockService
             length => logger.LogInformation(
                 "The mock for {AgentId} was cut at the provider's limit after {Length} characters; resuming",
                 agent.ID, length),
+            length => logger.LogWarning(
+                "The mock for {AgentId} went silent after {Length} characters; retrying once",
+                agent.ID, length),
             cancellationToken);
 
         // Thrown rather than returned, so the packager's per-agent catch writes a file that says
