@@ -517,7 +517,11 @@ dl.fields dd {
    this its bar would sit wherever that shorter list happens to end — a row of cards where the bars
    do not line up. margin-top:auto on the bar pushes it flush to the card's own bottom regardless of
    how many step rows are above it, so every bar in a grid row aligns with its neighbours'. */
-.agent-card {
+/* Scoped to the grid it lives in, because Import draws an agent card too and means something else by
+   it — one agent of a domain as its owner would recognise it, not one agent being emitted. Unscoped,
+   these rules reach that page as well: the class name is the same, the specificity is the same, and
+   this file is loaded after import.css. */
+.distillation-agents .agent-card {
     display: flex;
     flex-direction: column;
     border: 1px solid var(--alembic-border);
@@ -526,7 +530,7 @@ dl.fields dd {
     background: var(--alembic-panel-lit);
 }
 
-.agent-card-name {
+.distillation-agents .agent-card-name {
     margin: 0 0 0.4rem;
     font-weight: 600;
     font-size: 0.9rem;
