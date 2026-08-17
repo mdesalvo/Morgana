@@ -1,40 +1,13 @@
 /* ==========================================================================
-   Alembic — the surface, in six files.
+   Alembic — the surface, in seven files.
 
-   One file per part of the workbench, linked in this order by Pages/_Host.cshtml: base, landing,
-   import, panels, interview, controls. The palette is read off the alembic in wwwroot/images — a
-   night-violet room, the vessel lit magenta from inside, cyan where the distillate runs cold, and
-   one warm gold for what is finished — and it lives here, in base.css, because every other file
-   spends it and none of them defines it.
+   One file per part of the workbench, linked in this order by Pages/_Host.cshtml: palette, base,
+   landing, import, panels, interview, controls. The palette is the first of them and stands apart
+   in palette.css, spent by every file below it and defined by none.
 
-   base.css — the tokens, the reset, the page shells, and the mark that carries the alembic onto
-   every page past the landing.
+   base.css — the reset, the page shells, and the mark that carries the alembic onto every page
+   past the landing.
    ========================================================================== */
-
-:root {
-    /* The four grounds, one step apart each, in the order they stack: what is recessed into the
-       page, the page itself, what sits on it, what is lit on top. The room is a lit one — the
-       violet is in the ground rather than only in the glow above it, so a panel reads as standing
-       in the light rather than as the one thing visible in the dark. */
-    --alembic-bg: #15102b;
-    --alembic-bg-deep: #0d0920;
-    --alembic-panel: #1e1740;
-    --alembic-panel-lit: #271e52;
-    --alembic-border: #35296b;
-    --alembic-border-lit: #5a44b0;
-    --alembic-text: #ece8f8;
-    --alembic-muted: #a396cd;
-    --alembic-accent: #c084fc;
-    --alembic-accent-deep: #8b5cf6;
-    --alembic-cyan: #67e8f9;
-    --alembic-gold: #f4c56a;
-    --alembic-error: #ff8a8a;
-    --alembic-success: #4ade80;
-
-    /* The glow the vessel throws on everything near it. One shadow, reused, so the page reads
-       as lit from a single source rather than as a set of independently glowing boxes. */
-    --alembic-glow: 0 0 2.5rem rgba(139, 92, 246, 0.18);
-}
 
 * {
     box-sizing: border-box;
@@ -57,7 +30,7 @@ html, body {
        rather than narrow and strong — a soft light fills a room, a hard one draws a spotlight. */
     background:
         radial-gradient(ellipse 75rem 48rem at 50% -12%, rgba(167, 139, 250, 0.20), transparent 72%),
-        radial-gradient(ellipse 40rem 30rem at 85% 100%, rgba(103, 232, 249, 0.08), transparent 70%),
+        radial-gradient(ellipse 40rem 30rem at 85% 100%, color-mix(in srgb, var(--alembic-cyan) 8%, transparent), transparent 70%),
         var(--alembic-bg);
     background-attachment: fixed;
     color: var(--alembic-text);
@@ -133,7 +106,7 @@ html, body {
     object-fit: cover;
     border-radius: 50%;
     border: 1px solid var(--alembic-border-lit);
-    box-shadow: 0 0 2.1rem rgba(139, 92, 246, 0.42);
+    box-shadow: 0 0 2.1rem color-mix(in srgb, var(--alembic-accent-deep) 42%, transparent);
 }
 
 .alembic-mark span {

@@ -9,7 +9,7 @@
     padding: 0.7rem 1.1rem;
     border: 1px solid var(--alembic-border-lit);
     border-radius: 0.5rem;
-    background: rgba(192, 132, 252, 0.12);
+    background: color-mix(in srgb, var(--alembic-accent) 12%, transparent);
     box-shadow: var(--alembic-glow);
     color: var(--alembic-text);
     font-size: 1rem;
@@ -26,7 +26,7 @@
     padding: 0.7rem 1.1rem;
     border: 1px solid var(--alembic-error);
     border-radius: 0.5rem;
-    background: rgba(255, 138, 138, 0.1);
+    background: color-mix(in srgb, var(--alembic-error) 10%, transparent);
     color: var(--alembic-text);
     font-size: 1rem;
 }
@@ -87,6 +87,6 @@ h2.what-now {
     padding: 0.15rem 0.7rem;
     color: var(--alembic-text);
     font-size: 0.85rem;
-    background: rgba(30, 23, 64, 0.6);
+    background: color-mix(in srgb, var(--alembic-panel) 60%, transparent);
 }
 

@@ -91,7 +91,7 @@
     padding: 0.9rem 1.1rem;
     border: 1px solid var(--alembic-border);
     border-radius: 0.6rem;
-    background: rgba(23, 17, 48, 0.35);
+    background: color-mix(in srgb, var(--alembic-bg) 35%, transparent);
 }
 
 .tool-card h4 {
@@ -143,7 +143,7 @@
 
 .panel td {
     padding: 0.35rem 0.6rem 0.35rem 0;
-    border-bottom: 1px solid rgba(53, 41, 107, 0.5);
+    border-bottom: 1px solid color-mix(in srgb, var(--alembic-border) 50%, transparent);
     vertical-align: top;
 }
 
@@ -192,7 +192,7 @@ code {
     padding: 0.6rem 0.9rem;
     border: 1px solid var(--alembic-gold);
     border-radius: 0.5rem;
-    background: rgba(244, 197, 106, 0.1);
+    background: color-mix(in srgb, var(--alembic-gold) 10%, transparent);
     color: var(--alembic-text);
     font-size: 0.9rem;
 }
@@ -209,7 +209,7 @@ code {
     padding: 0.6rem 0.9rem;
     border: 1px solid var(--alembic-gold);
     border-radius: 0.5rem;
-    background: rgba(244, 197, 106, 0.1);
+    background: color-mix(in srgb, var(--alembic-gold) 10%, transparent);
     font-size: 0.85rem;
     line-height: 1.5;
 }

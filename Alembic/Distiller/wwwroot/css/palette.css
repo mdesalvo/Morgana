@@ -1,0 +1,36 @@
+/* ==========================================================================
+   Alembic — the palette, and nothing else.
+
+   Read off the alembic in wwwroot/images: a night-violet room, the vessel lit magenta from inside,
+   cyan where the distillate runs cold, and one warm gold for what is finished.
+
+   It lives alone, in the file every other one is linked after, because every other file spends it
+   and none of them defines it. A colour that appears anywhere but here has escaped, and the way it
+   is noticed is that a change made here fails to reach it — so a value with an alpha channel is
+   written color-mix(in srgb, var(--token) N%, transparent) rather than as its own rgba().
+   ========================================================================== */
+
+:root {
+    /* The four grounds, one step apart each, in the order they stack: what is recessed into the
+       page, the page itself, what sits on it, what is lit on top. The room is a lit one — the
+       violet is in the ground rather than only in the glow above it, so a panel reads as standing
+       in the light rather than as the one thing visible in the dark. */
+    --alembic-bg: #1e173e;
+    --alembic-bg-deep: #150f34;
+    --alembic-panel: #271e53;
+    --alembic-panel-lit: #302565;
+    --alembic-border: #3e307d;
+    --alembic-border-lit: #6752bc;
+    --alembic-text: #ece8f8;
+    --alembic-muted: #a396cd;
+    --alembic-accent: #c084fc;
+    --alembic-accent-deep: #8b5cf6;
+    --alembic-cyan: #67e8f9;
+    --alembic-gold: #f4c56a;
+    --alembic-error: #ff8a8a;
+    --alembic-success: #4ade80;
+
+    /* The glow the vessel throws on everything near it. One shadow, reused, so the page reads
+       as lit from a single source rather than as a set of independently glowing boxes. */
+    --alembic-glow: 0 0 2.5rem color-mix(in srgb, var(--alembic-accent-deep) 18%, transparent);
+}

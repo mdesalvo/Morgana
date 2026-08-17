@@ -22,9 +22,10 @@
            already settled. *@
         <link href="images/Alembic-Banner.jpg" rel="preload" as="image" />
 
-        @* One file per part of the workbench, in cascade order: base defines the palette every
-           other file spends, and the rest never redefine what a file before them settled. Linked
+        @* One file per part of the workbench, in cascade order: palette is spent by every file
+           after it, and the rest never redefine what a file before them settled. Linked
            rather than @imported, so they are fetched in parallel instead of one after another. *@
+        <link href="css/palette.css" rel="stylesheet" asp-append-version="true" />
         <link href="css/base.css" rel="stylesheet" asp-append-version="true" />
         <link href="css/landing.css" rel="stylesheet" asp-append-version="true" />
         <link href="css/import.css" rel="stylesheet" asp-append-version="true" />

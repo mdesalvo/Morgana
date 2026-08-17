@@ -66,13 +66,57 @@
             <div class="panel">
                 <h2>What the interview cannot say</h2>
 
-                <p>
-                    <label>Namespace <input @bind="rootNamespace" @bind:event="oninput" /></label>
+                @* The client has spent the whole interview describing their own work in their own
+                   words. This panel is the one place that asks for something else — facts about the
+                   C# Alembic is about to write — so it says so plainly before asking, rather than
+                   letting four unfamiliar words be the first thing on the screen. *@
+                <p class="panel-intro">
+                    Everything so far came out of the interview. These four did not: they describe the
+                    <b>C# code</b> Alembic is about to write for you, not the work your agents do.
+                    Nobody asked you during the interview because they belong to whoever installs
+                    Morgana rather than to the person who knows the business. Every one already has a
+                    sensible answer &mdash; change them only if your team has its own conventions.
                 </p>
+
+                @* The one field on this page that reaches every generated file, so it is given the
+                   room that says so rather than sitting inline like a filter box. *@
+                <div class="field">
+                    <label for="ns">Namespace</label>
+                    <input id="ns" class="mono" spellcheck="false" autocomplete="off"
+                           placeholder="@Distiller.Services.CodeEmitService.DefaultNamespace"
+                           @bind="rootNamespace" @bind:event="oninput" />
+                    @if (NamespaceProblem is { } problem)
+                    {
+                        <p class="field-note severity-error">@problem</p>
+                    }
+                    else
+                    {
+                        <p class="field-note muted">
+                            C# files every class under one, and this is the name your team gives this
+                            plugin's code. It prefixes everything Alembic writes
+                            @* Shown against a real class of this domain or not at all: a stand-in
+                               name here would be one more identifier on a screen already full of
+                               them, and the only one that is not going to exist. *@
+                            @if (draft.Agents.FirstOrDefault(a => a.Code.AgentClassName is not null) is { } named)
+                            {
+                                <text>&mdash; yours will read <code>@($"{EffectiveNamespace}.Agents.{named.Code.AgentClassName}")</code></text>
+                            }
+                            else
+                            {
+                                <text>, under <code>@EffectiveNamespace</code>.</text>
+                            }
+                        </p>
+                    }
+                </div>
 
                 <table>
                     <thead>
-                        <tr><th>Agent</th><th>Die</th><th>Classes</th><th>MCP</th></tr>
+                        <tr>
+                            <th>Agent</th>
+                            <th>Die <span class="th-note">which model it thinks with</span></th>
+                            <th>Classes <span class="th-note">what Alembic will name its code</span></th>
+                            <th>MCP <span class="th-note">servers it connects to at runtime for extra tools</span></th>
+                        </tr>
                     </thead>
                     <tbody>
                         @foreach (AgentDraft agent in draft.Agents)
@@ -98,57 +142,68 @@
                                     }
                                 </td>
                                 <td>
-                                    <label>
+                                    @* The header carries the sentence once. Repeating it per row put
+                                       the same nineteen words beside every agent and left the switch
+                                       itself the least visible thing in its own cell. *@
+                                    <label class="switch">
                                         <input type="checkbox"
                                                checked="@(agent.Code.MCPServers.Count > 0)"
                                                @onchange="e => ToggleMcp(agent, e)" />
-                                        This agent connects to MCP servers to enhance its toolkit at runtime
+                                        <span>Reaches MCP servers</span>
                                     </label>
+
                                     @if (agent.Code.MCPServers.Count > 0)
                                     {
-                                        <ul class="mcp-servers">
+                                        <div class="mcp-servers">
                                             @for (int i = 0; i < agent.Code.MCPServers.Count; i++)
                                             {
                                                 int index = i;
-                                                <li>
-                                                    <input type="url"
-                                                           value="@agent.Code.MCPServers[index]"
-                                                           placeholder="https://…"
-                                                           @oninput="e => SetMcpServer(agent, index, e)" />
-                                                    <button type="button" class="agent-pick"
-                                                            @onclick="() => RemoveMcpServer(agent, index)">
-                                                        Remove
-                                                    </button>
-                                                    <button type="button" class="agent-pick"
-                                                            disabled="@(GetMcpTest(agent, index).Status == McpTestStatus.Testing)"
-                                                            @onclick="() => TestMcpServer(agent, index)">
-                                                        Test
-                                                    </button>
-                                                    @{
-                                                        McpTestResult test = GetMcpTest(agent, index);
-                                                    }
-                                                    @if (test.Status == McpTestStatus.Testing)
+                                                McpTestResult test = GetMcpTest(agent, index);
+                                                bool malformed = !string.IsNullOrWhiteSpace(agent.Code.MCPServers[index])
+                                                                 && !IsAbsoluteHttpUri(agent.Code.MCPServers[index]);
+
+                                                <div class="mcp-server">
+                                                    <div class="mcp-server-row">
+                                                        <input type="url" class="mono"
+                                                               value="@agent.Code.MCPServers[index]"
+                                                               placeholder="https://…"
+                                                               spellcheck="false" autocomplete="off"
+                                                               @oninput="e => SetMcpServer(agent, index, e)" />
+                                                        <button type="button" class="agent-pick"
+                                                                disabled="@(test.Status == McpTestStatus.Testing || malformed)"
+                                                                @onclick="() => TestMcpServer(agent, index)">
+                                                            @(test.Status == McpTestStatus.Testing ? "Testing…" : "Test")
+                                                        </button>
+                                                        <button type="button" class="agent-pick icon"
+                                                                title="Remove this server"
+                                                                @onclick="() => RemoveMcpServer(agent, index)">
+                                                            &times;
+                                                        </button>
+                                                    </div>
+
+                                                    @* Said in full under the field rather than hidden
+                                                       in a tooltip: the detail IS the answer — which
+                                                       tools it advertises, or why it could not be
+                                                       reached — and a title attribute is the one place
+                                                       nobody reads it from. *@
+                                                    @if (malformed)
                                                     {
-                                                        <span class="muted">testing…</span>
+                                                        <p class="field-note severity-error">Not an absolute http(s) URI.</p>
                                                     }
                                                     else if (test.Status == McpTestStatus.Ok)
                                                     {
-                                                        <span class="severity-ok" title="@test.Detail">✓ live</span>
+                                                        <p class="field-note severity-ok">✓ live &mdash; @test.Detail</p>
                                                     }
                                                     else if (test.Status == McpTestStatus.Failed)
                                                     {
-                                                        <span class="severity-error" title="@test.Detail">✗ unreachable</span>
+                                                        <p class="field-note severity-error">✗ unreachable &mdash; @test.Detail</p>
                                                     }
-                                                    @if (!string.IsNullOrWhiteSpace(agent.Code.MCPServers[index])
-                                                            && !IsAbsoluteHttpUri(agent.Code.MCPServers[index]))
-                                                    {
-                                                        <span class="severity-error">not an absolute http(s) URI</span>
-                                                    }
-                                                </li>
+                                                </div>
                                             }
-                                        </ul>
+                                        </div>
+
                                         <button type="button" class="agent-pick" @onclick="() => AddMcpServer(agent)">
-                                            Add another server
+                                            + Add another
                                         </button>
                                     }
                                 </td>
@@ -257,10 +312,18 @@
                     {
                         <p class="muted stopped-notice">@stoppedNotice</p>
                     }
-                    <button class="primary" @onclick="BuildAsync" disabled="@HasInvalidMcpServer(draft)">
+                    <button class="primary" @onclick="BuildAsync"
+                            disabled="@(HasInvalidMcpServer(draft) || NamespaceProblem is not null)">
                         Build the archive
                     </button>
-                    @if (HasInvalidMcpServer(draft))
+                    @if (NamespaceProblem is not null)
+                    {
+                        <p class="severity-error">
+                            Fix the namespace above before building &mdash; it is declared in every
+                            generated file, so the archive would not compile.
+                        </p>
+                    }
+                    else if (HasInvalidMcpServer(draft))
                     {
                         <p class="severity-error">
                             Fix or remove the MCP server URLs above before building.
@@ -499,6 +562,43 @@
     /// </summary>
     private static bool HasInvalidMcpServer(DomainDraft draft) =>
         draft.Agents.Any(a => a.Code.MCPServers.Any(s => !IsAbsoluteHttpUri(s)));
+
+    /// <summary>What the emit will actually declare: the field when it says something, the default otherwise.</summary>
+    private string EffectiveNamespace =>
+        string.IsNullOrWhiteSpace(rootNamespace)
+            ? Distiller.Services.CodeEmitService.DefaultNamespace
+            : rootNamespace.Trim();
+
+    /// <summary>
+    /// Why the namespace as typed would not compile, or <c>null</c> while it would.
+    /// </summary>
+    /// <remarks>
+    /// Checked here because this field is the one input on the page that reaches every generated
+    /// file: a stray space or a leading digit turns the whole archive into C# that does not build,
+    /// which is the single failure Alembic exists to keep a client from meeting.
+    /// </remarks>
+    private string? NamespaceProblem
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(rootNamespace))
+                return null;
+
+            foreach (string part in rootNamespace.Trim().Split('.'))
+            {
+                if (part.Length == 0)
+                    return "Empty segment — two dots in a row, or a dot at one end.";
+
+                if (!char.IsLetter(part[0]) && part[0] != '_')
+                    return $"\"{part}\" starts with something other than a letter or underscore.";
+
+                if (part.Any(c => !char.IsLetterOrDigit(c) && c != '_'))
+                    return $"\"{part}\" holds a character a C# identifier cannot.";
+            }
+
+            return null;
+        }
+    }
 
     /// <summary>
     /// Checking the box opens one empty row to fill in; unchecking clears the list outright, since
@@ -923,9 +1023,10 @@
         try
         {
             // The die is already bound to a real value by OnInitialized — nothing left to default
-            // here.
+            // here. The namespace goes in as the field shows it, so what was previewed and what is
+            // declared cannot differ.
             foreach (AgentDraft agent in draft.Agents)
-                agent.Code.Namespace = rootNamespace;
+                agent.Code.Namespace = EffectiveNamespace;
 
             // State only. Nothing here renders and nothing here reaches the browser: a callback that
             // awaited JS interop had its Task discarded, and interop that outlives the circuit's own

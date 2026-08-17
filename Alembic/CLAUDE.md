@@ -1017,8 +1017,9 @@ Alembic/                              # Container: Distiller/ (the workbench) + 
       AgentSoFar.razor                #   the agent's own rows, folded behind its name
       SaveWork.razor                  #   the work so far, in one file, taken away in one click
       AgentWritten.razor              #   the one decision that is the client's, and the join to the next entry
-    wwwroot/css/                      # Six files, cascade order set in _Host.cshtml
-      base.css                        #   palette, reset, page shells, the mark
+    wwwroot/css/                      # Seven files, cascade order set in _Host.cshtml
+      palette.css                     #   the palette alone: every file below spends it, none redefines it
+      base.css                        #   reset, page shells, the mark
       landing.css / import.css        #   the two entrances
       panels.css / controls.css       #   what is read in a panel; buttons and shared furniture
       interview.css                   #   the interview, whose three states have to agree in one place

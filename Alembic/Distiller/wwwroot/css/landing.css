@@ -29,7 +29,7 @@
     position: absolute;
     inset: -8%;
     border-radius: 1.4rem;
-    background: radial-gradient(ellipse, rgba(192, 132, 252, 0.3), transparent 68%);
+    background: radial-gradient(ellipse, color-mix(in srgb, var(--alembic-accent) 30%, transparent), transparent 68%);
     filter: blur(1.4rem);
     transform: translateZ(0);
 }
@@ -42,7 +42,7 @@
     background: var(--alembic-bg-deep);
     border-radius: 0.9rem;
     border: 1px solid var(--alembic-border-lit);
-    box-shadow: 0 0 3rem rgba(139, 92, 246, 0.35);
+    box-shadow: 0 0 3rem color-mix(in srgb, var(--alembic-accent-deep) 35%, transparent);
 }
 
 .landing-head {
@@ -137,14 +137,14 @@
 }
 
 .gateway:hover .go {
-    background: rgba(192, 132, 252, 0.16);
+    background: color-mix(in srgb, var(--alembic-accent) 16%, transparent);
     border-color: var(--alembic-accent);
 }
 
 .gateway.primary-gateway {
     border-color: var(--alembic-border-lit);
     background:
-        radial-gradient(ellipse 22rem 12rem at 50% 0%, rgba(192, 132, 252, 0.24), transparent 72%),
+        radial-gradient(ellipse 22rem 12rem at 50% 0%, color-mix(in srgb, var(--alembic-accent) 24%, transparent), transparent 72%),
         linear-gradient(160deg, var(--alembic-panel-lit), var(--alembic-panel));
 }
 
@@ -152,11 +152,11 @@
     background: linear-gradient(135deg, var(--alembic-accent), var(--alembic-accent-deep));
     border-color: transparent;
     color: #14082b;
-    box-shadow: 0 0 1.2rem rgba(139, 92, 246, 0.35);
+    box-shadow: 0 0 1.2rem color-mix(in srgb, var(--alembic-accent-deep) 35%, transparent);
 }
 
 .gateway.primary-gateway:hover .go {
-    box-shadow: 0 0 1.8rem rgba(192, 132, 252, 0.6);
+    box-shadow: 0 0 1.8rem color-mix(in srgb, var(--alembic-accent) 60%, transparent);
 }
 
 /* Three doorways instead of two, for the page you land on after bringing a file: same shape as

@@ -69,8 +69,8 @@
 
 .journey .domain .under-way {
     border-color: var(--alembic-accent);
-    background: rgba(192, 132, 252, 0.16);
-    box-shadow: 0 0 1.4rem rgba(192, 132, 252, 0.25);
+    background: color-mix(in srgb, var(--alembic-accent) 16%, transparent);
+    box-shadow: 0 0 1.4rem color-mix(in srgb, var(--alembic-accent) 25%, transparent);
 }
 
 /* The rail: every step the interview goes through, the two that happen once on the line itself and
@@ -124,7 +124,7 @@
     padding: 1rem 0.9rem 0.5rem;
     border: 1px solid var(--alembic-border);
     border-radius: 0.7rem;
-    background: rgba(23, 17, 48, 0.35);
+    background: color-mix(in srgb, var(--alembic-bg) 35%, transparent);
 }
 
 /* The sheets behind it, and there is one only while there is another entry to come. Two offset
@@ -280,7 +280,7 @@
 
 .station.here .mark {
     background: linear-gradient(140deg, var(--alembic-accent), var(--alembic-accent-deep));
-    box-shadow: 0 0 0 0.32rem rgba(192, 132, 252, 0.18), 0 0 1.4rem rgba(192, 132, 252, 0.7);
+    box-shadow: 0 0 0 0.32rem color-mix(in srgb, var(--alembic-accent) 18%, transparent), 0 0 1.4rem color-mix(in srgb, var(--alembic-accent) 70%, transparent);
 }
 
 /* Narrow: the lap keeps its shape, since the shape is the whole of what it says, and the words are
@@ -418,7 +418,7 @@ textarea.example {
 textarea:focus {
     outline: none;
     border-color: var(--alembic-border-lit);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--alembic-accent-deep) 15%, transparent);
 }
 
 /* The way back sits in the same row as the answer and is styled in controls.css as a secondary
@@ -497,8 +497,8 @@ button.keep {
     padding: 0.4rem 1.1rem;
     border-radius: 1.4rem;
     border: 1px solid var(--alembic-accent);
-    background: rgba(192, 132, 252, 0.16);
-    box-shadow: 0 0 1.4rem rgba(192, 132, 252, 0.25);
+    background: color-mix(in srgb, var(--alembic-accent) 16%, transparent);
+    box-shadow: 0 0 1.4rem color-mix(in srgb, var(--alembic-accent) 25%, transparent);
     color: var(--alembic-text);
 }
 
@@ -543,7 +543,7 @@ button.keep {
     gap: 0 1rem;
     align-items: baseline;
     padding: 0.6rem 1rem;
-    border-top: 1px solid rgba(53, 41, 107, 0.55);
+    border-top: 1px solid color-mix(in srgb, var(--alembic-border) 55%, transparent);
     transition: background 0.4s;
 }
 
@@ -590,7 +590,7 @@ button.keep {
 /* Just written. A row the last exchange moved is lit, so a client who opens the panel finds what has
    changed rather than reading all of it to see. */
 .rows-open .drop.moved {
-    background: rgba(192, 132, 252, 0.1);
+    background: color-mix(in srgb, var(--alembic-accent) 10%, transparent);
 }
 
 .rows-open .drop.moved .what {
