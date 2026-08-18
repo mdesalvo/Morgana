@@ -2,22 +2,19 @@
 
 ## What is Alembic
 
-Alembic is a **Blazor Server** web application that gives a client the *initial morganization* turnkey:
-an AI-conducted functional interview that distils a domain expert's answers into a complete Morgana
-domain — intents, agent prose, tool contracts, C# assets and non-regression scenarios.
+Alembic is a **Blazor Server** web application that gives a client the *initial morganization*
+turnkey: an AI-conducted functional interview that distils a domain expert's answers into a complete
+Morgana domain — intents, agent prose, tool contracts, C# assets and non-regression scenarios.
 
 The name is the point. Every other unit in the repo names an instrument (Cauldron the vessel,
 Grimoire the book, Rune the mark, PromptHarness the rig); an *alembic* is the apparatus that
 distils, which is what this does to a rambling interview.
 
 Alembic lives at `Alembic/` in the repo root, alongside `Morgana/`, `Channels/`, `Examples/` and
-`PromptHarness/`. `Alembic/` is itself a container for two projects, each with its own solution,
-the same way the repo-root `PromptHarness/` carries `PromptHarness.slnx` beside `Morgana.slnx`
-rather than joining it: `Distiller/`, the workbench described throughout this document, with
-`Distiller.slnx`; and `PromptHarness/`, its own non-regression harness, with its own
-`PromptHarness.slnx` — nested here for tidiness but deliberately not a client of Distiller's own
-code, the same positioning the repo-root `PromptHarness/` has relative to `Morgana/`, which is why
-it carries the same name.
+`PromptHarness/`, and is itself a container for two projects, each with its own solution:
+`Distiller/`, the workbench described throughout this document (`Distiller.slnx`), and `PromptHarness/`,
+its own non-regression harness (`PromptHarness.slnx`) — nested here for tidiness but deliberately not
+a client of Distiller's own code.
 
 ## What Alembic is not
 
@@ -25,117 +22,85 @@ it carries the same name.
   joins no conversation pipeline. It is the only unit in the repo that is not a client of a running
   Morgana. Its sole external dependency is an LLM.
 - **Not a filesystem tool.** At runtime Alembic lives wherever the client deployed it — a cloud, an
-  on-prem box next to Morgana, a laptop — exactly like Cauldron, and its position in this repo says
-  nothing about that. So it makes **no assumption of seeing the client's filesystem**: configuration
-  arrives as an **upload** and leaves as a **download**.
+  on-prem box next to Morgana, a laptop — exactly like Cauldron. So it makes **no assumption of
+  seeing the client's filesystem**: configuration arrives as an **upload** and leaves as a
+  **download**.
 
-That second point is load-bearing and settles a question that would otherwise recur: Alembic cannot
-know which C# already exists on the client's side, so it never tries to guess, patch or merge it. See
-*Regeneration contract* below for what replaces that.
+That second point is load-bearing: Alembic cannot know which C# already exists on the client's side,
+so it never tries to guess, patch or merge it. See *Regeneration contract* below for what replaces
+that.
 
 ## Design decisions
 
 ### Performance tier, non-negotiable
 
-Alembic runs on `Records.LLMTier.Performance`, and not out of caution. Its whole job is writing
+Alembic runs on `Records.LLMTier.Performance`, not out of caution. Its whole job is writing
 **dispositive prose that does not contradict itself** — the exact task where the `Efficiency` die
 amplifies contradiction-following failures. A wizard that emits a subtly self-contradictory prompt is
-worse than no wizard, because the client has no instrument to notice. Alembic runs once, at
-onboarding, not per conversational turn: this is the wrong place to save.
+worse than no wizard, because the client has no instrument to notice, and Alembic runs once at
+onboarding, not per conversational turn: the wrong place to save.
 
-Alembic is not a `MorganaAgent`, so it carries no `[RequiresLLMTier]`; it consumes
-`ILLMService.GetChatClient(Performance)` directly. Consequence, deliberate and inherited from the
-framework's own no-cross-tier-fallback rule: **Alembic does not serve a single-tier deployment**
-(Ollama being the canonical case) until a `Performance` entry is configured.
+It is not a `MorganaAgent`, so it carries no `[RequiresLLMTier]`; it consumes
+`ILLMService.GetChatClient(Performance)` directly. Consequence, inherited from the framework's own
+no-cross-tier-fallback rule: **Alembic does not serve a single-tier deployment** (Ollama being the
+canonical case) until a `Performance` entry is configured.
 
 ### Alembic is of Morgana, and so is everything it writes
 
-Alembic is an agent of Morgana that produces agents of Morgana. It is therefore composed the way one
-is — layered, fenced, subordinate to her — from an `alembic.json` of **identical shape** to an
-agent's (Target / Instructions / Personality / Formatting), embedded the way `morgana.json` is
-embedded in Morgana.AI. Dogfooding: whoever tunes Alembic does the job Alembic teaches.
+Alembic is an agent of Morgana that produces agents of Morgana, so it is composed the way one is —
+layered, fenced, subordinate to her — from an `alembic.json` of **identical shape** to an agent's
+(Target / Instructions / Personality / Formatting), embedded the way `morgana.json` is embedded in
+Morgana.AI. Dogfooding: whoever tunes Alembic does the job Alembic teaches.
 
 Two layers, in `AlembicPromptService.ComposeAsync`:
 
 1. **Morgana in her own words**, resolved live from `morgana.json` rather than copied: her
-   `Personality`, because her identity is Alembic's identity; her `Target`, because it is the only
-   place that says what an agent *of* Morgana is — one agent of a multi-agent assistant whose
-   prompt comes in two layers, hers on top and the domain's below — and that lower layer is
-   precisely what Alembic writes; and her `GlobalPolicies` **by name only**, as the list of
-   subjects already settled above every agent.
-2. **Alembic's own prose**, assembled from two rows of `alembic.json`: what every pass says
-   identically, and what this pass adds.
+   `Personality`, because her identity is Alembic's identity; her `Target`, the only place that says
+   what an agent *of* Morgana is; and her `GlobalPolicies` **by name only**, as the subjects already
+   settled above every agent.
+2. **Alembic's own prose**, from two rows of `alembic.json`: what every pass says identically, and
+   what this pass adds.
 
-Two, not three. An earlier design put a shared `Doctrine` between them, on the model of Morgana's
-own framework layer — but hers is *glue*, binding the global policies to the multi-turn and context
-machinery, and there is nothing here for such a layer to bind. **The structure is what carries the
-semantics**: the four sections say what they always say.
+Two, not three: an earlier shared `Doctrine` layer, on the model of Morgana's own framework glue, had
+nothing to bind — hers binds global policies to turn/context machinery Alembic does not have. **The
+structure carries the semantics**: the four sections say what they always say.
 
-**The second layer is stored twice-over deduplicated, and read as one.** The six passes differ only
-in which tools they hold, so four copies of the conducting rules, the voice and the output format
-were four places to edit one rule and three chances to leave one behind — 22 000 characters of which
-half was duplication, and one of the copies had already drifted into contradicting the voice it was
-supposed to share. The identical half now lives once, in the `Interview` prompt; a pass carries only
-what is its own — what it settles, what it must leave alone, how it goes about that. `ComposeAsync`
-merges them **section by section under one set of labels**, the shared half carrying the label and
-the pass's half following it inside the same section, so what the model reads is still the four
-sections an agent prompt always is and there is no seam in it. `Personality` and `Formatting` are
-shared outright: the interviewer is one person however many passes they conduct.
+**The second layer is stored deduplicated, read as one.** The six passes differ only in which tools
+they hold, so four near-identical copies of the conducting rules, voice and output format were four
+places to edit one rule — 22 000 characters, half duplication, one copy already drifted from the
+voice it shared. The identical half now lives once, in the `Interview` prompt; a pass carries only
+what is its own, and `ComposeAsync` merges them **section by section under one set of labels** so the
+model still reads the same four sections with no seam. `Personality` and `Formatting` are shared
+outright: the interviewer is one person however many passes they conduct.
 
-**And a third row says which of two jobs the step is doing: `Composing` or `Correcting`.** Writing a
-section that does not exist and correcting one that does are different work, and a pass is handed
-only the half that is true of it. The alternatives were both worse and both were tried. Written as
-clauses inside the prose — *composing, ask this; correcting, ask that* — the two jobs sat in every
-pass and the model read both every time, which is how it twice opened an agent that was fully written
-as though it were blank: it had a concrete procedure telling it to start over and an abstract rule
-telling it not to, and the concrete one won. Written as two files, `alembic.new.json` and
-`alembic.modify.json`, they would have been nine tenths identical — the identity, the conducting
-rules, the voice, every tool declaration — which is precisely the duplication this prompt was already
-once rebuilt to remove, and one copy had drifted from the other the last time it existed. A row costs
-neither: what differs is stored once, and what does not is not stored twice.
+**A third row says which of two jobs the step is doing: `Composing` or `Correcting`.** Writing a
+section that doesn't exist and correcting one that does are different work. Written as clauses inside
+shared prose, both jobs sat in every pass and the model read both every time — which is how it twice
+opened a fully written agent as though blank, a concrete "start over" procedure beating an abstract
+"don't." Written as two whole files they would have reopened the same duplication above; a row costs
+neither. The `Correcting` row's load-bearing sentence — *where your own step's instructions describe
+building this section from nothing, they describe the other job; read them for what the section IS,
+never as a running order to start over with* — lets each pass keep its own procedure written plainly,
+with no conditional in it.
 
-The `Correcting` row carries the sentence that makes it work: **where the instructions for your own
-step describe building this section from nothing, they are describing the other job — read them for
-what the section IS, never as a running order to start over with.** That is what lets each pass keep
-its own procedure written plainly, in one voice, without a conditional in it.
+**Her `Target` was missing for a long time, and that was a real hole**: only her `Personality` went
+in, so the interview rested on the model already knowing what "a Morgana domain" means. Alembic
+explaining Morgana in its own words would drift the day the framework is tuned, so her `Target` is
+injected instead, and `alembic.json` states only what `morgana.json` does **not** — that a classifier
+routes on intent descriptions, that a tool is the only reach outside the conversation, what
+`context`/`request`/shared mean, and that `other` catches what nothing else does. Her policies go in
+**as names, not bodies**: Alembic needs only *which* subjects are already covered above an agent, not
+how.
 
-Verified across all six passes: composing and correcting differ by that block and by nothing else,
-character for character.
-
-The whole of Alembic's prose is now ~10 000 characters where it was ~22 500, and nothing was cut
-that instructs — what went was restatement, rules already enforced by a tool's own answer, and
-prohibitions the vocabulary rule already covers. The prose an interviewer reads obeys the law it
-teaches: clear, direct, and short enough that every sentence is read.
-
-**Her `Target` was missing for a long time, and that was a real hole.** Only her `Personality` went
-in, so the whole interview rested on the model already knowing what "a Morgana domain" means, and
-the prose kept talking to it about classifiers, context scope and startup failures on that
-assumption. The two ways out are not equal: Alembic explaining Morgana in Alembic's own words is a
-copy of the framework's self-description, and it drifts the day the framework is tuned — the exact
-failure that resolving her `Personality` live already avoids. So her `Target` is injected, and what
-stays in `alembic.json` is only what `morgana.json` does **not** say: that a classifier routes on
-intent descriptions, that a tool is the only reach outside the conversation, what `context`,
-`request` and shared mean, and that `other` catches what nothing else does.
-
-The policies go in **as names, not bodies**. What Alembic needs is *which* subjects are already
-covered above an agent, so it writes none of them again; how they are covered is the running agent's
-business and runs to some 14 000 characters of turn mechanics. Naming them from `morgana.json` also
-retired a hand-written list inside `alembic.json` that went stale the moment a policy was added.
-
-What is deliberately left out of layer 1: the policies' bodies and her `Formatting`.
-Those govern how a **channel turn** is formed — quick replies, rich cards, turn continuation, the
-system tools every agent shares, markdown for a rendered surface — and Alembic has no channel, no
-Guard, no Classifier and no turn in that sense. Handing it rules about things that
-do not exist in its world is the most direct way to manufacture the non-local contradictions this
-project exists to avoid. **What carries over is who she is; what does not is the mechanics of a
-conversation Alembic is not having.** For the same reason the variant "Alembic is a routed Morgana
-agent with its own intent" was rejected: it would drag in the whole Akka pipeline for an interview
-that has nothing in common with it.
+What stays out: the policies' bodies and her `Formatting`, which govern a **channel turn** (quick
+replies, rich cards, markdown for a rendered surface) Alembic doesn't have — handing it rules about
+things that don't exist in its world is the most direct way to manufacture the non-local
+contradictions this project exists to avoid.
 
 ### The four sections, and staying inside the universe
 
-The doctrine gives each section one question to answer, because a sentence in the wrong section is
-worse than a sentence missing — the agent reads each for a different purpose:
+Each section answers one question, because a sentence in the wrong section is worse than a sentence
+missing — the agent reads each for a different purpose:
 
 | Section | Answers | Size |
 |---|---|---|
@@ -144,18 +109,16 @@ worse than a sentence missing — the agent reads each for a different purpose:
 | `Personality` | the empathy, language, tone and humanity it meets the user with — voice only | 2–3 sentences |
 | `Formatting` | how this agent presents its **own** information: which shape suits which tool's output | brief, concrete |
 
-`Instructions` and `Formatting` both speak about the toolkit, which is exactly why they wait for the
-toolkit pass.
+`Instructions` and `Formatting` both speak about the toolkit, which is why they wait for the toolkit
+pass.
 
-And the universe is self-consistent by rule, not by luck. An authored agent is **one agent of
-Morgana**, never a separate creature: it is never "a virtual assistant", never "a helpful bot",
-never neutral corporate staff. `Personality` **names which facet she is here** — "a formal and
-exacting witch", "a brisk and steady witch" — which specialises her voice and is new information,
-where a bare list of adjectives would leave the agent sounding like anyone. Where the domain admits
-it she gets something of her own to speak from (a ledger, a scroll, a seed-bed); where it does not —
-someone whose pet is ill does not want whimsy — she gets none, and the brevity is the character. The
-colouring always stays in **how she speaks, never in what she claims to do**: a ledger may be gazed
-into, an invoice may not be conjured.
+The universe stays self-consistent by rule, not by luck. An authored agent is **one agent of
+Morgana**, never a separate creature — never "a virtual assistant" or neutral corporate staff.
+`Personality` **names which facet she is here** ("a formal and exacting witch"), specialising her
+voice where a bare adjective list would leave the agent sounding like anyone; where the domain admits
+it she gets something of her own to speak from (a ledger, a scroll), and where it doesn't — an ill
+pet wants no whimsy — she gets none. The colouring always stays in **how she speaks, never in what
+she claims to do**: a ledger may be gazed into, an invoice may not be conjured.
 
 ### Regeneration contract
 
@@ -166,29 +129,28 @@ Generated C# is split across two files per class:
 | `X.g.cs` | Alembic | attributes, constructor, `partial` signatures — **always overwrite** |
 | `X.cs` | the client | the working mock body, then the client's real integration — **written once, never touched again** |
 
-The split does double duty: it is the non-destructive-regeneration mechanism, *and* it is the line
-between what is templated (deterministic, so a re-run produces no spurious diff) and what is authored
-by the LLM (a plausible domain mock, which a template writes badly).
+The split does double duty: it is the non-destructive-regeneration mechanism, *and* the line between
+what is templated (deterministic, so a re-run produces no spurious diff) and what is authored by the
+LLM (a plausible domain mock, which a template writes badly).
 
-The agent class has no client half: a `MorganaAgent` subclass is attributes plus one constructor
+The agent class has no client half — a `MorganaAgent` subclass is attributes plus one constructor
 handing its type to `MorganaAgentAdapter`, and every domain decision it expresses is configuration
-Alembic already holds. A tool class does, and the seam is `partial` **methods**: the `.g.cs` declares
+Alembic already holds. A tool class does, and the seam is `partial` **methods**: `.g.cs` declares
 `public partial Task<string> GetInvoices(string userId, string count);` from the same
-`ToolDefinition` that goes into `agents.json`, and the `.cs` implements it. That buys two things for
-free — the pair `MorganaToolAdapter.AddTool` validates at startup is generated correct by
-construction, and a tool added to the configuration and forgotten in the code **does not compile**.
+`ToolDefinition` that goes into `agents.json`, and `.cs` implements it. That buys two things free —
+the pair `MorganaToolAdapter.AddTool` validates at startup is generated correct by construction, and
+a tool added to the configuration and forgotten in the code **does not compile**.
 
-Every emitted parameter is a `string`, and that is a statement about the configuration rather than a
-shortcut: `Records.ToolParameter` carries a name, a description, required, scope and shared, and no
-type. The JSON schema the model reads is generated from the *delegate*, so the type lives in the C#
-and only there. Narrowing one is a one-word edit in both halves; guessing one from a parameter's name
+Every emitted parameter is a `string`, a statement about the configuration rather than a shortcut:
+`Records.ToolParameter` carries a name, a description, required, scope and shared, and no type. The
+JSON schema the model reads is generated from the *delegate*, so the type lives in the C# and only
+there — narrowing one is a one-word edit in both halves, where guessing one from a parameter's name
 would be a guess the client meets at runtime.
 
 Because Alembic never sees the client's tree, this convention travels **inside the downloaded
-archive** and holds even where Alembic is absent. It does not need enforcing either: a signature that
-drifts is already a startup failure, since `MorganaToolAdapter.AddTool` validates delegate against
-definition. Alembic's job is only to surface it earlier, via an unconditional **migration report** of
-what changed against the uploaded `agents.json`.
+archive** and holds even where Alembic is absent, and needs no enforcing either — a drifted signature
+is already a startup failure via `MorganaToolAdapter.AddTool`. Alembic's job is only to surface it
+earlier, via an unconditional **migration report** of what changed against the uploaded `agents.json`.
 
 ### The emit, and what a template must not write
 
@@ -199,60 +161,39 @@ working mock per toolkit, `MIGRATION.md`, `README.md` carrying the two-halves co
 interview's save file.
 
 `ISolutionEmitService` writes the project and solution, the same string-template discipline as
-`ICodeEmitService` applied one level up. Without it the archive was loose sources — a client had to
-create a class library, add the `Morgana.AI` reference and embed `agents.json` by hand before
-anything built, work Alembic already knows the answer to. The `.csproj` references `Morgana.AI` and
-`Morgana.Contracts` by `PackageReference`, both pinned to whichever build this Alembic is running
-against (read off its own assemblies, never restated by hand where it would drift); `Morgana.Contracts`
-is named explicitly rather than left to arrive transitively, because `QuickReply`, `RichCard` and the
-rest of the wire contracts are types a tool body or a Formatting-shaped reply may want to construct
-directly, and a client should see and navigate to them, not discover them only when the compiler
-resolves them. The one thing this cannot see or guarantee is a NuGet feed on the client's machine
-that resolves those packages — where there is none yet, the archive still travels intact to a machine
-that has one.
+`ICodeEmitService` applied one level up — without it the archive was loose sources. The `.csproj`
+references `Morgana.AI` and `Morgana.Contracts` by `PackageReference`, both pinned to whichever build
+this Alembic runs against, read off its own assemblies; `Morgana.Contracts` is named explicitly
+rather than left to arrive transitively, since `QuickReply`, `RichCard` and the rest are types a tool
+body may want to construct directly.
 
 The split between `ICodeEmitService` and `IToolMockService` is the same split the file names carry.
 The emit is **string templates and nothing else** — no Roslyn — so the same Draft emits the same
 bytes and a re-run diffs to exactly the change. The mocks are the one artifact a template writes
 badly: invented invoices, a diary with believable gaps, stock levels that vary. They are **mocks and
-not stubs**, and the reason is the turnkey promise — the client drops the archive into a plugin,
-starts Morgana, and must be able to *talk to their agent on the first run*, which is the only way to
-hear whether the prose the interview wrote is right. A `NotImplementedException` makes the prose
-unreviewable, and the prose is what the whole interview was for.
+not stubs**, because of the turnkey promise — the client drops the archive into a plugin, starts
+Morgana, and must be able to *talk to their agent on the first run*, the only way to hear whether the
+prose the interview wrote is right. A `NotImplementedException` makes the prose unreviewable.
 
-Two things the live run settled. First, **no output ceiling is declared in Alembic's code**: a source
-file's length is a property of the toolkit, not a number choosable in advance, so `ToolMockService`
-streams and resumes on `FinishReason.Length` until the model stops of its own accord — the only other
-exit being a continuation that adds nothing. Second, a reasoning model spends its budget on thinking
-**first**: at the tier's prose-calibrated 8192 the InventoryTool request came back with 8192 output
-tokens, all reasoning, and *zero characters of text*. Removing `MaxOutputTokens` entirely is worse,
-because Anthropic requires `max_tokens` and the SDK default is smaller. The number therefore lives
-where a number belongs — Alembic's own `appsettings.json`, generous, with the reason written beside
-it — and an empty answer throws rather than writing an empty file, because a source file that looks
-like success and is not is the worst thing to hand a client at the end of an interview.
+Two things the live run settled. **No output ceiling is declared in Alembic's code**: a source file's
+length is a property of the toolkit, so `ToolMockService` streams and resumes on `FinishReason.Length`
+until the model stops of its own accord. And a reasoning model spends its budget on thinking **first**
+— at the tier's prose-calibrated 8192 one request came back with 8192 output tokens, all reasoning,
+zero characters of text — so the ceiling lives generously in `appsettings.json` rather than being
+removed, and an empty answer throws rather than writing an empty file that looks like success.
 
 Verified end to end against the shipped `Examples` domain: import → emit → unzip into a class library
-referencing `Morgana.AI` → **`dotnet build`, 0 errors**, four agents and three toolkits with 856 lines
-of mock behind them. That verification predates `ISolutionEmitService` and still holds for the C# it
-covers.
-
-The generated `.csproj`/`.slnx` themselves were verified separately, against a real feed rather than
-against this working copy: `Examples`'s own sources and `agents.json`, dropped beside a `.csproj` of
-the exact shape `SolutionEmitService` emits but pinned to the newest `Morgana.AI` and
-`Morgana.Contracts` actually published to nuget.org — restored and built clean from nothing already
-on disk. `PackageVersion` pins whatever this very Alembic is itself built against, read off its own
-assemblies rather than restated anywhere by hand; the day that build is also the newest one published,
-the two verifications are the same verification. Until then the mechanism is proven and only that one
-version number has nothing to resolve against yet — never a fact worth a specific number in this
-file, since the gap between them is exactly the release lag and closes on its own.
+referencing `Morgana.AI` → `dotnet build`, 0 errors. The generated `.csproj`/`.slnx` were verified
+separately against a real NuGet feed, pinned to the newest published `Morgana.AI`/`Morgana.Contracts`
+— restored and built clean.
 
 ### The migration report
 
 Unconditional, greenfield included, because a report that only appears when something is wrong is a
 report nobody has learned to read on the day it matters. It diffs the Draft against
-`DomainDraft.Baseline` — the domain frozen at import, kept as a Draft rather than as the uploaded
-bytes so the comparison is like with like, and serialized with the save file so a second sitting does
-not lose it. `Provenance` alone could not serve: it says an element was revised, never what it was.
+`DomainDraft.Baseline` — the domain frozen at import, kept as a Draft rather than the uploaded bytes
+so the comparison is like with like, and serialized with the save file so a second sitting does not
+lose it. `Provenance` alone could not serve: it says an element was revised, never what it was.
 
 ### Two files, one gesture
 
@@ -262,474 +203,207 @@ express, half-answered elements, the baseline — and `DomainDraft.Sitting`, the
 stood.
 
 **The sitting is what makes closing the tab survivable.** Without it the file held only what had been
-accepted into the domain, so a client interrupted while an agent was half written lost that agent and
-the map they had dictated to reach it — which is exactly the moment somebody actually stops, since
-everything accepted is already behind them. What is saved is the configuration in hand and never the
-conversation: the map, which entry, which step of it, and what has been written so far. Resuming
-re-enters that step the way `BackAsync` does — a fresh agent and a fresh session reading what is there
-as settled fact — which needs no new machinery, because the memory of this interview has always been
-the configuration rather than the transcript.
+accepted into the domain, so a client interrupted mid-agent lost that agent and the map they had
+dictated to reach it. What is saved is the configuration in hand, never the conversation: the map,
+which entry, which step, what has been written so far. Resuming re-enters that step the way
+`BackAsync` does — a fresh agent and a fresh session reading what is there as settled fact — since the
+memory of this interview has always been the configuration rather than the transcript.
 
 **The work is written down without being asked.** `InterviewService.Keep` runs at the end of every
-`ExchangeAsync` — the one place every turn passes through, the turn that *opens* a pass included — so
-the Draft in the circuit is current from the first question rather than from the first answer. On top
-of that `DraftStateService` takes a snapshot every `Alembic:Work:AutosaveSeconds`, held nowhere but in
-the service's own field.
+`ExchangeAsync`, the turn that *opens* a pass included, so the Draft in the circuit is current from
+the first question. `DraftStateService` also takes a snapshot every `Alembic:Work:AutosaveSeconds`,
+held nowhere but in the service's own field — a floor under one button, not a resumption mechanism:
+nothing is cached against a key or picked back up on the way in, since a workbench that silently
+resumed something the client had not asked to resume would be deciding for them what they came to
+do. `Save my work` serializes the live Draft on the press and falls back to the snapshot only when
+that throws, so the client gets bytes at worst `AutosaveSeconds` behind the screen — the only way
+back into work a dead circuit took with it.
 
-**The snapshot is a floor under one button, not a resumption mechanism.** Nothing here is cached
-against a key, and nothing is picked back up on the way in: a workbench that silently resumed
-something the client had not asked to resume would be deciding for them what they had come to do. The
-circuit is exactly as disposable as Blazor Server makes it — a suspended laptop, a proxy closing an
-idle socket, a deploy end it the same way, and what the client sees is the reload banner, and reloading
-means a new circuit that knows nothing. What the timer buys is narrower and sufficient: `Save my work`
-serializes the live Draft on the press and falls back to this snapshot only when that throws or catches
-a Draft mid-write, so the client still gets bytes, at worst `AutosaveSeconds` behind the screen. The
-only way back into work a dead circuit took with it is the file, brought to the landing page by hand.
+**The button hands the bytes over one JS call, and reads the file back.** An earlier `data:` URI
+holding the whole file in the anchor's href produced the worst bug this project has had: one computed
+before the Draft existed downloaded as an empty `{}`, one recomputed every turn sent the whole
+configuration on every answer. After the press a receipt now says what is *actually in the bytes*,
+parsed back out of the downloaded document rather than reported from the interview's own state,
+because the save that handed back an empty file did so while the interview on screen was perfectly
+healthy — only the file can say what is in the file. It stands on the row with the answer and the way
+back, at their size — page furniture was the wrong genus for the only thing standing between a client
+and losing an afternoon.
 
-**Save my work hands over this moment, or the last one it has.** The button serializes the Draft when
-it is pressed and falls back to the newest snapshot if that cannot be had, then passes the bytes to
-the browser through one JS call. It was a `data:` URI holding the whole file in the anchor's href,
-which is the shape that produced the worst bug this project has had: the href *is* the file, so one
-computed before the Draft existed was an empty save — hours of interview downloaded as `{}` — and one
-recomputed every turn sent the entire configuration across the wire on every answer. A save button
-that silently hands back nothing is found out by the one person who needed it.
-
-A save the client has to remember is a save they remember once the tab is gone. What the interview
-shows is therefore a **button**, of the same family as the two the client already knows.
-
-It stands **on the row with the answer and the way back**, at their size, which reverses where it
-used to be. On the mark's band it was page furniture — which is what it looked like and what it was
-treated as, and page furniture is the wrong genus for the only thing standing between a client and
-losing an afternoon. Nothing here is persisted and nothing is resumed, so that file is the whole of
-what survives the tab: it belongs among the things the client actually does, where the hands already
-are. Back on the left, then keep and answer together on the right, because going back is about what
-is behind them and the other two are about what is in front.
-
-**And it reads the file back.** After the press a receipt says what is in the bytes that just landed
-in the client's downloads — kinds of request mapped, agents finished, which one is in hand and at
-which step, how big the file is — parsed out of the downloaded document rather than reported from the
-interview's own state. That distinction is the whole of it: the save that handed back an empty file
-did so while the interview on screen was perfectly healthy, so any reassurance drawn from the
-interview would have confirmed the lie. Only the file can say what is in the file.
-
-It appears only once there is an interview: before that nobody has said anything, and a button
-offering to keep the work is a button hanging in an empty room. On the other side, a file that carries a sitting changes what
-the import page says: the door reads *carry on where you left off*, and the page names the entry they
-were in the middle of, since "begin" in front of somebody holding their own unfinished work reads as
-losing it. Both it and an `agents.json` arrive through the
-**same upload control**, because to the client they are one gesture — *here is where I am* — and
-which one it is is decided **by reading the file, never by its name**: a serialized Draft carries
-`CreatedAt` at the root and a configuration never does. A renamed file still lands where it belongs.
+A save file that carries a sitting changes what the import page says — *carry on where you left off*,
+naming the entry mid-way through — and both a save file and a configuration arrive through the
+**same upload control**, told apart **by reading the file, never by its name**: a serialized Draft
+carries `CreatedAt` at the root and a configuration never does.
 
 Verified end to end without a model: a save file and a configuration are told apart correctly, a
-resumed Draft keeps its provenance, its tiers and its baseline (whose own baseline stays `null` —
-one level, never a chain), the migration report still diffs against that baseline on the second day,
-and the `agents.json` re-exported after the detour is **byte-identical** to the one before it. The
-save file is roughly twice the configuration's size, which is the baseline, and is the price of a
-report that does not start lying when the client comes back tomorrow.
-
-Entries are ordered by what they cost to act on, and the load-bearing section is signatures. A tool
-whose parameter list changed still compiles on the generated side and fails at Morgana's startup in
-`MorganaToolAdapter.AddTool`, and the client-owned half is exactly where that fix is made by hand.
-Nothing is applied for the client, and nothing pretends to be: Alembic cannot see their tree, so what
-it can do is name every change precisely enough to apply in a minute.
+resumed Draft keeps its provenance, tiers and baseline (whose own baseline stays `null`, one level,
+never a chain), and the `agents.json` re-exported after the detour is byte-identical to the one
+before it.
 
 ### The recap is the real prompt
 
 The interview recap is **the composed prompt the model will actually read**, not a summary of the
-client's answers — a summary would be Alembic grading its own homework. This is possible because
+client's answers — a summary would be Alembic grading its own homework. Possible because
 `IPromptComposerService.ComposeAgentInstructionsAsync` takes the domain prompt as a parameter: the
-`Records.Prompt` is built in memory from the Draft and needs to exist nowhere on disk.
-
-It is shown as **two separate blocks, never concatenated**, because each is read by the model at a
-different moment of the turn:
-
-1. the composed two-layer system prompt — read once, before anything else;
-2. each tool description as the model weighs it, with `ToolDescriptionContextGuidance` already
-   spliced in where the tool declares context-scoped parameters, plus the parameter descriptions
-   exactly as authored (the framework splices no template at that rung, and an undescribed
-   parameter is emitted bare).
+`Records.Prompt` is built in memory from the Draft and needs to exist nowhere on disk. Shown as **two
+separate blocks, never concatenated**, since each is read by the model at a different moment of the
+turn: the composed two-layer system prompt, read once before anything else; and each tool
+description as the model weighs it, with `ToolDescriptionContextGuidance` already spliced in where
+relevant.
 
 **What the recap is true of.** The framework layer comes from the `morgana.json` embedded in the
-Morgana.AI this Alembic was built against, and the framework offers no override for it anywhere —
-it is an embedded resource, so "customising the policies" means forking Morgana.AI. The recap is
-therefore true for that version of Morgana and says nothing about a different one. Alembic
-deliberately does **not** accept an uploaded `morgana.json`: that would model a capability the
-framework does not have.
+Morgana.AI this Alembic was built against — an embedded resource with no override, so "customising
+the policies" means forking Morgana.AI. Alembic deliberately does **not** accept an uploaded
+`morgana.json`, since that would model a capability the framework does not have.
 
 ### Alembic is an agent, and its tools are declared the way an agent's are
 
-Alembic is assembled with the framework's own machinery, not an imitation of it:
-`MorganaToolAdapter` binds each tool's declaration in `alembic.json` to its delegate — validating
-parameter count, names and required/optional, so a declaration that drifts from its method fails at
-assembly rather than reaching the model as a schema nothing can satisfy — and
-`IChatClient.AsAIAgent` makes the agent.
+Alembic is assembled with the framework's own machinery, not an imitation of it: `MorganaToolAdapter`
+binds each tool's declaration in `alembic.json` to its delegate, validating parameter count, names
+and required/optional so a drifted declaration fails at assembly rather than reaching the model as a
+schema nothing can satisfy, and `IChatClient.AsAIAgent` makes the agent. Not `MorganaAgent` via
+`MorganaAgentAdapter`, which belongs to the routed world of `agents.json`, `[HandlesIntent]`, base
+tools and per-conversation persistence Alembic has none of. **The reuse stops exactly where the
+resemblance does.**
 
-Not `MorganaAgent` via `MorganaAgentAdapter`: that belongs to the routed world of `agents.json`,
-`[HandlesIntent]`, base tools and per-conversation persistence, and Alembic has none of it. **The
-reuse stops exactly where the resemblance does.**
+Tools rather than a structured reply: Alembic simply **talks** to the client and carries the
+configuration out of band, so a malformed answer stops costing the client a turn of their own
+interview. **A tool answers back** — every method in `InterviewTools` returns a sentence *to the
+model*, so a `Target` arriving as one sentence where the shape wants two to four is told so and
+corrects itself in the same turn. **What a pass may write is which tools exist**: the functional pass
+has no `SetAgentInstructions`/`SetAgentFormatting`, so the constraint is the absence of a tool rather
+than a sentence asking for restraint, and `SetPassCompleted` is believed only as far as the state
+machine can confirm it.
 
-Tools rather than a structured reply, and the difference is not stylistic:
-
-- Alembic simply **talks** to the client and carries the configuration out of band, so the reply
-  text and the proposal stop being welded into one object.
-- A malformed answer stops costing the client a turn of their own interview — that failure branch
-  no longer exists.
-- **A tool answers back.** Every method in `InterviewTools` returns a sentence *to the model*: a
-  `Target` that arrives at one sentence where the shape is two to four is told so and corrects
-  itself in the same turn. Recorded either way — the size is a shape, not a gate.
-- **What a pass may write is which tools exist.** The functional pass has no `SetAgentInstructions`
-  and no `SetAgentFormatting`, so it cannot write them. The constraint stopped being a sentence
-  asking for restraint.
-- `SetPassCompleted` is believed only as far as the state machine can confirm it, and the
-  declaration lives in the call rather than in a token inside the prose — the same out-of-band rule
-  Morgana applies to `SetTurnContinuation`, for the same reason.
-
-Three of the tools are the ones that stop Alembic writing blind: `GetExistingIntents` (the
-descriptions the classifier will weigh this one against — an overlap you never looked at is a
-collision no prose fixes afterwards), `GetFindings` (the deterministic pass, run against a probe
-domain so the relational rules are visible, filtered to this pass's business), and
-`GetComposedPrompt` (the whole of what the authored agent's model will read). **Alembic is the last
-reader of an agent before it exists**, and these are what let it read. `GetToolkit` joins them from
-the toolkit pass on, for the same reason at the tool layer: a description that never says *when* to
-call the tool is only visible when the toolkit is read back whole.
+Three tools stop Alembic writing blind: `GetExistingIntents` (what the classifier will weigh this one
+against), `GetFindings` (deterministic checks against a probe domain, filtered to this pass), and
+`GetComposedPrompt` (the whole of what the authored agent's model will read) — **Alembic is the last
+reader of an agent before it exists**. `GetToolkit` joins them from the toolkit pass on, for the same
+reason: a description that never says *when* to call a tool is only visible when the toolkit is read
+back whole.
 
 ### Choices: a channel's contract, an interviewer's doctrine
 
-Alembic has no `IChannelService` and needs none — it *is* its own UI. `SetChoice` attaches a button
-to a question, carried by `Morgana.Contracts.QuickReply`, so the shape the client sees in Alembic is
-literally the shape their own agents will emit. The component is **not** borrowed from Cauldron:
-same contract, own rendering, exactly as Rune and Grimoire relate to it.
+Alembic has no `IChannelService` and needs none — it *is* its own UI. `SetChoice` attaches a button to
+a question, carried by `Morgana.Contracts.QuickReply`, so the shape the client sees is literally the
+shape their own agents will emit. The doctrine is nearly the inverse of Morgana's: her quick replies
+let a user pick the next action and gate the text box while live; Alembic's only ever ask a **closed**
+question —
 
-The doctrine is nearly the inverse of Morgana's, and that is why copying the component would have
-been wrong. Her quick replies let a user pick the next action, and the channel gates the text box
-while they are live. Alembic's only ever ask a **closed** question:
+- **Never on a question about the client's domain**, since a menu would replace their own words with
+  Alembic's.
+- Only where the answer set is closed and known to Alembic, which in practice is **the answer that
+  adds nothing**: agreement with an inference just stated back, "nothing to add," or, where an
+  ordinary question's own wording names a minimal branch ("just X, or Y too"), the button for X in
+  the question's own words. Never the framework's raw vocabulary: "is this parameter context-scoped?"
+  is closed but unanswerable, which is why scope is inferred rather than offered.
+- **The text box never closes** — a choice is an offer, never a gate, and a spent row is shown inert
+  rather than removed.
 
-- **Never on a question about the client's domain.** Their words are the material being distilled,
-  and a menu replaces them with Alembic's — an expert clicking a button you wrote is an expert who
-  has stopped telling you how they work.
-- Only where the answer set is closed and known to Alembic rather than to the client — in practice
-  that is **the answer that adds nothing**: agreement with an inference Alembic has just stated
-  back, or that there is nothing to add where it asked whether anything was missing, or whether
-  there is something the agent should never do, or, on an ordinary domain question whose own wording
-  already names a minimal branch — "just X, or Y too" — the button for X, in the question's own
-  words, since choosing it is the same answer wearing a fourth face: nothing more than what was
-  named. Not the framework's vocabulary asked raw: "is this parameter context-scoped?" is a closed
-  question the client cannot answer, which is why scope is inferred rather than offered.
-- **The text box never closes.** A choice is an offer, never a gate, so the escape is structural
-  rather than an extra button. A spent row is shown inert rather than removed: the transcript
-  should still say what was offered.
+The functional pass rarely uses them, correctly so — nearly every question it asks is a domain
+question. Where they appear they are **required**, and the label answers the question exactly as put:
+*That's everything*, *Nothing missing*, *No, nothing like that* — never a label answering a different
+question than the one just asked.
 
-The functional pass rarely uses them, and correctly so — nearly every question it asks is a domain
-question. Observed across a full three-pass run: **two turns out of eighteen**, both of them
-confirmations, which is the right frequency rather than a shortfall.
+**There is exactly one button, and what it carries is the answer that adds nothing.** Agreement,
+*nothing missing* and a named minimal branch are the same answer wearing different faces — the client
+has nothing to contribute this turn, so the button is a **short circuit** that settles it with a press
+instead of a round trip nobody learns anything from. A second button would carry the opposite, which
+is never an answer: *something's missing* still has to be typed. The count is enforced in the
+**signature**: `SetChoice(label, value)` takes two plain strings, so a second button isn't
+expressible — the same bound applies to confirmations per step: **one**, since nothing here is
+irreversible and every step can be walked back into.
 
-Where they do appear they are **required**, and the label has to answer the question as it was put:
-*That's everything* against a positive question, *Nothing missing* against one put the other way,
-*No, nothing like that* where the question was whether the agent should be kept off something. Where
-the question named one specific case and asked whether it moves — *should it also hand off a
-complaint like this one* — the label speaks to that case, *No, that stays here too*, never a list the
-question never named: a label answering a different question than the one just asked is a label the
-client cannot trust. A confirming turn is one Alembic asked for its own reasons, and making the
-client type a sentence to agree with work they can already see is charging them for it.
-
-**There is exactly one button, and what it carries is the answer that adds nothing.** That is the
-invariant, not "a confirming turn": agreement, *nothing missing*, *nothing to avoid*, and the named
-minimal branch of an ordinary question are the same answer wearing four faces — the client has
-nothing to contribute this turn — and it is worth
-a button precisely because it is the one answer Alembic already knows the whole of. Everything they
-actually contribute is a sentence only they can write. So the button is a **short circuit**: where
-Alembic has got it right, or where there is genuinely nothing on the other side of the question, the
-turn settles with a press instead of a typed sentence and the interview skips a round trip nobody
-learns anything from.
-
-A second button would carry the opposite, which is never an answer: *something's missing* is the
-announcement of an answer, and the answer itself still has to be typed. It spends a press to say
-what the next sentence will say, and turns a single gesture into a choice between two.
-
-The count is therefore in the **signature**, not in prose asking for restraint and not in a check
-that trims what arrived: `SetChoice(label, value)` takes two plain strings, so a second button is
-not expressible. A schema admitting a list would have the model compose the button that gets
-dropped, which costs the tokens whether or not it is ever drawn — and every pass's declaration would
-carry a sentence saying *one*, which is five places to edit one rule. The id is Alembic's, since
-nothing tells two buttons apart when there is only one. Which is the same argument
-as the one below about how many confirmations a step may spend — **one** — since a step that asks
-three times has stopped interviewing and started interrogating: nothing here is irreversible, every
-step can be walked back into, and the pass after this one reads what was written and can be told it
-is wrong.
-
-Rich cards have no equivalent here and are not missed: the persistent configuration panel beside the
-transcript is the better surface. A card is richness *per turn* that scrolls away with the
-conversation; the panel updates on every proposal and stays.
+Rich cards have no equivalent and are not missed: the persistent configuration panel beside the
+transcript updates on every proposal and stays, where a card is richness *per turn* that scrolls
+away.
 
 ### The interview: C# owns the state, the model owns the conducting
 
 The split is fixed. **What has been established, which pass is running and what may be written next
-are facts**, and facts are not left to a model's discretion — they live in `InterviewState` and in
-`InterviewService`'s merge and readiness gate. **Which question to ask next, and how to turn a
-domain expert's answer into dispositive prose, is the model's** — no template writes that well.
+are facts**, living in `InterviewState` and `InterviewService`'s merge/readiness gate. **Which
+question to ask next, and how to turn an answer into dispositive prose, is the model's** — no
+template writes that well.
 
-Two consequences that look like details and are not:
-
-- Readiness is checked, not believed. The model reports that it thinks a pass is settled; the state
-  machine confirms the fields are actually there before agreeing. **And the moment it agrees, the
-  next pass opens** — inside the same `AnswerAsync`, with no gesture from the client. Asking them to
-  press a button between two passes was asking them to acknowledge a boundary that is Alembic's
-  alone, and the only thing they can say about it is yes. `IInterviewService` therefore has no
-  `Advance`: the loop terminates because entering a pass clears the flag, and a pass that settles
-  the moment it opens (a toolkit the client already described in full) moves on instead of stranding
-  the interview one question short. It does have `BackAsync`, and the asymmetry is the whole point —
-  see *One question, one step* below.
-- The **section labels** (`[TARGET]`, `[PERSONALITY]`, `[INSTRUCTIONS]`, `[FORMATTING]`) are
-  guaranteed in code, not asked of the
-  model. Both composed layers use the same four labels — precisely why the framework fences them —
-  so a domain layer arriving unlabelled leaves half the composed prompt without the markers the
-  other half has. A label says *which section this is*, not what it means: it is structure, and a
-  structural invariant must not depend on a model remembering a formatting rule. The normalisation
-  is idempotent and applies only to prose the interview authored; an imported agent's prose is the
-  client's and is never rewritten.
+Readiness is **checked, not believed**: the model reports a pass settled, the state machine confirms
+the fields are actually there, and the moment it agrees the next pass opens inside the same
+`AnswerAsync`, no client gesture required — asking them to press a button between two passes would
+ask them to acknowledge a boundary that is Alembic's alone. `IInterviewService` has no `Advance` for
+this reason; it does have `BackAsync`, and the asymmetry is the point (see *One question, one step*).
+The **section labels** (`[TARGET]`, `[PERSONALITY]`, `[INSTRUCTIONS]`, `[FORMATTING]`) are guaranteed
+in code, never asked of the model — structure that must not depend on a model remembering a
+formatting rule — and the normalisation applies only to prose the interview authored; an imported
+agent's prose is never rewritten.
 
 The client never writes prose. They answer questions about their work; Alembic writes the
-configuration and says what it understood. That asymmetry is the whole arrangement, and it is what
-spares a domain expert from having to become a prompt author.
+configuration and says what it understood — the asymmetry that spares a domain expert from having to
+become a prompt author.
 
-**Every step says where it is before it asks anything**, in one fixed shape rather than a worked
-example the model would otherwise reuse verbatim: *Agent — Step: what this step adds to the agent's
-capabilities.* Filled from the agent's name off the map, the step being settled, and what it adds —
-the same shape whether it is the agent's first step or its fifth, since opening and continuing are
-not worth telling apart.
+**Every step says where it is before it asks anything**, in one fixed shape — *Agent — Step: what
+this step adds to the agent's capabilities* — filled from the agent's name off the map, the step
+being settled, and what it adds. What earns it is that **the process is Alembic's alone**: the client
+sees one question on an otherwise empty screen, so the shared layer teaches the model the *process*
+and the opening sentence is where that reaches the client, said in the **second person** and asking
+**what happens, never what a word means** — "what a typical customer means by 'good' here" asks the
+client to define an abstraction of Alembic's and reaches nobody.
 
-What earns it is that **the process is Alembic's alone**. The client sees one question on an
-otherwise empty screen: the five steps an agent is built in, and what each hands it, are not on that
-screen and are not inferable from it. So the shared layer teaches the model the *process* rather than
-Alembic — the map, then per entry `Target`, `Personality`, `Toolkit`, `Instructions`/`Formatting`,
-acceptance, each named with what it confers — and the opening sentence is where that reaches the
-client. An agent nobody named, at a stage nobody announced, gets an answer to a different question.
+**One section per question, never two**, and **said once, never explained twice**: the opening
+sentence names the section and what it gives the agent — never what the section *is* — and every
+question after it is about their work, in their words, never intent/tool/parameter/scope/context/
+domain/configuration, each of which costs a beat of translation and comes back as the client's guess
+at Alembic's vocabulary. This is also why the rail can be named `Target`, `Personality`, `Toolkit`,
+`Instructions`, `Formatting`: those labels are glanced at, not answered.
 
-Two rules keep that sentence from becoming a lecture, both in `alembic.json`: it is said in the
-**second person** about their own business, and a question asks **what happens, never what a word
-means**. The failure they exist against is real prose from a live run — *What a typical customer
-means by "good" here — resolved on the spot, or pointed to what handles it — shapes where this
-stops?* — which asks the client to define an abstraction of Alembic's, buries the point of the step
-in an aside, and reaches nobody.
+**The page is wide, because a wizard is not an article** — a rail of steps, a domain map and a box
+for a paragraph do not fit prose's reading measure, so each element sets its own. **One question is
+the whole screen**: it stands alone and large, and what the answers have become folds away at the
+foot behind the agent's name, opened by the same tag that already names it on the map, computed once
+by `AgentRows` so the tag's count can never disagree with the rows behind it. There is no transcript —
+the agent's own `AgentSession` already remembers the conversation, so a second copy on screen would be
+a log to keep in step with one that already exists.
 
-Where a section's name carries something the client could not have inferred, it is said with it:
-`Personality` is **differential**, what marks this agent out against Morgana's own, since every agent
-of hers already speaks with one — and nobody guesses that from the word.
+**The rail has the shape of the process, and that shape is a loop.** `Domain Mapping` and `Domain
+Finalization` happen once; the six steps between them — `Target` through `Agent Acceptance` — repeat
+per entry inside a bordered lap, stacked like sheets while entries remain. Acceptance sits **inside**
+the lap, since it closes one entry's turn and the next opens on the step after the map — a rail read
+left to right cannot jump its own light backwards. The rail is visible from the first question, steps
+not yet reached shown faint rather than absent.
 
-**One section per question, never two.** A step that settles two of them opens on the first and turns
-to the second only once the first is written. Joined, they were one question carrying two subjects,
-which is answered on one of them with nothing on the screen saying which — the same defect the
-one-sentence-one-question-mark rule exists to prevent, arriving through the door marked *efficiency*.
+**What is in the box is a worked example, on the first question of a step and no other** — a
+fifty-word answer somebody else might have given, showing register, length and detail at once. All
+but the very first are written by the model itself, through `SetExample`, once it has read the map
+and can write in the client's own trade; the map's own opening example stays fixed, since nothing is
+yet known about this client and a model there would be inventing a hypothetical domain, differently
+and unverifiably, on the one screen that sets the whole interview's register.
 
-**Said once, and never explained twice.** A name is stated; prose written to say what a section
-*means* drifts, one revision at a time, into something true of every section — *what the agent is
-able to do* — which says nothing and which nobody ever converges on. So the rule has two halves and
-both are enforced in `alembic.json`: the opening sentence names the section and says what it gives
-the agent — never what the section *is* — and
-**every question after it is about their work, in their words** — never intent, tool, parameter,
-scope, context, domain or configuration, because each of those costs a beat of translation and what
-comes back after that beat is the client's guess at Alembic's vocabulary instead of their own
-account of how they work.
-
-This is also why the rail can be named `Target`, `Personality`, `Toolkit`, `Instructions,
-Formatting`: those labels are read at a glance rather than answered, and the question that opens the
-step has already said what they are.
-
-**And nothing else on the screen says it a second time.** A line under the rail restating what the
-step was after was built and then removed, twice: while it was specific it was the opening question
-in a second wording — and the same fact twice on one screen does not read as a repetition, it reads
-as two facts to reconcile, which is the overload a wizard cannot afford at the moment it is asking
-for its hardest answer. Cut short enough to stop being that, what was left was true of any interview
-about any business, which is the register nothing here is allowed to reach. The question carries it,
-alone. Not knowing whether the thing you are about to say
-belongs here or three steps on is the commonest way to be lost in a wizard. If that line ever starts
-growing, it has turned into a glossary and is wrong.
-
-**And the workbench takes the room it needs.** The pages were built inside a column meant for prose,
-which is the wrong measure for what is actually on this screen: a rail of seven steps, the map of a
-domain, and a box somebody is asked to write a paragraph into. Squeezed, the rail wrapped onto four
-lines and the box became a slot. The page is wide now, and the reading measures are set per element,
-where a measure means something — the question, the answer box, the cloud of words — rather than once
-around everything.
-
-The type went up with it, once, at the root: everything here is sized in rem, so a single step keeps
-every proportion already chosen. A surface given more room and left at the same size does not read as
-roomy, it reads as a small interface in a large window. The answer box got a second step of its own —
-a paragraph about somebody's own work, typed two sizes under the question that asked for it, reads as
-a field for a reference number, and it is the material the whole interview exists to collect.
-
-**One question is the whole screen**, and that is the same argument made in layout: a page of
-requirements is answered the way anybody answers one, by getting shorter. So the question stands
-alone and large, and what the answers have become is folded away at the foot behind the name of the
-agent they are about. There is no transcript on the screen: remembering the conversation is the
-agent's job and it has a live `AgentSession` doing it, so a second copy would be a log to keep in
-step with one that already exists — bought with a panel telling the client what they have just
-finished saying. What is at the foot appears once the map is drawn — until then there is no agent
-for it to be about, and nine rows reading *not yet* would report nothing achieved at the moment the
-interview is deciding everything else.
-
-**The entry's own tag on the map is what opens them.** Laid open they were a second screen of small
-print competing with the one thing the client is meant to be doing, and none of it is read at the
-moment it appears — it is *looked up*, when they wonder what has been written down about this one so
-far. So it folds; the question is behind what. Two answers were wrong before this one, and both were
-wrong the same way: a panel at the foot of the page under its own copy of the agent's name, pinned to
-the window or not, is **two objects where there is one thing**, sitting in the least looked-at place
-on the screen. The eye does not go there, and nothing in a wizard should have to be looked for.
-
-The tag on the map is already the agent, already lit among its neighbours, and already the phrase the
-lap on the rail is headed with. So it *is* the trigger — a caret and a count added to the object that
-was there anyway — and the rows drop out of it, directly under it, where the client is already
-looking. `AgentRows` computes them once for both, so the count on the tag cannot disagree with the
-rows behind it.
-
-The panel is exactly as wide as the lap above it — five sevenths of the rail, which is what the flex
-ratio of one station to the run gives — so its width says whose rows these are before a word is read.
-Full width it was a slab related to nothing.
-
-Its labels are **nouns**, and for the four sections they are the rail's own: `Target`, `Personality`,
-`Toolkit`, `Instructions`, `Formatting`, over `name`, `description`, `button`, `the button's
-request`. What was there before — *it is theirs when*, *how it meets them*, *what it reaches for* —
-was a column of sentences with pronouns in them, which is read as prose instead of scanned as labels:
-the client had to work out what *them* was before they could find the line they wanted. Naming a row
-exactly as the step that settles it is named also closes the loop the other way, since what was just
-asked for is the row that just filled in.
-
-Two rules about what they show. **Nothing is clipped**: a panel opened on purpose to read what has
-been written, that then shows four fifths of a sentence and an ellipsis, has answered nothing — the
-client opened it for the part that got cut. And they are **rows of one table, not a scatter of
-cards**: nine boxes each as tall as its own contents is precisely the layout that defeats running an
-eye down a column to find one thing. The rows also drop the `[TARGET]` fence before showing prose:
-that marker is guaranteed in code for the model that reads the composed prompt, and a panel written
-for the client is the wrong place to meet it.
-
-Above it, **one block says where the work stands**, and it is one block because it is one fact: the
-rail, and under it the entries of the domain, what earlier sittings left and then today's, written,
-being written, still ahead. The map is not a caption above the journey; it is the journey's first
-step and its subject, which is why it is on the rail rather than beside it.
-
-**The rail has the shape of the process, and that shape is a loop.** Two steps happen once —
-`Domain Mapping`, where the map is drawn, and `Domain Finalization`, the finished domain read and
-taken away — and the six between them happen again for every entry of that map: `Target`,
-`Personality`, `Toolkit`, `Instructions`, `Formatting`, `Agent Acceptance`. So those six
-are drawn inside a lap: bordered, headed on its edge
-`Agent Modeling · 📦 Delivery date`, and stacked like sheets while entries remain. No count in that
-head: the strip under the rail is the map itself with this entry lit among the others, so a number
-would say in arithmetic what the entries say in the client's own words — and a bare *1 of 4* a
-finger's width from four steps in a row is read as the steps. Nothing
-says *this repeats* in words; the surface says it. The run is named once, on the border that encloses
-it, rather than three times inside it: a prefix repeated on every station buries the part that tells
-them apart — which is the whole of what a rail is read for — at the end of the line, where the eye
-arrives last.
-
-Acceptance is **inside** the lap, and that is what settles a question a flat row could not answer.
-It closes one entry's turn and the next turn opens on the step after the map, so a rail that put it
-outside would light its last step and then jump the light backwards — the one thing a rail read left
-to right cannot do. What is genuinely outside and last is the only other thing that happens once: the
-whole domain, on the page the client lands on when the map is spent.
-
-**The rail is on the screen from the first question, and dim is not absent.** An interview that
-shows only a question is a black box: the client cannot tell whether they are two minutes from the
-end or twenty, and that is the one thing every wizard owes them. So the steps not yet reached are
-visible and faint.
-
-**The names above are labels; the meaning is the line below them** — the division of labour set out
-under *the interview* above, where the exception for field names and the rule that comes with it are
-stated. What earned it was the alternative: names like *what it is* and *how it works* were true of
-every step of every wizard ever built and told the client nothing about which part of their own work
-was about to be asked for. The marks on the rail carry no numbers, for the same reason the lap
-exists: a count running one to seven would claim an order that only two of the seven actually have.
-
-**Nothing is explained in prose.** The entries appear as they are named, in the client's own words,
-and a paragraph explaining each tier would be a wall of text however carefully it is worded — the
-things on the screen are different kinds of thing, and the eye tells them apart without being told.
-There is no standing hint under the box either: a line promising that half an answer will do is
-furniture from the second turn on, and Alembic says it better by inferring the rest and showing what
-it inferred.
-
-**What is in the box is a worked example, on the first question of a step and no other.** A label
-naming the material — *the parts of your work you would like Morgana to take on* — restates the
-question and teaches nothing, so what stands there instead is a fifty-word answer somebody else might
-have given: it shows the register, the length and the level of detail at once, which is the whole of
-what a first-time client is missing. From the second question of a step the box is empty, since the
-question there is a short follow-up and a fifty-word story under it answers something nobody asked.
-
-**All but the first are written by the model, in the turn that opens the step**, through `SetExample`
-— and that is the point at which it finally can: it has read the map, so the example is in the
-client's own trade and about the agent being built, rather than a stranger's business quoted at them
-while they are asked about their own. The prose asks for one close enough to be worth editing and
-too specific to be agreed with as it stands, because an example that fits exactly is one they press
-past without adding what only they know. It clears itself every exchange, so it cannot outlive its
-question; `AgentPersonality` has no such tool, since that step is answered by picking words and a story
-beside them would be an example of an answer nobody asked for.
-
-**The opening question of the map keeps a written one, and that is not an inconsistency.** Nothing is
-known about this client yet, so a model there would be inventing a hypothetical domain exactly as the
-house example does — but differently on every run, unverifiable, on the screen that sets the register
-for the whole interview. And the house example is *calibrated*: the shop sells, Morgana handles what
-comes after the order. That draws the boundary the mapping pass exists to teach — a domain is a
-choice, not an inventory — and a model asked for a plausible domain writes the inventory. The one
-case where the pass does know their trade is an uploaded `agents.json`: the intents already say what
-the business does, so `SetExample` is declared there too, conditioned on `GetExistingIntents`
-returning something, and what it writes wins over the house example.
-
-**Backwards is the client's, where forwards is not.** Going on is a claim that a step is settled,
-which the state machine decides; going back is a claim that something needs changing, which only
-they can make — so `BackAsync` is the one movement of the interview they drive, and `StepBack` names
-where it lands (*back to Target, Personality*, *back to 📦 Delivery date*) in the rail's own
-words rather than saying "back", because a step of this wizard is not numbered on the screen. It is
-also a button of the same size as *Answer* and on the same row, not a line of small print under the
-box: the two are the movements of the interview, and the one the client actually decides is the one
-that was set in eleven-point grey. It costs nothing to allow: a step is re-entered
-exactly the way it was entered the first time, a fresh agent and a fresh session reading the
-configuration as settled fact, with one line telling it the client came back to change something so
-it does not open from nothing. **The memory is the configuration, not the conversation** — the same
-thing that crosses a pass boundary going forwards. Stepping out of an entry into the one before it
-takes that agent back out of the Draft and into hand, so no second copy of it can ever be committed.
-
-The questions themselves are held to the same rule in `alembic.json`: **one sentence, one question
-mark, nothing after it**. A question carrying three sub-questions joined by dashes is answered on
-one of them, and no reader can tell which.
-
-The client will also never *use* the agent — the people who will are their customers — so everything
-Alembic writes is addressed to the agent about those people, never to the client. Two sentences in
-the doctrine, because it is a pronoun that needs pinning down and not a taxonomy that needs
-teaching.
+**Backwards is the client's, where forwards is not.** Going on is a claim the state machine settles;
+going back is a claim only the client can make, so `BackAsync` is the one movement they drive, and
+`StepBack` names where it lands in the rail's own words rather than saying "back." It costs nothing to
+allow: a step is re-entered exactly as it was the first time, a fresh agent and session reading the
+configuration as settled fact. **The memory is the configuration, not the conversation** — the same
+rule that crosses a pass boundary going forwards.
 
 ### The map first, then the agents
 
-**Alembic edits a domain, not an agent**, and a domain is a configuration of two halves: the
-`Intents`, and the `Agents` that answer them one each. So the interview opens on the half that comes
-first in every sense — the mapping pass produces the whole `Intents` section and nothing else, which
-is the ground the rest is planted in. Only then does it walk that list, four passes per entry, until
-every intent has its agent.
+**Alembic edits a domain, not an agent**, and a domain is `Intents` plus the `Agents` that answer them
+one each — so the interview opens on `Intents`, the ground everything else is planted in, then walks
+the list, five passes per entry, until every intent has its agent.
 
-**A domain is a choice, not an inventory**, and the mapping pass is worded to elicit that: the map
-is the subset of the client's own processes they are installing Morgana to run, not a description of
-their business. What they keep never appears on it, and asking for their work exhaustively turns the
-pass into a confession — the interview goes long, the list pads, and half of it is capability nobody
-asked for. What they do hand over has to be complete, because an intent missing from the map is a
-process the domain will never take and an intent nobody could tell from the one beside it is a user
-meeting the wrong agent. Both are settled while the client is still choosing words, which is the
-only moment either is cheap.
+**A domain is a choice, not an inventory.** The map is the subset of the client's own processes they
+are installing Morgana to run, not a description of their business — asking for their work
+exhaustively turns the pass into a confession, and half the resulting list is capability nobody asked
+for. What they do hand over has to be complete, because an intent missing from the map is a process
+the domain will never take, and an intent nobody could tell from the one beside it is a user meeting
+the wrong agent — both are cheapest to catch while the client is still choosing words.
 
 **All four of an intent's fields are written there, and that is the same argument twice.** A
-description is read by the classifier *against every other description*, and a label with the
-sentence it sends is read by a user *against every other button* — both are only correct side by
-side, so both belong to the pass that has the whole set in view. The buttons come last and in one
-go, once the list is closed: written by Alembic from what it was told, stated back as a set, and
-corrected. Never asked for one at a time, and never asked of the client at all.
-
-That is also why no later pass can write an intent: `SetIntent` does not exist. `AgentTarget`
-declares `SetAgentTarget` and nothing else that writes, so "the map is not reopened" is a fact about
-which tools exist rather than a sentence asking for restraint — and `InterviewState.MissingTarget`
-names the same single field, because it is the same fact.
-
-The order is forced twice over. The intent descriptions are what the classifier weighs *against each
-other*, so an intent settled alone is a description nobody compared to anything: the map has to be
-drawn before any agent, and read back whole (`GetDomainMap`) before it is called settled. And inside
-an agent, `Instructions` and `Formatting` speak about its tools, so they cannot be written before
-the toolkit exists.
+description is read by the classifier *against every other description*; a label and its sentence are
+read by a user *against every other button* — both correct only side by side, so both belong to the
+pass with the whole set in view, written by Alembic, stated back, corrected, never asked of the
+client one at a time. This is also why no later pass can write an intent: `SetIntent` does not exist,
+and `AgentTarget` declares `SetAgentTarget` and nothing else that writes. The order is forced twice
+over: descriptions are weighed *against each other*, so the map must be drawn and read back whole
+(`GetDomainMap`) before it's settled; and `Instructions`/`Formatting` speak about the toolkit, so they
+cannot be written before it exists.
 
 | Pass | Runs | Settles | Cannot touch |
 |---|---|---|---|
@@ -740,278 +414,157 @@ the toolkit exists.
 | `AgentInstructions` | per entry | `Instructions` | everything already settled, `Formatting` included |
 | `AgentFormatting` | per entry | `Formatting` | everything else, all of it settled |
 
-**`Target` and `Personality` are two passes, not two questions of one.** What they ask for is not the
-same kind of thing: a `Target` is *dictated* — the client knows what the work is and can say it —
-while a voice is *recognised*, since nobody has a ready sentence about how their own staff should
-sound. Joined, the voice arrived as an afterthought at the end of a turn already spent on the work,
-and was answered *yes, fine*. So the voice gets its own pass, its own screen, and a form of asking
-the rest of the interview never uses.
-
-**The cloud of words is that form.** `SetTraits` puts eight to fourteen adjectives under the question,
-picked several at a time or not at all, with the text box open beside them as always. They are the
-model's, not a fixed list: they have to be about this domain and this agent — a counter where someone
-is angry about money and one where someone's pet is ill are not the same counter — and they have to
-sit inside Morgana's own voice, which the composing model has read at the top of its prompt and a
-template has not. What comes back is words, and words are not a section: the pass writes the prose
-itself, names which facet of her this agent is, and reads it back composed, where a voice that argues
-with hers is visible and nowhere else.
-
-They are deliberately not `SetChoice`. A quick reply is one whole answer and spends the row when
-pressed; one of these is not an answer at all until it is joined by the others the client keeps. Same
-plumbing, different gesture, and the rendering says which: dashed and weightless until taken.
+**`Target` and `Personality` are two passes, not two questions of one.** A `Target` is *dictated* —
+the client knows the work and can say it — while a voice is *recognised*: nobody has a ready sentence
+about how their own staff should sound, so it gets its own screen and its own form: `SetTraits` puts
+eight to fourteen model-picked adjectives under the question, several at a time or none, text box
+still open — deliberately not `SetChoice`, since one word isn't an answer until joined by others. They
+must sit inside Morgana's own voice; what comes back is prose the pass writes itself, naming which
+facet of her this agent is, read back composed so a voice arguing with hers is visible.
 
 The `AgentFormatting` pass is the one place the loop stops for the client: letting a finished agent
-into the domain is the single decision of the interview that is theirs, and `AcceptAsync` reports
-whether the map has another entry — if it has, the next `AgentTarget` pass opens on the same screen,
-and the client never goes back to a menu to remember their own list.
+into the domain is the single decision of the interview that is theirs, and `AcceptAsync` opens the
+next `AgentTarget` pass automatically if the map has another entry.
 
-**The fallback intent is not on the map and never was.** `other` is where the classifier sends what
-it cannot place; `DomainDraft.EnsureFallbackIntent` puts it in every domain — greenfield at commit,
-uploaded at import, where its absence is also said out loud — and `DeclareIntent` refuses the name.
-It is the one element of a domain no interview authors and no client edits.
+**The fallback intent is not on the map and never was.** `other` is where the classifier sends what it
+cannot place; `DomainDraft.EnsureFallbackIntent` puts it in every domain (greenfield at commit,
+uploaded at import), and `DeclareIntent` refuses the name — the one element of a domain no interview
+authors and no client edits.
 
 ### The walk: a domain is edited, not only added to
 
-An agent already in the domain can be opened and corrected, and what made that cheap is that nearly
-everything it needs was already here. A step is re-entered with a fresh agent and a fresh session
-reading what is written as settled fact — `BackAsync`. An entry in hand is out of the domain so it
-cannot be committed twice — stepping between two entries. Removing a tool or a parameter is
-`DropTool` and `DropToolParameter`, which the toolkit pass has declared all along. What was missing
-was a way in **from outside the interview**, and a way to reach the part the client came about without
-sitting through the parts they did not.
+An agent already in the domain can be opened and corrected, and most of what that needed already
+existed: a step re-entered with a fresh agent/session reading settled fact (`BackAsync`); an entry out
+of the domain while in hand, so it cannot be committed twice; removing a tool or parameter
+(`DropTool`/`DropToolParameter`). What was missing was a way in **from outside the interview**.
 
 **Correcting is a fourth intention, so it is a fourth door.** Somebody who uploads a domain to fix a
-tool or a turn of phrase is not adding to it, not weighing it and not packaging it — Import's other
-three doors each answer a different question. It does not ask *which* agent and does not have to:
+tool or a phrase is not adding to it, weighing it or packaging it, and it does not ask *which* agent —
 whoever comes through it usually cannot say where the problem is, they recognise it when they read
-it. So it opens on the first agent and leafs; the client who *does* know it finds it the same way,
-stepping through with the walk's own prev/next rather than through a second door that would have
-landed them in the same place. Import's own agent cards, once a shortcut straight to one of them, are
-read-only now, for the same reason `Revise.razor`'s five rows are: one way in is the whole point, and
-a second one that reaches the same screen is a second thing to explain where there is one.
+it — so it opens on the first agent and leafs; the client who *does* know finds it the same way, with
+the walk's own prev/next. Import's own agent cards, once a shortcut straight to one of them, are
+read-only now: one way in is the point, and a second door reaching the same screen is a second thing
+to explain where there is one.
 
 **Leafing costs nothing, because leafing is reading.** `Pages/Revise.razor` calls no model and writes
-nothing to the Draft. An agent read on the way past is never taken out of the configuration, so
-closing the tab mid-walk loses nothing at all, and a screen arrives instantly rather than after a
-Performance call for a step nobody stopped at. That constraint is the shape of the page: a step
-composed on the way past would break the one gesture it exists for.
+nothing to the Draft — an agent read on the way past is never taken out of the configuration, so
+closing the tab mid-walk loses nothing, and the screen arrives instantly rather than after a
+Performance call for a step nobody stopped at. **The agent is shown whole, for reading**: five rows
+under the rail's own names, never clipped, but none is its own way in any more — one door per agent,
+always opening at the Target. The map is not one of the five and cannot be: it settles every intent
+*against every other one*, so reopening it over a single agent would be the one pass with nothing to
+compare its work to.
 
-**The agent is shown whole, for reading.** Five rows under the rail's own names — `Target`,
-`Personality`, `Toolkit`, `Instructions`, `Formatting` — each carrying what is written, never
-clipped: a screen opened to read what an agent says, that then shows four fifths of a sentence and an
-ellipsis, has answered nothing. None of the five is its own way in any more — see below for why —
-there is one door per agent, and it always opens at the Target. The two skips are for when the point
-is on another agent, and they carry the neighbouring agent's own name, because *next* says the list
-continues while the name says whether to press it. Past the last one is Review — a walk that looped
-would have no way of saying it was over.
-
-The map is not one of the five and cannot be. It settles every intent **against every other one**, so
-reopening it over a single agent would be the one pass of the interview with nothing to compare its
-work to. Changing what routes where is changing the domain rather than the agent, and it is already
-the interview's own first step.
-
-What `AgentRevision` carries is exactly what the domain would otherwise lose while the agent is out
-of it: **its place in the two lists**, since the order is the client's and an agent that walks to the
-bottom every time somebody fixes a sentence turns that order into a history of edits; **the
-provenance it arrived with**; and **what it read when it left**. That last one tells a rewrite from a
-look — an agent opened and left alone goes back `Imported`, because a migration report that lists
-everything the client *opened* is a report they stop reading. All three are serialized with the
-sitting, so an edit interrupted halfway comes back an edit.
-
-The **C# facts are not rewritten**. A fresh agent gets its class names proposed and the record flagged
-`Inferred`; an edited one keeps what it arrived with, which may not be a guess at all — a save file
-and an archive both carry the real namespace, the real class names and the tier. The one exception is
-the one fact an edit can genuinely create: an agent that had no native tools and now has some has
-nowhere for them to be emitted.
+What `AgentRevision` carries is what the domain would otherwise lose while an agent is out of it: its
+**place in the two lists** (so a fix never walks an entry to the bottom), the **provenance it arrived
+with**, and **what it read when it left** (opened and left alone goes back `Imported`, since a
+migration report listing everything merely *opened* is a report nobody reads). The **C# facts are not
+rewritten** on an edit — only a fresh agent gets proposed class names flagged `Inferred` — except the
+one fact an edit can genuinely create: native tools where there were none now need a class to be
+emitted into.
 
 **An edit always opens at the Target, and chains forward exactly like composing.** The earlier design
-had a correction settle the one section it was opened on and stop: the pass loop in `AnswerAsync`
-refused to chain when the agent came off the walk rather than off a fresh entry on the map, on the
-grounds that carrying the client through the four sections after the one they opened cost them four
-steps nobody asked for. That traded one hazard for a worse one — see below — so `ReviseAsync` no
-longer takes which section to open. It always opens the Target, `AnswerAsync`'s loop no longer tells
-composing and correcting apart, and an edit walks `Target → Personality → Toolkit → Instructions →
-Formatting` the same five steps, in the same order, that writing an agent for the first time does.
-`Revise.razor`'s five rows are read-only now, for exactly the leafing they were always for; the one
-thing they no longer do is choose where the interview opens.
+had a correction settle the one section it was opened on and stop, on the grounds that carrying the
+client through the four sections after it cost them four steps nobody asked for — but that traded one
+hazard for a worse one. Composing cannot leave a section wrong, since the toolkit is settled after the
+Target and against it; editing used to be able to, because the pass that noticed a `Target` now
+promising what no tool backs, or `Instructions` routing through a tool that's gone, had no tool to fix
+a section that wasn't its own, and could only name the gap in the client's words and stop. It no
+longer needs to: `ReviseAsync` always opens the Target, `AnswerAsync`'s loop no longer tells composing
+and correcting apart, and an edit walks `Target → Personality → Toolkit → Instructions → Formatting`
+exactly as writing an agent for the first time does — so the section left wrong is the very next pass
+in the chain, using the same tools that pass would use to write it from nothing. `Revise.razor`'s five
+rows are read-only, for exactly the leafing they were always for; the one thing they no longer do is
+choose where the interview opens.
 
-**This is what actually closes the hazard composing never has.** Changing one section can leave
-another wrong — a `Target` that now promises something no tool backs, `Instructions` still routing
-through a tool that is gone, a `Formatting` laying out a field nothing returns any more. Composing
-cannot produce it: the toolkit is settled after the `Target` and against it, so a capability without
-a tool never outlives the step that would have given it one. Editing used to be able to, because a
-correction opened and settled one section and stopped — the pass that noticed a gap had no tool to
-fix a section that was not its own, so the earlier design had it name the gap in the client's own
-words and leave it there. It no longer needs to: the section it noticed is wrong is the very next
-pass in the chain, or the one after that, and by the time the edit reaches `AgentFormatting` every
-section has been checked against what came before it, using the same tools that section would use to
-be written from nothing.
-
-The `Correcting` row's instructions say this directly — *check this section against what just
-changed, not only against what the client asked about here by name* — and license the fast path for
-the ordinary case, which is most of them: where nothing changed upstream that touches this section,
-say so in one sentence, attach the choice, and settle it **without calling the section's own `Set`
-tool at all**, so it survives untouched rather than being written back out in different words. That
-is what keeps a one-line `Target` fix from costing five real interrogations instead of one real
-question and four quick confirmations.
-
-The coherence pass still catches a `Target` with nothing behind it — an agent nobody has ever walked
-through Alembic's own edit is exactly as capable of arriving that way as one an edit once left short.
-What changed is which of those two cases is now the ordinary one: an agent edited here closes its own
-cross-section gaps in the same sitting the edit that opened it runs in, so the coherence pass meets
-that defect mainly in domains, or parts of domains, this interview has not touched — an imported
-agent left alone, or one hand-written outside Alembic entirely. Its own job stays what it always
-was: relations *between* agents — two of them claiming the same capability, one publishing a value
-under a name the other expects under a different one — which no amount of walking one agent's own
+The `Correcting` row licenses the fast path this needs: *check this section against what just
+changed, not only against what the client asked about here by name*, and where nothing changed
+upstream that touches this section, settle it with the offered choice **without calling the section's
+own `Set` tool at all**, so it survives untouched rather than rewritten in different words — what
+keeps a one-line `Target` fix from costing five real interrogations instead of one question and four
+quick confirms. The coherence pass still catches a `Target` with nothing behind it, but now mainly in
+domains this interview hasn't touched (an imported agent left alone, one hand-written outside
+Alembic) — its own job stays relations *between* agents, which no amount of walking one agent's own
 sections could ever see.
 
-Both are under test. `AddedCapabilityFixture` adds the coupon to `Inventory`'s `Target` — the hardest
-of the four agents rather than the easiest, since its eight tools make the toolkit *look*
-comprehensive and a gap surrounded by that much coverage is the one a pass reads past — and drives the
-edit through to `AgentFormatting`, supplying the missing tool once the chain reaches the `Toolkit`
-pass. `CrossSectionEditTests` asserts, deterministically, that the toolkit grew to cover the added
-capability, and separately that a tool was actually declared for it rather than merely mentioned. The
-original shape of this fixture stopped the moment the `Target` settled and asserted the opposite —
-that the toolkit stayed untouched — because that is what the one-section-and-stop design demanded of
-it; it failed on its first run, against the exact live transcript that prompted this whole redesign,
-which is the whole reason any of it exists.
+Both are under test. `AddedCapabilityFixture` adds a coupon capability to `Inventory`'s `Target` — the
+hardest of the four agents, since its eight tools make the toolkit *look* comprehensive — and drives
+the edit through to `AgentFormatting`; `CrossSectionEditTests` asserts, deterministically, that the
+toolkit grew to cover it and that a tool was actually declared rather than merely mentioned.
+`ExamplesDomainFixture` covers editing from the other end, starting from the shipped
+`Examples/agents.json` rather than interviewing a domain into existence: its first run found a real
+defect, `AcceptAsync` assigning `Agent.ID = Intent.Name` unconditionally, silently recasing an agent's
+own ID whenever it and its intent differed only in case. `ModePromptTests` holds the prompt
+architecture itself, without a model: each pass gets one mode row, the right one, and the two composed
+prompts differ by that row and nothing else.
 
 **A pass is never left to work out which job it is doing.** The message that opens a step states it
 as a fact — *nothing of this agent is written yet*, or *this agent already exists and you are
-correcting it*, followed by every section quoted back — and the prompt carries the matching
-`Composing` or `Correcting` row. The two wordings are one sentence kept in two places, so they are
-the same words rather than paraphrases of each other: a pass taught to recognise one of them has to
-be handed it.
+correcting it*, every section quoted back — read off the agent, never off which pass is running: a
+per-pass sentence could only be right for one of several ways a step is entered (straight down the
+interview, stepping back, resuming a saved sitting, correcting from the walk), and a table that tried
+once sent the client the mapping question three steps behind where they stood.
 
-That fact is read off the agent, never off which pass is running. A sentence per pass could only be
-right in one of the four ways a step is entered — running straight down the interview — and stepping
-back, resuming a saved sitting and correcting from the walk all arrive at the same pass over a
-differently-filled agent. The table that used to say it was the source of the first defect the walk
-turned up: the Target step of an agent that already had one opened with *nothing of its agent is
-written yet*, and the model, believing the concrete claim over the abstract instruction beside it,
-asked the client the mapping question three steps behind where they were standing.
-
-**The harness covers it from the other end than everything else does.** Every other fixture
-interviews a domain into existence and asks what Alembic wrote; `ExamplesDomainFixture` starts where
-a client with a running Morgana starts — the shipped `Examples/agents.json`, linked from the repo's
-own copy so it cannot drift — and reopens one agent of it at its Target, asking only for its
-Personality to change and letting the chain walk the other four sections on its own. The agent is the
-second of four on purpose: putting one back where it came from is invisible on a domain of one and
-answered by luck on the last of four. What is asserted splits the way the work does. The judge reads
-the turn that reaches the Personality pass and is asked whether it speaks to a voice that exists; the
-rest is decidable by reading the Draft — the agent back at its own index and exactly once, `Revised`
-rather than `Authored`, its C# facts unrewritten, the three sections nobody asked to change coming
-back byte-identical despite being walked, and every other agent of the domain byte-identical through
-an export. `ModePromptTests` holds the prompt architecture itself, without a model: each pass gets
-one mode row, the right one, and the two composed prompts differ by that row and by nothing else.
-
-The first run of it found a defect nothing else would have: `AcceptAsync` assigned
-`Agent.ID = Intent.Name` unconditionally, which is right for a fresh agent and wrong for one that
-arrived with an ID of its own. The `Examples` domain writes the agent `Contract` and the intent
-`contract` — Morgana matches them case-insensitively — so correcting a sentence in that agent
-silently recased its ID, an edit nobody asked for in a field nobody opened, arriving in the client's
-diff and in the migration report as a change they cannot account for.
-
-Two ends of the interview read the revision and nothing in the middle does, which is the point:
-correcting an agent's `Toolkit` is the same step, asked the same way, as settling the `Toolkit` of one
-being written now. What differs is that **behind its first step is the walk** rather than a step — and
-`StepBack` names it, because pressing it is also the way out of a section opened by mistake, and
-leaving has to put the agent back in the domain rather than leave it in a hand nobody is holding.
-
-Each pass is a **fresh agent and a fresh session**, and that is design rather than limitation: a
-toolkit pass carrying the whole functional interview in its context spends it re-litigating
-decisions already taken, and pays for that context on every turn thereafter. What crosses a pass
-boundary is the *configuration*, handed over by `GetAgentSoFar` and `GetToolkit` — read as settled
-fact rather than replayed as a conversation. The client's transcript is continuous: they are having
-one interview, and the seam belongs to the model alone.
-
-**Where a pass is standing is told, never inferred.** The opening message carries the facts the state
-machine already holds — which entry of how many, which intent and its description, what is already
-written on that agent, and what this step is about to give it — for every pass past the map, not just
-the first one on an entry. A pass left to work that out either spends a tool call on it or supposes,
-and both land on the client: the first sentence they read has to name their agent and say what this
-stage is for, and neither is reconstructable from a fresh session's context.
-
-The right-hand column is enforced structurally. A pass's toolset is its own `Tools` declaration in
-`alembic.json`, so the mapping pass has no `SetAgentTarget` and no `DeclareTool`, the toolkit pass
-has no `SetIntent`, and the functional pass has no `DeclareTool`. `InterviewState.Missing()` is pass-scoped for the same reason — a pass is
-complete when the fields *it* owns are set, and the toolkit pass owns none, since an agent with no
-native tools is the legal MCP-only shape.
+Each pass is a **fresh agent and a fresh session** by design, not limitation — a pass carrying the
+whole interview in its context spends it re-litigating decisions already taken. What crosses a pass
+boundary is the *configuration*, via `GetAgentSoFar`/`GetToolkit`, read as settled fact; the client's
+own transcript is continuous, and the restart belongs to the model alone. The right-hand column of
+the pass table above is enforced structurally, by each pass's own `Tools` declaration in
+`alembic.json`, and `InterviewState.Missing()` is pass-scoped the same way — a toolkit pass owns no
+fields at all, since an agent with no native tools is the legal MCP-only shape.
 
 ### One question, one step
 
 The characteristic failure of an LLM-conducted interview is not a wrong answer, it is **circling**:
-the model asks the same thing a second and a third time, each phrasing slightly better than the
-last, and the client stops answering. It appeared first in the functional pass on an agent's
-boundaries, and again in the toolkit pass — where the shape of the work invites it, because the
-naive reading asks each parameter's scope separately and four tools carry a dozen parameters.
+the model asks the same thing again, each phrasing slightly better, until the client stops answering.
+The fix is doctrine, high in Alembic's own `Instructions`, rather than a patch per pass: every
+question is a step, and an answer advances it if **anything can be written down** — the rest is
+inferred, proposed and corrected rather than asked again. Asking twice tells the client their answer
+wasn't good enough; asking three times ends the interview whether they say so or not.
 
-The fix is doctrine, high in Alembic's own `Instructions` where every pass reads it, rather
-than a patch per pass: every question is a step, and an answer advances it if **anything can be
-written down**. Adequate is not complete and never ideal — half an answer advances the step, and the
-other half is inferred, proposed, and corrected rather than asked again. Asking twice tells the
-client their answer was not good enough; asking three times ends the interview whether they say so
-or not.
-
-The toolkit pass then states the one instance the doctrine cannot know: **scope is inferred, never
-asked per parameter.** The client is asked once, about their setup — what the system already knows
-about a user the moment they arrive — and everything on that answer is `context` for the whole
-toolkit while everything else is `request`. `Shared` is an inference from what the value *is*: an
-identity the domain establishes once is shared, an agent's own working value is not.
+The toolkit pass states the one instance the doctrine can't know on its own: **scope is inferred,
+never asked per parameter.** The client is asked once, about their setup — what the system already
+knows about a user the moment they arrive — and everything on that answer is `context` for the whole
+toolkit, everything else `request`. `Shared` is inferred from what the value *is*: an identity the
+domain establishes once is shared, an agent's own working value is not.
 
 ### Validation runs before the recap
 
-The order is the design. Composing a beautiful prompt for a domain that would not start is a way of
+The order is the design: composing a beautiful prompt for a domain that would not start is a way of
 lying to the client with something that looks like evidence.
 
-Every check in `DraftValidationService` is decidable by reading the Draft — no model is asked, and
-none would help. Most of them restate a rule the framework already enforces at startup, and the
-duplication is the entire value: an `InvalidOperationException` from
-`HandlesIntentAgentRegistryService` arrives after the client has packaged, deployed and run,
-whereas the same sentence here arrives while they are still authoring and it costs nothing to
-change. Each finding carries a `Because` naming the rule, so it teaches instead of merely refusing.
+Every check in `DraftValidationService` is decidable by reading the Draft, no model asked — most
+restate a rule the framework already enforces at startup, and the duplication is the entire value: an
+`InvalidOperationException` from `HandlesIntentAgentRegistryService` arrives after the client has
+packaged, deployed and run; the same sentence here arrives while it costs nothing to change. Each
+finding carries a `Because` naming the rule.
 
-What it cannot see matters as much: whether two intent descriptions overlap enough to collide in
-the classifier, or whether an agent's `Instructions` contradict its `Formatting`, is not decidable
-here. That is the cross-agent coherence pass, it needs a model, and nothing in this service guesses
-at it.
-
-Two checks that once ran here were removed rather than kept as "true but expected": whether an
-agent's C# facts (class names, tier) are still Alembic's guess, and whether an agent declares no
-native tools. Both are true of *every* freshly imported or freshly authored agent without a single
-exception — Code.Inferred is unset until Morganize, and a bare tool count of zero cannot be told
-apart from a legitimate MCP-only agent without C# facts agents.json never carries — so neither ever
-discriminates a domain that needs attention from one that does not, and a warning that always fires
-teaches nothing. Morganize's own panel already surfaces and resolves the first directly; the second
-has no analogue there because there is nothing to resolve.
+What it cannot see matters as much: whether two intent descriptions collide in the classifier, or an
+agent's `Instructions` contradict its `Formatting`, needs a model — that is the cross-agent coherence
+pass. Two checks that once lived here were removed rather than kept as "true but expected": whether an
+agent's C# facts are still Alembic's guess, and whether an agent declares no native tools — both true
+of *every* freshly imported or authored agent without exception, so neither ever discriminated a
+domain needing attention from one that didn't.
 
 ### The starter scenarios: templates in, one domain out
 
 A domain agent *is* its prose, prose gets edited, and the only way to know an edit broke nothing is
-PromptHarness. A client who leaves without scenarios has a domain nobody can revise safely. Alembic
-writes the **starting set and no more**: it knows what the agents were designed to do, which is what
-a first scenario is made of, and nothing about what will actually go wrong, which is every scenario
-after it.
+PromptHarness. Alembic writes the **starting set and no more**: it knows what the agents were
+designed to do, which is what a first scenario is made of, and nothing about what will actually go
+wrong, which is every scenario after it.
 
-**Running them needs a source checkout of Morgana, not a deployed one.** PromptHarness boots Morgana
-in-process to observe it (`..\Morgana\Morgana.Web` by `ProjectReference`) — unlike the `.csproj` this
-same archive now ships, it is not something a client with only a running Morgana (a container, a
-managed deployment) can point at anything. Making the harness observe a *remote* Morgana instead is a
-real redesign — it would trade the in-process `ActivityListener`/stdout tee for a shared OTLP
-collector and a pre-provisioned JWT issuer — and belongs to PromptHarness, not Alembic. Until that
-exists, the YAML is written and travels regardless, for the client who does have Morgana's source
-beside it.
+**Running them needs a source checkout of Morgana, not a deployed one** — PromptHarness boots Morgana
+in-process to observe it, unlike the `.csproj` this archive ships. Observing a *remote* Morgana
+instead is a real redesign belonging to PromptHarness, not Alembic; until then the YAML travels
+regardless, for the client who does have Morgana's source beside it.
 
-The split that makes this work is between **which behaviours are worth protecting** and **which
-words say them here**. The first is knowledge about agents, true before any client arrives, and it is
-settled once in this repository as `Distiller/Harness/Templates/*.yaml`: one file per behavioural use-case,
-each a scenario the harness would load if its placeholders were real. The second is knowledge about
-the client's business, and only a model that has just read the whole domain can supply it. So the
-model derives — it replaces every `{{…}}` with this domain's own words and changes nothing else.
-
-Asking a model for "two or three scenarios" was the earlier shape and was the wrong one: it made the
-model choose which behaviours matter, which is the one decision it is worst placed to take after a
-single request, and the answer was the same three shapes every time.
+The split that makes this work: **which behaviours are worth protecting** is knowledge about agents,
+true before any client arrives, settled once as `Distiller/Harness/Templates/*.yaml` — one file per
+behavioural use-case, placeholders where domain words go. **Which words say them here** is knowledge
+about the client's business, which only a model that has just read the whole domain can supply, so
+the model derives: replace every `{{…}}`, change nothing else. Asking a model for "two or three
+scenarios" was the earlier, wrong shape — it made the model choose which behaviours matter, the
+decision it's worst placed to take, and the answer was the same three shapes every time.
 
 | Template | Protects | Needs |
 |---|---|---|
@@ -1024,98 +577,51 @@ single request, and the answer was the same three shapes every time.
 | `withheld-detail` | what its `Formatting` keeps back stays back | — |
 | `established-context-not-reasked` | a value given once is not asked for twice | a context parameter |
 
-The right-hand column is the only applicability decided in C#, because counting a list is not a
-question worth paying a model for. Everything semantic is the model's: a template it has no instance
-of comes back `not-applicable:` with a reason and is dropped. **A read-only toolkit has no
-confirmation to protect, and a scenario demanding one would fail a correct agent every run** — which
-is why declining had to be a first-class answer, and why each template is asked about on its own.
+Applicability is decided in C# only for the right-hand column. Everything semantic is the model's: a
+template with no instance comes back `not-applicable:` with a reason and is dropped, since a
+read-only toolkit has no confirmation to protect and a scenario demanding one would fail a correct
+agent every run.
 
-### What the templates are not
+**Nothing here is copied from `PromptHarness/`**, which is entirely infrastructural — the templates
+carry its shape because they were written against it, not because they are pieces of it. That is what
+makes the suite 100% domain **structurally**: the vocabulary a derivation is allowed is exactly the
+union of keys the templates use — fourteen, all domain — so framework-only keys are not reachable at
+all.
 
-They are **not copies of anything**. Nothing is linked or embedded from `PromptHarness/`: that suite
-is entirely infrastructural — it *is* the framework half — so there is nothing in it to derive a
-domain scenario from, and a worked example taken from it teaches the subject along with the form.
-The templates carry the harness's shape because they were written against it, not because they are
-pieces of it.
+**A derivation may drop a key and may never add one** — the whole check, enough because the template
+*is* the vocabulary. It runs at the emit because it can't be caught later: `ScenarioLoader` is built
+`.IgnoreUnmatchedProperties()`, so a key the harness doesn't recognise is dropped without a sound —
+the scenario loads, runs, passes, and asserts nothing. Every derivation is held to its template's key
+set, plus two other silent failures: an unresolved placeholder, a document with no turns. A scenario
+that fails still ships, the problem written across its top — a silently missing scenario costs the
+client more than a visibly broken one.
 
-**And that is what makes the suite 100% domain, structurally rather than by instruction.** The
-earlier design said so in prose and hoped; now the vocabulary a derivation is allowed is exactly the
-union of the keys the templates use — fourteen, all of them domain — so `guardCompliant`,
-`textMaxLength`, `summarizationOccurred`, `textNotMarkdown`, `degradedChannel`, `classifierIntent`
-and the whole context cycle are not reachable. They are Morgana's, her scenarios cover them, and
-they are maintained where the policies are. A client's copy of a policy scenario drifts from the
-policy while the original does not.
-
-The templates also carry what no key table conveys: `runs: 3, minPasses: 3` is already written in
-with the comment saying why it is a contract and not a tendency, and the header tells the model what
-a good derivation of *this* use-case decides. The reasoning is in the artifact rather than in a
-briefing beside it.
-
-### The one check, and why it cannot wait
-
-**A derivation may drop a key and may never add one.** That is the whole rule, and it is enough
-because the template is the vocabulary — every key in it is one Alembic wrote knowing the harness
-binds it.
-
-It has to be checked at the emit because it cannot be caught later. `ScenarioLoader`'s deserializer
-is built `.IgnoreUnmatchedProperties()` — right where it is, since a suite that refused to load over
-one stray key would be brittle in the hands of the person editing it — which means **a key the
-harness does not recognise is dropped without a sound**: the scenario loads, runs, passes, and
-asserts nothing. It reads as coverage and is not, and a model reaching for a plausible-but-absent key
-(`textContains`, say) produces exactly that. So every derivation is parsed with YamlDotNet and held
-to its template's key set, along with two other silent failures: a placeholder left unresolved, and a
-document with no turns.
-
-A scenario that fails still ships, with the problem written across its top. Alembic has no business
-deciding a client may not see its own artifact, and a silently missing scenario costs them more than
-a visibly broken one. The `id` is Alembic's either way — `{intent}-{template}`, unique across a
-domain by construction — rewritten as a line rather than re-serialized, because re-serializing would
-discard the comments and a comment saying why a turn admits two shapes is how the next reader knows
-the looseness was deliberate.
-
-### The discretionary pass
-
-The templated base protects what is worth protecting in any domain, which is precisely the part that
-could be known in advance. It cannot protect the rule that holds only here — the step that must
-never happen twice, the two things this business never says in the same breath — because nobody knew
-about it until the interview was over.
-
-So one call runs after the base, handed the domain and **the base in full**, and may add up to two
-scenarios of its own. The base is handed over whole for the one constraint that matters: an extra
-scenario must neither repeat what is already asserted nor contradict it, since a suite where two
-files disagree about the same turn is worse than one that never covered it — the failing one gets
-deleted and nobody remembers which was right. It is held to the union vocabulary rather than to one
-template's keys, and **none is the ordinary answer**, stated as such in the request: a domain the
-base already describes is a well-designed domain, not a gap.
+**The discretionary pass** runs once more after the base, handed the domain and the base **in full**
+so an addition can neither repeat what's already asserted nor contradict it, and may add up to two
+scenarios of its own. **None is the ordinary answer**: a domain the base already describes is
+well-designed, not a gap.
 
 ### The coherence pass
 
-The other half of reviewing a domain, and the half `DraftValidationService` explicitly cannot do.
-That one decides everything decidable by reading the Draft and asks no model, because none would
-help. Whether two intent descriptions overlap enough to collide in the classifier is the opposite
-kind of question: it is about meaning, and it is the most expensive defect a multi-agent domain
-carries, because no prose downstream resolves it and the user meets it as an agent answering the
-wrong question.
+The other half of reviewing a domain, and the half `DraftValidationService` cannot do. Whether two
+intent descriptions overlap enough to collide, or whether one agent's `Instructions` contradict
+another's `Formatting`, is about meaning — the most expensive defect a multi-agent domain carries,
+since no downstream prose resolves it and the user meets it as an agent answering the wrong question.
 
-Every defect it looks for is **relational**, and that is why the interview cannot close them all: it
-settles the map together, so the classifier collisions visible *there* are caught while the words
-are still being chosen, but it writes each agent's prose alone. Overlapping intents; two agents claiming the
-same capability; a value one publishes as `userId` that another expects as `customerCode`; ground
-the domain's own descriptions imply and no agent covers; an agent promising what no tool of its
-backs; two toolkits reaching the same system for the same purpose under two different shapes. It is
-handed the domain's exact words, never a summary, because a summary is precisely the step that would
-smooth an overlap away before the model saw it.
+Every defect it looks for is **relational**, which is why the interview cannot close them all — it
+settles the map together (catching classifier collisions while words are still being chosen) but
+writes each agent's prose alone: overlapping intents; two agents claiming the same capability; a value
+one publishes as `userId` another expects as `customerCode`; ground the domain implies and no agent
+covers; an agent promising what no tool backs; two toolkits reaching the same system under two
+different shapes. It's handed the domain's exact words, never a summary — a summary is precisely the
+step that would smooth an overlap away before the model saw it. The last defect carries its own
+exception, or it fires on every domain: two agents needing the same lookup through their own tools is
+ordinary; the same work under two different shapes is the defect, since each shape is a separate
+integration to keep true.
 
-The last of those is stated with its exception attached, because without one it fires on every
-domain: an agent reaches only through its own tools, so two agents needing the same lookup is the
-ordinary shape and not a defect. What is a defect is the same work under two shapes — different
-names, different parameters, descriptions that would have the model call either for the same reason
-— because each shape is a separate integration to keep true and they diverge the first time one is
-fixed. It is also the cheapest early sign that the two intents above them were always one.
-
-It answers JSON — the one place in Alembic that does, because this output is a list to be sorted and
-tabulated rather than writing to be read. And it **advises, never blocks**: a domain expert who
-disagrees with it about their own business is usually right.
+It answers JSON, the one place in Alembic that does, since this output is sorted and tabulated rather
+than read as prose. And it **advises, never blocks**: a domain expert who disagrees with it about
+their own business is usually right.
 
 ## Project Structure
 
@@ -1200,7 +706,6 @@ Alembic/                              # Container: Distiller/ (the workbench) + 
     AssemblyInfo.cs                   # Assembly-wide fixture + serial test collection
     Infrastructure/                   # AlembicHostFixture, InterviewDriver, ArchiveCompiler, Judge
     Fixtures/                         # Bistro Luna, interviewed into being; the Examples domain, imported and corrected
-                                      #   (a section rewritten, and a capability added that no tool backs)
     Tests/                            # DoctrineTests, MappingTests, InterviewConductionTests, FinalizationTests,
                                       #   EditingTests, CrossSectionEditTests, ModePromptTests
 ```
@@ -1214,51 +719,39 @@ reads. Three things about it are decisions rather than mechanics:
 positional. The Draft is the *editing* model, and an interview in progress is incomplete by
 definition — a tool whose description has not been asked for is a different state from one whose
 description is deliberately empty, and only a nullable field distinguishes them. Every nullable
-string in `DomainDraft.cs` means "not asked yet". Where a shape is final it still *is* the
-framework's own record; nothing here re-models a concept Morgana already models.
+string in `DomainDraft.cs` means "not asked yet."
 
 **What survives that Alembic does not understand.** AdditionalProperties keys other than `Tools`
-are kept verbatim in `AgentDraft.UnmodelledProperties` and written back untouched. The round-trip
-invariant must not depend on Alembic having a use for every key it meets. The `Tools` key is
-matched **ordinally**, deliberately: `Records.Prompt.GetAdditionalProperty` looks it up in a plain
-`Dictionary<string, object>`, so a differently-cased key is invisible to the framework and must
-stay invisible here rather than be promoted into a toolkit Morgana would never load.
+are kept verbatim in `AgentDraft.UnmodelledProperties` and written back untouched — the round-trip
+invariant must not depend on Alembic having a use for every key it meets. The `Tools` key is matched
+**ordinally**, deliberately: `Records.Prompt.GetAdditionalProperty` looks it up in a plain
+`Dictionary<string, object>`, so a differently-cased key is invisible to the framework and must stay
+invisible here.
 
-**Provenance** (`Imported` / `Revised` / `Authored`) exists so Alembic rewrites only what it owns
-and can *report* honestly. It is not what preserves untouched content — that is the round-trip
-invariant, which holds regardless.
+**Provenance** (`Imported` / `Revised` / `Authored`) exists so Alembic rewrites only what it owns and
+can *report* honestly. It is not what preserves untouched content — that is the round-trip invariant,
+which holds regardless.
 
 ## The round-trip invariant
 
-**A configuration that goes in comes back out equivalent.** This is what makes the interview safe
-to build on: a client uploading a domain of ten agents to add an eleventh gets the other ten back
-untouched, and Alembic does not need to understand them to promise it.
+**A configuration that goes in comes back out equivalent.** A client uploading a domain of ten agents
+to add an eleventh gets the other ten back untouched, and Alembic does not need to understand them to
+promise it.
 
-Equivalent, not byte-identical, and the difference is not a compromise — it is what the format
-actually means:
+Equivalent, not byte-identical, and the difference is what the format actually means:
+`AdditionalProperties` is a *list* Morgana looks keys up **across**, so the grouping carries no
+information; defaults are written explicitly; and emoji come back as escaped surrogate pairs, since
+`UnsafeRelaxedJsonEscaping`'s allow-list stops at U+FFFF. Verified against `Examples/agents.json`:
+exported JSON is semantically equal field by field, re-importing yields an identical Draft, and
+exporting that Draft again is byte-for-byte stable — a fixed point, so a file that has been through
+Alembic once stops moving.
 
-- `AdditionalProperties` is a *list* of dictionaries and Morgana looks keys up **across** every
-  entry, so the grouping carries no information. The exporter writes the toolkit as its own entry
-  followed by the unmodelled ones, which need not reproduce the arrangement the file arrived with.
-- Defaults are written explicitly. An omitted `Shared` and an explicit `"Shared": false` say the
-  same thing; stating it is the clearer of the two.
-- Emoji come back as escaped surrogate pairs. `JavaScriptEncoder.UnsafeRelaxedJsonEscaping` stops
-  escaping accented text, dashes and apostrophes, but its allow-list is expressed in
-  `UnicodeRange`s, which stop at U+FFFF — so anything outside the BMP is still escaped. The first
-  export normalises a hand-written file once; every export after that is diffable against the one
-  before it, which is the comparison that matters in use.
-
-Verified against `Examples/agents.json` (5 intents, 4 agents, 14 tools, 23 parameters): the
-exported JSON is semantically equal to the original field by field, re-importing it yields an
-identical Draft, and exporting that Draft again is byte-for-byte stable — the export is a fixed
-point, so a file that has been through Alembic once stops moving.
-
-`AgentCodeFacts` holds what `agents.json` cannot: namespace, class names, tier, MCP servers. On
-import all of it is unknown, so Alembic proposes the class names from the framework's naming
-convention and flags the whole record `Inferred`. Namespace and tier are left null rather than
-guessed — they follow from nothing in the file, and a confident wrong value is worse than an empty
-one the interview will ask about. The inference is a genuine guess and is meant to be seen as one:
-against the `Examples` domain it proposes `MonkeysAgent` where the real class is `MonkeyAgent`.
+`AgentCodeFacts` holds what `agents.json` cannot: namespace, class names, tier, MCP servers. On import
+all of it is unknown, so Alembic proposes class names from the framework's naming convention and
+flags the record `Inferred`; namespace and tier are left null rather than guessed, since a confident
+wrong value is worse than an empty one the interview will ask about. The inference is a genuine guess
+and meant to be seen as one: against `Examples` it proposes `MonkeysAgent` where the real class is
+`MonkeyAgent`.
 
 ## DI Registrations (Program.cs)
 
@@ -1303,7 +796,7 @@ Parsing an uploaded `agents.json` is therefore free: there is no parallel repres
 |---|---|
 | `Alembic:Work:AutosaveSeconds` | How often `DraftStateService` refreshes its one fallback snapshot for `Save my work`. It is the size of the window a dead connection can cost, and the only reason it is not smaller is that each snapshot serializes the whole Draft. There is no retention setting beyond it: the snapshot dies with the circuit, and the file behind `Save my work` is the only thing meant to outlive it |
 | `Morgana:LLM:Provider` | `Anthropic`, `AzureOpenAI`, `Ollama`, `OpenAI` |
-| `Morgana:LLM:{Provider}:Tiers:Performance` | `Options` (`ModelId`, `MaxOutputTokens`) + `MagicDust`. Only `Performance` is declared — Alembic never uses the Efficiency die. `MagicDust` carries **both axes at zero and nothing else**: metering off, which is the truth here — dust accounting is applied by `MorganaAgentAdapter`, and Alembic goes to `GetChatClient(Performance)` directly, so the pricing is never read at all. A calibrated tariff would be a claim about a price nobody consults, ageing against whichever model the tier is pointed at. It cannot be shortened to `{}`: the JSON configuration provider reads an empty object as `null`, `Records.TierDefinition` takes `MagicDust` as a non-nullable constructor parameter, and the dictionary binder drops an element it cannot construct **without raising anything** — so the whole tier disappears and the failure surfaces, one page later, as `No tiers configured` |
+| `Morgana:LLM:{Provider}:Tiers:Performance` | `Options` (`ModelId`, `MaxOutputTokens`) + `MagicDust`. Only `Performance` is declared — Alembic never uses the Efficiency die. `MagicDust` carries **both axes at zero and nothing else**: metering off, which is the truth here — dust accounting is applied by `MorganaAgentAdapter`, and Alembic goes to `GetChatClient(Performance)` directly, so the pricing is never read at all. It cannot be shortened to `{}`: the JSON configuration provider reads an empty object as `null`, `Records.TierDefinition` takes `MagicDust` as a non-nullable constructor parameter, and the dictionary binder drops an element it cannot construct **without raising anything** — so the whole tier disappears and the failure surfaces, one page later, as `No tiers configured` |
 
 The section is named `Morgana:` and not `Alembic:` because `MorganaLLM` reads that path. In-repo,
 Alembic declares the **same `UserSecretsId` as Morgana.Web** (the same trick PromptHarness uses), so
@@ -1317,17 +810,6 @@ configure twice. A standalone deployment supplies the section by environment var
 - **Run**: `dotnet run` — default https://localhost:5005. Needs **no** Morgana instance running
 - **Docker**: profile-gated, so `compose up` skips it —
   `docker compose --env-file .env --env-file .env.versions --profile authoring up alembic`
-
-## History
-
-All eight phases shipped, in this order, on one principle: **deterministic ends first, the LLM in
-the middle last**. Import → Draft → export was verifiable without a single model call, and once that
-loop closed it became a hard invariant the interview could not break. Then came validation and the
-recap (the first shippable milestone — useful without any interview), the interview itself in two
-halves (functional pass, then toolkit + return pass, because `Instructions`/`Formatting` speak about
-tools and had to come last), the turnkey C# emit and migration report, and finally the PromptHarness
-starter scenarios and the cross-agent coherence pass. Nothing is currently in flight; new work starts
-as its own entry here rather than reopening this list.
 
 ## Conventions
 
