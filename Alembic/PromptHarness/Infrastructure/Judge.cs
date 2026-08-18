@@ -11,7 +11,7 @@ public sealed record JudgeVerdict(bool Holds, string Reason);
 /// <summary>
 /// Evaluates natural-language propositions about a piece of authored prose — a near-direct port of
 /// <c>PromptHarness</c>'s <c>LLMJudge</c>, for the same reason it exists there: Alembic's own
-/// self-check inside <c>AgentFormatter</c> is the same conducting session re-reading its own work,
+/// self-check inside <c>AgentFormatting</c> is the same conducting session re-reading its own work,
 /// which is not independence, and a live run has already shown it can follow a client's explicit
 /// request straight past a rule it just wrote. This is a second, separate call that has never seen
 /// the interview and has no stake in defending it.
@@ -47,13 +47,49 @@ public sealed class Judge
 
     public Judge(ILLMService llmService) => this.llmService = llmService;
 
-    /// <summary>Judges a single proposition against a piece of prose, retrying once before giving up.</summary>
-    public async Task<JudgeVerdict> EvaluateAsync(string proposition, string prose, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The prompt for judging a turn Alembic put to its client, rather than prose it authored for an
+    /// agent.
+    /// </summary>
+    /// <remarks>
+    /// Two artifacts, two questions. <see cref="SystemPrompt"/> judges what a deployed agent will be
+    /// instructed to do and tells the judge to weigh only what the text instructs, which is the wrong
+    /// test entirely for a question put to a person. What is judged here is whether Alembic asked the
+    /// right thing — and the defect it exists to catch is a question that reads as though nothing had
+    /// been written yet, asked over a domain that is written in full.
+    /// </remarks>
+    private const string TurnSystemPrompt =
+        """
+        You are a strict evaluator in a non-regression suite for an AI system that interviews a
+        domain expert about their business in order to author conversational agents for them. You
+        are given one turn that system said to its client — normally a single question — and a
+        proposition about it. Decide whether the proposition is TRUE of that turn.
+
+        Rules:
+        - Judge only what the turn actually says to the client. Do not infer intent, do not be
+          charitable, and do not credit a turn for what it presumably knew but did not say.
+        - If the proposition is only partially true, it is false.
+        - The turn may be in any language; judge its meaning, not its language.
+
+        Respond with JSON only, no prose, no code fences:
+        {"holds": true|false, "reason": "<one short sentence>"}
+        """;
+
+    /// <summary>Judges a single proposition against a piece of authored prose.</summary>
+    public Task<JudgeVerdict> EvaluateAsync(string proposition, string prose, CancellationToken cancellationToken = default) =>
+        AskAsync(SystemPrompt, "AUTHORED PROSE", prose, proposition);
+
+    /// <summary>Judges a single proposition against a turn Alembic put to the client.</summary>
+    public Task<JudgeVerdict> EvaluateTurnAsync(string proposition, string turn, CancellationToken cancellationToken = default) =>
+        AskAsync(TurnSystemPrompt, "WHAT ALEMBIC SAID TO THE CLIENT", turn, proposition);
+
+    /// <summary>One judged proposition, retrying once before giving up.</summary>
+    private async Task<JudgeVerdict> AskAsync(string systemPrompt, string label, string subject, string proposition)
     {
         string userPrompt =
             $"""
-             AUTHORED PROSE:
-             {prose}
+             {label}:
+             {subject}
 
              PROPOSITION:
              {proposition}
@@ -66,7 +102,7 @@ public sealed class Judge
             try
             {
                 string answer = await llmService.CompleteWithSystemPromptAsync(
-                    $"alembic-harness-judge-{Guid.NewGuid():N}", SystemPrompt, userPrompt);
+                    $"alembic-harness-judge-{Guid.NewGuid():N}", systemPrompt, userPrompt);
 
                 return Parse(answer);
             }

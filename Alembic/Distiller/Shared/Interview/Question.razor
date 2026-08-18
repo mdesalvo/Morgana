@@ -105,6 +105,18 @@
     private readonly HashSet<string> picked = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Whether the client has touched the cloud at all this question.
+    /// </summary>
+    /// <remarks>
+    /// It guards one case and not the whole cloud: a client who types "less formal" and sends, having
+    /// left the words alone, would otherwise have 'formal' travel with them as a word they want,
+    /// because it was lit before they arrived. Where they typed nothing the lit set is exactly their
+    /// answer — keep this voice — and where they took or gave back a word the whole set is, and it is
+    /// complete: what stayed lit is what they kept.
+    /// </remarks>
+    private bool touched;
+
+    /// <summary>
     /// Taking the work away, beside the two movements of the interview.
     /// </summary>
     [Parameter]
@@ -134,6 +146,17 @@
     /// </summary>
     [Parameter]
     public IReadOnlyList<string>? Traits { get; set; }
+
+    /// <summary>
+    /// Which of those words the agent's voice already carries, lit from the start.
+    /// </summary>
+    /// <remarks>
+    /// A cloud offered over a voice that already exists has to show that voice, or it asks the client
+    /// to say a second time what the question above it has just read back to them. Lit is not the
+    /// same as answered, though — see <see cref="touched"/>.
+    /// </remarks>
+    [Parameter]
+    public IReadOnlyList<string>? Taken { get; set; }
 
     /// <summary>
     /// The way back, beside the answer.
@@ -166,9 +189,45 @@
     public EventCallback<QuickReply> OnChoose { get; set; }
 
     /// <summary>
-    /// Whether there is nothing to send: no words picked and nothing typed.
+    /// Whether there is nothing to send.
     /// </summary>
-    private bool Empty => picked.Count == 0 && string.IsNullOrWhiteSpace(answer);
+    // Read off what would actually travel, rather than off the box and the cloud separately: a cloud
+    // lit only because the voice already carries those words holds nothing the client has said, and
+    // an enabled button that sends nothing is worse than a disabled one.
+    private bool Empty => Said.Length == 0;
+
+    /// <summary>
+    /// The answer as it would reach Alembic: what they typed, and what they did with the cloud.
+    /// </summary>
+    private string Said => string.Join(" ", new[] { answer.Trim(), Voice(answer.Trim()) }
+        .Where(part => part.Length > 0));
+
+    /// <summary>
+    /// What the cloud contributes to the answer, and nothing when it is not the client speaking.
+    /// </summary>
+    /// <remarks>
+    /// The words go as a sentence rather than as a list, because what reaches the model is one
+    /// person's answer either way and a bare enumeration reads as a form return. Anything typed
+    /// stays first: it is their own account, and the words are what they recognised in it.
+    /// </remarks>
+    private string Voice(string typed)
+    {
+        // The one case lit words must not travel: they wrote a sentence and left the cloud alone, so
+        // those words are not their claim — they are lit because the voice already carries them, and
+        // 'formal' going out beside "less formal" contradicts the sentence it is attached to.
+        if (!touched && typed.Length > 0)
+            return string.Empty;
+
+        // Everywhere else the set IS the answer, the untouched one included: a cloud lit off a voice
+        // that already exists, sent as it stands, says keep it — which is a real answer to a question
+        // that has just read that voice back, and one the client would otherwise have no way to give.
+        if (picked.Count > 0)
+            return $"The voice I would want here: {string.Join(", ", picked)}.";
+
+        // Giving every word back is an answer, once they have actually given them back. An empty
+        // cloud nobody has touched is an agent with no voice yet, and there is nothing to send.
+        return touched ? "None of those words is the voice I want." : string.Empty;
+    }
 
     /// <summary>
     /// Whether the box still reads exactly as the worked example was written — not "untouched
@@ -195,6 +254,16 @@
 
         primedOn = Turn;
         answer = Prompting;
+
+        // The cloud is primed on the same key as the box, and for the same reason: a render that
+        // changed nothing about the question must not put words back under a client who has just
+        // taken them off. What it opens showing is the voice the agent already has — nothing at all
+        // on one being written for the first time, which has no voice yet to read back.
+        touched = false;
+        picked.Clear();
+
+        foreach (string trait in Taken ?? [])
+            picked.Add(trait);
     }
 
     /// <summary>
@@ -218,6 +287,8 @@
     /// </summary>
     private void Toggle(string trait)
     {
+        touched = true;
+
         if (!picked.Remove(trait))
             picked.Add(trait);
     }
@@ -225,20 +296,12 @@
     /// <summary>
     /// Sends the answer and empties the box, so the next question is not met by the last answer.
     /// </summary>
-    /// <remarks>
-    /// Picked words go as a sentence rather than as a list, because what reaches the model is one
-    /// person's answer either way and a bare enumeration reads as a form return. Anything typed
-    /// stays first: it is the client's own account, and the words are what they recognised in it.
-    /// </remarks>
     private async Task SendAsync()
     {
-        string typed = answer.Trim();
-        string said = picked.Count == 0
-            ? typed
-            : (typed.Length > 0 ? typed + " " : string.Empty)
-              + $"The voice I would want here: {string.Join(", ", picked)}.";
+        string said = Said;
 
         answer = string.Empty;
+        touched = false;
         picked.Clear();
 
         await OnAnswer.InvokeAsync(said);

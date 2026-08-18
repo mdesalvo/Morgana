@@ -12,7 +12,7 @@ namespace Distiller.Model;
 /// anything. And within an agent, Instructions and Formatting speak about its tools, so they cannot
 /// be written before the toolkit exists.
 /// </remarks>
-public enum InterviewPass
+public enum InterviewStep
 {
     /// <summary>
     /// The domain map: every kind of request this business gets, named and described, before any
@@ -23,41 +23,27 @@ public enum InterviewPass
     /// <summary>
     /// What the agent is for and where it stops: its Target, and nothing else.
     /// </summary>
-    AgentModeler,
+    AgentTarget,
 
     /// <summary>
     /// How the agent sounds: its Personality, and nothing else.
     /// </summary>
-    /// <remarks>
-    /// Its own pass rather than the second half of the one before, because what it asks for is a
-    /// different kind of thing. A Target is dictated — the client knows what the work is — while a
-    /// voice is recognised: they are shown what this one could sound like and say which of it is
-    /// them. Joined to the Target, that recognition arrived as an afterthought at the end of a turn
-    /// already spent on the work, and was answered 'yes, fine'.
-    /// </remarks>
-    AgentVoicer,
+    AgentPersonality,
 
     /// <summary>
     /// The toolkit: one tool at a time, its contract and its parameters.
     /// </summary>
-    ToolkitModeler,
+    AgentToolkit,
 
     /// <summary>
-    /// How the agent goes about the work: its Instructions, now that there is a toolkit for them to
-    /// speak about.
+    /// How the agent goes about the work: its Instructions, now that there is a toolkit for them to speak about.
     /// </summary>
-    AgentInstructor,
+    AgentInstructions,
 
     /// <summary>
     /// How the agent lays out what its tools return: its Formatting, and nothing else.
     /// </summary>
-    /// <remarks>
-    /// Its own step rather than the second question of the one before, for the reason every other
-    /// step is its own: a step opens with a worked example of the answer it wants, and a step
-    /// settling two sections can only carry the example for the first of them. The second arrived
-    /// under an empty box, which is the screen this interview shows to nobody else.
-    /// </remarks>
-    AgentFormatter
+    AgentFormatting
 }
 
 /// <summary>
@@ -75,7 +61,7 @@ public sealed class InterviewState
     /// <summary>
     /// Which pass is running.
     /// </summary>
-    public InterviewPass Pass { get; set; } = InterviewPass.DomainMapper;
+    public InterviewStep Pass { get; set; } = InterviewStep.DomainMapper;
 
     /// <summary>
     /// The question on the table: the last thing Alembic said to the client.
@@ -167,6 +153,19 @@ public sealed class InterviewState
     public AgentDraft Agent { get; set; } = new();
 
     /// <summary>
+    /// Set when the entry in hand came out of the domain — one section of an agent that already
+    /// exists, opened from the walk — rather than out of a map being drawn today.
+    /// </summary>
+    /// <remarks>
+    /// The steps themselves do not read this, and that is what made the walk cheap to build: writing
+    /// the Toolkit of an agent that already exists is the same step, asked the same way, as writing
+    /// the Toolkit of one being written now. What reads it is the two ends — there is nothing behind
+    /// the first step of an edit, since no map was drawn today to step back onto, and letting the
+    /// agent in again has to put it back where it came from rather than append it.
+    /// </remarks>
+    public AgentRevision? Revision { get; set; }
+
+    /// <summary>
     /// Whether Alembic considers this pass's fields settled. A statement about the configuration,
     /// never about the client's patience.
     /// </summary>
@@ -200,6 +199,49 @@ public sealed class InterviewState
 
     /// <inheritdoc cref="Traits" />
     public List<string> PendingTraits { get; } = [];
+
+    /// <summary>
+    /// The offered words the agent's voice already carries, so the cloud opens showing the voice
+    /// that exists rather than an empty set.
+    /// </summary>
+    /// <remarks>
+    /// A step reopened reads what is written as settled fact, and this is that rule reaching the one
+    /// part of the screen it had not. An agent whose Personality says it is formal and pragmatic,
+    /// offered the word 'pragmatic' unlit, is being asked to say a second time what the question
+    /// above it has just read back — so the client either re-picks what was already true, which is
+    /// busywork, or leaves it dark and reads the cloud as a claim that it is not.
+    /// <para>
+    /// Literal, case-insensitive, on whole words: a word is lit because the prose contains it, never
+    /// because it means something similar. Lighting 'precise' over a voice that says 'exacting' would
+    /// be Alembic putting a word in the client's mouth on the one question whose whole point is that
+    /// the words are theirs to recognise.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<string> TraitsTaken =>
+        Agent.Personality is { Length: > 0 } voice
+            ? [.. Traits.Where(trait => Carries(voice, trait))]
+            : [];
+
+    /// <summary>
+    /// Whether a piece of prose uses a word, as a word and not as part of a longer one.
+    /// </summary>
+    // The boundary check is what keeps 'formal' from lighting up inside 'informal', which is the one
+    // pair where a substring match would say the opposite of the truth.
+    private static bool Carries(string prose, string trait)
+    {
+        for (int at = prose.IndexOf(trait, StringComparison.OrdinalIgnoreCase);
+             at >= 0;
+             at = prose.IndexOf(trait, at + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            int after = at + trait.Length;
+
+            if ((at == 0 || !char.IsLetter(prose[at - 1]))
+                && (after == prose.Length || !char.IsLetter(prose[after])))
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Why the last exchange failed, when it did. Null on a healthy interview.
@@ -253,12 +295,12 @@ public sealed class InterviewState
     /// </remarks>
     public IReadOnlyList<string> Missing() => Pass switch
     {
-        InterviewPass.DomainMapper => MissingMap(),
-        InterviewPass.AgentModeler => MissingTarget(),
-        InterviewPass.AgentVoicer => MissingVoice(),
-        InterviewPass.ToolkitModeler => MissingToolkit(),
-        InterviewPass.AgentInstructor => MissingInstructions(),
-        InterviewPass.AgentFormatter => MissingFormatting(),
+        InterviewStep.DomainMapper => MissingMap(),
+        InterviewStep.AgentTarget => MissingTarget(),
+        InterviewStep.AgentPersonality => MissingVoice(),
+        InterviewStep.AgentToolkit => MissingToolkit(),
+        InterviewStep.AgentInstructions => MissingInstructions(),
+        InterviewStep.AgentFormatting => MissingFormatting(),
         _ => []
     };
 
@@ -283,9 +325,14 @@ public sealed class InterviewState
         {
             string named = intent.Name ?? "(unnamed)";
 
-            if (string.IsNullOrWhiteSpace(intent.Description)) missing.Add($"what routes to '{named}'");
-            if (string.IsNullOrWhiteSpace(intent.Label)) missing.Add($"the button for '{named}'");
-            if (string.IsNullOrWhiteSpace(intent.DefaultValue)) missing.Add($"what pressing '{named}' sends");
+            if (string.IsNullOrWhiteSpace(intent.Description))
+                missing.Add($"what routes to '{named}'");
+
+            if (string.IsNullOrWhiteSpace(intent.Label))
+                missing.Add($"the button for '{named}'");
+
+            if (string.IsNullOrWhiteSpace(intent.DefaultValue))
+                missing.Add($"what pressing '{named}' sends");
         }
 
         return missing;
@@ -320,14 +367,8 @@ public sealed class InterviewState
     /// <summary>
     /// How the agent goes about the work, which could not be written before the toolkit existed.
     /// </summary>
-    private List<string> MissingInstructions()
-    {
-        List<string> missing = [];
-
-        if (string.IsNullOrWhiteSpace(Agent.Instructions)) missing.Add("agentInstructions");
-
-        return missing;
-    }
+    private List<string> MissingInstructions() =>
+        string.IsNullOrWhiteSpace(Agent.Instructions) ? ["agentInstructions"] : [];
 
     /// <summary>
     /// How the agent lays out what its tools return.

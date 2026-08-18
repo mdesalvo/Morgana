@@ -33,7 +33,7 @@ public sealed class MappingTests
             interview, BistroLunaFixture.MappingScript, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Null(driven.FinalState.Error);
-        Assert.True(driven.FinalState.Pass != InterviewPass.DomainMapper,
+        Assert.True(driven.FinalState.Pass != InterviewStep.DomainMapper,
             $"The mapping pass never settled within the driven exchanges.\n{driven}");
 
         // Exactly one entry: the client described one process ("check availability, then book"),

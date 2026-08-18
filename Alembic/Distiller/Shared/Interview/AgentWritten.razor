@@ -5,11 +5,21 @@
 *@
 
 <div class="sealed">
-    <h2>@Named is written</h2>
+    <h2>@Named is @(Revising ? "revised" : "written")</h2>
 
     <p>
         What it is, what it reaches for, how it works &mdash; all settled.
-        @if (Remaining > 0)
+        @if (Revising)
+        {
+            @*
+                An agent taken out of the domain to be corrected is not the last entry of a map: no
+                map was drawn today, and calling it the last of one reports a place in a list the
+                client never dictated. What is true is smaller and is the whole of what they need —
+                it goes back where it came from, and they go on going over the rest.
+            *@
+            <text>Put it back in the domain and carry on going over the others.</text>
+        }
+        else if (Remaining > 0)
         {
             <text>
                 Put it in the domain and we go on to @Next &mdash;
@@ -31,7 +41,7 @@
         @Keep
 
         <button class="primary" @onclick="() => OnAccept.InvokeAsync()" disabled="@Busy">
-            @(Remaining > 0 ? "Into the domain, then the next" : "Into the domain")
+            @(Revising ? "Back into the domain" : Remaining > 0 ? "Into the domain, then the next" : "Into the domain")
         </button>
     </div>
 </div>
@@ -71,6 +81,12 @@
     /// What to call the finished agent: its button, which is the client's own phrase for it.
     /// </summary>
     private string Named => State.Intent.Label ?? State.Intent.Name ?? "This agent";
+
+    /// <summary>
+    /// Whether this agent came out of the domain to be corrected rather than out of a map drawn
+    /// today.
+    /// </summary>
+    private bool Revising => State.Revision is not null;
 
     /// <summary>
     /// How many entries of the map have no agent yet, this one excluded.

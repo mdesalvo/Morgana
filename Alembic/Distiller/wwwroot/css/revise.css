@@ -1,0 +1,168 @@
+/* ==========================================================================
+   The walk: a domain's agents read one screen at a time, with one door into editing each.
+
+   Nothing on this page is a form and nothing on it is a question. It is a reading surface with
+   exits, so what it is styled to do is be legible at a glance and say clearly which parts move —
+   which, since editing stopped being per-section, is now the rows (none of them) and the one
+   button beneath them (the only one).
+   ========================================================================== */
+
+.walk {
+    margin: 1.4rem 0 2rem;
+
+    /* The one measure that actually matters on this page: how wide a section's own prose is allowed
+       to read. Named here, once, so the table around it (.walk-sections) and the button under it
+       (.walk-edit) can be sized from the same number instead of independently guessing a width that
+       happens to look right today and drifts the first time this one changes. */
+    --walk-measure: 52rem;
+}
+
+/* Where you are, and what is either side. The two skips are the same size and the same weight as
+   each other because they are the same act in two directions, and they carry the neighbouring
+   agent's own name rather than an arrow alone: "next" tells the client the list continues, the
+   name tells them whether to press it. */
+.walk-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--alembic-border);
+}
+
+.walk-who {
+    text-align: center;
+    min-width: 0;
+}
+
+.walk-who h1 {
+    margin: 0;
+    font-size: 1.9rem;
+    font-weight: 300;
+    letter-spacing: 0.04em;
+    color: var(--alembic-accent);
+}
+
+.walk-count {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--alembic-muted);
+}
+
+.walk-step {
+    flex: 0 1 14rem;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.45rem;
+    padding: 0.5rem 0.9rem;
+    background: color-mix(in srgb, var(--alembic-panel) 60%, transparent);
+    color: var(--alembic-text);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.walk-step:hover {
+    border-color: var(--alembic-accent);
+    color: var(--alembic-cyan);
+    box-shadow: var(--alembic-glow);
+}
+
+/* Gone rather than dim on the first agent, where there genuinely is nothing behind — a disabled
+   button drawn anyway is a control that can never do anything, and that is not a quieter version
+   of a control, it is one with nothing to press. Invisible rather than absent from the layout, so
+   the head does not lurch sideways the one time it has no opposite number. */
+.walk-step-spacer {
+    visibility: hidden;
+}
+
+.walk-when {
+    margin: 0.9rem 0 0;
+    color: var(--alembic-muted);
+    font-size: 0.95rem;
+}
+
+/* Rows of one table, not a scatter of cards: five boxes each as tall as its own contents is exactly
+   the layout that defeats running an eye down a column to find one thing.
+
+   Held to the label column, the gap and the value's own measure — 8rem + 1rem + --walk-measure, plus
+   a row's horizontal padding either side — rather than left to fill the wide page: a value that tops
+   out at --walk-measure left the row's border running on into empty space well before the margin,
+   which read as the table being wider than anything in it, a tear the value's own max-width could
+   never sew shut from inside a track sized 1fr. Centered rather than left-hung for the same reason:
+   held to its own measure but pinned to the left edge, the empty space the width fix just closed on
+   the right would have reopened on both sides at once, unevenly. */
+.walk-sections {
+    display: flex;
+    flex-direction: column;
+    max-width: calc(8rem + 1rem + var(--walk-measure) + 2.2rem);
+    margin: 1.4rem auto 0;
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.55rem;
+    overflow: hidden;
+}
+
+/* A row read, never pressed: laid out as a row of a table, because it is read far more often than
+   an agent is edited. The label column is fixed so the five names line up and the eye can run down
+   them. */
+.walk-section {
+    display: grid;
+    grid-template-columns: 8rem 1fr;
+    align-items: start;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.9rem 1.1rem;
+    color: var(--alembic-text);
+}
+
+.walk-section + .walk-section {
+    border-top: 1px solid color-mix(in srgb, var(--alembic-border) 60%, transparent);
+}
+
+.walk-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--alembic-muted);
+    padding-top: 0.2rem;
+}
+
+/* Never clipped. A screen opened to read what an agent says, that then shows four fifths of a
+   sentence and an ellipsis, has answered nothing: the part that got cut is the part they came for.
+   The measure is set here, where a measure means something, rather than around the whole page. */
+.walk-value {
+    max-width: var(--walk-measure);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.walk-section.unwritten .walk-value {
+    color: var(--alembic-muted);
+    font-style: italic;
+}
+
+/* The one way in, beneath the rows it acts on rather than beside any one of them. Sized the way
+   every primary button in this wizard is — to its own text — never stretched to the table's width:
+   a button that wide reads as a bar across the page rather than as a control anyone presses. Centred
+   on the same axis as the table above it, rather than hung off its left edge, so the one thing on
+   this page anyone actually presses sits under the middle of what it acts on. */
+.walk-edit {
+    display: block;
+    width: fit-content;
+    margin: 1.4rem auto 0;
+}
+
+@media (max-width: 48rem) {
+    .walk-section {
+        grid-template-columns: 1fr;
+    }
+}

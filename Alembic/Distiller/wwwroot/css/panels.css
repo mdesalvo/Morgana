@@ -286,3 +286,26 @@ pre.prompt {
     max-height: 34rem;
     overflow-y: auto;
 }
+
+/* One tool per line, wherever a toolkit is read: the panel behind the map's own tag, and the walk
+   over a domain's agents. A hanging indent keeps a description that wraps aligned under the text
+   rather than under the bullet, since the signature's own bold is exactly what a wall of eight of
+   these needs to stay scannable without cutting anything short.
+
+   Both .value and .walk-value set white-space: pre-wrap for the flat, newline-joined strings every
+   other row still is — the wrong thing for this one now that a tool is a real element rather than a
+   line in that string. Left alone, it preserves the indentation the Razor source itself is written
+   with as literal leading whitespace on the first line, which is what actually read as "centred":
+   the bullet line pushed right by however many spaces the markup happened to be indented, every
+   wrapped continuation snapping back to the true edge. Reset here rather than by keeping the markup
+   on one line forever, so the next edit to it cannot reopen the same thing. */
+.tool-line {
+    padding-left: 1.1em;
+    text-indent: -1.1em;
+    text-align: left;
+    white-space: normal;
+}
+
+.tool-line + .tool-line {
+    margin-top: 0.4rem;
+}

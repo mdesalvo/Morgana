@@ -94,6 +94,14 @@
 
   <ItemGroup>
     <Content Include="..\Distiller\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+
+    <!--
+      The shipped Examples domain, as the fixture for everything that starts from a configuration a
+      client already runs rather than from an interview — editing above all. Linked from the repo's
+      own copy rather than duplicated here, so the domain these tests correct is the same one the
+      rest of the repository builds and demonstrates, and cannot quietly drift from it.
+    -->
+    <Content Include="..\..\Examples\agents.json" Link="examples-agents.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />

@@ -158,13 +158,13 @@
     /// <summary>
     /// The step, named as the rail names it.
     /// </summary>
-    private static string Step(InterviewPass pass) => pass switch
+    private static string Step(InterviewStep pass) => pass switch
     {
-        InterviewPass.DomainMapper => "the map",
-        InterviewPass.AgentModeler => "Target",
-        InterviewPass.AgentVoicer => "Personality",
-        InterviewPass.ToolkitModeler => "Toolkit",
-        InterviewPass.AgentInstructor => "Instructions",
+        InterviewStep.DomainMapper => "the map",
+        InterviewStep.AgentTarget => "Target",
+        InterviewStep.AgentPersonality => "Personality",
+        InterviewStep.AgentToolkit => "Toolkit",
+        InterviewStep.AgentInstructions => "Instructions",
         _ => "Formatting"
     };
 

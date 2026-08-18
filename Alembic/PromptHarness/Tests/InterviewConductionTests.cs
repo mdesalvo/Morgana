@@ -42,7 +42,7 @@ public sealed class InterviewConductionTests
 
         // The client described exactly two operations: checking availability and placing a
         // reservation. A toolkit with neither, or with a third tool nobody described, would be the
-        // ToolkitModeler pass inventing or dropping capability rather than transcribing what it was
+        // AgentToolkit pass inventing or dropping capability rather than transcribing what it was
         // told.
         Assert.True(agent.Tools.Count >= 1, $"Agent declared no tools at all.\n{driven}");
         Assert.All(agent.Tools, tool => Assert.False(string.IsNullOrWhiteSpace(tool.Name), $"A tool has no Name.\n{driven}"));

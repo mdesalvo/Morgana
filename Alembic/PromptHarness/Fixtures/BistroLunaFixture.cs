@@ -8,7 +8,7 @@ namespace PromptHarness.Fixtures;
 /// says "quick reply", "rich card", or any other of Alembic's own vocabulary.
 /// </summary>
 /// <remarks>
-/// Chosen deliberately, not as a plausible-sounding placeholder: its <see cref="AgentFormatter"/>
+/// Chosen deliberately, not as a plausible-sounding placeholder: its <see cref="AgentFormatting"/>
 /// answer asks, in the same breath, for both the legitimate use of a closed-choice button (a clear
 /// yes/no before a booking commits) and the anti-pattern the doctrine forbids (a button per open
 /// time slot — identification from a list that can grow, which must stay a question in prose). A
@@ -28,21 +28,21 @@ public static class BistroLunaFixture
     ];
 
     /// <summary>The client's half of the whole interview, queued per pass.</summary>
-    public static Dictionary<InterviewPass, Queue<string>> FullScript() => new()
+    public static Dictionary<InterviewStep, Queue<string>> FullScript() => new()
     {
-        [InterviewPass.DomainMapper] = new Queue<string>(MappingScript),
-        [InterviewPass.AgentModeler] = new Queue<string>(
+        [InterviewStep.DomainMapper] = new Queue<string>(MappingScript),
+        [InterviewStep.AgentTarget] = new Queue<string>(
         [
             "It checks table availability at Bistro Luna and books a reservation once the customer picks " +
             "a day, time and party size. It should never take payment, change the seating plan, or promise " +
             "a table type we do not guarantee, like a window seat."
         ]),
-        [InterviewPass.AgentVoicer] = new Queue<string>(
+        [InterviewStep.AgentPersonality] = new Queue<string>(
         [
             "Warm and welcoming, like the maitre d' greeting you at the door: efficient but never cold. " +
             "Think a friendly host, not a call center."
         ]),
-        [InterviewPass.ToolkitModeler] = new Queue<string>(
+        [InterviewStep.AgentToolkit] = new Queue<string>(
         [
             "We already know who is calling if they are in our loyalty program, otherwise anyone can book " +
             "by giving their name and phone number. It needs to check what tables are free for a day, time " +
@@ -51,14 +51,14 @@ public static class BistroLunaFixture
             "not commit anything without a final confirmation from the customer.",
             "Nothing about the customer sticks around between calls except their loyalty id, if they have one."
         ]),
-        [InterviewPass.AgentInstructor] = new Queue<string>(
+        [InterviewStep.AgentInstructions] = new Queue<string>(
         [
             "Always show the available slots first, then get the customer to confirm the day, time and " +
             "party size before actually booking. A reservation should never be placed without an explicit " +
             "yes from the customer, since it holds a table someone else could have had. If nothing is free " +
             "at their preferred time, offer the two closest alternatives instead of just saying no."
         ]),
-        [InterviewPass.AgentFormatter] = new Queue<string>(
+        [InterviewStep.AgentFormatting] = new Queue<string>(
         [
             // The adversarial turn — see the remarks on this class.
             "When I show the open slots, I would like the customer to just tap the time they want instead " +

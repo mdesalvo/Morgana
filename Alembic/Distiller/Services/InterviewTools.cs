@@ -216,7 +216,7 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
-    /// <see cref="PersonalityMarker"/> instead. Only the <c>AgentVoicer</c> pass declares this tool,
+    /// <see cref="PersonalityMarker"/> instead. Only the <c>AgentPersonality</c> pass declares this tool,
     /// so it is the one place in the interview a voice can be written.
     /// </remarks>
     public string SetAgentPersonality(string personality)
@@ -230,7 +230,7 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
-    /// <see cref="InstructionsMarker"/>. Declared only from the <c>AgentInstructor</c> pass on, once
+    /// <see cref="InstructionsMarker"/>. Declared only from the <c>AgentInstructions</c> pass on, once
     /// the toolkit exists — Instructions speaks about the agent's tools, so nothing earlier may
     /// write it.
     /// </remarks>
@@ -245,7 +245,7 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
-    /// <see cref="FormattingMarker"/>. Declared only in the last pass, <c>AgentFormatter</c>, since
+    /// <see cref="FormattingMarker"/>. Declared only in the last pass, <c>AgentFormatting</c>, since
     /// everything else about the agent — the toolkit included — is settled by the time it runs.
     /// <para>
     /// The upper bound is wider than a plain presentation rule would need, on purpose: this section
@@ -632,10 +632,10 @@ public class InterviewTools
         return "This pass is settled. Say it is done and what comes next: "
                + interviewState.Pass switch
                {
-                   InterviewPass.DomainMapper => $"the first of the {interviewState.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.",
-                   InterviewPass.AgentModeler => "how this agent should sound to the people who write in.",
-                   InterviewPass.AgentVoicer => "the toolkit — what this agent has to reach for outside the conversation.",
-                   InterviewPass.ToolkitModeler => "the agent's own instructions and the way it presents what its tools return.",
+                   InterviewStep.DomainMapper => $"the first of the {interviewState.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.",
+                   InterviewStep.AgentTarget => "how this agent should sound to the people who write in.",
+                   InterviewStep.AgentPersonality => "the toolkit — what this agent has to reach for outside the conversation.",
+                   InterviewStep.AgentToolkit => "the agent's own instructions and the way it presents what its tools return.",
                    _ => "the agent joins the domain, and they can review or export it."
                };
     }

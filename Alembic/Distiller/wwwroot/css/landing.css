@@ -159,14 +159,19 @@
     box-shadow: 0 0 1.8rem color-mix(in srgb, var(--alembic-accent) 60%, transparent);
 }
 
-/* Three doorways instead of two, for the page you land on after bringing a file: same shape as
-   the landing's, because they are the same kind of thing — a way on, not a description. */
-.gateways-three {
-    grid-template-columns: repeat(3, 1fr);
+/* Four doorways instead of two, for the page you land on after bringing a file: same shape as the
+   landing's, because they are the same kind of thing — a way on, not a description. They are the
+   four intentions somebody arrives with, and correcting what came in is one of them: not adding to
+   the domain, not weighing it, not packaging it.
+
+   Two by two rather than four in a row, because four doors across a wide page make each one a strip
+   too shallow for its own sigil, and the sigil is what is read before the words are. */
+.gateways-four {
+    grid-template-columns: repeat(2, 1fr);
 }
 
 @media (max-width: 52rem) {
-    .gateways-three {
+    .gateways-four {
         grid-template-columns: 1fr;
     }
 }

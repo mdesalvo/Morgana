@@ -18,13 +18,29 @@
    request — computed once by AgentRows.Of so this panel and the caret+count on the map's own tag
    can never disagree about what is written down. A row with no value yet is shown faint rather
    than omitted, so the panel reads as the client's own domain filling in rather than a form
-   growing new fields under them. *@
+   growing new fields under them.
+
+   The Toolkit row is the one exception: its Value is only a stand-in for the empty check, and this
+   is what actually renders it, one tool per line straight off the agent's own Tools — bolding a
+   signature this way is real markup, not a string built and escaped by hand. *@
 <div class="rows-open">
     @foreach (AgentRows.Row row in AgentRows.Of(State))
     {
         <div class="drop @(row.Value is null ? "empty" : "") @(row.Moved ? "moved" : "")">
             <span class="what">@row.What</span>
-            <span class="value">@(row.Value ?? "not yet")</span>
+            @if (row.What == "Toolkit" && State.Agent.Tools.Count > 0)
+            {
+                <div class="value tools">
+                    @foreach (ToolDraft tool in State.Agent.Tools)
+                    {
+                        <div class="tool-line">&bull; <strong>@AgentRows.Signature(tool)</strong>@(string.IsNullOrWhiteSpace(tool.Description) ? null : $" — {tool.Description}")</div>
+                    }
+                </div>
+            }
+            else
+            {
+                <span class="value">@(row.Value ?? "not yet")</span>
+            }
         </div>
     }
 </div>

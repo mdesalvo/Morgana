@@ -89,6 +89,13 @@
             *@
             <h2 class="what-now">Agents found in this domain</h2>
 
+            @*
+                Read-only, the way the walk's own five rows are: this is evidence, not a second door.
+                It used to also open the walk standing on the agent it names — a shortcut past the row
+                of presses a client who already knew which one they came about would otherwise need.
+                The walk's own prev/next reaches the same screen with no second thing to explain, so
+                this went back to being only what it says it is: what came in.
+            *@
             @foreach (AgentDraft agent in draft.Agents)
             {
                 IntentDraft? intent = draft.Intents.FirstOrDefault(i => i.Name == agent.ID);
@@ -154,7 +161,32 @@
             they are doors to an action that cannot mean anything yet. So with no agent in hand there
             is exactly one door: into the interview that is the only way to get one.
         *@
-        <div class="gateways @(HasAgents ? "gateways-three" : "gateways-one")">
+        <div class="gateways @(HasAgents ? "gateways-four" : "gateways-one")">
+
+            @if (HasAgents)
+            {
+                @*
+                    A door of the same rank as the other three, because it answers a different
+                    intention and not a smaller one: somebody who uploads a domain to correct a tool
+                    or a turn of phrase is not adding to it, not weighing it and not packaging it.
+
+                    It does not ask which agent, and it does not have to. Whoever comes through here
+                    usually cannot say where the problem is — they know it when they read it — so the
+                    walk opens on the first and leafs, and the client who DOES know finds it the same
+                    way, with the walk's own prev/next: this is the only door onto that screen now.
+                *@
+                <a class="gateway" href="revise">
+                    <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 19.5 8.4 18 19 7.4a2 2 0 0 0-2.8-2.8L5.6 15.2 4 19.5z" />
+                        <path d="M14.6 6.6 17 9" />
+                        <path d="M4 21.6h16" />
+                    </svg>
+
+                    <h2>Go over the agents</h2>
+                    <span class="go">Leaf &rarr;</span>
+                </a>
+            }
 
             <a class="gateway @(!HasAgents || arrivedAsArchive ? null : "primary-gateway")" href="interview">
                 <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"

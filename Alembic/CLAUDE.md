@@ -82,6 +82,26 @@ the pass's half following it inside the same section, so what the model reads is
 sections an agent prompt always is and there is no seam in it. `Personality` and `Formatting` are
 shared outright: the interviewer is one person however many passes they conduct.
 
+**And a third row says which of two jobs the step is doing: `Composing` or `Correcting`.** Writing a
+section that does not exist and correcting one that does are different work, and a pass is handed
+only the half that is true of it. The alternatives were both worse and both were tried. Written as
+clauses inside the prose — *composing, ask this; correcting, ask that* — the two jobs sat in every
+pass and the model read both every time, which is how it twice opened an agent that was fully written
+as though it were blank: it had a concrete procedure telling it to start over and an abstract rule
+telling it not to, and the concrete one won. Written as two files, `alembic.new.json` and
+`alembic.modify.json`, they would have been nine tenths identical — the identity, the conducting
+rules, the voice, every tool declaration — which is precisely the duplication this prompt was already
+once rebuilt to remove, and one copy had drifted from the other the last time it existed. A row costs
+neither: what differs is stored once, and what does not is not stored twice.
+
+The `Correcting` row carries the sentence that makes it work: **where the instructions for your own
+step describe building this section from nothing, they are describing the other job — read them for
+what the section IS, never as a running order to start over with.** That is what lets each pass keep
+its own procedure written plainly, in one voice, without a conditional in it.
+
+Verified across all six passes: composing and correcting differ by that block and by nothing else,
+character for character.
+
 The whole of Alembic's prose is now ~10 000 characters where it was ~22 500, and nothing was cut
 that instructs — what went was restatement, rules already enforced by a tool's own answer, and
 prohibitions the vocabulary rule already covers. The prose an interviewer reads obeys the law it
@@ -640,7 +660,7 @@ client's own trade and about the agent being built, rather than a stranger's bus
 while they are asked about their own. The prose asks for one close enough to be worth editing and
 too specific to be agreed with as it stands, because an example that fits exactly is one they press
 past without adding what only they know. It clears itself every exchange, so it cannot outlive its
-question; `AgentVoicer` has no such tool, since that step is answered by picking words and a story
+question; `AgentPersonality` has no such tool, since that step is answered by picking words and a story
 beside them would be an example of an answer nobody asked for.
 
 **The opening question of the map keeps a written one, and that is not an inconsistency.** Nothing is
@@ -700,7 +720,7 @@ side, so both belong to the pass that has the whole set in view. The buttons com
 go, once the list is closed: written by Alembic from what it was told, stated back as a set, and
 corrected. Never asked for one at a time, and never asked of the client at all.
 
-That is also why no later pass can write an intent: `SetIntent` does not exist. `AgentModeler`
+That is also why no later pass can write an intent: `SetIntent` does not exist. `AgentTarget`
 declares `SetAgentTarget` and nothing else that writes, so "the map is not reopened" is a fact about
 which tools exist rather than a sentence asking for restraint — and `InterviewState.MissingTarget`
 names the same single field, because it is the same fact.
@@ -714,11 +734,11 @@ the toolkit exists.
 | Pass | Runs | Settles | Cannot touch |
 |---|---|---|---|
 | `DomainMapper` | once | the whole `Intents` section: every name, description, label and opening sentence | everything about every agent |
-| `AgentModeler` | per entry | the agent's `Target` | the intents, its voice, tools, `Instructions`, `Formatting` |
-| `AgentVoicer` | per entry | the agent's `Personality` | everything else, the `Target` included |
-| `ToolkitModeler` | per entry | the tools, their descriptions, their parameters, scopes and sharing | what the agent *is*, `Instructions`, `Formatting` |
-| `AgentInstructor` | per entry | `Instructions` | everything already settled, `Formatting` included |
-| `AgentFormatter` | per entry | `Formatting` | everything else, all of it settled |
+| `AgentTarget` | per entry | the agent's `Target` | the intents, its voice, tools, `Instructions`, `Formatting` |
+| `AgentPersonality` | per entry | the agent's `Personality` | everything else, the `Target` included |
+| `AgentToolkit` | per entry | the tools, their descriptions, their parameters, scopes and sharing | what the agent *is*, `Instructions`, `Formatting` |
+| `AgentInstructions` | per entry | `Instructions` | everything already settled, `Formatting` included |
+| `AgentFormatting` | per entry | `Formatting` | everything else, all of it settled |
 
 **`Target` and `Personality` are two passes, not two questions of one.** What they ask for is not the
 same kind of thing: a `Target` is *dictated* — the client knows what the work is and can say it —
@@ -740,15 +760,163 @@ They are deliberately not `SetChoice`. A quick reply is one whole answer and spe
 pressed; one of these is not an answer at all until it is joined by the others the client keeps. Same
 plumbing, different gesture, and the rendering says which: dashed and weightless until taken.
 
-The `AgentFormatter` pass is the one place the loop stops for the client: letting a finished agent
+The `AgentFormatting` pass is the one place the loop stops for the client: letting a finished agent
 into the domain is the single decision of the interview that is theirs, and `AcceptAsync` reports
-whether the map has another entry — if it has, the next `AgentModeler` pass opens on the same screen,
+whether the map has another entry — if it has, the next `AgentTarget` pass opens on the same screen,
 and the client never goes back to a menu to remember their own list.
 
 **The fallback intent is not on the map and never was.** `other` is where the classifier sends what
 it cannot place; `DomainDraft.EnsureFallbackIntent` puts it in every domain — greenfield at commit,
 uploaded at import, where its absence is also said out loud — and `DeclareIntent` refuses the name.
 It is the one element of a domain no interview authors and no client edits.
+
+### The walk: a domain is edited, not only added to
+
+An agent already in the domain can be opened and corrected, and what made that cheap is that nearly
+everything it needs was already here. A step is re-entered with a fresh agent and a fresh session
+reading what is written as settled fact — `BackAsync`. An entry in hand is out of the domain so it
+cannot be committed twice — stepping between two entries. Removing a tool or a parameter is
+`DropTool` and `DropToolParameter`, which the toolkit pass has declared all along. What was missing
+was a way in **from outside the interview**, and a way to reach the part the client came about without
+sitting through the parts they did not.
+
+**Correcting is a fourth intention, so it is a fourth door.** Somebody who uploads a domain to fix a
+tool or a turn of phrase is not adding to it, not weighing it and not packaging it — Import's other
+three doors each answer a different question. It does not ask *which* agent and does not have to:
+whoever comes through it usually cannot say where the problem is, they recognise it when they read
+it. So it opens on the first agent and leafs; the client who *does* know it finds it the same way,
+stepping through with the walk's own prev/next rather than through a second door that would have
+landed them in the same place. Import's own agent cards, once a shortcut straight to one of them, are
+read-only now, for the same reason `Revise.razor`'s five rows are: one way in is the whole point, and
+a second one that reaches the same screen is a second thing to explain where there is one.
+
+**Leafing costs nothing, because leafing is reading.** `Pages/Revise.razor` calls no model and writes
+nothing to the Draft. An agent read on the way past is never taken out of the configuration, so
+closing the tab mid-walk loses nothing at all, and a screen arrives instantly rather than after a
+Performance call for a step nobody stopped at. That constraint is the shape of the page: a step
+composed on the way past would break the one gesture it exists for.
+
+**The agent is shown whole, for reading.** Five rows under the rail's own names — `Target`,
+`Personality`, `Toolkit`, `Instructions`, `Formatting` — each carrying what is written, never
+clipped: a screen opened to read what an agent says, that then shows four fifths of a sentence and an
+ellipsis, has answered nothing. None of the five is its own way in any more — see below for why —
+there is one door per agent, and it always opens at the Target. The two skips are for when the point
+is on another agent, and they carry the neighbouring agent's own name, because *next* says the list
+continues while the name says whether to press it. Past the last one is Review — a walk that looped
+would have no way of saying it was over.
+
+The map is not one of the five and cannot be. It settles every intent **against every other one**, so
+reopening it over a single agent would be the one pass of the interview with nothing to compare its
+work to. Changing what routes where is changing the domain rather than the agent, and it is already
+the interview's own first step.
+
+What `AgentRevision` carries is exactly what the domain would otherwise lose while the agent is out
+of it: **its place in the two lists**, since the order is the client's and an agent that walks to the
+bottom every time somebody fixes a sentence turns that order into a history of edits; **the
+provenance it arrived with**; and **what it read when it left**. That last one tells a rewrite from a
+look — an agent opened and left alone goes back `Imported`, because a migration report that lists
+everything the client *opened* is a report they stop reading. All three are serialized with the
+sitting, so an edit interrupted halfway comes back an edit.
+
+The **C# facts are not rewritten**. A fresh agent gets its class names proposed and the record flagged
+`Inferred`; an edited one keeps what it arrived with, which may not be a guess at all — a save file
+and an archive both carry the real namespace, the real class names and the tier. The one exception is
+the one fact an edit can genuinely create: an agent that had no native tools and now has some has
+nowhere for them to be emitted.
+
+**An edit always opens at the Target, and chains forward exactly like composing.** The earlier design
+had a correction settle the one section it was opened on and stop: the pass loop in `AnswerAsync`
+refused to chain when the agent came off the walk rather than off a fresh entry on the map, on the
+grounds that carrying the client through the four sections after the one they opened cost them four
+steps nobody asked for. That traded one hazard for a worse one — see below — so `ReviseAsync` no
+longer takes which section to open. It always opens the Target, `AnswerAsync`'s loop no longer tells
+composing and correcting apart, and an edit walks `Target → Personality → Toolkit → Instructions →
+Formatting` the same five steps, in the same order, that writing an agent for the first time does.
+`Revise.razor`'s five rows are read-only now, for exactly the leafing they were always for; the one
+thing they no longer do is choose where the interview opens.
+
+**This is what actually closes the hazard composing never has.** Changing one section can leave
+another wrong — a `Target` that now promises something no tool backs, `Instructions` still routing
+through a tool that is gone, a `Formatting` laying out a field nothing returns any more. Composing
+cannot produce it: the toolkit is settled after the `Target` and against it, so a capability without
+a tool never outlives the step that would have given it one. Editing used to be able to, because a
+correction opened and settled one section and stopped — the pass that noticed a gap had no tool to
+fix a section that was not its own, so the earlier design had it name the gap in the client's own
+words and leave it there. It no longer needs to: the section it noticed is wrong is the very next
+pass in the chain, or the one after that, and by the time the edit reaches `AgentFormatting` every
+section has been checked against what came before it, using the same tools that section would use to
+be written from nothing.
+
+The `Correcting` row's instructions say this directly — *check this section against what just
+changed, not only against what the client asked about here by name* — and license the fast path for
+the ordinary case, which is most of them: where nothing changed upstream that touches this section,
+say so in one sentence, attach the choice, and settle it **without calling the section's own `Set`
+tool at all**, so it survives untouched rather than being written back out in different words. That
+is what keeps a one-line `Target` fix from costing five real interrogations instead of one real
+question and four quick confirmations.
+
+The coherence pass still catches a `Target` with nothing behind it — an agent nobody has ever walked
+through Alembic's own edit is exactly as capable of arriving that way as one an edit once left short.
+What changed is which of those two cases is now the ordinary one: an agent edited here closes its own
+cross-section gaps in the same sitting the edit that opened it runs in, so the coherence pass meets
+that defect mainly in domains, or parts of domains, this interview has not touched — an imported
+agent left alone, or one hand-written outside Alembic entirely. Its own job stays what it always
+was: relations *between* agents — two of them claiming the same capability, one publishing a value
+under a name the other expects under a different one — which no amount of walking one agent's own
+sections could ever see.
+
+Both are under test. `AddedCapabilityFixture` adds the coupon to `Inventory`'s `Target` — the hardest
+of the four agents rather than the easiest, since its eight tools make the toolkit *look*
+comprehensive and a gap surrounded by that much coverage is the one a pass reads past — and drives the
+edit through to `AgentFormatting`, supplying the missing tool once the chain reaches the `Toolkit`
+pass. `CrossSectionEditTests` asserts, deterministically, that the toolkit grew to cover the added
+capability, and separately that a tool was actually declared for it rather than merely mentioned. The
+original shape of this fixture stopped the moment the `Target` settled and asserted the opposite —
+that the toolkit stayed untouched — because that is what the one-section-and-stop design demanded of
+it; it failed on its first run, against the exact live transcript that prompted this whole redesign,
+which is the whole reason any of it exists.
+
+**A pass is never left to work out which job it is doing.** The message that opens a step states it
+as a fact — *nothing of this agent is written yet*, or *this agent already exists and you are
+correcting it*, followed by every section quoted back — and the prompt carries the matching
+`Composing` or `Correcting` row. The two wordings are one sentence kept in two places, so they are
+the same words rather than paraphrases of each other: a pass taught to recognise one of them has to
+be handed it.
+
+That fact is read off the agent, never off which pass is running. A sentence per pass could only be
+right in one of the four ways a step is entered — running straight down the interview — and stepping
+back, resuming a saved sitting and correcting from the walk all arrive at the same pass over a
+differently-filled agent. The table that used to say it was the source of the first defect the walk
+turned up: the Target step of an agent that already had one opened with *nothing of its agent is
+written yet*, and the model, believing the concrete claim over the abstract instruction beside it,
+asked the client the mapping question three steps behind where they were standing.
+
+**The harness covers it from the other end than everything else does.** Every other fixture
+interviews a domain into existence and asks what Alembic wrote; `ExamplesDomainFixture` starts where
+a client with a running Morgana starts — the shipped `Examples/agents.json`, linked from the repo's
+own copy so it cannot drift — and reopens one agent of it at its Target, asking only for its
+Personality to change and letting the chain walk the other four sections on its own. The agent is the
+second of four on purpose: putting one back where it came from is invisible on a domain of one and
+answered by luck on the last of four. What is asserted splits the way the work does. The judge reads
+the turn that reaches the Personality pass and is asked whether it speaks to a voice that exists; the
+rest is decidable by reading the Draft — the agent back at its own index and exactly once, `Revised`
+rather than `Authored`, its C# facts unrewritten, the three sections nobody asked to change coming
+back byte-identical despite being walked, and every other agent of the domain byte-identical through
+an export. `ModePromptTests` holds the prompt architecture itself, without a model: each pass gets
+one mode row, the right one, and the two composed prompts differ by that row and by nothing else.
+
+The first run of it found a defect nothing else would have: `AcceptAsync` assigned
+`Agent.ID = Intent.Name` unconditionally, which is right for a fresh agent and wrong for one that
+arrived with an ID of its own. The `Examples` domain writes the agent `Contract` and the intent
+`contract` — Morgana matches them case-insensitively — so correcting a sentence in that agent
+silently recased its ID, an edit nobody asked for in a field nobody opened, arriving in the client's
+diff and in the migration report as a change they cannot account for.
+
+Two ends of the interview read the revision and nothing in the middle does, which is the point:
+correcting an agent's `Toolkit` is the same step, asked the same way, as settling the `Toolkit` of one
+being written now. What differs is that **behind its first step is the walk** rather than a step — and
+`StepBack` names it, because pressing it is also the way out of a section opened by mistake, and
+leaving has to put the agent back in the domain rather than leave it in a hand nobody is holding.
 
 Each pass is a **fresh agent and a fresh session**, and that is design rather than limitation: a
 toolkit pass carrying the whole functional interview in its context spends it re-litigating
@@ -1003,7 +1171,8 @@ Alembic/                              # Container: Distiller/ (the workbench) + 
       AssetPackageService.cs          #  The one archive: config, sources, mocks, reports, save file
     Pages/_Host.cshtml                # Blazor Server host page (Server: prerendering mounts twice)
     Pages/Index.razor                 # Landing: the alembic, and the two ways in — distil a new domain, or continue one
-    Pages/Import.razor                # Upload an agents.json or a save file, see the parsed Draft, download it back
+    Pages/Import.razor                # Upload an agents.json, a save file or an archive; four doors, agents read-only
+    Pages/Revise.razor                # The walk: the domain's agents read one screen at a time, one door in, always at Target
     Pages/Review.razor                # Findings, then the composed prompts
     Pages/Interview.razor             # The wizard: drives the state machine, owns none of the pieces
     Pages/Morganize.razor             # The turnkey end: validate, then emit the one archive
@@ -1017,10 +1186,11 @@ Alembic/                              # Container: Distiller/ (the workbench) + 
       AgentSoFar.razor                #   the agent's own rows, folded behind its name
       SaveWork.razor                  #   the work so far, in one file, taken away in one click
       AgentWritten.razor              #   the one decision that is the client's, and the join to the next entry
-    wwwroot/css/                      # Seven files, cascade order set in _Host.cshtml
+    wwwroot/css/                      # Eight files, cascade order set in _Host.cshtml
       palette.css                     #   the palette alone: every file below spends it, none redefines it
       base.css                        #   reset, page shells, the mark
       landing.css / import.css        #   the two entrances
+      revise.css                      #   the walk: reading surface with exits, no question on it
       panels.css / controls.css       #   what is read in a panel; buttons and shared furniture
       interview.css                   #   the interview, whose three states have to agree in one place
     wwwroot/favicon.svg               # The vessel at 16px: belly, neck, spout, one spark
@@ -1029,8 +1199,10 @@ Alembic/                              # Container: Distiller/ (the workbench) + 
     PromptHarness.csproj              # xunit v3, ProjectReference → ..\Distiller\Distiller.csproj
     AssemblyInfo.cs                   # Assembly-wide fixture + serial test collection
     Infrastructure/                   # AlembicHostFixture, InterviewDriver, ArchiveCompiler, Judge
-    Fixtures/                         # Scripted "domain expert" fixtures (e.g. Bistro Luna)
-    Tests/                            # DoctrineTests, MappingTests, InterviewConductionTests, FinalizationTests
+    Fixtures/                         # Bistro Luna, interviewed into being; the Examples domain, imported and corrected
+                                      #   (a section rewritten, and a capability added that no tool backs)
+    Tests/                            # DoctrineTests, MappingTests, InterviewConductionTests, FinalizationTests,
+                                      #   EditingTests, CrossSectionEditTests, ModePromptTests
 ```
 
 ## The Draft

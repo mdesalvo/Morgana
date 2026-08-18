@@ -1,0 +1,239 @@
+@page "/revise"
+@inject IDraftStateService DraftStateService
+@inject NavigationManager NavigationManager
+
+@*
+    The walk: the domain's agents, one screen each, read rather than interviewed.
+
+    Nothing here calls a model and nothing here writes to the Draft, and both are the point. Somebody
+    who imported a domain to correct something usually does not know where it is — they want to leaf
+    through until they recognise it, the way a track is found by pressing next rather than by knowing
+    its number. Leafing has to cost what leafing costs: a screen, instantly. A step that composed a
+    question on the way past would charge a Performance call and a wait for a step nobody stopped at,
+    which breaks the one gesture this page exists for.
+
+    So the agent is shown whole — its five sections as they stand — for reading, and reading only:
+    none of the five is its own way in any more. A fix to one section can leave another wrong (a
+    Target that now promises something no tool of it backs is the ordinary way a domain drifts), and
+    a client who could open exactly the section they meant to fix would have no reason to ever look
+    at the rest. So there is one way in per agent, and it always opens at Target: the interview it
+    hands over to walks every section from there, forcing the model to recheck what the change moved
+    rather than trusting the other four are still true. The two skips beside the header are for the
+    case where the point is on another agent. The model, the session and the agent leaving the
+    configuration all wait until editing is actually asked for: an agent read on the way past is
+    never taken out of the domain, so closing the tab in the middle of a walk loses nothing at all.
+
+    This is the only place the walk exists. The interview it hands over to is the interview, unchanged
+    — an agent that already exists is walked by the same five steps, asked the same way, as one being
+    written now; only the mode each reads in differs.
+*@
+
+<div class="alembic-page alembic-wide">
+
+    @if (Agents.Count == 0)
+    {
+        <div class="panel">
+            <h2>Nothing to go over</h2>
+            <p class="muted">
+                This domain holds no agent yet. Bring a configuration, or distil one.
+            </p>
+        </div>
+    }
+    else if (Current is { } agent)
+    {
+        <div class="walk">
+
+            @*
+                Which of how many, and the agents either side by name. A bare "3 of 7" says where the
+                client is but not what is next, and what is next is exactly what they are deciding
+                when they reach for the skip.
+
+                On the first agent there is nothing behind, so the skip is not drawn at all rather
+                than drawn disabled — a control that can never do anything is not a quieter version
+                of itself, it is a button with nothing behind it. An empty spacer of the same size
+                takes its place instead of removing it outright, so the name does not lurch to the
+                edge the one time in the walk it has no opposite number.
+            *@
+            <div class="walk-head">
+                @if (At > 0)
+                {
+                    <button class="walk-step" @onclick="Previous" title="The agent before this one">
+                        &#9198; @Named(Agents[At - 1])
+                    </button>
+                }
+                else
+                {
+                    <span class="walk-step walk-step-spacer" aria-hidden="true"></span>
+                }
+
+                <div class="walk-who">
+                    <h1>@Named(agent)</h1>
+                    <span class="walk-count">@(At + 1) of @Agents.Count</span>
+                </div>
+
+                @*
+                    Past the last agent is the finished domain, which is where an interview ends when
+                    its map is spent. A walk that looped would have no way of saying it was over, and
+                    reviewing what you have just corrected is the thing you came to do next.
+                *@
+                <button class="walk-step" @onclick="Next">
+                    @(Last ? "Review the domain" : Named(Agents[At + 1])) &#9197;
+                </button>
+            </div>
+
+            @if (Description(agent) is { Length: > 0 } description)
+            {
+                <p class="walk-when">Comes when someone asks about @Lower(description)</p>
+            }
+
+            @*
+                Five rows, each the whole of what is written, for reading only. Not clipped: a screen
+                opened to read what an agent says, that then shows four fifths of a sentence and an
+                ellipsis, has answered nothing — the part that got cut is the part they came for.
+
+                The labels are the rail's own, matching the interview's own vocabulary, but none of
+                them is pressable any more: editing is one gesture for the whole agent, below, not
+                five doors into five separate promises about what a fix will and will not touch.
+            *@
+            <div class="walk-sections">
+                @foreach (Section part in Sections(agent))
+                {
+                    <div class="walk-section @(part.Written is null ? "unwritten" : null)">
+                        <span class="walk-label">@part.Label</span>
+
+                        @if (part.Label == "Toolkit" && agent.Tools.Count > 0)
+                        {
+                            <div class="walk-value tools">
+                                @foreach (ToolDraft tool in agent.Tools)
+                                {
+                                    <div class="tool-line">&bull; <strong>@AgentRows.Signature(tool)</strong>@(string.IsNullOrWhiteSpace(tool.Description) ? null : $" — {tool.Description}")</div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="walk-value">
+                                @(part.Written ?? "Not written yet")
+                            </span>
+                        }
+                    </div>
+                }
+            </div>
+
+            @*
+                One way in, always the same door: the Target. Editing hands the whole agent to the
+                interview and lets it walk every section from there, so a change here is checked
+                against what comes after it instead of trusted to leave the rest alone.
+            *@
+            <button class="primary walk-edit" @onclick="() => Edit(agent)">
+                Edit this agent
+            </button>
+
+        </div>
+    }
+
+    <Back />
+
+</div>
+
+@code {
+    /// <summary>
+    /// One section of the agent on screen: what it is called, and what it says.
+    /// </summary>
+    private sealed record Section(string Label, string? Written);
+
+    /// <summary>
+    /// Which agent of the domain is on screen.
+    /// </summary>
+    /// <remarks>
+    /// In the address rather than in the circuit, so a walk survives the reload a Blazor Server
+    /// circuit does not — and so Import's own agent cards can hand somebody straight to the one they
+    /// were reading, instead of to the first and a row of presses.
+    /// </remarks>
+    [SupplyParameterFromQuery(Name = "at")]
+    public int? Where { get; set; }
+
+    /// <summary>
+    /// The agents of the domain, in the domain's own order.
+    /// </summary>
+    /// <remarks>
+    /// The fallback has no agent and is not one of these: it is where the classifier sends what it
+    /// cannot place, it belongs to every domain, and there is nothing about it for anyone to correct.
+    /// </remarks>
+    private IReadOnlyList<AgentDraft> Agents =>
+        DraftStateService.Current?.Agents ?? [];
+
+    /// <summary>
+    /// Where the walk stands, held to the domain it is walking so an address typed by hand or an
+    /// agent removed since cannot put it past the end.
+    /// </summary>
+    private int At => Math.Clamp(Where ?? 0, 0, Math.Max(0, Agents.Count - 1));
+
+    private AgentDraft? Current => Agents.Count > 0 ? Agents[At] : null;
+
+    private bool Last => At + 1 >= Agents.Count;
+
+    /// <summary>
+    /// The intent that reaches an agent, which is where its name and its description live.
+    /// </summary>
+    private IntentDraft? Intent(AgentDraft agent) =>
+        DraftStateService.Current?.Intents.FirstOrDefault(i =>
+            string.Equals(i.Name, agent.ID, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The client's own word for an agent: its button, which is what they called it.
+    /// </summary>
+    private string Named(AgentDraft agent) =>
+        Intent(agent)?.Label ?? agent.ID ?? "an agent";
+
+    private string? Description(AgentDraft agent) => Intent(agent)?.Description;
+
+    /// <summary>
+    /// Lowers a description's first letter so it reads on from "asks about".
+    /// </summary>
+    private static string Lower(string description) =>
+        char.ToLowerInvariant(description[0]) + description[1..];
+
+    /// <summary>
+    /// The agent as five sections, in the order the interview writes them.
+    /// </summary>
+    /// <remarks>
+    /// The Toolkit is named by its tools rather than by prose, because that is what it is — a list of
+    /// what this agent can reach. <see cref="AgentRows.Toolkit"/> only says whether it is empty; the
+    /// markup renders it one tool per line, signature bolded, straight off <c>agent.Tools</c> — the
+    /// same way the panel behind the map's own tag does, so a client leafing here and one still
+    /// mid-interview meet the same toolkit written the same way.
+    /// </remarks>
+    private static IReadOnlyList<Section> Sections(AgentDraft agent) =>
+    [
+        new Section("Target", AgentRows.Plain(agent.Target)),
+        new Section("Personality", AgentRows.Plain(agent.Personality)),
+        new Section("Toolkit", AgentRows.Toolkit(agent.Tools)),
+        new Section("Instructions", AgentRows.Plain(agent.Instructions)),
+        new Section("Formatting", AgentRows.Plain(agent.Formatting))
+    ];
+
+    private void Previous() => Go(At - 1);
+
+    /// <summary>
+    /// On past this agent, or out of the walk when it was the last.
+    /// </summary>
+    private void Next()
+    {
+        if (Last)
+            NavigationManager.NavigateTo("review");
+        else
+            Go(At + 1);
+    }
+
+    private void Go(int at) => NavigationManager.NavigateTo($"revise?at={at}");
+
+    /// <summary>
+    /// Hands the whole agent over to the interview, which is where the model finally comes on. It
+    /// always opens at the Target — see the doctrine at the top of this file for why there is no
+    /// longer a way to name a section here.
+    /// </summary>
+    private void Edit(AgentDraft agent) =>
+        NavigationManager.NavigateTo(
+            $"interview?revise={Uri.EscapeDataString(agent.ID ?? string.Empty)}&back={At}");
+}

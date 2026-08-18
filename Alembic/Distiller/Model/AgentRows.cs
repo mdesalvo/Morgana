@@ -40,12 +40,7 @@ public static class AgentRows
             new Row("Personality", Plain(interviewState.Agent.Personality), interviewState.Changed.Contains("agentPersonality"))
         ];
 
-        bool toolsMoved = interviewState.Changed.Contains("tools");
-
-        if (interviewState.Agent.Tools.Count == 0)
-            rows.Add(new Row("Toolkit", null, toolsMoved));
-        else
-            rows.AddRange(interviewState.Agent.Tools.Select(t => new Row("tool", t.Name, toolsMoved)));
+        rows.Add(new Row("Toolkit", Toolkit(interviewState.Agent.Tools), interviewState.Changed.Contains("tools")));
 
         rows.Add(new Row("Instructions", Plain(interviewState.Agent.Instructions), interviewState.Changed.Contains("agentInstructions")));
         rows.Add(new Row("Formatting", Plain(interviewState.Agent.Formatting), interviewState.Changed.Contains("agentFormatting")));
@@ -65,6 +60,23 @@ public static class AgentRows
             : $"{intent.Label ?? "…"}  |  {intent.DefaultValue ?? "…"}";
 
     /// <summary>
+    /// The toolkit's own <see cref="Row.Value"/>: not what actually reaches the client, only enough
+    /// to say whether the row is empty and to give <see cref="Written"/> something to count. The view
+    /// itself renders the tools it stands for straight from <see cref="ToolDraft"/>, one line each
+    /// with its signature bolded — real markup, so this stays plain text.
+    /// </summary>
+    public static string? Toolkit(IReadOnlyList<ToolDraft> tools) =>
+        tools.Count == 0 ? null : string.Join(" · ", tools.Select(Signature));
+
+    /// <summary>
+    /// A tool's name and parameters, plain text, exactly as the client named both.
+    /// </summary>
+    public static string Signature(ToolDraft tool) =>
+        (tool.Name ?? "(unnamed)") + (tool.Parameters.Count == 0
+            ? string.Empty
+            : $"({string.Join(", ", tool.Parameters.Select(p => p.Name ?? "…"))})");
+
+    /// <summary>
     /// How many rows have something in them.
     /// </summary>
     public static int Written(IReadOnlyList<Row> rows) => rows.Count(row => row.Value is not null);
@@ -72,10 +84,14 @@ public static class AgentRows
     /// <summary>
     /// A written section as the client should read it: without the label the framework fences it in.
     /// </summary>
+    /// <remarks>
+    /// Public because two screens read prose the interview wrote and neither should meet the fence:
+    /// the panel behind the entry's tag, and the walk over a domain's agents.
+    /// </remarks>
     // [TARGET] is a marker for the model that reads the composed prompt, guaranteed in code precisely
     // because it must not depend on anyone remembering it. It is not a word of this client's, and a
     // panel written for them is the wrong place to meet it.
-    private static string? Plain(string? section) =>
+    public static string? Plain(string? section) =>
         section is null ? null : Labelled.Replace(section, string.Empty).TrimStart();
 
     private static readonly System.Text.RegularExpressions.Regex Labelled =

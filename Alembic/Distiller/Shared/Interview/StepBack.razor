@@ -38,18 +38,35 @@
     /// <summary>
     /// Where the way back lands, in the client's own words, or <c>null</c> when nothing is behind.
     /// </summary>
-    // Named exactly as the rail above names it, so the button and the step it lands on are the same
-    // words and the client can see where they are about to be. Leaving an entry says so by naming the
-    // entry instead: it is a bigger move than stepping between two steps of one.
+    // The strings on the right are rail labels, not InterviewStep names — each step's own name minus
+    // "Agent" happens to be its rail label today, but nothing ties the two together structurally the
+    // way PassPromptIds ties a step to its prompt ID, so a step renamed without its rail label (or
+    // the other way round) would drift here silently.
+    //
+    // Pattern matching, so order decides: the first arm that fits wins.
     private string? Behind => State switch
     {
-        { Pass: InterviewPass.AgentFormatter, ReadyForReview: true } => "Change something in this one",
-        { Pass: InterviewPass.DomainMapper } => null,
-        { Pass: InterviewPass.AgentModeler, At: 0 } => "Back to Domain Mapping",
-        { Pass: InterviewPass.AgentModeler } => $"Back to {Named(State.Map[State.At - 1])}",
-        { Pass: InterviewPass.AgentVoicer } => "Back to Target",
-        { Pass: InterviewPass.ToolkitModeler } => "Back to Personality",
-        { Pass: InterviewPass.AgentInstructor } => "Back to Toolkit",
+        // ReadyForReview only surfaces here at AgentFormatting now, for both jobs alike: composing or
+        // editing, AnswerAsync's loop drains it immediately at every earlier pass by carrying a
+        // settled one straight into the next. So this arm no longer needs a Revision check to tell
+        // the two apart — reaching AgentFormatting ready for review means the same thing either way,
+        // and this button reopens that very section rather than stepping back to the one before it,
+        // exactly like every other arm below, so it is named the same way they are.
+        { Pass: InterviewStep.AgentFormatting, ReadyForReview: true } => "Back to Formatting",
+
+        // The map is the first thing there is. Behind it is only the landing.
+        { Pass: InterviewStep.DomainMapper } => null,
+
+        // Leaving an edit's very first step exits to the walk it was opened from, named by the agent
+        // rather than by a section — a bigger move than stepping between two steps of one. A fresh
+        // compose's Target has no agent behind it, only the map or the entry before it, below.
+        { Pass: InterviewStep.AgentTarget, Revision: not null } => $"Back to {Named(State.Intent)}",
+
+        { Pass: InterviewStep.AgentTarget, At: 0 } => "Back to Domain Mapping",
+        { Pass: InterviewStep.AgentTarget } => $"Back to {Named(State.Map[State.At - 1])}",
+        { Pass: InterviewStep.AgentPersonality } => "Back to Target",
+        { Pass: InterviewStep.AgentToolkit } => "Back to Personality",
+        { Pass: InterviewStep.AgentInstructions } => "Back to Toolkit",
         _ => "Back to Instructions"
     };
 

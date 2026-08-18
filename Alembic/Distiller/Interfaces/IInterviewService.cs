@@ -28,6 +28,31 @@ public interface IInterviewService
     Task<InterviewState> StartAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Opens an agent already in the domain, at its Target, so the client can have it corrected.
+    /// </summary>
+    /// <param name="agentID">The agent, by the intent name that reaches it.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns><c>false</c> when the domain holds no such agent.</returns>
+    // Reached from the walk and from nowhere else. That is what keeps leafing through a domain free:
+    // the walk moves a marker, and the model, the session and the agent leaving the configuration all
+    // wait until the client actually asks to edit it.
+    //
+    // Always the Target, never the section the client meant to fix: an edit is a compose walk seeded
+    // from an existing agent rather than a blank one, so it starts where a compose starts and
+    // AnswerAsync's chain carries it through every pass after — the same chain a fresh agent walks,
+    // running in Correcting mode throughout. That is what makes a change to one section force the
+    // model to recheck what comes after it instead of trusting nothing downstream moved.
+    //
+    // Everything an edit needs already existed. A step is re-entered with a fresh agent and a fresh
+    // session reading what is written as settled fact, which is what BackAsync does; an entry in hand
+    // is out of the domain so it cannot be committed twice, which is what stepping between entries
+    // does; and removing a tool or a parameter is DropTool and DropToolParameter, which the toolkit
+    // pass has declared all along. What was missing was a way in from outside the interview.
+    Task<bool> ReviseAsync(
+        string agentID,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Records the client's answer and asks the next question.
     /// </summary>
     /// <param name="answer">What the client said.</param>

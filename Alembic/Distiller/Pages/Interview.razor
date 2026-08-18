@@ -58,6 +58,7 @@
                       Prompting="@Prompting(interviewState)"
                       Choice="Offered(interviewState)"
                       Traits="interviewState.Traits"
+                      Taken="interviewState.TraitsTaken"
                       Busy="isBusy"
                       Turn="interviewState.Exchanges"
                       OnAnswer="SendAsync"
@@ -85,6 +86,32 @@
     private bool started;
 
     /// <summary>
+    /// The agent whose section the client came to rewrite, when they arrived from the walk rather
+    /// than to write something new.
+    /// </summary>
+    /// <remarks>
+    /// In the address, because what it names is their own gesture — this agent, this section — and it
+    /// has to survive the reload a Blazor Server circuit does not. It is also why the two are one
+    /// page: an edit is the same interview entered partway down, and a second page would be a copy of
+    /// this one with the map taken out.
+    /// </remarks>
+    [SupplyParameterFromQuery(Name = "revise")]
+    public string? Revise { get; set; }
+
+    /// <summary>
+    /// Where on the walk they were standing, so finishing here puts them back on that screen rather
+    /// than at its first agent.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "back")]
+    public int? Walked { get; set; }
+
+    /// <summary>
+    /// Where the client goes when there is nothing more to do here: back onto the walk if that is
+    /// where they came from, and to the finished domain otherwise.
+    /// </summary>
+    private string Leaving => Walked is { } at ? $"revise?at={at}" : "review";
+
+    /// <summary>
     /// What the domain held before this interview: earlier sittings and uploaded configurations.
     /// </summary>
     /// <remarks>
@@ -100,10 +127,15 @@
                             string.Equals(m.Name, i.Name, StringComparison.OrdinalIgnoreCase)) != true);
 
     /// <summary>
-    /// Whether every section is settled and the agent is waiting to be let into the domain.
+    /// Whether the agent is done here and waiting to be let into the domain.
     /// </summary>
+    /// <remarks>
+    /// The last of the five steps, whichever job this is: composing, the agent does not exist until
+    /// all of it does; editing, the chain walks the same five before it, so an agent is never handed
+    /// back with only one section rechecked.
+    /// </remarks>
     private static bool Written(InterviewState interviewState) =>
-        interviewState is { Pass: InterviewPass.AgentFormatter, ReadyForReview: true };
+        interviewState is { ReadyForReview: true, Pass: InterviewStep.AgentFormatting };
 
     /// <summary>
     /// The worked example in the answer box: the model's, or the house one on the very first question.
@@ -129,7 +161,7 @@
 
     private static string Prompting(InterviewState interviewState) =>
         interviewState.Example
-        ?? (interviewState is { Pass: InterviewPass.DomainMapper, PassJustOpened: true }
+        ?? (interviewState is { Pass: InterviewStep.DomainMapper, PassJustOpened: true }
                 ? HouseExample
                 : string.Empty);
 
@@ -176,7 +208,22 @@
     private async Task BackAsync()
     {
         isBusy = true;
-        try { await InterviewService.BackAsync(); }
+
+        try
+        {
+            if (await InterviewService.BackAsync())
+                return;
+
+            // Nothing behind it, which on an edit means the first step of the one agent in hand. That
+            // agent is out of the domain while it is being worked on, so leaving has to put it back
+            // — a client who opened the wrong section and pressed back must not be the reason an
+            // agent is missing from their own configuration.
+            if (InterviewService.Current?.Revision is not null)
+            {
+                await InterviewService.AcceptAsync();
+                NavigationManager.NavigateTo(Leaving);
+            }
+        }
         finally { isBusy = false; }
     }
 
@@ -199,7 +246,21 @@
         isBusy = true;
         StateHasChanged();
 
-        try { await InterviewService.StartAsync(); }
+        try
+        {
+            // An agent named in the address is one the client picked off their own domain, so there
+            // is nothing to fall back to when it is not there: starting a fresh interview instead
+            // would answer a gesture about one agent by offering to write another.
+            if (Revise is { Length: > 0 } revised)
+            {
+                if (!await InterviewService.ReviseAsync(revised))
+                    NavigationManager.NavigateTo(Leaving);
+            }
+            else
+            {
+                await InterviewService.StartAsync();
+            }
+        }
         finally { isBusy = false; }
 
         StateHasChanged();
@@ -219,8 +280,11 @@
 
         try
         {
+            // An edit puts one agent back and is over — its map was one entry. Where that lands is
+            // the walk it came from, on the same agent, now reading what was just changed: the client
+            // corrected one thing and is still going over their domain.
             if (!await InterviewService.AcceptAsync())
-                NavigationManager.NavigateTo("review");
+                NavigationManager.NavigateTo(Leaving);
         }
         finally { isBusy = false; }
     }

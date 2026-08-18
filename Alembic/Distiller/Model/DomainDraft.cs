@@ -125,7 +125,7 @@ public sealed class InterviewSitting
     /// <summary>
     /// Which step of an entry the interview stood on.
     /// </summary>
-    public InterviewPass Pass { get; set; }
+    public InterviewStep Pass { get; set; }
 
     /// <summary>
     /// Which entry of the map it stood on, or -1 while the map was still being drawn.
@@ -151,6 +151,53 @@ public sealed class InterviewSitting
     /// writes a fresh one, the fresh one wins, exactly as it would have without a save in between.
     /// </remarks>
     public string? Example { get; set; }
+
+    /// <summary>
+    /// What the agent in hand was before it left the domain, when this sitting is one section of an
+    /// agent being revised rather than a fresh entry being written.
+    /// </summary>
+    public AgentRevision? Revision { get; set; }
+}
+
+/// <summary>
+/// An agent taken out of the domain to be worked on, and what it needs to go back the way it came.
+/// </summary>
+/// <remarks>
+/// An agent being edited must not also be sitting in the configuration, or letting it back in would
+/// write it twice — the rule <c>BackAsync</c> already obeys when it steps out of one entry into the
+/// one before. So the domain is without it for the length of the edit, and this is what puts it back:
+/// its place in the two lists, since the order is the client's and an agent that walks to the bottom
+/// every time somebody fixes a sentence turns that order into a history of edits; and the provenance
+/// it arrived with, since an imported agent has to come back <see cref="Provenance.Revised"/> rather
+/// than as something Alembic claims to have authored.
+/// <para>
+/// It exists only while a section is actually being rewritten. Reading an agent on the way past
+/// creates none: leafing through a domain is not editing it, and an agent nobody has changed never
+/// leaves the configuration at all.
+/// </para>
+/// </remarks>
+public sealed class AgentRevision
+{
+    /// <summary>Where the intent stood in the domain's own list.</summary>
+    public int IntentAt { get; set; } = -1;
+
+    /// <summary>Where the agent stood in the domain's own list.</summary>
+    public int AgentAt { get; set; } = -1;
+
+    /// <summary>What the agent's provenance was before the edit opened.</summary>
+    public Provenance Origin { get; set; }
+
+    /// <summary>
+    /// What the agent read when it left the domain, so leaving the edit can tell a rewrite from a
+    /// look.
+    /// </summary>
+    /// <remarks>
+    /// Opening a section is not changing it, and an agent that goes back exactly as it came must go
+    /// back <see cref="Provenance.Imported"/> — otherwise the migration report names it among the
+    /// things this sitting touched, and a report that lists everything the client opened is a report
+    /// they stop reading.
+    /// </remarks>
+    public string? Was { get; set; }
 }
 
 /// <summary>
@@ -220,14 +267,14 @@ public sealed class AgentDraft
     /// <summary>
     /// What the agent is for: its scope and its boundaries.
     /// </summary>
-    /// <remarks><c>null</c> until the <c>AgentModeler</c> pass settles it — the field
+    /// <remarks><c>null</c> until the <c>AgentTarget</c> pass settles it — the field
     /// <see cref="InterviewState.MissingTarget"/> tests to decide whether that pass may close.</remarks>
     public string? Target { get; set; }
 
     /// <summary>
     /// Domain-specific behavioural rules. Written after the toolkit, because they speak about it.
     /// </summary>
-    /// <remarks><c>null</c> until the <c>AgentInstructor</c> pass runs, which is why the pass order
+    /// <remarks><c>null</c> until the <c>AgentInstructions</c> pass runs, which is why the pass order
     /// puts the toolkit before it — instructions about tools cannot be asked for before the tools
     /// they describe exist.</remarks>
     public string? Instructions { get; set; }
@@ -235,14 +282,14 @@ public sealed class AgentDraft
     /// <summary>
     /// How the agent presents its own tools' output. Written after the toolkit, for the same reason.
     /// </summary>
-    /// <remarks><c>null</c> until the <c>AgentFormatter</c> pass, the last one an entry goes
+    /// <remarks><c>null</c> until the <c>AgentFormatting</c> pass, the last one an entry goes
     /// through before <see cref="AcceptAsync"/>-style acceptance.</remarks>
     public string? Formatting { get; set; }
 
     /// <summary>
     /// Tone and voice. Optional in the framework, and optional here.
     /// </summary>
-    /// <remarks><c>null</c> until the <c>AgentVoicer</c> pass; unlike <see cref="Target"/> etc. this
+    /// <remarks><c>null</c> until the <c>AgentPersonality</c> pass; unlike <see cref="Target"/> etc. this
     /// one may legitimately stay <c>null</c> even once accepted, since a voice is optional.</remarks>
     public string? Personality { get; set; }
 
@@ -288,7 +335,7 @@ public sealed class ToolDraft
     /// Tool name. Must match the C# method name exactly — <c>MorganaToolAdapter.AddTool</c>
     /// validates the pair and fails startup on a mismatch.
     /// </summary>
-    /// <remarks><c>null</c> until the <c>ToolkitModeler</c> pass declares this tool via
+    /// <remarks><c>null</c> until the <c>AgentToolkit</c> pass declares this tool via
     /// <c>DeclareTool</c>.</remarks>
     public string? Name { get; set; }
 
