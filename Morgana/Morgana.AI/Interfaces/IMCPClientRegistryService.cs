@@ -1,4 +1,3 @@
-using Microsoft.Extensions.AI;
 using ModelContextProtocol.Client;
 using Morgana.AI.Attributes;
 using Morgana.AI.Services;
@@ -21,30 +20,6 @@ public interface IMCPClientRegistryService : IDisposable, IAsyncDisposable
     /// </param>
     /// <returns>Connected MCPClient instance ready for tool discovery and invocation</returns>
     Task<MCPClient> GetOrCreateClientAsync(UsesMCPServerAttribute serverAttribute);
-
-    /// <summary>
-    /// Runs operation against pooled client, transparently recovering from terminated session.
-    /// Per MCP Streamable HTTP spec, dead client is evicted, fresh one connected (new initialize),
-    /// and operation is retried once. Makes any MCP host usable without manual reconnection.
-    /// </summary>
-    /// <typeparam name="T">Operation result type.</typeparam>
-    /// <param name="serverAttribute">The attribute identifying the target server.</param>
-    /// <param name="operation">The work to perform against the (possibly reconnected) client.</param>
-    /// <returns>The operation result, after at most one transparent reconnect+retry.</returns>
-    Task<T> ExecuteWithReconnectAsync<T>(
-        UsesMCPServerAttribute serverAttribute,
-        Func<MCPClient, Task<T>> operation);
-
-    /// <summary>
-    /// Wraps a freshly-discovered MCP tool so every future invocation re-resolves a live session
-    /// through this registry instead of staying bound to the session it was discovered on — the
-    /// fix for an agent (a long-lived actor) whose server drops that session mid-conversation, long
-    /// after the one-time discovery that happened in its constructor.
-    /// </summary>
-    /// <param name="discoveredTool">The tool as first discovered — source of the schema snapshot.</param>
-    /// <param name="serverAttribute">The server declaration, used to re-resolve the live client.</param>
-    /// <returns>An <see cref="AIFunction"/> safe to hand to <c>ChatOptions.Tools</c> for the life of the agent.</returns>
-    AIFunction WrapResilientTool(McpClientTool discoveredTool, UsesMCPServerAttribute serverAttribute);
 
     /// <summary>
     /// Disconnects and removes a specific MCP client from the pool.

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.28.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Alembic — Turnkey Domain Onboarding
-This release introduces **Alembic**, a Blazor Server workbench that distils a live interview with a domain expert into a complete, ready-to-run **Morgana domain** — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — **with no prompt ever authored by hand**.
+This release introduces **Alembic**, a Blazor Server workbench that distils a live interview with a domain expert into a complete, ready-to-build **Morgana domain** — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — **with no prompt ever authored by hand**.
 A domain-mapping pass turns the client's own words into intents; five further passes per agent (Target, Personality, Toolkit, Instructions, Formatting) build its prose incrementally, each reading back only what is already settled.
 The result is deterministically validated, composed exactly as the running agent's own model will read it and packaged as **one downloadable C# archive** ready to be built, taking a client from a description of their business to a running, testable Morgana plugin in one sitting.
 ### 🎯 Major Feature: Prompt Composition Extension Point
@@ -18,13 +18,15 @@ This release introduces `IPromptComposerService`, opening the **innermost core o
 - Introduced `IPromptComposerService` as an **extension point for prompt composition**: `ConfigurationPromptComposerService` ships as the default implementation (two-layer fenced composition, global policies ordered by type and priority, injection templates spliced into tool descriptions and per-turn context declaration) and can be replaced in DI with any alternative prompt architecture without touching the agent adapter, the tool adapter or the context provider.
 
 ### 🔄 Changed
-- **`MorganaChatReducer` replacing `Microsoft.Extensions.AI.SummarizingChatReducer` as history reducer** — gaining complete control over history reduction strategies while maintaining backward compatibility.
-- A SignalR channel must now join its conversation group **before** starting the conversation, which its own minting of the conversation id makes possible.
+- **`MorganaChatReducer` replacing `SummarizingChatReducer` as history reducer** — gaining complete control over history reduction strategies while maintaining backward compatibility.
+- Updated `Microsoft.Agents.AI` to 1.18.0
+- Updated `Microsoft.Extensions.AI` to 10.9.0
+- Updated `ModelContextProtocol.Core` to 2.2.0
+- Updated `OllamaSharp` to 5.4.30
 
 ### 🐛 Fixed
 - Text welded across tool calls — a turn that calls a tool writes several assistant messages, and their texts were concatenated with nothing in between.
 - History losing part of a reply on resume — only the last assistant message of a turn is marked user-facing, so everything written before a tool call vanished from the rendered history while the live reply had shown it.
-- Summarizer blind to tool activity — MEAI's SummarizingChatReducer drops every message carrying function-call or function-result content from the summarizer's input, so a tool-driven agent was summarized from a text-only skeleton and the model reported that no tool ran and no identifier existed.
 - **Cauldron (1)**
   - SignalR presentation race — a fresh conversation's greeting could reach an empty group and be discarded without a trace, since Cauldron joined the group only after the start response returned.
 

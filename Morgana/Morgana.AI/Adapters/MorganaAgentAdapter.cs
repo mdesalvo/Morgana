@@ -221,9 +221,8 @@ public class MorganaAgentAdapter
             agentTools,
             toolContextFactory);
 
-        // 6b) Collect the tools of every [UsesMCPServer] on the agent: each server is
-        //     discovered through the reconnect-safe path. Best-effort by design — a server
-        //     that is down or misconfigured is logged per-server and skipped, never aborting
+        // 6b) Collect the tools of every [UsesMCPServer] on the agent. Best-effort by
+        //     design — a server that is down or misconfigured is logged per-server and skipped, never aborting
         //     agent creation (an MCP-only agent simply ends up with no tools rather than
         //     failing to exist). They stay apart from the native adapter because they need
         //     nothing from it: each one arrives already an AIFunction.
@@ -462,7 +461,7 @@ public class MorganaAgentAdapter
 
     /// <summary>
     /// Discovers tools from every MCP server declared on the agent.
-    /// Collects [UsesMCPServer] attributes, discovers tools through reconnect-safe path.
+    /// Collects [UsesMCPServer] attributes and discovers tools from each.
     /// McpClientTool instances are already AIFunctions; no schema conversion applied.
     /// </summary>
     /// <param name="agentType">Agent type to inspect for [UsesMCPServer] attributes</param>
@@ -491,9 +490,7 @@ public class MorganaAgentAdapter
             // attempted independently and a failure (unreachable host, bad URI, discovery
             // error) is logged and swallowed so it cannot abort the remaining servers or
             // agent creation. This is what makes MCP registration "best-effort" — a dead
-            // server costs that server's tools, nothing more. DiscoverMCPToolsFromServer
-            // itself already absorbs a terminated session via the reconnect-safe path; a
-            // throw reaching here means a hard, non-transient fault for THAT server only.
+            // server costs that server's tools, nothing more.
             try
             {
                 mcpTools.AddRange(DiscoverMCPToolsFromServer(attribute));
@@ -508,25 +505,18 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Discovers tools from a single MCP server and wraps each with resilient reconnection.
-    /// Tools retain server-declared names; schema is untouched but invocation is wrapped
-    /// for session recovery (via ReconnectingMCPTool).
+    /// Discovers tools from a single MCP server. Tools retain server-declared names and schema
+    /// untouched — <see cref="McpClientTool"/> already is an <see cref="AIFunction"/>, so no
+    /// wrapping or conversion is applied.
     /// </summary>
     /// <param name="serverAttribute">Attribute declaring the MCP server (transport, command, args)</param>
-    /// <returns>Server's tools as AIFunctions with resilient wrapping</returns>
+    /// <returns>Server's tools as AIFunctions</returns>
     private IList<AIFunction> DiscoverMCPToolsFromServer(UsesMCPServerAttribute serverAttribute)
     {
         logger.LogInformation("Registering MCP tools from server: {ServerAttributeCommand}", serverAttribute.Command);
 
-        // Discover through the reconnecting wrapper: an MCP host whose session store does
-        // not survive instance recycling or scale-out can drop the cached client's session
-        // between connect and tool listing (the spec-mandated HTTP 404 on a session-bearing
-        // request). The wrapper transparently re-initializes and retries once instead of
-        // failing registration outright.
-        IList<McpClientTool> mcpTools = imcpClientRegistryService
-            .ExecuteWithReconnectAsync(serverAttribute, client => client.DiscoverToolsAsync())
-            .GetAwaiter()
-            .GetResult();
+        MCPClient mcpClient = imcpClientRegistryService.GetOrCreateClientAsync(serverAttribute).GetAwaiter().GetResult();
+        IList<McpClientTool> mcpTools = mcpClient.DiscoverToolsAsync().GetAwaiter().GetResult();
 
         // A reachable server that advertises zero tools is not an error (it may expose
         // none yet, or only prompts/resources): warn for visibility and return — there is
@@ -542,16 +532,7 @@ public class MorganaAgentAdapter
 
         logger.LogInformation("Successfully registered {McpToolsCount} MCP tools from {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);
 
-        // Wrapped here, not left as the raw McpClientTool list: this is the one and only
-        // discovery this agent will ever perform (RegisterMCPTools runs once, in the
-        // constructor), so binding the agent to these exact instances is binding it to
-        // whichever session happened to be live at creation time, for the rest of the
-        // conversation. WrapResilientTool keeps the schema (captured here, from these same
-        // instances) and replaces only the invocation path.
-        return
-        [
-            .. mcpTools.Select(mcpTool => imcpClientRegistryService.WrapResilientTool(mcpTool, serverAttribute))
-        ];
+        return [.. mcpTools];
     }
 
     private class ToolDefinitionNameComparer : IEqualityComparer<Records.ToolDefinition>

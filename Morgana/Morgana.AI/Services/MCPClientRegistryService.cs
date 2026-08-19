@@ -1,7 +1,4 @@
 using System.Collections.Concurrent;
-using System.Net;
-using System.Text.Json;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -11,32 +8,24 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Manages MCP client connections: pooling, lazy connect, and reconnect-on-session-drop.
-/// Pool key comes straight from <see cref="UsesMCPServerAttribute"/> (URI for Http, command
-/// path for Stdio) — no external configuration needed, agents are fully self-contained.
+/// Manages MCP client connections: pooling and lazy connect. Pool key comes straight from
+/// <see cref="UsesMCPServerAttribute"/> (URI for Http, command path for Stdio) — no external
+/// configuration needed, agents are fully self-contained.
 /// </summary>
 public class MCPClientRegistryService : IMCPClientRegistryService
 {
     /// <summary>
-    /// Logger for connection-pool lifecycle and reconnect diagnostics (create, reuse,
-    /// session-terminated recovery, disposal). Injected; never null.
+    /// Logger for connection-pool lifecycle diagnostics (create, reuse, disposal). Injected;
+    /// never null.
     /// </summary>
     private readonly ILogger logger;
 
     /// <summary>
     /// Connection pool: one MCPClient per pool key, shared across conversations/agents
-    /// targeting the same server. ConcurrentDictionary ensures lock-free acquire and
-    /// reconnect stay correct: atomic TryAdd/TryRemove guarantee single live client
-    /// per key with no double-dispose.
+    /// targeting the same server. ConcurrentDictionary's atomic TryAdd guarantees a single
+    /// live client per key with no double-connect.
     /// </summary>
     private readonly ConcurrentDictionary<string, MCPClient> mcpClients;
-
-    /// <summary>
-    /// Per-pool-key reconnect mutex. Collapses thundering-herd failures (N conversations
-    /// sharing one pooled client) into single reconnect: first caller gates and re-establishes;
-    /// others observe already-replaced client and adopt it. Keyed by pool key (small static set).
-    /// </summary>
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> reconnectGates;
 
     /// <summary>
     /// Latches true after the first <see cref="Dispose"/>/<see cref="DisposeAsync"/>.
@@ -54,7 +43,6 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     {
         this.logger = logger;
         mcpClients = new ConcurrentDictionary<string, MCPClient>();
-        reconnectGates = new ConcurrentDictionary<string, SemaphoreSlim>();
     }
 
     /// <summary>
@@ -106,127 +94,6 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         }
     }
 
-    /// <inheritdoc/>
-    public async Task<T> ExecuteWithReconnectAsync<T>(
-        UsesMCPServerAttribute serverAttribute,
-        Func<MCPClient, Task<T>> operation)
-    {
-        // A bad URI 404s at the eager initialize handshake inside GetOrCreateClientAsync and
-        // throws HERE, outside the catch below — so any 404 the catch DOES observe is on an
-        // already-established session (carries Mcp-Session-Id), never a routing mistake.
-        MCPClient mcpClient = await GetOrCreateClientAsync(serverAttribute);
-        try
-        {
-            return await operation(mcpClient);
-        }
-        catch (Exception ex) when (IsSessionTerminated(ex))
-        {
-            // Single-flight, instance-conditional recovery (see ReconnectAsync): collapses N
-            // concurrent failures into one reconnect. Retry runs exactly once — a second
-            // failure is a real fault (server down, auth, protocol) and propagates.
-            MCPClient reconnectedMCPClient = await ReconnectAsync(serverAttribute, staleMCPClient: mcpClient);
-            return await operation(reconnectedMCPClient);
-        }
-    }
-
-    /// <inheritdoc/>
-    public AIFunction WrapResilientTool(McpClientTool discoveredTool, UsesMCPServerAttribute serverAttribute)
-        => new ReconnectingMCPTool(discoveredTool, serverAttribute, this);
-
-    /// <summary>
-    /// Recovers from a terminated session: single-flight reconnect behind a per-pool-key gate,
-    /// replacing the pooled client only if it's still the exact instance the caller saw fail.
-    /// </summary>
-    private async Task<MCPClient> ReconnectAsync(UsesMCPServerAttribute serverAttribute, MCPClient staleMCPClient)
-    {
-        string poolKey = PoolKey(serverAttribute);
-
-        // One binary semaphore (count 1 → mutex) shared by all callers recovering THIS
-        // pool key — that is what makes the reconnect single-flight. GetOrAdd's factory
-        // may run more than once under first-hit contention, but the dictionary keeps
-        // exactly one instance; any redundant SemaphoreSlim is simply never awaited.
-        SemaphoreSlim reconnectGate = reconnectGates.GetOrAdd(poolKey, _ => new SemaphoreSlim(1, 1));
-
-        // Serialize the recovery: the first caller proceeds to reconnect; the rest block
-        // here and, once released, fall into the instance-conditional check below and
-        // adopt the client the winner already published instead of reconnecting again.
-        await reconnectGate.WaitAsync();
-
-        try
-        {
-            // Instance-conditional eviction: if the pooled client is no longer the one we
-            // saw die, a peer already healed it while we queued — adopt it, touch nothing.
-            if (mcpClients.TryGetValue(poolKey, out MCPClient? currentMCPClient)
-                 && !ReferenceEquals(currentMCPClient, staleMCPClient))
-            {
-                logger.LogDebug("MCP client for {Key} was already reconnected by a peer; reusing it", poolKey);
-                return currentMCPClient;
-            }
-
-            logger.LogWarning(
-                "MCP session terminated for {Key} (HTTP 404 on a session-bearing request — " +
-                "the spec-mandated drop signal); reconnecting once (single-flight)", poolKey);
-
-            // We hold the gate and the pooled instance is still the dead one (or absent):
-            // evict + dispose it, then connect fresh. The TryRemove is the authoritative
-            // single eviction; concurrent catch-callers are serialized behind the gate and
-            // will take the early-return branch above once we publish the replacement.
-            if (mcpClients.TryRemove(poolKey, out MCPClient? removedMCPClient))
-            {
-                try
-                {
-                    await removedMCPClient.DisposeAsync();
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error disposing terminated MCP client: {Key}", poolKey);
-                }
-            }
-
-            // Mint a fresh session (new initialize handshake). Still under the gate, so
-            // no peer recoverer connects in parallel. If this throws (server truly down),
-            // it propagates out through the finally below — the gate is released, the key
-            // is left empty, and the next caller retries cleanly from a known state.
-            MCPClient reconnectedMCPClient = await MCPClient.ConnectAsync(serverAttribute, logger);
-
-            // A first-time GetOrCreateClientAsync (not gated — it serves the cold-acquire
-            // path) may have populated the key while we were connecting. Mirror that
-            // method's race rule: keep the incumbent, dispose our redundant one. Otherwise
-            // publish ours.
-            if (mcpClients.TryAdd(poolKey, reconnectedMCPClient))
-                return reconnectedMCPClient;
-
-            // Cold-acquire won the race: our just-connected client is surplus. Dispose it
-            // (no socket leak) and hand back the incumbent the pool now holds.
-            await reconnectedMCPClient.DisposeAsync();
-            return mcpClients[poolKey];
-        }
-        finally
-        {
-            // Always release — including when ConnectAsync threw — so a failed reconnect
-            // never deadlocks the queued recoverers; the next one re-evaluates from the
-            // (now empty) pool and attempts its own connect.
-            reconnectGate.Release();
-        }
-    }
-
-    /// <summary>
-    /// True when exception (or inner) is MCP's "session terminated, re-initialize" signal:
-    /// HTTP 404 NotFound per Streamable HTTP spec. Server-agnostic recovery for any MCP host
-    /// whose session store doesn't survive recycling/scale-out. Private: ReconnectingMCPTool
-    /// reads it directly as nested class.
-    /// </summary>
-    private static bool IsSessionTerminated(Exception? ex)
-    {
-        for (Exception? current = ex; current is not null; current = current.InnerException)
-        {
-            if (current is HttpRequestException { StatusCode: HttpStatusCode.NotFound })
-                return true;
-        }
-
-        return false;
-    }
-
     /// <summary>Disconnects and removes a specific MCP client from pool.</summary>
     public async Task DisconnectClientAsync(UsesMCPServerAttribute serverAttribute)
     {
@@ -271,12 +138,6 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         await Task.WhenAll(disconnectTasks);
         mcpClients.Clear();
 
-        // Release the per-key reconnect gates: SemaphoreSlim is IDisposable and the
-        // registry is being torn down, so nothing will queue on them again.
-        foreach (SemaphoreSlim reconnectGate in reconnectGates.Values)
-            reconnectGate.Dispose();
-        reconnectGates.Clear();
-
         logger.LogInformation("All MCP clients disconnected");
     }
 
@@ -304,96 +165,11 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         }
     }
 
-    /// <summary>
-    /// MCP tool wrapper that survives server session drops mid-conversation. Long-lived agent actor calls through
-    /// cached tool; on session-terminated (HTTP 404), reconnects via registry's single-flight gate and retries once.
-    /// Fast path zero-cost when session never drops. Only WrapResilientTool constructs; nested for IsSessionTerminated visibility.
-    /// </summary>
-    private sealed class ReconnectingMCPTool : AIFunction
-    {
-        /// <summary>The pool this tool reconnects through, so a refresh goes via its single-flight gate rather than opening a private session.</summary>
-        private readonly MCPClientRegistryService registry;
-
-        /// <summary>The server declaration to reconnect to; also what resolves to the pool key on a refresh.</summary>
-        private readonly UsesMCPServerAttribute serverAttribute;
-
-        /// <summary>Name to re-resolve after a reconnect: the refreshed session returns new tool instances, matched back by name.</summary>
-        private readonly string toolName;
-
-        /// <summary>
-        /// The tool this instance currently calls through. Read/replaced without a lock: a race
-        /// between two concurrent calls both seeing a dead session is benign — the registry's own
-        /// single-flight gate (<see cref="ReconnectAsync"/>) collapses the redundant refresh.
-        /// </summary>
-        private McpClientTool currentTool;
-
-        /// <summary>
-        /// Wraps a freshly-discovered <see cref="McpClientTool"/>, capturing its schema once and its
-        /// invocation as a cache that only refreshes itself on a session-terminated failure.
-        /// </summary>
-        public ReconnectingMCPTool(McpClientTool discoveredTool, UsesMCPServerAttribute serverAttribute, MCPClientRegistryService registry)
-        {
-            this.registry = registry;
-            this.serverAttribute = serverAttribute;
-            toolName = discoveredTool.Name;
-            currentTool = discoveredTool;
-
-            Name = discoveredTool.Name;
-            Description = discoveredTool.Description;
-            JsonSchema = discoveredTool.JsonSchema;
-            ReturnJsonSchema = discoveredTool.ReturnJsonSchema;
-        }
-
-        /// <inheritdoc/>
-        public override string Name { get; }
-
-        /// <inheritdoc/>
-        public override string Description { get; }
-
-        /// <inheritdoc/>
-        public override JsonElement JsonSchema { get; }
-
-        /// <inheritdoc/>
-        public override JsonElement? ReturnJsonSchema { get; }
-
-        /// <summary>
-        /// Calls the cached tool directly. Only on the MCP session-terminated signal does it
-        /// re-discover through the reconnect-safe path and retry once — any other failure (bad
-        /// arguments, a genuine server error) propagates immediately, exactly as it would from a
-        /// bare <c>McpClientTool</c>.
-        /// </summary>
-        protected override async ValueTask<object?> InvokeCoreAsync(
-            AIFunctionArguments arguments,
-            CancellationToken cancellationToken)
-        {
-            try
-            {
-                return await currentTool.InvokeAsync(arguments, cancellationToken);
-            }
-            catch (Exception ex) when (IsSessionTerminated(ex))
-            {
-                // Falls through to the refresh below — the cached tool is dead, not the request.
-            }
-
-            McpClientTool refreshedTool = await registry.ExecuteWithReconnectAsync(
-                serverAttribute,
-                async client =>
-                {
-                    IList<McpClientTool> tools = await client.DiscoverToolsAsync(cancellationToken);
-                    return tools.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal))
-                        ?? throw new InvalidOperationException($"MCP server '{serverAttribute.Command}' no longer advertises tool '{toolName}'.");
-                });
-
-            currentTool = refreshedTool;
-            return await refreshedTool.InvokeAsync(arguments, cancellationToken);
-        }
-    }
 }
 
 /// <summary>
 /// Wrapper over SDK's McpClient for one connected MCP server (transport + live session). Private constructor; instances
 /// created only via ConnectAsync. Owned/pooled by MCPClientRegistryService (per-key, shared across conversations/agents).
-/// On session termination (HTTP 404), registry discards and reconnects; no retry here.
 /// </summary>
 public class MCPClient : IAsyncDisposable
 {
