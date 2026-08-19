@@ -93,6 +93,29 @@ if (!app.Environment.IsDevelopment())
 
 // Request pipeline configuration
 app.UseHttpsRedirection();              // Redirect HTTP → HTTPS
+
+// ============================================================================
+// 6. EMBEDDING CONTROL (frame-ancestors)
+// ============================================================================
+// Widget puts this app in an <iframe> on third-party sites, and nothing in
+// ASP.NET Core constrains framing by default — which for a chat surface is the wrong
+// default in both directions: unconfigured, any site could frame it and phish through it.
+//
+// Closed unless configured: with no origins listed, only Cauldron's own pages may frame it
+// ('self', which is what makes /widget/morgana.html work out of the box). Each origin an
+// operator adds to Cauldron:Widget:AllowedEmbedOrigins is a site allowed to host the widget.
+string[] allowedEmbedOrigins = app.Configuration
+    .GetSection("Cauldron:Widget:AllowedEmbedOrigins")
+    .Get<string[]>() ?? [];
+string frameAncestors = allowedEmbedOrigins.Length > 0
+    ? $"frame-ancestors 'self' {string.Join(' ', allowedEmbedOrigins)}"
+    : "frame-ancestors 'self'";
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.ContentSecurityPolicy = frameAncestors;
+    await next();
+});
+
 app.UseStaticFiles();                   // Serve static files (CSS, JS, images)
 app.UseRouting();                       // Enable endpoint routing
 
@@ -109,7 +132,7 @@ app.MapGet("/health", () => Results.Ok(new
 }));
 
 // ============================================================================
-// 6. APPLICATION STARTUP
+// 7. APPLICATION STARTUP
 // ============================================================================
 // Start the application and listen for requests.
 

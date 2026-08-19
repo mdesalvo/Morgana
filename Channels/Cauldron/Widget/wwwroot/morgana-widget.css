@@ -1,0 +1,306 @@
+/*
+    ============================================================================
+    MORGANA WIDGET STYLES
+    ============================================================================
+
+    Loaded inside the widget's shadow root, so none of this can reach the host page and
+    none of the host page's CSS can reach it. What DOES cross the boundary is inheritance:
+    font-family, font-size, line-height and friends flow in from the host's <body>, so
+    :host restates every inherited property the widget depends on instead of trusting
+    whatever the embedding site happens to set.
+
+    Palette mirrors Cauldron's own site.css so the launcher reads as the same artefact as
+    the chat it opens.
+*/
+
+:host {
+    /* Cauldron's palette, redeclared here: CSS custom properties inherit through the
+       shadow boundary, so relying on the host page to define them would be relying on
+       the host page to have Cauldron's stylesheet. */
+    --morgana-primary: #8b5cf6;
+    --morgana-primary-dark: #6d28d9;
+    --morgana-secondary: #ec4899;
+    --morgana-bg: #0f172a;
+    --morgana-surface: #1e293b;
+    --morgana-surface-light: #334155;
+    --morgana-text: #f1f5f9;
+
+    /* Inherited properties, pinned so the host page's typography cannot deform the widget */
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    font-size: 16px;
+    font-weight: 400;
+    font-style: normal;
+    line-height: 1.4;
+    letter-spacing: normal;
+    text-transform: none;
+    text-align: left;
+    color: var(--morgana-text);
+    direction: ltr;
+}
+
+/* The global reset a page normally provides stops at the shadow boundary */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* ==========================================================================
+   LAUNCHER — closed state
+   ==========================================================================
+   Fixed rather than laid out inside the host element: a fixed ancestor is not a
+   containing block for fixed descendants, so these coordinates are the viewport's
+   and the widget stays put regardless of what the host page does with scrolling. */
+
+.launcher {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 9px 22px 9px 9px;
+
+    border: 1px solid rgba(139, 92, 246, 0.45);
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--morgana-surface), var(--morgana-bg));
+    box-shadow:
+        0 10px 30px -8px rgba(0, 0, 0, 0.6),
+        0 0 24px -6px rgba(139, 92, 246, 0.5);
+
+    font: inherit;
+    color: var(--morgana-text);
+    cursor: pointer;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                border-radius 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.launcher:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 16px 36px -8px rgba(0, 0, 0, 0.7),
+        0 0 34px -4px rgba(139, 92, 246, 0.75);
+}
+
+.launcher:focus-visible {
+    outline: 2px solid var(--morgana-secondary);
+    outline-offset: 3px;
+}
+
+/* --- Avatar: the round, animated face of the button --- */
+
+.launcher-avatar {
+    position: relative;
+    display: block;
+    flex-shrink: 0;
+    width: 53px;
+    height: 53px;
+}
+
+.launcher-avatar img {
+    position: relative;
+    z-index: 1;
+    width: 53px;
+    height: 53px;
+    border: 2px solid var(--morgana-primary);
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Breathing halo behind the avatar — the same "there is magic running" cue the chat
+   header uses, at a scale that suits a resting launcher. */
+.launcher-avatar .glow {
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(139, 92, 246, 0.55), transparent 70%);
+    animation: morgana-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes morgana-pulse {
+    0%, 100% { opacity: 0.45; transform: scale(1); }
+    50%      { opacity: 0.9;  transform: scale(1.12); }
+}
+
+/* --- Label --- */
+
+.launcher-label {
+    white-space: nowrap;
+    font-size: 16px;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--morgana-text), var(--morgana-primary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    transition: opacity 0.2s ease, max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    max-width: 220px;
+    overflow: hidden;
+}
+
+/* --- Sparkles --- */
+
+.sparkle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--morgana-secondary);
+    opacity: 0;
+    pointer-events: none;
+    animation: morgana-sparkle 3.2s ease-in-out infinite;
+}
+
+.sparkle.s1 { top: 6px;    left: 34px; animation-delay: 0s;   }
+.sparkle.s2 { bottom: 8px; left: 20px; animation-delay: 1.1s; background: var(--morgana-primary); }
+.sparkle.s3 { top: 12px;   right: 22px; animation-delay: 2.0s; }
+
+@keyframes morgana-sparkle {
+    0%, 100%  { opacity: 0; transform: scale(0.4); }
+    40%, 60%  { opacity: 1; transform: scale(1); }
+}
+
+/* --- Open state: the pill collapses into a round minimize button ---
+   It keeps the launcher's own chrome — gradient, purple rim, glow — because it is still the
+   same control; only the payload swaps. Dropping that chrome for a bare glyph on a flat disc
+   is what makes a dismiss button read as borrowed from some other UI. */
+
+.launcher-minimize {
+    display: none;
+    width: 24px;
+    height: 24px;
+    color: var(--morgana-primary);
+    transition: color 0.2s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.launcher.is-open {
+    padding: 0;
+    width: 60px;
+    height: 60px;
+    justify-content: center;
+    border-radius: 50%;
+    border-color: rgba(139, 92, 246, 0.6);
+    background: linear-gradient(135deg, var(--morgana-surface), var(--morgana-bg));
+}
+
+.launcher.is-open:hover .launcher-minimize {
+    color: var(--morgana-text);
+    /* Nudged along the direction it points: the panel is going down, and the icon says so */
+    transform: translateY(2px);
+}
+
+.launcher.is-open .launcher-avatar,
+.launcher.is-open .sparkle {
+    display: none;
+}
+
+.launcher.is-open .launcher-label {
+    max-width: 0;
+    opacity: 0;
+}
+
+.launcher.is-open .launcher-minimize {
+    display: block;
+}
+
+/* ==========================================================================
+   PANEL — open state
+   ========================================================================== */
+
+.panel {
+    position: fixed;
+    right: 20px;
+    bottom: 104px;
+
+    width: 440px;
+    /* Never taller than the space left above the launcher, so the panel cannot run off
+       the top of a short viewport (a laptop with browser chrome, a split window). */
+    height: min(682px, calc(100vh - 140px));
+
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    border-radius: 16px;
+    background: var(--morgana-surface);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75);
+    overflow: hidden;
+
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+    transform-origin: bottom right;
+    transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.panel.open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.panel[hidden] {
+    display: none;
+}
+
+.frame {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+}
+
+/* ==========================================================================
+   NARROW VIEWPORTS
+   ==========================================================================
+   Below this width a floating panel would leave a useless sliver of host page around
+   it, so the chat takes the screen instead and the launcher rides above it as the
+   only way back out. */
+
+@media (max-width: 520px) {
+    .panel {
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        height: 100dvh;
+        border: 0;
+        border-radius: 0;
+    }
+
+    .launcher.is-open {
+        z-index: 1;
+        right: 12px;
+        bottom: 12px;
+        width: 53px;
+        height: 53px;
+        box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.8);
+    }
+}
+
+/* ==========================================================================
+   MOTION PREFERENCES
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .launcher,
+    .panel,
+    .launcher-label,
+    .launcher-minimize {
+        transition-duration: 0.01ms;
+    }
+
+    .launcher-avatar .glow,
+    .sparkle {
+        animation: none;
+    }
+
+    .sparkle {
+        opacity: 0.7;
+    }
+
+    .launcher:hover,
+    .launcher.is-open:hover .launcher-minimize {
+        transform: none;
+    }
+}

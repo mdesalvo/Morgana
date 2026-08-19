@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+    <PropertyGroup>
+       <Title>Widget</Title>
+       <PackageId>Widget</PackageId>
+
+       <!-- The folder is short because it sits inside Cauldron and reads in context; the
+            assembly is qualified because it does not — it lands in a publish directory
+            alongside everything else, where a bare "Widget.dll" would be anybody's. -->
+       <AssemblyName>Cauldron.Widget</AssemblyName>
+
+       <!-- Overrides the shared description in Directory.Build.props, which speaks for the
+            Cauldron application and would otherwise have this project claim to be it. -->
+       <Description>
+       Cauldron.Widget is the embeddable launcher for Cauldron: a floating "Consult Morgana" button
+       that opens a live Cauldron conversation inside any existing web page — whatever its server
+       technology — through a single script tag carrying no parameters.
+       Static assets only: dependency-free JavaScript, CSS and imagery, served under /widget/ by the
+       very Cauldron instance the launcher embeds.
+       </Description>
+
+       <!-- Static assets only: no C#, no Razor components, nothing that runs server-side.
+            The whole deliverable is wwwroot/, and it is served by whichever app references
+            this project — Cauldron. -->
+       <StaticWebAssetBasePath>widget</StaticWebAssetBasePath>
+       <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <!-- Directory.Build.props arms every project in Channels/Cauldron with the running app's
+         dependencies. None of them mean anything to a bag of .js/.css/.gif files, so they are
+         dropped here rather than trailing into Cauldron as transitive noise. -->
+    <ItemGroup>
+       <PackageReference Remove="Microsoft.AspNetCore.SignalR.Client" />
+       <PackageReference Remove="Microsoft.AspNetCore.App.Internal.Assets" />
+       <PackageReference Remove="Markdig" />
+       <PackageReference Remove="Microsoft.IdentityModel.JsonWebTokens" />
+       <PackageReference Remove="HtmlSanitizer" />
+    </ItemGroup>
+
+</Project>

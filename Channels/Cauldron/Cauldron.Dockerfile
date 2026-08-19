@@ -23,6 +23,7 @@ WORKDIR /src
 # Morgana one that the zero-dependency Morgana.Contracts inherits).
 COPY ["Channels/Cauldron/Cauldron.csproj", "Channels/Cauldron/"]
 COPY ["Channels/Cauldron/Directory.Build.props", "Channels/Cauldron/"]
+COPY ["Channels/Cauldron/Widget/Widget.csproj", "Channels/Cauldron/Widget/"]
 COPY ["Morgana/Morgana.Contracts/Morgana.Contracts.csproj", "Morgana/Morgana.Contracts/"]
 COPY ["Morgana/Directory.Build.props", "Morgana/"]
 

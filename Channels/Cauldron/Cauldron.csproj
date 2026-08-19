@@ -7,8 +7,23 @@
        <UserSecretsId>8f66e78c-06cc-4648-90a1-d05df3439409</UserSecretsId>
     </PropertyGroup>
 
+    <!-- Widget sits inside this project's directory, so Cauldron's recursive globs reach into
+         it and would compile the nested project's generated obj/ files as if they were its
+         own — duplicate assembly attributes, and a build that fails on the second run rather
+         than the first. The subtree belongs to that project alone. -->
+    <ItemGroup>
+       <Compile Remove="Widget\**" />
+       <Content Remove="Widget\**" />
+       <None Remove="Widget\**" />
+       <EmbeddedResource Remove="Widget\**" />
+    </ItemGroup>
+
     <ItemGroup>
        <ProjectReference Include="..\..\Morgana\Morgana.Contracts\Morgana.Contracts.csproj" />
+       <!-- Static-asset only. The reference points this way because the widget has to be
+            SERVED by the Cauldron it embeds: referencing it here publishes its wwwroot under
+            /widget/, which is the URL third-party pages script-tag. -->
+       <ProjectReference Include="Widget\Widget.csproj" />
     </ItemGroup>
 
 </Project>

@@ -96,6 +96,12 @@ services:
 
       # Morgana (Backend URL)
       - Cauldron__MorganaURL=http://morgana:5001
+
+      # Widget embedding allowlist (CSP frame-ancestors), one indexed entry per origin.
+      # Closed by default: with none set only Cauldron's own pages may frame it, so the
+      # widget runs on /widget/morgana.html but on no external site until listed here.
+      # - Cauldron__Widget__AllowedEmbedOrigins__0=https://www.example.com
+      # - Cauldron__Widget__AllowedEmbedOrigins__1=https://shop.example.com
     depends_on:
       - morgana
     networks:

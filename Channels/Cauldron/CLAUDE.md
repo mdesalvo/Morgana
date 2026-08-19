@@ -62,6 +62,12 @@ Channels/Cauldron/
   Shared/MainLayout.razor             # Layout wrapper
   wwwroot/css/                        # Component-specific CSS (site.css, rich-card.css, quick-reply.css, etc.)
   wwwroot/images/                     # Morgana avatar images
+  Widget/                             # Embeddable launcher (static assets only, published under /widget/)
+    Widget.csproj                     # Razor Class Library, StaticWebAssetBasePath=widget, compiles no code
+    wwwroot/morgana-widget.js         # Loader: origin discovery, shadow root, launcher, lazy iframe
+    wwwroot/morgana-widget.css        # Launcher + panel styling, in Cauldron's palette
+    wwwroot/morgana-animated.gif      # Morgana's face on the button
+    wwwroot/morgana.html                 # Mock third-party host page carrying only the script tag
 ```
 
 ## Architecture
@@ -183,6 +189,23 @@ Morgana persists this and uses it to decide whether to adapt (degrade) outbound 
 | `Cauldron:StreamingResponse:TypewriterTickMilliseconds` | Typewriter speed (default `15`ms) |
 | `Cauldron:StreamingResponse:TypewriterTickChars` | Chars per tick (default `1`) |
 | `Cauldron:LandingMessages` | String array of whimsical "warming up" lines for the sparkle loader, picked uniformly at random per session. Mirrors Rune's `Rune:LandingMessages` (same pool, same intent). |
+| `Cauldron:Widget:AllowedEmbedOrigins` | Origins allowed to frame Cauldron, emitted as CSP `frame-ancestors`. Empty (the default) means `'self'` only: no external site can embed the widget until its origin is listed. |
+
+## Embeddable Widget
+
+`Widget` is a static-asset Razor Class Library — no C#, no Razor, no server of its own. `Cauldron.csproj` references it, which publishes its `wwwroot/` under `/widget/`; the dependency points that way because the widget has to be **served by** the Cauldron instance it embeds.
+
+A host site of any technology (JSP, PHP, static HTML — the contract is plain browser HTML) integrates it with one tag and no parameters:
+
+```html
+<script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
+```
+
+`morgana-widget.js` reads its own `src` to learn the Cauldron origin, which is what buys the zero-parameter contract. It mounts a closed shadow root (so host-page CSS and widget CSS cannot reach each other) holding a launcher pill — Morgana's gif plus *Consult Morgana* — that toggles a panel containing a sandboxed `<iframe>` pointed at Cauldron's chat page.
+
+Two lifecycle rules matter, both dictated by Blazor Server: the iframe is created on **first open**, because loading Cauldron opens a circuit and pins per-visitor state on the server; and it is **never destroyed**, because that circuit is the conversation, so closing hides the panel instead of unmounting. Zero JS dependencies is deliberate — a widget cannot know the stack of the page it lands in.
+
+`/widget/morgana.html` is a mock third-party page carrying only the script tag; it works out of the box because the default `frame-ancestors 'self'` covers same-origin framing.
 
 ## UI Patterns
 

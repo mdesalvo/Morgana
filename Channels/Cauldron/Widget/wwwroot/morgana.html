@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Morgana Widget</title>
+
+    <!--
+        This page brings styling of its own — serif type, its own palette, its own resets —
+        and none of it reaches the launcher. That is the point of the sample: if the widget
+        still renders as Morgana on top of these rules, the shadow-root isolation holds.
+    -->
+    <style>
+        body {
+            margin: 0;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 18px;
+            line-height: 1.7;
+            color: #1f2937;
+            background: #f8fafc;
+        }
+        header {
+            background: #1d4ed8;
+            color: #fff;
+            padding: 24px 32px;
+        }
+        header h1 { margin: 0; font-size: 24px; }
+        header p { margin: 4px 0 0; font-size: 15px; opacity: 0.85; }
+        main { max-width: 720px; margin: 0 auto; padding: 48px 24px 120px; }
+        h2 { margin-top: 40px; }
+        code {
+            background: #e2e8f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 15px;
+        }
+        pre {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 16px 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>The Greenhouse &amp; Nursery</h1>
+        <p>Plants, flowers and advice — the sort of site that would want Morgana on it</p>
+    </header>
+
+    <main>
+        <h2>A perfectly ordinary page</h2>
+        <p>
+            This page knows nothing about Blazor, SignalR, .NET or Morgana. It sets its own
+            fonts, its own colours and its own resets, and it would behave identically if it
+            were rendered by a JSP, a PHP template, a Rails view or a static site generator.
+        </p>
+
+        <h2>The whole integration</h2>
+        <pre>&lt;script src="https://your-cauldron-host/widget/morgana-widget.js" defer&gt;&lt;/script&gt;</pre>
+        <p>
+            One tag, placed anywhere in the document. The widget reads the Cauldron origin off
+            its own <code>src</code>, mounts a launcher in the bottom-right corner, and loads
+            the chat only when a visitor actually opens it.
+        </p>
+
+        <h2>What to look for</h2>
+        <p>
+            The launcher below uses none of this page's typography or colours, and this page's
+            stylesheet cannot restyle it — both directions are sealed by the shadow root. The
+            conversation itself runs inside a sandboxed iframe served by Cauldron, so nothing
+            on this page can read it and nothing in it can touch this page.
+        </p>
+    </main>
+
+    <!-- Loaded relative to this file, which resolves to the same Cauldron host that serves it -->
+    <script src="morgana-widget.js" defer></script>
+</body>
+</html>

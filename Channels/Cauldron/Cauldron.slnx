@@ -4,4 +4,5 @@
 	<File Path="CLAUDE.md" />
   </Folder>
   <Project Path="Cauldron.csproj" />
+  <Project Path="Widget/Widget.csproj" />
 </Solution>
