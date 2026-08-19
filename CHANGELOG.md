@@ -10,12 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This release introduces **Alembic**, a Blazor Server workbench that distils a live interview with a domain expert into a complete, ready-to-build **Morgana domain** — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — **with no prompt ever authored by hand**.
 A domain-mapping pass turns the client's own words into intents; five further passes per agent (Target, Personality, Toolkit, Instructions, Formatting) build its prose incrementally, each reading back only what is already settled.
 The result is deterministically validated, composed exactly as the running agent's own model will read it and packaged as **one downloadable C# archive** ready to be built, taking a client from a description of their business to a running, testable Morgana plugin in one sitting.
-### 🎯 Major Feature: Prompt Composition Extension Point
-This release introduces `IPromptComposerService`, opening the **innermost core of an AI application — how a prompt is assembled — to substitution**. It joins the suite of pluggable interfaces as the sibling of `IPromptResolverService`: the resolver abstracts *where prompts come from*, the composer *how they become what the model reads*.
 
 ### ✨ Added
 - **Alembic** — a Blazor Server authoring workbench: an LLM-conducted interview (domain mapping, then five passes per agent — Target, Personality, Toolkit, Instructions, Formatting) turns a domain expert's own words into intents and agent prose, deterministically validated and composed exactly as the running agent will read it before anything is downloaded
-- Introduced `IPromptComposerService` as an **extension point for prompt composition**: `ConfigurationPromptComposerService` ships as the default implementation (two-layer fenced composition, global policies ordered by type and priority, injection templates spliced into tool descriptions and per-turn context declaration) and can be replaced in DI with any alternative prompt architecture without touching the agent adapter, the tool adapter or the context provider.
 
 ### 🔄 Changed
 - **`MorganaChatReducer` replacing `SummarizingChatReducer` as history reducer** — gaining complete control over history reduction strategies while maintaining backward compatibility.
