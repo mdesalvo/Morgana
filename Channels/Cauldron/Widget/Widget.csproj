@@ -26,6 +26,19 @@
        <GenerateDocumentationFile>false</GenerateDocumentationFile>
     </PropertyGroup>
 
+    <!-- The sample host page is a development aid, not part of the deliverable. A customer
+         hosts the widget inside their own site, at their own origin; shipping a fictitious
+         nursery — complete with invented opening hours and address — inside a production
+         image would put a page that reads as a real business on their domain, and cost them
+         ~390 KB of photography nobody ever requests. Debug keeps it, so `dotnet run` still
+         serves /widget/morgana.html; Release, which is what the Dockerfile builds, drops it.
+         The launcher itself is unaffected: it binds to the Cauldron that served it, so the
+         chat is faithful wherever the host page happens to live. -->
+    <ItemGroup Condition="'$(Configuration)' == 'Release'">
+       <Content Remove="wwwroot\morgana.html" />
+       <Content Remove="wwwroot\demo\**" />
+    </ItemGroup>
+
     <!-- Directory.Build.props arms every project in Channels/Cauldron with the running app's
          dependencies. None of them mean anything to a bag of .js/.css/.gif files, so they are
          dropped here rather than trailing into Cauldron as transitive noise. -->

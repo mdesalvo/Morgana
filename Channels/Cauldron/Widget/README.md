@@ -16,7 +16,7 @@ Three static files, plus a sample host page. No framework, no build step, no npm
 | `wwwroot/morgana-widget.css` | The launcher and panel styling, in Cauldron's palette                                   |
 | `wwwroot/morgana-animated.webp` | Morgana's icon on the button                                                            |
 | `wwwroot/morgana.html` | A sample host page — a fictitious plant nursery, styled entirely with inline attributes |
-| `wwwroot/demo/*.webp` | Photography for that sample page only; nothing in the widget itself loads them          |
+| `wwwroot/demo/*.webp` | Photography for that sample page only; Debug-only, like the page                        |
 
 The `.csproj` is a static-asset Razor Class Library: it compiles no code and exists so the
 files travel with `Cauldron` and get published under `/widget/`. `Cauldron.csproj` takes the
@@ -68,6 +68,12 @@ dotnet run
 
 Then open <https://localhost:5002/widget/morgana.html> — a mock third-party page carrying only
 the script tag. The launcher appears bottom-right; clicking it loads Cauldron in the panel.
+
+**That page is a Debug-only artefact.** `Widget.csproj` drops `morgana.html` and `demo/` from
+Release builds, which is what the Dockerfile makes, so a published image serves the launcher and
+nothing else under `/widget/`. Customers host the widget inside their own site at their own
+origin; a fictitious nursery with invented opening hours has no business turning up on it. Run in
+Debug to see the sample.
 
 To exercise the genuinely cross-origin path, serve `morgana.html` from a different origin (for
 instance `python3 -m http.server 8080` in a copy of that directory, pointing the script tag
