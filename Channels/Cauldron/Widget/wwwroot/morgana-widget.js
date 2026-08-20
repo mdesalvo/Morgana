@@ -90,16 +90,13 @@
     launcher.innerHTML =
         '<span class="launcher-avatar">' +
             '<span class="glow" aria-hidden="true"></span>' +
-            '<img src="' + assetsBase + 'morgana-animated.gif" alt="" aria-hidden="true" />' +
+            '<img src="' + assetsBase + 'morgana-animated.webp" alt="" aria-hidden="true" />' +
         '</span>' +
         '<span class="launcher-label">Consult Morgana</span>' +
         '<svg class="launcher-minimize" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
-            '<path d="M6 9.5l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.25" ' +
+            '<path d="M5.5 9l6.5 6.5 6.5-6.5" fill="none" stroke="currentColor" stroke-width="2.6" ' +
                   'stroke-linecap="round" stroke-linejoin="round" />' +
-        '</svg>' +
-        '<span class="sparkle s1" aria-hidden="true"></span>' +
-        '<span class="sparkle s2" aria-hidden="true"></span>' +
-        '<span class="sparkle s3" aria-hidden="true"></span>';
+        '</svg>';
 
     // ========================================================================
     // PANEL (open state)

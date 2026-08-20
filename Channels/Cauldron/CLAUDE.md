@@ -66,8 +66,9 @@ Channels/Cauldron/
     Widget.csproj                     # Razor Class Library, StaticWebAssetBasePath=widget, compiles no code
     wwwroot/morgana-widget.js         # Loader: origin discovery, shadow root, launcher, lazy iframe
     wwwroot/morgana-widget.css        # Launcher + panel styling, in Cauldron's palette
-    wwwroot/morgana-animated.gif      # Morgana's face on the button
-    wwwroot/morgana.html                 # Mock third-party host page carrying only the script tag
+    wwwroot/morgana-animated.webp     # Morgana's face on the button
+    wwwroot/morgana.html              # Mock third-party host page carrying only the script tag
+    wwwroot/demo/*.webp               # Photography for that sample page only
 ```
 
 ## Architecture
@@ -205,7 +206,7 @@ A host site of any technology (JSP, PHP, static HTML — the contract is plain b
 
 Two lifecycle rules matter, both dictated by Blazor Server: the iframe is created on **first open**, because loading Cauldron opens a circuit and pins per-visitor state on the server; and it is **never destroyed**, because that circuit is the conversation, so closing hides the panel instead of unmounting. Zero JS dependencies is deliberate — a widget cannot know the stack of the page it lands in.
 
-`/widget/morgana.html` is a mock third-party page carrying only the script tag; it works out of the box because the default `frame-ancestors 'self'` covers same-origin framing.
+`/widget/morgana.html` is a mock third-party page — a fictitious plant nursery — carrying only the script tag; it works out of the box because the default `frame-ancestors 'self'` covers same-origin framing. It is styled with **inline attributes only**: no stylesheet, no class name, no custom property, so there is nothing on the page that could collide with the widget's own CSS or inherit into its shadow root. The one thing that still crosses the boundary is plain inheritance from `<body>`, which is exactly what the widget's `:host` block pins — and what the page's serif type is there to put under pressure.
 
 ## UI Patterns
 

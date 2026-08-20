@@ -8,14 +8,15 @@ Cauldron instance that served the widget. That is the entire feature.
 
 ## What it is made of
 
-Three static files. No framework, no build step, no npm, no server code:
+Three static files, plus a sample host page. No framework, no build step, no npm, no server code:
 
-| File | Role |
-|---|---|
-| `wwwroot/morgana-widget.js` | Discovers the Cauldron origin, mounts the launcher, opens/closes the panel |
-| `wwwroot/morgana-widget.css` | The launcher and panel styling, in Cauldron's palette |
-| `wwwroot/morgana-animated.gif` | Morgana's face on the button |
-| `wwwroot/morgana.html` | A sample host page, with styling of its own |
+| File | Role                                                                                    |
+|---|-----------------------------------------------------------------------------------------|
+| `wwwroot/morgana-widget.js` | Discovers the Cauldron origin, mounts the launcher, opens/closes the panel              |
+| `wwwroot/morgana-widget.css` | The launcher and panel styling, in Cauldron's palette                                   |
+| `wwwroot/morgana-animated.webp` | Morgana's icon on the button                                                            |
+| `wwwroot/morgana.html` | A sample host page — a fictitious plant nursery, styled entirely with inline attributes |
+| `wwwroot/demo/*.webp` | Photography for that sample page only; nothing in the widget itself loads them          |
 
 The `.csproj` is a static-asset Razor Class Library: it compiles no code and exists so the
 files travel with `Cauldron` and get published under `/widget/`. `Cauldron.csproj` takes the
@@ -109,6 +110,5 @@ SignalR connection and the exchange in flight.
 - **Escape closes only while focus is on the host page.** Keystrokes inside the iframe belong
   to Cauldron's cross-origin document and are not observable from the widget. The launcher,
   which is outside the iframe, always closes the panel.
-- **`morgana-animated.gif` is ~1.1 MB.** It is loaded on every page that carries the widget.
-  Re-encoding it as animated WebP, or serving a static avatar until first hover, would repay
-  itself on a high-traffic host site.
+- **`morgana-animated.webp` is ~410 KB.** It is loaded on every page that carries the widget.
+  Serving a static avatar until first hover would shave that further on a high-traffic host site.

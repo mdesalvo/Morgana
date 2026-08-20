@@ -19,6 +19,7 @@
        the host page to have Cauldron's stylesheet. */
     --morgana-primary: #8b5cf6;
     --morgana-primary-dark: #6d28d9;
+    --morgana-primary-light: #c4b5fd;
     --morgana-secondary: #ec4899;
     --morgana-bg: #0f172a;
     --morgana-surface: #1e293b;
@@ -64,9 +65,9 @@
     gap: 13px;
     padding: 9px 22px 9px 9px;
 
-    border: 1px solid rgba(139, 92, 246, 0.45);
+    border: 1px solid rgba(139, 92, 246, 0.55);
     border-radius: 999px;
-    background: linear-gradient(135deg, var(--morgana-surface), var(--morgana-bg));
+    background: linear-gradient(135deg, var(--morgana-surface-light), var(--morgana-surface));
     box-shadow:
         0 10px 30px -8px rgba(0, 0, 0, 0.6),
         0 0 24px -6px rgba(139, 92, 246, 0.5);
@@ -143,28 +144,6 @@
     overflow: hidden;
 }
 
-/* --- Sparkles --- */
-
-.sparkle {
-    position: absolute;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--morgana-secondary);
-    opacity: 0;
-    pointer-events: none;
-    animation: morgana-sparkle 3.2s ease-in-out infinite;
-}
-
-.sparkle.s1 { top: 6px;    left: 34px; animation-delay: 0s;   }
-.sparkle.s2 { bottom: 8px; left: 20px; animation-delay: 1.1s; background: var(--morgana-primary); }
-.sparkle.s3 { top: 12px;   right: 22px; animation-delay: 2.0s; }
-
-@keyframes morgana-sparkle {
-    0%, 100%  { opacity: 0; transform: scale(0.4); }
-    40%, 60%  { opacity: 1; transform: scale(1); }
-}
-
 /* --- Open state: the pill collapses into a round minimize button ---
    It keeps the launcher's own chrome — gradient, purple rim, glow — because it is still the
    same control; only the payload swaps. Dropping that chrome for a bare glyph on a flat disc
@@ -172,9 +151,13 @@
 
 .launcher-minimize {
     display: none;
-    width: 24px;
-    height: 24px;
-    color: var(--morgana-primary);
+    width: 27px;
+    height: 27px;
+    /* Violet-on-slate was the same value range as the disc behind it. The glyph carries the
+       whole meaning of the control once the avatar is gone, so it takes the light end of the
+       palette and leaves the violet to the rim and the hover. */
+    color: var(--morgana-text);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
     transition: color 0.2s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -184,18 +167,20 @@
     height: 60px;
     justify-content: center;
     border-radius: 50%;
-    border-color: rgba(139, 92, 246, 0.6);
-    background: linear-gradient(135deg, var(--morgana-surface), var(--morgana-bg));
+    border-color: rgba(139, 92, 246, 0.7);
+    background: linear-gradient(135deg, var(--morgana-surface-light), var(--morgana-surface));
+    /* The collapsed label is still a flex item, and a gap on either side of it would push the
+       chevron off the disc's centre by half of it. Zero here is what actually centres the glyph. */
+    gap: 0;
 }
 
 .launcher.is-open:hover .launcher-minimize {
-    color: var(--morgana-text);
+    color: var(--morgana-primary-light);
     /* Nudged along the direction it points: the panel is going down, and the icon says so */
     transform: translateY(2px);
 }
 
-.launcher.is-open .launcher-avatar,
-.launcher.is-open .sparkle {
+.launcher.is-open .launcher-avatar {
     display: none;
 }
 
@@ -217,7 +202,7 @@
     right: 20px;
     bottom: 104px;
 
-    width: 440px;
+    width: 512px;
     /* Never taller than the space left above the launcher, so the panel cannot run off
        the top of a short viewport (a laptop with browser chrome, a split window). */
     height: min(682px, calc(100vh - 140px));
@@ -256,9 +241,11 @@
    ==========================================================================
    Below this width a floating panel would leave a useless sliver of host page around
    it, so the chat takes the screen instead and the launcher rides above it as the
-   only way back out. */
+   only way back out. The number is tied to the panel: 512px of panel plus its 20px right
+   offset plus the same clearance on the left is 552, so anything under 560 has to go
+   full-screen or the panel hangs off the left edge. Change the width, change this. */
 
-@media (max-width: 520px) {
+@media (max-width: 560px) {
     .panel {
         right: 0;
         bottom: 0;
@@ -290,13 +277,8 @@
         transition-duration: 0.01ms;
     }
 
-    .launcher-avatar .glow,
-    .sparkle {
+    .launcher-avatar .glow {
         animation: none;
-    }
-
-    .sparkle {
-        opacity: 0.7;
     }
 
     .launcher:hover,

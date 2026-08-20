@@ -3,80 +3,268 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Morgana Widget</title>
+    <title>The Greenhouse &amp; Nursery</title>
 
     <!--
-        This page brings styling of its own — serif type, its own palette, its own resets —
-        and none of it reaches the launcher. That is the point of the sample: if the widget
-        still renders as Morgana on top of these rules, the shadow-root isolation holds.
+        A mock host site, committed to being a host site: its own serif typography, its own
+        green palette, its own layout — and none of it reaches the launcher in the corner,
+        which stays dark and violet and sans-serif. That contrast is the demonstration.
+
+        Every rule on this page is an inline style attribute. There is no stylesheet, no class
+        name and no custom property anywhere in the document, deliberately: a selector cannot
+        collide with the widget's, and a custom property cannot inherit into its shadow root,
+        if neither exists. What still crosses the boundary is plain inheritance — font-family,
+        font-size, line-height off <body> — which is exactly what the widget's :host block
+        pins for itself, and what this page's serif type is here to put under pressure.
+
+        Photography: Unsplash (Unsplash License), served locally from /widget/demo/ so the
+        sample page has no third-party dependency of any kind.
+
+        Nothing on the rendered page talks about the widget, on purpose: a nursery's website
+        does not explain its own chat button, and a sample that breaks character stops being a
+        sample of anything. The whole integration is the one tag at the bottom of <body>:
+
+            <script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
+
+        No parameters — the script reads the Cauldron origin off its own src. It mounts a closed
+        shadow root, so neither page's CSS can reach the other, and the chat itself is a sandboxed
+        iframe created on first open, so a visitor who never clicks costs no Blazor circuit.
+        Widget/README.md has the rest.
     -->
-    <style>
-        body {
-            margin: 0;
-            font-family: Georgia, 'Times New Roman', serif;
-            font-size: 18px;
-            line-height: 1.7;
-            color: #1f2937;
-            background: #f8fafc;
-        }
-        header {
-            background: #1d4ed8;
-            color: #fff;
-            padding: 24px 32px;
-        }
-        header h1 { margin: 0; font-size: 24px; }
-        header p { margin: 4px 0 0; font-size: 15px; opacity: 0.85; }
-        main { max-width: 720px; margin: 0 auto; padding: 48px 24px 120px; }
-        h2 { margin-top: 40px; }
-        code {
-            background: #e2e8f0;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: ui-monospace, Menlo, Consolas, monospace;
-            font-size: 15px;
-        }
-        pre {
-            background: #0f172a;
-            color: #e2e8f0;
-            padding: 16px 20px;
-            border-radius: 8px;
-            overflow-x: auto;
-            font-family: ui-monospace, Menlo, Consolas, monospace;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-    </style>
 </head>
-<body>
-    <header>
-        <h1>The Greenhouse &amp; Nursery</h1>
-        <p>Plants, flowers and advice — the sort of site that would want Morgana on it</p>
+<body style="margin:0; font-family:Georgia,'Iowan Old Style','Times New Roman',serif; font-size:18px; line-height:1.7; color:#3f3a33; background:#fbfaf5; -webkit-font-smoothing:antialiased;">
+
+    <!-- ================= MASTHEAD ================= -->
+    <header style="position:sticky; top:0; z-index:10; background:rgba(251,250,245,0.94); backdrop-filter:blur(8px); border-bottom:1px solid #dce4d8;">
+        <div style="max-width:1080px; margin:0 auto; padding:0 28px; display:flex; align-items:center; gap:20px; min-height:74px;">
+            <a href="#" style="display:flex; align-items:center; gap:12px; margin-right:auto; text-decoration:none; color:#14532d;">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="width:30px; height:30px; flex:none;">
+                    <path d="M12 21c0-6.5 3.6-11.2 9-12 .6 5.6-2.4 12-9 12z" fill="currentColor" opacity="0.85" />
+                    <path d="M12 21C7.2 20.4 3 16.4 3 10.5 8.4 11 12 15 12 21z" fill="currentColor" opacity="0.45" />
+                    <path d="M12 21v-6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                </svg>
+                <span style="font-size:21px; line-height:1.15; letter-spacing:0.01em;">
+                    The Greenhouse &amp; Nursery
+                    <span style="display:block; font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; letter-spacing:0.22em; text-transform:uppercase; color:#4d7c56;">Under glass since 1974</span>
+                </span>
+            </a>
+            <nav style="display:flex; gap:26px; font-size:15px;">
+                <a href="#bench"  style="color:#166534; text-decoration:none;">This week</a>
+                <a href="#advice" style="color:#166534; text-decoration:none;">Advice</a>
+                <a href="#visit"  style="color:#166534; text-decoration:none;">Visit</a>
+            </nav>
+        </div>
     </header>
 
-    <main>
-        <h2>A perfectly ordinary page</h2>
-        <p>
-            This page knows nothing about Blazor, SignalR, .NET or Morgana. It sets its own
-            fonts, its own colours and its own resets, and it would behave identically if it
-            were rendered by a JSP, a PHP template, a Rails view or a static site generator.
-        </p>
+    <!-- ================= HERO ================= -->
+    <div style="position:relative; min-height:460px; display:flex; align-items:flex-end; color:#ffffff; overflow:hidden;">
+        <img src="demo/hero.webp"
+             alt="Ferns and palms crowding the inside of a Victorian glasshouse"
+             style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;" />
+        <!-- The scrim is a real element rather than a ::after, since there are no rulesets to hang one on -->
+        <div aria-hidden="true" style="position:absolute; inset:0; background:linear-gradient(180deg, rgba(10,40,22,0.15) 0%, rgba(10,40,22,0.55) 55%, rgba(8,32,18,0.88) 100%);"></div>
+        <div style="position:relative; z-index:1; max-width:1080px; margin:0 auto; padding:96px 28px 56px; width:100%;">
+            <p style="margin:0 0 14px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; letter-spacing:0.26em; text-transform:uppercase; color:#bfe0c4;">Nursery &amp; potting bench</p>
+            <h1 style="margin:0; font-size:clamp(34px,5.4vw,56px); line-height:1.1; font-weight:400; max-width:15ch; text-wrap:balance;">Everything we sell was grown three metres from where you're standing</h1>
+            <p style="margin:18px 0 28px; max-width:46ch; color:#e4efe2;">
+                Two heated houses, one cold frame and a stubborn refusal to buy in stock we
+                haven't raised ourselves. Come for a plant, leave with instructions.
+            </p>
+            <div style="display:flex; flex-wrap:wrap; gap:14px;">
+                <a href="#bench" style="display:inline-block; font-family:ui-sans-serif,system-ui,sans-serif; font-size:15px; padding:13px 26px; border-radius:999px; text-decoration:none; background:#ffffff; color:#14532d;">See what's ready</a>
+                <a href="#visit" style="display:inline-block; font-family:ui-sans-serif,system-ui,sans-serif; font-size:15px; padding:13px 26px; border-radius:999px; text-decoration:none; border:1px solid rgba(255,255,255,0.6); color:#ffffff;">Opening hours</a>
+            </div>
+        </div>
+    </div>
 
-        <h2>The whole integration</h2>
-        <pre>&lt;script src="https://your-cauldron-host/widget/morgana-widget.js" defer&gt;&lt;/script&gt;</pre>
-        <p>
-            One tag, placed anywhere in the document. The widget reads the Cauldron origin off
-            its own <code>src</code>, mounts a launcher in the bottom-right corner, and loads
-            the chat only when a visitor actually opens it.
-        </p>
+    <!-- ================= THIS WEEK ON THE BENCH ================= -->
+    <section id="bench" style="scroll-margin-top:74px; padding:76px 0; background:#eef3ec; border-top:1px solid #dce4d8; border-bottom:1px solid #dce4d8;">
+        <div style="max-width:1080px; margin:0 auto; padding:0 28px;">
+            <div style="max-width:60ch; margin-bottom:40px;">
+                <p style="margin:0; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; letter-spacing:0.24em; text-transform:uppercase; color:#4d7c56;">Ready this week</p>
+                <h2 style="margin:8px 0 12px; font-size:clamp(26px,3.4vw,36px); font-weight:400; line-height:1.2; color:#14532d;">Off the bench and hardened off</h2>
+                <p style="margin:0; color:#5b564d;">
+                    Small batches, potted on when they ask for it rather than on a schedule.
+                    When a tray sells out it stays sold out until the next one is ready.
+                </p>
+            </div>
 
-        <h2>What to look for</h2>
-        <p>
-            The launcher below uses none of this page's typography or colours, and this page's
-            stylesheet cannot restyle it — both directions are sealed by the shadow root. The
-            conversation itself runs inside a sandboxed iframe served by Cauldron, so nothing
-            on this page can read it and nothing in it can touch this page.
-        </p>
-    </main>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:26px;">
+
+                <article style="background:#ffffff; border:1px solid #dce4d8; border-radius:4px; overflow:hidden; display:flex; flex-direction:column;">
+                    <figure style="margin:0; position:relative; aspect-ratio:1/1;">
+                        <img src="demo/haworthia.webp" alt="A zebra haworthia in a pale mint glazed pot" style="width:100%; height:100%; object-fit:cover; display:block;" />
+                        <span style="position:absolute; top:12px; left:12px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; background:#14532d; color:#eaf3e8; padding:5px 11px; border-radius:999px;">Beginner</span>
+                    </figure>
+                    <div style="padding:18px 20px 22px; display:flex; flex-direction:column; flex:1;">
+                        <h3 style="margin:0; font-size:20px; font-weight:400; color:#14532d;">Zebra Haworthia</h3>
+                        <span style="font-style:italic; font-size:15px; color:#4d7c56;">Haworthiopsis attenuata</span>
+                        <p style="margin:8px 0 0; font-size:15.5px; line-height:1.6; color:#5b564d;">Forgives three missed waterings and a north-facing windowsill. Our most returned-to plant.</p>
+                        <p style="margin:auto 0 0; padding-top:16px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:17px; color:#3f3a33;">£14 <small style="color:#4d7c56; font-size:13px;">· 9cm glazed pot</small></p>
+                    </div>
+                </article>
+
+                <article style="background:#ffffff; border:1px solid #dce4d8; border-radius:4px; overflow:hidden; display:flex; flex-direction:column;">
+                    <figure style="margin:0; position:relative; aspect-ratio:1/1;">
+                        <img src="demo/monstera.webp" alt="A monstera trailing over the arm of a pale chair" style="width:100%; height:100%; object-fit:cover; display:block;" />
+                        <span style="position:absolute; top:12px; left:12px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; background:#b4653a; color:#fdf1ea; padding:5px 11px; border-radius:999px;">Last few</span>
+                    </figure>
+                    <div style="padding:18px 20px 22px; display:flex; flex-direction:column; flex:1;">
+                        <h3 style="margin:0; font-size:20px; font-weight:400; color:#14532d;">Swiss Cheese Plant</h3>
+                        <span style="font-style:italic; font-size:15px; color:#4d7c56;">Monstera deliciosa</span>
+                        <p style="margin:8px 0 0; font-size:15.5px; line-height:1.6; color:#5b564d;">Raised from a cutting off the house plant in the tea room. Already fenestrating.</p>
+                        <p style="margin:auto 0 0; padding-top:16px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:17px; color:#3f3a33;">£38 <small style="color:#4d7c56; font-size:13px;">· 19cm, staked</small></p>
+                    </div>
+                </article>
+
+                <article style="background:#ffffff; border:1px solid #dce4d8; border-radius:4px; overflow:hidden; display:flex; flex-direction:column;">
+                    <figure style="margin:0; position:relative; aspect-ratio:1/1;">
+                        <img src="demo/ficus.webp" alt="Broad glossy leaves of a rubber plant" style="width:100%; height:100%; object-fit:cover; display:block;" />
+                        <span style="position:absolute; top:12px; left:12px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; background:#14532d; color:#eaf3e8; padding:5px 11px; border-radius:999px;">Air-cleaning</span>
+                    </figure>
+                    <div style="padding:18px 20px 22px; display:flex; flex-direction:column; flex:1;">
+                        <h3 style="margin:0; font-size:20px; font-weight:400; color:#14532d;">Rubber Plant</h3>
+                        <span style="font-style:italic; font-size:15px; color:#4d7c56;">Ficus elastica</span>
+                        <p style="margin:8px 0 0; font-size:15.5px; line-height:1.6; color:#5b564d;">Wipe the leaves, turn it a quarter each week, and it will outlive the room it's in.</p>
+                        <p style="margin:auto 0 0; padding-top:16px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:17px; color:#3f3a33;">£29 <small style="color:#4d7c56; font-size:13px;">· 17cm nursery pot</small></p>
+                    </div>
+                </article>
+
+                <article style="background:#ffffff; border:1px solid #dce4d8; border-radius:4px; overflow:hidden; display:flex; flex-direction:column;">
+                    <figure style="margin:0; position:relative; aspect-ratio:1/1;">
+                        <img src="demo/succulents.webp" alt="Six small succulents in terracotta pots, seen from above" style="width:100%; height:100%; object-fit:cover; display:block;" />
+                        <span style="position:absolute; top:12px; left:12px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; background:#14532d; color:#eaf3e8; padding:5px 11px; border-radius:999px;">Gift set</span>
+                    </figure>
+                    <div style="padding:18px 20px 22px; display:flex; flex-direction:column; flex:1;">
+                        <h3 style="margin:0; font-size:20px; font-weight:400; color:#14532d;">Windowsill Six</h3>
+                        <span style="font-style:italic; font-size:15px; color:#4d7c56;">Echeveria &amp; friends</span>
+                        <p style="margin:8px 0 0; font-size:15.5px; line-height:1.6; color:#5b564d;">Six terracotta pots, no two alike, chosen off the bench on the morning you order.</p>
+                        <p style="margin:auto 0 0; padding-top:16px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:17px; color:#3f3a33;">£42 <small style="color:#4d7c56; font-size:13px;">· set of six</small></p>
+                    </div>
+                </article>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= FROM THE POTTING BENCH ================= -->
+    <section id="advice" style="scroll-margin-top:74px; padding:76px 0;">
+        <div style="max-width:1080px; margin:0 auto; padding:0 28px; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:54px; align-items:center;">
+            <img src="demo/sowing.webp" alt="A hand pricking seedlings out of a module tray" style="width:100%; aspect-ratio:9/7; object-fit:cover; border-radius:4px; display:block;" />
+            <div>
+                <p style="margin:0; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; letter-spacing:0.24em; text-transform:uppercase; color:#4d7c56;">From the potting bench</p>
+                <h2 style="margin:8px 0 12px; font-size:clamp(26px,3.4vw,36px); font-weight:400; line-height:1.2; color:#14532d;">Three things we say most days</h2>
+                <p style="margin:0; color:#5b564d;">
+                    Nobody kills a plant on purpose. Almost everything that comes back to us on
+                    the counter comes back for one of these three reasons.
+                </p>
+                <ul style="list-style:none; margin:26px 0 0; padding:0;">
+                    <li style="padding:16px 0; border-top:1px solid #dce4d8; font-size:16.5px;">
+                        <strong style="display:block; font-weight:400; color:#14532d;">Too much water, not too little.</strong>
+                        Push a finger in to the second knuckle. Dry? Water it. Damp? Walk away.
+                    </li>
+                    <li style="padding:16px 0; border-top:1px solid #dce4d8; font-size:16.5px;">
+                        <strong style="display:block; font-weight:400; color:#14532d;">Light is a quantity, not a mood.</strong>
+                        "Bright indirect" means it should read a newspaper's worth of light all day.
+                    </li>
+                    <li style="padding:16px 0; border-top:1px solid #dce4d8; border-bottom:1px solid #dce4d8; font-size:16.5px;">
+                        <strong style="display:block; font-weight:400; color:#14532d;">Repot in spring, never in the dark.</strong>
+                        A plant moved in November has to grow roots on an empty tank.
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= VISIT =================
+         The hours live in a section of their own rather than in the footer: an anchor pointing
+         at the last element of a document can never bring it to the top of the viewport — the
+         page runs out of scroll first — so #visit would have dropped the reader at the bottom
+         of the page with the hours somewhere off to the side. Here it lands on the heading. -->
+    <section id="visit" style="scroll-margin-top:74px; padding:76px 0; background:#eef3ec; border-top:1px solid #dce4d8; border-bottom:1px solid #dce4d8;">
+        <div style="max-width:1080px; margin:0 auto; padding:0 28px;">
+            <div style="max-width:60ch; margin-bottom:40px;">
+                <p style="margin:0; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; letter-spacing:0.24em; text-transform:uppercase; color:#4d7c56;">Come and see</p>
+                <h2 style="margin:8px 0 12px; font-size:clamp(26px,3.4vw,36px); font-weight:400; line-height:1.2; color:#14532d;">Opening hours &amp; where to find us</h2>
+                <p style="margin:0; color:#5b564d;">
+                    The gate at the end of Lower Marsh Lane is the one with the wheelbarrow
+                    against it. Park on the verge; the gravel is for deliveries.
+                </p>
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:34px;">
+                <div style="background:#ffffff; border:1px solid #dce4d8; border-radius:4px; padding:24px 26px;">
+                    <h3 style="margin:0 0 12px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; font-weight:500; letter-spacing:0.2em; text-transform:uppercase; color:#4d7c56;">Open</h3>
+                    <p style="margin:0 0 4px; font-size:17px; color:#14532d;">Tue – Sat, 9am – 5pm</p>
+                    <p style="margin:0 0 4px; font-size:17px; color:#14532d;">Sun, 10am – 4pm</p>
+                    <p style="margin:10px 0 0; font-size:15.5px; color:#5b564d;">Closed Mondays, and the week after Christmas.</p>
+                </div>
+                <div style="background:#ffffff; border:1px solid #dce4d8; border-radius:4px; padding:24px 26px;">
+                    <h3 style="margin:0 0 12px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; font-weight:500; letter-spacing:0.2em; text-transform:uppercase; color:#4d7c56;">Find us</h3>
+                    <p style="margin:0 0 4px; font-size:17px; color:#14532d;">Lower Marsh Lane</p>
+                    <p style="margin:0 0 4px; font-size:17px; color:#14532d;">Bury St Edmunds IP33</p>
+                    <p style="margin:10px 0 0; font-size:15.5px; color:#5b564d;">Twelve minutes from the A14, junction 44.</p>
+                </div>
+                <div style="background:#ffffff; border:1px solid #dce4d8; border-radius:4px; padding:24px 26px;">
+                    <h3 style="margin:0 0 12px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; font-weight:500; letter-spacing:0.2em; text-transform:uppercase; color:#4d7c56;">Ask first</h3>
+                    <p style="margin:0 0 4px; font-size:17px; color:#14532d;">The violet button, bottom right</p>
+                    <p style="margin:10px 0 0; font-size:15.5px; color:#5b564d;">Morgana knows what came off the bench this morning and what is still under glass.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= THE ADVICE DESK ================= -->
+    <section style="padding:76px 0; background:#14532d; color:#dcecdc;">
+        <div style="max-width:1080px; margin:0 auto; padding:0 28px; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:54px; align-items:center;">
+            <div>
+                <p style="margin:0; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; letter-spacing:0.24em; text-transform:uppercase; color:#8fb896;">The advice desk</p>
+                <h2 style="margin:8px 0 12px; font-size:clamp(26px,3.4vw,36px); font-weight:400; line-height:1.2; color:#ffffff;">Nobody here will sell you a plant that wants a room you haven't got</h2>
+                <p style="margin:0 0 18px; color:#cfe2cf;">
+                    Tell us which way the window faces, how warm the room gets and how honest
+                    you're prepared to be about watering, and we'll put three names in front of
+                    you. It takes a minute and it saves a plant.
+                </p>
+                <p style="margin:0; color:#cfe2cf;">
+                    Somebody is on the bench all day. Out of hours, the button in the corner
+                    still answers — it knows the stock list and the state of the frames.
+                </p>
+            </div>
+            <ul style="list-style:none; margin:0; padding:0;">
+                <li style="padding:18px 0; border-top:1px solid #29563a; font-size:16.5px; color:#cfe2cf;">
+                    <strong style="display:block; font-weight:400; color:#ffffff;">"North-facing kitchen, forgetful"</strong>
+                    Sansevieria, ZZ plant, or the haworthia on the bench this week.
+                </li>
+                <li style="padding:18px 0; border-top:1px solid #29563a; font-size:16.5px; color:#cfe2cf;">
+                    <strong style="display:block; font-weight:400; color:#ffffff;">"Bright hallway, two cats"</strong>
+                    Calathea and parlour palm. Nothing from the lily family, ever.
+                </li>
+                <li style="padding:18px 0; border-top:1px solid #29563a; border-bottom:1px solid #29563a; font-size:16.5px; color:#cfe2cf;">
+                    <strong style="display:block; font-weight:400; color:#ffffff;">"Present, tomorrow, no idea"</strong>
+                    The Windowsill Six, wrapped at the counter while you wait.
+                </li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- ================= FOOTER ================= -->
+    <footer style="background:#0b2415; color:#9fc0a4; padding:48px 0 130px; font-size:15.5px;">
+        <div style="max-width:1080px; margin:0 auto; padding:0 28px;">
+            <div style="display:flex; flex-wrap:wrap; align-items:baseline; gap:12px 26px;">
+                <span style="font-size:19px; color:#d6e8d7;">The Greenhouse &amp; Nursery</span>
+                <span style="font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; letter-spacing:0.22em; text-transform:uppercase; color:#6f9077;">Under glass since 1974</span>
+                <span style="margin-left:auto; display:flex; gap:22px; font-size:15px;">
+                    <a href="#bench"  style="color:#bcd6bd;">This week</a>
+                    <a href="#advice" style="color:#bcd6bd;">Advice</a>
+                    <a href="#visit"  style="color:#bcd6bd;">Visit</a>
+                </span>
+            </div>
+            <p style="margin:36px 0 0; padding-top:20px; border-top:1px solid #1c3d28; font-size:13.5px; color:#6f9077;">
+                A fictitious nursery, invented to give the Morgana widget somewhere to live.
+                Photography from Unsplash, served locally under /widget/demo/.
+            </p>
+        </div>
+    </footer>
 
     <!-- Loaded relative to this file, which resolves to the same Cauldron host that serves it -->
     <script src="morgana-widget.js" defer></script>
