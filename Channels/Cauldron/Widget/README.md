@@ -15,7 +15,7 @@ Three static files, plus a sample host page. No framework, no build step, no npm
 | `wwwroot/morgana-widget.js` | Discovers the Cauldron origin, mounts the launcher, opens/closes the panel              |
 | `wwwroot/morgana-widget.css` | The launcher and panel styling, in Cauldron's palette                                   |
 | `wwwroot/morgana-animated.webp` | Morgana's icon on the button                                                            |
-| `wwwroot/morgana.html` | A sample host page — a fictitious plant nursery, styled entirely with inline attributes |
+| `wwwroot/morgana.html` | A sample host page — a fictitious plant nursery, styled entirely with inline attributes; Debug-only |
 | `wwwroot/demo/*.webp` | Photography for that sample page only; Debug-only, like the page                        |
 
 The `.csproj` is a static-asset Razor Class Library: it compiles no code and exists so the
