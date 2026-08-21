@@ -16,7 +16,7 @@ turns:
       toolsNotCalled: [GetInvoices]
       textNotEmpty: true
 
-  - say: "Eccolo: P99"
+  - say: "Eccolo: P994E"
     expect:
       agent: BillingAgent
       contextWrites: [userId]

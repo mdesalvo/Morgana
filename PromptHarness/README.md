@@ -118,6 +118,16 @@ or the listener heard nothing.
 **Cost.** Every turn is a live LLM call, multiplied by the scenario's run count, plus one judge call
 per proposition on structurally-passing turns. The default is 5 runs.
 
+**`P994E` is not an arbitrary string.** The example plugin models one shop, *The Greenhouse &
+Nursery*, on one SQLite system of record shipped as a seed (`Examples/Data/Examples.db`), and every
+desk of that shop keys on the customer code: `P994E` is the seeded customer who has invoices, a
+Green Care Plan and past orders. A code nobody is registered under is refused by Billing, by the
+plan and by any attempt to raise an order — so a scenario that hands the agent an invented code is
+measuring a "customer not found" answer, not the behaviour it names. The seed's calendar is rebased
+onto the current month on first deployment, which is what keeps `GetPaymentHistory` populated and
+the pending invoice actually pending; the harness gives each run its own throwaway `StoragePath`,
+so every run starts from a freshly deployed shop.
+
 **The tier is not the suite's to choose.** Each agent binds to its die through
 `[RequiresLLMTier]`, so a scenario costs whatever the agent it exercises costs — and forcing it
 otherwise would mean measuring a configuration nobody runs. With the example plugin that means:
@@ -127,13 +137,15 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 | `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Efficiency` |
 | `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
 | `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
-| `behaviour-rich-card`, `context-no-invented-writes` | Inventory | **`Performance`** |
+| `behaviour-rich-card`, `context-no-invented-writes`, `classifier-routes-catalog-request-to-inventory` | Inventory | **`Performance`** |
 | `classifier-disambiguates-colliding-billing-contract` | *(none — diverted before routing)* | `Efficiency` (classifier only) |
 
 Everything Morgana runs on its own account — guard, classifier, presenter — plus the judge, always
-goes to the cheapest configured tier. So the two Inventory scenarios dominate the bill: at 5 runs
-each they are a handful of `Performance` turns against a suite that is otherwise `Efficiency`
-throughout. Keep them out of the tight iteration loop and run them at checkpoints.
+goes to the cheapest configured tier. So the three Inventory scenarios dominate the bill: a handful
+of `Performance` turns against a suite that is otherwise `Efficiency` throughout — which is also why
+`classifier-routes-catalog-request-to-inventory` runs 3 times rather than 5, its property being a
+routing decision that merely happens to land on a `Performance` agent. Keep them out of the tight
+iteration loop and run them at checkpoints.
 
 Running the rest against `Efficiency` is also a useful stress test in its own right: it is the tier
 that amplifies contradiction-following failures.

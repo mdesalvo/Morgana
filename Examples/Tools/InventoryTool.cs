@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Examples.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
@@ -7,11 +8,11 @@ using Morgana.AI.Attributes;
 namespace Examples.Tools;
 
 /// <summary>
-/// Greenhouse/nursery inventory tool backed by a standalone SQLite database (independent from
-/// Morgana's per-conversation persistence). Unlike BillingTool/ContractTool (in-memory mock data,
-/// read-only), this tool models a real stateful process: stock levels and orders persist across
-/// restarts AND across different conversationIds, because a greenhouse is a system of record
-/// shared by whoever talks to it, not a per-conversation scratchpad.
+/// The greenhouse ledger of The Greenhouse &amp; Nursery: catalog, stock levels and the order
+/// lifecycle, read and written on the shop's shared database (see <see cref="GreenhouseDatabaseHelper"/>).
+/// Unlike BillingTool and ContractTool, which only read from it, this tool is where the shop's
+/// state actually moves: an order confirmed here decrements stock for everyone, in every
+/// conversation, until someone cancels it.
 /// </summary>
 [ProvidesToolForIntent("inventory")]
 public class InventoryTool : MorganaTool
@@ -22,105 +23,18 @@ public class InventoryTool : MorganaTool
     {
         // MorganaAgentAdapter constructs one InventoryTool per conversation (see
         // Activator.CreateInstance in RegisterToolsInAdapter), so this runs once per conversation,
-        // not once per process — EnsureDatabase's own lock+flag is what makes that safe and cheap
-        // instead of re-deploying the seed file on every single conversation.
-        EnsureDatabase();
+        // not once per process — GreenhouseDatabaseHelper.Ensure's own lock+flag is what makes that safe
+        // and cheap instead of re-deploying the seed file on every single conversation.
+        GreenhouseDatabaseHelper.Ensure();
     }
 
     // =========================================================================
-    // STORAGE
+    // ROWS AND LOOKUPS
     // =========================================================================
-
-    private static readonly object InitLock = new();
-    private static bool _databaseReady;
-
-    private static string StorageDirectory
-    {
-        get
-        {
-            string? storageDirectory = Environment.GetEnvironmentVariable("Morgana__ConversationPersistence__StoragePath");
-            return string.IsNullOrWhiteSpace(storageDirectory)
-                ? AppContext.BaseDirectory
-                : storageDirectory;
-        }
-    }
-
-    private static string DbPath => Path.Combine(StorageDirectory, "inventory.db");
-    private static string ConnectionString => $"Data Source={DbPath}";
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = false,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     private record Product(string Sku, string Name, string Category, string Description, long QuantityOnHand, long ReorderThreshold, double UnitPrice);
 
     private record Order(string OrderId, string Sku, long Quantity, string Status, string? UserId, string? ConversationId, string SealWord, string CreatedAt, string? ConfirmedAt, string? CancelledAt);
-
-    /// <summary>
-    /// Deploys the embedded seed database to <see cref="DbPath"/> the very first time an
-    /// InventoryTool is ever constructed against that physical location — a straight byte
-    /// copy, no schema/SQL executed at runtime. Every activation after that (any conversation,
-    /// any process restart, any container recreation that keeps the volume) finds the file
-    /// already there and does nothing further: from that point on the data only changes
-    /// through live CreatePurchaseOrder/ConfirmOrder/CancelOrder transactions.
-    /// </summary>
-    private static void EnsureDatabase()
-    {
-        if (_databaseReady)
-            return;
-
-        lock (InitLock)
-        {
-            if (_databaseReady)
-                return;
-
-            // File.Exists is the ENTIRE "have we seeded yet" check — there is no separate flag
-            // or marker row anywhere. That is deliberate: the moment inventory.db exists on disk
-            // at this path, whatever it contains (seed data, or years of live orders on top of
-            // it) is the truth, and we must never overwrite it just because the process restarted.
-            if (!File.Exists(DbPath))
-            {
-                Directory.CreateDirectory(StorageDirectory);
-
-                // FileMode.CreateNew (not Create) so that if two InventoryTool instances somehow
-                // raced past the File.Exists check on a fresh volume, the loser throws IOException
-                // here instead of silently overwriting whatever the winner just wrote — the lock
-                // above already prevents that within one process, this is the belt-and-braces for
-                // "what if a second process/container did the same thing at the same instant".
-                using Stream seedStream = typeof(InventoryTool).Assembly.GetManifestResourceStream("Examples.Data.Inventory.db")
-                    ?? throw new InvalidOperationException($"Embedded seed database 'Examples.Data.Inventory.db' not found.");
-                using FileStream fileStream = new FileStream(DbPath, FileMode.CreateNew, FileAccess.Write);
-                seedStream.CopyTo(fileStream);
-            }
-
-            _databaseReady = true;
-        }
-    }
-
-    /// <summary>
-    /// Opens (and returns) a connection to <see cref="DbPath"/> with a busy timeout applied.
-    /// </summary>
-    /// <remarks>
-    /// inventory.db is a SHARED, live database: different conversations WILL try to write to it at
-    /// the same instant (that is the whole point of this example). SQLite serializes writers with a
-    /// single write lock, and without a busy timeout the loser of that race throws "database is
-    /// locked" immediately. PRAGMA busy_timeout instead makes it WAIT for the holder to commit and
-    /// then proceed — the transactional writes in ConfirmOrder/CancelOrder rely on this so that two
-    /// concurrent commits queue up rather than one of them blowing up in the caller's face.
-    /// </remarks>
-    private static async Task<SqliteConnection> OpenConnectionAsync()
-    {
-        SqliteConnection connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync();
-
-        await using SqliteCommand pragma = connection.CreateCommand();
-        pragma.CommandText = "PRAGMA busy_timeout = 5000;";
-        await pragma.ExecuteNonQueryAsync();
-
-        return connection;
-    }
 
     private static async Task<Product?> FindProductAsync(SqliteConnection connection, string sku)
     {
@@ -173,6 +87,15 @@ public class InventoryTool : MorganaTool
     /// </summary>
     private static string GenerateSealWord() => Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
 
+    private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string userId)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT DisplayName FROM Customers WHERE UserId = $userId COLLATE NOCASE";
+        command.Parameters.AddWithValue("$userId", userId);
+
+        return (string?)await command.ExecuteScalarAsync();
+    }
+
     private static async Task<List<string>> GetAllSkusAsync(SqliteConnection connection)
     {
         await using SqliteCommand command = connection.CreateCommand();
@@ -210,7 +133,7 @@ public class InventoryTool : MorganaTool
     /// <returns>JSON array of products with stock status icons.</returns>
     public async Task<string> GetProductCatalog()
     {
-        await using SqliteConnection connection = await OpenConnectionAsync();
+        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT Sku, Name, Category, QuantityOnHand, ReorderThreshold, UnitPrice FROM Products ORDER BY Category, Name";
@@ -236,17 +159,17 @@ public class InventoryTool : MorganaTool
             }
         }
 
-        return JsonSerializer.Serialize(new { totalProducts = products.Count, products }, JsonOptions);
+        return JsonSerializer.Serialize(new { totalProducts = products.Count, products }, GreenhouseDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
     /// Retrieves the detailed stock level for a single product.
     /// </summary>
-    /// <param name="sku">Product SKU to inspect (e.g. "RTR-100").</param>
+    /// <param name="sku">Product SKU to inspect (e.g. "RSE-100").</param>
     /// <returns>JSON object with quantity, threshold, price and stock status.</returns>
     public async Task<string> CheckStockLevel(string sku)
     {
-        await using SqliteConnection connection = await OpenConnectionAsync();
+        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         Product? product = await FindProductAsync(connection, sku);
         if (product == null)
@@ -256,7 +179,7 @@ public class InventoryTool : MorganaTool
                 error = "Product not found",
                 requestedSku = sku,
                 availableSkus = await GetAllSkusAsync(connection)
-            }, JsonOptions);
+            }, GreenhouseDatabaseHelper.JsonOptions);
         }
 
         return JsonSerializer.Serialize(new
@@ -270,7 +193,7 @@ public class InventoryTool : MorganaTool
             stockStatus = StockStatus(product.QuantityOnHand, product.ReorderThreshold),
             statusIcon = StockStatusIcon(product.QuantityOnHand, product.ReorderThreshold),
             maxOrderableQuantity = product.QuantityOnHand
-        }, JsonOptions);
+        }, GreenhouseDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -285,9 +208,9 @@ public class InventoryTool : MorganaTool
     public async Task<string> CreatePurchaseOrder(string sku, int quantity, string userId)
     {
         if (quantity <= 0)
-            return JsonSerializer.Serialize(new { error = "Quantity must be a positive number", requestedQuantity = quantity }, JsonOptions);
+            return JsonSerializer.Serialize(new { error = "Quantity must be a positive number", requestedQuantity = quantity }, GreenhouseDatabaseHelper.JsonOptions);
 
-        await using SqliteConnection connection = await OpenConnectionAsync();
+        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         Product? product = await FindProductAsync(connection, sku);
         if (product == null)
@@ -297,7 +220,7 @@ public class InventoryTool : MorganaTool
                 error = "Product not found",
                 requestedSku = sku,
                 availableSkus = await GetAllSkusAsync(connection)
-            }, JsonOptions);
+            }, GreenhouseDatabaseHelper.JsonOptions);
         }
 
         // This check is a courtesy at quote time, not a reservation: nothing here decrements
@@ -312,7 +235,7 @@ public class InventoryTool : MorganaTool
                 sku = product.Sku,
                 requestedQuantity = quantity,
                 availableQuantity = product.QuantityOnHand
-            }, JsonOptions);
+            }, GreenhouseDatabaseHelper.JsonOptions);
         }
 
         // getToolContext() (not a method parameter) is the only way to reach ConversationId: it
@@ -356,7 +279,7 @@ public class InventoryTool : MorganaTool
             totalPrice = Math.Round(product.UnitPrice * quantity, 2),
             status = "Pending",
             note = "Order created but NOT yet committed: stock has not been touched. The sealWord is shown ONLY this once — tell the user to keep both orderId and sealWord, they are required together for ConfirmOrder, CancelOrder and GetOrderStatus, even in a future session. Call ConfirmOrder with this exact orderId and sealWord ONLY after the user has explicitly confirmed they want to proceed."
-        }, JsonOptions);
+        }, GreenhouseDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -368,7 +291,7 @@ public class InventoryTool : MorganaTool
     /// <returns>JSON object with the confirmed order and remaining stock.</returns>
     public async Task<string> ConfirmOrder(string orderId, string sealWord)
     {
-        await using SqliteConnection connection = await OpenConnectionAsync();
+        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         // Order-not-found and wrong-sealWord return the IDENTICAL message on purpose: if a wrong
         // seal word got its own distinct error, that alone would confirm to the caller that the
@@ -376,7 +299,7 @@ public class InventoryTool : MorganaTool
         // field at a time. One combined check, one combined message, no such leak.
         Order? order = await FindOrderAsync(connection, orderId);
         if (order == null || !string.Equals(order.SealWord, sealWord, StringComparison.OrdinalIgnoreCase))
-            return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, JsonOptions);
+            return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, GreenhouseDatabaseHelper.JsonOptions);
 
         // This pre-read is ONLY for the seal-word gate and a friendly fast-path error. It is NOT the
         // state the writes below trust: between here and the commit another conversation may
@@ -390,13 +313,13 @@ public class InventoryTool : MorganaTool
                 error = $"Order cannot be confirmed: current status is '{order.Status}', not 'Pending'",
                 orderId,
                 status = order.Status
-            }, JsonOptions);
+            }, GreenhouseDatabaseHelper.JsonOptions);
         }
 
         // Claiming the order (Pending -> Confirmed) and decrementing stock must both happen or
         // neither: a single transaction. The transaction's FIRST statement is a write, so it takes
         // the write lock straight away — no SELECT-then-UPDATE lock upgrade, hence none of SQLite's
-        // classic writer-upgrade deadlock — while PRAGMA busy_timeout (set in OpenConnectionAsync)
+        // classic writer-upgrade deadlock — while PRAGMA busy_timeout (set by GreenhouseDatabaseHelper.OpenConnectionAsync)
         // makes a losing concurrent writer WAIT for our commit instead of throwing "database is locked".
         await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
 
@@ -425,7 +348,7 @@ public class InventoryTool : MorganaTool
                 error = $"Order cannot be confirmed: current status is '{latest?.Status ?? "Unknown"}', not 'Pending'",
                 orderId,
                 status = latest?.Status
-            }, JsonOptions);
+            }, GreenhouseDatabaseHelper.JsonOptions);
         }
 
         // Decrement stock, guarded so it can NEVER go negative: WHERE QuantityOnHand >= qty means a
@@ -452,7 +375,7 @@ public class InventoryTool : MorganaTool
                 orderId,
                 requestedQuantity = order.Quantity,
                 availableQuantity = current?.QuantityOnHand ?? 0
-            }, JsonOptions);
+            }, GreenhouseDatabaseHelper.JsonOptions);
         }
 
         // Read the remaining stock back inside the SAME transaction, so the figure reported is the
@@ -478,7 +401,7 @@ public class InventoryTool : MorganaTool
             status = "Confirmed",
             confirmedAt,
             remainingStock
-        }, JsonOptions);
+        }, GreenhouseDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -489,14 +412,14 @@ public class InventoryTool : MorganaTool
     /// <returns>JSON object with order status and timestamps.</returns>
     public async Task<string> GetOrderStatus(string orderId, string sealWord)
     {
-        await using SqliteConnection connection = await OpenConnectionAsync();
+        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         // Same combined not-found/wrong-sealWord check as ConfirmOrder, same reason: a distinct
         // "wrong seal word" message would confirm the orderId is real even when it isn't the
         // caller's to inspect.
         Order? order = await FindOrderAsync(connection, orderId);
         if (order == null || !string.Equals(order.SealWord, sealWord, StringComparison.OrdinalIgnoreCase))
-            return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, JsonOptions);
+            return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, GreenhouseDatabaseHelper.JsonOptions);
 
         return JsonSerializer.Serialize(new
         {
@@ -507,7 +430,7 @@ public class InventoryTool : MorganaTool
             createdAt = order.CreatedAt,
             confirmedAt = order.ConfirmedAt,
             cancelledAt = order.CancelledAt
-        }, JsonOptions);
+        }, GreenhouseDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -520,15 +443,15 @@ public class InventoryTool : MorganaTool
     /// <returns>JSON object describing the cancellation outcome.</returns>
     public async Task<string> CancelOrder(string orderId, string sealWord, string? reason = null)
     {
-        await using SqliteConnection connection = await OpenConnectionAsync();
+        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         // Same combined not-found/wrong-sealWord check as ConfirmOrder/GetOrderStatus, same reason.
         Order? order = await FindOrderAsync(connection, orderId);
         if (order == null || !string.Equals(order.SealWord, sealWord, StringComparison.OrdinalIgnoreCase))
-            return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, JsonOptions);
+            return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, GreenhouseDatabaseHelper.JsonOptions);
 
         if (order.Status == "Cancelled")
-            return JsonSerializer.Serialize(new { error = "Order is already cancelled", orderId }, JsonOptions);
+            return JsonSerializer.Serialize(new { error = "Order is already cancelled", orderId }, GreenhouseDatabaseHelper.JsonOptions);
 
         // Cancel and (if needed) restore stock as one atomic unit, first statement a write so we
         // take the write lock up front (no lock-upgrade deadlock; busy_timeout makes a concurrent
@@ -570,7 +493,7 @@ public class InventoryTool : MorganaTool
             // Neither claim won a row: a concurrent CancelOrder already cancelled it between our
             // pre-read and now (Cancelled is the only other status this order could be in).
             await transaction.RollbackAsync();
-            return JsonSerializer.Serialize(new { error = "Order is already cancelled", orderId }, JsonOptions);
+            return JsonSerializer.Serialize(new { error = "Order is already cancelled", orderId }, GreenhouseDatabaseHelper.JsonOptions);
         }
 
         // stockRestored is derived from which UPDATE actually won a row — atomic with the claim,
@@ -600,7 +523,7 @@ public class InventoryTool : MorganaTool
             cancelledAt,
             stockRestored,
             reason = reason ?? "Not specified"
-        }, JsonOptions);
+        }, GreenhouseDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -616,7 +539,7 @@ public class InventoryTool : MorganaTool
         // Akka, not by whatever string a prompt-injected message might try to pass as an argument.
         ToolContext ctx = getToolContext();
 
-        await using SqliteConnection connection = await OpenConnectionAsync();
+        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE ConversationId = $conversationId ORDER BY CreatedAt DESC";
@@ -640,7 +563,7 @@ public class InventoryTool : MorganaTool
             }
         }
 
-        return JsonSerializer.Serialize(new { totalOrders = orders.Count, orders }, JsonOptions);
+        return JsonSerializer.Serialize(new { totalOrders = orders.Count, orders }, GreenhouseDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -657,7 +580,9 @@ public class InventoryTool : MorganaTool
         // unlike GetOrders()'s ConversationId, it is not a trust boundary, which is exactly why
         // this tool deliberately stops at a summary (no sealWord, no ability to act on any
         // of these orders) rather than granting the same access GetOrderStatus/ConfirmOrder do.
-        await using SqliteConnection connection = await OpenConnectionAsync();
+        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+
+        string? customerName = await FindCustomerNameAsync(connection, userId);
 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE UserId = $userId COLLATE NOCASE ORDER BY CreatedAt DESC";
@@ -681,6 +606,6 @@ public class InventoryTool : MorganaTool
             }
         }
 
-        return JsonSerializer.Serialize(new { userId, totalOrders = orders.Count, orders }, JsonOptions);
+        return JsonSerializer.Serialize(new { userId, customerName, totalOrders = orders.Count, orders }, GreenhouseDatabaseHelper.JsonOptions);
     }
 }

@@ -44,8 +44,8 @@
 
 # Exception: Examples ships a committed seed database that is embedded as a
 # resource in the plugin DLL (see EmbeddedResource in Examples.csproj), not a
-# runtime-generated conversation/inventory DB — it must survive the *.db exclusion above.
-!Examples/Data/Inventory.db
+# runtime-generated conversation/nursery DB — it must survive the *.db exclusion above.
+!Examples/Data/Examples.db
 
 # ==============================================================================
 # ENVIRONMENT & SECRETS

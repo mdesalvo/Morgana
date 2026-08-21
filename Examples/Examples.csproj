@@ -23,15 +23,18 @@
 
     <Description>
     Examples is a showcase demostrating modeling of domain agents with Morgana.AI framework.
-    It includes 4 agents serving "billing", "contract", "monkeys" and "inventory" intents. Each agent
-    encodes its prompt defining target, personality and the available tools (see agents.json).
+    It models one single organization, the fictional nursery "The Greenhouse &amp; Nursery", through 4 agents
+    serving the "inventory", "billing", "contract" and "monkeys" intents: the greenhouse ledger, the accounts
+    desk, the Green Care Plan and the naturalist's primate almanac. The first three share one SQLite system
+    of record (Data/Examples.db). Each agent encodes its prompt defining target, personality and the
+    available tools (see agents.json).
     </Description>
 
   </PropertyGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="agents.json" />
-    <EmbeddedResource Include="Data\Inventory.db" />
+    <EmbeddedResource Include="Data\Examples.db" />
   </ItemGroup>
 
   <ItemGroup>

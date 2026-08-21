@@ -86,12 +86,15 @@ Spectre.Console CLI at `Channels/Rune/` (separate solution, has its own `CLAUDE.
 
 ### Examples (plugin)
 
-Four example agents packaged as a plugin DLL (copied to `plugins/` after build). References `Morgana.AI` via **project reference** (`..\Morgana\Morgana.AI`, bringing `Morgana.Contracts` transitively) — not the NuGet package — so the in-repo/Docker build is deterministic; an out-of-tree plugin would instead reference the `Morgana.AI` NuGet package:
-- `BillingAgent` + `BillingTool` — telecom billing with invoices, payment history
-- `ContractAgent` + `ContractTool` — contract summarization
-- `MonkeyAgent` — MCP-only agent using external MonkeyMCP server (no native tool)
-- `InventoryAgent` + `InventoryTool` — greenhouse/nursery inventory; stateful example agent: consult catalog, create/confirm/cancel orders, backed by its own standalone SQLite database
+Four example agents packaged as a plugin DLL (copied to `plugins/` after build). References `Morgana.AI` via **project reference** (`..\Morgana\Morgana.AI`, bringing `Morgana.Contracts` transitively) — not the NuGet package — so the in-repo/Docker build is deterministic; an out-of-tree plugin would instead reference the `Morgana.AI` NuGet package.
+
+**One organization, several desks.** The three domain agents are not three unrelated demos: they are three roles inside the same fictional shop, *The Greenhouse & Nursery* (the same shop the widget's host page in `Channels/Cauldron/Widget/wwwroot/morgana.html` advertises). That is the property the example exists to show — Morgana impersonating several specialists who are recognizably colleagues, keyed to the same customer, reading the same books:
+- `InventoryAgent` + `InventoryTool` — the greenhouse ledger: catalog, live stock, the two-step order lifecycle (quote → confirm) with seal words, cancellation and per-customer order history. The only agent that **writes**
+- `BillingAgent` + `BillingTool` — the accounts desk: the invoices issued to a customer, their charge lines, what is still outstanding (summed by the tool, never by the model) and the payments received. Read-only
+- `ContractAgent` + `ContractTool` — the Green Care Plan: the garden-care subscription the nursery sells alongside its plants — coverage, plant-health guarantee, fees, the seven clauses, renewal and termination, plus the tending calendar (visits already made, with their outcome and notes; the next dates **computed** from the plan's own visit days, never stored, so the calendar cannot go stale). Read-only
+- `MonkeyAgent` — MCP-only agent using external MonkeyMCP server (no native tool). Framed in-domain as the nursery's primate almanac, but its job here is structural: it is the one agent whose tools are acquired at runtime, and the one with an empty context vocabulary
 - `agents.json` — embedded resource with intents and per-agent prompts/tool definitions
+- `Data/Examples.db` + `Data/GreenhouseDatabaseHelper.cs` — the shop's **single system of record**, embedded as a seed resource and deployed once per `StoragePath`: customers, catalog and stock, orders, the plan and its clauses, the tending visits, invoices and their charge lines. One database is what makes the three desks one shop — an invoice line carries the `orderId` that produced it, the customer code the accounts desk is given is the same code the greenhouse ledger keys orders by, and a code nobody is registered under is refused everywhere alike. On deployment the seed's calendar is **rebased** onto the current month (`RebaseCalendar`, whole months, day-of-month preserved), so the demo always opens on a plausible present — an invoice actually due, a plan with months left — instead of a ledger abandoned in the year the seed was authored. After that instant the data only changes through live orders
 
 ### PromptHarness (non-regression harness)
 
