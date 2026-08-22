@@ -171,6 +171,16 @@ builder.Services.AddSingleton<ILLMService>(sp => {
 // Storage Model: Each conversation stored as encrypted "morgana-{conversationId}.db" file
 // Configuration: Morgana:ConversationPersistence in appsettings.json
 
+// Plugin-owned stores outside DI (e.g. Examples' GreenhouseDatabaseHelper) read StoragePath
+// from this OS environment variable rather than IConfiguration, because they have no access
+// to the DI container. A value that only ever came from appsettings.json or User Secrets would
+// never reach them otherwise, silently splitting "where conversations live" from "where the
+// plugin's own database lives". Forward whatever Configuration resolved back onto the same
+// variable so both read the identical, single-sourced value.
+string? conversationStoragePath = builder.Configuration["Morgana:ConversationPersistence:StoragePath"];
+if (!string.IsNullOrWhiteSpace(conversationStoragePath))
+    Environment.SetEnvironmentVariable("Morgana__ConversationPersistence__StoragePath", conversationStoragePath);
+
 builder.Services.Configure<Records.ConversationPersistenceOptions>(
     builder.Configuration.GetSection("Morgana:ConversationPersistence"));
 builder.Services.AddSingleton<IConversationPersistenceService, SQLiteConversationPersistenceService>();
