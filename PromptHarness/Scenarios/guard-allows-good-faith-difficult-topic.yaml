@@ -11,7 +11,7 @@ turns:
     expect:
       guardCompliant: true
       agent: BillingAgent
-      contextWrites: [userId]
+      contextWrites: [customerCode]
       toolsCalled: [GetInvoices]
       textNotEmpty: true
     judgeNot:

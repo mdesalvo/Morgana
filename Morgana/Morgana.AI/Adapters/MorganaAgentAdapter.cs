@@ -301,7 +301,7 @@ public class MorganaAgentAdapter
         // Scope=="context" guard is essential — a Shared but request-scoped parameter is
         // asked of the user every turn, not carried in the registry, so promoting it would
         // wrongly route a per-turn input into first-write-wins shared state. Flatten across
-        // all tools and Distinct() because the same logical variable (e.g. "userId") is
+        // all tools and Distinct() because the same logical variable (e.g. "customerCode") is
         // typically declared on several tools and must register exactly once.
         List<string> sharedVariables = [.. tools
              .SelectMany(t => t.Parameters)

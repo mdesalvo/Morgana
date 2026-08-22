@@ -8,7 +8,7 @@ namespace Morgana.AI.Interfaces;
 public interface IAuthenticationService
 {
     /// <summary>
-    /// Validates bearer token and extracts caller identity (UserId, DisplayName). Token is raw value only
+    /// Validates bearer token and extracts caller identity (CallerId, DisplayName). Token is raw value only
     /// (no "Bearer " prefix). Must be low-latency (no external calls on hot path). Returns AuthenticationResult.
     /// </summary>
     Task<Records.AuthenticationResult> AuthenticateAsync(string token);

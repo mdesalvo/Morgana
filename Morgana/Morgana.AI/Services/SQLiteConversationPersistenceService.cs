@@ -487,7 +487,7 @@ WHERE id = 1;
             await EnsureDatabaseInitializedAsync(sqliteConnection);
 
             // Serialize the value as JSON, then encrypt for at-rest parity with agent_session.
-            // Shared variables are typically short strings (e.g. userId), so the overhead is
+            // Shared variables are typically short strings (e.g. customerCode), so the overhead is
             // negligible and the encryption keeps the on-disk shape coherent across the schema.
             string serialized = JsonSerializer.Serialize(variableValue);
             byte[] encrypted = Encrypt(serialized);

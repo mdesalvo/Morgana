@@ -49,7 +49,7 @@ public class MorganaTool
     /// Agents should call this before asking the user for any piece of information
     /// that may already be available.
     /// </summary>
-    /// <param name="variableName">Name of the variable to retrieve (e.g. "userId", "invoiceId").</param>
+    /// <param name="variableName">Name of the variable to retrieve (e.g. "customerCode", "invoiceId").</param>
     /// <returns>
     /// The variable value if found, or an instructional message directing the LLM to call <see cref="SetContextVariable"/> or ask the user.
     /// </returns>
@@ -79,7 +79,7 @@ public class MorganaTool
     /// the conversation-scoped <c>shared_context</c> registry so other agents of the same
     /// conversation can hydrate it on their next turn.
     /// </summary>
-    /// <param name="variableName">Name of the variable to set (e.g. "userId", "invoiceId").</param>
+    /// <param name="variableName">Name of the variable to set (e.g. "customerCode", "invoiceId").</param>
     /// <param name="variableValue">Value to store.</param>
     /// <returns>Confirmation message for the LLM.</returns>
     public Task<object> SetContextVariable(string variableName, string variableValue)
@@ -300,7 +300,7 @@ public class MorganaTool
         /// Conversation identifier this agent instance is scoped to. Unlike <see cref="Session"/>
         /// (an opaque Microsoft.Agents.AI object with no conversation concept of its own), this is
         /// the actual Akka-assigned conversationId — never writable by the LLM, unlike context
-        /// variables such as userId. Domain tools that need to scope persisted state to "this
+        /// variables such as customerCode. Domain tools that need to scope persisted state to "this
         /// conversation" (as opposed to a user-supplied, LLM-writable identifier) should use this,
         /// not a context variable.
         /// </summary>

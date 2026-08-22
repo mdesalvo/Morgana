@@ -9,14 +9,14 @@ turns:
   - say: "Hi, my customer code is P994E — show me my last 3 invoices"
     expect:
       agent: BillingAgent
-      contextVocabulary: [userId]
+      contextVocabulary: [customerCode]
       toolsCalled: [GetInvoices]
       textNotEmpty: true
 
   - say: "Now show me my payment history for the last 6 months"
     expect:
       agent: BillingAgent
-      contextVocabulary: [userId]
+      contextVocabulary: [customerCode]
       toolsCalled: [GetPaymentHistory]
       noContextWrites: true
       textNotEmpty: true

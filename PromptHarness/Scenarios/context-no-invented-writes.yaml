@@ -14,7 +14,7 @@ turns:
     expect:
       agent: InventoryAgent
       noContextWrites: true
-      contextVocabulary: [userId]
+      contextVocabulary: [customerCode]
       textNotEmpty: true
       textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judgeNot:

@@ -381,12 +381,12 @@ public static class Records
     /// Result of a token authentication operation.
     /// </summary>
     /// <param name="IsAuthenticated">Whether the token was successfully validated</param>
-    /// <param name="UserId">The caller's unique identifier (from the <c>sub</c> claim), null if not authenticated</param>
+    /// <param name="CallerId">The caller's unique identifier (from the <c>sub</c> claim), null if not authenticated</param>
     /// <param name="DisplayName">The caller's display name (from the <c>name</c> claim), null if not authenticated</param>
     /// <param name="Error">Description of why authentication failed, null if authenticated</param>
     public record AuthenticationResult(
         bool IsAuthenticated,
-        string? UserId = null,
+        string? CallerId = null,
         string? DisplayName = null,
         string? Error = null);
 
@@ -401,13 +401,13 @@ public static class Records
     /// <param name="Text">User's message text</param>
     /// <param name="Timestamp">Timestamp when the message was created</param>
     /// <param name="TurnContext">OpenTelemetry activity context for the current turn span.</param>
-    /// <param name="UserId">Authenticated caller identity, propagated from the HTTP layer for conversation ownership and audit.</param>
+    /// <param name="CallerId">Authenticated caller identity, propagated from the HTTP layer for conversation ownership and audit.</param>
     public record UserMessage(
         string ConversationId,
         string Text,
         DateTime Timestamp,
         ActivityContext TurnContext = default,
-        string? UserId = null);
+        string? CallerId = null);
 
     // ==========================================================================
     // GUARD (CONTENT MODERATION) MESSAGES

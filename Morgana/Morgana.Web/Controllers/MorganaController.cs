@@ -316,7 +316,7 @@ public class MorganaController : ControllerBase
         try
         {
             #region Authentication
-            (IActionResult? authFailure, string? userId) = await AuthenticateRequestAsync();
+            (IActionResult? authFailure, string? callerId) = await AuthenticateRequestAsync();
             if (authFailure is not null)
                 return authFailure;
             #endregion
@@ -393,7 +393,7 @@ public class MorganaController : ControllerBase
                 request.Text,
                 DateTime.UtcNow,
                 httpContext,           // passed as ActivityLink to turn span in supervisor
-                userId                 // authenticated caller identity
+                callerId                 // authenticated caller identity
             ));
 
             logger.LogInformation("Message sent to conversation {RequestConversationId}", request.ConversationId);
@@ -442,9 +442,9 @@ public class MorganaController : ControllerBase
     /// <summary>
     /// Validates the bearer token from the Authorization header when authentication is enabled.
     /// Returns null if the token is valid; returns an IActionResult (401) on failure.
-    /// On success, outputs the authenticated UserId.
+    /// On success, outputs the authenticated CallerId.
     /// </summary>
-    private async Task<(IActionResult? Failure, string? UserId)> AuthenticateRequestAsync()
+    private async Task<(IActionResult? Failure, string? CallerId)> AuthenticateRequestAsync()
     {
         string? authorizationHeader = Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
@@ -462,7 +462,7 @@ public class MorganaController : ControllerBase
             return (Unauthorized(new { error = authResult.Error }), null);
         }
 
-        return (null, authResult.UserId);
+        return (null, authResult.CallerId);
     }
 
     /// <summary>

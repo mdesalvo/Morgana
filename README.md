@@ -157,7 +157,7 @@ Agents express their capabilities through **tools**, which can be native impleme
 [ProvidesToolForIntent("billing")]
 public class BillingTool : MorganaTool 
 {
-    public async Task<string> GetInvoices(string userId, int count) { ... }
+    public async Task<string> GetInvoices(string customerCode, int count) { ... }
 }
 
 [HandlesIntent("monkeys")]

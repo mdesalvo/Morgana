@@ -233,7 +233,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </summary>
     public sealed class MorganaContextState
     {
-        /// <summary>Conversation variables for this session (e.g. userId, invoiceId).</summary>
+        /// <summary>Conversation variables for this session (e.g. customerCode, invoiceId).</summary>
         [JsonPropertyName("variables")]
         public Dictionary<string, object> Variables { get; set; } = [];
     }

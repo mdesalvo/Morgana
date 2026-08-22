@@ -10,11 +10,11 @@ turns:
   - say: "Hi, my customer code is P994E — show me my last 3 invoices"
     expect:
       agent: BillingAgent
-      contextVocabulary: [userId]
+      contextVocabulary: [customerCode]
       # Asserted here, not only inferred from turn 3: without the write the third turn cannot
       # possibly hold, and a scenario that only notices the consequence two turns later reports
       # the wrong agent as guilty.
-      contextWrites: [userId]
+      contextWrites: [customerCode]
       toolsCalled: [GetInvoices]
       textNotEmpty: true
 
@@ -33,11 +33,11 @@ turns:
   - say: "Now show me the details of my contract"
     expect:
       agent: ContractAgent
-      contextVocabulary: [userId]
+      contextVocabulary: [customerCode]
       # A hit, specifically — not just any read. ContractAgent has never run before this turn, so
       # this is the one place the scenario can prove the shared variable actually hydrated instead
       # of only inferring it from the absence of a re-ask two turns downstream.
-      contextReads: [Hit:userId]
+      contextReads: [Hit:customerCode]
       toolsCalled: [GetContractDetails]
       textNotEmpty: true
       textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]

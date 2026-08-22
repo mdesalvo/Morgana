@@ -136,7 +136,7 @@ LLM (a plausible domain mock, which a template writes badly).
 The agent class has no client half — a `MorganaAgent` subclass is attributes plus one constructor
 handing its type to `MorganaAgentAdapter`, and every domain decision it expresses is configuration
 Alembic already holds. A tool class does, and the seam is `partial` **methods**: `.g.cs` declares
-`public partial Task<string> GetInvoices(string userId, string count);` from the same
+`public partial Task<string> GetInvoices(string customerCode, string count);` from the same
 `ToolDefinition` that goes into `agents.json`, and `.cs` implements it. That buys two things free —
 the pair `MorganaToolAdapter.AddTool` validates at startup is generated correct by construction, and
 a tool added to the configuration and forgotten in the code **does not compile**.

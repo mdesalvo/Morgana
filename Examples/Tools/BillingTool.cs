@@ -31,7 +31,7 @@ public class BillingTool : MorganaTool
 
     private record Invoice(
         string InvoiceId,
-        string UserId,
+        string CustomerCode,
         DateTime PeriodStart,
         DateTime PeriodEnd,
         DateTime IssueDate,
@@ -56,7 +56,7 @@ public class BillingTool : MorganaTool
         decimal Amount);
 
     private const string InvoiceColumns =
-        "InvoiceId, UserId, PeriodStart, PeriodEnd, IssueDate, DueDate, Subtotal, TaxRate, Tax, Total, Status, PaidDate, PaymentType, PaymentLastFour";
+        "InvoiceId, CustomerCode, PeriodStart, PeriodEnd, IssueDate, DueDate, Subtotal, TaxRate, Tax, Total, Status, PaidDate, PaymentType, PaymentLastFour";
 
     private static Invoice ReadInvoice(SqliteDataReader reader) => new Invoice(
         reader.GetString(0),
@@ -87,13 +87,13 @@ public class BillingTool : MorganaTool
     /// desk that refuses to look before it has recognised you is a worse demo and a worse shop.
     /// The name is a courtesy on the answer, never a permission to answer.
     /// </remarks>
-    private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string userId)
+    private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string customerCode)
     {
         // COLLATE NOCASE, like everywhere else in this plugin: the code travels through a chat
         // transcript, typed from memory, and 'p994e' is the same customer as 'P994E'.
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT DisplayName FROM Customers WHERE UserId = $userId COLLATE NOCASE";
-        command.Parameters.AddWithValue("$userId", userId);
+        command.CommandText = "SELECT DisplayName FROM Customers WHERE CustomerCode = $customerCode COLLATE NOCASE";
+        command.Parameters.AddWithValue("$customerCode", customerCode);
 
         return (string?)await command.ExecuteScalarAsync();
     }
@@ -177,20 +177,20 @@ public class BillingTool : MorganaTool
     /// <summary>
     /// Retrieves the most recent invoices issued to a customer as structured JSON.
     /// </summary>
-    /// <param name="userId">Customer code (retrieved from context)</param>
+    /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="count">Number of recent invoices to retrieve (1-10)</param>
     /// <returns>JSON array of invoice summaries</returns>
-    public async Task<string> GetInvoices(string userId, int count)
+    public async Task<string> GetInvoices(string customerCode, int count)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, userId);
+        string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
         count = Math.Clamp(count, 1, 10);
 
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE UserId = $userId COLLATE NOCASE ORDER BY IssueDate DESC LIMIT $count";
-        command.Parameters.AddWithValue("$userId", userId);
+        command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE CustomerCode = $customerCode COLLATE NOCASE ORDER BY IssueDate DESC LIMIT $count";
+        command.Parameters.AddWithValue("$customerCode", customerCode);
         command.Parameters.AddWithValue("$count", count);
 
         List<Invoice> invoices = [];
@@ -204,7 +204,7 @@ public class BillingTool : MorganaTool
         {
             return JsonSerializer.Serialize(new
             {
-                userId,
+                customerCode,
                 customerName,
                 totalCount = 0,
                 invoices = Array.Empty<object>(),
@@ -214,7 +214,7 @@ public class BillingTool : MorganaTool
 
         var result = new
         {
-            userId,
+            customerCode,
             customerName,
             totalCount = invoices.Count,
             invoices = invoices.Select(invoice => new
@@ -239,14 +239,14 @@ public class BillingTool : MorganaTool
     /// <summary>
     /// Retrieves detailed information about a specific invoice as structured JSON.
     /// </summary>
-    /// <param name="userId">Customer code (retrieved from context)</param>
+    /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="invoiceId">Specific invoice identifier (e.g., "INV-0512")</param>
     /// <returns>JSON object with complete invoice details</returns>
-    public async Task<string> GetInvoiceDetails(string userId, string invoiceId)
+    public async Task<string> GetInvoiceDetails(string customerCode, string invoiceId)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, userId);
+        string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
         // Scoped to the customer, not merely looked up by id: one customer's invoice is never
         // readable by quoting its number in another customer's conversation, and an invoice that
@@ -254,9 +254,9 @@ public class BillingTool : MorganaTool
         Invoice? invoice = null;
         await using (SqliteCommand command = connection.CreateCommand())
         {
-            command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE InvoiceId = $invoiceId COLLATE NOCASE AND UserId = $userId COLLATE NOCASE";
+            command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE InvoiceId = $invoiceId COLLATE NOCASE AND CustomerCode = $customerCode COLLATE NOCASE";
             command.Parameters.AddWithValue("$invoiceId", invoiceId);
-            command.Parameters.AddWithValue("$userId", userId);
+            command.Parameters.AddWithValue("$customerCode", customerCode);
 
             await using SqliteDataReader reader = await command.ExecuteReaderAsync();
             if (await reader.ReadAsync())
@@ -266,8 +266,8 @@ public class BillingTool : MorganaTool
         if (invoice == null)
         {
             await using SqliteCommand available = connection.CreateCommand();
-            available.CommandText = "SELECT InvoiceId FROM Invoices WHERE UserId = $userId COLLATE NOCASE ORDER BY IssueDate DESC";
-            available.Parameters.AddWithValue("$userId", userId);
+            available.CommandText = "SELECT InvoiceId FROM Invoices WHERE CustomerCode = $customerCode COLLATE NOCASE ORDER BY IssueDate DESC";
+            available.Parameters.AddWithValue("$customerCode", customerCode);
 
             List<string> invoiceIds = [];
             await using (SqliteDataReader reader = await available.ExecuteReaderAsync())
@@ -291,7 +291,7 @@ public class BillingTool : MorganaTool
         var result = new
         {
             invoiceId = invoice.InvoiceId,
-            userId = invoice.UserId,
+            customerCode = invoice.CustomerCode,
             customerName,
             period = PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
             dates = new
@@ -343,17 +343,17 @@ public class BillingTool : MorganaTool
     /// <summary>
     /// Sums what the customer still owes: the invoices left unpaid, oldest first.
     /// </summary>
-    /// <param name="userId">Customer code (retrieved from context)</param>
+    /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <returns>JSON object with the outstanding total and the invoices making it up</returns>
-    public async Task<string> GetOutstandingBalance(string userId)
+    public async Task<string> GetOutstandingBalance(string customerCode)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, userId);
+        string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE UserId = $userId COLLATE NOCASE AND Status <> 'Paid' AND Status <> 'Cancelled' ORDER BY DueDate";
-        command.Parameters.AddWithValue("$userId", userId);
+        command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE CustomerCode = $customerCode COLLATE NOCASE AND Status <> 'Paid' AND Status <> 'Cancelled' ORDER BY DueDate";
+        command.Parameters.AddWithValue("$customerCode", customerCode);
 
         List<Invoice> unpaid = [];
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync())
@@ -366,7 +366,7 @@ public class BillingTool : MorganaTool
         {
             return JsonSerializer.Serialize(new
             {
-                userId,
+                customerCode,
                 customerName,
                 hasOutstanding = false,
                 totalDue = 0m,
@@ -382,7 +382,7 @@ public class BillingTool : MorganaTool
 
         var result = new
         {
-            userId,
+            customerCode,
             customerName,
             hasOutstanding = true,
             totalDue,
@@ -407,21 +407,21 @@ public class BillingTool : MorganaTool
     /// <summary>
     /// Retrieves the payment history of a customer as structured JSON.
     /// </summary>
-    /// <param name="userId">Customer code (retrieved from context)</param>
+    /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="months">Number of months of history to retrieve (1-12)</param>
     /// <returns>JSON object with payment history</returns>
-    public async Task<string> GetPaymentHistory(string userId, int months = 6)
+    public async Task<string> GetPaymentHistory(string customerCode, int months = 6)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, userId);
+        string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
         months = Math.Clamp(months, 1, 12);
         DateTime cutoffDate = DateTime.UtcNow.AddMonths(-months);
 
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE UserId = $userId COLLATE NOCASE AND Status = 'Paid' AND PaidDate >= $cutoff ORDER BY PaidDate DESC";
-        command.Parameters.AddWithValue("$userId", userId);
+        command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE CustomerCode = $customerCode COLLATE NOCASE AND Status = 'Paid' AND PaidDate >= $cutoff ORDER BY PaidDate DESC";
+        command.Parameters.AddWithValue("$customerCode", customerCode);
         command.Parameters.AddWithValue("$cutoff", cutoffDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
 
         List<Invoice> payments = [];
@@ -435,7 +435,7 @@ public class BillingTool : MorganaTool
         {
             return JsonSerializer.Serialize(new
             {
-                userId,
+                customerCode,
                 customerName,
                 months,
                 hasData = false,
@@ -447,7 +447,7 @@ public class BillingTool : MorganaTool
 
         var result = new
         {
-            userId,
+            customerCode,
             customerName,
             months,
             hasData = true,

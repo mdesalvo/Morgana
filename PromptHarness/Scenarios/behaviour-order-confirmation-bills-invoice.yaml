@@ -8,9 +8,15 @@ description: >-
   harness session. The seal word CANNOT be scripted as the random value a real conversation would
   receive — the harness DSL has no way to capture a value the model invents in one turn and replay
   it in a later turn's fixed text — so InventoryTool.GenerateSealWord() is pinned for the run to
-  Harness:DeterministicSealWord (appsettings.Harness.json, default "534LW03D"); see both members' own
-  remarks. Depends on that default staying "534LW03D" — if it is ever overridden, this turn's say:
-  text needs the same literal.
+  Harness:DeterministicSealWord (appsettings.Harness.json, default "534LW03D"); see both members'
+  own remarks. Depends on that default staying "534LW03D" — if it is ever overridden, this
+  scenario's say: text needs the same literal.
+  Three turns, not two: even when the customer supplies the seal word AND an explicit "yes" in the
+  very same message, InventoryAgent's own doctrine (step 5 of the numbered process in its
+  Instructions — restate binding effect, wait for a SEPARATE explicit yes) still holds one more
+  round before calling ConfirmOrder. Confirmed live: a two-turn version of this scenario failed 0/5,
+  the agent asking "Shall I proceed?" every single run rather than treating the front-loaded seal
+  word as sufficient. That is correct behaviour, not a bug — the scenario is written to match it.
 
 turns:
   - say: "Hi, I'd like to order 1 pack of the wildflower seed mix, my customer code is T780C"
@@ -25,6 +31,18 @@ turns:
       - "The response asks the customer to confirm before the order becomes binding."
 
   - say: "Yes, please confirm it. The seal word is 534LW03D"
+    expect:
+      agent: InventoryAgent
+      agentCompleted: false
+      toolsCalled: [GetOrderStatus]
+      toolsNotCalled: [ConfirmOrder]
+      textNotEmpty: true
+    judge:
+      - "The response restates that confirming is binding (stock will be committed, or the action cannot easily be undone) and asks the customer for a final go-ahead."
+    judgeNot:
+      - "The response claims the order is already confirmed or billed."
+
+  - say: "Yes, proceed"
     expect:
       agent: InventoryAgent
       toolsCalled: [ConfirmOrder]

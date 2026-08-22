@@ -34,7 +34,7 @@ public class InventoryTool : MorganaTool
 
     private record Product(string Sku, string Name, string Category, string Description, long QuantityOnHand, long ReorderThreshold, double UnitPrice);
 
-    private record Order(string OrderId, string Sku, long Quantity, string Status, string? UserId, string? ConversationId, string SealWord, string CreatedAt, string? ConfirmedAt, string? CancelledAt);
+    private record Order(string OrderId, string Sku, long Quantity, string Status, string? CustomerCode, string? ConversationId, string SealWord, string CreatedAt, string? ConfirmedAt, string? CancelledAt);
 
     private static async Task<Product?> FindProductAsync(SqliteConnection connection, string sku)
     {
@@ -58,7 +58,7 @@ public class InventoryTool : MorganaTool
         // transcript, possibly retyped by a user from memory across a session boundary — comparing
         // case-insensitively is what makes that forgiving instead of a needless "order not found".
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT OrderId, Sku, Quantity, Status, UserId, ConversationId, SealWord, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE OrderId = $orderId COLLATE NOCASE";
+        command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CustomerCode, ConversationId, SealWord, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE OrderId = $orderId COLLATE NOCASE";
         command.Parameters.AddWithValue("$orderId", orderId);
 
         await using SqliteDataReader reader = await command.ExecuteReaderAsync();
@@ -103,11 +103,11 @@ public class InventoryTool : MorganaTool
             ? deterministic
             : Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
 
-    private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string userId)
+    private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string customerCode)
     {
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT DisplayName FROM Customers WHERE UserId = $userId COLLATE NOCASE";
-        command.Parameters.AddWithValue("$userId", userId);
+        command.CommandText = "SELECT DisplayName FROM Customers WHERE CustomerCode = $customerCode COLLATE NOCASE";
+        command.Parameters.AddWithValue("$customerCode", customerCode);
 
         return (string?)await command.ExecuteScalarAsync();
     }
@@ -219,9 +219,9 @@ public class InventoryTool : MorganaTool
     /// </summary>
     /// <param name="sku">Product SKU to order.</param>
     /// <param name="quantity">Quantity requested (must not exceed current stock).</param>
-    /// <param name="userId">Identifier of the requesting customer (retrieved from shared context).</param>
+    /// <param name="customerCode">Identifier of the requesting customer (retrieved from shared context).</param>
     /// <returns>JSON object with the new orderId, one-time sealWord, quote and pending status.</returns>
-    public async Task<string> CreatePurchaseOrder(string sku, int quantity, string userId)
+    public async Task<string> CreatePurchaseOrder(string sku, int quantity, string customerCode)
     {
         if (quantity <= 0)
             return JsonSerializer.Serialize(new { error = "Quantity must be a positive number", requestedQuantity = quantity }, GreenhouseDatabaseHelper.JsonOptions);
@@ -269,20 +269,20 @@ public class InventoryTool : MorganaTool
         await using (SqliteCommand insert = connection.CreateCommand())
         {
             insert.CommandText = """
-                INSERT INTO Orders (OrderId, Sku, Quantity, Status, UserId, ConversationId, SealWord, CreatedAt)
-                VALUES ($orderId, $sku, $quantity, 'Pending', $userId, $conversationId, $sealWord, $createdAt)
+                INSERT INTO Orders (OrderId, Sku, Quantity, Status, CustomerCode, ConversationId, SealWord, CreatedAt)
+                VALUES ($orderId, $sku, $quantity, 'Pending', $customerCode, $conversationId, $sealWord, $createdAt)
                 """;
             insert.Parameters.AddWithValue("$orderId", orderId);
             insert.Parameters.AddWithValue("$sku", product.Sku);
             insert.Parameters.AddWithValue("$quantity", quantity);
-            insert.Parameters.AddWithValue("$userId", userId);
+            insert.Parameters.AddWithValue("$customerCode", customerCode);
             insert.Parameters.AddWithValue("$conversationId", ctx.ConversationId);
             insert.Parameters.AddWithValue("$sealWord", sealWord);
             insert.Parameters.AddWithValue("$createdAt", createdAt);
             await insert.ExecuteNonQueryAsync();
         }
 
-        toolLogger.LogInformation("Created purchase order {OrderId} for {Quantity}x {Sku} (user {UserId})", orderId, quantity, sku, userId);
+        toolLogger.LogInformation("Created purchase order {OrderId} for {Quantity}x {Sku} (user {CustomerCode})", orderId, quantity, sku, customerCode);
 
         return JsonSerializer.Serialize(new
         {
@@ -416,7 +416,7 @@ public class InventoryTool : MorganaTool
         // in that vanishingly unlikely case the order still confirms, just without a billed line.
         string? invoiceId = product == null
             ? null
-            : await GreenhouseDatabaseHelper.BillCustomerAsync(connection, transaction, order.UserId!, product.Name,
+            : await GreenhouseDatabaseHelper.BillCustomerAsync(connection, transaction, order.CustomerCode!, product.Name,
                 order.Sku, order.OrderId, product.UnitPrice, (int)order.Quantity, confirmedAtUtc);
 
         await transaction.CommitAsync();
@@ -602,25 +602,25 @@ public class InventoryTool : MorganaTool
 
     /// <summary>
     /// Lists every order ever placed by a given customer, across ALL conversations/sessions —
-    /// the full history behind a userId, not just the current chat. Summary only: sealWord is
+    /// the full history behind a customerCode, not just the current chat. Summary only: sealWord is
     /// never included here (it is shown exactly once, by CreatePurchaseOrder), so seeing this
     /// list is not enough to act on or fully inspect any specific past order.
     /// </summary>
-    /// <param name="userId">Identifier of the customer whose order history to retrieve (retrieved from shared context).</param>
+    /// <param name="customerCode">Identifier of the customer whose order history to retrieve (retrieved from shared context).</param>
     /// <returns>JSON array of that customer's orders across every conversation (no sealWord included).</returns>
-    public async Task<string> GetOrderHistory(string userId)
+    public async Task<string> GetOrderHistory(string customerCode)
     {
-        // userId is a shared context variable the LLM itself can write via SetContextVariable —
+        // customerCode is a shared context variable the LLM itself can write via SetContextVariable —
         // unlike GetOrders()'s ConversationId, it is not a trust boundary, which is exactly why
         // this tool deliberately stops at a summary (no sealWord, no ability to act on any
         // of these orders) rather than granting the same access GetOrderStatus/ConfirmOrder do.
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, userId);
+        string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE UserId = $userId COLLATE NOCASE ORDER BY CreatedAt DESC";
-        command.Parameters.AddWithValue("$userId", userId);
+        command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE CustomerCode = $customerCode COLLATE NOCASE ORDER BY CreatedAt DESC";
+        command.Parameters.AddWithValue("$customerCode", customerCode);
 
         List<object> orders = [];
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync())
@@ -640,6 +640,6 @@ public class InventoryTool : MorganaTool
             }
         }
 
-        return JsonSerializer.Serialize(new { userId, customerName, totalOrders = orders.Count, orders }, GreenhouseDatabaseHelper.JsonOptions);
+        return JsonSerializer.Serialize(new { customerCode, customerName, totalOrders = orders.Count, orders }, GreenhouseDatabaseHelper.JsonOptions);
     }
 }

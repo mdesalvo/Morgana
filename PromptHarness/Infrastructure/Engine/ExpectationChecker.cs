@@ -317,7 +317,7 @@ public static partial class ExpectationChecker
 
     /// <summary>
     /// Splits a <c>contextReads</c> entry into its optional outcome prefix and variable name —
-    /// <c>"Hit:userId"</c> → <c>("Hit", "userId")</c>, <c>"userId"</c> → <c>(null, "userId")</c>.
+    /// <c>"Hit:customerCode"</c> → <c>("Hit", "customerCode")</c>, <c>"customerCode"</c> → <c>(null, "customerCode")</c>.
     /// </summary>
     private static (string? Operation, string Variable) ParseContextReadEntry(string entry)
     {

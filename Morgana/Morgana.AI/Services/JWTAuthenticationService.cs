@@ -161,8 +161,8 @@ public class JWTAuthenticationService : IAuthenticationService
                 return new Records.AuthenticationResult(IsAuthenticated: false, Error: error);
             }
 
-            string? userId = result.Claims.TryGetValue(JwtRegisteredClaimNames.Sub, out object? subValue) ? subValue?.ToString() : null;
-            if (string.IsNullOrEmpty(userId))
+            string? callerId = result.Claims.TryGetValue(JwtRegisteredClaimNames.Sub, out object? subValue) ? subValue?.ToString() : null;
+            if (string.IsNullOrEmpty(callerId))
             {
                 logger.LogWarning("JWT valid but missing 'sub' claim");
                 return new Records.AuthenticationResult(IsAuthenticated: false, Error: "Token is valid but missing required 'sub' claim");
@@ -171,8 +171,8 @@ public class JWTAuthenticationService : IAuthenticationService
 
             // "name" is optional on a channel's self-issued token; falling back to the "sub" value
             // (the user id itself) means callers always get a non-null DisplayName to show.
-            string? displayName = result.Claims.TryGetValue(JwtRegisteredClaimNames.Name, out object? nameValue) ? nameValue?.ToString() : userId;
-            return new Records.AuthenticationResult(IsAuthenticated: true, UserId: userId, DisplayName: displayName);
+            string? displayName = result.Claims.TryGetValue(JwtRegisteredClaimNames.Name, out object? nameValue) ? nameValue?.ToString() : callerId;
+            return new Records.AuthenticationResult(IsAuthenticated: true, CallerId: callerId, DisplayName: displayName);
         }
         catch (Exception ex)
         {

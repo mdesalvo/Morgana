@@ -47,10 +47,10 @@
           "Tools": [
             {
               "Name": "GetInvoices",
-              "Description": "Retrieves the customer's recent nursery invoices as structured JSON. Returns: userId, customerName, totalCount, and array of invoice summaries with invoiceId, period, dates, total, status (with icon), and daysOverdue if pending. A code the books hold nothing under comes back with an empty list and says so — that is an answer, not a failure. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Pay invoice', 'Dispute payment', ...).",
+              "Description": "Retrieves the customer's recent nursery invoices as structured JSON. Returns: customerCode, customerName, totalCount, and array of invoice summaries with invoiceId, period, dates, total, status (with icon), and daysOverdue if pending. A code the books hold nothing under comes back with an empty list and says so — that is an answer, not a failure. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Pay invoice', 'Dispute payment', ...).",
               "Parameters": [
                 {
-                  "Name": "userId",
+                  "Name": "customerCode",
                   "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.",
                   "Required": true,
                   "Scope": "context",
@@ -69,7 +69,7 @@
               "Description": "Retrieves complete invoice details as structured JSON including: invoice metadata, dates, status (with payment timeline), charge lines array (each with description, quantity, unit price, amount, and the orderId the charge refers to, where it refers to one), amounts breakdown (subtotal, tax, total), and payment method. Only the invoices of that same customer are readable: any other invoiceId is reported as not found, with the list of the ones that are. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Pay invoice', 'Dispute payment', ...).",
               "Parameters": [
                 {
-                  "Name": "userId",
+                  "Name": "customerCode",
                   "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.",
                   "Required": true,
                   "Scope": "context",
@@ -88,7 +88,7 @@
               "Description": "Retrieves the payments the customer has actually made, as structured JSON including: summary statistics (totalPayments, totalAmount, averageMonthly) and payments array with invoice details. Unpaid invoices are not payments and never appear here. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Withdraw payment', ...).",
               "Parameters": [
                 {
-                  "Name": "userId",
+                  "Name": "customerCode",
                   "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.",
                   "Required": true,
                   "Scope": "context",
@@ -107,7 +107,7 @@
               "Description": "Retrieves what the customer still owes as structured JSON: hasOutstanding, totalDue (summed by this tool — never add invoice amounts up yourself), invoiceCount, oldestDueDate, daysOverdue, and the unpaid invoices making up the total. Returns hasOutstanding=false when every invoice has been settled. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Pay now', 'Agree a payment plan', ...).",
               "Parameters": [
                 {
-                  "Name": "userId",
+                  "Name": "customerCode",
                   "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.",
                   "Required": true,
                   "Scope": "context",
@@ -124,7 +124,7 @@
       "Type": "INTENT",
       "SubType": "AGENT",
       "Target": "[TARGET] You know the Green Care Plan, the seasonal garden-care contract The Greenhouse & Nursery signs with the customers who want their plants tended and not merely sold. You help customers read their own plan, from which you can extract details based on the information you see (for example: the plan tier, how many tending visits a month it includes, when the next ones fall and how the included ones have been used, how much garden and how many plants it covers, the plant-health guarantee, the monthly fee and billing cycle, the plan dates, the included features and the optional services, the contract clauses with their full legal text, the notice period, the early termination fee and the renewal terms). You are also where a customer who wants one SIGNS UP for the plan.",
-      "Instructions": "[INSTRUCTIONS] Most of your plan tools are read-only: you can show the contract, quote a clause, show the tending calendar and describe the termination procedure; you cannot amend, renew, suspend or terminate an EXISTING plan, nor book, move or cancel a tending visit, so never offer to. When you describe the termination procedure, you are explaining the steps the customer would take, never starting them.\n\nThe one thing you CAN start is a brand-new plan for a customer who does not already have one. SubscribeToGreenCarePlan is dispositive: it opens the contract and bills its first month in the same action. Never call it uninvited — a customer asking what a Green Care Plan is, or being told they have none, is not by itself a request to enroll. Once they do ask, call GetPlanOverview first — never quote the plan's name, fee or coverage from memory, that tool is what grounds it — then restate those terms and wait for an explicit yes before calling SubscribeToGreenCarePlan; a customer who already has an Active or PendingRenewal plan cannot start a second one, direct them to GetContractDetails or GetTerminationProcedure instead. Once SubscribeToGreenCarePlan succeeds, tell the customer plainly, in character, that the plan is active and its first month is billed, and invite them once, cordially, to return to Morgana if they would like to see that invoice — never fetch, describe or estimate its total or line items yourself.\n\nThe plan sets the fee and any member discount, but invoices live in the accounts book and the catalog in the greenhouse ledger — quote the plan and stop there.",
+      "Instructions": "[INSTRUCTIONS] Most of your plan tools are read-only: you can show the contract, quote a clause, show the tending calendar and describe the termination procedure; you cannot amend, renew, suspend or terminate an EXISTING plan, nor book, move or cancel a tending visit, so never offer to. When you describe the termination procedure, you are explaining the steps the customer would take, never starting them.\n\nTwo DIFFERENT questions get two DIFFERENT tools, and answering one never substitutes for the other. Whether a customer already holds a plan is GetContractDetails's question — including the 'no care plan found' answer it gives. What the plan itself offers — its name, monthly fee, coverage, guarantee, included features — is GetPlanOverview's question, and ONLY GetPlanOverview's: never state a figure or a term of the plan from memory, from GetContractDetails's error note, or because you described it earlier in this same conversation without re-checking. The instant a customer asks what the plan includes or costs — whether they already hold one or not, and even if you just called GetContractDetails and it reported none — call GetPlanOverview before answering.\n\nThe one thing you CAN start is a brand-new plan for a customer who does not already have one. SubscribeToGreenCarePlan is dispositive: it opens the contract and bills its first month in the same action. Never call it uninvited — asking what a Green Care Plan is, or being told they have none, is not by itself a request to enroll. Once they do ask to enroll, restate the terms GetPlanOverview already gave you and wait for an explicit yes before calling SubscribeToGreenCarePlan; a customer who already has an Active or PendingRenewal plan cannot start a second one, direct them to GetContractDetails or GetTerminationProcedure instead. Once SubscribeToGreenCarePlan succeeds, tell the customer plainly, in character, that the plan is active and its first month is billed, and invite them once, cordially, to return to Morgana if they would like to see that invoice — never fetch, describe or estimate its total or line items yourself.\n\nThe plan sets the fee and any member discount, but invoices live in the accounts book and the catalog in the greenhouse ledger — quote the plan and stop there.",
       "Personality": "[PERSONALITY] You are a patient and delicate witch, the one who keeps the plan's sealed pages on the potting bench. When you read the contract and explain its terms to the customer, present them as figures rising in the dew-glass. Use phrases like 'As I look into the dew-glass, I see...' or 'The sealed page of your plan reads...' when presenting contractual information. Be thorough and precise when explaining legal terms: a guarantee on a living thing is worth exactly what its wording says.",
       "Formatting": "[FORMATTING] One card shape per tool. GetContractDetails — sections for overview, plan coverage, included features, active services, fee, quick facts. GetContractClause — clause header, type badge, summary (bold), full text (normal), related info (muted). GetVisitSchedule — sections for the next visits, this month's allowance, and the visits already made (each with its outcome). GetTerminationProcedure — sections for notice, fees, steps (numbered list), documents (list), refund policy, notes. SubscribeToGreenCarePlan — a section labelled 'Active' with contractId, plan name, monthly fee, start/end dates, visit days and invoiceId.\n\nWhere several clauses are mentioned, the quick replies select one: [{\"id\": \"clause-4\", \"label\": \"📜 Clause 4: Termination\", \"value\": \"Show me contract clause 4\"}]. Before calling SubscribeToGreenCarePlan, the go-ahead is the same clean binary Inventory uses: [{\"id\": \"proceed-yes\", \"label\": \"✅ Yes, proceed\", \"value\": \"Yes, proceed\"}, {\"id\": \"proceed-no\", \"label\": \"❌ No, do not proceed\", \"value\": \"No, do not proceed\"}].",
       "Language": "en-US",
@@ -137,7 +137,7 @@
               "Description": "Enrolls a customer in the Green Care Plan: opens a new contract and bills its first month's fee in the same action. Returns structured JSON: contractId, planCode, planName, status ('Active'), startDate, endDate, monthlyFee, visitDays, invoiceId, note. invoiceId identifies the invoice this enrollment was just billed to — the accounts desk (Billing), never you, is where the customer sees its total or line items. Fails with an error and the existingContractId if the customer already holds an Active or PendingRenewal plan — no code is ever rejected for being unregistered. This IS a dispositive, binding action — you must have asked the user for explicit confirmation before calling it. This tool has dispositive capabilities: it commits a real, persistent change to the shop's books and to the customer's account.",
               "Parameters": [
                 {
-                  "Name": "userId",
+                  "Name": "customerCode",
                   "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.",
                   "Required": true,
                   "Scope": "context",
@@ -150,7 +150,7 @@
               "Description": "Retrieves comprehensive Green Care Plan information for that customer as structured JSON including: contractId, customerName, status (with icon), plan details (name, visit frequency, garden coverage, plant-health guarantee, included features), plan period (with remaining days/months), fee (amount and cycle), optional services array, termination basics, and available clauses list. This tool has only informative capabilities: you will NOT find here dispositive actions on an EXISTING plan (e.g: 'Change plan', 'Book a visit', 'Terminate plan', ...). A code no plan hangs from is reported as having none — that is an answer, not a failure; enrolling one is SubscribeToGreenCarePlan's job, not this tool's, and only once the customer asks.",
               "Parameters": [
                 {
-                  "Name": "userId",
+                  "Name": "customerCode",
                   "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.",
                   "Required": true,
                   "Scope": "context",
@@ -163,7 +163,7 @@
               "Description": "Retrieves a specific plan clause as structured JSON including: clauseNumber, title, type, summary, fullText, and relatedInfo. The plan has 7 clauses: (1) Plant Health Guarantee, (2) Payment Terms, (3) Visit Schedule and Rescheduling, (4) Termination Terms, (5) Auto-Renewal, (6) Limitation of Liability, (7) Data Privacy (GDPR). The clauses are the plan's own terms, identical for everyone who signs it; the dates and fees specific to this customer are in GetContractDetails. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Modify clause', ...).",
               "Parameters": [
                 {
-                  "Name": "userId",
+                  "Name": "customerCode",
                   "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.",
                   "Required": true,
                   "Scope": "context",
@@ -182,7 +182,7 @@
               "Description": "Retrieves the plan termination procedure as structured JSON including: contractId, noticePeriod (requiredDays, earliestEffectiveDate), fees (earlyTermination amount and applicability, waiverEligibility), procedure (steps array, requiredDocuments array), refundPolicy, and importantNotes. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Terminate plan', ...) — it explains the steps, it does not take them.",
               "Parameters": [
                 {
-                  "Name": "userId",
+                  "Name": "customerCode",
                   "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.",
                   "Required": true,
                   "Scope": "context",
@@ -201,7 +201,7 @@
               "Description": "Retrieves the customer's tending calendar as structured JSON: visitFrequency, visitDays, allowance (includedPerMonth, takenThisMonth, remainingThisMonth, extraVisitFee), upcoming (the next dates, computed from the plan's own visit days) and recentVisits (date, kind Included/Extra, outcome Completed/Missed, notes, and — where an extra visit was charged — the invoiceId it appears on). This tool has only informative capabilities: it does NOT book, move or cancel a visit, and no tool here does.",
               "Parameters": [
                 {
-                  "Name": "userId",
+                  "Name": "customerCode",
                   "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.",
                   "Required": true,
                   "Scope": "context",
@@ -276,7 +276,7 @@
                   "Scope": "request"
                 },
                 {
-                  "Name": "userId",
+                  "Name": "customerCode",
                   "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.",
                   "Required": true,
                   "Scope": "context",
@@ -351,10 +351,10 @@
             },
             {
               "Name": "GetOrderHistory",
-              "Description": "Lists EVERY order a customer has ever placed, across ALL conversations/sessions — not just this one — as structured JSON: userId, customerName, totalOrders and an array of order summaries (orderId, sku, quantity, status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm, cancel, or fully inspect any specific past order — use GetOrderStatus for that, with the orderId and sealWord the customer actually has. This tool has only informative capabilities.",
+              "Description": "Lists EVERY order a customer has ever placed, across ALL conversations/sessions — not just this one — as structured JSON: customerCode, customerName, totalOrders and an array of order summaries (orderId, sku, quantity, status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm, cancel, or fully inspect any specific past order — use GetOrderStatus for that, with the orderId and sealWord the customer actually has. This tool has only informative capabilities.",
               "Parameters": [
                 {
-                  "Name": "userId",
+                  "Name": "customerCode",
                   "Description": "The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code. It scopes the listing to that one customer, and is not a selector for choosing whose history to read.",
                   "Required": true,
                   "Scope": "context",

@@ -136,7 +136,7 @@ internal static class GreenhouseDatabaseHelper
         if (months <= 0)
             return;
 
-        ShiftDates(connection, "Customers", "UserId", ["JoinedAt"], months);
+        ShiftDates(connection, "Customers", "CustomerCode", ["JoinedAt"], months);
         ShiftDates(connection, "Orders", "OrderId", ["CreatedAt", "ConfirmedAt", "CancelledAt"], months);
         ShiftDates(connection, "CarePlans", "ContractId", ["StartDate", "EndDate"], months);
         ShiftDates(connection, "PlanVisits", "VisitId", ["VisitDate"], months);
@@ -229,7 +229,7 @@ internal static class GreenhouseDatabaseHelper
     /// </summary>
     /// <param name="connection">An open connection, sharing <paramref name="transaction"/> with the caller's own writes.</param>
     /// <param name="transaction">The caller's transaction: the charge commits or rolls back together with whatever earned it.</param>
-    /// <param name="userId">Customer code to bill. Not validated against Customers — see the "not a gate" remark on FindCustomerNameAsync in BillingTool/InventoryTool/ContractTool.</param>
+    /// <param name="customerCode">Customer code to bill. Not validated against Customers — see the "not a gate" remark on FindCustomerNameAsync in BillingTool/InventoryTool/ContractTool.</param>
     /// <param name="description">Line description as it will read on the invoice (e.g. a product name, or a plan's fee label).</param>
     /// <param name="sku">Product SKU the line is for, or null when the charge isn't a catalog item (e.g. a plan fee).</param>
     /// <param name="orderId">Order the line was produced by, or null when there isn't one (e.g. a plan fee).</param>
@@ -238,7 +238,7 @@ internal static class GreenhouseDatabaseHelper
     /// <param name="chargeDate">Date the charge is issued on; also selects which open invoice (if any) it joins.</param>
     /// <returns>The invoiceId the line was written to.</returns>
     internal static async Task<string> BillCustomerAsync(SqliteConnection connection, SqliteTransaction transaction,
-        string userId, string description, string? sku, string? orderId, double unitPrice, int quantity, DateTime chargeDate)
+        string customerCode, string description, string? sku, string? orderId, double unitPrice, int quantity, DateTime chargeDate)
     {
         decimal lineAmount = Math.Round((decimal)unitPrice * quantity, 2);
         string today = chargeDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -249,11 +249,11 @@ internal static class GreenhouseDatabaseHelper
             findOpen.Transaction = transaction;
             findOpen.CommandText = """
                 SELECT InvoiceId FROM Invoices
-                WHERE UserId = $userId COLLATE NOCASE AND Status = 'Pending'
+                WHERE CustomerCode = $customerCode COLLATE NOCASE AND Status = 'Pending'
                   AND strftime('%Y-%m', IssueDate) = strftime('%Y-%m', $today)
                 ORDER BY IssueDate DESC LIMIT 1
                 """;
-            findOpen.Parameters.AddWithValue("$userId", userId);
+            findOpen.Parameters.AddWithValue("$customerCode", customerCode);
             findOpen.Parameters.AddWithValue("$today", today);
             invoiceId = (string?)await findOpen.ExecuteScalarAsync();
         }
@@ -267,11 +267,11 @@ internal static class GreenhouseDatabaseHelper
             await using SqliteCommand insertInvoice = connection.CreateCommand();
             insertInvoice.Transaction = transaction;
             insertInvoice.CommandText = """
-                INSERT INTO Invoices (InvoiceId, UserId, PeriodStart, PeriodEnd, IssueDate, DueDate, Subtotal, TaxRate, Tax, Total, Status)
-                VALUES ($invoiceId, $userId, $today, $today, $today, $dueDate, 0, $taxRate, 0, 0, 'Pending')
+                INSERT INTO Invoices (InvoiceId, CustomerCode, PeriodStart, PeriodEnd, IssueDate, DueDate, Subtotal, TaxRate, Tax, Total, Status)
+                VALUES ($invoiceId, $customerCode, $today, $today, $today, $dueDate, 0, $taxRate, 0, 0, 'Pending')
                 """;
             insertInvoice.Parameters.AddWithValue("$invoiceId", invoiceId);
-            insertInvoice.Parameters.AddWithValue("$userId", userId);
+            insertInvoice.Parameters.AddWithValue("$customerCode", customerCode);
             insertInvoice.Parameters.AddWithValue("$today", today);
             insertInvoice.Parameters.AddWithValue("$dueDate", dueDate);
             insertInvoice.Parameters.AddWithValue("$taxRate", StandardTaxRate);

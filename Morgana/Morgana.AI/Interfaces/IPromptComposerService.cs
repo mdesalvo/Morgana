@@ -40,7 +40,7 @@ public interface IPromptComposerService
     /// Produces the per-turn declaration naming the context variables the session currently holds —
     /// the names only, never the values. This is the one composed fragment carrying a <em>fact</em>
     /// rather than a rule: tool descriptions are built once at agent creation and can only ever
-    /// state the contract ("this tool takes a userId"), never the state ("userId is held right now"),
+    /// state the contract ("this tool takes a customerCode"), never the state ("customerCode is held right now"),
     /// which nobody knows at build time.
     /// </summary>
     /// <param name="heldVariables">

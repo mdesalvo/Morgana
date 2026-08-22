@@ -30,7 +30,7 @@ public enum FindingSeverity
 /// </para>
 /// </remarks>
 /// <param name="Severity">Whether this stops the domain or merely deserves a look.</param>
-/// <param name="Where">What the finding is about, e.g. <c>billing.GetInvoices.userId</c>.</param>
+/// <param name="Where">What the finding is about, e.g. <c>billing.GetInvoices.customerCode</c>.</param>
 /// <param name="Message">What is wrong, in the terms the client authored it in.</param>
 /// <param name="Because">
 /// Which rule of Morgana's makes it so — named, so the finding teaches rather than just refuses.

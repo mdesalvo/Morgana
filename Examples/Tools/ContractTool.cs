@@ -38,7 +38,7 @@ public class ContractTool : MorganaTool
     // their contract number, their dates, their fee). Everything below reads that pairing.
     private record CarePlanSchedule(
         string ContractId,
-        string UserId,
+        string CustomerCode,
         string PlanCode,
         DateTime StartDate,
         DateTime EndDate,
@@ -74,20 +74,20 @@ public class ContractTool : MorganaTool
         decimal MonthlyCost,
         bool IsOptional);
 
-    private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string userId)
+    private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string customerCode)
     {
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT DisplayName FROM Customers WHERE UserId = $userId COLLATE NOCASE";
-        command.Parameters.AddWithValue("$userId", userId);
+        command.CommandText = "SELECT DisplayName FROM Customers WHERE CustomerCode = $customerCode COLLATE NOCASE";
+        command.Parameters.AddWithValue("$customerCode", customerCode);
 
         return (string?)await command.ExecuteScalarAsync();
     }
 
-    private static async Task<CarePlanSchedule?> FindScheduleAsync(SqliteConnection connection, string userId)
+    private static async Task<CarePlanSchedule?> FindScheduleAsync(SqliteConnection connection, string customerCode)
     {
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT ContractId, UserId, PlanCode, StartDate, EndDate, Status, BillingCycle, MonthlyFee, VisitDays FROM CarePlans WHERE UserId = $userId COLLATE NOCASE ORDER BY StartDate DESC";
-        command.Parameters.AddWithValue("$userId", userId);
+        command.CommandText = "SELECT ContractId, CustomerCode, PlanCode, StartDate, EndDate, Status, BillingCycle, MonthlyFee, VisitDays FROM CarePlans WHERE CustomerCode = $customerCode COLLATE NOCASE ORDER BY StartDate DESC";
+        command.Parameters.AddWithValue("$customerCode", customerCode);
 
         await using SqliteDataReader reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync())
@@ -201,12 +201,12 @@ public class ContractTool : MorganaTool
     // No gate on the customer registry, here or anywhere else in this plugin: an unknown code is
     // simply a code no plan hangs from, which is the same answer a known customer without a plan
     // gets — SubscribeToGreenCarePlan takes either exactly the same way.
-    private static string NoCarePlan(string userId, string? customerName) => JsonSerializer.Serialize(new
+    private static string NoCarePlan(string customerCode, string? customerName) => JsonSerializer.Serialize(new
     {
         error = "No care plan found",
-        userId,
+        customerCode,
         customerName,
-        note = "No Green Care Plan is held under this customer code: either the customer buys from the nursery without one, the code belongs to another bench, or it was mistyped. Never invent a code to try again with. If the customer wants one, SubscribeToGreenCarePlan is how — but only once they say so; a missing plan is not itself a reason to offer enrollment unprompted."
+        note = "No Green Care Plan is held under this customer code: either the customer buys from the nursery without one, the code belongs to another bench, or it was mistyped. Never invent a code to try again with. If the customer wants one, SubscribeToGreenCarePlan is how — but only once they say so; a missing plan is not itself a reason to offer enrollment unprompted. If they ask what the plan offers or costs, THIS note has none of that — call GetPlanOverview, never answer from memory."
     }, GreenhouseDatabaseHelper.JsonOptions);
 
     // The only plan product the nursery currently offers. GetPlanProductAsync already reads any
@@ -264,15 +264,15 @@ public class ContractTool : MorganaTool
     /// first month's fee immediately, atomically with it — see GreenhouseDatabaseHelper.BillCustomerAsync,
     /// the same backoffice write path InventoryTool.ConfirmOrder bills a confirmed order through.
     /// </summary>
-    /// <param name="userId">Customer code enrolling (retrieved from shared context).</param>
+    /// <param name="customerCode">Customer code enrolling (retrieved from shared context).</param>
     /// <returns>JSON object with the new contractId, the plan's terms and the invoice it was billed to.</returns>
-    public async Task<string> SubscribeToGreenCarePlan(string userId)
+    public async Task<string> SubscribeToGreenCarePlan(string customerCode)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         // One active (or renewing) plan per customer at a time: a domain rule about what a Green
         // Care Plan IS, not a gate on whether the customer code is real — see NoCarePlan's remark.
-        CarePlanSchedule? existing = await FindScheduleAsync(connection, userId);
+        CarePlanSchedule? existing = await FindScheduleAsync(connection, customerCode);
         if (existing != null && existing.Status is "Active" or "PendingRenewal")
         {
             return JsonSerializer.Serialize(new
@@ -297,11 +297,11 @@ public class ContractTool : MorganaTool
         {
             insertPlan.Transaction = transaction;
             insertPlan.CommandText = """
-                INSERT INTO CarePlans (ContractId, UserId, PlanCode, StartDate, EndDate, Status, BillingCycle, MonthlyFee, VisitDays)
-                VALUES ($contractId, $userId, $planCode, $startDate, $endDate, 'Active', 'Monthly', $monthlyFee, $visitDays)
+                INSERT INTO CarePlans (ContractId, CustomerCode, PlanCode, StartDate, EndDate, Status, BillingCycle, MonthlyFee, VisitDays)
+                VALUES ($contractId, $customerCode, $planCode, $startDate, $endDate, 'Active', 'Monthly', $monthlyFee, $visitDays)
                 """;
             insertPlan.Parameters.AddWithValue("$contractId", contractId);
-            insertPlan.Parameters.AddWithValue("$userId", userId);
+            insertPlan.Parameters.AddWithValue("$customerCode", customerCode);
             insertPlan.Parameters.AddWithValue("$planCode", DefaultPlanCode);
             insertPlan.Parameters.AddWithValue("$startDate", startDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             insertPlan.Parameters.AddWithValue("$endDate", endDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
@@ -310,17 +310,17 @@ public class ContractTool : MorganaTool
             await insertPlan.ExecuteNonQueryAsync();
         }
 
-        string invoiceId = await GreenhouseDatabaseHelper.BillCustomerAsync(connection, transaction, userId,
+        string invoiceId = await GreenhouseDatabaseHelper.BillCustomerAsync(connection, transaction, customerCode,
             $"{product.Name} - Monthly Fee", null, null, (double)product.MonthlyFee, 1, startDate);
 
         await transaction.CommitAsync();
 
-        toolLogger.LogInformation("Enrolled {UserId} in Green Care Plan {PlanCode}: contract {ContractId}, billed to invoice {InvoiceId}", userId, DefaultPlanCode, contractId, invoiceId);
+        toolLogger.LogInformation("Enrolled {CustomerCode} in Green Care Plan {PlanCode}: contract {ContractId}, billed to invoice {InvoiceId}", customerCode, DefaultPlanCode, contractId, invoiceId);
 
         return JsonSerializer.Serialize(new
         {
             contractId,
-            userId,
+            customerCode,
             planCode = DefaultPlanCode,
             planName = product.Name,
             status = "Active",
@@ -336,17 +336,17 @@ public class ContractTool : MorganaTool
     /// <summary>
     /// Retrieves the customer's Green Care Plan in full as structured JSON.
     /// </summary>
-    /// <param name="userId">Customer code (retrieved from context)</param>
+    /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <returns>JSON object with complete plan overview</returns>
-    public async Task<string> GetContractDetails(string userId)
+    public async Task<string> GetContractDetails(string customerCode)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, userId);
+        string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
-        CarePlanSchedule? schedule = await FindScheduleAsync(connection, userId);
+        CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return NoCarePlan(userId, customerName);
+            return NoCarePlan(customerCode, customerName);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         List<string> features = await GetFeaturesAsync(connection, schedule.PlanCode);
@@ -358,7 +358,7 @@ public class ContractTool : MorganaTool
         var result = new
         {
             contractId = schedule.ContractId,
-            userId = schedule.UserId,
+            customerCode = schedule.CustomerCode,
             customerName,
             status = new
             {
@@ -427,18 +427,18 @@ public class ContractTool : MorganaTool
     /// <summary>
     /// Retrieves a single clause of the customer's Green Care Plan as structured JSON.
     /// </summary>
-    /// <param name="userId">Customer code (retrieved from context)</param>
+    /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="clauseNumber">Clause number to retrieve (1-7)</param>
     /// <returns>JSON object with complete clause details</returns>
-    public async Task<string> GetContractClause(string userId, int clauseNumber)
+    public async Task<string> GetContractClause(string customerCode, int clauseNumber)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, userId);
+        string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
-        CarePlanSchedule? schedule = await FindScheduleAsync(connection, userId);
+        CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return NoCarePlan(userId, customerName);
+            return NoCarePlan(customerCode, customerName);
 
         List<PlanClause> clauses = await GetClausesAsync(connection, schedule.PlanCode, clauseNumber);
         if (clauses.Count == 0)
@@ -481,17 +481,17 @@ public class ContractTool : MorganaTool
     /// <summary>
     /// Retrieves the customer's tending calendar: the visits already made, and when the next ones fall.
     /// </summary>
-    /// <param name="userId">Customer code (retrieved from context)</param>
+    /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <returns>JSON object with the recent visits, the upcoming dates and this month's allowance</returns>
-    public async Task<string> GetVisitSchedule(string userId)
+    public async Task<string> GetVisitSchedule(string customerCode)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, userId);
+        string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
-        CarePlanSchedule? schedule = await FindScheduleAsync(connection, userId);
+        CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return NoCarePlan(userId, customerName);
+            return NoCarePlan(customerCode, customerName);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         DateTime today = DateTime.UtcNow.Date;
@@ -596,18 +596,18 @@ public class ContractTool : MorganaTool
     /// <summary>
     /// Provides the step-by-step termination procedure of the customer's plan as structured JSON.
     /// </summary>
-    /// <param name="userId">Customer code (retrieved from context)</param>
+    /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="reason">Optional termination reason for internal tracking</param>
     /// <returns>JSON object with complete termination guide</returns>
-    public async Task<string> GetTerminationProcedure(string userId, string? reason = null)
+    public async Task<string> GetTerminationProcedure(string customerCode, string? reason = null)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, userId);
+        string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
-        CarePlanSchedule? schedule = await FindScheduleAsync(connection, userId);
+        CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return NoCarePlan(userId, customerName);
+            return NoCarePlan(customerCode, customerName);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         List<string> steps = await GetTerminationStepsAsync(connection, schedule.PlanCode);

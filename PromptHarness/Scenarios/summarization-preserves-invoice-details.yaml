@@ -19,7 +19,7 @@ turns:
   - say: "Eccolo: P994E"
     expect:
       agent: BillingAgent
-      contextWrites: [userId]
+      contextWrites: [customerCode]
       toolsCalled: [SetContextVariable, GetInvoices]
       textNotEmpty: true
 

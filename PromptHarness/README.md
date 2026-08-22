@@ -205,11 +205,11 @@ turns:
       toolsCalled: [GetContextVariable]
       toolsNotCalled: [GetInvoices]
       toolsCalledFirst: [GetContextVariable]   # prefix of the invocation order
-      contextReads: [userId]
-      contextWrites: [userId]
+      contextReads: [customerCode]
+      contextWrites: [customerCode]
       noContextWrites: true
       noContextAccess: true
-      contextVocabulary: [userId] # every name touched must appear here
+      contextVocabulary: [customerCode] # every name touched must appear here
       textNotEmpty: true
       textNotContains: ["#INT#"]
     judge:                        # propositions an LLM must find TRUE

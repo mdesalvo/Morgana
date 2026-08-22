@@ -108,8 +108,8 @@ public sealed class ExpectSpec
 
     /// <summary>
     /// Context variables that must have been read via <c>GetContextVariable</c>. A bare name
-    /// (<c>userId</c>) matches either outcome; prefixing it with the outcome
-    /// (<c>Hit:userId</c> / <c>Miss:userId</c>) asserts that specific one — the form to reach for
+    /// (<c>customerCode</c>) matches either outcome; prefixing it with the outcome
+    /// (<c>Hit:customerCode</c> / <c>Miss:customerCode</c>) asserts that specific one — the form to reach for
     /// when a hit and a miss would mean different things (a shared variable that must already be
     /// hydrated for a follow-up agent is a hit or the scenario proves nothing).
     /// </summary>
