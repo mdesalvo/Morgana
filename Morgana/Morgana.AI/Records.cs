@@ -804,14 +804,6 @@ public static class Records
 
             /// <summary>Injected per turn, naming the context variables the session currently holds.</summary>
             public const string HeldContextDeclaration = "HeldContextDeclaration";
-
-            /// <summary>
-            /// Injected per turn in place of <see cref="HeldContextDeclaration"/> when the session
-            /// holds no context variable at all — a lighter reminder that an empty declaration is
-            /// not permission to skip GetContextVariable, still resolved to "" (skip splicing) when
-            /// the prompt layer does not configure it, same as every other template.
-            /// </summary>
-            public const string HeldContextDeclarationEmpty = "HeldContextDeclarationEmpty";
         }
 
         /// <summary>

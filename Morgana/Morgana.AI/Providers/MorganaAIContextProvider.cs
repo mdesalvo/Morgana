@@ -186,10 +186,8 @@ public class MorganaAIContextProvider : AIContextProvider
     /// <summary>
     /// Per-turn injection: declares by name only which context variables session holds (names only, never
     /// values, ordinal-sorted for cache stability). Critical for agents activated mid-conversation on empty
-    /// per-agent history: hydrated shared variables from registry are invisible in history. An empty session
-    /// still gets a lighter injection (HeldContextDeclarationEmpty) rather than silence — see
-    /// ComposeHeldContextDeclarationAsync — so the lookup-before-asking discipline never reads as optional
-    /// just because nothing happens to be held on this particular turn.
+    /// per-agent history: hydrated shared variables from registry are invisible in history. An empty
+    /// session gets no injection at all — see ComposeHeldContextDeclarationAsync.
     /// </summary>
     protected override async ValueTask<AIContext> ProvideAIContextAsync(
         InvokingContext context,
@@ -211,7 +209,7 @@ public class MorganaAIContextProvider : AIContextProvider
 
         logger.LogInformation(
             "{MorganaAiContextProviderName} DECLARED '{VariableNames}'",
-            nameof(MorganaAIContextProvider), heldVariables.Length == 0 ? "(none — empty-context reminder)" : string.Join(", ", heldVariables));
+            nameof(MorganaAIContextProvider), string.Join(", ", heldVariables));
 
         return new AIContext { Instructions = declaration };
     }
