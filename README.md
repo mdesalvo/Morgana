@@ -22,7 +22,7 @@ The system is powered by **Microsoft.Agents.AI**, enabling seamless integration 
 
 <table style="border:none;">
   <tr>
-    <th colspan=6>Cauldron (Web Channel)</th>
+    <th colspan=6>Cauldron (Web Channel) / Cauldron Widget</th>
   </tr>
   <tr>
     <td>
