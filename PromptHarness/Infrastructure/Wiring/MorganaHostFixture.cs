@@ -214,6 +214,13 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Morgana__RateLimiting__Enabled", "false");
         Environment.SetEnvironmentVariable("Morgana__DustLimiting__Enabled", "false");
 
+        // Examples' InventoryTool reads this to pin the order seal word to a known constant instead
+        // of a fresh random one — see GenerateSealWord's and HarnessOptions.DeterministicSealWord's
+        // own remarks. Without it, a scripted scenario could never recite the seal word back in its
+        // second turn, since nothing in the harness DSL can capture a value the model invents
+        // mid-run and reuse it in a later turn's fixed text.
+        Environment.SetEnvironmentVariable("Harness__DeterministicSealWord", Options.DeterministicSealWord);
+
         // Unset by default (see HarnessOptions.SummarizationThreshold's own remarks): only
         // SummarizationTests sets these, in its own filtered dotnet test invocation, so the rest of
         // the suite always runs against the inherited, unmodified reducer configuration.

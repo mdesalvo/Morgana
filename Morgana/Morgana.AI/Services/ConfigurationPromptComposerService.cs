@@ -133,16 +133,17 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <inheritdoc />
     public async Task<string?> ComposeHeldContextDeclarationAsync(IReadOnlyCollection<string> heldVariables)
     {
-        if (heldVariables.Count == 0)
-            return null;
-
         FrameworkLayer framework = await frameworkLayer.Value;
 
-        string declaration = Records.GlobalPolicy.ResolveTemplate(
-            framework.Policies, Records.GlobalPolicy.Templates.HeldContextDeclaration);
+        // An empty session still gets an injection, just a lighter one: HeldContextDeclarationEmpty
+        // reminds the model that "nothing held right now" is not licence to skip GetContextVariable,
+        // rather than silently declaring victory over the whole context-handling doctrine by omission.
+        string declaration = heldVariables.Count == 0
+            ? Records.GlobalPolicy.ResolveTemplate(framework.Policies, Records.GlobalPolicy.Templates.HeldContextDeclarationEmpty)
+            : Records.GlobalPolicy.ResolveTemplate(framework.Policies, Records.GlobalPolicy.Templates.HeldContextDeclaration);
 
         // ResolveTemplate returns "" for a template the prompt layer does not declare, which every
-        // splice site reads as "inject nothing".
+        // splice site reads as "inject nothing" — still true for either variant.
         return declaration.Length == 0
             ? null
             : declaration.Replace(HeldVariablesPlaceholder, string.Join(", ", heldVariables));

@@ -85,7 +85,23 @@ public class InventoryTool : MorganaTool
     /// or inspecting a SPECIFIC past order — possibly from a completely different session — requires
     /// something the caller could only have if they were actually given it when the order was made.
     /// </summary>
-    private static string GenerateSealWord() => Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+    /// <remarks>
+    /// PromptHarness scenarios script the customer's side of the conversation as fixed text decided
+    /// before the run, so a scenario cannot possibly recite back a value this method only invents at
+    /// runtime — the two-step order flow was, until now, structurally untestable end to end. Since
+    /// the word is deliberately not real security to begin with, the harness is allowed the one
+    /// affordance a genuine caller never gets: <c>Harness__DeterministicSealWord</c>
+    /// (<c>HarnessOptions.DeterministicSealWord</c>, republished by <c>MorganaHostFixture</c> onto
+    /// the same in-process environment this plugin reads) pins this to a known constant for the
+    /// run, the same env-var mechanism <see cref="Examples.Data.GreenhouseDatabaseHelper"/> already
+    /// uses for StoragePath. Unset in every other environment, where this still returns a fresh
+    /// random word every time.
+    /// </remarks>
+    private static string GenerateSealWord() =>
+        Environment.GetEnvironmentVariable("Harness__DeterministicSealWord")
+        is { Length: > 0 } deterministic
+            ? deterministic
+            : Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
 
     private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string userId)
     {
@@ -316,6 +332,10 @@ public class InventoryTool : MorganaTool
             }, GreenhouseDatabaseHelper.JsonOptions);
         }
 
+        // Read once, outside the transaction, purely for the name/price that go on the invoice
+        // line below — the same tolerance CreatePurchaseOrder already applies to its own quote.
+        Product? product = await FindProductAsync(connection, order.Sku);
+
         // Claiming the order (Pending -> Confirmed) and decrementing stock must both happen or
         // neither: a single transaction. The transaction's FIRST statement is a write, so it takes
         // the write lock straight away — no SELECT-then-UPDATE lock upgrade, hence none of SQLite's
@@ -323,7 +343,8 @@ public class InventoryTool : MorganaTool
         // makes a losing concurrent writer WAIT for our commit instead of throwing "database is locked".
         await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
 
-        string confirmedAt = DateTime.UtcNow.ToString("O");
+        DateTime confirmedAtUtc = DateTime.UtcNow;
+        string confirmedAt = confirmedAtUtc.ToString("O");
 
         // Claim the order FIRST, conditionally on it still being Pending. This WHERE clause, not the
         // pre-read above, is what serializes two simultaneous confirmations of the same order down
@@ -389,9 +410,18 @@ public class InventoryTool : MorganaTool
             remainingStock = Convert.ToInt64(await readStock.ExecuteScalarAsync());
         }
 
+        // Bill it, in the same transaction: a Confirmed order with no invoice line is exactly the
+        // half-done state this method exists to prevent for stock, so it must not exist for billing
+        // either. product may be null only if the SKU was deleted between the pre-reads and here —
+        // in that vanishingly unlikely case the order still confirms, just without a billed line.
+        string? invoiceId = product == null
+            ? null
+            : await GreenhouseDatabaseHelper.BillCustomerAsync(connection, transaction, order.UserId!, product.Name,
+                order.Sku, order.OrderId, product.UnitPrice, (int)order.Quantity, confirmedAtUtc);
+
         await transaction.CommitAsync();
 
-        toolLogger.LogInformation("Confirmed order {OrderId}: stock of {Sku} decremented by {Quantity}", orderId, order.Sku, order.Quantity);
+        toolLogger.LogInformation("Confirmed order {OrderId}: stock of {Sku} decremented by {Quantity}, billed to invoice {InvoiceId}", orderId, order.Sku, order.Quantity, invoiceId);
 
         return JsonSerializer.Serialize(new
         {
@@ -400,7 +430,11 @@ public class InventoryTool : MorganaTool
             quantity = order.Quantity,
             status = "Confirmed",
             confirmedAt,
-            remainingStock
+            remainingStock,
+            invoiceId,
+            note = invoiceId == null
+                ? null
+                : "The order has been billed to this invoice as of this confirmation — tell the customer, in character, that their order is settled and that they can ask Morgana (or the accounts desk) to see this invoice, now or later. Never read out invoice totals or line items yourself: that belongs to the accounts desk."
         }, GreenhouseDatabaseHelper.JsonOptions);
     }
 

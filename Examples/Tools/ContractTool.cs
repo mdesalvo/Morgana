@@ -13,7 +13,10 @@ namespace Examples.Tools;
 /// signs alongside their plants — tending visits, coverage, plant-health guarantee, fees, clauses
 /// and termination. Reads the same shared database the greenhouse ledger writes (see
 /// <see cref="GreenhouseDatabaseHelper"/>): the plan's terms are the shop's, the schedule is the
-/// customer's, and the monthly fee it sets is the one BillingTool's invoices charge. Read-only.
+/// customer's, and the monthly fee it sets is the one BillingTool's invoices charge. Reads for
+/// every existing plan; the one dispositive action it has is enrolling a customer in a NEW plan
+/// (see <see cref="SubscribeToGreenCarePlan"/>), which bills through the same shared backoffice
+/// path <see cref="InventoryTool"/>'s ConfirmOrder uses — see <see cref="GreenhouseDatabaseHelper.BillCustomerAsync"/>.
 /// </summary>
 [ProvidesToolForIntent("contract")]
 public class ContractTool : MorganaTool
@@ -197,18 +200,138 @@ public class ContractTool : MorganaTool
 
     // No gate on the customer registry, here or anywhere else in this plugin: an unknown code is
     // simply a code no plan hangs from, which is the same answer a known customer without a plan
-    // gets. There is nothing to sign anyone up with here either way.
+    // gets — SubscribeToGreenCarePlan takes either exactly the same way.
     private static string NoCarePlan(string userId, string? customerName) => JsonSerializer.Serialize(new
     {
         error = "No care plan found",
         userId,
         customerName,
-        note = "No Green Care Plan is held under this customer code: either the customer buys from the nursery without one, or the code belongs to another bench or was mistyped. Never invent a code to try again with."
+        note = "No Green Care Plan is held under this customer code: either the customer buys from the nursery without one, the code belongs to another bench, or it was mistyped. Never invent a code to try again with. If the customer wants one, SubscribeToGreenCarePlan is how — but only once they say so; a missing plan is not itself a reason to offer enrollment unprompted."
     }, GreenhouseDatabaseHelper.JsonOptions);
+
+    // The only plan product the nursery currently offers. GetPlanProductAsync already reads any
+    // PlanCode the schema might hold, so a second product would only need this constant to grow
+    // into a parameter — nothing else here assumes there is exactly one.
+    private const string DefaultPlanCode = "GREEN-CARE-PREMIUM";
+
+    /// <summary>
+    /// Spaces <paramref name="count"/> visit days as evenly as a 28-day month allows, anchored on
+    /// the enrollment date — the same shape the seed data uses (e.g. "6,20", 14 days apart).
+    /// </summary>
+    private static string PickVisitDays(DateTime startDate, int count)
+    {
+        count = Math.Max(1, count);
+        int step = 28 / count;
+        int firstDay = Math.Clamp(startDate.Day, 1, 28);
+        return string.Join(',', Enumerable.Range(0, count).Select(position => ((firstDay - 1 + position * step) % 28) + 1));
+    }
 
     // =========================================================================
     // TOOL METHODS
     // =========================================================================
+
+    /// <summary>
+    /// Retrieves the Green Care Plan's own terms as structured JSON — no customer code, no
+    /// existing schedule required. What GetContractDetails cannot be for a prospect: every other
+    /// read tool in this class needs a CarePlans row to hang off, which a customer deciding
+    /// whether to sign up does not have yet. This is the ONE thing SubscribeToGreenCarePlan's
+    /// restate-then-confirm step can ground its numbers in without already having enrolled them.
+    /// </summary>
+    /// <returns>JSON object with the plan's name, coverage, guarantee, fee and included features.</returns>
+    public async Task<string> GetPlanOverview()
+    {
+        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+
+        PlanProduct product = await GetPlanProductAsync(connection, DefaultPlanCode);
+        List<string> features = await GetFeaturesAsync(connection, DefaultPlanCode);
+
+        return JsonSerializer.Serialize(new
+        {
+            planCode = product.PlanCode,
+            name = product.Name,
+            visitFrequency = product.VisitFrequency,
+            coverage = product.Coverage,
+            guarantee = product.Guarantee,
+            monthlyFee = product.MonthlyFee,
+            includedFeatures = features,
+            noticePeriodDays = product.NoticePeriodDays,
+            earlyTerminationFee = product.EarlyTerminationFee
+        }, GreenhouseDatabaseHelper.JsonOptions);
+    }
+
+    /// <summary>
+    /// Enrolls a customer in the Green Care Plan: opens a new CarePlans schedule and bills the
+    /// first month's fee immediately, atomically with it — see GreenhouseDatabaseHelper.BillCustomerAsync,
+    /// the same backoffice write path InventoryTool.ConfirmOrder bills a confirmed order through.
+    /// </summary>
+    /// <param name="userId">Customer code enrolling (retrieved from shared context).</param>
+    /// <returns>JSON object with the new contractId, the plan's terms and the invoice it was billed to.</returns>
+    public async Task<string> SubscribeToGreenCarePlan(string userId)
+    {
+        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+
+        // One active (or renewing) plan per customer at a time: a domain rule about what a Green
+        // Care Plan IS, not a gate on whether the customer code is real — see NoCarePlan's remark.
+        CarePlanSchedule? existing = await FindScheduleAsync(connection, userId);
+        if (existing != null && existing.Status is "Active" or "PendingRenewal")
+        {
+            return JsonSerializer.Serialize(new
+            {
+                error = "Customer already has an active Green Care Plan",
+                existingContractId = existing.ContractId,
+                status = existing.Status,
+                note = "Only one Green Care Plan may be active per customer code at a time. Show the existing one with GetContractDetails, or point to GetTerminationProcedure if the customer wants to end it before starting a new one — never enroll over it."
+            }, GreenhouseDatabaseHelper.JsonOptions);
+        }
+
+        PlanProduct product = await GetPlanProductAsync(connection, DefaultPlanCode);
+
+        DateTime startDate = DateTime.UtcNow.Date;
+        DateTime endDate = startDate.AddMonths(12);
+        string contractId = $"GCP-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        string visitDays = PickVisitDays(startDate, product.IncludedVisitsPerMonth);
+
+        await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
+
+        await using (SqliteCommand insertPlan = connection.CreateCommand())
+        {
+            insertPlan.Transaction = transaction;
+            insertPlan.CommandText = """
+                INSERT INTO CarePlans (ContractId, UserId, PlanCode, StartDate, EndDate, Status, BillingCycle, MonthlyFee, VisitDays)
+                VALUES ($contractId, $userId, $planCode, $startDate, $endDate, 'Active', 'Monthly', $monthlyFee, $visitDays)
+                """;
+            insertPlan.Parameters.AddWithValue("$contractId", contractId);
+            insertPlan.Parameters.AddWithValue("$userId", userId);
+            insertPlan.Parameters.AddWithValue("$planCode", DefaultPlanCode);
+            insertPlan.Parameters.AddWithValue("$startDate", startDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            insertPlan.Parameters.AddWithValue("$endDate", endDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            insertPlan.Parameters.AddWithValue("$monthlyFee", (double)product.MonthlyFee);
+            insertPlan.Parameters.AddWithValue("$visitDays", visitDays);
+            await insertPlan.ExecuteNonQueryAsync();
+        }
+
+        string invoiceId = await GreenhouseDatabaseHelper.BillCustomerAsync(connection, transaction, userId,
+            $"{product.Name} - Monthly Fee", null, null, (double)product.MonthlyFee, 1, startDate);
+
+        await transaction.CommitAsync();
+
+        toolLogger.LogInformation("Enrolled {UserId} in Green Care Plan {PlanCode}: contract {ContractId}, billed to invoice {InvoiceId}", userId, DefaultPlanCode, contractId, invoiceId);
+
+        return JsonSerializer.Serialize(new
+        {
+            contractId,
+            userId,
+            planCode = DefaultPlanCode,
+            planName = product.Name,
+            status = "Active",
+            startDate = startDate.ToString("dd/MM/yyyy"),
+            endDate = endDate.ToString("dd/MM/yyyy"),
+            monthlyFee = product.MonthlyFee,
+            visitDays,
+            invoiceId,
+            note = "The plan is active and its first month has been billed to this invoice — tell the customer, in character, that they can ask Morgana (or the accounts desk) to see it. Never read out invoice totals or line items yourself: that belongs to the accounts desk."
+        }, GreenhouseDatabaseHelper.JsonOptions);
+    }
 
     /// <summary>
     /// Retrieves the customer's Green Care Plan in full as structured JSON.

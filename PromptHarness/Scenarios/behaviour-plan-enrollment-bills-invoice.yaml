@@ -1,0 +1,35 @@
+id: behaviour-plan-enrollment-bills-invoice
+description: >-
+  ContractAgent's one dispositive action: SubscribeToGreenCarePlan opens a new Green Care Plan AND
+  bills its first month, atomically, through the same shared backoffice path InventoryTool's
+  ConfirmOrder uses (GreenhouseDatabaseHelper.BillCustomerAsync). Also guards the grounding fix that
+  came with it — GetPlanOverview must be called before the agent restates the plan's name or fee,
+  never quoted from memory, since GetContractDetails (every other read tool here) requires a
+  schedule that does not exist yet for a prospect. Uses M455D, a seeded customer with no existing
+  plan, so the enrollment always takes the "new plan" branch rather than the "already active" refusal.
+
+turns:
+  - say: "Hi, my customer code is M455D. What does the Green Care Plan include, and how much would it cost me?"
+    expect:
+      agent: ContractAgent
+      agentCompleted: false
+      toolsCalled: [GetPlanOverview]
+      toolsNotCalled: [SubscribeToGreenCarePlan]
+      textNotEmpty: true
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+    judge:
+      - "The response states the plan's monthly fee as a concrete figure, not a vague or placeholder amount."
+    judgeNot:
+      - "The response claims the customer is already enrolled or already has a plan."
+
+  - say: "Great, please sign me up"
+    expect:
+      agent: ContractAgent
+      toolsCalled: [SubscribeToGreenCarePlan]
+      textNotEmpty: true
+      textNotContains: ["#INT#", "invoiceId", "InvoiceLines", "contractId"]
+    judge:
+      - "The response confirms the Green Care Plan is now active for the customer."
+      - "The response tells the customer, in some form, that the first month has been billed and that they can ask about the invoice."
+    judgeNot:
+      - "The response states a specific invoice total, amount or line item."

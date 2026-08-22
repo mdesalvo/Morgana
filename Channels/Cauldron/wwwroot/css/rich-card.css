@@ -442,3 +442,96 @@
         margin-top: 4px;
     }
 }
+
+/* Same 600px breakpoint as site.css/quick-reply.css, chosen around the Widget's fixed 512px panel
+   width — narrower than the 768px block above, so this layers further reductions on top of it
+   rather than replacing it. All sizes here are rem, so they already track a card's own scale; the
+   bigger win for a card this narrow is the repeated elements — key-value rows, list items, grid
+   cells, section blocks — where trimming a few px of padding/margin once pays off once per row
+   instead of once per card, which is what keeps a long card (many clauses, many invoice lines)
+   from stretching the conversation as far down as it otherwise would. */
+@media (max-width: 600px) {
+    .rich-card-header {
+        padding: 10px 14px;
+    }
+
+    .rich-card-body {
+        padding: 14px;
+    }
+
+    .rich-card-title {
+        font-size: 1rem;
+    }
+
+    .rich-card-subtitle,
+    .rich-card-text-muted {
+        font-size: 0.75rem;
+    }
+
+    .rich-card-text-small {
+        font-size: 0.7rem;
+    }
+
+    .rich-card-text-block {
+        margin: 6px 0;
+    }
+
+    .rich-card-key-value {
+        padding: 7px 0;
+    }
+
+    .rich-card-key-value-emphasized .rich-card-key {
+        font-size: 0.9rem;
+    }
+
+    .rich-card-key-value-emphasized .rich-card-value {
+        font-size: 0.95rem;
+    }
+
+    .rich-card-divider {
+        margin: 10px 0;
+    }
+
+    .rich-card-list-bullet li,
+    .rich-card-list-numbered li,
+    .rich-card-list-plain .rich-card-list-item {
+        margin: 5px 0;
+    }
+
+    .rich-card-section {
+        margin: 10px 0;
+        padding: 12px;
+    }
+
+    .rich-card-section-title {
+        font-size: 0.95rem;
+    }
+
+    .rich-card-section-subtitle {
+        font-size: 0.7rem;
+    }
+
+    .rich-card-grid {
+        gap: 8px;
+    }
+
+    .rich-card-grid-item {
+        padding: 10px;
+    }
+
+    .rich-card-grid-key {
+        font-size: 0.7rem;
+    }
+
+    .rich-card-grid-value {
+        font-size: 0.95rem;
+    }
+
+    .rich-card-badge {
+        font-size: 0.75rem;
+    }
+
+    .rich-card-image-caption {
+        font-size: 0.75rem;
+    }
+}

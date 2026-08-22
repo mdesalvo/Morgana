@@ -68,6 +68,17 @@ public sealed class HarnessOptions
     public int? SummarizationTargetCount { get; init; }
 
     /// <summary>
+    /// Pins Examples' InventoryTool.GenerateSealWord() to this fixed value for the run instead of a
+    /// fresh random one — see that method's own remarks. The harness DSL has no way to capture a
+    /// value the model invents in one turn and replay it into a later turn's fixed <c>say:</c> text,
+    /// so a scenario scripting ConfirmOrder needs the seal word pinned to something it can recite
+    /// back verbatim. Republished to the in-process host as <c>Harness__DeterministicSealWord</c>,
+    /// the one env var name Examples' plugin code reads — override it the same way as
+    /// <see cref="Phase"/> if a scenario ever needs a different literal.
+    /// </summary>
+    public string DeterministicSealWord { get; init; } = "534LW03D";
+
+    /// <summary>
     /// Where the journey files and failure reports are written. An absolute path is used as-is; a
     /// relative one resolves against the project directory, not the build output.
     /// </summary>

@@ -214,4 +214,114 @@ internal static class GreenhouseDatabaseHelper
 
         return connection;
     }
+
+    private const double StandardTaxRate = 0.22;
+    private const int InvoiceDueDays = 15;
+
+    /// <summary>
+    /// The shop's ONE backoffice write path onto <c>Invoices</c>/<c>InvoiceLines</c>. Whoever
+    /// dispositively charges a customer — the greenhouse ledger confirming an order, the Green
+    /// Care Plan desk enrolling a new plan — calls this instead of writing those two tables
+    /// itself, so every agent's writes land in the identical shape: a line joins the customer's
+    /// invoice already open (Pending) for the calendar month of <paramref name="chargeDate"/>, or
+    /// opens a fresh one if none is. This is deliberately in the shared helper, not owned by
+    /// either tool: consistency of the books is a backoffice concern, not a domain one.
+    /// </summary>
+    /// <param name="connection">An open connection, sharing <paramref name="transaction"/> with the caller's own writes.</param>
+    /// <param name="transaction">The caller's transaction: the charge commits or rolls back together with whatever earned it.</param>
+    /// <param name="userId">Customer code to bill. Not validated against Customers — see the "not a gate" remark on FindCustomerNameAsync in BillingTool/InventoryTool/ContractTool.</param>
+    /// <param name="description">Line description as it will read on the invoice (e.g. a product name, or a plan's fee label).</param>
+    /// <param name="sku">Product SKU the line is for, or null when the charge isn't a catalog item (e.g. a plan fee).</param>
+    /// <param name="orderId">Order the line was produced by, or null when there isn't one (e.g. a plan fee).</param>
+    /// <param name="unitPrice">Price per unit.</param>
+    /// <param name="quantity">Quantity being charged.</param>
+    /// <param name="chargeDate">Date the charge is issued on; also selects which open invoice (if any) it joins.</param>
+    /// <returns>The invoiceId the line was written to.</returns>
+    internal static async Task<string> BillCustomerAsync(SqliteConnection connection, SqliteTransaction transaction,
+        string userId, string description, string? sku, string? orderId, double unitPrice, int quantity, DateTime chargeDate)
+    {
+        decimal lineAmount = Math.Round((decimal)unitPrice * quantity, 2);
+        string today = chargeDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        string? invoiceId;
+        await using (SqliteCommand findOpen = connection.CreateCommand())
+        {
+            findOpen.Transaction = transaction;
+            findOpen.CommandText = """
+                SELECT InvoiceId FROM Invoices
+                WHERE UserId = $userId COLLATE NOCASE AND Status = 'Pending'
+                  AND strftime('%Y-%m', IssueDate) = strftime('%Y-%m', $today)
+                ORDER BY IssueDate DESC LIMIT 1
+                """;
+            findOpen.Parameters.AddWithValue("$userId", userId);
+            findOpen.Parameters.AddWithValue("$today", today);
+            invoiceId = (string?)await findOpen.ExecuteScalarAsync();
+        }
+
+        int lineNumber;
+        if (invoiceId == null)
+        {
+            invoiceId = $"INV-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+            string dueDate = chargeDate.AddDays(InvoiceDueDays).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            await using SqliteCommand insertInvoice = connection.CreateCommand();
+            insertInvoice.Transaction = transaction;
+            insertInvoice.CommandText = """
+                INSERT INTO Invoices (InvoiceId, UserId, PeriodStart, PeriodEnd, IssueDate, DueDate, Subtotal, TaxRate, Tax, Total, Status)
+                VALUES ($invoiceId, $userId, $today, $today, $today, $dueDate, 0, $taxRate, 0, 0, 'Pending')
+                """;
+            insertInvoice.Parameters.AddWithValue("$invoiceId", invoiceId);
+            insertInvoice.Parameters.AddWithValue("$userId", userId);
+            insertInvoice.Parameters.AddWithValue("$today", today);
+            insertInvoice.Parameters.AddWithValue("$dueDate", dueDate);
+            insertInvoice.Parameters.AddWithValue("$taxRate", StandardTaxRate);
+            await insertInvoice.ExecuteNonQueryAsync();
+            lineNumber = 1;
+        }
+        else
+        {
+            await using SqliteCommand maxLine = connection.CreateCommand();
+            maxLine.Transaction = transaction;
+            maxLine.CommandText = "SELECT COALESCE(MAX(LineNumber), 0) FROM InvoiceLines WHERE InvoiceId = $invoiceId";
+            maxLine.Parameters.AddWithValue("$invoiceId", invoiceId);
+            lineNumber = Convert.ToInt32(await maxLine.ExecuteScalarAsync()) + 1;
+        }
+
+        await using (SqliteCommand insertLine = connection.CreateCommand())
+        {
+            insertLine.Transaction = transaction;
+            insertLine.CommandText = """
+                INSERT INTO InvoiceLines (InvoiceId, LineNumber, Description, Sku, OrderId, UnitPrice, Quantity, Unit, Amount)
+                VALUES ($invoiceId, $lineNumber, $description, $sku, $orderId, $unitPrice, $quantity, 'unit', $amount)
+                """;
+            insertLine.Parameters.AddWithValue("$invoiceId", invoiceId);
+            insertLine.Parameters.AddWithValue("$lineNumber", lineNumber);
+            insertLine.Parameters.AddWithValue("$description", description);
+            insertLine.Parameters.AddWithValue("$sku", (object?)sku ?? DBNull.Value);
+            insertLine.Parameters.AddWithValue("$orderId", (object?)orderId ?? DBNull.Value);
+            insertLine.Parameters.AddWithValue("$unitPrice", unitPrice);
+            insertLine.Parameters.AddWithValue("$quantity", quantity);
+            insertLine.Parameters.AddWithValue("$amount", (double)lineAmount);
+            await insertLine.ExecuteNonQueryAsync();
+        }
+
+        // Subtotal/Tax/Total are always the sum of the lines that actually exist, recomputed here
+        // rather than incremented, so they can never drift from what InvoiceLines really holds.
+        await using (SqliteCommand recompute = connection.CreateCommand())
+        {
+            recompute.Transaction = transaction;
+            recompute.CommandText = """
+                UPDATE Invoices SET
+                    Subtotal = (SELECT COALESCE(SUM(Amount), 0) FROM InvoiceLines WHERE InvoiceId = $invoiceId),
+                    Tax = ROUND((SELECT COALESCE(SUM(Amount), 0) FROM InvoiceLines WHERE InvoiceId = $invoiceId) * TaxRate, 2),
+                    Total = (SELECT COALESCE(SUM(Amount), 0) FROM InvoiceLines WHERE InvoiceId = $invoiceId)
+                            + ROUND((SELECT COALESCE(SUM(Amount), 0) FROM InvoiceLines WHERE InvoiceId = $invoiceId) * TaxRate, 2)
+                WHERE InvoiceId = $invoiceId
+                """;
+            recompute.Parameters.AddWithValue("$invoiceId", invoiceId);
+            await recompute.ExecuteNonQueryAsync();
+        }
+
+        return invoiceId;
+    }
 }

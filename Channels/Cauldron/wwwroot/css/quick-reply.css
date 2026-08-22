@@ -104,3 +104,19 @@
     pointer-events: none;
     opacity: 0.6;
 }
+
+/* Same 600px breakpoint as site.css — chosen around the Widget's fixed 512px panel width, see the
+   comment there. A stack of several quick replies is one of the tallest things this narrow layout
+   ever has to render, so trimming both label size and the gap between buttons pays off directly on
+   how much vertical space the whole stack takes. */
+@media (max-width: 600px) {
+    .quick-replies {
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .quick-reply-btn {
+        font-size: 13px;
+        padding: 11px 16px;
+    }
+}

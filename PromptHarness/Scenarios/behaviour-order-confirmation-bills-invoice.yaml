@@ -1,0 +1,37 @@
+id: behaviour-order-confirmation-bills-invoice
+description: >-
+  Confirming an order is dispositive twice over: it decrements stock AND bills the customer through
+  the shared backoffice path (GreenhouseDatabaseHelper.BillCustomerAsync), atomically with the
+  confirmation itself. Guards that InventoryAgent actually tells the customer this happened and
+  points them back to Morgana for the invoice, rather than treating ConfirmOrder as a stock-only
+  event. Uses SEED-400 (500 units seeded) so five replays never run the SKU out of stock within one
+  harness session. The seal word CANNOT be scripted as the random value a real conversation would
+  receive — the harness DSL has no way to capture a value the model invents in one turn and replay
+  it in a later turn's fixed text — so InventoryTool.GenerateSealWord() is pinned for the run to
+  Harness:DeterministicSealWord (appsettings.Harness.json, default "534LW03D"); see both members' own
+  remarks. Depends on that default staying "534LW03D" — if it is ever overridden, this turn's say:
+  text needs the same literal.
+
+turns:
+  - say: "Hi, I'd like to order 1 pack of the wildflower seed mix, my customer code is T780C"
+    expect:
+      agent: InventoryAgent
+      agentCompleted: false
+      toolsCalled: [CreatePurchaseOrder]
+      toolsNotCalled: [ConfirmOrder]
+      textNotEmpty: true
+    judge:
+      - "The response gives the customer a seal word (or explicitly calls it that) to use when confirming the order."
+      - "The response asks the customer to confirm before the order becomes binding."
+
+  - say: "Yes, please confirm it. The seal word is 534LW03D"
+    expect:
+      agent: InventoryAgent
+      toolsCalled: [ConfirmOrder]
+      textNotEmpty: true
+      textNotContains: ["#INT#", "invoiceId", "InvoiceLines"]
+    judge:
+      - "The response confirms the order is now settled or binding."
+      - "The response tells the customer, in some form, that this purchase has been billed to them and that they can ask about the invoice."
+    judgeNot:
+      - "The response states a specific invoice total, amount or line item."

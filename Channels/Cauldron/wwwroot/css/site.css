@@ -471,3 +471,19 @@ body {
         animation: none;
     }
 }
+
+/* The Widget's panel is a fixed 512px (morgana-widget.css), comfortably inside this breakpoint,
+   so this also covers any narrow phone tab open directly on Cauldron — a shared benefit, not a
+   conflict. Trimming message text and padding here is what keeps bubbles and their line-count from
+   stretching a conversation vertically in a space this narrow. .message-time inherits via calc(1em),
+   so it shrinks along with .message-bubble without a rule of its own. */
+@media (max-width: 600px) {
+    .message-bubble {
+        font-size: 14px;
+        padding: 10px 14px;
+    }
+
+    .message-text.completion-text {
+        font-size: 12px;
+    }
+}
