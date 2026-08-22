@@ -22,7 +22,7 @@ The system is powered by **Microsoft.Agents.AI**, enabling seamless integration 
 
 <table style="border:none;">
   <tr>
-    <th colspan=5>Cauldron (Web Channel)</th>
+    <th colspan=6>Cauldron (Web Channel)</th>
   </tr>
   <tr>
     <td>
@@ -40,9 +40,12 @@ The system is powered by **Microsoft.Agents.AI**, enabling seamless integration 
     <td>
       <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Agent2.jpg" alt="Morgana - Agent2 (Cauldron)"/>
     </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Widget.jpg" alt="Morgana - Widget (Cauldron)"/>
+    </td>
   </tr>
   <tr>
-    <th colspan=5>Grimoire (TTY Channel)</th>
+    <th colspan=6>Grimoire (TTY Channel)</th>
   </tr>
   <tr>
     <td>
@@ -60,6 +63,7 @@ The system is powered by **Microsoft.Agents.AI**, enabling seamless integration 
     <td>
       <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-Agent2GRM.jpg" alt="Morgana - Agent2 (Grimoire)"/>
     </td>
+    <td>&nbsp;</td>
   </tr>
 </table>
 
