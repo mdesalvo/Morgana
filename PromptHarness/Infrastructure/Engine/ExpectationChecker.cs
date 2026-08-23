@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using Markdig;
 using Markdig.Syntax;
@@ -46,6 +47,7 @@ public static partial class ExpectationChecker
         // of these still produces every relevant failure in one pass rather than stopping at the first.
         CheckQuickReplies(expect, turn, failures);
         CheckRichCard(expect, turn, failures);
+        CheckRichCardContains(expect, turn, failures);
         CheckTools(expect, turn, failures);
         CheckContext(expect, turn, failures);
         CheckText(expect, turn, failures);
@@ -189,6 +191,65 @@ public static partial class ExpectationChecker
             case "present" when !present:
                 failures.Add("richCard: expected present, got none");
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Deterministic substrings that must appear somewhere in the rich card's own text — the
+    /// structural layer's only window into a card's body, since <c>LLMJudge</c> deliberately never
+    /// sees anything past the title (see <see cref="ScenarioDefinition.RichCardContains"/>).
+    /// </summary>
+    private static void CheckRichCardContains(ExpectSpec expect, TurnResult turn, List<string> failures)
+    {
+        if (expect.RichCardContains is not { Count: > 0 } required)
+            return;
+
+        string flattened = turn.Message.RichCard is null ? string.Empty : FlattenRichCard(turn.Message.RichCard);
+
+        foreach (string substring in required)
+        {
+            if (!flattened.Contains(substring, StringComparison.OrdinalIgnoreCase))
+                failures.Add($"richCardContains: '{substring}' not found in the rich card (got: {(turn.Message.RichCard is null ? "no card" : $"'{flattened}'")})");
+        }
+    }
+
+    /// <summary>Concatenates every piece of text a rich card actually renders, recursing into nested sections.</summary>
+    private static string FlattenRichCard(RichCard card)
+    {
+        StringBuilder text = new StringBuilder();
+        text.Append(card.Title).Append(' ').Append(card.Subtitle).Append(' ');
+        AppendComponents(card.Components, text);
+        return text.ToString();
+    }
+
+    /// <summary>Recursive half of <see cref="FlattenRichCard"/>, one branch per known component type.</summary>
+    private static void AppendComponents(IEnumerable<CardComponent> components, StringBuilder text)
+    {
+        foreach (CardComponent component in components)
+        {
+            switch (component)
+            {
+                case TextBlockComponent textBlock:
+                    text.Append(textBlock.Content).Append(' ');
+                    break;
+                case KeyValueComponent keyValue:
+                    text.Append(keyValue.Key).Append(' ').Append(keyValue.Value).Append(' ');
+                    break;
+                case ListComponent list:
+                    text.Append(string.Join(' ', list.Items)).Append(' ');
+                    break;
+                case SectionComponent section:
+                    text.Append(section.Title).Append(' ').Append(section.Subtitle).Append(' ');
+                    AppendComponents(section.Components, text);
+                    break;
+                case GridComponent grid:
+                    foreach (GridItem item in grid.Items)
+                        text.Append(item.Key).Append(' ').Append(item.Value).Append(' ');
+                    break;
+                case BadgeComponent badge:
+                    text.Append(badge.Text).Append(' ');
+                    break;
+            }
         }
     }
 

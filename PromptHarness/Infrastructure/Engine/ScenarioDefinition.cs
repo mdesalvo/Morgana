@@ -37,6 +37,18 @@ public sealed class ScenarioDefinition
     /// opt-in for the one scenario that means to exercise <c>MorganaChannelAdapter</c>'s rewrite path.
     /// </summary>
     public bool? DegradedChannel { get; init; }
+
+    /// <summary>
+    /// A pool of interchangeable actors for a scenario whose dispositive action is legitimately
+    /// one-time-only per customer (e.g. enrolling in a plan a customer may hold only once) — unlike
+    /// a re-orderable SKU, seeding "more of the same" cannot make such an action replayable against
+    /// a single fixed customer, since a fresh run's business state ("no existing plan") does not
+    /// reset between replays the way a per-conversation session does. Every occurrence of
+    /// <c>{{customerCode}}</c> in every turn's <c>say:</c> is substituted with
+    /// <c>CustomerCodes[(run - 1) % CustomerCodes.Count]</c> before the message is sent — one
+    /// customer per run, reused round-robin if there are more runs than codes.
+    /// </summary>
+    public List<string>? CustomerCodes { get; init; }
 }
 
 /// <summary>A single user turn and its expectations.</summary>
@@ -94,6 +106,15 @@ public sealed class ExpectSpec
     /// <summary>Rich card presence: <c>absent</c> or <c>present</c>.</summary>
     public string? RichCard { get; init; }
 
+    /// <summary>
+    /// Substrings that must appear somewhere in the rich card's flattened text (title, subtitle,
+    /// and every component's own text — see <see cref="ExpectationChecker"/>'s flattening). For
+    /// deterministic values only, e.g. a seal word pinned via <c>Harness:DeterministicSealWord</c>:
+    /// the judge deliberately never sees a card's body (only its title), so a domain fact the agent
+    /// habitually delivers inside a card rather than in prose has no other way to be checked at all.
+    /// </summary>
+    public List<string>? RichCardContains { get; init; }
+
     /// <summary>Tools that must appear among the turn's invocations.</summary>
     public List<string>? ToolsCalled { get; init; }
 
@@ -107,11 +128,13 @@ public sealed class ExpectSpec
     public List<string>? ToolsCalledFirst { get; init; }
 
     /// <summary>
-    /// Context variables that must have been read via <c>GetContextVariable</c>. A bare name
-    /// (<c>customerCode</c>) matches either outcome; prefixing it with the outcome
-    /// (<c>Hit:customerCode</c> / <c>Miss:customerCode</c>) asserts that specific one — the form to reach for
-    /// when a hit and a miss would mean different things (a shared variable that must already be
-    /// hydrated for a follow-up agent is a hit or the scenario proves nothing).
+    /// Context variables the turn must have read — via <c>GetContextVariable</c> (<c>Hit</c> /
+    /// <c>Miss</c>) or via the per-turn <c>HeldContextDeclaration</c> injection (<c>Declared</c>),
+    /// which hands an already-held variable's value to the model directly, with no tool call at all.
+    /// A bare name (<c>customerCode</c>) matches any of the three; prefixing it (<c>Hit:customerCode</c>
+    /// / <c>Miss:customerCode</c> / <c>Declared:customerCode</c>) asserts that specific one. A shared
+    /// variable hydrated for a follow-up agent is normally a <c>Declared</c>, not a <c>Hit</c>: the
+    /// agent already has the value in front of it and has no reason to call the tool.
     /// </summary>
     public List<string>? ContextReads { get; init; }
 

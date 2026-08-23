@@ -176,13 +176,24 @@ public sealed class ScenarioRunner
                 : await channel.StartConversationAsync(timeout);
             conversationId = opened;
 
+            // Round-robins one actor per run for a scenario pooling several — see
+            // ScenarioDefinition.CustomerCodes' own remarks for why "more stock" cannot substitute
+            // for "a different customer" when the dispositive action is one-time-only per customer.
+            string? customerCode = scenario.CustomerCodes is { Count: > 0 } codes
+                ? codes[(index - 1) % codes.Count]
+                : null;
+
             foreach (TurnDefinition turnDefinition in scenario.Turns)
             {
+                string say = customerCode is null
+                    ? turnDefinition.Say
+                    : turnDefinition.Say.Replace("{{customerCode}}", customerCode, StringComparison.Ordinal);
+
                 // Mark, send, then close the window: BeginTurn/CompleteTurnAsync bracket exactly
                 // the observation period this one turn's send-and-reply spans.
                 TurnScope scope = observer.BeginTurn(conversationId);
-                ChannelMessage message = await channel.SendAsync(conversationId, turnDefinition.Say, timeout);
-                TurnResult turn = await observer.CompleteTurnAsync(scope, turnDefinition.Say, message);
+                ChannelMessage message = await channel.SendAsync(conversationId, say, timeout);
+                TurnResult turn = await observer.CompleteTurnAsync(scope, say, message);
 
                 transcript.Add(turn.Describe());
 

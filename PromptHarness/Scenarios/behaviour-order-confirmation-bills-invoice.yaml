@@ -26,8 +26,15 @@ turns:
       toolsCalled: [CreatePurchaseOrder]
       toolsNotCalled: [ConfirmOrder]
       textNotEmpty: true
+      # Structural, not judged: the seal word is customarily delivered inside the order's own rich
+      # card (a key_value component), never spelled out in prose — the agent's flowery persona text
+      # only alludes to it ("keep that seal word safe"). LLMJudge deliberately never sees a card's
+      # body, only its title, so this is the one place the harness CAN check the literal value ever
+      # reached the customer: it's deterministic only because Harness:DeterministicSealWord pins
+      # InventoryTool.GenerateSealWord() to "534LW03D" for this run.
+      richCard: present
+      richCardContains: ["534LW03D"]
     judge:
-      - "The response gives the customer a seal word (or explicitly calls it that) to use when confirming the order."
       - "The response asks the customer to confirm before the order becomes binding."
 
   - say: "Yes, please confirm it. The seal word is 534LW03D"

@@ -7,14 +7,34 @@ description: >-
   never quoted from memory, since GetContractDetails (every other read tool here) requires a
   schedule that does not exist yet for a prospect. Uses M455D, a seeded customer with no existing
   plan, so the enrollment always takes the "new plan" branch rather than the "already active" refusal.
+  A DIFFERENT such customer per run, round-robin via customerCodes/{{customerCode}} — enrolling is a
+  one-time action per customer, so run 1 actually opening M455D's plan would make every later run in
+  the same harness session see "already active" and take the refusal branch instead of the happy path
+  being measured. Confirmed live: with a single fixed customer, run 1 passed and runs 2-5 failed on
+  exactly that refusal, 0/5 overall. Five seeded prospects (Data/Examples.db) cover five runs with room
+  to spare.
+  Three turns, not two: ContractAgent's own doctrine for SubscribeToGreenCarePlan ("restate the terms
+  GetPlanOverview already gave you and wait for an explicit yes before calling
+  SubscribeToGreenCarePlan") mirrors InventoryTool.ConfirmOrder's — asking to enroll is not itself the
+  explicit yes, it is what triggers the restate-and-wait step. Confirmed live: with a 2-turn version,
+  the agent restated the terms and asked "Does this suit you?"/"Are you ready to enroll?" instead of
+  calling the tool, 5/5 runs. That is correct behaviour, not a bug — the scenario is written to
+  match it, the same way behaviour-order-confirmation-bills-invoice does for Inventory.
+
+customerCodes: [M455D, M455E, M455F, M455G, M455H]
 
 turns:
-  - say: "Hi, my customer code is M455D. What does the Green Care Plan include, and how much would it cost me?"
+  - say: "Hi, my customer code is {{customerCode}}. What does the Green Care Plan include, and how much would it cost me?"
     expect:
       agent: ContractAgent
       agentCompleted: false
       toolsCalled: [GetPlanOverview]
       toolsNotCalled: [SubscribeToGreenCarePlan]
+      # RichCardUsage: GetPlanOverview returns multi-field structured data (fee, coverage, guarantee,
+      # terms) — a markdown wall of bullets standing in for a card is an explicit policy violation,
+      # not a stylistic choice, and it is what produced the dead-end turn below (no card, no quick
+      # replies, no continuation signal) the one time this regressed live.
+      richCard: present
       textNotEmpty: true
       textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judge:
@@ -22,7 +42,20 @@ turns:
     judgeNot:
       - "The response claims the customer is already enrolled or already has a plan."
 
-  - say: "Great, please sign me up"
+  - say: "I'd like to sign up for the Green Care Plan"
+    expect:
+      agent: ContractAgent
+      agentCompleted: false
+      toolsNotCalled: [SubscribeToGreenCarePlan]
+      textNotEmpty: true
+      textNotContains: ["#INT#", "invoiceId", "InvoiceLines", "contractId"]
+    judge:
+      - "The response restates the plan's terms (monthly fee, and at least one other term such as coverage, visit frequency or the guarantee) before asking anything else."
+      - "The response asks the customer for a final, explicit go-ahead before enrollment becomes binding."
+    judgeNot:
+      - "The response claims the plan is already active or already billed."
+
+  - say: "Yes, proceed"
     expect:
       agent: ContractAgent
       toolsCalled: [SubscribeToGreenCarePlan]
