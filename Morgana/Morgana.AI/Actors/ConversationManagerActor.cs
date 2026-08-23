@@ -494,6 +494,12 @@ public class ConversationManagerActor : MorganaActor
             // the more urgent message.
             string template = send90 ? dustLimitingOptions.Warning90Message : dustLimitingOptions.Warning70Message;
 
+            // Diagnostic only, no behavioural effect: PromptHarness taps the host's log output the
+            // same way it does for MorganaChatReducer's reduction line, since the wire message this
+            // emits is a second, out-of-band ChannelMessage the harness's single-message-per-turn
+            // webhook receiver does not otherwise observe cleanly.
+            actorLogger.Info($"DUST WARNING ({(send90 ? 90 : 70)}%) for {conversationId}, remaining={remaining:F2}");
+
             // Use the identical `remaining` value from the main response's ConversationMetadata
             // so the warning text percentage and the gauge are always in sync.
             await channelService.SendMessageAsync(new ChannelMessage
@@ -525,6 +531,10 @@ public class ConversationManagerActor : MorganaActor
     {
         try
         {
+            // Diagnostic only, no behavioural effect — see EmitDustWarningsIfNeededAsync's own
+            // remark on why PromptHarness needs this tapped from the log rather than the wire.
+            actorLogger.Info($"DUST EXHAUSTED for {conversationId}");
+
             // Sends the lockout notice with a gauge pinned at zero, right after the answer this
             // turn already delivered: the conversation stays alive but will accept no further turn.
             await channelService.SendMessageAsync(new ChannelMessage
