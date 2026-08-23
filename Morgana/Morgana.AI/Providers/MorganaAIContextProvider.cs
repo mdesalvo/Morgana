@@ -184,10 +184,9 @@ public class MorganaAIContextProvider : AIContextProvider
     // =========================================================================
 
     /// <summary>
-    /// Per-turn injection: declares by name only which context variables session holds (names only, never
-    /// values, ordinal-sorted for cache stability). Critical for agents activated mid-conversation on empty
-    /// per-agent history: hydrated shared variables from registry are invisible in history. An empty
-    /// session gets no injection at all — see ComposeHeldContextDeclarationAsync.
+    /// Per-turn injection: hands the model the context variables the session holds, name and value,
+    /// ordinal-sorted. Critical for agents activated mid-conversation on empty per-agent history:
+    /// hydrated shared variables from registry are invisible in history. Empty session → no injection.
     /// </summary>
     protected override async ValueTask<AIContext> ProvideAIContextAsync(
         InvokingContext context,
@@ -198,9 +197,15 @@ public class MorganaAIContextProvider : AIContextProvider
 
         MorganaContextState contextState = sessionState.GetOrInitializeState(context.Session);
 
-        string[] heldVariables = [.. contextState.Variables.Keys
-            .Where(name => !EphemeralVariableNames.Contains(name))
-            .Order(StringComparer.Ordinal)];
+        // Strip the framework's own ephemeral keys (turn_continuation, quick_replies, rich_card) —
+        // they are not inputs to resolve, never something the model should be told it "holds". The
+        // SortedDictionary keeps keys in ordinal order so the declaration text is byte-identical
+        // across turns whenever the held set itself doesn't change (keeps the composed prompt stable).
+        SortedDictionary<string, object> heldVariables = new SortedDictionary<string, object>(
+            contextState.Variables
+                .Where(kvp => !EphemeralVariableNames.Contains(kvp.Key))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+            StringComparer.Ordinal);
 
         string? declaration = await promptComposerService.ComposeHeldContextDeclarationAsync(heldVariables);
 
@@ -209,7 +214,7 @@ public class MorganaAIContextProvider : AIContextProvider
 
         logger.LogInformation(
             "{MorganaAiContextProviderName} DECLARED '{VariableNames}'",
-            nameof(MorganaAIContextProvider), string.Join(", ", heldVariables));
+            nameof(MorganaAIContextProvider), string.Join(", ", heldVariables.Keys));
 
         return new AIContext { Instructions = declaration };
     }

@@ -45,6 +45,7 @@ PromptHarness (test process)
   │                          REST out (JWT iss=harness) · webhook in (own ephemeral port)
   ├── TurnObserver      ──► ActivityListener on morgana.agent  → agent.tools_invoked
   │                          Console.Out tee on MorganaTool logs → context reads/writes
+  │                          + MorganaAIContextProvider's per-turn declaration → Declared reads
   ├── LlmJudge          ──► ILLMService.CompleteWithSystemPromptAsync (cheapest configured tier)
   └── ScenarioRunner    ──► replays a YAML scenario N times, reports passes against a threshold
 ```

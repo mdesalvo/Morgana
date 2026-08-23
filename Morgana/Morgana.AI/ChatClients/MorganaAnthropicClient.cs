@@ -3,6 +3,7 @@ using Anthropic.Models.Messages;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Morgana.AI.Services;
 
 namespace Morgana.AI.ChatClients;
 
@@ -178,35 +179,12 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
     }
 
     /// <summary>
-    /// Applies the Anthropic ephemeral prompt cache marker (1h TTL) to the system prefix
-    /// of the outbound request, returning the (possibly mutated) message chatMessages and an
-    /// (possibly cloned) <see cref="ChatOptions"/> with <see cref="ChatOptions.Instructions"/>
-    /// cleared if it was promoted into a leading <see cref="ChatRole.System"/> message.
+    /// Applies the Anthropic ephemeral prompt cache marker (1h TTL) to the system prefix of the
+    /// outbound request. Two paths, detailed inline: <c>ChatOptions.Instructions</c> (the agent
+    /// path — promoted to a leading System message) and an already-leading System
+    /// <see cref="ChatMessage"/> (Guard/Classifier/Presenter/ChannelAdapter). No-op on content
+    /// below Anthropic's cacheable-size floor — harmless, not worth special-casing.
     /// </summary>
-    /// <remarks>
-    /// <para><strong>Two-path coverage of the system prefix:</strong></para>
-    /// <chatMessages type="number">
-    ///   <item><strong><c>ChatOptions.Instructions</c> path</strong> (used by
-    ///     <c>Microsoft.Agents.AI</c> when an agent is invoked: the framework + domain prompt
-    ///     composed by <c>MorganaAgentAdapter.ComposeAgentInstructions</c> ends up here, NOT
-    ///     in the message chatMessages). When this string is non-empty, we promote it to a leading
-    ///     <see cref="ChatMessage"/> with role System whose <see cref="TextContent"/> carries
-    ///     the cache marker, and we clear <c>Instructions</c> on a *clone* of the chatOptions to
-    ///     avoid duplicating the prefix in the API request. This is the heavy path: the
-    ///     agent's system prompt is several thousand tokens.</item>
-    ///   <item><strong>Leading system <see cref="ChatMessage"/> path</strong> (used by
-    ///     <see cref="Abstractions.MorganaLLM.CompleteWithSystemPromptAsync"/> and any other caller that
-    ///     puts the system prompt directly in the message chatMessages, e.g. Guard, Classifier,
-    ///     Presenter, ChannelAdapter). When path 1 doesn't apply, we mark the LAST
-    ///     <see cref="TextContent"/> of the LAST leading System message instead.</item>
-    /// </chatMessages>
-    ///
-    /// <para><strong>No-op below threshold:</strong> Anthropic ignores cache breakpoints on
-    /// content shorter than the model's minimum cacheable size (~1024 tokens for Sonnet,
-    /// ~2048 for Haiku). Setting the marker on small system prompts (Guard, Classifier in
-    /// isolation) is harmless. The big win is on agent system prompts which sit well above
-    /// the threshold and are repeated turn after turn.</para>
-    /// </remarks>
     private static (List<ChatMessage> ChatMessages, ChatOptions? ChatOptions) MarkLeadingSystemForCache(
         List<ChatMessage> chatMessages,
         ChatOptions? chatOptions)
@@ -219,16 +197,38 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
             ChatOptions clonedChatOptions = chatOptions.Clone();
             clonedChatOptions.Instructions = null;
 
-            TextContent textContent = new TextContent(chatOptions.Instructions);
-            textContent.WithCacheControl(Ttl.Ttl1h);
-            chatMessages.Insert(0, new ChatMessage(ChatRole.System, [textContent]));
+            // The per-turn held-context declaration (marked with DynamicInstructionsMarker) rides at
+            // the tail of Instructions. Split it off so only the stable framework+domain prefix is
+            // cached — otherwise every turn's declaration change would bust the whole prompt's cache.
+            int markerIndex = chatOptions.Instructions.IndexOf(
+                ConfigurationPromptComposerService.DynamicInstructionsMarker, StringComparison.Ordinal);
+
+            // No marker means no held-context declaration was injected this turn (empty session) —
+            // the whole string is the static prefix, same as before this split existed.
+            string staticPrefix = markerIndex < 0 ? chatOptions.Instructions : chatOptions.Instructions[..markerIndex];
+            TextContent staticContent = new TextContent(staticPrefix).WithCacheControl(Ttl.Ttl1h);
+            List<AIContent> systemContents = [staticContent];
+
+            if (markerIndex >= 0)
+            {
+                // Deliberately no cache_control here: Anthropic caches everything up to and including
+                // a marked block, so a second, unmarked block just rides along uncached — exactly what
+                // we want for text that changes every turn.
+                string dynamicTail = chatOptions.Instructions[(markerIndex + ConfigurationPromptComposerService.DynamicInstructionsMarker.Length)..];
+                systemContents.Add(new TextContent(dynamicTail));
+            }
+
+            chatMessages.Insert(0, new ChatMessage(ChatRole.System, systemContents));
 
             return (chatMessages, clonedChatOptions);
         }
 
-        // PATH 2 — leading system ChatMessage already in the chatMessages (Guard / Classifier /
-        // Presenter / ChannelAdapter via MorganaLLM.CompleteWithSystemPromptAsync). Mark the
-        // last TextContent of the last leading system message.
+        // PATH 2 — chatOptions.Instructions was empty, so this isn't an Microsoft.Agents.AI agent
+        // call: the caller (Guard, Classifier, Presenter, ChannelAdapter via
+        // MorganaLLM.CompleteWithSystemPromptAsync) put its system prompt directly in chatMessages
+        // instead. Find the run of leading System messages — walk from the start and stop at the
+        // first non-System message, since a System message appearing later (e.g. a mid-conversation
+        // summarization note) is not part of the prefix and must never be marked.
         int lastSystemIdx = -1;
         for (int i = 0; i < chatMessages.Count; i++)
         {
@@ -237,9 +237,14 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
             else
                 break;
         }
+        // No leading System message at all — nothing to cache, leave the request untouched.
         if (lastSystemIdx < 0)
             return (chatMessages, chatOptions);
 
+        // Mark the LAST TextContent of the LAST leading System message: callers may append multiple
+        // system messages (e.g. base prompt + a later addendum), and Anthropic's cache breakpoint
+        // covers everything up to and including the marked block — placing it last covers the whole
+        // leading run in one shot.
         TextContent? lastText = chatMessages[lastSystemIdx].Contents.OfType<TextContent>().LastOrDefault();
         if (lastText is null)
             return (chatMessages, chatOptions);
@@ -250,34 +255,16 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
     }
 
     /// <summary>
-    /// Reads the Anthropic-specific <c>cache_creation_input_tokens</c> counter from the
-    /// response usage and emits it as a tag on <see cref="Activity.Current"/> under the key
-    /// <c>gen_ai.usage.cache_write.input_tokens</c>. This complements MEAI's built-in
-    /// <c>OpenTelemetryChatClient</c>, which already emits
-    /// <c>gen_ai.usage.cache_read.input_tokens</c> from <see cref="UsageDetails.CachedInputTokenCount"/>
-    /// but has no first-class field for cache writes.
+    /// Reads the Anthropic-specific cache-creation token count from the response usage and emits it
+    /// as a span tag. Complements MEAI's built-in cache_read tag, which has no counterpart for writes.
+    /// Non-streaming path only — see inline comments for why, and for the tag-naming and lookup
+    /// choices.
     /// </summary>
-    /// <remarks>
-    /// <para>Naming choice: there is no OTel semantic convention for the cache-write side
-    /// (only <c>cache_read</c> is standardised), so the tag name is up to us. We use
-    /// <c>cache_write</c> for symmetry with <c>cache_read</c>; the upstream Anthropic field
-    /// is <c>cache_creation_input_tokens</c>, and that name remains the source-key
-    /// heuristic match below — it just isn't reflected on the public tag.</para>
-    ///
-    /// <para>The MEAI Anthropic adapter surfaces cache creation as an entry in
-    /// <see cref="UsageDetails.AdditionalCounts"/>. The exact key may differ across SDK
-    /// versions, so the lookup is heuristic: any key whose name contains both <c>"cache"</c>
-    /// and <c>"creation"</c> is accepted. If no candidate is found, the method is a silent
-    /// no-op — the cache_read tag from MEAI remains the primary signal.</para>
-    ///
-    /// <para>This method is invoked only on the non-streaming path
-    /// (<see cref="GetResponseAsync"/>), where the final <see cref="ChatResponse.Usage"/>
-    /// is delivered atomically. The streaming path forwards chunks untouched — for it,
-    /// cache observability comes from MEAI's <c>OpenTelemetryChatClient</c> upstream,
-    /// which aggregates <c>gen_ai.usage.cache_read.input_tokens</c> across the stream.</para>
-    /// </remarks>
     private static void EmitCacheWriteTag(UsageDetails? usageDetails)
     {
+        // Called only from GetResponseAsync: the streaming path forwards chunks untouched, and cache
+        // observability there comes from MEAI's own OpenTelemetryChatClient aggregating cache_read
+        // across the stream — there is no single final UsageDetails to read a cache-write count from.
         if (usageDetails?.AdditionalCounts is null)
             return;
 
@@ -285,11 +272,17 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         if (current is null)
             return;
 
+        // The MEAI Anthropic adapter surfaces cache creation as an entry in AdditionalCounts, but the
+        // exact key can differ across SDK versions — match heuristically on any key naming both
+        // "cache" and "creation" rather than hardcoding e.g. "cache_creation_input_tokens". No match
+        // is a silent no-op: MEAI's own cache_read tag remains the primary signal either way.
         foreach (KeyValuePair<string, long> kv in usageDetails.AdditionalCounts)
         {
             if (kv.Key.Contains("cache", StringComparison.OrdinalIgnoreCase)
                  && kv.Key.Contains("creation", StringComparison.OrdinalIgnoreCase))
             {
+                // No OTel semantic convention exists for the write side (only cache_read is
+                // standardised) — "cache_write" is our own choice, picked for symmetry with MEAI's tag.
                 current.SetTag("gen_ai.usage.cache_write.input_tokens", kv.Value);
                 return;
             }

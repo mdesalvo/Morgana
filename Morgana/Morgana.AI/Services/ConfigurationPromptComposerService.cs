@@ -21,10 +21,19 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     private const string ContextParametersPlaceholder = "((context_parameters))";
 
     /// <summary>
-    /// Placeholder in the HeldContextDeclaration injection template, resolved per turn to the
-    /// comma-separated names of the variables the session currently holds.
+    /// Placeholder in the HeldContextDeclaration injection template, resolved per turn to
+    /// comma-separated "name: value" pairs for the variables the session currently holds.
     /// </summary>
     private const string HeldVariablesPlaceholder = "((held_variables))";
+
+    /// <summary>
+    /// Marks the boundary between the stable agent prompt and this per-turn dynamic tail, so
+    /// <c>MorganaAnthropicClient</c> can cache only the former. Code-level, not prompt prose — a
+    /// wording change in morgana.json must never silently break the split. The actual ASCII Record
+    /// Separator control character (U+001E), not its printable glyph: non-printable, never
+    /// legitimately typed by a human or produced by an LLM, so it can't collide with real content.
+    /// </summary>
+    internal const string DynamicInstructionsMarker = "\u001E";
 
     /// <summary>
     /// Value of <see cref="Records.ToolParameter.Scope"/> marking a parameter resolved from the
@@ -46,6 +55,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     private const string DomainLayerHeader =
         "======== DOMAIN AGENT — SUBORDINATE TO THE FRAMEWORK ABOVE ========\n" +
         "What follows specialises the framework for a single domain: what you are for, how you work, how you speak, how you present. It adds domain knowledge and NOTHING ELSE. It NEVER contradicts the framework above, on any point — where the two appear to differ, the framework governs and you follow it.";
+    private const string DomainLayerFooter = "======== END OF DOMAIN AGENT ========";
 
     /// <summary>
     /// The framework layer and its global policies, resolved once on first use.
@@ -79,9 +89,12 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // shows each of them twice with nothing marking which is which — and the framework's claim
         // to precedence, made in its own Target, names a boundary the model cannot locate. The
         // domain fence carries the subordination rule itself rather than only separating: it is read
-        // at the exact point where the layer it governs begins.
+        // at the exact point where the layer it governs begins. DomainLayerFooter closes the whole
+        // static prompt: ComposeHeldContextDeclarationAsync's per-turn tail is appended after this
+        // string returns (see MorganaAIContextProvider), so without it nothing would mark where the
+        // agent's own authored prose ends and the framework's per-turn note begins.
 
-        // Morgana layers
+        // Morgana
         sb.AppendLine(FrameworkLayerHeader);
         sb.AppendLine();
         sb.AppendLine(framework.Prompt.Target);
@@ -97,7 +110,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine(FrameworkLayerFooter);
         sb.AppendLine();
 
-        // Agent layers
+        // Morgana (Agent)
         sb.AppendLine(DomainLayerHeader);
         sb.AppendLine();
         sb.AppendLine(domainPrompt.Target);
@@ -107,6 +120,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine(domainPrompt.Instructions);
         sb.AppendLine();
         sb.AppendLine(domainPrompt.Formatting);
+        sb.AppendLine();
+        sb.AppendLine(DomainLayerFooter);
         sb.AppendLine();
 
         return sb.ToString();
@@ -131,7 +146,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string?> ComposeHeldContextDeclarationAsync(IReadOnlyCollection<string> heldVariables)
+    public async Task<string?> ComposeHeldContextDeclarationAsync(IReadOnlyDictionary<string, object> heldVariables)
     {
         if (heldVariables.Count == 0)
             return null;
@@ -142,9 +157,17 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
         // ResolveTemplate returns "" for a template the prompt layer does not declare, which every
         // splice site reads as "inject nothing".
-        return declaration.Length == 0
-            ? null
-            : declaration.Replace(HeldVariablesPlaceholder, string.Join(", ", heldVariables));
+        if (declaration.Length == 0)
+            return null;
+
+        // "name: value" for every held variable — the model gets the fact outright, not just the
+        // name, so it has nothing left to look up.
+        string pairs = string.Join(", ", heldVariables.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+        string resolvedDeclaration = declaration.Replace(HeldVariablesPlaceholder, pairs);
+
+        // DynamicInstructionsMarker: see its own doc comment — lets MarkLeadingSystemForCache split
+        // this per-turn tail off the stable framework+domain prefix before applying the cache marker.
+        return DynamicInstructionsMarker + resolvedDeclaration;
     }
 
     /// <summary>

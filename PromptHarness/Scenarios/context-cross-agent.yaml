@@ -34,10 +34,12 @@ turns:
     expect:
       agent: ContractAgent
       contextVocabulary: [customerCode]
-      # A hit, specifically — not just any read. ContractAgent has never run before this turn, so
-      # this is the one place the scenario can prove the shared variable actually hydrated instead
-      # of only inferring it from the absence of a re-ask two turns downstream.
-      contextReads: [Hit:customerCode]
+      # A Declared, specifically — not just any read. ContractAgent has never run before this turn,
+      # so this is the one place the scenario can prove the shared variable actually hydrated instead
+      # of only inferring it from the absence of a re-ask two turns downstream. Declared, not Hit:
+      # the value already sits in the per-turn declaration, so the agent has no reason to call
+      # GetContextVariable at all.
+      contextReads: [Declared:customerCode]
       toolsCalled: [GetContractDetails]
       textNotEmpty: true
       textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]

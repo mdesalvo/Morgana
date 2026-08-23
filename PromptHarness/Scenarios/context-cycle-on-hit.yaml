@@ -17,6 +17,10 @@ turns:
     expect:
       agent: BillingAgent
       contextVocabulary: [customerCode]
+      # Structural proof of hydration, not just an inference from the judge's absence-of-re-ask:
+      # the same agent, still active, gets customerCode from the per-turn declaration on this turn
+      # too — it never needs GetContextVariable once the value is already held.
+      contextReads: [Declared:customerCode]
       toolsCalled: [GetPaymentHistory]
       noContextWrites: true
       textNotEmpty: true

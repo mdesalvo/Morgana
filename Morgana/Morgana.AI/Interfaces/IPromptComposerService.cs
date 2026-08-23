@@ -37,18 +37,19 @@ public interface IPromptComposerService
     Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition);
 
     /// <summary>
-    /// Produces the per-turn declaration naming the context variables the session currently holds —
-    /// the names only, never the values. This is the one composed fragment carrying a <em>fact</em>
-    /// rather than a rule: tool descriptions are built once at agent creation and can only ever
-    /// state the contract ("this tool takes a customerCode"), never the state ("customerCode is held right now"),
-    /// which nobody knows at build time.
+    /// Produces the per-turn declaration handing the session's currently-held context variables
+    /// directly to the model — name AND value, not just the name. This is the one composed fragment
+    /// carrying a <em>fact</em> rather than a rule: tool descriptions are built once at agent creation
+    /// and can only state the contract ("this tool takes a customerCode"), never the state
+    /// ("customerCode is T780C right now"). Handing over the value outright turns recall from a
+    /// discretionary tool call into a fact already in front of the model.
     /// </summary>
     /// <param name="heldVariables">
-    /// Names of the variables held by the session, framework-ephemeral keys already excluded.
+    /// The variables held by the session, framework-ephemeral keys already excluded.
     /// </param>
     /// <returns>
     /// The declaration to inject, or <c>null</c> when nothing should be injected — either because
     /// the session holds no variables or because the prompt layer declares no such template.
     /// </returns>
-    Task<string?> ComposeHeldContextDeclarationAsync(IReadOnlyCollection<string> heldVariables);
+    Task<string?> ComposeHeldContextDeclarationAsync(IReadOnlyDictionary<string, object> heldVariables);
 }
