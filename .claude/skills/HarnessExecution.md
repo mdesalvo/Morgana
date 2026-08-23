@@ -78,9 +78,37 @@ Activated when the user says things like:
 6. **Always redirect full output to a log file** in the scratchpad directory (`> file 2>&1`, never
    pipe through `tail` on the live command) — grep the file afterward for the summary line and any
    `[FAIL]`/`✗` detail. A truncated `tail` loses the per-run transcript needed to diagnose a failure
-   without re-running (and re-paying for) the scenario.
+   without re-running (and re-paying for) the scenario. This is not a style preference: piping a
+   backgrounded `dotnet test` through `tail -N` truncates the *saved* output file too (the pipeline's
+   tail process is what actually writes it), so a multi-scenario run that fails early in the log can
+   silently lose the one failure you needed, while later passing scenarios survive. Redirect first,
+   read/grep second — never combine the two in one command.
 
-7. **Report a results table**: one row per scenario actually exercised (not per test class — a
+   Launch the run with `run_in_background: true` (or accept the harness's own auto-backgrounding on
+   timeout) and then **wait on it properly** — `TaskOutput` with `block: true`, or a `Monitor` — rather
+   than babysitting it with manual `sleep` + `ls`/`wc -l` polling loops. The run is 5-10+ minutes of
+   live LLM calls; do not spend turns re-checking a file that isn't done yet.
+
+7. **Watch the configured output folder for live, per-scenario results instead of waiting for the
+   whole run to finish.** `HarnessWriter` (journey row, `{HarnessDirectory}/{scenarioId}.md`) and
+   `FailureLog` (failing-run transcript, `{HarnessDirectory}/failures/{scenarioId}.log`, deleted again
+   once a scenario is clean) are both written the instant *that scenario's* `RunAsync` returns — not
+   at the end of the whole `dotnet test` invocation. A `[Theory]` class with several `[InlineData]`
+   scenario ids therefore drops files into that folder one at a time as the suite progresses, so it
+   can be tailed/opened mid-run to see which scenarios have already landed and how, well before the
+   process exits.
+   - Default location: `Harness:HarnessDirectory` in `PromptHarness/appsettings.Harness.json`
+     (currently the relative value `"Harness"`, resolved against the PromptHarness project root, i.e.
+     `PromptHarness/Harness/` — gitignored, never expect it in `git status`).
+   - The user running the suite may have their own `Harness__HarnessDirectory` override pointing
+     somewhere else entirely (a personal results folder, a shared drive) — confirm with them where
+     they're actually watching before assuming the in-repo default is it; do not assume two different
+     configured paths are the same run's output.
+   - If neither location has fresh files after a run that should have produced them, do not silently
+     shrug — a scenario ID and phase both funnel into the file name, so an empty/missing folder is
+     itself worth flagging rather than only relying on the `dotnet test` console summary.
+
+8. **Report a results table**: one row per scenario actually exercised (not per test class — a
    `[Theory]` class covers several scenario IDs), columns `Scenario | Group | Result`, plus a short
    note under any row that failed (which assertion or judge proposition, one line). Do not editorialize
    pass/fail severity in the table itself — keep judgment calls in prose below it.
