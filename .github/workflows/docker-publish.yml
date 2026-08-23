@@ -86,3 +86,15 @@ jobs:
             ${{ env.DOCKER_USERNAME }}/rune:latest
           cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/rune:latest
           cache-to: type=inline
+
+      - name: Build and push Alembic
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Alembic/Alembic.Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_USERNAME }}/alembic:${{ steps.version.outputs.VERSION }}
+            ${{ env.DOCKER_USERNAME }}/alembic:latest
+          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/alembic:latest
+          cache-to: type=inline
