@@ -9,7 +9,8 @@ namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
 /// Reads the two structural signals a turn leaves behind inside the host process: the
-/// <c>morgana.agent</c> span and the context-tool log lines.
+/// <c>morgana.agent</c> span and the context-related log lines — from <c>MorganaTool</c>
+/// (HIT/MISS/SET) and from <c>MorganaAIContextProvider</c>'s per-turn declaration.
 /// </summary>
 /// <remarks>
 /// <para>Neither signal exists for the harness's benefit — both are production instrumentation the
@@ -25,6 +26,15 @@ public sealed partial class TurnObserver : IDisposable
     /// <summary>Matches the context-tool log lines emitted by <c>MorganaTool</c>.</summary>
     [GeneratedRegex(@"MorganaTool \([^)]*\) (?<op>HIT|MISS|SET) variable '(?<name>[^']*)'", RegexOptions.CultureInvariant)]
     private static partial Regex ContextAccessPattern { get; }
+
+    /// <summary>
+    /// Matches <c>MorganaAIContextProvider</c>'s per-turn declaration line — the proof that one or
+    /// more variables were handed to the model directly, without a <c>GetContextVariable</c> call.
+    /// The line is only ever logged when the session holds at least one variable, so an empty
+    /// session simply produces no match here — nothing to skip specially.
+    /// </summary>
+    [GeneratedRegex(@"MorganaAIContextProvider DECLARED '(?<names>[^']*)'", RegexOptions.CultureInvariant)]
+    private static partial Regex DeclaredContextPattern { get; }
 
     /// <summary>Listener on the framework's single <see cref="ActivitySource"/>.</summary>
     private readonly ActivityListener listener;
@@ -95,8 +105,21 @@ public sealed partial class TurnObserver : IDisposable
             llmMark);
     }
 
+    /// <summary>
+    /// Current position in the captured log — the counterpart to <see cref="TurnScope.LogMark"/> but
+    /// takeable once, at conversation start, for callers that need a cumulative window spanning
+    /// every turn since (e.g. a one-shot signal like a dust-budget threshold, which a single turn's
+    /// own window can miss entirely depending on which turn happens to cross it — see
+    /// <c>ScenarioRunner</c>'s use of this for <c>TurnResult.CumulativeLogLines</c>).
+    /// </summary>
+    public int Mark() => output.Mark();
+
     /// <summary>Closes the window and assembles what was observed alongside the delivered message.</summary>
-    public async Task<TurnResult> CompleteTurnAsync(TurnScope scope, string userMessage, ChannelMessage message)
+    /// <param name="conversationLogMark">
+    /// When given, <see cref="TurnResult.CumulativeLogLines"/> is populated with every log line
+    /// since this mark (conversation start) rather than left empty — see <see cref="Mark"/>.
+    /// </param>
+    public async Task<TurnResult> CompleteTurnAsync(TurnScope scope, string userMessage, ChannelMessage message, int? conversationLogMark = null)
     {
         // The console logger writes on a background queue, so the last tool lines of a turn can
         // still be in flight when the webhook has already been delivered.
@@ -107,23 +130,33 @@ public sealed partial class TurnObserver : IDisposable
         IReadOnlyList<string> lines = output.Since(scope.LogMark);
 
         // Parse every context-tool log line in this window into a structured access. Lines that
-        // don't match the pattern (ordinary framework noise) are silently skipped rather than
+        // don't match either pattern (ordinary framework noise) are silently skipped rather than
         // treated as an error — this parser only cares about the subset it recognises.
         List<ContextAccess> accesses = [];
         foreach (string line in lines)
         {
             Match match = ContextAccessPattern.Match(line);
-            if (!match.Success)
-                continue;
-
-            ContextOperation operation = match.Groups["op"].Value switch
+            if (match.Success)
             {
-                "HIT" => ContextOperation.Hit,
-                "MISS" => ContextOperation.Miss,
-                _ => ContextOperation.Set
-            };
+                ContextOperation operation = match.Groups["op"].Value switch
+                {
+                    "HIT" => ContextOperation.Hit,
+                    "MISS" => ContextOperation.Miss,
+                    _ => ContextOperation.Set
+                };
 
-            accesses.Add(new ContextAccess(operation, match.Groups["name"].Value));
+                accesses.Add(new ContextAccess(operation, match.Groups["name"].Value));
+                continue;
+            }
+
+            // One DECLARED line can name several variables at once ("customerCode, invoiceId") —
+            // one ContextAccess per name, same as a tool-log line would produce one per call.
+            Match declared = DeclaredContextPattern.Match(line);
+            if (declared.Success)
+            {
+                foreach (string name in declared.Groups["names"].Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    accesses.Add(new ContextAccess(ContextOperation.Declared, name));
+            }
         }
 
         // The most recent agent span recorded for this conversation since the turn began, if any —
@@ -163,7 +196,8 @@ public sealed partial class TurnObserver : IDisposable
             guard?.Compliant,
             guard?.Violation,
             classifier?.Intent,
-            classifier?.Confidence);
+            classifier?.Confidence,
+            conversationLogMark is { } mark ? output.Since(mark) : []);
     }
 
     /// <inheritdoc />

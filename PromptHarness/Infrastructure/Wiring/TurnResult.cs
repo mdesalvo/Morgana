@@ -12,7 +12,16 @@ public enum ContextOperation
     Miss,
 
     /// <summary><c>SetContextVariable</c> wrote the variable.</summary>
-    Set
+    Set,
+
+    /// <summary>
+    /// The variable was handed to the model directly in the per-turn <c>HeldContextDeclaration</c>
+    /// injection (name and value), so no <c>GetContextVariable</c> call happened — there was nothing
+    /// left to look up. The proof of hydration for an already-held variable, replacing <c>Hit</c> in
+    /// that case: a follow-up agent, or a later turn of the same agent, reads its held variables from
+    /// the declaration, not from a tool call.
+    /// </summary>
+    Declared
 }
 
 /// <summary>A single context-variable access observed on a turn, in the order it happened.</summary>
@@ -36,6 +45,14 @@ public sealed record ContextAccess(ContextOperation Operation, string VariableNa
 /// <param name="GuardViolation">Violation text from the same span when <paramref name="GuardCompliant"/> is false.</param>
 /// <param name="ClassifierIntent">Intent from the <c>morgana.classifier</c> span; null on a follow-up turn, which skips classification entirely.</param>
 /// <param name="ClassifierConfidence">Confidence from the same span, parsed from its string tag.</param>
+/// <param name="CumulativeLogLines">
+/// Host log lines since conversation start, not just since this turn began — empty unless the
+/// caller passed a conversation-start mark into <c>TurnObserver.CompleteTurnAsync</c>. What a
+/// one-shot, edge-triggered signal (a dust-budget threshold, never resent once crossed) needs: which
+/// exact turn crosses it is a token-cost measurement that can shift by a turn or two between runs, so
+/// checking "has this happened by now" against the whole conversation is the only way to assert on it
+/// without pinning to a turn index that variance can invalidate. See <c>ExpectationChecker.CheckDust</c>.
+/// </param>
 public sealed record TurnResult(
     string ConversationId,
     string UserMessage,
@@ -48,8 +65,12 @@ public sealed record TurnResult(
     bool? GuardCompliant = null,
     string? GuardViolation = null,
     string? ClassifierIntent = null,
-    double? ClassifierConfidence = null)
+    double? ClassifierConfidence = null,
+    IReadOnlyList<string>? CumulativeLogLines = null)
 {
+    /// <summary>Never null even when the caller didn't ask for cumulative tracking — see the parameter's own remarks.</summary>
+    public IReadOnlyList<string> Cumulative => CumulativeLogLines ?? [];
+
     /// <summary>Names read via <c>GetContextVariable</c>, whether the read hit or missed.</summary>
     public IReadOnlyList<string> ContextReads
         => [.. ContextAccesses.Where(a => a.Operation != ContextOperation.Set).Select(a => a.VariableName)];

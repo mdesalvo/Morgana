@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -116,7 +117,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Channel = new HarnessChannel(
             BaseAddress,
             IssuerKey,
-            Configuration["Morgana:Authentication:Audience"] ?? "morgana.ai");
+            Configuration["Morgana:Authentication:Audience"] ?? "morgana.ai",
+            drainTrailingSideMessages: Options.DustBudgetPerConversation is not null);
         await Channel.StartAsync();
 
         // Step 7: assemble the scenario engine last, since it depends on everything above —
@@ -212,7 +214,19 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Morgana__ConversationPersistence__StoragePath", storagePath);
         Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableGuardrail", Options.EnableGuardrail ? "true" : "false");
         Environment.SetEnvironmentVariable("Morgana__RateLimiting__Enabled", "false");
-        Environment.SetEnvironmentVariable("Morgana__DustLimiting__Enabled", "false");
+
+        // Unset by default (see HarnessOptions.DustBudgetPerConversation's own remarks): only
+        // DustTests sets this, in its own filtered dotnet test invocation, so the rest of the suite
+        // always runs against a budget no scripted few-turn conversation could ever dent.
+        if (Options.DustBudgetPerConversation is { } dustBudget)
+        {
+            Environment.SetEnvironmentVariable("Morgana__DustLimiting__Enabled", "true");
+            Environment.SetEnvironmentVariable("Morgana__DustLimiting__BudgetPerConversation", dustBudget.ToString(CultureInfo.InvariantCulture));
+        }
+        else
+        {
+            Environment.SetEnvironmentVariable("Morgana__DustLimiting__Enabled", "false");
+        }
 
         // Examples' InventoryTool reads this to pin the order seal word to a known constant instead
         // of a fresh random one — see GenerateSealWord's and HarnessOptions.DeterministicSealWord's

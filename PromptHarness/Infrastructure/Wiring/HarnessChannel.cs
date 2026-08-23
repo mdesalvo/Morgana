@@ -92,15 +92,27 @@ public sealed class HarnessChannel : IAsyncDisposable
     private string callbackUrl = string.Empty;
 
     /// <summary>
+    /// Whether <see cref="SendAsync"/> should spend a short grace wait draining a possible trailing
+    /// side message after every turn's primary response — see
+    /// <see cref="DiscardTrailingSideMessageAsync"/>'s own remarks. Off by default: the wait costs
+    /// real wall-clock time on every single turn of every scenario in the assembly for a case
+    /// (a dust-budget warning) that is otherwise never possible, since dust limiting is
+    /// force-disabled everywhere except <c>DustTests</c>' own run.
+    /// </summary>
+    private readonly bool drainTrailingSideMessages;
+
+    /// <summary>
     /// Wires the channel against a running host.
     /// </summary>
     /// <param name="morganaBaseAddress">Base address of the instance under test.</param>
     /// <param name="issuerKey">Symmetric key the host accepts for the <c>harness</c> issuer.</param>
     /// <param name="audience">Audience claim Morgana validates.</param>
-    public HarnessChannel(string morganaBaseAddress, string issuerKey, string audience)
+    /// <param name="drainTrailingSideMessages">See the field's own remarks.</param>
+    public HarnessChannel(string morganaBaseAddress, string issuerKey, string audience, bool drainTrailingSideMessages = false)
     {
         this.morganaBaseAddress = morganaBaseAddress;
         this.audience = audience;
+        this.drainTrailingSideMessages = drainTrailingSideMessages;
 
         // The signing key here must be byte-identical to the one MorganaHostFixture pushed into
         // the host's Morgana:Authentication:Issuers:*:SymmetricKey — the two are minted from the
@@ -211,7 +223,38 @@ public sealed class HarnessChannel : IAsyncDisposable
         using HttpResponseMessage response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
-        return await ReceiveAsync(conversationId, timeout);
+        ChannelMessage primary = await ReceiveAsync(conversationId, timeout);
+        if (drainTrailingSideMessages)
+            await DiscardTrailingSideMessageAsync(conversationId);
+
+        return primary;
+    }
+
+    /// <summary>
+    /// Drains and discards a second, out-of-band message that can follow a turn's primary response
+    /// on the very same webhook — <c>ConversationManagerActor</c>'s dust-budget warning or
+    /// exhaustion notice, sent moments after the main answer. This channel's contract is one message
+    /// per <see cref="SendAsync"/> call; left undrained, that second message would sit in the queue
+    /// and be misread as the NEXT turn's response, silently shifting every assertion after it by one
+    /// turn. Its content is never asserted on here — <c>DustTests</c> reads the fact of the warning
+    /// from <c>ConversationManagerActor</c>'s own diagnostic log line instead (see
+    /// <c>ExpectationChecker.CheckDust</c>) — so a short bounded wait to catch and drop it is enough;
+    /// the grace period only needs to outlast the same async continuation the primary send() and this
+    /// side-effect both run inside, not a whole extra LLM round trip.
+    /// </summary>
+    private async Task DiscardTrailingSideMessageAsync(string conversationId)
+    {
+        Channel<ChannelMessage> queue = inbox.GetOrAdd(conversationId, _ => Channel.CreateUnbounded<ChannelMessage>());
+
+        using CancellationTokenSource cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        try
+        {
+            await queue.Reader.ReadAsync(cancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // The overwhelmingly common case: no side message followed this turn at all.
+        }
     }
 
     /// <summary>Ends a conversation and forgets its queues. Failures are swallowed: teardown is best-effort.</summary>

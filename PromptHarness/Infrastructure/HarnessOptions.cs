@@ -68,6 +68,17 @@ public sealed class HarnessOptions
     public int? SummarizationTargetCount { get; init; }
 
     /// <summary>
+    /// Overrides <c>Morgana:DustLimiting:BudgetPerConversation</c> at boot, when set, and also
+    /// switches <c>Morgana:DustLimiting:Enabled</c> on for the run — dust limiting is force-disabled
+    /// otherwise (see <c>MorganaHostFixture.ApplyHostEnvironment</c>), the same reasoning as
+    /// <see cref="SummarizationThreshold"/>: process-wide for the single assembly-shared host, so
+    /// only <c>DustTests</c>' own filtered <c>dotnet test</c> invocation should ever set it. Pick a
+    /// value small enough that a handful of cheap scripted turns cross 70%, then 90%, then exhaust
+    /// it — see that class's own remarks for the calibration this depends on.
+    /// </summary>
+    public double? DustBudgetPerConversation { get; init; }
+
+    /// <summary>
     /// Pins Examples' InventoryTool.GenerateSealWord() to this fixed value for the run instead of a
     /// fresh random one — see that method's own remarks. The harness DSL has no way to capture a
     /// value the model invents in one turn and replay it into a later turn's fixed <c>say:</c> text,
