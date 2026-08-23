@@ -27,6 +27,7 @@ Framing itself is **closed by default** — a site may host the widget only once
 - Updated `Microsoft.Extensions.AI` to 10.9.0
 - Updated `ModelContextProtocol.Core` to 2.2.0
 - Updated `OllamaSharp` to 5.4.30
+- Updated `OpenTelemetry` to 1.18.0
 
 ### 🐛 Fixed
 - Text welded across tool calls — a turn that calls a tool writes several assistant messages, and their texts were concatenated with nothing in between.
