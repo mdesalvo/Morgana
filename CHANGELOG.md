@@ -23,7 +23,7 @@ Framing itself is **closed by default** — a site may host the widget only once
 
 ### 🔄 Changed
 - **`MorganaChatReducer` replacing `SummarizingChatReducer` as history reducer** — gaining complete control over history reduction strategies while maintaining backward compatibility.
-- Updated `Microsoft.Agents.AI` to 1.18.0
+- Updated `Microsoft.Agents.AI` to 1.19.0
 - Updated `Microsoft.Extensions.AI` to 10.9.0
 - Updated `ModelContextProtocol.Core` to 2.2.0
 - Updated `OllamaSharp` to 5.4.30
