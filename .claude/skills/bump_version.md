@@ -21,7 +21,7 @@ For production hotfixes, activated when the user says:
 
 ## Procedure
 
-1. **Extract current version** from `/home/marco/RiderProjects/Morgana/Morgana/Directory.Build.props`
+1. **Extract current version** from `<repo root>/Morgana/Directory.Build.props`
    - Extract the value of `<Version>X.Y.Z</Version>`
 
 2. **Increment the version** using Semantic Versioning
@@ -33,15 +33,17 @@ For production hotfixes, activated when the user says:
      - Example: 0.25.0 → 0.25.1
 
 3. **Update all version files** in the following paths:
-   - `/home/marco/RiderProjects/Morgana/Morgana/Directory.Build.props`
-   - `/home/marco/RiderProjects/Morgana/Channels/Cauldron/Directory.Build.props`
-   - `/home/marco/RiderProjects/Morgana/Channels/Rune/Directory.Build.props`
-   - `/home/marco/RiderProjects/Morgana/Channels/Grimoire/Directory.Build.props`
-   - `/home/marco/RiderProjects/Morgana/Examples/Examples.csproj`
-   - `/home/marco/RiderProjects/Morgana/PromptHarness/PromptHarness.csproj`
+   - `<repo root>/Morgana/Directory.Build.props`
+   - `<repo root>/Channels/Cauldron/Directory.Build.props`
+   - `<repo root>/Channels/Rune/Directory.Build.props`
+   - `<repo root>/Channels/Grimoire/Directory.Build.props`
+   - `<repo root>/Examples/Examples.csproj`
+   - `<repo root>/PromptHarness/PromptHarness.csproj`
+   - `<repo root>/Alembic/Directory.Build.props`
+   - `<repo root>/Alembic/PromptHarness/PromptHarness.csproj`
 
 4. **Add new section in CHANGELOG.md**
-   - Read `/home/marco/RiderProjects/Morgana/CHANGELOG.md`
+   - Read `<repo root>/CHANGELOG.md`
    - Insert a new section right after the header and preamble
    - **For normal version bumps** (Y increment):
    ```

@@ -48,7 +48,7 @@
     <IsTestProject>true</IsTestProject>
 
     <!-- Version Information -->
-    <Version>0.28.0</Version>
+    <Version>0.29.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
 

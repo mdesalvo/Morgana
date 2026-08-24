@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.29.0] - UNDER DEVELOPMENT
+### ✨ Added
+
+### 🔄 Changed
+
+### 🐛 Fixed
+
+### 🚀 Future Enablement
+
+
 ## [0.28.0] - 2026-08-23
 ### 🎯 Major Feature: Alembic — Turnkey Domain Onboarding
 This release introduces **Alembic**, a Blazor Server workbench that distils a live interview with a domain expert into a complete, ready-to-build **Morgana domain** — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — **with no prompt ever authored by hand**.
