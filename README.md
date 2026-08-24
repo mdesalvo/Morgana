@@ -255,7 +255,7 @@ dotnet build ./Channels/Cauldron
 dotnet build ./Channels/Grimoire
 dotnet build ./Channels/Rune
 
-# 🔨 Alembic, the authoring workbench (optional, work in progress)
+# 🔨 Alembic, the authoring workbench (optional)
 #    Not part of a running Morgana: it talks to no backend, only to an LLM,
 #    so it is profile-gated in compose and never started by `up`.
 dotnet build ./Alembic
