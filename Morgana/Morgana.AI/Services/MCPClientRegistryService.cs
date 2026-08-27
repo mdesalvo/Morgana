@@ -120,25 +120,24 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         logger.LogInformation("Disconnecting {McpClientsCount} MCP clients...", mcpClients.Count);
 
         // Disconnect in parallel (network I/O may block); failures caught per-client to avoid cascading
-        List<Task> disconnectTasks =
-        [
-            .. mcpClients.Select(kvp => Task.Run(async () =>
-            {
-                try
-                {
-                    await kvp.Value.DisposeAsync();
-                    logger.LogInformation("Disconnected MCP client: {KvpKey}", kvp.Key);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error disconnecting MCP client: {KvpKey}", kvp.Key);
-                }
-            }))
-        ];
-        await Task.WhenAll(disconnectTasks);
+        await Task.WhenAll(mcpClients.Select(kvp => DisconnectOneAsync(kvp.Key, kvp.Value)));
         mcpClients.Clear();
 
         logger.LogInformation("All MCP clients disconnected");
+    }
+
+    /// <summary>Disposes a single pooled client, swallowing and logging any failure.</summary>
+    private async Task DisconnectOneAsync(string key, MCPClient client)
+    {
+        try
+        {
+            await client.DisposeAsync();
+            logger.LogInformation("Disconnected MCP client: {Key}", key);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error disconnecting MCP client: {Key}", key);
+        }
     }
 
     // IDisposable / IAsyncDisposable

@@ -152,7 +152,7 @@ public class MorganaAgentAdapter
         Type agentType,
         string conversationId,
         Func<AgentSession?> sessionAccessor,
-        Action<string, object>? sharedContextCallback = null)
+        Func<string, object, Task>? sharedContextCallback = null)
         // The single sync-over-async point of the whole creation path, and it is a structural
         // boundary rather than a shortcut: a MorganaAgent is materialized by Akka through
         // DependencyResolver.Props, i.e. inside a constructor, which offers no async seam. Everything
@@ -176,7 +176,7 @@ public class MorganaAgentAdapter
         Type agentType,
         string conversationId,
         Func<AgentSession?> sessionAccessor,
-        Action<string, object>? sharedContextCallback = null)
+        Func<string, object, Task>? sharedContextCallback = null)
     {
         // 1) Identity: the [HandlesIntent] attribute is the agent's contract. Its absence
         //    is a wiring bug (a MorganaAgent subclass that forgot the attribute), so fail
@@ -239,7 +239,7 @@ public class MorganaAgentAdapter
         //     agent creation (an MCP-only agent simply ends up with no tools rather than
         //     failing to exist). They stay apart from the native adapter because they need
         //     nothing from it: each one arrives already an AIFunction.
-        List<AIFunction> mcpTools = RegisterMCPTools(agentType);
+        List<AIFunction> mcpTools = await RegisterMCPToolsAsync(agentType);
 
         // 7) Resolve THIS agent's own tier client/pricing (never the framework-default
         //    client) and wrap it in a per-agent dust meter. The role label
@@ -307,7 +307,7 @@ public class MorganaAgentAdapter
     private MorganaAIContextProvider CreateAIContextProvider(
         string agentName,
         IEnumerable<Records.ToolDefinition> tools,
-        Action<string, object>? sharedContextCallback = null)
+        Func<string, object, Task>? sharedContextCallback = null)
     {
         // Derive the shared-variable allow-list from the tool definitions: a parameter is
         // cross-agent shared only if it is BOTH flagged Shared AND context-scoped. The
@@ -478,7 +478,7 @@ public class MorganaAgentAdapter
     /// </summary>
     /// <param name="agentType">Agent type to inspect for [UsesMCPServer] attributes</param>
     /// <returns>Discovered tools as AIFunctions, empty if no servers declared</returns>
-    private List<AIFunction> RegisterMCPTools(Type agentType)
+    private async Task<List<AIFunction>> RegisterMCPToolsAsync(Type agentType)
     {
         // An agent may declare several [UsesMCPServer] (multiple servers, mixed
         // Http/Stdio) — collect them all, not just the first.
@@ -505,7 +505,7 @@ public class MorganaAgentAdapter
             // server costs that server's tools, nothing more.
             try
             {
-                mcpTools.AddRange(DiscoverMCPToolsFromServer(attribute));
+                mcpTools.AddRange(await DiscoverMCPToolsFromServerAsync(attribute));
             }
             catch (Exception ex)
             {
@@ -523,12 +523,12 @@ public class MorganaAgentAdapter
     /// </summary>
     /// <param name="serverAttribute">Attribute declaring the MCP server (transport, command, args)</param>
     /// <returns>Server's tools as AIFunctions</returns>
-    private IList<AIFunction> DiscoverMCPToolsFromServer(UsesMCPServerAttribute serverAttribute)
+    private async Task<IList<AIFunction>> DiscoverMCPToolsFromServerAsync(UsesMCPServerAttribute serverAttribute)
     {
         logger.LogInformation("Registering MCP tools from server: {ServerAttributeCommand}", serverAttribute.Command);
 
-        MCPClient mcpClient = imcpClientRegistryService.GetOrCreateClientAsync(serverAttribute).GetAwaiter().GetResult();
-        IList<McpClientTool> mcpTools = mcpClient.DiscoverToolsAsync().GetAwaiter().GetResult();
+        MCPClient mcpClient = await imcpClientRegistryService.GetOrCreateClientAsync(serverAttribute);
+        IList<McpClientTool> mcpTools = await mcpClient.DiscoverToolsAsync();
 
         // A reachable server that advertises zero tools is not an error (it may expose
         // none yet, or only prompts/resources): warn for visibility and return — there is

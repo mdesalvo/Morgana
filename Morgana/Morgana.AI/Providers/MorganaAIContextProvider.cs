@@ -49,9 +49,10 @@ public class MorganaAIContextProvider : AIContextProvider
     /// <summary>
     /// Invoked when a shared variable is written. Wired by MorganaAgent to persist the value
     /// into the conversation-scoped <c>shared_context</c> registry, where every agent of the
-    /// conversation can hydrate it at the start of its next turn.
+    /// conversation can hydrate it at the start of its next turn. Awaited by the writing tool
+    /// call, so the persisted write completes before the turn issues its next tool call.
     /// </summary>
-    public Action<string, object>? OnSharedContextUpdate { get; set; }
+    public Func<string, object, Task>? OnSharedContextUpdate { get; set; }
 
     /// <summary>
     /// Keys used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
@@ -119,7 +120,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// to persist the value into the conversation-scoped <c>shared_context</c> registry where
     /// other agents can hydrate it on their next turn.
     /// </summary>
-    public void SetVariable(AgentSession session, string variableName, object variableValue)
+    public async Task SetVariableAsync(AgentSession session, string variableName, object variableValue)
     {
         MorganaContextState contextState = sessionState.GetOrInitializeState(session);
         contextState.Variables[variableName] = variableValue;
@@ -130,8 +131,8 @@ public class MorganaAIContextProvider : AIContextProvider
         logger.LogInformation(
             "{MorganaAiContextProviderName} SET {Private} '{VariableName}' = '{VariableValue}'", nameof(MorganaAIContextProvider), isShared ? "SHARED" : "PRIVATE", variableName, variableValue);
 
-        if (isShared)
-            OnSharedContextUpdate?.Invoke(variableName, variableValue);
+        if (isShared && OnSharedContextUpdate is not null)
+            await OnSharedContextUpdate(variableName, variableValue);
     }
 
     /// <summary>
