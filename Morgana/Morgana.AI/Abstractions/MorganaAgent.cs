@@ -150,14 +150,14 @@ public class MorganaAgent : MorganaActor
     /// </remarks>
     /// <param name="key">Name of the shared variable.</param>
     /// <param name="value">Value to persist.</param>
-    protected void OnSharedContextUpdate(string key, object value)
+    protected async Task OnSharedContextUpdate(string key, object value)
     {
         agentLogger.LogInformation("Agent {AgentIntent} writing shared context variable: {Key}", AgentIntent, key);
 
-        // Block the actor briefly to honour first-write-wins ordering: the next inbound message
-        // (e.g. another tool call from the same turn) must observe the previous shared write.
-        persistenceService.UpsertSharedVariableAsync(conversationId, key, value, AgentIntent)
-            .GetAwaiter().GetResult();
+        // Awaited by the tool call that wrote the variable, itself running inside the agent's
+        // ReceiveAsync: the persisted write lands before the turn issues its next tool call,
+        // preserving first-write-wins ordering without blocking the actor thread.
+        await persistenceService.UpsertSharedVariableAsync(conversationId, key, value, AgentIntent);
     }
 
     /// <summary>

@@ -82,16 +82,15 @@ public class MorganaTool
     /// <param name="variableName">Name of the variable to set (e.g. "customerCode", "invoiceId").</param>
     /// <param name="variableValue">Value to store.</param>
     /// <returns>Confirmation message for the LLM.</returns>
-    public Task<object> SetContextVariable(string variableName, string variableValue)
+    public async Task<object> SetContextVariable(string variableName, string variableValue)
     {
         ToolContext ctx = getToolContext();
-        ctx.Provider.SetVariable(ctx.Session, variableName, variableValue);
+        await ctx.Provider.SetVariableAsync(ctx.Session, variableName, variableValue);
 
         toolLogger.LogInformation(
             "{MorganaToolName} ({Name}) SET variable '{VariableName}' into agent context. Value is: {Value}", nameof(MorganaTool), GetType().Name, variableName, variableValue);
 
-        return Task.FromResult<object>(
-            $"Information {variableName} inserted in context with value: {variableValue}");
+        return $"Information {variableName} inserted in context with value: {variableValue}";
     }
 
     // =========================================================================
@@ -108,17 +107,16 @@ public class MorganaTool
     /// <c>false</c> when the agent has finished and the conversation may return to Morgana.
     /// </param>
     /// <returns>Confirmation message for the LLM.</returns>
-    public Task<object> SetTurnContinuation(bool turnContinuation)
+    public async Task<object> SetTurnContinuation(bool turnContinuation)
     {
         ToolContext ctx = getToolContext();
-        ctx.Provider.SetVariable(ctx.Session, "turn_continuation", turnContinuation);
+        await ctx.Provider.SetVariableAsync(ctx.Session, "turn_continuation", turnContinuation);
 
         toolLogger.LogInformation("LLM set turn continuation to {TurnContinuation} via SetTurnContinuation tool", turnContinuation);
 
-        return Task.FromResult<object>(
-            turnContinuation
-                ? "Turn continuation set: you remain in service and await the user's next turn."
-                : "Turn continuation cleared: this turn concludes your handling of the request.");
+        return turnContinuation
+            ? "Turn continuation set: you remain in service and await the user's next turn."
+            : "Turn continuation cleared: this turn concludes your handling of the request.";
     }
 
     // =========================================================================
@@ -140,24 +138,23 @@ public class MorganaTool
     /// <see cref="QuickReply"/> instances. The values are re-serialized to JSON before being stored
     /// in the ephemeral <c>quick_replies</c> context variable, where downstream readers expect a string.</para>
     /// </remarks>
-    public Task<object> SetQuickReplies(List<QuickReply> quickReplies)
+    public async Task<object> SetQuickReplies(List<QuickReply> quickReplies)
     {
         // Validate input — empty list is a no-op
         if (quickReplies == null || quickReplies.Count == 0)
         {
             toolLogger.LogWarning("SetQuickReplies called with no quick replies");
-            return Task.FromResult<object>("Warning: No quick replies were set (empty data).");
+            return "Warning: No quick replies were set (empty data).";
         }
 
         // Store serialized quick replies in ephemeral context; agents retrieve them via ExecuteAgentAsync before sending response
         ToolContext ctx = getToolContext();
-        ctx.Provider.SetVariable(ctx.Session, "quick_replies",
+        await ctx.Provider.SetVariableAsync(ctx.Session, "quick_replies",
             JsonSerializer.Serialize(quickReplies, Records.DefaultJsonSerializerOptions));
 
         toolLogger.LogInformation("LLM set {Count} quick reply buttons via SetQuickReplies tool", quickReplies.Count);
 
-        return Task.FromResult<object>(
-            $"Quick reply buttons set successfully. The user will see {quickReplies.Count} interactive options. Now provide your text response to the user - the quick reply buttons will appear below your message.");
+        return $"Quick reply buttons set successfully. The user will see {quickReplies.Count} interactive options. Now provide your text response to the user - the quick reply buttons will appear below your message.";
     }
 
     // =========================================================================
@@ -180,7 +177,7 @@ public class MorganaTool
     /// <item>Maximum 50 components total</item>
     /// </list>
     /// </remarks>
-    public Task<object> SetRichCard(string richCard)
+    public async Task<object> SetRichCard(string richCard)
     {
         try
         {
@@ -190,7 +187,7 @@ public class MorganaTool
             if (parsedRichCard == null)
             {
                 toolLogger.LogWarning("SetRichCard called with invalid JSON structure");
-                return Task.FromResult<object>("Error: Rich card JSON structure is invalid.");
+                return "Error: Rich card JSON structure is invalid.";
             }
 
             // Enforce depth constraint (max 3 levels: card → section → nested content)
@@ -198,8 +195,7 @@ public class MorganaTool
             if (depth > 3)
             {
                 toolLogger.LogWarning("SetRichCard called with excessive nesting depth: {Depth} (max 3)", depth);
-                return Task.FromResult<object>(
-                    $"Error: Rich card exceeds maximum nesting depth of 3 (found: {depth}). Please simplify the card structure.");
+                return $"Error: Rich card exceeds maximum nesting depth of 3 (found: {depth}). Please simplify the card structure.";
             }
 
             // Enforce component limit (max 50 total, including nested components in sections)
@@ -207,27 +203,24 @@ public class MorganaTool
             if (totalComponents > 50)
             {
                 toolLogger.LogWarning("SetRichCard called with too many components: {TotalComponents} (max 50)", totalComponents);
-                return Task.FromResult<object>(
-                    $"Error: Rich card has too many components: {totalComponents} (max 50). Please create a more focused card.");
+                return $"Error: Rich card has too many components: {totalComponents} (max 50). Please create a more focused card.";
             }
 
             // Store original JSON string (not the parsed object) in ephemeral context; agents retrieve it via ExecuteAgentAsync
             ToolContext ctx = getToolContext();
-            ctx.Provider.SetVariable(ctx.Session, "rich_card", richCard);
+            await ctx.Provider.SetVariableAsync(ctx.Session, "rich_card", richCard);
 
             toolLogger.LogInformation(
                 "LLM set rich card '{Title}' with {TotalComponents} components (depth: {Depth}) via SetRichCard tool",
                 parsedRichCard.Title, totalComponents, depth);
 
-            return Task.FromResult<object>(
-                $"Rich card set successfully. The user will see a structured visual card titled '{parsedRichCard.Title}'. You can now provide additional context or explanation in text if needed.");
+            return $"Rich card set successfully. The user will see a structured visual card titled '{parsedRichCard.Title}'. You can now provide additional context or explanation in text if needed.";
         }
         catch (JsonException ex)
         {
             // JSON parsing failed; return error message the LLM can act on
             toolLogger.LogError(ex, "Failed to parse rich card JSON in SetRichCard");
-            return Task.FromResult<object>(
-                "Error: Rich card JSON format is invalid. Please check the structure and try again.");
+            return "Error: Rich card JSON format is invalid. Please check the structure and try again.";
         }
     }
 

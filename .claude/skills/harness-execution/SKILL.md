@@ -1,3 +1,8 @@
+---
+name: harness-execution
+description: Runs PromptHarness on demand against the currently configured LLM provider, over a user-chosen scope and run/pass threshold. Live LLM calls, real cost. Use when the user says "run the harness", "execute the prompt harness", "launch the harness".
+---
+
 # HarnessExecution
 
 Runs the PromptHarness (`PromptHarness/PromptHarness.csproj`) on demand against whichever LLM

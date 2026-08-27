@@ -1,3 +1,8 @@
+---
+name: bump-version
+description: Automates version increment for Morgana and all dependent projects when starting a new development cycle, or when preparing a production hotfix. Use when the user says things like "we just released", "bump the version", "start a new version", "prepare a hotfix".
+---
+
 # bump_version
 
 Automates version increment for Morgana and all dependent projects when starting a new development cycle.

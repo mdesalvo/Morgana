@@ -842,10 +842,19 @@ public static class Records
     /// <param name="Name">Tool method name (must match actual method name in MorganaTool class)</param>
     /// <param name="Description">Tool description for LLM understanding</param>
     /// <param name="Parameters">List of tool parameter definitions</param>
+    /// <param name="Reserved">
+    /// True for the five morgana.json base tools (GetContextVariable, SetContextVariable,
+    /// SetTurnContinuation, SetQuickReplies, SetRichCard). Never set from configuration: a domain
+    /// tool declaring this in agents.json has it forced back to false by MorganaAgentAdapter —
+    /// it is stamped true only where MorganaAgentAdapter reads morgana.json's own Tools array,
+    /// so no JSON a plugin author writes can ever make it stick. Consumers (e.g. the reverse
+    /// guard-rail wrapper) use it to skip tools whose output the framework itself controls.
+    /// </param>
     public record ToolDefinition(
         string Name,
         string Description,
-        IReadOnlyList<ToolParameter> Parameters);
+        IReadOnlyList<ToolParameter> Parameters,
+        bool Reserved = false);
 
     /// <summary>
     /// Tool parameter: name (must match method param), description, Required flag. Scope: "context" (GetContextVariable)
