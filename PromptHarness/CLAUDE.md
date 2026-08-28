@@ -29,6 +29,9 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~HarnessSmokeTests"
 # the blocking group (context handling, 5/5 threshold)
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
 
+# the peer-consultation group (5/5, blocking)
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerConsultationTests"
+
 # the behavioural group (default threshold)
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~BehaviourTests"
 
@@ -103,6 +106,12 @@ The judge is skipped once a turn already fails structurally (saves a live call).
   reverts the prose rather than lowering the threshold.
 - `BehaviourTests` — default threshold (`Harness:DefaultRuns`/`DefaultMinPasses`, 5/4). Protects
   visible presentation: button emission, card rendering, conversation closure.
+- `PeerConsultationTests` — blocking at 5/5, for the same reason as the group above: the failure is
+  silent. An agent that quietly stops consulting a colleague still answers, just with less than it
+  could have known; an agent that reveals the exchange still answers, just having shown the user
+  machinery they were never meant to see. Unlike every other group it also depends on a **topology** —
+  the scenarios name agents that must still declare `[ConsultsAgent]` of one another — so a failure
+  here has a second thing it can mean, and the attributes are the first place to look.
 - `GuardTests` / `ActorTests` — the **actors** group, aimed at the four framework prompts none of
   the above meaningfully exercise: Guard, Classifier, ChannelAdapter, Presentation. Three production
   mechanisms stood in the way of a straightforward scenario, and each got its own workaround rather

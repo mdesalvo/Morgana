@@ -1,8 +1,17 @@
+using System.Reflection;
 using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
 using Morgana.AI;
+using A2A;
+using A2A.AspNetCore;
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Hosting;
+using Microsoft.Agents.AI.Hosting.A2A;
 using Morgana.AI.Adapters;
+using Morgana.AI.Attributes;
+using Morgana.AI.Abstractions;
+using Morgana.AI.SessionStores;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.AI.Telemetry;
@@ -16,6 +25,11 @@ using Morgana.Web.Services;
 // Stack: ASP.NET Core REST + SignalR real-time + Akka.NET orchestration + plugin-based agents.
 // LLM providers: Anthropic, Azure OpenAI, OpenAI, Ollama. Pipeline: Guard → Classifier → Router → Agents.
 // ==============================================================================
+
+// Microsoft marks the A2A hosting run-mode API experimental (MEAI001). It is the documented way to
+// declare that an agent answers inline rather than as a background task, which is exactly what a
+// consultation is, so it is used deliberately — as MorganaAgentAdapter already does for IChatReducer.
+#pragma warning disable MEAI001
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -124,6 +138,8 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IPromptResolverService: Resolves prompt templates from configuration
 // - IPromptComposerService: Assembles what the model reads (composed prompt, tool descriptions, held-context declaration)
 // - IAgentRegistryService: Maps intents to agent types for routing
+// - IAgentDirectoryService: Describes agents to one another as A2A cards, for peer consultation
+// - IHostAddressService: Reports the address this instance bound, so a card names a callable endpoint
 // - IGuardRailService: Checks user messages for content safety and compliance
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
@@ -132,6 +148,8 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryService>();
 builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistryService>();
 builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
+builder.Services.AddSingleton<IHostAddressService, KestrelHostAddressService>();
+builder.Services.AddSingleton<IAgentDirectoryService, ConfigurationAgentDirectoryService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptComposerService>();
 builder.Services.AddSingleton<ILLMTierValidationService, RequiresLLMTierValidationService>();
@@ -282,6 +300,64 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddHostedService<AkkaHostedService>();
 
 // ==============================================================================
+// SECTION 9.5: A2A Publication - agents of this installation, exposed to agents
+// ==============================================================================
+// An agent named by somebody's [ConsultsAgent] is published as an A2A agent, so that colleague is
+// reached through the protocol rather than through a private path. The chain is entirely Microsoft's:
+// AddA2AServer wraps the agent in an AIHostAgent and an A2AAgentHandler, MapA2AJsonRpc exposes it,
+// and MapWellKnownAgentCard makes it discoverable. Morgana contributes exactly two pieces: the agent
+// carrying a request to the conversation's actor (MorganaHostedAgent) and the session store turning
+// the A2A context id into that conversation's identity (MorganaHostedAgentSessionStore).
+//
+// NOTHING below is stood up when no agent declares a colleague, or when the feature is switched off:
+// no hosted agent, no server, no route, no card. A deployment whose agents do not consult one another
+// is the deployment it was before any of this existed, and pays for A2A neither in surface nor in
+// startup work. Only the intents actually named are published, so an agent nobody consults exposes
+// no endpoint either — publish everything discovered instead, and it becomes one line here.
+
+Dictionary<string, Type> discoveredAgents = HandlesIntentAgentRegistryService.DiscoverAgents();
+
+string[] publishedIntents = builder.Configuration.GetValue("Morgana:AgentToAgent:Enabled", true)
+    ?
+    [
+        .. discoveredAgents.Values
+            .SelectMany(agentType => agentType.GetCustomAttributes<ConsultsAgentAttribute>())
+            .Select(consultsAgent => consultsAgent.Intent)
+            .Where(discoveredAgents.ContainsKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+    ]
+    : [];
+
+TimeSpan a2aRequestTimeout = TimeSpan.FromSeconds(
+    builder.Configuration.GetValue("Morgana:ActorSystem:TimeoutSeconds", 180));
+
+foreach (string publishedIntent in publishedIntents)
+{
+    builder.Services
+        .AddAIAgent(publishedIntent, (serviceProvider, agentName) => new MorganaHostedAgent(
+            agentName,
+            serviceProvider.GetRequiredService<IAgentDirectoryService>()
+                .GetAgentCardAsync(agentName).GetAwaiter().GetResult()?.Description ?? agentName,
+            serviceProvider.GetRequiredService<IAgentRegistryService>(),
+            serviceProvider.GetRequiredService<IPromptComposerService>(),
+            serviceProvider,
+            a2aRequestTimeout,
+            serviceProvider.GetRequiredService<ILogger>()))
+
+        // The session store is where a request's A2A context id becomes a Morgana conversation.
+        // Not isolation-key scoped: the context id IS the partition here, and Morgana's own
+        // per-conversation database already isolates everything the conversation owns.
+        .WithSessionStore(
+            (serviceProvider, agentName) => new MorganaHostedAgentSessionStore(serviceProvider.GetRequiredService<ILogger>()),
+            ServiceLifetime.Singleton,
+            false)
+
+        // Runs the agent inline and answers with a Message rather than a Task: a consultation is a
+        // single question answered in full, which is what the published card advertises.
+        .AddA2AServer(options => options.AgentRunMode = AgentRunMode.DisallowBackground);
+}
+
+// ==============================================================================
 // SECTION 10: Application Pipeline Configuration
 // ==============================================================================
 // Configures the HTTP request pipeline and middleware
@@ -295,6 +371,57 @@ app.UseRouting();                       // Enable endpoint routing
 app.UseAuthorization();                 // Enable authorization middleware
 app.MapControllers();                   // Map REST API controllers
 app.MapHub<MorganaHub>("/morganaHub");  // Map SignalR hub endpoint
+
+// One JSON-RPC endpoint and one well-known agent card per published agent. The card is what makes
+// the agent discoverable: A2ACardResolver reads it to learn which interface to bind a client to, and
+// Morgana's own directory resolves a colleague through that same fetch rather than short-circuiting
+// to an in-process object.
+if (publishedIntents.Length > 0)
+{
+    IAgentDirectoryService agentDirectory = app.Services.GetRequiredService<IAgentDirectoryService>();
+    IAuthenticationService a2aAuthentication = app.Services.GetRequiredService<IAuthenticationService>();
+
+    foreach (string publishedIntent in publishedIntents)
+    {
+        string agentPath = $"{ConfigurationAgentDirectoryService.AgentPathPrefix}/{publishedIntent}";
+
+        AgentCard? publishedCard = await agentDirectory.GetAgentCardAsync(publishedIntent);
+        if (publishedCard is null)
+            continue;
+
+        app.MapA2AJsonRpc(publishedIntent, agentPath)
+           .AddEndpointFilter(async (invocationContext, next) =>
+                await AuthenticateA2ARequestAsync(invocationContext, next, a2aAuthentication));
+
+        // The card itself stays open: discovery is what tells a caller how to authenticate, and a
+        // card behind authentication cannot be found by anyone not already knowing how to reach it.
+        app.MapWellKnownAgentCard(publishedCard, agentPath);
+    }
+
+    // The cards above were projected while the endpoints were still being mapped, before Kestrel had
+    // bound anything, so none of them names an address yet. The moment it has, the directory fills
+    // them in — the well-known endpoint serialises its card on every request, so a card read after
+    // this point carries the interface, and nothing ever had to be told the application's own URL.
+    app.Lifetime.ApplicationStarted.Register(() => agentDirectory.PublishInterfacesAsync().GetAwaiter().GetResult());
+}
+
+// The A2A endpoints are mapped outside the controllers, so they carry no gate of their own. This
+// applies the very gate MorganaController applies: the same issuer whitelist, the same audience,
+// fail-closed. An agent consulting a colleague presents a token issued under the "morgana" issuer.
+static async ValueTask<object?> AuthenticateA2ARequestAsync(
+    EndpointFilterInvocationContext invocationContext,
+    EndpointFilterDelegate next,
+    IAuthenticationService authenticationService)
+{
+    string? authorization = invocationContext.HttpContext.Request.Headers.Authorization.FirstOrDefault();
+
+    if (authorization is null || !authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        return Results.Unauthorized();
+
+    Records.AuthenticationResult authentication = await authenticationService.AuthenticateAsync(authorization["Bearer ".Length..]);
+
+    return authentication.IsAuthenticated ? await next(invocationContext) : Results.Unauthorized();
+}
 
 // ==============================================================================
 // SECTION 11: Application Startup

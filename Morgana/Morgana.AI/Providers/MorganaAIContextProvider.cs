@@ -16,13 +16,24 @@ public class MorganaAIContextProvider : AIContextProvider
 {
     /// <summary>
     /// Reserved keys the framework writes into the same dictionary to carry a turn's presentation
-    /// decisions (see <c>MorganaTool.SetTurnContinuation/SetQuickReplies/SetRichCard</c>, drained by
-    /// <c>MorganaAgent</c> at the end of every turn). They are never declared to the model: they are
-    /// not inputs to resolve, and naming a stale one would invite the next turn to re-read buttons or
-    /// a card that has already been rendered and consumed.
+    /// decisions (drained by <c>MorganaAgent</c> at the end of every turn) and its peer-consultation
+    /// bookkeeping (see <c>MorganaAgentAdapter</c>). They are never declared to the model: naming a
+    /// stale one would invite the next turn to re-read a card already rendered and consumed.
     /// </summary>
     private static readonly ImmutableHashSet<string> EphemeralVariableNames =
-        ["turn_continuation", "quick_replies", "rich_card"];
+        ["turn_continuation", "quick_replies", "rich_card", ServingConsultationKey, ConsultationRoundsKey];
+
+    /// <summary>
+    /// Marks the session of an agent currently answering a colleague. Read when that agent's own peer
+    /// functions are invoked, to refuse a chained consultation and keep the call graph acyclic.
+    /// </summary>
+    public const string ServingConsultationKey = "peer_consultation";
+
+    /// <summary>
+    /// Counts the consultation rounds the agent has spent on the current user turn, so an exchange
+    /// that fails to converge has a ceiling.
+    /// </summary>
+    public const string ConsultationRoundsKey = "peer_consultation_rounds";
 
     /// <summary>Logger for provider-level diagnostics.</summary>
     private readonly ILogger logger;

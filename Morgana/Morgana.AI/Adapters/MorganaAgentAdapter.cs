@@ -1,6 +1,10 @@
 using System.Reflection;
+using System.Text.Json;
+using A2A;
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.A2A;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using Morgana.AI.Abstractions;
@@ -61,6 +65,17 @@ public class MorganaAgentAdapter
     protected readonly IDustLimitService dustLimitService;
 
     /// <summary>
+    /// Describes the agents of the ecosystem to one another. Consulted once per
+    /// <c>[ConsultsAgent]</c> declaration, to obtain the colleague's card.
+    /// </summary>
+    protected readonly IAgentDirectoryService agentDirectoryService;
+
+    /// <summary>
+    /// Application configuration, read for the peer-consultation budget and timeout.
+    /// </summary>
+    protected readonly IConfiguration configuration;
+
+    /// <summary>
     /// Logger instance for agent creation diagnostics and tool registration tracking.
     /// </summary>
     protected readonly ILogger logger;
@@ -70,6 +85,12 @@ public class MorganaAgentAdapter
     /// Loaded once during adapter initialization from morgana.json.
     /// </summary>
     protected readonly Records.Prompt morganaPrompt;
+
+    /// <summary>
+    /// Prefix of the function name under which a colleague is offered to a model, and the marker by
+    /// which the asking agent recognises a consultation in its own history when clearing it out.
+    /// </summary>
+    public const string PeerFunctionNamePrefix = "consult_";
 
     /// <summary>
     /// The morgana.json base tools (GetContextVariable, SetContextVariable,
@@ -98,6 +119,8 @@ public class MorganaAgentAdapter
     /// <param name="imcpClientRegistryService">Service for managing MCP server connections</param>
     /// <param name="chatReducerService">Service for reducing context window sent to LLM</param>
     /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
+    /// <param name="agentDirectoryService">Supplies the card of each declared colleague and resolves it into a callable agent</param>
+    /// <param name="configuration">Application configuration, read for the peer-consultation budget and timeout</param>
     /// <param name="logger">Logger instance for diagnostics</param>
     public MorganaAgentAdapter(
         ILLMService llmService,
@@ -107,6 +130,8 @@ public class MorganaAgentAdapter
         IMCPClientRegistryService imcpClientRegistryService,
         HistoryReducerService chatReducerService,
         IDustLimitService dustLimitService,
+        IAgentDirectoryService agentDirectoryService,
+        IConfiguration configuration,
         ILogger logger)
     {
         this.llmService = llmService;
@@ -116,6 +141,8 @@ public class MorganaAgentAdapter
         this.imcpClientRegistryService = imcpClientRegistryService;
         this.chatReducerService = chatReducerService;
         this.dustLimitService = dustLimitService;
+        this.agentDirectoryService = agentDirectoryService;
+        this.configuration = configuration;
         this.logger = logger;
 
         morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
@@ -241,6 +268,17 @@ public class MorganaAgentAdapter
         //     nothing from it: each one arrives already an AIFunction.
         List<AIFunction> mcpTools = await RegisterMCPToolsAsync(agentType);
 
+        // 6c) Collect the colleagues this agent declares it may consult. Like MCP tools they arrive
+        //     already AIFunctions and bypass the native adapter entirely — they are not declared in
+        //     agents.json, are not implemented by any MorganaTool, and their prose is the colleague's
+        //     own card rather than something this agent's author wrote.
+        List<AIFunction> peerAgents = await RegisterPeerAgentsAsync(
+            agentType,
+            intentAttribute.Intent,
+            conversationId,
+            sessionAccessor,
+            morganaAIContextProvider);
+
         // 7) Resolve THIS agent's own tier client/pricing (never the framework-default
         //    client) and wrap it in a per-agent dust meter. The role label
         //    ("Morgana (Billing/Efficiency)" etc.) attributes consumption to this agent+tier in
@@ -282,7 +320,7 @@ public class MorganaAgentAdapter
                 ChatOptions = new ChatOptions
                 {
                     Instructions = await promptComposerService.ComposeAgentInstructionsAsync(agentPrompt),
-                    Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools]
+                    Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents]
                 }
             });
 
@@ -470,6 +508,190 @@ public class MorganaAgentAdapter
             morganaToolAdapter.AddTool(toolDefinition.Name, toolImplementation, toolDefinition);
         }
     }
+
+    /// <summary>
+    /// Builds one callable function per colleague the agent declares with <c>[ConsultsAgent]</c>.
+    /// </summary>
+    /// <remarks>
+    /// Best-effort as MCP registration is: an unreachable colleague costs that colleague and nothing
+    /// more. Startup validation already rejects a declaration naming no agent, so a failure here
+    /// means the A2A endpoints are unreachable, not that the topology is wrong.
+    /// </remarks>
+    /// <param name="conversationId">Conversation the consultations are scoped to, carried as the A2A context id</param>
+    /// <param name="contextProvider">Context store of the asking agent, holding the per-turn consultation budget</param>
+    /// <returns>One AIFunction per resolvable colleague, empty if none is declared</returns>
+    private async Task<List<AIFunction>> RegisterPeerAgentsAsync(
+        Type agentType,
+        string callerIntent,
+        string conversationId,
+        Func<AgentSession?> sessionAccessor,
+        MorganaAIContextProvider contextProvider)
+    {
+        ConsultsAgentAttribute[] attributes = [.. agentType.GetCustomAttributes<ConsultsAgentAttribute>()];
+
+        if (attributes.Length == 0)
+        {
+            logger.LogDebug("Agent {AgentTypeName} consults no colleague", agentType.Name);
+            return [];
+        }
+
+        // The whole mechanism is switchable off in one place: with it disabled an agent runs exactly
+        // as it did before, unaware it ever had colleagues, which is what makes the feature safe to
+        // turn off in a deployment that cannot afford the extra turns.
+        if (!configuration.GetValue("Morgana:AgentToAgent:Enabled", true))
+        {
+            logger.LogInformation("Peer consultation is disabled: agent {AgentTypeName} will not see its {Count} declared colleague(s)", agentType.Name, attributes.Length);
+            return [];
+        }
+
+        int maxRoundsPerTurn = configuration.GetValue("Morgana:AgentToAgent:MaxRoundsPerTurn", 4);
+
+        List<AIFunction> peerAgents = [];
+
+        foreach (ConsultsAgentAttribute attribute in attributes)
+        {
+            AgentCard? peerCard = await agentDirectoryService.GetAgentCardAsync(attribute.Intent);
+            if (peerCard is null)
+            {
+                logger.LogWarning("Agent {AgentTypeName} declares a consultation of '{PeerIntent}', which the directory does not know", agentType.Name, attribute.Intent);
+                continue;
+            }
+
+            // Resolved through A2A discovery, so what comes back is Microsoft.Agents.AI.A2A's own
+            // A2AAgent over the interface the colleague's card advertises — the identical object an
+            // agent in another process would obtain for the same colleague.
+            AIAgent? peerAgent = await agentDirectoryService.ResolvePeerAgentAsync(attribute.Intent, callerIntent);
+            if (peerAgent is null)
+            {
+                logger.LogWarning("Agent {AgentTypeName} cannot reach declared colleague '{PeerIntent}'; it will run without it", agentType.Name, attribute.Intent);
+                continue;
+            }
+
+            // The A2A context identifier is the conversation, bound once here rather than left to a
+            // per-call default: every consultation of this colleague belongs to one exchange, and it
+            // is that id the answering side turns back into the conversation's actor.
+            AgentSession peerSession = peerAgent is A2AAgent a2aPeerAgent
+                ? await a2aPeerAgent.CreateSessionAsync(conversationId)
+                : await peerAgent.CreateSessionAsync();
+
+            // Morgana's rules sit above the colleague as pipeline middleware, in the shape the agent
+            // framework defines, leaving the resolved A2AAgent untouched. The closure holds nothing
+            // that can go stale: it captures immutables only, reads the live session through
+            // sessionAccessor() at invocation, and never captures the colleague — innerAgent is handed
+            // in by the pipeline on every call. One closure per declared colleague per agent, and
+            // agents are per-conversation, so none is shared. The streaming delegate is left null and
+            // the framework bridges streaming onto the run delegate, so the guards cannot be skipped.
+            string peerIntent = attribute.Intent;
+            AIAgent guardedPeerAgent = new AIAgentBuilder(peerAgent)
+                .Use(async (messages, session, options, innerAgent, cancellationToken) =>
+                {
+                    string? refusal = await ApplyPeerGuardsAsync(callerIntent, peerIntent, sessionAccessor(), maxRoundsPerTurn, contextProvider);
+
+                    return refusal is not null
+                        ? new AgentResponse(new ChatMessage(ChatRole.Assistant, refusal))
+                        : await innerAgent.RunAsync(messages, session, WithDeclaredCaller(options, callerIntent), cancellationToken);
+                }, null)
+                .Build();
+
+            // The function name is what the model calls, so it is derived from the colleague's intent
+            // rather than from the card's free-form name, and sanitized because a name is constrained
+            // where a card's name is not.
+            peerAgents.Add(guardedPeerAgent.AsAIFunction(
+                new AIFunctionFactoryOptions
+                {
+                    Name = ToFunctionName(attribute.Intent),
+                    Description = await promptComposerService.ComposePeerDescriptionAsync(peerCard)
+                },
+                peerSession));
+
+            logger.LogInformation("Agent {AgentTypeName} may consult '{PeerIntent}'", agentType.Name, attribute.Intent);
+        }
+
+        return peerAgents;
+    }
+
+    /// <summary>
+    /// Applies the two rules a consultation is bound by, and charges the round to the turn's budget
+    /// when they pass.
+    /// </summary>
+    /// <remarks>
+    /// A refusal comes back as an ordinary answer, never an exception: the asking agent is mid-turn
+    /// with a user waiting, and a refused consultation must degrade its answer, not destroy the turn.
+    /// </remarks>
+    /// <param name="callerSession">The asking agent's session, or null when it has none yet.</param>
+    /// <returns>The serialized refusal envelope, or <c>null</c> when the consultation may proceed.</returns>
+    private async Task<string?> ApplyPeerGuardsAsync(
+        string callerIntent,
+        string peerIntent,
+        AgentSession? callerSession,
+        int maxRoundsPerTurn,
+        MorganaAIContextProvider contextProvider)
+    {
+        if (callerSession is null)
+            return null;
+
+        // A colleague may not consult a colleague of its own: the chain stops at one hop, so the call
+        // graph cannot contain a cycle and no caller chain has to travel with the request.
+        if (contextProvider.GetVariable(callerSession, MorganaAIContextProvider.ServingConsultationKey) is not null)
+        {
+            logger.LogWarning("Agent '{CallerIntent}' attempted to consult '{PeerIntent}' while itself answering a colleague", callerIntent, peerIntent);
+            return RefusalEnvelope("You are currently answering a colleague, and a colleague may not consult a further colleague. Answer with what you know.");
+        }
+
+        int roundsSoFar = ReadConsultationRounds(callerSession, contextProvider);
+        if (roundsSoFar >= maxRoundsPerTurn)
+        {
+            logger.LogWarning("Agent '{CallerIntent}' exhausted its {MaxRounds} consultation round(s) for this turn", callerIntent, maxRoundsPerTurn);
+            return RefusalEnvelope($"This exchange has run for {roundsSoFar} rounds and must end now. Answer with what you already have.");
+        }
+
+        await contextProvider.SetVariableAsync(callerSession, MorganaAIContextProvider.ConsultationRoundsKey, roundsSoFar + 1);
+
+        logger.LogInformation("Agent '{CallerIntent}' is consulting '{PeerIntent}' (round {Round})", callerIntent, peerIntent, roundsSoFar + 1);
+
+        return null;
+    }
+
+    /// <summary>
+    /// Returns a copy of the run options declaring who is asking, so nothing outside this call is
+    /// mutated. The A2A layer carries the property as message metadata and hands it back to the
+    /// answering agent, which is how a consultation names its requester without putting it in the text.
+    /// </summary>
+    private static AgentRunOptions WithDeclaredCaller(AgentRunOptions? options, string callerIntent)
+    {
+        AgentRunOptions declaredOptions = options?.Clone() ?? new AgentRunOptions();
+
+        declaredOptions.AdditionalProperties ??= [];
+        declaredOptions.AdditionalProperties[MorganaHostedAgent.CallerIntentPropertyKey] = callerIntent;
+
+        return declaredOptions;
+    }
+
+    /// <summary>
+    /// Reads the asking agent's consultation counter for the current turn, tolerating the
+    /// <see cref="JsonElement"/> form a value takes once its session has been persisted and reloaded.
+    /// </summary>
+    private static int ReadConsultationRounds(AgentSession callerSession, MorganaAIContextProvider contextProvider)
+        => contextProvider.GetVariable(callerSession, MorganaAIContextProvider.ConsultationRoundsKey) switch
+        {
+            int rounds => rounds,
+            JsonElement { ValueKind: JsonValueKind.Number } element => element.GetInt32(),
+            string text when int.TryParse(text, out int parsed) => parsed,
+            _ => 0
+        };
+
+    /// <summary>Renders a refusal in the envelope a colleague's real answer travels in.</summary>
+    private static string RefusalEnvelope(string message)
+        => JsonSerializer.Serialize(new Records.PeerConsultationResponse(message, false), Records.DefaultJsonSerializerOptions);
+
+    /// <summary>Builds the name under which a colleague is offered as a callable function.</summary>
+    /// <remarks>
+    /// Intents are authored freely while a function name is not, so anything outside the permitted
+    /// alphabet folds to an underscore; the prefix keeps a colleague visibly distinct from the
+    /// agent's own tools in the model's tool list.
+    /// </remarks>
+    private static string ToFunctionName(string peerIntent)
+        => $"{PeerFunctionNamePrefix}{new string([.. peerIntent.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_')])}";
 
     /// <summary>
     /// Discovers tools from every MCP server declared on the agent.

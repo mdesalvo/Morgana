@@ -81,6 +81,17 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     public const string TurnTextKey = "morgana:turn_text";
 
     /// <summary>
+    /// Key written into <see cref="ChatMessage.AdditionalProperties"/> of every message an agent
+    /// appends while answering a colleague rather than the user.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="UserFacingMarkerKey"/> cannot express this: it marks which assistant message of a
+    /// turn survives, whereas whole turns must disappear here, question included — and an agent whose
+    /// session holds only consultations carries no marker for the history filter to work from at all.
+    /// </remarks>
+    public const string ConsultationMarkerKey = "morgana:consultation";
+
+    /// <summary>
     /// Initializes a new singleton instance of <see cref="MorganaChatHistoryProvider"/>.
     /// </summary>
     /// <param name="agentIntent">Agent intent label (e.g. "billing") used in log output.</param>

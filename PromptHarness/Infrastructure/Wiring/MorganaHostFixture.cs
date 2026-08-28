@@ -38,6 +38,13 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// </remarks>
 public sealed class MorganaHostFixture : IAsyncLifetime
 {
+    /// <summary>
+    /// Issuer the host signs its own agent-to-agent traffic under. Declared here rather than
+    /// referenced from Morgana.AI: the harness compiles without seeing the framework's internals, and
+    /// the name is part of the configuration contract it targets.
+    /// </summary>
+    private const string PeerIssuerName = "morgana";
+
     /// <summary>Configuration resolved by the harness: the host's own appsettings plus the shared secrets store.</summary>
     public IConfiguration Configuration { get; private set; } = null!;
 
@@ -49,6 +56,13 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
     /// <summary>Symmetric key minted for this run and shared with the host as the <c>harness</c> issuer key.</summary>
     public string IssuerKey { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Key minted for this run under the <c>morgana</c> issuer, which the host uses to sign the A2A
+    /// requests its agents send one another. Separate from <see cref="IssuerKey"/> on purpose: two
+    /// issuers sharing a key would defeat the per-issuer trust model the instance under test relies on.
+    /// </summary>
+    private string peerIssuerKey = string.Empty;
 
     /// <summary>Tee on the host's stdout; the turn observer reads tool log lines from it.</summary>
     public HostOutputCapture Output { get; private set; } = null!;
@@ -87,6 +101,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // Step 2: mint per-run, disposable identity — a fresh JWT signing key (never written to
         // disk) and a scratch directory for the SQLite databases this run's conversations create.
         IssuerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        peerIssuerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         storagePath = Path.Combine(Path.GetTempPath(), "morgana-harness", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(storagePath);
 
@@ -251,9 +266,14 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         foreach (IConfigurationSection _ in Configuration.GetSection("Morgana:OpenTelemetry:Exporters").GetChildren())
             Environment.SetEnvironmentVariable($"Morgana__OpenTelemetry__Exporters__{exporterIndex++}__Enabled", "false");
 
-        // The freshly-minted per-run key replaces whatever "harness" issuer key sits in the shared
-        // secrets store, so this run's credentials are never anything durable enough to leak.
-        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ResolveHarnessIssuerIndex()}__SymmetricKey", IssuerKey);
+        // The freshly-minted per-run keys replace whatever sits in the shared secrets store, so this
+        // run's credentials are never anything durable enough to leak. Two issuers are overridden:
+        // "harness", which the suite itself authenticates as, and "morgana", which the host signs its
+        // own agent-to-agent traffic with — the latter is startup-fatal if left on its placeholder,
+        // so a run would not even boot without it.
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ResolveIssuerIndex(HarnessChannel.IssuerName)}__SymmetricKey", IssuerKey);
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ResolveIssuerIndex(PeerIssuerName)}__SymmetricKey", peerIssuerKey);
+
 
         // Framework categories at Information, everything else quiet: the tool log lines the turn
         // observer parses are Information-level, and the rest is noise in the capture buffer.
@@ -262,18 +282,19 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Finds the position of the <c>harness</c> entry in <c>Morgana:Authentication:Issuers</c>, whose
-    /// key this run overrides.
+    /// Finds the position of a named entry in <c>Morgana:Authentication:Issuers</c>, whose key this
+    /// run overrides.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when the host declares no <c>harness</c> issuer.</exception>
-    private int ResolveHarnessIssuerIndex()
+    /// <param name="issuerName">Issuer whose index is wanted.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the host declares no such issuer.</exception>
+    private int ResolveIssuerIndex(string issuerName)
     {
         // Issuers is a JSON array, so IConfiguration exposes each element as a child section whose
         // own Key is its array index as a string ("0", "1", ...) — that index is exactly the
         // fragment ApplyHostEnvironment needs to target this one entry's SymmetricKey.
         foreach (IConfigurationSection issuer in Configuration.GetSection("Morgana:Authentication:Issuers").GetChildren())
         {
-            if (string.Equals(issuer["Name"], HarnessChannel.IssuerName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(issuer["Name"], issuerName, StringComparison.OrdinalIgnoreCase))
                 return int.Parse(issuer.Key);
         }
 
@@ -281,8 +302,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // that can never authenticate the harness's own channel, turning a config gap into a
         // confusing timeout many steps later instead of a clear error now.
         throw new InvalidOperationException(
-            $"Morgana:Authentication:Issuers contains no '{HarnessChannel.IssuerName}' entry. The harness authenticates as its own " +
-            "channel and cannot run against an instance that does not declare it.");
+            $"Morgana:Authentication:Issuers contains no '{issuerName}' entry. The harness mints a per-run key for it and " +
+            "cannot run against an instance that does not declare it.");
     }
 
     /// <summary>

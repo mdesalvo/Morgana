@@ -36,6 +36,18 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     internal const string DynamicInstructionsMarker = "\u001E";
 
     /// <summary>
+    /// Placeholder in the PeerConsultationGuidance injection template, resolved to the competences
+    /// the consulted colleague's card advertises.
+    /// </summary>
+    private const string PeerSkillsPlaceholder = "((peer_skills))";
+
+    /// <summary>
+    /// Placeholder in the PeerConsultationDeclaration injection template, resolved to the intent of
+    /// the agent doing the asking.
+    /// </summary>
+    private const string ConsultationCallerPlaceholder = "((caller))";
+
+    /// <summary>
     /// Value of <see cref="Records.ToolParameter.Scope"/> marking a parameter resolved from the
     /// session's context variables rather than asked of the user.
     /// </summary>
@@ -143,6 +155,37 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         return contextParameters.Length > 0 && descriptionGuidance.Length > 0
             ? $"{toolDefinition.Description}\n\n{descriptionGuidance.Replace(ContextParametersPlaceholder, string.Join(", ", contextParameters))}"
             : toolDefinition.Description;
+    }
+
+    /// <inheritdoc />
+    public async Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard)
+    {
+        FrameworkLayer framework = await frameworkLayer.Value;
+
+        string consultationGuidance = Records.GlobalPolicy.ResolveTemplate(
+            framework.Policies, Records.GlobalPolicy.Templates.PeerConsultationGuidance);
+
+        if (consultationGuidance.Length == 0)
+            return peerCard.Description ?? "";
+
+        // A card with no skills is legitimate (an agent whose competences are only known once its
+        // MCP servers answer), and says so rather than leaving the placeholder dangling.
+        string skills = peerCard.Skills is { Count: > 0 }
+            ? string.Join("; ", peerCard.Skills.Select(skill => $"{skill.Name} — {skill.Description}"))
+            : "not declared in advance";
+
+        return $"{peerCard.Description}\n\n{consultationGuidance.Replace(PeerSkillsPlaceholder, skills)}";
+    }
+
+    /// <inheritdoc />
+    public async Task<string> ComposeConsultationRequestAsync(string callerIntent)
+    {
+        FrameworkLayer framework = await frameworkLayer.Value;
+
+        string declaration = Records.GlobalPolicy.ResolveTemplate(
+            framework.Policies, Records.GlobalPolicy.Templates.PeerConsultationDeclaration);
+
+        return declaration.Replace(ConsultationCallerPlaceholder, callerIntent);
     }
 
     /// <inheritdoc />

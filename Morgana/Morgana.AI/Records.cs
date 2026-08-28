@@ -530,6 +530,35 @@ public static class Records
     public record AgentStreamChunk(
         string Text);
 
+    // ==========================================================================
+    // PEER CONSULTATION MODELS
+    // ==========================================================================
+
+    /// <summary>
+    /// Question one agent puts to a colleague of the same conversation, sent to the colleague's
+    /// actor and answered with a <see cref="PeerConsultationResponse"/>.
+    /// </summary>
+    /// <param name="ConversationId">Conversation both agents belong to; scopes session and shared context.</param>
+    /// <param name="TurnContext">OTel context of the user turn that triggered the consultation.</param>
+    public record PeerConsultation(
+        string ConversationId,
+        string CallerIntent,
+        string Question,
+        ActivityContext TurnContext = default);
+
+    /// <summary>
+    /// A colleague's answer, both as the actor reply and — serialized — as the tool result the
+    /// asking agent's model reads, which is why every member carries an explicit JSON name.
+    /// </summary>
+    /// <param name="ColleagueAwaitsYourReply">True when the colleague is waiting, i.e. the exchange is unfinished.</param>
+    /// <param name="Options">Options offered, as data to choose from — never buttons to render.</param>
+    /// <param name="Card">Structured data presented, as data to read — never a card to render.</param>
+    public record PeerConsultationResponse(
+        [property: JsonPropertyName("answer")] string Answer,
+        [property: JsonPropertyName("colleagueAwaitsYourReply")] bool ColleagueAwaitsYourReply,
+        [property: JsonPropertyName("options")] List<QuickReply>? Options = null,
+        [property: JsonPropertyName("card")] RichCard? Card = null);
+
     /// <summary>
     /// LLM-generated presentation response from ConversationSupervisorActor.
     /// Contains the welcome message and quick reply buttons for user interaction.
@@ -794,7 +823,7 @@ public static class Records
         public const string InjectionType = "Injection";
 
         /// <summary>
-        /// Injection template names: ToolDescriptionContextGuidance, HeldContextDeclaration.
+        /// Injection template names: ToolDescriptionContextGuidance, HeldContextDeclaration, PeerConsultationGuidance, PeerConsultationDeclaration.
         /// Contract between morgana.json and code. Resolved by Name — must match configuration exactly.
         /// </summary>
         public static class Templates
@@ -804,6 +833,12 @@ public static class Records
 
             /// <summary>Injected per turn, naming the context variables the session currently holds.</summary>
             public const string HeldContextDeclaration = "HeldContextDeclaration";
+
+            /// <summary>Appended to the description under which a colleague is offered as a callable function.</summary>
+            public const string PeerConsultationGuidance = "PeerConsultationGuidance";
+
+            /// <summary>Placed in front of a colleague's question, telling the answering agent who its reader is.</summary>
+            public const string PeerConsultationDeclaration = "PeerConsultationDeclaration";
         }
 
         /// <summary>

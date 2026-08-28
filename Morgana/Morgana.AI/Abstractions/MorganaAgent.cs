@@ -7,6 +7,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
@@ -113,6 +114,7 @@ public class MorganaAgent : MorganaActor
         this.agentLogger = agentLogger;
 
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
+        ReceiveAsync<Records.PeerConsultation>(ServeConsultationAsync);
         ReceiveAsync<Records.FailureContext>(HandleAgentFailureAsync);
     }
 
@@ -352,6 +354,11 @@ public class MorganaAgent : MorganaActor
             agentSpan?.SetTag(MorganaTelemetry.AgentResponsePreview, responsePreview);
             agentSpan?.Dispose();
 
+            // The exchange with a colleague is spent once it has been read. Clearing it here keeps
+            // it out of the caller's own session — see StripPeerConsultations — and is done after
+            // the span has been tagged, so telemetry still records that the colleague was consulted.
+            StripPeerConsultations(aiAgentSession, historyBaseline);
+
             // Tag this turn's user-facing assistant message — the LAST assistant message that
             // actually carries text content. The Anthropic / OpenAI / etc. tool-use protocol
             // persists one assistant message per tool-calling round (text + tool_call →
@@ -403,9 +410,119 @@ public class MorganaAgent : MorganaActor
         }
         finally
         {
-            // Safety net: ephemeral UI variables (rich card, quick replies) must NEVER leak to the next turn.
+            // Safety net: ephemeral UI variables (rich card, quick replies, ...) must NEVER leak to the next turn.
             if (aiAgentSession is not null)
             {
+                aiContextProvider.DropVariable(aiAgentSession, "rich_card");
+                aiContextProvider.DropVariable(aiAgentSession, "quick_replies");
+                aiContextProvider.DropVariable(aiAgentSession, "turn_continuation");
+                aiContextProvider.DropVariable(aiAgentSession, MorganaAIContextProvider.ConsultationRoundsKey);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Answers a colleague of the same conversation, running a full LLM turn whose reader is another
+    /// agent instead of the user.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not an <see cref="Records.AgentRequest"/>: it never streams, never reaches the
+    /// supervisor, and is persisted as inactive, so answering a colleague cannot make this agent the
+    /// conversation's active agent. Its messages are marked as a consultation and kept out of the
+    /// transcript, while the agent still remembers them, which is what lets a second question
+    /// continue where the first left off. Never throws — a failure is reported as an answer.
+    /// </remarks>
+    protected virtual async Task ServeConsultationAsync(Records.PeerConsultation consultation)
+    {
+        IActorRef senderRef = Sender;
+
+        Activity? consultationSpan = MorganaTelemetry.Source.StartActivity(
+            MorganaTelemetry.ConsultationActivity,
+            ActivityKind.Internal,
+            consultation.TurnContext);
+
+        consultationSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+        consultationSpan?.SetTag(MorganaTelemetry.ConsultationCaller, consultation.CallerIntent);
+        consultationSpan?.SetTag(MorganaTelemetry.ConsultationTarget, AgentIntent);
+
+        try
+        {
+            aiAgentSession ??= await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this)
+                               ?? await aiAgent.CreateSessionAsync();
+
+            // The colleague may know things this agent has never been told: shared variables are
+            // hydrated exactly as on a user turn, which is what makes a consultation answerable
+            // without asking the asker for what the conversation already established.
+            Dictionary<string, object> sharedFromRegistry = await persistenceService.LoadSharedVariablesAsync(conversationId);
+            if (sharedFromRegistry.Count > 0)
+                aiContextProvider.MergeSharedContext(aiAgentSession, sharedFromRegistry);
+
+            // Marks this turn as served for a colleague. Read by MorganaPeerGuardAgent to refuse
+            // a chained consultation, and dropped again before the session is persisted.
+            await aiContextProvider.SetVariableAsync(aiAgentSession, MorganaAIContextProvider.ServingConsultationKey, consultation.CallerIntent);
+
+            agentLogger.LogInformation("Agent '{AgentIntent}' is answering a consultation from '{CallerIntent}'", AgentIntent, consultation.CallerIntent);
+
+            // Everything appended past this point belongs to this consultation: the span is
+            // per-exchange, so reporting from zero would attribute every past user turn to it.
+            int historyBaseline = aiChatHistoryProvider.GetMessages(aiAgentSession).Count;
+
+            AgentResponse response = await aiAgent.RunAsync(
+                new ChatMessage(ChatRole.User, consultation.Question) { CreatedAt = DateTimeOffset.UtcNow },
+                aiAgentSession);
+
+            // Everything this turn appended belongs to a conversation the user never had. Marking it
+            // here — question included — is what keeps it out of the rendered transcript while
+            // leaving it in the agent's own memory, where the next question from the same colleague
+            // needs to find it.
+            foreach (ChatMessage consultationMessage in aiChatHistoryProvider.GetMessages(aiAgentSession).Skip(historyBaseline))
+            {
+                consultationMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+                consultationMessage.AdditionalProperties[MorganaChatHistoryProvider.ConsultationMarkerKey] = true;
+            }
+
+            // The colleague's presentation decisions are handed over as data rather than drained:
+            // the asking agent reads the options it was offered and may come back having chosen one.
+            bool awaitsReply = GetTurnContinuationFromContext(aiAgentSession);
+            List<QuickReply>? quickReplies = GetQuickRepliesFromContext(aiAgentSession);
+            RichCard? richCard = GetRichCardFromContext(aiAgentSession);
+
+            consultationSpan?.SetTag(MorganaTelemetry.ConsultationAwaitingReply, awaitsReply || quickReplies?.Count > 0);
+            consultationSpan?.SetTag(MorganaTelemetry.AgentToolsInvoked, GetToolsInvoked(aiAgentSession, historyBaseline));
+            consultationSpan?.Dispose();
+
+            // Dropped BEFORE the save, unlike the presentation keys below: persisted, it would come
+            // back on rehydration and leave the agent permanently believing it is answering a
+            // colleague, which would make it refuse every consultation of its own from then on.
+            aiContextProvider.DropVariable(aiAgentSession, MorganaAIContextProvider.ServingConsultationKey);
+
+            // Persisted as completed: an agent that answered a colleague is not thereby in service
+            // to the user, and must not be restored as the conversation's active agent.
+            await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, true);
+
+            senderRef.Tell(new Records.PeerConsultationResponse(
+                response.Text.Trim(),
+                awaitsReply || quickReplies?.Count > 0,
+                quickReplies,
+                richCard));
+        }
+        catch (Exception ex)
+        {
+            agentLogger.LogError(ex, "Agent '{AgentIntent}' failed to answer a consultation from '{CallerIntent}'", AgentIntent, consultation.CallerIntent);
+            consultationSpan?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            consultationSpan?.AddException(ex);
+            consultationSpan?.Dispose();
+
+            senderRef.Tell(new Records.PeerConsultationResponse(
+                $"Your colleague for '{AgentIntent}' could not answer. Proceed without them.", false));
+        }
+        finally
+        {
+            // Safety net for the paths that did not reach the drop above, the failure path first
+            // among them: no key this turn wrote for the framework's own use may outlive it.
+            if (aiAgentSession is not null)
+            {
+                aiContextProvider.DropVariable(aiAgentSession, MorganaAIContextProvider.ServingConsultationKey);
                 aiContextProvider.DropVariable(aiAgentSession, "rich_card");
                 aiContextProvider.DropVariable(aiAgentSession, "quick_replies");
                 aiContextProvider.DropVariable(aiAgentSession, "turn_continuation");
@@ -422,6 +539,55 @@ public class MorganaAgent : MorganaActor
         Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
 
         failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
+    }
+
+    /// <summary>
+    /// Removes this turn's peer-consultation calls, and their results, from the agent's own history.
+    /// </summary>
+    /// <remarks>
+    /// A colleague's answer is read once and worthless afterwards: left in place it would be resent
+    /// to the LLM on every later turn, rich card included. Call and result go as a pair — a stored
+    /// call whose result is missing is rejected by the provider — and a message left empty is dropped.
+    /// </remarks>
+    /// <param name="historyBaseline">Messages present before the turn ran; earlier turns cleared themselves.</param>
+    protected void StripPeerConsultations(AgentSession session, int historyBaseline)
+    {
+        List<ChatMessage> messages = aiChatHistoryProvider.GetMessages(session);
+
+        HashSet<string> consultationCallIds =
+        [
+            .. messages.Skip(historyBaseline)
+                .SelectMany(m => m.Contents.OfType<FunctionCallContent>())
+                .Where(call => call.Name.StartsWith(MorganaAgentAdapter.PeerFunctionNamePrefix, StringComparison.Ordinal))
+                .Select(call => call.CallId)
+        ];
+
+        if (consultationCallIds.Count == 0)
+            return;
+
+        for (int index = messages.Count - 1; index >= historyBaseline; index--)
+        {
+            ChatMessage message = messages[index];
+
+            for (int contentIndex = message.Contents.Count - 1; contentIndex >= 0; contentIndex--)
+            {
+                bool belongsToConsultation = message.Contents[contentIndex] switch
+                {
+                    FunctionCallContent call => consultationCallIds.Contains(call.CallId),
+                    FunctionResultContent result => consultationCallIds.Contains(result.CallId),
+                    _ => false
+                };
+
+                if (belongsToConsultation)
+                    message.Contents.RemoveAt(contentIndex);
+            }
+
+            if (message.Contents.Count == 0)
+                messages.RemoveAt(index);
+        }
+
+        agentLogger.LogInformation(
+            "Agent '{AgentIntent}' cleared {Count} peer consultation(s) from its own history", AgentIntent, consultationCallIds.Count);
     }
 
     /// <summary>

@@ -37,6 +37,29 @@ public interface IPromptComposerService
     Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition);
 
     /// <summary>
+    /// Produces the description under which a colleague is offered as a callable function: its own
+    /// card, then the framework's rules for consulting one, with <c>((peer_skills))</c> resolved to
+    /// the competences that card advertises.
+    /// </summary>
+    /// <remarks>
+    /// The rung of the placement ladder where the decision is made: the model reads it while weighing
+    /// whether to ask at all, which is where an exchange is kept short or allowed to sprawl.
+    /// </remarks>
+    /// <returns>The description to expose on the generated <c>AIFunction</c>.</returns>
+    Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard);
+
+    /// <summary>
+    /// Produces the note placed in front of a colleague's question — the one signal telling the
+    /// answering agent that this turn's reader is not the user.
+    /// </summary>
+    /// <remarks>
+    /// It travels inside the question, not as a system-prompt injection: a prompt is composed once,
+    /// while whether a turn serves a colleague changes turn by turn.
+    /// </remarks>
+    /// <returns>The note, or an empty string when the prompt layer declares no such template.</returns>
+    Task<string> ComposeConsultationRequestAsync(string callerIntent);
+
+    /// <summary>
     /// Produces the per-turn declaration handing the session's currently-held context variables
     /// directly to the model — name AND value, not just the name. This is the one composed fragment
     /// carrying a <em>fact</em> rather than a rule: tool descriptions are built once at agent creation

@@ -48,14 +48,15 @@ own.
 
 | Folder | Purpose |
 |---|---|
-| `Abstractions/` | Base classes: `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool` |
+| `Abstractions/` | Morgana's own implementations of a framework base type: `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool`, and `MorganaHostedAgent` — the `AIAgent` under which an intent is published over A2A, carrying an inbound request to the conversation's actor |
 | `Actors/` | Pipeline actors: `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
-| `Adapters/` | `MorganaAgentAdapter` (agent builder), `MorganaToolAdapter` (tool→AIFunction), `MorganaChannelAdapter` (rich→plain degradation) |
-| `Attributes/` | `[HandlesIntent]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]` |
+| `Adapters/` | `MorganaAgentAdapter` (agent builder, and the peer-consultation surface), `MorganaToolAdapter` (tool→AIFunction), `MorganaChannelAdapter` (rich→plain degradation) |
+| `Attributes/` | `[HandlesIntent]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
 | `ChatClients/` | `IChatClient` decorator chain: `TierDefaultsChatClient` (per-tier `ChatOptions` defaults), `DustAccountingChatClient` (Magic Dust metering), `MorganaAnthropicClient` (Anthropic no-prefill guard + cache marker) |
 | `Extensions/` | `ActorSystemExtensions` — C# 14 `extension(ActorSystem)` syntax for `GetOrCreateActorAsync<T>` and `GetOrCreateAgentAsync(Type)` |
 | `Interfaces/` | All service contracts (see Service layer below) |
 | `Providers/` | `MorganaAIContextProvider` (per-agent context variables, with cross-agent shared variables persisted in the conversation-scoped `shared_context` registry), `MorganaChatHistoryProvider` (chat history with optional summarizing reducer) |
+| `SessionStores/` | `MorganaHostedAgentSessionStore` — the `AgentSessionStore` turning an inbound A2A `contextId` into the conversation it names |
 | `Services/` | Default implementations of all interfaces |
 | `Telemetry/` | `MorganaTelemetry` (ActivitySource, metrics), `OpenTelemetryExtensions` |
 | `Records.cs` | All immutable record types (DTOs) for actor messages, configuration |
@@ -69,6 +70,7 @@ own.
 | `Controllers/MorganaController.cs` | REST API at `api/morgana` — conversation start/end/resume/history/message/health |
 | `Hubs/MorganaHub.cs` | SignalR hub at `/morganaHub` — group-based real-time messaging |
 | `Services/PluginLoaderService.cs` | Scans `plugins/` directory for DLLs containing `MorganaAgent` subclasses |
+| `Services/KestrelHostAddressService.cs` | `IHostAddressService` implementation — reports the address Kestrel actually bound, so an A2A card can name a callable endpoint with nothing configured |
 | `Services/SignalRChannelService.cs` | `IChannelService` implementation — pushes `ChannelMessage` and stream chunks over SignalR |
 | `appsettings.json` | All configuration sections (see Key Configuration below) |
 
@@ -92,6 +94,7 @@ Four example agents packaged as a plugin DLL (copied to `plugins/` after build).
 - `InventoryAgent` + `InventoryTool` — the greenhouse ledger: catalog, live stock, the two-step order lifecycle (quote → confirm) with seal words, cancellation and per-customer order history. Confirming an order is dispositive: it decrements stock **and** bills the customer, atomically, through the shared backoffice path
 - `BillingAgent` + `BillingTool` — the accounts desk: the invoices issued to a customer, their charge lines, what is still outstanding (summed by the tool, never by the model) and the payments received. Read-only — every line on its books was written by another desk closing a sale, never by Billing itself
 - `ContractAgent` + `ContractTool` — the Green Care Plan: the garden-care subscription the nursery sells alongside its plants — coverage, plant-health guarantee, fees, the seven clauses, renewal and termination, plus the tending calendar (visits already made, with their outcome and notes; the next dates **computed** from the plan's own visit days, never stored, so the calendar cannot go stale). Mostly read-only, with one dispositive exception symmetric to Inventory's: enrolling a customer in a new plan opens the contract **and** bills its first month, atomically, through the same shared backoffice path
+- The three desks also **talk to each other**, which is the second thing the plugin exists to show: `BillingAgent` declares `[ConsultsAgent("inventory")]` and `ContractAgent` declares `[ConsultsAgent("billing")]` — the accounts desk can ask the greenhouse what was actually in the order behind a charge line, and the plan desk can ask accounts whether a plan's fee has been invoiced. Neither answer is on the asking desk's own books, and neither desk gains a tool it should not have: it asks the colleague whose competence it is, exactly as it would pick up the phone. Note the topology is deliberately a chain and not a triangle — Contract → Billing → Inventory would be a second hop, which the framework refuses, so the demo exercises the guard as well as the happy path
 - `MonkeyAgent` — MCP-only agent using external MonkeyMCP server (no native tool). Framed in-domain as the nursery's primate almanac, but its job here is structural: it is the one agent whose tools are acquired at runtime, and the one with an empty context vocabulary
 - `agents.json` — embedded resource with intents and per-agent prompts/tool definitions
 - `Data/Examples.db` + `Data/GreenhouseDatabaseHelper.cs` — the shop's **single system of record**, embedded as a seed resource and deployed once per `StoragePath`: customers, catalog and stock, orders, the plan and its clauses, the tending visits, invoices and their charge lines. One database is what makes the three desks one shop — an invoice line carries the `orderId` that produced it (or none, for a plan fee), and the customer code the accounts desk is given is the same code the greenhouse ledger and the plan desk key their own writes by. There is deliberately no gate on that registry anywhere in the plugin: a code nobody is registered under is answered the same way everywhere (nothing found under it, never invented, never refused) — the nursery takes anyone at the counter, on the ledger, at the accounts desk and at the plan desk alike. On deployment the seed's calendar is **rebased** onto the current month (`RebaseCalendar`, whole months, day-of-month preserved), so the demo always opens on a plausible present — an invoice actually due, a plan with months left — instead of a ledger abandoned in the year the seed was authored. After that instant the data only changes through live orders, plan enrollments and the invoices either one produces
@@ -163,6 +166,91 @@ When an agent signals `IsCompleted = false` — declared explicitly via the `Set
 
 Tools with `Shared: true` parameters route their values into a conversation-scoped `shared_context` registry persisted alongside the agent sessions in the per-conversation SQLite DB. Writes go through `IConversationPersistenceService.UpsertSharedVariableAsync` (first-write-wins enforced via `INSERT OR IGNORE`); every agent calls `LoadSharedVariablesAsync` at the start of each turn and merges the result into its own `MorganaAIContextProvider` (first-write-wins again on the local merge: existing local values are not overwritten). Example: `customerCode` set by BillingAgent is available to ContractAgent without re-asking, even if Contract is activated for the first time after Billing's actor has been decommissioned.
 
+### Inter-agent consultation (A2A)
+
+An agent may declare `[ConsultsAgent("billing")]` — as many times as it has colleagues — and each
+declaration becomes **one more `AIFunction` in its tool list**, named `consult_{intent}`, beside its
+native and MCP tools. Underneath it is not a Morgana invention but the A2A protocol, end to end, run
+through Microsoft's own stack.
+
+**Publication (Morgana.Web, Section 9.5).** An intent **named by somebody's `[ConsultsAgent]`** is
+registered with `AddAIAgent` and `AddA2AServer` (`Microsoft.Agents.AI.Hosting.A2A`), then mapped with
+`MapA2AJsonRpc` at `/a2a/{intent}` and `MapWellKnownAgentCard` at
+`/a2a/{intent}/.well-known/agent-card.json`. **Nothing is stood up when no agent declares a
+colleague**, or when `Morgana:AgentToAgent:Enabled` is false: no hosted agent, no server, no route,
+no card — such a deployment is the deployment it was before any of this existed, and pays for A2A
+neither in prompt tokens nor in surface. An agent nobody consults exposes no endpoint either;
+publishing everything discovered instead is one line in that loop. The
+address those cards advertise is never configured: cards are projected while the endpoints are still
+being mapped, and at `ApplicationStarted` — once Kestrel has bound and before any request can read a
+card — `IAgentDirectoryService.PublishInterfacesAsync` fills them in from `IHostAddressService`,
+which reads the bound address and answers a wildcard binding (`http://+:8080`, the Docker case) with
+loopback on the same port. Configuring an address belongs to whoever *consumes* one — a channel holds
+Morgana's URL, and a remote peer would be declared on the consuming side — never to the application
+describing itself. So an
+agent of this installation is reachable and discoverable by anything that speaks A2A, not only by
+its siblings. The JSON-RPC endpoint carries an endpoint filter applying the same `IAuthenticationService`
+gate the controller applies; the card itself stays open, because discovery is what tells a caller how
+to authenticate.
+
+**What Morgana contributes is exactly two types**, and both exist to reconcile one mismatch: A2A
+hosting expects one long-lived agent per name, while Morgana's agents are per-conversation actors.
+- `MorganaHostedAgentSessionStore` — the hosting layer resolves a request's A2A `contextId` into a
+  session; this store returns a `MorganaHostedAgentSession` carrying it, and persists nothing (the
+  real state is the actor's, already written to the per-conversation database).
+- `MorganaHostedAgent` — one per intent, owns no model: it reads the conversation from that session,
+  resolves the very actor the router would have reached, and `Ask`s it a `Records.PeerConsultation`.
+
+**Consumption.** `ConfigurationAgentDirectoryService` projects each agent's `AgentCard` from the
+domain configuration (intent → name and purpose, declared tools → `AgentSkill`s) and resolves a
+colleague with `A2ACardResolver.GetAIAgentAsync` — so what the asking agent holds is
+`Microsoft.Agents.AI.A2A`'s `A2AAgent`, the identical object an agent in another process would get.
+`A2AAgent.CreateSessionAsync(conversationId)` binds the A2A context to the conversation, and
+`AIAgentExtensions.AsAIFunction` makes it callable. Outbound requests are signed per request by
+`MorganaPeerAuthenticationHandler` under the `morgana` issuer, which must be declared in
+`Morgana:Authentication:Issuers` like any channel.
+
+**Morgana's own rules sit above the colleague as pipeline middleware**, built with the agent
+framework's own `AIAgentBuilder.Use` so the resolved `A2AAgent` stays untouched and no wrapper type
+is invented. The middleware refuses a chained consultation — an agent answering a colleague finds its
+own peer functions refusing, so the call graph cannot cycle without any caller chain travelling with
+the request — caps the rounds one user turn may spend (`Morgana:AgentToAgent:MaxRoundsPerTurn`), and
+declares the caller's intent in `AgentRunOptions.AdditionalProperties`, which the A2A layer carries
+as message metadata and hands back to the answering agent. Its streaming delegate is left null, and
+the framework bridges streaming onto the run delegate, so the guards cannot be skipped by asking for
+a stream. The cap is a safety net, not the mechanism: convergence is asked of the
+prose, by `PeerConsultationDeclaration`.
+
+**The answering turn** runs in `MorganaAgent.ServeConsultationAsync`, deliberately not an
+`AgentRequest`: it never streams, never reaches the supervisor, and is persisted as inactive so
+answering a colleague can never make that agent the conversation's active agent. Shared context is
+hydrated exactly as on a user turn, so a colleague already knows the `customerCode` nobody re-asked
+for. What comes back is the serialized `Records.PeerConsultationResponse` envelope — answer, whether
+the colleague awaits a reply, and any options or rich card it attached — handed over as **data** the
+asking agent reads and acts on, never as buttons to render.
+
+**The exchange leaves no trace in the conversation**, and that takes two distinct erasures:
+- Every message the answering turn appended is stamped `MorganaChatHistoryProvider.ConsultationMarkerKey`
+  and dropped by `GetConversationHistoryAsync` before any of its processing passes. The
+  `UserFacingMarkerKey` alone cannot do this — it marks which assistant message of a turn survives,
+  while whole turns, question included, must disappear, and an agent whose session holds nothing but
+  consultations carries no marker for the filter to work from at all.
+- `MorganaAgent.StripPeerConsultations` removes the `consult_*` call and its result from the **asking**
+  agent's own history once read, as a matched pair (a stored call without its result is rejected by
+  the provider on the next turn). A colleague's answer is worth exactly one reading: left in place it
+  would be resent to the LLM on every later turn, rich card included, and would sit in the session as
+  a record of an exchange the conversation never had. It runs after the span is tagged, so
+  `agent.tools_invoked` still records that the colleague was consulted.
+
+**Nor is any of it paid by an agent it does not concern.** `PeerConsultationGuidance` lives on a
+colleague's function description, so an agent with no `[ConsultsAgent]` never carries one;
+`PeerConsultationDeclaration` is spliced into an inbound question, so an agent pays it only on the
+turns it is actually being consulted, never on its own turns with the user. An agent that neither
+consults nor is consulted reads not one extra token.
+
+OTel: a `morgana.consultation` span (`consultation.caller`, `consultation.target`,
+`consultation.awaiting_reply`) nested under the answering agent's work.
+
 ## Service Layer
 
 ### Core Services (Morgana.AI/Services)
@@ -173,7 +261,8 @@ Tools with `Shared: true` parameters route their values into a conversation-scop
 | `LLMGuardRailService` | `IGuardRailService` | Async LLM policy check against the Guard prompt. Fails open on LLM error |
 | `LLMPresenterService` | `IPresenterService` | LLM-generated welcome message + quick replies. Falls back to `FallbackMessage` + intent-derived buttons on LLM failure. Never throws |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json` (embedded in Morgana.AI) + domain prompts from `agents.json` (via `IAgentConfigurationService`). Case-insensitive lookup |
-| `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads, at all three rungs of the placement ladder: the fenced two-layer system prompt, the tool descriptions (splicing `ToolDescriptionContextGuidance`), and the per-turn `HeldContextDeclaration`. Sibling of the resolver and its client — the resolver abstracts *where prompts come from*, the composer *how they become what the model reads*, so swapping prompt storage for a database does not drag the layer fences along. Caches the framework layer on first resolution |
+| `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer system prompt, the tool descriptions (splicing `ToolDescriptionContextGuidance`), the per-turn `HeldContextDeclaration`, and the two peer-consultation fragments (`PeerConsultationGuidance` on a colleague's function description, `PeerConsultationDeclaration` in front of a colleague's question). Sibling of the resolver and its client — the resolver abstracts *where prompts come from*, the composer *how they become what the model reads*, so swapping prompt storage for a database does not drag the layer fences along. Caches the framework layer on first resolution |
+| `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery: projects an `AgentCard` per agent from the domain configuration (intent → name and purpose, declared tools → `AgentSkill`s, plus the interface this installation publishes it under), and resolves a colleague into an `AIAgent` via `A2ACardResolver`. Cards cached per intent, built on demand |
 | `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Scans all loaded assemblies for `agents.json` embedded resources. Graceful degradation if none found (agentless mode) |
 | `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents via `[HandlesIntent]` reflection scanning. Bidirectional validation: every configured intent must have an agent and vice versa. Throws on mismatch at startup. Delegates LLM tier validation to `ILLMTierValidationService` |
 | `RequiresLLMTierValidationService` | `ILLMTierValidationService` | Validates every discovered agent's `[RequiresLLMTier]` declaration against the active provider's configured tiers. Startup-fatal on missing attribute or unconfigured tier |
@@ -220,7 +309,8 @@ Startup validation: `ILLMTierValidationService` (`RequiresLLMTierValidationServi
 3. **Create agent class** extending `MorganaAgent`, decorated with `[HandlesIntent("myintent")]` **and** `[RequiresLLMTier(LLMTier.X)]` (mandatory — declares the fixed die, `Efficiency` or `Performance`, the agent runs on; validated at startup against the active provider's `Tiers` map). Constructor calls `MorganaAgentAdapter.CreateAgent()` which returns `(AIAgent, MorganaAIContextProvider, MorganaChatHistoryProvider)`
 4. **Create tool class** (optional) extending `MorganaTool`, decorated with `[ProvidesToolForIntent("myintent")]`. Method names must match tool Names in JSON. Constructor signature: `(ILogger, Func<ToolContext>)`
 5. **Or use MCP** — decorate agent with `[UsesMCPServer("url")]` (Http) or `[UsesMCPServer(MCPTransport.Stdio, "cmd", args)]` for auto-discovered remote tools. Supports multiple `[UsesMCPServer]` on one agent
-6. **Package as plugin DLL** — place in `plugins/` directory, `PluginLoaderService` discovers it at startup
+6. **Optionally declare colleagues** — `[ConsultsAgent("otherintent")]`, once per colleague, exposes each as a `consult_{intent}` function in this agent's tool list (see Inter-agent consultation above). Validated at startup: the named intent must be handled by a registered agent, and never by the declaring agent itself
+7. **Package as plugin DLL** — place in `plugins/` directory, `PluginLoaderService` discovers it at startup
 
 Minimal agent (see `BillingAgent.cs`):
 ```csharp
@@ -318,8 +408,9 @@ presents its own tools' output. Anything it says that a global policy already sa
 if two agents need the same sentence, that is a policy gap to be filled above, never a repair below.
 
 Framework prompts (`morgana.json`):
-- **Morgana**: base personality, global policies — P0-P7, all `Critical`: ContextHandling, QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage, ToolGrounding, MandatoryTextualResponse, RichCardUsage. The `QuickReplyDoctrine` (P1) is the unifying master rule the other quick-reply policies instantiate — see Design Philosophy. `GlobalPoliciesHeader` states the "these are binding" emphasis once, above the list, rather than each policy repeating it in its own opening words; `GlobalPoliciesFooter` closes the block, because an opening claim about what follows otherwise scopes over the framework's own Instructions and Formatting and the whole domain layer beneath them.
+- **Morgana**: base personality, global policies — P0-P7, all `Critical`: ContextHandling, QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage, ToolGrounding, MandatoryTextualResponse, RichCardUsage. Peer consultation deliberately adds **no policy here**: a rule stating that some turns are addressed to a colleague would have to sit above the policies it suspends, forward-referencing quick replies and cards before the model has read what they are, and would be paid by every agent on every turn — including the ones with no colleagues at all. It lives instead on the two rungs where it is read (the injection templates below), leaving only its non-revelation clause in `MandatoryTextualResponse`, whose subject — never narrating your own machinery — it already was. The `QuickReplyDoctrine` (P1) is the unifying master rule the other quick-reply policies instantiate — see Design Philosophy. `GlobalPoliciesHeader` states the "these are binding" emphasis once, above the list, rather than each policy repeating it in its own opening words; `GlobalPoliciesFooter` closes the block, because an opening claim about what follows otherwise scopes over the framework's own Instructions and Formatting and the whole domain layer beneath them.
   Its `Target` is the composed prompt's **preamble, not a role description**: it names the two layers, says this one governs how a turn is formed while the domain layer governs what the conversation is about, and settles precedence. It deliberately promises no capability: a claim like "solve problems through the support scenarios you can handle" sits in the primacy slot unbacked, and `ToolGrounding` then has to spend a clause defending against it. Its `Instructions` carry the **order of a turn** (resolve inputs → call the domain tool → decide presentation → write the text once), which no single policy states: each policy governs one aspect, and the observed defects are overwhelmingly sequencing failures
+  Two further entries govern peer consultation, both `Type: "Injection"`: `PeerConsultationGuidance` is spliced by `ComposePeerDescriptionAsync` into the description under which a colleague is offered as a function, with `((peer_skills))` resolved from the colleague's card — the rung where the model decides whether to ask at all, and therefore where an exchange is either kept short or allowed to sprawl; `PeerConsultationDeclaration` is composed by `ComposeConsultationRequestAsync`, spliced by `MorganaHostedAgent` in front of the incoming question rather than into the answering agent's prompt, with `((caller))` resolved to the asking agent: a prompt is composed once while whether a turn serves a colleague changes turn by turn. It is the one signal telling the agent its reader is not the user, and it carries the whole rule for that turn — the policies on buttons, cards, continuation and voice are suspended in favour of facts only, complete in one turn.
   Two further entries in the same array carry `Type: "Injection"`. They are **not policies but templates** — `FormatGlobalPolicies` skips both of them (it filters on `IsInjectionTemplate`, not by name, so this list grows without touching that method) — and each has one splice site. `ToolDescriptionContextGuidance` is spliced by `IPromptComposerService.ComposeToolDescriptionAsync` (called from `MorganaToolAdapter`) into the description of every tool declaring context-scoped parameters; rendered in the system prompt it would be an instruction with no referent ("BEFORE INVOKING THIS TOOL" names no tool there), re-paid on every round trip. `HeldContextDeclaration` is spliced per turn by `IPromptComposerService.ComposeHeldContextDeclarationAsync`, called from `MorganaAIContextProvider.ProvideAIContextAsync` — it resolves `((held_variables))` to **name: value** pairs for the context variables the session currently holds, minus the framework's ephemeral keys, so an agent waking on a shared variable it never asked for has nothing left to look up (a names-only variant relied on the model choosing to call `GetContextVariable`, which proved unreliable). An empty session gets no injection at all (a lighter "nothing held, still check" variant was tried and dropped — it never earned its per-turn token cost). The declaration is prefixed with a code-level marker (`ConfigurationPromptComposerService.DynamicInstructionsMarker`) that `MorganaAnthropicClient.MarkLeadingSystemForCache` uses to split it off the stable framework+domain prefix before caching, so a turn's declaration changing never busts the cache for the whole prompt. `HeldContextDeclaration` is the one entry carrying a *fact* rather than a rule, and the only one that can: tool descriptions are built once at agent creation, so `((context_parameters))` can only ever state the **contract** ("this tool takes a `customerCode`"), true even against an empty store — never the **state** ("`customerCode` is held right now"), which nobody knows at build time. That distinction is what the second splice site buys, and it extends the placement ladder one rung: a parameter description is read once the model is already invoking the tool, a tool description when it weighs the tool, and the per-turn injection before any tool is weighed at all — which is where an agent activated first time mid-conversation fails, deciding to ask on an empty (per-agent) history without ever selecting the domain tool whose description carries the guidance
 - **Classifier**: JSON response `{intents: [{intent, confidence}, ...]}`, ranked most-confident first, with `((formattedIntents))` placeholder. One entry for a clean match; more only for a genuine collision, resolved deterministically by `LLMClassifierService` — see Classifier disambiguation above. Carries a `DisambiguationMessage` additional property alongside `UnrecognizedIntentError`
 - **Guard**: JSON response `{compliant, violation}`
@@ -371,9 +462,10 @@ At application startup, comprehensive validation is performed:
 
 1. **HandlesIntentAgentRegistryService**: bidirectional check — every configured intent (except `"other"`) must have a `[HandlesIntent]` agent, and every `[HandlesIntent]` agent must have a configured intent. Throws `InvalidOperationException` on mismatch
 2. **RequiresLLMTierValidationService** (`ILLMTierValidationService`, delegated to by the agent registry): every discovered agent must declare `[RequiresLLMTier]`, and the declared tier must exist in the active provider's `Tiers` map. Throws on mismatch
-3. **ProvidesToolForIntentRegistryService**: warns on agents without tools (MCP-only is valid), warns on orphaned tools, errors on duplicate tool registrations for same intent
-4. **EmbeddedAgentConfigurationService**: warns if no `agents.json` found (agentless mode is allowed)
-5. **MorganaLLM provider constructors**: reject a `Tiers` entry whose `ModelId` is still an override placeholder, or an empty `Tiers` map
+3. **HandlesIntentAgentRegistryService** (same pass): every `[ConsultsAgent]` declaration must name an intent handled by a registered agent, and never the declaring agent's own. A consultation is resolved at agent-creation time, so a typo would otherwise surface as a colleague that silently never appears
+4. **ProvidesToolForIntentRegistryService**: warns on agents without tools (MCP-only is valid), warns on orphaned tools, errors on duplicate tool registrations for same intent
+5. **EmbeddedAgentConfigurationService**: warns if no `agents.json` found (agentless mode is allowed)
+6. **MorganaLLM provider constructors**: reject a `Tiers` entry whose `ModelId` is still an override placeholder, or an empty `Tiers` map
 
 ## Key Configuration Sections (appsettings.json)
 
@@ -381,6 +473,7 @@ At application startup, comprehensive validation is performed:
 |-----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `Morgana:LLM:Provider`                              | LLM provider: `Anthropic`, `AzureOpenAI`, `Ollama`, `OpenAI`                                                                                                                                                                  |
 | `Morgana:LLM:{Provider}`                            | Provider credentials (ApiKey, Endpoint) + `Tiers` map keyed by die (`Efficiency`/`Performance`), each entry with `Options` (`ModelId`, optional `MaxOutputTokens`) and per-model `MagicDust` pricing |
+| `Morgana:AgentToAgent`                              | `Enabled` (default true — off means agents never see their declared colleagues and run exactly as before), `MaxRoundsPerTurn` (default 4, safety net on an exchange that fails to converge). There is deliberately **no address setting**: an application does not declare its own URL — see `IHostAddressService`. The wait on a colleague reuses `ActorSystem:TimeoutSeconds` |
 | `Morgana:ActorSystem:TimeoutSeconds`                | Actor/agent receive timeout (default 180s)                                                                                                                                                                                    |
 | `Morgana:ActorSystem:EnableGuardrail`               | Toggle guard rail (useful for local dev)                                                                                                                                                                                      |
 | `Morgana:ActorSystem:IntentCollisionThreshold` | Confidence-gap threshold (default `0.10`, on the classifier's 0-1 scale) below which two or more ranked intents count as a collision. `LLMClassifierService` applies it; `ConversationSupervisorActor` turns a collision into a disambiguation quick reply instead of routing to an agent — see Classifier disambiguation |
@@ -389,7 +482,7 @@ At application startup, comprehensive validation is performed:
 | `Morgana:ConversationPersistence`                   | StoragePath, EncryptionKey (AES-256, base64, must be 32 bytes)                                                                                                                                                                |
 | `Morgana:RateLimiting`                              | Enabled, MaxMessagesPerMinute/Hour/Day, custom ErrorMessage templates with `{limit}` placeholder                                                                                                                              |
 | `Morgana:DustLimiting`                              | Enabled, BudgetPerConversation (default 80 units), Warning70Message, Warning90Message, ErrorMessage. `MagicDust` pricing (InputTokensPerDustUnit, OutputTokensPerDustUnit, CachedInputWeight, CacheCreationWeight) lives per-tier on each `Tiers` entry under `Morgana:LLM:{Provider}`. Shipped defaults are calibrated on official provider pricing assuming a dual deploy of **Haiku 4.5/Sonnet 5** (Anthropic) and **gpt-4o-mini/gpt-4o** (OpenAI and AzureOpenAI), with a usability floor guaranteeing ≥10 full-length Performance turns per budget — formula in `Records.MagicDustPricing` remarks. Recalibrate when pointing a tier at a different model |
-| `Morgana:Authentication`                            | Audience, Issuers[] (per-issuer Name + SymmetricKey min 256-bit)                                                                                                                                                              |
+| `Morgana:Authentication`                            | Audience, Issuers[] (per-issuer Name + SymmetricKey min 256-bit). Beyond the channels, one entry named `morgana` is required: it is the issuer the instance signs its own agent-to-agent traffic with, and a placeholder key there is startup-fatal like any other                                                                                                                                                              |
 | `Morgana:HistoryReducer`                            | Enabled, SummarizationThreshold (default 12), SummarizationTargetCount (default 8), SummarizationPrompt                                                                                                                       |
 | `Morgana:OpenTelemetry`                             | Enabled, ServiceName, Exporters array (name, enabled, endpoint)                                                                                                                                                               |
 | `Morgana:Plugins:Directories`                       | Plugin scan directories (default: `["plugins"]`)                                                                                                                                                                              |
