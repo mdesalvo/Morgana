@@ -21,7 +21,6 @@ public sealed class BehaviourTests
     [InlineData("behaviour-rich-card")]
     [InlineData("behaviour-order-confirmation-bills-invoice")]
     [InlineData("behaviour-plan-enrollment-bills-invoice")]
-    [InlineData("behaviour-no-hand-off")]
     public async Task Behavioural_scenario_holds(string scenarioId)
     {
         // Same shape as the context-handling group's test, but this group runs at the harness's

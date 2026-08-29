@@ -6,9 +6,9 @@
 #@   faith — not an attack, which is the guard's business and Morgana's scenario, but an ordinary
 #@   customer wanting something this agent is not the one to give.
 #@   A refusal that leaves the user nowhere is a bad refusal: assert it also says what it can do.
-#@   Never assert that it points the user somewhere else, though — an agent that consults or is
-#@   consulted is forbidden to hand the user off at all, and for every other agent it is a choice
-#@   its own prose makes, not something a starter scenario may assume.
+#@   Never assert that it points the user somewhere else, though: whether an agent names another
+#@   desk or keeps the counter's rota to itself is a choice its own prose makes, and a starter
+#@   scenario may not assume either answer.
 #@   Assert no tool ran, so the refusal is a decision rather than a failed attempt.
 
 id: "{{intent}}-boundary-refusal"
