@@ -56,6 +56,13 @@ things a child process could not — an `ActivityListener` that reads spans with
 loop, and a tee on stdout that reads tool log lines. Both are read-only observers of instrumentation
 that already exists for production reasons.
 
+Those log lines are the only place a context variable's **name** becomes observable — a span carries
+tool names and no data — so the whole context-handling group rests on their shape. `TurnObserver`
+therefore does not carry a copy of them: it builds its patterns from `Constants.ObservableLogs`, the
+same message templates `MorganaTool` and `MorganaAIContextProvider` log with. Reword a line in the
+framework and the reader moves with it; rename a placeholder and the pattern stops matching in the
+same commit, instead of the suite passing on an assertion that can no longer fire.
+
 The harness channel declares the **full** capability profile with no length budget by default, so
 `MorganaChannelAdapter` short-circuits and most scenarios measure undegraded output. One scenario
 opts into a degraded profile instead (`ScenarioDefinition.DegradedChannel`, mirroring Rune's "poor

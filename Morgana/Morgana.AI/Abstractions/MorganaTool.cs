@@ -73,13 +73,15 @@ public class MorganaTool
         if (value != null)
         {
             toolLogger.LogInformation(
-                "{MorganaToolName} ({Name}) HIT variable '{VariableName}' from agent context. Value is: {Value}", nameof(MorganaTool), GetType().Name, variableName, value);
+                Constants.ObservableLogs.ContextHit,
+                Constants.ObservableLogs.ToolName, GetType().Name, Constants.ObservableLogs.Hit, variableName, value);
 
             return Task.FromResult(value);
         }
 
         toolLogger.LogInformation(
-            "{MorganaToolName} ({Name}) MISS variable '{VariableName}' from agent context.", nameof(MorganaTool), GetType().Name, variableName);
+            Constants.ObservableLogs.ContextMiss,
+            Constants.ObservableLogs.ToolName, GetType().Name, Constants.ObservableLogs.Miss, variableName);
 
         return Task.FromResult<object>(
             $"Information {variableName} not available in context: you need to engage SetContextVariable to set it.");
@@ -100,7 +102,8 @@ public class MorganaTool
         await ctx.Provider.SetVariableAsync(ctx.Session, variableName, variableValue);
 
         toolLogger.LogInformation(
-            "{MorganaToolName} ({Name}) SET variable '{VariableName}' into agent context. Value is: {Value}", nameof(MorganaTool), GetType().Name, variableName, variableValue);
+            Constants.ObservableLogs.ContextSet,
+            Constants.ObservableLogs.ToolName, GetType().Name, Constants.ObservableLogs.Set, variableName, variableValue);
 
         return $"Information {variableName} inserted in context with value: {variableValue}";
     }

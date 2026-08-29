@@ -2,8 +2,9 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using Morgana.Contracts;
+using Morgana.AI;
 using Morgana.AI.Telemetry;
+using Morgana.Contracts;
 
 namespace PromptHarness.Infrastructure.Wiring;
 
@@ -21,11 +22,27 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// <c>ActivitySource.StartActivity</c> return real activities even with every exporter disabled,
 /// which is precisely how the suite gets span data without an OTLP collector in the loop.</para>
 /// </remarks>
-public sealed partial class TurnObserver : IDisposable
+public sealed class TurnObserver : IDisposable
 {
-    /// <summary>Matches the context-tool log lines emitted by <c>MorganaTool</c>.</summary>
-    [GeneratedRegex(@"MorganaTool \([^)]*\) (?<op>HIT|MISS|SET) variable '(?<name>[^']*)'", RegexOptions.CultureInvariant)]
-    private static partial Regex ContextAccessPattern { get; }
+    /// <summary>
+    /// Matches the context-tool log lines emitted by <c>MorganaTool</c>, built from the framework's
+    /// own message template rather than from a copy of it.
+    /// </summary>
+    /// <remarks>
+    /// These lines are the only place a context variable's NAME becomes observable — a span carries
+    /// tool names and no data — so the whole context-handling group rests on them, and a reworded
+    /// log line would otherwise turn into a silent pass. Deriving the pattern from
+    /// <see cref="Constants.ObservableLogs"/> makes that impossible: the wording travels, and a
+    /// renamed placeholder stops matching here at the same commit it changes there.
+    /// </remarks>
+    private static readonly Regex ContextAccessPattern = new Regex(
+        PatternFrom(
+            Constants.ObservableLogs.ContextAccessHead,
+            ("{MorganaToolName}", Regex.Escape(Constants.ObservableLogs.ToolName)),
+            ("{Name}", "[^)]*"),
+            ("{Operation}", $"(?<op>{Constants.ObservableLogs.Hit}|{Constants.ObservableLogs.Miss}|{Constants.ObservableLogs.Set})"),
+            ("{VariableName}", "(?<name>[^']*)")),
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>
     /// Matches <c>MorganaAIContextProvider</c>'s per-turn declaration line — the proof that one or
@@ -33,8 +50,36 @@ public sealed partial class TurnObserver : IDisposable
     /// The line is only ever logged when the session holds at least one variable, so an empty
     /// session simply produces no match here — nothing to skip specially.
     /// </summary>
-    [GeneratedRegex(@"MorganaAIContextProvider DECLARED '(?<names>[^']*)'", RegexOptions.CultureInvariant)]
-    private static partial Regex DeclaredContextPattern { get; }
+    private static readonly Regex DeclaredContextPattern = new Regex(
+        PatternFrom(
+            Constants.ObservableLogs.DeclaredContext,
+            ("{MorganaAiContextProviderName}", Regex.Escape(Constants.ObservableLogs.ContextProviderName)),
+            ("{VariableNames}", "(?<names>[^']*)")),
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Turns a logging message template into a regex: everything outside the placeholders is matched
+    /// literally, and each named placeholder is replaced by what the caller wants read out of it.
+    /// </summary>
+    /// <remarks>
+    /// The template is escaped FIRST and the placeholders are then found in their escaped form, so a
+    /// template containing regex metacharacters — the parentheses around the tool's class name do —
+    /// stays literal. A placeholder the caller does not name is left escaped and simply never matches,
+    /// which is the loud failure wanted: a template that grew a field the harness does not know about
+    /// fails every scenario at once rather than quietly matching a prefix of the line.
+    /// </remarks>
+    /// <param name="template">The framework's own message template.</param>
+    /// <param name="groups">Placeholder (as written in the template) to the sub-pattern replacing it.</param>
+    /// <returns>A pattern matching the rendered line.</returns>
+    private static string PatternFrom(string template, params (string Placeholder, string Pattern)[] groups)
+    {
+        string pattern = Regex.Escape(template);
+
+        foreach ((string placeholder, string replacement) in groups)
+            pattern = pattern.Replace(Regex.Escape(placeholder), replacement);
+
+        return pattern;
+    }
 
     /// <summary>Listener on the framework's single <see cref="ActivitySource"/>.</summary>
     private readonly ActivityListener listener;
@@ -140,8 +185,8 @@ public sealed partial class TurnObserver : IDisposable
             {
                 ContextOperation operation = match.Groups["op"].Value switch
                 {
-                    "HIT" => ContextOperation.Hit,
-                    "MISS" => ContextOperation.Miss,
+                    Constants.ObservableLogs.Hit => ContextOperation.Hit,
+                    Constants.ObservableLogs.Miss => ContextOperation.Miss,
                     _ => ContextOperation.Set
                 };
 

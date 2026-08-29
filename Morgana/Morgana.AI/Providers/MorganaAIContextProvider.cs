@@ -219,8 +219,8 @@ public class MorganaAIContextProvider : AIContextProvider
             return new AIContext();
 
         logger.LogInformation(
-            "{MorganaAiContextProviderName} DECLARED '{VariableNames}'",
-            nameof(MorganaAIContextProvider), string.Join(", ", heldVariables.Keys));
+            Constants.ObservableLogs.DeclaredContext,
+            Constants.ObservableLogs.ContextProviderName, string.Join(", ", heldVariables.Keys));
 
         return new AIContext { Instructions = declaration };
     }

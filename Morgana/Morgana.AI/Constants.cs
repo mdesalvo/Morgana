@@ -269,6 +269,53 @@ public static class Constants
     }
 
     /// <summary>
+    /// Log lines somebody OUTSIDE the process reads. Ordinary logging is prose for an operator and
+    /// belongs nowhere near this file; these three lines are different — they are the only place a
+    /// context variable's NAME becomes observable, and the PromptHarness parses them to assert the
+    /// lookup-before-asking cycle, which no span attribute carries (a name is data, and spans carry
+    /// none). That makes their shape a contract with a reader that cannot be recompiled with them.
+    /// </summary>
+    public static class ObservableLogs
+    {
+        /// <summary>Emitter of the context-access lines, as it names itself in them.</summary>
+        public const string ToolName = nameof(Abstractions.MorganaTool);
+
+        /// <summary>Emitter of the declaration line, as it names itself in it.</summary>
+        public const string ContextProviderName = nameof(Providers.MorganaAIContextProvider);
+
+        /// <summary>The variable was already held: the lookup answered and the user was not asked.</summary>
+        public const string Hit = "HIT";
+
+        /// <summary>The variable was not held: asking the user is legitimate from here on.</summary>
+        public const string Miss = "MISS";
+
+        /// <summary>The variable was written, whoever the value came from.</summary>
+        public const string Set = "SET";
+
+        /// <summary>
+        /// The stable head of all three context-access lines. Everything the harness needs is in it —
+        /// the emitter, the operation and the variable name — so the per-operation tails below may
+        /// change without moving the reader.
+        /// </summary>
+        public const string ContextAccessHead = "{MorganaToolName} ({Name}) {Operation} variable '{VariableName}'";
+
+        /// <summary>Read of a held variable, with the value it answered.</summary>
+        public const string ContextHit = ContextAccessHead + " from agent context. Value is: {Value}";
+
+        /// <summary>Read of a variable the session does not hold.</summary>
+        public const string ContextMiss = ContextAccessHead + " from agent context.";
+
+        /// <summary>Write of a variable, with the value stored.</summary>
+        public const string ContextSet = ContextAccessHead + " into agent context. Value is: {Value}";
+
+        /// <summary>
+        /// The per-turn declaration: the variables handed to the model outright, which is why an agent
+        /// may legitimately use one without ever calling GetContextVariable. Names several at once.
+        /// </summary>
+        public const string DeclaredContext = "{MorganaAiContextProviderName} DECLARED '{VariableNames}'";
+    }
+
+    /// <summary>
     /// Control characters used as structural markers inside composed text. Not prose: never rendered,
     /// never typed by a human, never produced by a model, so they cannot collide with real content.
     /// </summary>
