@@ -327,6 +327,23 @@ string[] publishedIntents = builder.Configuration.GetValue("Morgana:AgentToAgent
     ]
     : [];
 
+// An installation that publishes A2A endpoints must be able to CALL them: every outbound
+// consultation is signed under the "morgana" issuer, and without that key a colleague resolves to
+// nothing and simply never appears in the asking agent's tool list — a topology that validated
+// cleanly at startup, failing silently on the first conversation. That is the same defect the
+// [ConsultsAgent] checks exist to prevent, so it is refused in the same place and at the same time
+// rather than logged as a warning nobody reads. Fail fast, and say which of the two ways out to take.
+if (publishedIntents.Length > 0
+    && ConfigurationAgentDirectoryService.ResolvePeerSigningKey(builder.Configuration) is null)
+{
+    throw new InvalidOperationException(
+        $"Peer consultation is enabled and {publishedIntents.Length} agent(s) are published over A2A "
+        + $"({string.Join(", ", publishedIntents)}), but no usable signing key is configured for the "
+        + $"'{Constants.AgentToAgent.IssuerName}' issuer: declare it under Morgana:Authentication:Issuers "
+        + "with a real SymmetricKey (User Secrets or environment), or set Morgana:AgentToAgent:Enabled "
+        + "to false to run without peer consultation.");
+}
+
 TimeSpan a2aRequestTimeout = TimeSpan.FromSeconds(
     builder.Configuration.GetValue("Morgana:ActorSystem:TimeoutSeconds", 180));
 

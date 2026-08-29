@@ -149,17 +149,23 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             validationErrors.Add(ex.Message);
         }
 
-        // Check 4: every [ConsultsAgent] declaration must name an agent that exists, and never the
-        // declaring agent itself. A consultation is resolved at agent-creation time, long after
-        // startup, so a typo would otherwise surface as a colleague that silently never appears.
+        // Check 4: every [ConsultsAgent] declaration must name an agent that exists, never the
+        // declaring agent itself, and never the same colleague twice. A consultation is resolved at
+        // agent-creation time, long after startup, so each of these would otherwise surface on the
+        // first conversation: a typo as a colleague that silently never appears, a duplicate as two
+        // functions of the same name in the tool list, which the provider rejects outright.
         foreach ((string declaredIntent, Type agentType) in registry)
         {
+            HashSet<string> declaredColleagues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (ConsultsAgentAttribute consultsAgent in agentType.GetCustomAttributes<ConsultsAgentAttribute>())
             {
                 if (string.Equals(consultsAgent.Intent, declaredIntent, StringComparison.OrdinalIgnoreCase))
                     validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of itself ('{declaredIntent}')");
                 else if (!registry.ContainsKey(consultsAgent.Intent))
                     validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of '{consultsAgent.Intent}', which no Morgana agent handles");
+                else if (!declaredColleagues.Add(consultsAgent.Intent))
+                    validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of '{consultsAgent.Intent}' more than once");
             }
         }
 

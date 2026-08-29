@@ -24,12 +24,6 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// <summary>Version stamped on every locally projected card, tracking the framework's own contract.</summary>
     private const string LocalCardVersion = "1.0";
 
-    /// <summary>
-    /// Placeholder <c>appsettings.json</c> ships in place of a real secret. A setting still holding
-    /// it has not been configured, and is treated as absent rather than used as a signing key.
-    /// </summary>
-    private const string SecretPlaceholder = "_SECURE_OVERRIDE_";
-
     /// <summary>Source of the intents, which carry each agent's name and purpose.</summary>
     private readonly IAgentConfigurationService agentConfigurationService;
 
@@ -236,17 +230,25 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// </summary>
     /// <returns>The issuer's key (null when the issuer is not declared) and the configured audience.</returns>
     private (string? SymmetricKey, string Audience) ResolvePeerCredentials()
+        => (ResolvePeerSigningKey(configuration),
+            configuration["Morgana:Authentication:Audience"] ?? "morgana.ai");
+
+    /// <summary>
+    /// The key Morgana signs its own peer traffic with, or <c>null</c> when the <c>morgana</c> issuer
+    /// is undeclared, blank, or still holding the placeholder <c>appsettings.json</c> ships.
+    /// </summary>
+    /// <param name="configuration">Application configuration.</param>
+    /// <returns>The signing key, or null when it has not been configured.</returns>
+    public static string? ResolvePeerSigningKey(IConfiguration configuration)
     {
         Records.IssuerOptions? issuer = configuration.GetSection("Morgana:Authentication:Issuers")
             .Get<List<Records.IssuerOptions>>()?
             .FirstOrDefault(i => string.Equals(i.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase));
 
-        string? symmetricKey = string.IsNullOrWhiteSpace(issuer?.SymmetricKey)
-                               || string.Equals(issuer.SymmetricKey.Trim(), SecretPlaceholder, StringComparison.Ordinal)
+        return string.IsNullOrWhiteSpace(issuer?.SymmetricKey)
+               || string.Equals(issuer.SymmetricKey.Trim(), Constants.Overrides.Secure, StringComparison.Ordinal)
             ? null
             : issuer.SymmetricKey;
-
-        return (symmetricKey, configuration["Morgana:Authentication:Audience"] ?? "morgana.ai");
     }
 
     /// <summary>

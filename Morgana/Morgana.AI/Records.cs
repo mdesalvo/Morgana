@@ -296,18 +296,6 @@ public static class Records
     }
 
     /// <summary>
-    /// Sentinel placeholder values used throughout appsettings.json for settings that MUST be
-    /// overridden via User Secrets or environment variables before the app is usable (see
-    /// CLAUDE.md "Conventions": <c>_SECURE_OVERRIDE_</c> for secrets, <c>_FUNCTIONAL_OVERRIDE_</c>
-    /// for non-secret required values). Lives here, next to <see cref="TierDefinition"/>, rather
-    /// than inside <c>MorganaLLM</c>, because recognizing an unfilled placeholder is a config
-    /// convention — not LLM-specific behavior — that any consumer of appsettings.json could
-    /// reasonably need to check, not just the LLM provider constructors that happen to be the
-    /// only ones checking it today.
-    /// </summary>
-    internal static readonly string[] OverridePlaceholders = ["_SECURE_OVERRIDE_", "_FUNCTIONAL_OVERRIDE_"];
-
-    /// <summary>
     /// Per-conversation lifetime dust budget (no sliding window, no reset). Orthogonal to RateLimitOptions.
     /// Message templates are English defaults; deployments override in Morgana:DustLimiting with own personality.
     /// Percent placeholder: fuel-gauge semantics (remaining as 0–100 integer, not dust units).

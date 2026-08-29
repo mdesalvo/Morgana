@@ -316,6 +316,24 @@ public static class Constants
     }
 
     /// <summary>
+    /// Sentinel values <c>appsettings.json</c> ships in place of a setting that MUST be filled in
+    /// before the application is usable — a secret through User Secrets or the environment, a
+    /// non-secret required value through either. A setting still holding one has not been
+    /// configured, and every reader treats it as absent rather than as a value.
+    /// </summary>
+    public static class Overrides
+    {
+        /// <summary>Stands in for a secret: an API key, a signing key.</summary>
+        public const string Secure = "_SECURE_OVERRIDE_";
+
+        /// <summary>Stands in for a required non-secret: a model id, an endpoint.</summary>
+        public const string Functional = "_FUNCTIONAL_OVERRIDE_";
+
+        /// <summary>Both, for a reader that only asks whether a setting was ever filled in.</summary>
+        public static readonly string[] All = [Secure, Functional];
+    }
+
+    /// <summary>
     /// Control characters used as structural markers inside composed text. Not prose: never rendered,
     /// never typed by a human, never produced by a model, so they cannot collide with real content.
     /// </summary>

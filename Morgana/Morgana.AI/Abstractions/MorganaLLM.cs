@@ -132,7 +132,7 @@ public class MorganaLLM : ILLMService
     /// <param name="tier">Tier this model serves — the key it was registered under in the <c>Tiers</c> map.</param>
     /// <param name="modelName">
     /// The model/deployment identifier this tier resolves to (<c>TierDefinition.Options.ModelId</c>),
-    /// checked against <see cref="Records.OverridePlaceholders"/> before registration. Not
+    /// checked against <see cref="Constants.Overrides"/> before registration. Not
     /// stored — the client already has it baked in — this parameter exists purely so every
     /// provider gets the check for free instead of each duplicating it.
     /// </param>
@@ -157,7 +157,7 @@ public class MorganaLLM : ILLMService
         // RequiresLLMTierValidationService's "tier exists" check sees nothing wrong) — this is
         // the only point left where the raw, still-a-placeholder value is visible before it
         // disappears into an already-built client.
-        if (Records.OverridePlaceholders.Contains(modelName))
+        if (Constants.Overrides.All.Contains(modelName))
             throw new InvalidOperationException(
                 $"Morgana:LLM:{{Provider}}:Tiers:{tier} has a ModelId that is still the " +
                 $"placeholder '{modelName}'. Override it via User Secrets or environment variables before " +
