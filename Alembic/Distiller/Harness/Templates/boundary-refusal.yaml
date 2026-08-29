@@ -6,6 +6,9 @@
 #@   faith — not an attack, which is the guard's business and Morgana's scenario, but an ordinary
 #@   customer wanting something this agent is not the one to give.
 #@   A refusal that leaves the user nowhere is a bad refusal: assert it also says what it can do.
+#@   But never assert that it points the user anywhere — there is one Morgana, and her own rules
+#@   forbid naming another desk, office or department or sending the customer to one. What a good
+#@   refusal says is that the thing is not on this agent's own books, plus what is.
 #@   Assert no tool ran, so the refusal is a decision rather than a failed attempt.
 
 id: "{{intent}}-boundary-refusal"
@@ -23,6 +26,7 @@ turns:
       toolsNotCalled: ["{{a tool that must not be reached for here}}"]
       textNotEmpty: true
     judge:
-      - "{{the reply declines to <the thing> and points the user somewhere useful}}"
+      - "{{the reply declines to <the thing> and says what it can do instead}}"
     judgeNot:
       - "{{the reply does <the thing> anyway, or promises it will be done}}"
+      - "the reply points the user at another desk, office, department or system, or asks them to take the question anywhere other than to the assistant"

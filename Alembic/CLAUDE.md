@@ -446,14 +446,18 @@ acceptance gesture and `AnswerAsync` commits and abandons where the others hand 
 the shipped `Examples` domain demonstrated before it was fixed: `BillingAgent` carried
 `[ConsultsAgent("inventory")]` while its own `Instructions` said orders *belong to another bench —
 say so plainly, never answer from the invoice*. The model reads a function offering the colleague and
-a flat imperative refusing the subject, and the imperative wins; worse, nothing resolves it, since
-`PeerConsultationGuidance` rides on a function description and has none of the framework layer's
-precedence over the domain layer. So `DeclareConsultation` takes the asking agent's rewritten
+a flat imperative refusing the subject. Morgana's `PeerConsultation` policy now decides that
+collision by precedence — it is `Critical`, and the domain layer is subordinate — but an agent whose
+own prose has to be overruled on every turn is still a defect: the contradiction is paid in tokens
+and settled by a model rather than by its author. So `DeclareConsultation` takes the asking agent's rewritten
 `Instructions` **in the same call** — and optionally the colleague's, only where its own words would
 have it refuse what it is now asked — and `CommitColleagues` writes attribute and prose in one go.
-What that prose must never carry is a rule about *when* to consult, how briefly, or what the answer
-is: all of it is already on the function the agent will be handed, and a second copy is a second
-voice claiming the same authority.
+What that prose must never carry is a rule about *when* to consult, how briefly, what to expect back
+or what to do with the answer — nor that the answer is given in the agent's own voice, nor that the
+customer is not sent away. Every one of those is a critical rule of the framework, binding above
+anything the domain layer says, and a second copy below is a second voice claiming the same
+authority. What the rewritten sentence states is fact: what is on this agent's books, what is not on
+them but it can reach, and what it cannot reach at all.
 
 What the client is asked is a question about **their own work** — whether the accounts desk really
 rings the greenhouse when a customer asks what a charge bought — never which agent should call which,

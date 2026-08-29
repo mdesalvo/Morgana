@@ -122,9 +122,12 @@ Its interview closes on one pass that is not about any single agent: `DomainColl
 which agents may consult which — `[ConsultsAgent]` is a relation, so it cannot be asked while half
 its ends are still unwritten — and writes the edge together with the boundary sentence in the asking
 agent's `Instructions` that the edge would otherwise contradict. Declaring one without the other is
-the defect the shipped `Examples` domain carried until it was fixed, and it is unresolvable from
-inside a prompt: `PeerConsultationGuidance` rides on a function description and holds none of the
-framework layer's precedence over a domain agent's flat imperative.
+the defect the shipped `Examples` domain carried until it was fixed. The framework now settles who
+wins — the `PeerConsultation` policy is `Critical`, so a domain sentence refusing what a colleague
+answers contradicts a rule above it — but a contradiction resolved by precedence is still a
+contradiction, paid on every turn and read by a model that has to pick. The pass therefore writes
+the boundary as a statement of fact (what is on this agent's books, what it can reach, what it
+cannot) and never as a rule about consulting, which the framework already carries.
 
 It references **`Morgana.AI`** (not `Morgana.Contracts` like the channels): it exchanges no wire DTOs but needs the domain model of a configuration — `Records.Prompt`, `Records.ToolDefinition`, `Records.Intent` — which makes parsing an uploaded `agents.json` free. It also consumes `IPromptComposerService`, which is what lets the interview recap be **the composed prompt the model will really read** rather than a summary of the client's answers: `ComposeAgentInstructionsAsync` takes the domain prompt as a parameter, so the `Records.Prompt` can be built in memory from a Draft that exists nowhere on disk. Alembic runs on the `Performance` tier — writing non-contradictory dispositive prose is precisely where the `Efficiency` die fails — and consequently does not serve a single-tier deployment.
 
