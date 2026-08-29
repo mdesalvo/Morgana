@@ -14,6 +14,7 @@ using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.AI.SessionStores;
 using Morgana.AI.Telemetry;
+using Morgana.Web.Filters;
 using Morgana.Web.Hubs;
 using Morgana.Web.Services;
 
@@ -399,7 +400,6 @@ app.MapHub<MorganaHub>("/morganaHub");  // Map SignalR hub endpoint
 if (publishedIntents.Length > 0)
 {
     IAgentDirectoryService agentDirectory = app.Services.GetRequiredService<IAgentDirectoryService>();
-    IAuthenticationService a2aAuthentication = app.Services.GetRequiredService<IAuthenticationService>();
 
     foreach (string publishedIntent in publishedIntents)
     {
@@ -409,9 +409,10 @@ if (publishedIntents.Length > 0)
         if (publishedCard is null)
             continue;
 
+        // These endpoints are the hosting layer's, not a controller's, so they carry no gate of
+        // their own until one is put on them: A2AAuthenticationFilter is the same gate MorganaController applies.
         app.MapA2AJsonRpc(publishedIntent, agentPath)
-           .AddEndpointFilter(async (invocationContext, next) =>
-                await AuthenticateA2ARequestAsync(invocationContext, next, a2aAuthentication));
+           .AddEndpointFilter<IEndpointConventionBuilder, A2AAuthenticationFilter>();
 
         // The card itself stays open: discovery is what tells a caller how to authenticate, and a
         // card behind authentication cannot be found by anyone not already knowing how to reach it.
@@ -423,24 +424,6 @@ if (publishedIntents.Length > 0)
     // them in — the well-known endpoint serialises its card on every request, so a card read after
     // this point carries the interface, and nothing ever had to be told the application's own URL.
     app.Lifetime.ApplicationStarted.Register(() => agentDirectory.PublishInterfacesAsync().GetAwaiter().GetResult());
-}
-
-// The A2A endpoints are mapped outside the controllers, so they carry no gate of their own. This
-// applies the very gate MorganaController applies: the same issuer whitelist, the same audience,
-// fail-closed. An agent consulting a colleague presents a token issued under the "morgana" issuer.
-static async ValueTask<object?> AuthenticateA2ARequestAsync(
-    EndpointFilterInvocationContext invocationContext,
-    EndpointFilterDelegate next,
-    IAuthenticationService authenticationService)
-{
-    string? authorization = invocationContext.HttpContext.Request.Headers.Authorization.FirstOrDefault();
-
-    if (authorization is null || !authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        return Results.Unauthorized();
-
-    Records.AuthenticationResult authentication = await authenticationService.AuthenticateAsync(authorization["Bearer ".Length..]);
-
-    return authentication.IsAuthenticated ? await next(invocationContext) : Results.Unauthorized();
 }
 
 // ==============================================================================

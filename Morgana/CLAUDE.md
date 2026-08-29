@@ -71,6 +71,7 @@ own.
 | `Controllers/MorganaController.cs` | REST API at `api/morgana` — conversation start/end/resume/history/message/health |
 | `Hubs/MorganaHub.cs` | SignalR hub at `/morganaHub` — group-based real-time messaging |
 | `Services/PluginLoaderService.cs` | Scans `plugins/` directory for DLLs containing `MorganaAgent` subclasses |
+| `Filters/A2AAuthenticationFilter.cs` | `IEndpointFilter` on the A2A JSON-RPC endpoints — the same bearer/issuer gate `MorganaController` applies, fail-closed. Those endpoints are mapped by the hosting layer, outside the controllers, so they carry no gate until one is put on them; the well-known card endpoint stays open by design |
 | `Services/KestrelHostAddressService.cs` | `IHostAddressService` implementation — reports the address Kestrel actually bound, so an A2A card can name a callable endpoint with nothing configured |
 | `Services/SignalRChannelService.cs` | `IChannelService` implementation — pushes `ChannelMessage` and stream chunks over SignalR |
 | `appsettings.json` | All configuration sections (see Key Configuration below) |
@@ -201,9 +202,9 @@ loopback on the same port. Configuring an address belongs to whoever *consumes* 
 Morgana's URL, and a remote peer would be declared on the consuming side — never to the application
 describing itself. So an
 agent of this installation is reachable and discoverable by anything that speaks A2A, not only by
-its siblings. The JSON-RPC endpoint carries an endpoint filter applying the same `IAuthenticationService`
-gate the controller applies; the card itself stays open, because discovery is what tells a caller how
-to authenticate.
+its siblings. The JSON-RPC endpoint carries `Morgana.Web/Filters/A2AAuthenticationFilter`, an `IEndpointFilter`
+applying the same `IAuthenticationService` gate the controller applies; the card itself stays open,
+because discovery is what tells a caller how to authenticate.
 
 **What Morgana contributes is exactly two types**, and both exist to reconcile one mismatch: A2A
 hosting expects one long-lived agent per name, while Morgana's agents are per-conversation actors.
