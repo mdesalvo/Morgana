@@ -23,8 +23,13 @@ public interface IPromptComposerService
     /// framework's claim to precedence names a boundary the model cannot locate.
     /// </summary>
     /// <param name="domainPrompt">The agent's own prompt, resolved from <c>agents.json</c>.</param>
+    /// <param name="peerCapable">
+    /// True when this agent consults a colleague or is itself consulted, which is what admits the
+    /// peer-consultation policy into the rendered rules. False leaves an agent outside the topology
+    /// reading exactly the prompt it read before peer consultation existed.
+    /// </param>
     /// <returns>The composed instructions, ready for <c>ChatOptions.Instructions</c>.</returns>
-    Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt);
+    Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false);
 
     /// <summary>
     /// Produces the description a tool presents to the model. When the tool declares

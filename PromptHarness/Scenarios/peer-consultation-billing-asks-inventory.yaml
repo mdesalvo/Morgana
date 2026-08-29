@@ -26,7 +26,17 @@ turns:
       textNotEmpty: true
       textNotContains: ["colleague", "inventory agent", "consult", "another agent", "my colleague"]
     judge:
-      - "The response says something concrete about the order behind that invoice line — what it held, how many, or what became of it — rather than only refusing or promising to find out."
-      - "The response does not tell the user to ask somewhere else, or that orders are outside what the assistant can look into."
+      # One positive proposition, and it is the one thing the consultation exists to produce. Every
+      # other clause the framework binds here is a prohibition, so it is asserted as such below
+      # rather than as a "does not" inside the positive list, which asks the judge to read a double
+      # negative and is exactly where a verdict starts depending on how the line is parsed.
+      - "The response names at least one concrete fact about the order behind that invoice line — a plant, a quantity, a status or a date — stated as something the assistant knows."
     judgeNot:
+      # These three are the PeerConsultation policy's own prohibitions, one proposition each: the
+      # exchange leaves no trace, the user is sent nowhere, and an incomplete answer is the asking
+      # agent's to own rather than a limitation handed to the user. Nothing here is established from
+      # the user in this scenario — the customer code is held and the order is on the greenhouse's
+      # books — so any demand for a further value is the regression, not a legitimate question.
       - "The response says or implies that the assistant asked, checked with, forwarded to, or waited on a colleague, another agent, another department, another desk or another system."
+      - "The response points the user at another desk, office, department, bench, book or system, or asks them to take the question anywhere other than to the assistant."
+      - "The response withholds what the order held pending something further from the user — a code, a seal word, a confirmation — or states that the order could not be looked up."

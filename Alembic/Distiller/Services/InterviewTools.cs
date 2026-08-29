@@ -697,6 +697,15 @@ public class InterviewTools
     }
 
     /// <summary>
+    /// True when some OTHER agent of the draft declares it may consult this one — the half of the
+    /// consultation relation an agent cannot see from its own <c>Consults</c> list.
+    /// </summary>
+    private bool IsConsultedByOthers(AgentDraft agent)
+        => (draftStateService.Current?.Agents ?? []).Any(other =>
+               other.ID != agent.ID &&
+               other.Code.Consults.Contains(agent.ID, StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>
     /// Returns the prompt this agent's model will really read.
     /// </summary>
     public async Task<string> GetComposedPrompt()
@@ -704,7 +713,9 @@ public class InterviewTools
         if (string.IsNullOrWhiteSpace(interviewState.Agent.Target))
             return "Nothing to compose yet: the agent has no target.";
 
-        AgentRecap recap = await recapService.ComposeAsync(interviewState.Agent);
+        AgentRecap recap = await recapService.ComposeAsync(
+            interviewState.Agent,
+            IsConsultedByOthers(interviewState.Agent));
 
         return "This is the whole of what this agent's model will read:\n\n" + recap.SystemPrompt;
     }

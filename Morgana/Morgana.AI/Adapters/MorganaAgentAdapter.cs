@@ -319,7 +319,14 @@ public class MorganaAgentAdapter
                 // Give the agent its instructions and tools
                 ChatOptions = new ChatOptions
                 {
-                    Instructions = await promptComposerService.ComposeAgentInstructionsAsync(agentPrompt),
+                    Instructions = await promptComposerService.ComposeAgentInstructionsAsync(
+                        agentPrompt,
+
+                        // Both ends of the topology, not just the asking one: an agent nobody
+                        // consults and that consults nobody never reads the peer-consultation rules,
+                        // while one that is only ever asked reads them because a colleague's question
+                        // can land on it at any turn.
+                        peerAgents.Count > 0 || IsConsultedByAnyAgent(intentAttribute.Intent)),
                     Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents]
                 }
             });
@@ -508,6 +515,34 @@ public class MorganaAgentAdapter
             morganaToolAdapter.AddTool(toolDefinition.Name, toolImplementation, toolDefinition);
         }
     }
+
+    /// <summary>
+    /// The intents named by somebody's <c>[ConsultsAgent]</c>, i.e. the agents that can be asked a
+    /// question. Computed once: the set is decided by the plugins loaded at startup and cannot
+    /// change afterwards, while agents are created per conversation.
+    /// </summary>
+    private static readonly Lazy<HashSet<string>> consultedIntents = new(() =>
+    {
+        Dictionary<string, Type> discoveredAgents = HandlesIntentAgentRegistryService.DiscoverAgents();
+
+        // Case-insensitive like every other intent lookup in the framework: the attribute carries
+        // whatever casing its author typed, the registry keys do not have to agree with it.
+        return new HashSet<string>(
+            discoveredAgents.Values
+                .SelectMany(agentType => agentType.GetCustomAttributes<ConsultsAgentAttribute>())
+                .Select(consultsAgent => consultsAgent.Intent)
+                .Where(discoveredAgents.ContainsKey),
+            StringComparer.OrdinalIgnoreCase);
+    }, LazyThreadSafetyMode.ExecutionAndPublication);
+
+    /// <summary>
+    /// True when some agent of this installation declares it may consult the given intent — the same
+    /// condition under which Morgana.Web publishes that intent over A2A, since an unpublished agent
+    /// is unreachable and therefore never asked.
+    /// </summary>
+    private bool IsConsultedByAnyAgent(string intent)
+        => configuration.GetValue("Morgana:AgentToAgent:Enabled", true)
+           && consultedIntents.Value.Contains(intent);
 
     /// <summary>
     /// Builds one callable function per colleague the agent declares with <c>[ConsultsAgent]</c>.

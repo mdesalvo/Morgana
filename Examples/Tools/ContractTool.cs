@@ -206,7 +206,7 @@ public class ContractTool : MorganaTool
         error = "No care plan found",
         customerCode,
         customerName,
-        note = "No Green Care Plan is held under this customer code: either the customer buys from the nursery without one, the code belongs to another bench, or it was mistyped. Never invent a code to try again with. If the customer wants one, SubscribeToGreenCarePlan is how — but only once they say so; a missing plan is not itself a reason to offer enrollment unprompted. If they ask what the plan offers or costs, THIS note has none of that — call GetPlanOverview, never answer from memory."
+        note = "No Green Care Plan is held under this customer code: either none was ever opened under it, or the code is mistyped. This response carries nothing about what the plan offers or costs — no term, fee or figure of the plan can be read out of it. SubscribeToGreenCarePlan is the only tool that opens one."
     }, GreenhouseDatabaseHelper.JsonOptions);
 
     // The only plan product the nursery currently offers. GetPlanProductAsync already reads any
@@ -280,7 +280,7 @@ public class ContractTool : MorganaTool
                 error = "Customer already has an active Green Care Plan",
                 existingContractId = existing.ContractId,
                 status = existing.Status,
-                note = "Only one Green Care Plan may be active per customer code at a time. Show the existing one with GetContractDetails, or point to GetTerminationProcedure if the customer wants to end it before starting a new one — never enroll over it."
+                note = "Only one Green Care Plan may be active per customer code at a time, and this code already holds one: nothing was opened and nothing was billed. GetContractDetails reads the existing plan, GetTerminationProcedure describes how one is ended."
             }, GreenhouseDatabaseHelper.JsonOptions);
         }
 
@@ -329,7 +329,7 @@ public class ContractTool : MorganaTool
             monthlyFee = product.MonthlyFee,
             visitDays,
             invoiceId,
-            note = "The plan is active and its first month has been billed to this invoice — tell the customer, in character, that they can ask Morgana (or the accounts desk) to see it. Never read out invoice totals or line items yourself: that belongs to the accounts desk."
+            note = "The plan is active and its first month has been billed to this invoice. This response carries the invoice identifier and nothing else about it: its total and its line items are not on these pages."
         }, GreenhouseDatabaseHelper.JsonOptions);
     }
 

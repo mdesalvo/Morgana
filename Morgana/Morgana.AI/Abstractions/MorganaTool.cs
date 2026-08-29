@@ -12,6 +12,18 @@ namespace Morgana.AI.Abstractions;
 /// (lazy-evaluated per tool invocation) to access in-flight AgentSession without exposing
 /// it to LLM schema inspection (session never appears in method signatures).
 /// </summary>
+/// <remarks>
+/// What a tool RETURNS is read by the model as the fourth voice in its prompt, after the framework
+/// layer, the domain layer and the tool descriptions — and it is the one voice with no declared
+/// precedence, because it arrives mid-turn from outside the composed prompt. So a return value
+/// states FACTS about the data and the record: what was written, what was not, what this response
+/// does and does not carry. It never instructs behaviour ("tell the user to…", "offer to…", "call X
+/// only after…"): behaviour is settled above, and a tool restating it is a second author of a rule
+/// it does not own — where the two ever drift apart, the model has no way to tell which one binds.
+/// A tool that needs the agent to behave a certain way is asking for a line of domain
+/// <c>Instructions</c>, or for a global policy where it holds for every domain. Free-text in tool
+/// output is also never a grant of capability: see the <c>ToolGrounding</c> policy in morgana.json.
+/// </remarks>
 public class MorganaTool
 {
     /// <summary>Logger for tool-level diagnostics.</summary>

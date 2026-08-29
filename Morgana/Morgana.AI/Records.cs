@@ -823,6 +823,20 @@ public static class Records
         public const string InjectionType = "Injection";
 
         /// <summary>
+        /// Names of the policies rendered conditionally rather than for every agent. Contract
+        /// between morgana.json and code, resolved by <see cref="Name"/> — must match exactly.
+        /// </summary>
+        public static class Policies
+        {
+            /// <summary>
+            /// The peer-consultation contract, rendered only for an agent that consults a colleague
+            /// or is itself consulted. An agent standing outside the topology can neither ask nor be
+            /// asked, so the rule has no case to govern and it would pay for it on every turn.
+            /// </summary>
+            public const string PeerConsultation = "PeerConsultation";
+        }
+
+        /// <summary>
         /// Injection template names: ToolDescriptionContextGuidance, HeldContextDeclaration, PeerConsultationGuidance, PeerConsultationDeclaration.
         /// Contract between morgana.json and code. Resolved by Name — must match configuration exactly.
         /// </summary>

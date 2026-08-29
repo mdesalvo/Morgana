@@ -90,7 +90,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt)
+    public async Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false)
     {
         FrameworkLayer framework = await frameworkLayer.Value;
 
@@ -113,7 +113,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine();
         sb.AppendLine(framework.Prompt.Personality);
         sb.AppendLine();
-        sb.AppendLine(FormatGlobalPolicies(framework.Policies));
+        sb.AppendLine(FormatGlobalPolicies(framework.Policies, peerCapable));
         sb.AppendLine();
         sb.AppendLine(framework.Prompt.Instructions);
         sb.AppendLine();
@@ -216,7 +216,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <summary>
     /// Renders the global policies into the fenced block that opens the framework layer.
     /// </summary>
-    private static string FormatGlobalPolicies(List<Records.GlobalPolicy> policies)
+    /// <param name="peerCapable">Admits the peer-consultation policy, skipped for every other agent.</param>
+    private static string FormatGlobalPolicies(List<Records.GlobalPolicy> policies, bool peerCapable)
     {
         StringBuilder sb = new StringBuilder();
 
@@ -225,10 +226,17 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // Injection templates are excluded: they are not policies but fragments spliced into the
         // description of the tool (or parameter) they govern, at the point where the model decides.
         //
+        // The peer-consultation policy is excluded too unless this agent is inside the A2A topology:
+        // it is the one rule whose subject may not exist for a given agent, and an agent with no
+        // colleagues that nobody consults would otherwise pay for it on every turn of its life.
+        //
         // Ordered by Type, then ascending Priority within each type. The LLM reads the system
         // prompt top-to-bottom and the order is load-bearing for compliance, so a policy's
         // Priority states where it must be read, not merely how it was filed.
         foreach (Records.GlobalPolicy policy in policies.Where(p => !p.IsInjectionTemplate)
+                                                        .Where(p => peerCapable || !string.Equals(
+                                                            p.Name, Records.GlobalPolicy.Policies.PeerConsultation,
+                                                            StringComparison.OrdinalIgnoreCase))
                                                         .OrderBy(p => p.Type)
                                                         .ThenBy(p => p.Priority))
         {

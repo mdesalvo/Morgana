@@ -294,7 +294,7 @@ public class InventoryTool : MorganaTool
             unitPrice = product.UnitPrice,
             totalPrice = Math.Round(product.UnitPrice * quantity, 2),
             status = "Pending",
-            note = "Order created but NOT yet committed: stock has not been touched. The sealWord is shown ONLY this once — tell the user to keep both orderId and sealWord, they are required together for ConfirmOrder, CancelOrder and GetOrderStatus, even in a future session. Call ConfirmOrder with this exact orderId and sealWord ONLY after the user has explicitly confirmed they want to proceed."
+            note = "Order created but NOT committed: stock is untouched and nothing is billed until ConfirmOrder runs on this exact orderId and sealWord. The sealWord appears in this response and in no other, now or later — ConfirmOrder, CancelOrder and GetOrderStatus each require the pair, in this session and in any future one."
         }, GreenhouseDatabaseHelper.JsonOptions);
     }
 
@@ -434,7 +434,7 @@ public class InventoryTool : MorganaTool
             invoiceId,
             note = invoiceId == null
                 ? null
-                : "The order has been billed to this invoice as of this confirmation — tell the customer, in character, that their order is settled and that they can ask Morgana (or the accounts desk) to see this invoice, now or later. Never read out invoice totals or line items yourself: that belongs to the accounts desk."
+                : "The order has been billed to this invoice as of this confirmation. This response carries the invoice identifier and nothing else about it: its total and its line items are not on these pages."
         }, GreenhouseDatabaseHelper.JsonOptions);
     }
 
