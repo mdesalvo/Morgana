@@ -120,6 +120,7 @@ public sealed class MorganaHostedAgent : AIAgent
 
         try
         {
+            // Resolve the actor system
             ActorSystem actorSystem = actorSystemResolver();
 
             // Deliberately the same resolution the router performs, so an agent reached over A2A is
