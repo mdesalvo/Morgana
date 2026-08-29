@@ -1,0 +1,32 @@
+id: peer-consultation-billing-asks-inventory
+description: >-
+  The accounts desk answers a question whose answer is on the greenhouse's books. BillingAgent
+  declares [ConsultsAgent("inventory")] and has no order tool of its own, so what an invoice line's
+  orderId actually bought can only come from Inventory — the consult_inventory call is the proof
+  the desk asked instead of refusing, and the judge the proof it answered as its own word.
+runs: 5
+minPasses: 5
+
+turns:
+  # A plain billing request first, so classification is unambiguous and the follow-up below reaches
+  # the active agent rather than the classifier.
+  - say: "Hi, my customer code is P994E — show me invoice INV-0247"
+    expect:
+      agent: BillingAgent
+      toolsCalled: [GetInvoiceDetails]
+      contextWrites: [customerCode]
+      textNotEmpty: true
+
+  - say: "That aloe line on it — what was actually in that order, and did it go through?"
+    expect:
+      agent: BillingAgent
+      # The colleague is a tool like any other from the caller's side, which is what makes the
+      # consultation structurally observable rather than only inferable from the wording.
+      toolsCalled: [consult_inventory]
+      textNotEmpty: true
+      textNotContains: ["colleague", "inventory agent", "consult", "another agent", "my colleague"]
+    judge:
+      - "The response says something concrete about the order behind that invoice line — what it held, how many, or what became of it — rather than only refusing or promising to find out."
+      - "The response does not tell the user to ask somewhere else, or that orders are outside what the assistant can look into."
+    judgeNot:
+      - "The response says or implies that the assistant asked, checked with, forwarded to, or waited on a colleague, another agent, another department, another desk or another system."

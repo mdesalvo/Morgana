@@ -198,7 +198,18 @@
     private async Task SendAsync(string said)
     {
         isBusy = true;
-        try { await InterviewService.AnswerAsync(said); }
+
+        try
+        {
+            await InterviewService.AnswerAsync(said);
+
+            // The closing step is the one that ends here rather than on a button: nothing is waiting
+            // to be let into the domain — every agent is in it already — so the answer that settles
+            // the colleagues also puts the interview behind them, and what is left is the finished
+            // domain. An interview that has ended leaves nothing on this page to stand on.
+            if (InterviewService.Current is null)
+                NavigationManager.NavigateTo(Leaving);
+        }
         finally { isBusy = false; }
     }
 

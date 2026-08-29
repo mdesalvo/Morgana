@@ -353,6 +353,31 @@ input[type="checkbox"] {
     font-size: 0.85rem;
 }
 
+/* The classes of defect the coherence pass can be asked for. A column and not a row of chips: each
+   one carries a line saying what ticking it goes looking for, and a client who has to hover to find
+   that out ticks whatever sounds most serious instead. */
+.aspects {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin: 0 0 1.25rem;
+}
+
+/* The checkbox sits against the label's first line rather than the middle of a two-line block. */
+.switch.aspect {
+    align-items: flex-start;
+    font-size: 0.9rem;
+}
+
+.switch.aspect input {
+    margin-top: 0.15rem;
+}
+
+.switch.aspect .field-note {
+    margin-top: 0.1rem;
+    color: var(--alembic-muted);
+}
+
 /* One server: the URL takes the room left over, the two buttons take what they need. */
 .mcp-servers {
     display: flex;

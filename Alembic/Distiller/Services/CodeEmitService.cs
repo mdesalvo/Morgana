@@ -100,6 +100,12 @@ public class CodeEmitService : ICodeEmitService
         foreach (string server in agent.Code.MCPServers)
             sb.AppendLine($"[UsesMCPServer(\"{server}\")]");
 
+        // One per colleague, and each one becomes a consult_{intent} function in this agent's tool
+        // list at assembly time. Startup refuses an intent no agent handles and refuses the agent's
+        // own, which is why the interview settles them against the finished domain.
+        foreach (string colleague in agent.Code.Consults)
+            sb.AppendLine($"[ConsultsAgent(\"{colleague}\")]");
+
         sb.AppendLine($"public partial class {agentClass} : MorganaAgent");
         sb.AppendLine("{");
         sb.AppendLine($"    public {agentClass}(");

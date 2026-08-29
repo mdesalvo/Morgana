@@ -78,9 +78,31 @@
             <details class="recap-section">
                 <summary>Coherence</summary>
             <p class="muted">
-                What only reading every agent at once reveals: overlaps, contested ground, values
-                that disagree between agents.
+                What only reading every agent at once reveals. Ask it for what you actually want to
+                know: each class below is a separate question about your domain, and the pass is
+                composed of the ones you tick and nothing else.
             </p>
+
+            @*
+                Ticked one at a time rather than run whole, and the reason is not the token bill. A
+                report answering six questions when the client asked one is a table to sift, and a
+                table to sift is a table nobody finishes; worse, the class they actually came about
+                arrives ranked beneath five they did not. So the choice is theirs, nothing is ticked
+                for them, and the pass cannot run until they have said what they are looking for.
+            *@
+            <div class="aspects">
+                @foreach (CoherenceAspect aspect in CoherenceService.Aspects)
+                {
+                    string id = aspect.Id;
+                    <label class="switch aspect">
+                        <input type="checkbox" checked="@asked.Contains(id)" @onchange="e => ToggleAspect(id, e)" />
+                        <span>
+                            @aspect.Label
+                            <span class="field-note">@aspect.Summary</span>
+                        </span>
+                    </label>
+                }
+            </div>
 
             @*
                 Running the pass itself is optional and cheap to try; it is "Apply" that writes directly
@@ -102,14 +124,20 @@
 
             @if (coherence is null)
             {
-                <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || draft.Agents.Count < 2)">
-                    @(isReviewing ? "Reading the domain…" : "Run the coherence pass")
+                <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || draft.Agents.Count < 2 || asked.Count == 0)">
+                    @(isReviewing ? "Reading the domain…" : Asking)
                 </button>
 
                 @if (draft.Agents.Count < 2)
                 {
                     <p class="muted">
                         One agent, so there is nothing to relate: this pass needs two.
+                    </p>
+                }
+                else if (asked.Count == 0)
+                {
+                    <p class="muted">
+                        Nothing ticked yet, so there is no question to ask. Pick what you want looked at.
                     </p>
                 }
             }
@@ -120,10 +148,17 @@
             }
             else if (coherence.Findings.Count == 0)
             {
-                @* No "Run it again" here: nothing in the domain can have changed since this same
-                   pass just read it clean, so a re-run would face the exact same domain and spend
-                   another Performance call to say the same thing again. *@
-                <p class="all-clear">&check; Nothing to report. No overlap, no contested capability, no value that disagrees with itself.</p>
+                @* Nothing in the domain can have changed since this same pass just read it clean, so
+                   re-running THE SAME question would spend another Performance call to hear the same
+                   answer. A different question is another matter entirely, and that is exactly what
+                   ticking a class the last run did not carry is — so the button comes back for that
+                   and for nothing else. *@
+                <p class="all-clear">&check; Nothing to report on @Ran.</p>
+
+                @if (AskedSomethingElse)
+                {
+                    <button class="primary" @onclick="ReviewAsync" disabled="@isReviewing">@Asking</button>
+                }
             }
             else
             {
@@ -188,7 +223,7 @@
                 @* Only once something has actually changed: re-running against a domain nobody
                    touched since the last pass would hand the model the exact same cards and spend
                    a call to hear the exact same findings back. *@
-                @if (AnyApplied)
+                @if (AnyApplied || AskedSomethingElse)
                 {
                     @if (coherenceRuns >= ChaseWarningThreshold)
                     {
@@ -206,7 +241,7 @@
                     }
                     else
                     {
-                        <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue)">Run it again</button>
+                        <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue)">@(AskedSomethingElse ? Asking : "Run it again")</button>
                     }
                 }
             }
@@ -329,6 +364,21 @@
     /// <summary>Whether the coherence pass is in flight, so the button reads "Reading the domain…" and cannot be pressed twice.</summary>
     private bool isReviewing;
 
+    /// <summary>
+    /// The classes of defect the client has ticked, by <see cref="CoherenceAspect.Id"/>.
+    /// </summary>
+    /// <remarks>
+    /// Empty on arrival, deliberately: this pass is a question about their domain and there is no
+    /// question they are known to have. Ticking every box for them would put the old whole-pass
+    /// behaviour back under a control that says it is a choice.
+    /// </remarks>
+    private readonly HashSet<string> asked = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What the last run actually asked, so a re-run can tell a new question from the same one.
+    /// </summary>
+    private readonly HashSet<string> ran = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>The composed prompt for <see cref="selectedAgentId"/>, or <c>null</c> when no agent is picked.</summary>
     private AgentRecap? recap;
 
@@ -368,6 +418,36 @@
     private const int ChaseWarningThreshold = 2;
 
     /// <summary>
+    /// What the button offers to do, counted in the client's own ticks rather than named as a pass.
+    /// </summary>
+    private string Asking =>
+        asked.Count == 1 ? "Ask about this one thing" : $"Ask about these {asked.Count} things";
+
+    /// <summary>
+    /// What the last run was asked, in the labels the client ticked.
+    /// </summary>
+    private string Ran =>
+        string.Join(", ", CoherenceService.Aspects.Where(a => ran.Contains(a.Id)).Select(a => a.Label.ToLowerInvariant()));
+
+    /// <summary>
+    /// Whether the ticks now differ from the ones the last run carried — the one thing that makes
+    /// another call worth making over a domain nobody has touched since.
+    /// </summary>
+    private bool AskedSomethingElse => asked.Count > 0 && !asked.SetEquals(ran);
+
+    /// <summary>
+    /// Takes a class of defect in or out of the next run. Nothing already reported is disturbed:
+    /// what is on screen is the answer to the question that was asked, and it stays true of it.
+    /// </summary>
+    private void ToggleAspect(string aspectId, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+            asked.Add(aspectId);
+        else
+            asked.Remove(aspectId);
+    }
+
+    /// <summary>
     /// Runs the deterministic checks against whatever Draft is already in the circuit — the
     /// coherence pass is never run here, since it costs a model call and the client has not asked
     /// for it yet.
@@ -401,8 +481,13 @@
         isReviewing = true;
         coherenceRuns++;
         applyResults.Clear();
-        try { coherence = await CoherenceService.ReviewAsync(draft, resolvedThisSitting); }
+        try { coherence = await CoherenceService.ReviewAsync(draft, [.. asked], resolvedThisSitting); }
         finally { isReviewing = false; }
+
+        // What was actually asked, recorded after the call rather than before it: the button that
+        // offers another run reads the difference between this and the ticks standing now.
+        ran.Clear();
+        ran.UnionWith(asked);
     }
 
     /// <summary>

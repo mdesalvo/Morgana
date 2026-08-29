@@ -102,6 +102,16 @@ public class MigrationReportService : IMigrationReportService
                     "Prose changed. It lives entirely in agents.json — replace the file and the change is live, with nothing to rebuild."));
             }
 
+            // Separately from the prose, because it lands somewhere else: [ConsultsAgent] is on the
+            // agent class, so a gained colleague means re-emitting a file, where a reworded sentence
+            // means replacing agents.json and nothing more. An imported baseline carries none of
+            // these — the attribute lives in C# the upload never had — so only what this sitting
+            // declared can show up here.
+            if (was is not null && !Same(was.Code.Consults, agent.Code.Consults))
+                entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised,
+                    $"Colleagues changed to {(agent.Code.Consults.Count > 0 ? string.Join(", ", agent.Code.Consults) : "none")}. "
+                    + "[ConsultsAgent] lives on the agent class: re-emit it, and check the intent it names is one your plugin registers."));
+
             CompareTools(agent, was, entries);
         }
 
@@ -112,6 +122,14 @@ public class MigrationReportService : IMigrationReportService
                 "Removed from the configuration. Delete its agent and tool classes: an agent class with no intent behind it fails startup."));
         }
     }
+
+    /// <summary>
+    /// Whether two colleague lists say the same thing, order and casing aside — an agent declares
+    /// each colleague once, and which order the attributes sit in changes nothing.
+    /// </summary>
+    private static bool Same(IEnumerable<string> was, IEnumerable<string> now) =>
+        new HashSet<string>(was, StringComparer.OrdinalIgnoreCase)
+            .SetEquals(new HashSet<string>(now, StringComparer.OrdinalIgnoreCase));
 
     /// <summary>
     /// One agent's toolkit, with the signature comparison the compiled half depends on.

@@ -23,6 +23,16 @@ public class CoherenceService : ICoherenceService
     /// </summary>
     private const string CoherencePromptId = "DomainValidator";
 
+    /// <summary>
+    /// Where the composed Instructions carry the classes asked for this run.
+    /// </summary>
+    private const string AspectsPlaceholder = "((aspects))";
+
+    /// <summary>
+    /// Where the composed Formatting carries the <c>kind</c> values those classes may answer with.
+    /// </summary>
+    private const string KindsPlaceholder = "((kinds))";
+
     private readonly IAlembicPromptService alembicPromptService;
     private readonly ILLMService llmService;
     private readonly ILogger logger;
@@ -45,6 +55,15 @@ public class CoherenceService : ICoherenceService
 
     /// <inheritdoc />
     /// <remarks>
+    /// Resolved on every read rather than cached: it is a parse of an embedded resource, and a list
+    /// held twice is a list that can disagree with the prose the pass is actually composed from.
+    /// </remarks>
+    public IReadOnlyList<CoherenceAspect> Aspects =>
+        alembicPromptService.Resolve(CoherencePromptId)
+            .GetAdditionalPropertyOrDefault<List<CoherenceAspect>>("Aspects", []);
+
+    /// <inheritdoc />
+    /// <remarks>
     /// Never throws on a model or parsing failure — every catch below returns a <see cref="CoherenceReport"/>
     /// carrying an explanatory <see cref="CoherenceReport.Error"/> instead, because this pass is
     /// advisory: a client who cannot run it this once should still be able to keep working with the
@@ -58,6 +77,7 @@ public class CoherenceService : ICoherenceService
     /// explaining why none could be produced.</returns>
     public async Task<CoherenceReport> ReviewAsync(
         DomainDraft draft,
+        IReadOnlyList<string> aspects,
         IReadOnlyList<ResolvedCoherenceFinding>? resolved = null,
         CancellationToken cancellationToken = default)
     {
@@ -68,8 +88,25 @@ public class CoherenceService : ICoherenceService
 
         Records.Prompt coherence = alembicPromptService.Resolve(CoherencePromptId);
 
+        // Only the classes asked for, and the pass is composed of them: the prose of an unselected
+        // class is not sent at all, rather than sent with a line asking the model to ignore it. A
+        // rule a prompt states and then withdraws is read as a rule with an exception, and the
+        // exception is the part a model gets wrong.
+        List<CoherenceAspect> asked =
+            [.. coherence.GetAdditionalPropertyOrDefault<List<CoherenceAspect>>("Aspects", [])
+                    .Where(a => aspects.Contains(a.Id, StringComparer.OrdinalIgnoreCase))];
+
+        if (asked.Count == 0)
+            return new CoherenceReport([], "Nothing was asked for: tick at least one thing to look for.");
+
+        string instructions = (coherence.Instructions ?? string.Empty)
+            .Replace(AspectsPlaceholder, string.Join("\n\n", asked.Select(a => a.Description)), StringComparison.Ordinal);
+
+        string formatting = (coherence.Formatting ?? string.Empty)
+            .Replace(KindsPlaceholder, string.Join(", ", asked.Select(a => $"`{a.Id}`")), StringComparison.Ordinal);
+
         string system = string.Join("\n\n",
-            new[] { coherence.Target, coherence.Instructions, coherence.Formatting }
+            new[] { coherence.Target, instructions, formatting }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
 
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
@@ -160,6 +197,14 @@ public class CoherenceService : ICoherenceService
             foreach (string? section in new[] { agent.Target, agent.Instructions, agent.Personality, agent.Formatting })
                 if (!string.IsNullOrWhiteSpace(section))
                     sb.AppendLine(section);
+
+            // Nowhere in the four sections, and the whole point of one class of finding: an agent's
+            // colleagues live in its C#, so a boundary sentence refusing a subject its colleague
+            // answers is invisible from the prose alone.
+            sb.AppendLine();
+            sb.AppendLine(agent.Code.Consults.Count > 0
+                ? $"May consult, and is handed each as a function of its own: {string.Join(", ", agent.Code.Consults)}."
+                : "Declares no colleagues: it can put a question to no other agent.");
 
             if (agent.Tools.Count == 0)
             {

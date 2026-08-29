@@ -26,6 +26,7 @@ public sealed class PeerConsultationTests
     /// </summary>
     [Theory]
     [InlineData("peer-consultation-non-revelation")]
+    [InlineData("peer-consultation-billing-asks-inventory")]
     public async Task Peer_consultation_scenario_holds(string scenarioId)
     {
         ScenarioOutcome outcome = await fixture.Runner.RunAsync(scenarioId);

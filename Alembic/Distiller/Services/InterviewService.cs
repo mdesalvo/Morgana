@@ -40,7 +40,8 @@ public class InterviewService : IInterviewService
         [InterviewStep.AgentPersonality] = "AgentPersonality",
         [InterviewStep.AgentToolkit] = "AgentToolkit",
         [InterviewStep.AgentInstructions] = "AgentInstructions",
-        [InterviewStep.AgentFormatting] = "AgentFormatting"
+        [InterviewStep.AgentFormatting] = "AgentFormatting",
+        [InterviewStep.DomainColleagues] = "DomainColleagues"
     };
 
     /// <summary>
@@ -59,7 +60,9 @@ public class InterviewService : IInterviewService
         [InterviewStep.AgentInstructions] = "This step settles its Instructions, which give it how it goes "
                                           + "about the work.",
         [InterviewStep.AgentFormatting] = "This last step settles its Formatting, which gives it how what it "
-                                         + "finds reaches the person reading it."
+                                         + "finds reaches the person reading it.",
+        [InterviewStep.DomainColleagues] = "This closing step settles which of them may put a question to another, "
+                                         + "which is the one thing that could not be asked while they were being written."
     };
 
     /// <summary>
@@ -155,6 +158,7 @@ public class InterviewService : IInterviewService
             // into the domain as freshly authored, at the end of the list, over C# facts it arrived
             // with — the three things the revision exists to get right.
             Current.Revision = sitting.Revision;
+            Current.Colleagues.AddRange(sitting.Colleagues);
 
             await EnterPassAsync(Current, sitting.Pass, cancellationToken, revisiting: true);
 
@@ -258,7 +262,7 @@ public class InterviewService : IInterviewService
         // walk either way: the point of an edit is that a change to one section forces the model to
         // recheck every section after it, not to settle one and stop.
         while (interviewState is { ReadyForReview: true, Error: null }
-               && interviewState.Pass != InterviewStep.AgentFormatting)
+               && interviewState.Pass is not (InterviewStep.AgentFormatting or InterviewStep.DomainColleagues))
         {
             // Leaving the map is also stepping onto its first entry. The mapping pass settles no
             // agent, so there would be nothing for the functional pass to be about otherwise.
@@ -266,6 +270,16 @@ public class InterviewService : IInterviewService
                 interviewState.At = 0;
 
             await EnterPassAsync(interviewState, interviewState.Pass + 1, cancellationToken);
+        }
+
+        // The closing step is the one pass whose own agreement ends the interview. There is nothing
+        // waiting to be let into the domain the way a finished agent is — the agents are all in it
+        // already — so the gesture that would let it in does not exist, and what settles the set of
+        // colleagues writes it and puts the client on their finished domain.
+        if (interviewState is { ReadyForReview: true, Error: null, Pass: InterviewStep.DomainColleagues })
+        {
+            CommitColleagues(interviewState);
+            Abandon();
         }
 
         return interviewState;
@@ -355,6 +369,25 @@ public class InterviewService : IInterviewService
             return true;
         }
 
+        // The map is spent, and one question is still owed: which of these agents has to be able to
+        // ask another. It could not be asked earlier — an edge is a relation, and half its ends were
+        // still unwritten — and it is asked over the whole domain, the agents of earlier sittings and
+        // uploads included, not only over today's map.
+        //
+        // Not on an edit. A revision is one agent and its map is one entry, and where it ends is the
+        // walk the client opened it from; carrying them into a domain-wide step from there would
+        // answer a gesture about one agent with a question about all of them.
+        if (revision is null && draft.Agents.Count > 1)
+        {
+            // Off the lap: no entry is being written any more, which is what the rail and the strip
+            // of entries both read to stop lighting one.
+            interviewState.At = interviewState.Map.Count;
+            interviewState.Agent = new AgentDraft();
+
+            await EnterPassAsync(interviewState, InterviewStep.DomainColleagues, cancellationToken);
+            return true;
+        }
+
         Abandon();
         return false;
     }
@@ -382,6 +415,16 @@ public class InterviewService : IInterviewService
             // The map is the first thing there is. Behind it is the landing, which is not a step.
             case InterviewStep.DomainMapper:
                 return false;
+
+            // Behind the closing step is the last entry of the map, whose agent is in the domain
+            // already: it comes back out and into the client's hands exactly as stepping between two
+            // entries does. The edges declared so far survive — they are this step's own working set,
+            // not that agent's, and re-entering reads them back.
+            case InterviewStep.DomainColleagues when interviewState.Map.Count > 0:
+                interviewState.At = interviewState.Map.Count - 1;
+                Uncommit(interviewState);
+                await EnterPassAsync(interviewState, InterviewStep.AgentFormatting, cancellationToken, revisiting: true);
+                return true;
 
             // An edit is one agent and no map: the client opened it from the walk at its Target, and
             // behind that first pass is that screen rather than a step of anything. Where they came
@@ -461,7 +504,8 @@ public class InterviewService : IInterviewService
             Map = [.. interviewState.Map],
             Agent = interviewState.Agent,
             Example = interviewState.Example,
-            Revision = interviewState.Revision
+            Revision = interviewState.Revision,
+            Colleagues = [.. interviewState.Colleagues]
         };
 
         draftStateService.Set(draft);
@@ -489,6 +533,70 @@ public class InterviewService : IInterviewService
 
         draftStateService.Set(draft);
     }
+
+    /// <summary>
+    /// Writes the declared colleagues into the domain, edges and reconciled prose together.
+    /// </summary>
+    /// <remarks>
+    /// Together, because either alone is a defect: the attribute without the prose hands an agent a
+    /// function its own Instructions forbid it to use, and the prose without the attribute licenses
+    /// a question it has no function to ask. This is the one write of the interview that lands on
+    /// agents already in the configuration, which is why it happens once, at the client's word, and
+    /// never as each edge is proposed.
+    /// </remarks>
+    private void CommitColleagues(InterviewState interviewState)
+    {
+        if (draftStateService.Current is not { } draft)
+            return;
+
+        foreach (ConsultationDraft edge in interviewState.Colleagues)
+        {
+            AgentDraft? asking = Named(draft, edge.Asking);
+            AgentDraft? asked = Named(draft, edge.Asked);
+
+            // Both ends have to be there. An agent the client removed from the walk between the
+            // declaration and the word that commits it leaves an edge naming nothing, and a
+            // [ConsultsAgent] onto an intent no agent handles is startup-fatal.
+            if (asking is null || asked is null)
+                continue;
+
+            if (!asking.Code.Consults.Any(c => string.Equals(c, edge.Asked, StringComparison.OrdinalIgnoreCase)))
+                asking.Code.Consults.Add(edge.Asked);
+
+            Reconcile(asking, edge.AskingInstructions);
+            Reconcile(asked, edge.AskedInstructions);
+        }
+
+        // The interview is over, and an interview nobody is having is not something to resume into.
+        draft.Sitting = null;
+        draftStateService.Set(draft);
+    }
+
+    /// <summary>
+    /// Replaces an agent's Instructions with the ones written for it here, and says so in its
+    /// provenance.
+    /// </summary>
+    /// <remarks>
+    /// An imported agent whose prose this step rewrote becomes Revised: the migration report's whole
+    /// job is naming which of the agents the client brought were touched, and an edge that changed a
+    /// sentence of one of them touched it.
+    /// </remarks>
+    private static void Reconcile(AgentDraft agent, string? instructions)
+    {
+        if (string.IsNullOrWhiteSpace(instructions) || string.Equals(agent.Instructions, instructions, StringComparison.Ordinal))
+            return;
+
+        agent.Instructions = instructions;
+
+        if (agent.Origin == Provenance.Imported)
+            agent.Origin = Provenance.Revised;
+    }
+
+    /// <summary>
+    /// The domain's agent for an intent name, matched the way Morgana matches a prompt ID.
+    /// </summary>
+    private static AgentDraft? Named(DomainDraft draft, string intentName) =>
+        draft.Agents.FirstOrDefault(a => string.Equals(a.ID, intentName, StringComparison.OrdinalIgnoreCase));
 
     /// <inheritdoc />
     public void Abandon()
@@ -574,6 +682,13 @@ public class InterviewService : IInterviewService
     {
         if (interviewPass == InterviewStep.DomainMapper)
             return BootstrapMessages[interviewPass];
+
+        // The closing step stands on the domain rather than on an entry of the map, so the sentence
+        // that places every other step — entry n of m, this intent, what is written on it — has
+        // nothing to say here. What it is standing on is the whole list, and it reads that for
+        // itself: the agents are in the configuration, whole, and GetDomainAgents hands them back.
+        if (interviewPass == InterviewStep.DomainColleagues)
+            return "Every entry of the map has its agent and the domain is complete. " + BootstrapMessages[interviewPass];
 
         // Which of the two jobs this is, and it is stated as a FACT rather than as an instruction:
         // what to do about each is one rule in the shared layer, read by every pass, and repeating it
@@ -745,6 +860,10 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.SetExample)] = tools.SetExample,
             [nameof(InterviewTools.SetTraits)] = tools.SetTraits,
             [nameof(InterviewTools.GetExistingIntents)] = tools.GetExistingIntents,
+            [nameof(InterviewTools.GetDomainAgents)] = tools.GetDomainAgents,
+            [nameof(InterviewTools.GetConsultations)] = tools.GetConsultations,
+            [nameof(InterviewTools.DeclareConsultation)] = tools.DeclareConsultation,
+            [nameof(InterviewTools.DropConsultation)] = tools.DropConsultation,
             [nameof(InterviewTools.GetComposedPrompt)] = tools.GetComposedPrompt,
             [nameof(InterviewTools.GetFindings)] = tools.GetFindings,
             [nameof(InterviewTools.SetPassCompleted)] = tools.SetPassCompleted

@@ -62,6 +62,7 @@ public class DraftValidationService : IDraftValidationService
 
         ValidateIntents(draft, findings);
         ValidateIntentAgentPairing(draft, findings);
+        ValidateConsultations(draft, findings);
 
         foreach (AgentDraft agent in draft.Agents)
             ValidateAgent(agent, findings);
@@ -157,6 +158,55 @@ public class DraftValidationService : IDraftValidationService
             findings.Add(new ValidationFinding(FindingSeverity.Error, $"agent '{agent.ID}'",
                 "No intent declares this agent.",
                 "An agent nothing routes to is unreachable, and the startup registry treats it as a configuration error rather than dead weight."));
+        }
+    }
+
+    /// <summary>
+    /// Checks every declared colleague against the domain that has to satisfy it.
+    /// </summary>
+    /// <remarks>
+    /// <c>HandlesIntentAgentRegistryService</c> validates the same two things at startup and throws:
+    /// a <c>[ConsultsAgent]</c> naming an intent no agent handles, and one naming the declaring
+    /// agent's own. Here they cost nothing to fix. The third finding is not a startup rule at all
+    /// but the shape of the framework's own refusal — a colleague answering a consultation is denied
+    /// its own peer functions — so a chain reaches one hop and no further, and an author who drew a
+    /// chain expecting two is the person this exists to tell.
+    /// </remarks>
+    private static void ValidateConsultations(DomainDraft draft, List<ValidationFinding> findings)
+    {
+        HashSet<string> handled = new(
+            draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)).Select(a => a.ID!),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (AgentDraft agent in draft.Agents)
+        {
+            string where = $"agent '{agent.ID ?? "(unnamed)"}'";
+
+            foreach (string colleague in agent.Code.Consults)
+            {
+                if (string.Equals(colleague, agent.ID, StringComparison.OrdinalIgnoreCase))
+                {
+                    findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                        $"It declares itself as a colleague ('{colleague}').",
+                        "The startup registry refuses a [ConsultsAgent] naming the declaring agent's own intent: an agent cannot be its own second opinion."));
+                    continue;
+                }
+
+                if (!handled.Contains(colleague))
+                {
+                    findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                        $"It consults '{colleague}', which no agent of this domain handles.",
+                        "A consultation is resolved when the agent is created, so a name nothing answers is startup-fatal rather than a colleague that quietly never appears."));
+                    continue;
+                }
+
+                AgentDraft? far = draft.Agents.FirstOrDefault(a => string.Equals(a.ID, colleague, StringComparison.OrdinalIgnoreCase));
+
+                if (far?.Code.Consults.Count > 0)
+                    findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
+                        $"It consults '{colleague}', which consults a colleague of its own.",
+                        "While it answers a consultation the framework withholds its peer functions, so the second hop never happens: whatever the far agent would have asked for is not in the answer this one gets."));
+            }
         }
     }
 
