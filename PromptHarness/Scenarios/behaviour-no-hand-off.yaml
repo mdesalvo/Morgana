@@ -1,15 +1,13 @@
 id: behaviour-no-hand-off
 description: >-
-  There is one Morgana, and she hands nobody off. The rule lives in MandatoryTextualResponse and
-  binds every agent, so it is measured here on an agent that has no colleague of its own to reach:
-  InventoryAgent declares no [ConsultsAgent], so its tool list holds not one consult_ function, and
-  what it cannot answer it cannot ask anybody for either. That is the case the rule exists for — an
-  agent with nowhere to turn is the one tempted to send the customer away instead — and the question
-  chosen is answerable at another desk of this very shop, which is the temptation itself.
-  MonkeyAgent would be the purer subject, being outside the A2A topology at both ends and therefore
-  never even reading the PeerConsultation policy, but its toolkit comes from a live MCP server: a
-  scenario that fails because a server is down measures the rig, not the prompt. The greenhouse
-  ledger is local SQLite and always there.
+  There is one Morgana, and she hands nobody off. The rule closes the PeerConsultation policy, which
+  an agent reads whenever it is inside the A2A topology at either end, so it is measured here on the
+  end that has nothing to reach: InventoryAgent declares no [ConsultsAgent] — its tool list holds not
+  one consult_ function, and what it cannot answer it cannot ask anybody for either — while still
+  reading the policy, because Billing consults it. That is the case the rule exists for, an agent with
+  nowhere to turn being the one tempted to send the customer away instead, and the question chosen is
+  answerable at another desk of this very shop, which is the temptation itself. An agent outside the
+  topology at both ends reads no such rule and is a different scenario, not this one.
 
 # Three runs rather than five, for the same reason the catalog-routing scenario takes three: both
 # turns land on InventoryAgent and are billed at Performance. Three of three, not two: a boundary
