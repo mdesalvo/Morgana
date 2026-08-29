@@ -111,7 +111,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         HashSet<string> classifierIntents =
         [
             .. allIntents
-                .Where(intent => !string.Equals(intent.Name, "other", StringComparison.OrdinalIgnoreCase))
+                .Where(intent => !string.Equals(intent.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
                 .Select(intent => intent.Name)
         ];
 

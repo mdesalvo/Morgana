@@ -1,3 +1,5 @@
+using Morgana.AI;
+
 namespace Distiller.Model;
 
 /// <summary>
@@ -82,7 +84,7 @@ public sealed class DomainDraft
     /// <summary>
     /// The name the classifier falls back to when it cannot place a message at all.
     /// </summary>
-    public const string FallbackIntent = "other";
+    public const string FallbackIntent = Constants.Intents.Other;
 
     /// <summary>
     /// Puts the fallback intent in the domain if it is not already there.

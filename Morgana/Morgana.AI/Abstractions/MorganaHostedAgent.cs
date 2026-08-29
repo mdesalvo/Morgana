@@ -21,12 +21,6 @@ namespace Morgana.AI.Abstractions;
 /// </remarks>
 public sealed class MorganaHostedAgent : AIAgent
 {
-    /// <summary>
-    /// Key under which the asking agent's intent travels in <see cref="AgentRunOptions.AdditionalProperties"/>,
-    /// carried by the A2A layer as message metadata in both directions.
-    /// </summary>
-    public const string CallerIntentPropertyKey = "morgana.caller";
-
     /// <summary>Intent this hosted agent publishes; fixed for its lifetime.</summary>
     private readonly string intent;
 
@@ -204,7 +198,7 @@ public sealed class MorganaHostedAgent : AIAgent
     /// </summary>
     /// <param name="options">Run options assembled by the A2A hosting layer for this request.</param>
     private static string ReadCallerIntent(AgentRunOptions? options)
-        => options?.AdditionalProperties?.TryGetValue(CallerIntentPropertyKey, out object? caller) == true && caller is not null
+        => options?.AdditionalProperties?.TryGetValue(Constants.MessageProperties.CallerIntent, out object? caller) == true && caller is not null
             ? caller.ToString() ?? "unknown"
             : "unknown";
 

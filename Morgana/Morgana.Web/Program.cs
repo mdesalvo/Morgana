@@ -386,7 +386,7 @@ if (publishedIntents.Length > 0)
 
     foreach (string publishedIntent in publishedIntents)
     {
-        string agentPath = $"{ConfigurationAgentDirectoryService.AgentPathPrefix}/{publishedIntent}";
+        string agentPath = $"{Constants.AgentToAgent.AgentPathPrefix}/{publishedIntent}";
 
         AgentCard? publishedCard = await agentDirectory.GetAgentCardAsync(publishedIntent);
         if (publishedCard is null)

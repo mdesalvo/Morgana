@@ -315,14 +315,14 @@ public class MorganaAgent : MorganaActor
             #region LLM tools
             // TurnContinuation
             bool wantsContinuation = GetTurnContinuationFromContext(aiAgentSession);
-            aiContextProvider.DropVariable(aiAgentSession, "turn_continuation");
+            aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnContinuation);
 
             // QuickReplies
             List<QuickReply>? quickReplies = GetQuickRepliesFromContext(aiAgentSession);
             bool hasQuickReplies = quickReplies?.Count > 0;
             if (hasQuickReplies)
             {
-                aiContextProvider.DropVariable(aiAgentSession, "quick_replies");
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.QuickReplies);
                 agentLogger.LogInformation("Dropped {Count} quick replies from context (ephemeral data)", quickReplies!.Count);
             }
 
@@ -331,7 +331,7 @@ public class MorganaAgent : MorganaActor
             bool hasRichCard = richCard != null;
             if (hasRichCard)
             {
-                aiContextProvider.DropVariable(aiAgentSession, "rich_card");
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RichCard);
                 agentLogger.LogInformation("Dropped rich card '{Title}' from context (ephemeral data)", richCard!.Title);
             }
             #endregion
@@ -380,8 +380,8 @@ public class MorganaAgent : MorganaActor
             if (finalAssistantMessage is not null)
             {
                 finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
-                finalAssistantMessage.AdditionalProperties[MorganaChatHistoryProvider.UserFacingMarkerKey] = true;
-                finalAssistantMessage.AdditionalProperties[MorganaChatHistoryProvider.TurnTextKey] = llmResponseText;
+                finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.UserFacing] = true;
+                finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnText] = llmResponseText;
             }
 
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
@@ -413,10 +413,10 @@ public class MorganaAgent : MorganaActor
             // Safety net: ephemeral UI variables (rich card, quick replies, ...) must NEVER leak to the next turn.
             if (aiAgentSession is not null)
             {
-                aiContextProvider.DropVariable(aiAgentSession, "rich_card");
-                aiContextProvider.DropVariable(aiAgentSession, "quick_replies");
-                aiContextProvider.DropVariable(aiAgentSession, "turn_continuation");
-                aiContextProvider.DropVariable(aiAgentSession, MorganaAIContextProvider.ConsultationRoundsKey);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RichCard);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.QuickReplies);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnContinuation);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
             }
         }
     }
@@ -459,7 +459,7 @@ public class MorganaAgent : MorganaActor
 
             // Marks this turn as served for a colleague. Read by MorganaPeerGuardAgent to refuse
             // a chained consultation, and dropped again before the session is persisted.
-            await aiContextProvider.SetVariableAsync(aiAgentSession, MorganaAIContextProvider.ServingConsultationKey, consultation.CallerIntent);
+            await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.ServingConsultation, consultation.CallerIntent);
 
             agentLogger.LogInformation("Agent '{AgentIntent}' is answering a consultation from '{CallerIntent}'", AgentIntent, consultation.CallerIntent);
 
@@ -478,7 +478,7 @@ public class MorganaAgent : MorganaActor
             foreach (ChatMessage consultationMessage in aiChatHistoryProvider.GetMessages(aiAgentSession).Skip(historyBaseline))
             {
                 consultationMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
-                consultationMessage.AdditionalProperties[MorganaChatHistoryProvider.ConsultationMarkerKey] = true;
+                consultationMessage.AdditionalProperties[Constants.MessageProperties.Consultation] = true;
             }
 
             // The colleague's presentation decisions are handed over as data rather than drained:
@@ -494,7 +494,7 @@ public class MorganaAgent : MorganaActor
             // Dropped BEFORE the save, unlike the presentation keys below: persisted, it would come
             // back on rehydration and leave the agent permanently believing it is answering a
             // colleague, which would make it refuse every consultation of its own from then on.
-            aiContextProvider.DropVariable(aiAgentSession, MorganaAIContextProvider.ServingConsultationKey);
+            aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ServingConsultation);
 
             // Persisted as completed: an agent that answered a colleague is not thereby in service
             // to the user, and must not be restored as the conversation's active agent.
@@ -522,10 +522,10 @@ public class MorganaAgent : MorganaActor
             // among them: no key this turn wrote for the framework's own use may outlive it.
             if (aiAgentSession is not null)
             {
-                aiContextProvider.DropVariable(aiAgentSession, MorganaAIContextProvider.ServingConsultationKey);
-                aiContextProvider.DropVariable(aiAgentSession, "rich_card");
-                aiContextProvider.DropVariable(aiAgentSession, "quick_replies");
-                aiContextProvider.DropVariable(aiAgentSession, "turn_continuation");
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ServingConsultation);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RichCard);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.QuickReplies);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnContinuation);
             }
         }
     }
@@ -534,7 +534,7 @@ public class MorganaAgent : MorganaActor
     {
         agentLogger.LogError(failure.Failure.Cause, "Agent execution failed in {Name}", GetType().Name);
 
-        Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync("Morgana");
+        Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Morgana);
         List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>("ErrorAnswers");
         Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
 
@@ -558,7 +558,7 @@ public class MorganaAgent : MorganaActor
         [
             .. messages.Skip(historyBaseline)
                 .SelectMany(m => m.Contents.OfType<FunctionCallContent>())
-                .Where(call => call.Name.StartsWith(MorganaAgentAdapter.PeerFunctionNamePrefix, StringComparison.Ordinal))
+                .Where(call => call.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
                 .Select(call => call.CallId)
         ];
 
@@ -623,7 +623,7 @@ public class MorganaAgent : MorganaActor
     /// declared completion or made no declaration at all.</returns>
     protected bool GetTurnContinuationFromContext(AgentSession session)
     {
-        object? ctxTurnContinuation = aiContextProvider.GetVariable(session, "turn_continuation");
+        object? ctxTurnContinuation = aiContextProvider.GetVariable(session, Constants.ContextKeys.TurnContinuation);
         return ctxTurnContinuation switch
         {
             bool continuation => continuation,
@@ -659,14 +659,14 @@ public class MorganaAgent : MorganaActor
             catch (JsonException ex)
             {
                 agentLogger.LogError(ex, "Failed to deserialize quick replies from context");
-                aiContextProvider.DropVariable(session, "quick_replies");
+                aiContextProvider.DropVariable(session, Constants.ContextKeys.QuickReplies);
             }
 
             return null;
         }
         #endregion
 
-        object? ctxQuickReplies = aiContextProvider.GetVariable(session, "quick_replies");
+        object? ctxQuickReplies = aiContextProvider.GetVariable(session, Constants.ContextKeys.QuickReplies);
         return ctxQuickReplies switch
         {
             string ctxQuickRepliesJson when !string.IsNullOrEmpty(ctxQuickRepliesJson) => GetQuickReplies(ctxQuickRepliesJson),
@@ -700,14 +700,14 @@ public class MorganaAgent : MorganaActor
             catch (JsonException ex)
             {
                 agentLogger.LogError(ex, "Failed to deserialize rich card from context");
-                aiContextProvider.DropVariable(session, "rich_card");
+                aiContextProvider.DropVariable(session, Constants.ContextKeys.RichCard);
             }
 
             return null;
         }
         #endregion
 
-        object? ctxRichCard = aiContextProvider.GetVariable(session, "rich_card");
+        object? ctxRichCard = aiContextProvider.GetVariable(session, Constants.ContextKeys.RichCard);
         return ctxRichCard switch
         {
             string ctxRichCardJson when !string.IsNullOrEmpty(ctxRichCardJson) => GetRichCard(ctxRichCardJson),

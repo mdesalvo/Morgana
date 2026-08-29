@@ -121,7 +121,7 @@ public class MorganaLLM : ILLMService
 
         // Loads the framework prompt once at startup, so the error-message templates it
         // carries are ready before the first LLM call ever happens.
-        morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
+        morganaPrompt = promptResolverService.ResolveAsync(Constants.Prompts.Morgana).GetAwaiter().GetResult();
     }
 
     /// <summary>

@@ -14,45 +14,6 @@ namespace Morgana.AI.Services;
 /// </remarks>
 public class ConfigurationPromptComposerService : IPromptComposerService
 {
-    /// <summary>
-    /// Placeholder in the ToolDescriptionContextGuidance injection template, resolved to the
-    /// comma-separated names of the tool's own context-scoped parameters.
-    /// </summary>
-    private const string ContextParametersPlaceholder = "((context_parameters))";
-
-    /// <summary>
-    /// Placeholder in the HeldContextDeclaration injection template, resolved per turn to
-    /// comma-separated "name: value" pairs for the variables the session currently holds.
-    /// </summary>
-    private const string HeldVariablesPlaceholder = "((held_variables))";
-
-    /// <summary>
-    /// Marks the boundary between the stable agent prompt and this per-turn dynamic tail, so
-    /// <c>MorganaAnthropicClient</c> can cache only the former. Code-level, not prompt prose — a
-    /// wording change in morgana.json must never silently break the split. The actual ASCII Record
-    /// Separator control character (U+001E), not its printable glyph: non-printable, never
-    /// legitimately typed by a human or produced by an LLM, so it can't collide with real content.
-    /// </summary>
-    internal const string DynamicInstructionsMarker = "\u001E";
-
-    /// <summary>
-    /// Placeholder in the PeerConsultationGuidance injection template, resolved to the competences
-    /// the consulted colleague's card advertises.
-    /// </summary>
-    private const string PeerSkillsPlaceholder = "((peer_skills))";
-
-    /// <summary>
-    /// Placeholder in the PeerConsultationDeclaration injection template, resolved to the intent of
-    /// the agent doing the asking.
-    /// </summary>
-    private const string ConsultationCallerPlaceholder = "((caller))";
-
-    /// <summary>
-    /// Value of <see cref="Records.ToolParameter.Scope"/> marking a parameter resolved from the
-    /// session's context variables rather than asked of the user.
-    /// </summary>
-    private const string ContextScope = "context";
-
     // Structural boundary markers for the composed prompt. These are glue between the framework
     // and domain layers, not domain-tunable prose, so — unlike everything they surround — they are
     // fixed in code and morgana.json carries no override point for them. An implementation
@@ -82,7 +43,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     {
         frameworkLayer = new Lazy<Task<FrameworkLayer>>(async () =>
         {
-            Records.Prompt prompt = await promptResolverService.ResolveAsync("Morgana");
+            Records.Prompt prompt = await promptResolverService.ResolveAsync(Constants.Prompts.Morgana);
             return new FrameworkLayer(
                 prompt,
                 prompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies"));
@@ -145,15 +106,15 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         FrameworkLayer framework = await frameworkLayer.Value;
 
         string descriptionGuidance = Records.GlobalPolicy.ResolveTemplate(
-            framework.Policies, Records.GlobalPolicy.Templates.ToolDescriptionContext);
+            framework.Policies, Constants.Injections.ToolDescriptionContextGuidance);
 
         // Extract context-scoped parameter names; if present and guidance template exists, splice names into guidance text
         string[] contextParameters = [.. toolDefinition.Parameters
-            .Where(p => string.Equals(p.Scope?.Trim(), ContextScope, StringComparison.OrdinalIgnoreCase))
+            .Where(p => string.Equals(p.Scope?.Trim(), Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
             .Select(p => p.Name)];
 
         return contextParameters.Length > 0 && descriptionGuidance.Length > 0
-            ? $"{toolDefinition.Description}\n\n{descriptionGuidance.Replace(ContextParametersPlaceholder, string.Join(", ", contextParameters))}"
+            ? $"{toolDefinition.Description}\n\n{descriptionGuidance.Replace(Constants.Placeholders.ContextParameters, string.Join(", ", contextParameters))}"
             : toolDefinition.Description;
     }
 
@@ -163,7 +124,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         FrameworkLayer framework = await frameworkLayer.Value;
 
         string consultationGuidance = Records.GlobalPolicy.ResolveTemplate(
-            framework.Policies, Records.GlobalPolicy.Templates.PeerConsultationGuidance);
+            framework.Policies, Constants.Injections.PeerConsultationGuidance);
 
         if (consultationGuidance.Length == 0)
             return peerCard.Description ?? "";
@@ -174,7 +135,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
             ? string.Join("; ", peerCard.Skills.Select(skill => $"{skill.Name} — {skill.Description}"))
             : "not declared in advance";
 
-        return $"{peerCard.Description}\n\n{consultationGuidance.Replace(PeerSkillsPlaceholder, skills)}";
+        return $"{peerCard.Description}\n\n{consultationGuidance.Replace(Constants.Placeholders.PeerSkills, skills)}";
     }
 
     /// <inheritdoc />
@@ -183,9 +144,9 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         FrameworkLayer framework = await frameworkLayer.Value;
 
         string declaration = Records.GlobalPolicy.ResolveTemplate(
-            framework.Policies, Records.GlobalPolicy.Templates.PeerConsultationDeclaration);
+            framework.Policies, Constants.Injections.PeerConsultationDeclaration);
 
-        return declaration.Replace(ConsultationCallerPlaceholder, callerIntent);
+        return declaration.Replace(Constants.Placeholders.ConsultationCaller, callerIntent);
     }
 
     /// <inheritdoc />
@@ -196,7 +157,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
         FrameworkLayer framework = await frameworkLayer.Value;
 
-        string declaration = Records.GlobalPolicy.ResolveTemplate(framework.Policies, Records.GlobalPolicy.Templates.HeldContextDeclaration);
+        string declaration = Records.GlobalPolicy.ResolveTemplate(framework.Policies, Constants.Injections.HeldContextDeclaration);
 
         // ResolveTemplate returns "" for a template the prompt layer does not declare, which every
         // splice site reads as "inject nothing".
@@ -206,11 +167,11 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // "name: value" for every held variable — the model gets the fact outright, not just the
         // name, so it has nothing left to look up.
         string pairs = string.Join(", ", heldVariables.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
-        string resolvedDeclaration = declaration.Replace(HeldVariablesPlaceholder, pairs);
+        string resolvedDeclaration = declaration.Replace(Constants.Placeholders.HeldVariables, pairs);
 
-        // DynamicInstructionsMarker: see its own doc comment — lets MarkLeadingSystemForCache split
+        // The marker: see its own doc comment on Constants — it lets MarkLeadingSystemForCache split
         // this per-turn tail off the stable framework+domain prefix before applying the cache marker.
-        return DynamicInstructionsMarker + resolvedDeclaration;
+        return Constants.Markers.DynamicInstructions + resolvedDeclaration;
     }
 
     /// <summary>
@@ -235,7 +196,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // Priority states where it must be read, not merely how it was filed.
         foreach (Records.GlobalPolicy policy in policies.Where(p => !p.IsInjectionTemplate)
                                                         .Where(p => peerCapable || !string.Equals(
-                                                            p.Name, Records.GlobalPolicy.Policies.PeerConsultation,
+                                                            p.Name, Constants.Policies.PeerConsultation,
                                                             StringComparison.OrdinalIgnoreCase))
                                                         .OrderBy(p => p.Type)
                                                         .ThenBy(p => p.Priority))

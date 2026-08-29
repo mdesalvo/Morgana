@@ -21,9 +21,6 @@ namespace Morgana.AI.Services;
 /// </remarks>
 public class ConfigurationAgentDirectoryService : IAgentDirectoryService
 {
-    /// <summary>Path under which every agent's A2A endpoints are published, one segment per intent.</summary>
-    public const string AgentPathPrefix = "/a2a";
-
     /// <summary>Version stamped on every locally projected card, tracking the framework's own contract.</summary>
     private const string LocalCardVersion = "1.0";
 
@@ -121,7 +118,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             cardsLock.Release();
         }
 
-        logger.LogInformation("Agents of this instance publish their A2A interfaces at {BaseAddress}{AgentPathPrefix}/{{intent}}", baseAddress, AgentPathPrefix);
+        logger.LogInformation("Agents of this instance publish their A2A interfaces at {BaseAddress}{AgentPathPrefix}/{{intent}}", baseAddress, Constants.AgentToAgent.AgentPathPrefix);
     }
 
     /// <inheritdoc />
@@ -139,7 +136,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         {
             logger.LogError(
                 "Peer consultation needs an issuer named '{IssuerName}' under Morgana:Authentication:Issuers to sign its own requests; '{Intent}' cannot be consulted",
-                MorganaPeerAuthenticationHandler.IssuerName, intent);
+                Constants.AgentToAgent.IssuerName, intent);
             return null;
         }
 
@@ -149,7 +146,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             // the same call a consumer in another process makes, so a card that is unpublished or
             // unreachable fails here, at the directory, rather than at the first consultation.
             HttpClient httpClient = new HttpClient(new MorganaPeerAuthenticationHandler(symmetricKey, audience, callerIntent));
-            A2ACardResolver resolver = new A2ACardResolver(new Uri($"{baseAddress}{AgentPathPrefix}/{intent}/"), httpClient);
+            A2ACardResolver resolver = new A2ACardResolver(new Uri($"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{intent}/"), httpClient);
 
             AIAgent peerAgent = await resolver.GetAIAgentAsync(httpClient);
 
@@ -229,7 +226,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     private static AgentInterface BuildInterface(string baseAddress, string intent)
         => new AgentInterface
         {
-            Url = $"{baseAddress}{AgentPathPrefix}/{intent}",
+            Url = $"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{intent}",
             ProtocolBinding = ProtocolBindingNames.JsonRpc
         };
 
@@ -242,7 +239,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     {
         Records.IssuerOptions? issuer = configuration.GetSection("Morgana:Authentication:Issuers")
             .Get<List<Records.IssuerOptions>>()?
-            .FirstOrDefault(i => string.Equals(i.Name, MorganaPeerAuthenticationHandler.IssuerName, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(i => string.Equals(i.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase));
 
         string? symmetricKey = string.IsNullOrWhiteSpace(issuer?.SymmetricKey)
                                || string.Equals(issuer.SymmetricKey.Trim(), SecretPlaceholder, StringComparison.Ordinal)
@@ -263,12 +260,6 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// </remarks>
     private sealed class MorganaPeerAuthenticationHandler : DelegatingHandler
     {
-        /// <summary>
-        /// Issuer name Morgana signs its own peer traffic under; must match an entry in
-        /// <c>Morgana:Authentication:Issuers</c>, whose key it shares.
-        /// </summary>
-        public const string IssuerName = "morgana";
-
         /// <summary>
         /// Lifetime of a minted token. Deliberately short: a consultation is a single
         /// request-response, and the validator already tolerates 30 seconds of clock skew.
@@ -311,7 +302,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         private string MintToken()
             => new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
             {
-                Issuer = IssuerName,
+                Issuer = Constants.AgentToAgent.IssuerName,
                 Audience = audience,
                 Expires = DateTime.UtcNow.Add(TokenLifetime),
                 SigningCredentials = signingCredentials,

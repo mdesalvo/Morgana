@@ -2,6 +2,7 @@ using System.Text.Json;
 using Distiller.Interfaces;
 using Distiller.Model;
 using Morgana.Contracts;
+using Morgana.AI;
 
 namespace Distiller.Services;
 
@@ -46,17 +47,17 @@ public class InterviewTools
     /// The intent name the framework reserves for the classifier's fallback. No authored agent may
     /// take it.
     /// </summary>
-    private const string ReservedFallbackIntent = "other";
+    private const string ReservedFallbackIntent = Constants.Intents.Other;
 
     /// <summary>
     /// The scope of a parameter Morgana resolves from the session's own context variables.
     /// </summary>
-    private const string ContextScope = "context";
+    private const string ContextScope = Constants.Scopes.Context;
 
     /// <summary>
     /// The scope of a parameter the agent obtains from the user in conversation.
     /// </summary>
-    private const string RequestScope = "request";
+    private const string RequestScope = Constants.Scopes.Request;
 
     /// <summary>The interview these tools write into — see the constructor.</summary>
     private readonly InterviewState interviewState;

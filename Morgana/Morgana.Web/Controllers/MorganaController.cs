@@ -123,7 +123,7 @@ public class MorganaController : ControllerBase
             }
 
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
-                "manager", request.ConversationId);
+                Constants.Actors.Manager, request.ConversationId);
 
             manager.Tell(new Records.CreateConversation(
                 request.ConversationId, false, request.ChannelMetadata));
@@ -161,7 +161,7 @@ public class MorganaController : ControllerBase
             logger.LogInformation("Ending conversation {ConversationId}", conversationId);
 
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
-                "manager", conversationId);
+                Constants.Actors.Manager, conversationId);
 
             manager.Tell(new Records.TerminateConversation(conversationId));
 
@@ -208,7 +208,7 @@ public class MorganaController : ControllerBase
 
             // Resume the manager owning this conversation
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
-                "manager", conversationId);
+                Constants.Actors.Manager, conversationId);
 
             // Send it the message to restore this conversation
             manager.Tell(new Records.CreateConversation(
@@ -386,7 +386,7 @@ public class MorganaController : ControllerBase
             ActivityContext httpContext = Activity.Current?.Context ?? default;
 
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
-                "manager", request.ConversationId);
+                Constants.Actors.Manager, request.ConversationId);
 
             manager.Tell(new Records.UserMessage(
                 request.ConversationId,

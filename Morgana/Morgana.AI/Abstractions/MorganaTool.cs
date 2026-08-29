@@ -122,7 +122,7 @@ public class MorganaTool
     public async Task<object> SetTurnContinuation(bool turnContinuation)
     {
         ToolContext ctx = getToolContext();
-        await ctx.Provider.SetVariableAsync(ctx.Session, "turn_continuation", turnContinuation);
+        await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.TurnContinuation, turnContinuation);
 
         toolLogger.LogInformation("LLM set turn continuation to {TurnContinuation} via SetTurnContinuation tool", turnContinuation);
 
@@ -161,7 +161,7 @@ public class MorganaTool
 
         // Store serialized quick replies in ephemeral context; agents retrieve them via ExecuteAgentAsync before sending response
         ToolContext ctx = getToolContext();
-        await ctx.Provider.SetVariableAsync(ctx.Session, "quick_replies",
+        await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.QuickReplies,
             JsonSerializer.Serialize(quickReplies, Records.DefaultJsonSerializerOptions));
 
         toolLogger.LogInformation("LLM set {Count} quick reply buttons via SetQuickReplies tool", quickReplies.Count);
@@ -220,7 +220,7 @@ public class MorganaTool
 
             // Store original JSON string (not the parsed object) in ephemeral context; agents retrieve it via ExecuteAgentAsync
             ToolContext ctx = getToolContext();
-            await ctx.Provider.SetVariableAsync(ctx.Session, "rich_card", richCard);
+            await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.RichCard, richCard);
 
             toolLogger.LogInformation(
                 "LLM set rich card '{Title}' with {TotalComponents} components (depth: {Depth}) via SetRichCard tool",

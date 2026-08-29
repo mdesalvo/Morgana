@@ -76,13 +76,13 @@ public class ConversationSupervisorActor : MorganaActor
         this.presenterService = presenterService;
 
         guard = Context.System.GetOrCreateActorAsync<GuardActor>(
-            "guard", conversationId).GetAwaiter().GetResult();
+            Constants.Actors.Guard, conversationId).GetAwaiter().GetResult();
 
         classifier = Context.System.GetOrCreateActorAsync<ClassifierActor>(
-            "classifier", conversationId).GetAwaiter().GetResult();
+            Constants.Actors.Classifier, conversationId).GetAwaiter().GetResult();
 
         router = Context.System.GetOrCreateActorAsync<RouterActor>(
-            "router", conversationId).GetAwaiter().GetResult();
+            Constants.Actors.Router, conversationId).GetAwaiter().GetResult();
 
         // Supervisor always starts in Idle state
         Idle();
@@ -533,7 +533,7 @@ public class ConversationSupervisorActor : MorganaActor
             // path; "error" is the one extra key a successful classification never carries, kept
             // here purely for diagnostics.
             Records.ClassificationResult fallbackClassification = new Records.ClassificationResult(
-                "other",
+                Constants.Intents.Other,
                 new Dictionary<string, string>
                 {
                     ["confidence"] = "0.00",
@@ -999,7 +999,7 @@ public class ConversationSupervisorActor : MorganaActor
         ];
 
         // Get the disambiguation message from the classifier's prompt
-        Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
+        Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Classifier);
         string disambiguationMessage = classifierPrompt.GetAdditionalProperty<string>("DisambiguationMessage");
 
         // Tell the response straight to the client — no router, no agent, exactly like a Guard
@@ -1100,7 +1100,7 @@ public class ConversationSupervisorActor : MorganaActor
     private string GetAgentDisplayName(string? intent)
     {
         // No intent, or the catch-all "other": shown as the bare persona, with no agent name attached.
-        if (string.IsNullOrEmpty(intent) || string.Equals(intent, "other", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrEmpty(intent) || string.Equals(intent, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
             return "Morgana";
 
         // Otherwise capitalizes the intent for display and qualifies the persona with it.

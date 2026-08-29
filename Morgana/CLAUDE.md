@@ -60,6 +60,7 @@ own.
 | `Services/` | Default implementations of all interfaces |
 | `Telemetry/` | `MorganaTelemetry` (ActivitySource, metrics), `OpenTelemetryExtensions` |
 | `Records.cs` | All immutable record types (DTOs) for actor messages, configuration |
+| `Constants.cs` | The framework's glossary, peer of `Records.cs`: every literal that is a *contract between two parties who cannot see each other* — prompt IDs, policy and injection names, base tool names, actor name prefixes, ephemeral context keys, message-property markers, prompt placeholders, parameter scopes, the `other` intent, the A2A prefixes and issuer. Deliberately not there: log text, display names, prompt prose, and configuration keys (those bind through `IConfiguration`, where they are read). `MorganaTelemetry` keeps its own span/attribute glossary beside the ActivitySource that emits it |
 | `morgana.json` | Framework-level prompts (Morgana, Classifier, Guard, Presentation, ChannelAdapter) with global policies, base tools, error answers |
 
 ### Morgana.Web (host)
@@ -365,7 +366,7 @@ Every agent gets **base tools** from `morgana.json` (`GetContextVariable`, `SetC
 
 A guidance template is joined to an authored description by a blank line, never by inserted punctuation: an authored description is a finished sentence and closes itself, in both configuration layers.
 
-The template names are the contract between `morgana.json` and the code that splices them, and they live in one place — `Records.GlobalPolicy.Templates` — resolved through `GlobalPolicy.ResolveTemplate`, which returns `""` for an unconfigured template (every splice site reads that as "leave the description alone").
+The template names are the contract between `morgana.json` and the code that splices them, and they live in one place — `Constants.Injections` — resolved through `GlobalPolicy.ResolveTemplate`, which returns `""` for an unconfigured template (every splice site reads that as "leave the description alone").
 
 A tool declaring at least one context-scoped parameter gets `ToolDescriptionContextGuidance` appended to **its own description**, with `((context_parameters))` resolved to those parameter names. The placement is the point, and it is a ladder: a parameter description is read once the model is already invoking the tool, a tool description when it weighs the tool at all, and the per-turn `HeldContextDeclaration` before any tool is weighed.
 
@@ -520,7 +521,7 @@ At application startup, comprehensive validation is performed:
 
 ## Conventions
 
-- All actor messages are immutable records in `Records.cs`
+- All actor messages are immutable records in `Records.cs`; every cross-party literal is a member of `Constants` (see the table above), never a repeated string
 - Actors use `Tell` pattern (not `Ask`) for streaming support; `Become()` for FSM state transitions
 - Extension points follow the pattern: interface in `Interfaces/`, default implementation in `Services/`, DI registration in `Program.cs`
 - Tool method names must match exactly the `Name` field in JSON tool definitions

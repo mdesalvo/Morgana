@@ -145,7 +145,7 @@ public class ConversationManagerActor : MorganaActor
             // Create the FSM orchestrator of the turn pipeline, named after this conversation
             // (/user/supervisor-{conversationId}), reusing it if the actor path already exists.
             supervisor = await Context.System.GetOrCreateActorAsync<ConversationSupervisorActor>(
-                "supervisor", msg.ConversationId);
+                Constants.Actors.Supervisor, msg.ConversationId);
 
             // Watch the supervisor so its death arrives here as a Terminated message
             // (handled above) instead of taking the manager down with a DeathPactException.
@@ -327,7 +327,7 @@ public class ConversationManagerActor : MorganaActor
         {
             // Recreate the FSM orchestrator under the same conversation-scoped path.
             supervisor = await Context.System.GetOrCreateActorAsync<ConversationSupervisorActor>(
-                "supervisor", msg.ConversationId);
+                Constants.Actors.Supervisor, msg.ConversationId);
 
             // Watch the new instance too, so a further death is again seen as Terminated
             // instead of a DeathPactException.

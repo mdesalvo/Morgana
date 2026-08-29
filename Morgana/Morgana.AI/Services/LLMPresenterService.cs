@@ -122,7 +122,7 @@ public class LLMPresenterService : IPresenterService
 
         // Generate the rich presentation message, or the fallback version
         // in case of any blocking issues. Morgana must always present herself.
-        Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync("Presentation");
+        Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Presentation);
         Records.PresentationResult presentationResult = displayableIntents.Count == 0
             ? new Records.PresentationResult(presentationPrompt.GetAdditionalProperty<string>("NoAgentsMessage"), [])
             : await GenerateMessageAsync(presentationPrompt, displayableIntents);
@@ -166,7 +166,7 @@ public class LLMPresenterService : IPresenterService
 
             // Compose the system prompt by interpolating the formatted list into the template.
             string presentationSystemPrompt =
-                $"{presentationPrompt.Target}\n\n{presentationPrompt.Instructions}\n\n{presentationPrompt.Formatting}".Replace("((intents))", formattedIntents);
+                $"{presentationPrompt.Target}\n\n{presentationPrompt.Instructions}\n\n{presentationPrompt.Formatting}".Replace(Constants.Placeholders.Intents, formattedIntents);
 
             // The fixed user message acts as a trigger; the real instructions live in the system prompt.
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(

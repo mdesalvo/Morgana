@@ -722,7 +722,7 @@ public static class Records
             return
             [
                 .. Intents
-                    .Where(i => !string.Equals(i.Name, "other", StringComparison.OrdinalIgnoreCase)
+                    .Where(i => !string.Equals(i.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase)
                                 && !string.IsNullOrEmpty(i.Label))
             ];
         }
@@ -823,39 +823,6 @@ public static class Records
         public const string InjectionType = "Injection";
 
         /// <summary>
-        /// Names of the policies rendered conditionally rather than for every agent. Contract
-        /// between morgana.json and code, resolved by <see cref="Name"/> — must match exactly.
-        /// </summary>
-        public static class Policies
-        {
-            /// <summary>
-            /// The peer-consultation contract, rendered only for an agent that consults a colleague
-            /// or is itself consulted. An agent standing outside the topology can neither ask nor be
-            /// asked, so the rule has no case to govern and it would pay for it on every turn.
-            /// </summary>
-            public const string PeerConsultation = "PeerConsultation";
-        }
-
-        /// <summary>
-        /// Injection template names: ToolDescriptionContextGuidance, HeldContextDeclaration, PeerConsultationGuidance, PeerConsultationDeclaration.
-        /// Contract between morgana.json and code. Resolved by Name — must match configuration exactly.
-        /// </summary>
-        public static class Templates
-        {
-            /// <summary>Appended to the description of a tool declaring context-scoped parameters.</summary>
-            public const string ToolDescriptionContext = "ToolDescriptionContextGuidance";
-
-            /// <summary>Injected per turn, naming the context variables the session currently holds.</summary>
-            public const string HeldContextDeclaration = "HeldContextDeclaration";
-
-            /// <summary>Appended to the description under which a colleague is offered as a callable function.</summary>
-            public const string PeerConsultationGuidance = "PeerConsultationGuidance";
-
-            /// <summary>Placed in front of a colleague's question, telling the answering agent who its reader is.</summary>
-            public const string PeerConsultationDeclaration = "PeerConsultationDeclaration";
-        }
-
-        /// <summary>
         /// True when this entry is an injection template, spliced into tool/parameter descriptions
         /// instead of being rendered among the global policies.
         /// </summary>
@@ -863,7 +830,9 @@ public static class Records
             => string.Equals(Type, InjectionType, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Resolves template text by name from policies; returns empty string if not found (signals splice sites to skip).
+        /// Resolves an injection template's text by name (see <see cref="Constants.Injections"/>);
+        /// returns an empty string when the prompt layer declares none, which every splice site
+        /// reads as "inject nothing".
         /// </summary>
         public static string ResolveTemplate(IEnumerable<GlobalPolicy> policies, string name)
             => policies.FirstOrDefault(policy =>

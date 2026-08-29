@@ -1,4 +1,5 @@
 using Distiller.Model;
+using Morgana.AI;
 
 namespace Distiller.Services;
 
@@ -189,8 +190,8 @@ public class CoherenceApplyTools
         string cleanScope = (scope ?? string.Empty).Trim().ToLowerInvariant();
         string? resolvedScope = cleanScope switch
         {
-            "context" => "context",
-            "request" => "request",
+            Constants.Scopes.Context => Constants.Scopes.Context,
+            Constants.Scopes.Request => Constants.Scopes.Request,
             "" or "none" or "null" => null,
             _ => cleanScope
         };

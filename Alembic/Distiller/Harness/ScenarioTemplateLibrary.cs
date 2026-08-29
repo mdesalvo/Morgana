@@ -1,5 +1,6 @@
 using System.Reflection;
 using Distiller.Model;
+using Morgana.AI;
 
 namespace Distiller.Harness;
 
@@ -56,7 +57,7 @@ public static class ScenarioTemplateLibrary
             TemplateRequirement.Tools => agent.Tools.Count >= 1,
             TemplateRequirement.TwoTools => agent.Tools.Count >= 2,
             TemplateRequirement.Context => agent.Tools.Any(tool =>
-                tool.Parameters.Any(parameter => parameter.Scope == "context")),
+                tool.Parameters.Any(parameter => parameter.Scope == Constants.Scopes.Context)),
             _ => true
         });
 

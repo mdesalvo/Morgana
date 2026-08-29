@@ -87,12 +87,6 @@ public class MorganaAgentAdapter
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
-    /// Prefix of the function name under which a colleague is offered to a model, and the marker by
-    /// which the asking agent recognises a consultation in its own history when clearing it out.
-    /// </summary>
-    public const string PeerFunctionNamePrefix = "consult_";
-
-    /// <summary>
     /// The morgana.json base tools (GetContextVariable, SetContextVariable,
     /// SetTurnContinuation, SetQuickReplies, SetRichCard), stamped <c>Reserved = true</c> exactly
     /// once here — the only place in the codebase that ever sets it true. Every other reader of a
@@ -145,7 +139,7 @@ public class MorganaAgentAdapter
         this.configuration = configuration;
         this.logger = logger;
 
-        morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
+        morganaPrompt = promptResolverService.ResolveAsync(Constants.Prompts.Morgana).GetAwaiter().GetResult();
 
         morganaTools = [.. morganaPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools")
             .Select(t => t with { Reserved = true })];
@@ -363,7 +357,7 @@ public class MorganaAgentAdapter
         // typically declared on several tools and must register exactly once.
         List<string> sharedVariables = [.. tools
              .SelectMany(t => t.Parameters)
-             .Where(p => p.Shared && string.Equals(p.Scope, "context", StringComparison.OrdinalIgnoreCase))
+             .Where(p => p.Shared && string.Equals(p.Scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
              .Select(p => p.Name)
              .Distinct()];
 
@@ -667,7 +661,7 @@ public class MorganaAgentAdapter
 
         // A colleague may not consult a colleague of its own: the chain stops at one hop, so the call
         // graph cannot contain a cycle and no caller chain has to travel with the request.
-        if (contextProvider.GetVariable(callerSession, MorganaAIContextProvider.ServingConsultationKey) is not null)
+        if (contextProvider.GetVariable(callerSession, Constants.ContextKeys.ServingConsultation) is not null)
         {
             logger.LogWarning("Agent '{CallerIntent}' attempted to consult '{PeerIntent}' while itself answering a colleague", callerIntent, peerIntent);
             return RefusalEnvelope("You are currently answering a colleague, and a colleague may not consult a further colleague. Answer with what you know.");
@@ -680,7 +674,7 @@ public class MorganaAgentAdapter
             return RefusalEnvelope($"This exchange has run for {roundsSoFar} rounds and must end now. Answer with what you already have.");
         }
 
-        await contextProvider.SetVariableAsync(callerSession, MorganaAIContextProvider.ConsultationRoundsKey, roundsSoFar + 1);
+        await contextProvider.SetVariableAsync(callerSession, Constants.ContextKeys.ConsultationRounds, roundsSoFar + 1);
 
         logger.LogInformation("Agent '{CallerIntent}' is consulting '{PeerIntent}' (round {Round})", callerIntent, peerIntent, roundsSoFar + 1);
 
@@ -697,7 +691,7 @@ public class MorganaAgentAdapter
         AgentRunOptions declaredOptions = options?.Clone() ?? new AgentRunOptions();
 
         declaredOptions.AdditionalProperties ??= [];
-        declaredOptions.AdditionalProperties[MorganaHostedAgent.CallerIntentPropertyKey] = callerIntent;
+        declaredOptions.AdditionalProperties[Constants.MessageProperties.CallerIntent] = callerIntent;
 
         return declaredOptions;
     }
@@ -707,7 +701,7 @@ public class MorganaAgentAdapter
     /// <see cref="JsonElement"/> form a value takes once its session has been persisted and reloaded.
     /// </summary>
     private static int ReadConsultationRounds(AgentSession callerSession, MorganaAIContextProvider contextProvider)
-        => contextProvider.GetVariable(callerSession, MorganaAIContextProvider.ConsultationRoundsKey) switch
+        => contextProvider.GetVariable(callerSession, Constants.ContextKeys.ConsultationRounds) switch
         {
             int rounds => rounds,
             JsonElement { ValueKind: JsonValueKind.Number } element => element.GetInt32(),
@@ -726,7 +720,7 @@ public class MorganaAgentAdapter
     /// agent's own tools in the model's tool list.
     /// </remarks>
     private static string ToFunctionName(string peerIntent)
-        => $"{PeerFunctionNamePrefix}{new string([.. peerIntent.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_')])}";
+        => $"{Constants.AgentToAgent.PeerFunctionNamePrefix}{new string([.. peerIntent.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_')])}";
 
     /// <summary>
     /// Discovers tools from every MCP server declared on the agent.

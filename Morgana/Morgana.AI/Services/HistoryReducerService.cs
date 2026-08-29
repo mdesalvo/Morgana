@@ -105,7 +105,7 @@ public class HistoryReducerService
 public sealed class MorganaChatReducer : IChatReducer
 {
     /// <summary>Property stamped on the last summarized message. Same name MEAI uses, which is what makes the two interchangeable.</summary>
-    public const string SummaryKey = "__summary__";
+    public const string SummaryKey = Constants.MessageProperties.Summary;
 
     /// <summary>
     /// Cap on the rendered length of one content item, so a catalogue-sized tool return cannot dominate

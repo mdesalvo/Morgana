@@ -86,13 +86,13 @@ public class MorganaChannelAdapter
         // ── LLM-guided rewrite ────────────────────────────────────────────────────
         try
         {
-            Records.Prompt adapterPrompt = await promptResolverService.ResolveAsync("ChannelAdapter");
+            Records.Prompt adapterPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.ChannelAdapter);
 
             string capabilitiesJson = JsonSerializer.Serialize(
                 channelCapabilities, Records.DefaultJsonSerializerOptions);
 
             string systemPrompt = $"{adapterPrompt.Target}\n\n{adapterPrompt.Instructions}\n\n{adapterPrompt.Formatting}"
-                .Replace("((channel_capabilities))", capabilitiesJson);
+                .Replace(Constants.Placeholders.ChannelCapabilities, capabilitiesJson);
 
             string userPrompt = JsonSerializer.Serialize(channelMessage, Records.DefaultJsonSerializerOptions);
 

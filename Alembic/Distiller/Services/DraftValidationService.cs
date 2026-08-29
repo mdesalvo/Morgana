@@ -1,5 +1,6 @@
 using Distiller.Interfaces;
 using Distiller.Model;
+using Morgana.AI;
 
 namespace Distiller.Services;
 
@@ -30,13 +31,13 @@ public class DraftValidationService : IDraftValidationService
     /// (quick replies, a rich card, a turn continuation) declares none at all, which is why the
     /// empty scope is legal rather than a third value.
     /// </summary>
-    private static readonly string[] KnownScopes = ["context", "request"];
+    private static readonly string[] KnownScopes = [Constants.Scopes.Context, Constants.Scopes.Request];
 
     /// <summary>
     /// The intent the framework reserves for "none of the above". It is the one intent exempt from
     /// needing an agent — <c>HandlesIntentAgentRegistryService</c> excludes it by name.
     /// </summary>
-    private const string OtherIntent = "other";
+    private const string OtherIntent = Constants.Intents.Other;
 
     /// <summary>
     /// C# keywords that cannot be used bare as an identifier. Not the full list: only the ones a
@@ -327,7 +328,7 @@ public class DraftValidationService : IDraftValidationService
                     "A parameter resolving an input declares 'context' or 'request'; one carrying a value the model itself authors declares none."));
 
             if (parameter.Shared
-                && !string.Equals(parameter.Scope, "context", StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(parameter.Scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, parameterWhere,
                     "The parameter is Shared but not context-scoped.",
                     "Shared publishes a resolved context variable to the conversation's shared_context registry, so it only means anything alongside Scope 'context'."));

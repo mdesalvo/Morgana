@@ -42,7 +42,7 @@ public class LLMClassifierService : IClassifierService
     /// </summary>
     private static readonly Records.ClassificationResult FallbackResult =
         new Records.ClassificationResult(
-            "other",
+            Constants.Intents.Other,
             new Dictionary<string, string>
             {
                 ["confidence"] = "0.00",
@@ -80,10 +80,10 @@ public class LLMClassifierService : IClassifierService
             intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
 
         Records.Prompt classifierPrompt =
-            promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
+            promptResolverService.ResolveAsync(Constants.Prompts.Classifier).GetAwaiter().GetResult();
 
         classifierSystemPrompt =
-            $"{classifierPrompt.Target.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}\n{classifierPrompt.Formatting}";
+            $"{classifierPrompt.Target.Replace(Constants.Placeholders.FormattedIntents, formattedIntents)}\n{classifierPrompt.Instructions}\n{classifierPrompt.Formatting}";
     }
 
     /// <inheritdoc/>
@@ -122,7 +122,7 @@ public class LLMClassifierService : IClassifierService
             // implementation handled with its `?? "other"` fallback — we deliberately keep that same
             // fail-safe behaviour.
             if (rankedIntentScores.Count == 0)
-                rankedIntentScores.Add(new Records.IntentScore("other", 0.5));
+                rankedIntentScores.Add(new Records.IntentScore(Constants.Intents.Other, 0.5));
 
             // Step 4: the top of the ranked list is our "official" pick — the one that goes into
             // ClassificationResult.Intent and is used for normal (non-ambiguous) routing regardless
@@ -138,7 +138,7 @@ public class LLMClassifierService : IClassifierService
             List<string> collidingIntents =
             [
                 .. rankedIntentScores
-                    .Where(candidate => !string.Equals(candidate.Intent, "other", StringComparison.OrdinalIgnoreCase))
+                    .Where(candidate => !string.Equals(candidate.Intent, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
                     .Where(candidate => topIntentScore - candidate.Confidence < disambiguationThreshold)
                     .Select(candidate => candidate.Intent)
             ];
