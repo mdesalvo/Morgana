@@ -75,8 +75,6 @@ turns:
     judge:
       - "The response says the plan is now active."
       - "The response says the first month has been billed."
-      # ContractAgent's own Instructions end the enrollment by inviting the customer, once, to return
-      # to Morgana for that invoice — so this is a domain promise, and the suite holds the domain to it.
-      - "The response tells the customer they may ask about that invoice."
+      - "The response tells the customer that invoice can be seen if they wish."
     judgeNot:
       - "The response gives the invoice's own total, its tax, or a line on it."
