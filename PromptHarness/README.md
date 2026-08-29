@@ -56,6 +56,17 @@ things a child process could not — an `ActivityListener` that reads spans with
 loop, and a tee on stdout that reads tool log lines. Both are read-only observers of instrumentation
 that already exists for production reasons.
 
+**One proposition, one act.** A judge is a model, and every extra thing asked of it in one line is
+another thing it can get wrong — so a proposition names a single act, in a single clause. A list of
+synonyms for the same act is fine (`another desk, office or department`); a conjunction of two
+distinct claims is not (`says it was billed **and** invites them to ask about the invoice` — two
+propositions), and neither is a comparative (`describes the invoice **rather than** merely saying it
+was billed`), which asks for a judgement of proportion instead of a fact. A proposition needing a
+carve-out sentence to be fair is a proposition that was written wrong: fix the act, do not coach the
+judge. This holds for `judgeNot` above all, where the failure mode is asymmetric — a broad
+prohibition puts the judge on a hunt, and a model on a hunt finds something; every false red spent
+there is trust in the suite spent with it.
+
 Those log lines are the only place a context variable's **name** becomes observable — a span carries
 tool names and no data — so the whole context-handling group rests on their shape. `TurnObserver`
 therefore does not carry a copy of them: it builds its patterns from `Constants.ObservableLogs`, the

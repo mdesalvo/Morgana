@@ -19,4 +19,4 @@ turns:
     judge:
       - "The response conveys at least one concrete invoice detail (an amount, a date or a status) in plain prose."
     judgeNot:
-      - "The response reads as a bare mechanical list of raw option labels rather than natural prose."
+      - "The response is a list of option labels with no sentence connecting them."

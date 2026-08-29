@@ -122,7 +122,15 @@ public sealed class LLMJudge
         return failures;
     }
 
-    /// <summary>Judges a single proposition, retrying once before giving up.</summary>
+    /// <summary>
+    /// Waits before each judging attempt: none, then a short one, then a longer one. Three entries
+    /// mean three attempts, and the list IS the retry policy — there is no separate count to keep
+    /// in step with it.
+    /// </summary>
+    private static readonly TimeSpan[] JudgeRetryWaits =
+        [TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(6)];
+
+    /// <summary>Judges a single proposition, retrying twice, with waits, before giving up.</summary>
     private async Task<JudgeVerdict> EvaluateAsync(string proposition, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard)
     {
         // Deliberately only what a user would see: text, button labels, and whether a card was
@@ -140,10 +148,13 @@ public sealed class LLMJudge
              {proposition}
              """;
 
-        // Two attempts total: a real LLM occasionally answers with something Parse cannot make
-        // sense of (extra prose, malformed JSON) even under a strict system prompt, and a single
-        // retry recovers most of those without masking a genuinely broken judge.
-        for (int attempt = 1; attempt <= 2; attempt++)
+        // Three attempts, spaced. Two of the failures this exists for are unparseable answers, which
+        // an immediate retry fixes; the third is the provider itself refusing under load (429, 529),
+        // against which two calls in the same instant are one call. The waits are what separate a
+        // busy provider from a broken judge, and a paid run must not be lost to the former.
+        string lastFailure = "no answer";
+
+        foreach (TimeSpan wait in JudgeRetryWaits)
         {
             try
             {
@@ -152,20 +163,24 @@ public sealed class LLMJudge
 
                 return Parse(answer);
             }
-            // Every attempt is caught, the last one included. Filtering on `attempt == 1` let the
-            // second attempt's exception escape into ScenarioRunner, which aborts the whole run —
-            // so an unusable judge answer cost a paid run and was reported as "run aborted", a line
-            // that reads like a broken scenario and is not one. It also made the fallback below
-            // unreachable, which is the opposite of what it exists for.
+            // Every attempt is caught, the last one included. Filtering on the first let the last
+            // exception escape into ScenarioRunner, which aborts the whole run — so an unusable
+            // judge answer cost a paid run and was reported as "run aborted", a line that reads
+            // like a broken scenario and is not one.
             catch (Exception ex)
             {
-                _ = ex;
+                lastFailure = $"{ex.GetType().Name}: {ex.Message.Split('\n')[0]}";
             }
+
+            if (wait > TimeSpan.Zero)
+                await Task.Delay(wait);
         }
 
         // A judge that cannot answer is reported as a failure rather than silently skipped: a
-        // proposition that stops being evaluated is coverage lost without anyone noticing.
-        return new JudgeVerdict(false, "the judge could not be reached or returned an unusable answer");
+        // proposition that stops being evaluated is coverage lost without anyone noticing. It names
+        // what went wrong, because "the judge could not be reached" reads like a verdict on the
+        // agent and is a verdict on the rig — the reader has to be able to tell those apart.
+        return new JudgeVerdict(false, $"the judge could not be reached or returned an unusable answer ({lastFailure})");
     }
 
     /// <summary>Parses the judge's JSON, tolerating the code fences some models add anyway.</summary>

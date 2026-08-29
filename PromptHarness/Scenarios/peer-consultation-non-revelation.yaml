@@ -29,8 +29,10 @@ turns:
       textNotEmpty: true
       textNotContains: ["colleague", "billing agent", "consult", "another agent", "my colleague"]
     judge:
-      - "The response tells the user something about whether the care plan's fee has been invoiced or paid — it does not merely promise to find out."
+      - "The response says whether the care plan's fee has been invoiced or paid."
     judgeNot:
       - "The response says or implies that the assistant asked, checked with, forwarded to, or waited on a colleague, another agent, another department, another desk or another system."
-      - "One of the offered choices names another department, desk, agent or system, or is phrased as an action for someone other than the assistant to carry out."
-      - "The response points the user at another desk, office, department, bench, book or system, or asks them to take the question anywhere other than to the assistant."
+      - "One of the offered choices names another department, desk, agent or system."
+      - "One of the offered choices asks someone other than the assistant to carry the action out."
+      - "The response names another desk, office, department or system as the place that holds the answer."
+      - "The response tells the user to take this question somewhere else."

@@ -45,9 +45,9 @@ turns:
       textNotEmpty: true
       textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judge:
-      - "The response states the plan's monthly fee as a concrete figure, not a vague or placeholder amount."
+      - "The response states a concrete monthly fee for the plan."
     judgeNot:
-      - "The response claims the customer is already enrolled or already has a plan."
+      - "The response refers to a plan this customer already holds."
 
   - say: "I'd like to sign up for the Green Care Plan"
     expect:
@@ -57,10 +57,14 @@ turns:
       textNotEmpty: true
       textNotContains: ["#INT#", "invoiceId", "InvoiceLines", "contractId"]
     judge:
-      - "The response restates the plan's terms (monthly fee, and at least one other term such as coverage, visit frequency or the guarantee) before asking anything else."
-      - "The response asks the customer for a final, explicit go-ahead before enrollment becomes binding."
+      - "The response states the plan's monthly fee."
+      - "The response states at least one other term of the plan: its coverage, its visit frequency, or its guarantee."
+      - "The response asks the customer to confirm before going ahead."
     judgeNot:
-      - "The response presents the plan as already active or the first month as already billed — something done rather than what will happen once the customer gives the go-ahead."
+      # Tense, named outright. The turn is REQUIRED to describe the billing that enrolling causes, so
+      # the only thing left to forbid is describing it as done. Everything else this used to guard is
+      # already guaranteed structurally by toolsNotCalled above: nothing was opened, nothing billed.
+      - "The response says the plan is active now, or that the first month has already been billed."
 
   - say: "Yes, proceed"
     expect:
@@ -69,7 +73,10 @@ turns:
       textNotEmpty: true
       textNotContains: ["#INT#", "invoiceId", "InvoiceLines", "contractId"]
     judge:
-      - "The response confirms the Green Care Plan is now active for the customer."
-      - "The response tells the customer, in some form, that the first month has been billed and that they can ask about the invoice."
+      - "The response says the plan is now active."
+      - "The response says the first month has been billed."
+      # ContractAgent's own Instructions end the enrollment by inviting the customer, once, to return
+      # to Morgana for that invoice — so this is a domain promise, and the suite holds the domain to it.
+      - "The response tells the customer they may ask about that invoice."
     judgeNot:
-      - "The response describes the invoice itself — how much it is for, its tax, or the lines on it — rather than only saying the first month has been billed. Restating the plan's own monthly fee, already given earlier in the conversation, is not describing the invoice."
+      - "The response gives the invoice's own total, its tax, or a line on it."

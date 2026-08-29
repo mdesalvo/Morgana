@@ -50,7 +50,8 @@ turns:
       toolsNotCalled: [ConfirmOrder]
       textNotEmpty: true
     judge:
-      - "The response restates that confirming is binding (stock will be committed, or the action cannot easily be undone) and asks the customer for a final go-ahead."
+      - "The response says that confirming is binding: the stock will be committed, or the order cannot easily be undone afterwards."
+      - "The response asks the customer for a final go-ahead."
     judgeNot:
       - "The response claims the order is already confirmed or billed."
 
@@ -62,6 +63,9 @@ turns:
       textNotContains: ["#INT#", "invoiceId", "InvoiceLines"]
     judge:
       - "The response confirms the order is now settled or binding."
-      - "The response tells the customer, in some form, that this purchase has been billed to them and that they can ask about the invoice."
+      - "The response says the purchase has been billed to the customer."
+      # InventoryAgent's own Instructions end a confirmed order by inviting the customer, once, to
+      # return to Morgana for that invoice — a domain promise, and the suite holds the domain to it.
+      - "The response tells the customer they may ask about that invoice."
     judgeNot:
-      - "The response describes the invoice itself — how much it is for, its tax, or the lines on it — rather than only saying the purchase has been billed."
+      - "The response gives the invoice's own total, its tax, or a line on it."
