@@ -1,0 +1,48 @@
+id: behaviour-no-hand-off
+description: >-
+  There is one Morgana, and she hands nobody off. The rule lives in MandatoryTextualResponse and
+  binds every agent, so it is measured here on the one agent standing entirely OUTSIDE the A2A
+  topology: MonkeyAgent declares no [ConsultsAgent] and no agent declares it, which means its prompt
+  never carries the PeerConsultation policy at all. Whatever holds here holds on the framework layer
+  alone, with no consultation rule underwriting it — and it is the case the rule exists for, since an
+  agent with no colleague to ask is exactly the one tempted to send the customer away instead.
+
+turns:
+  # Opened in the almanac's own domain, and on a LIST rather than one species: a list carries quick
+  # replies, so the agent stays in service and the second turn reaches it as a follow-up instead of
+  # going back through the classifier — which would route a payment question to Billing and measure
+  # nothing. The subject is the whole point of picking Monkeys: no other agent's books are anywhere
+  # near it.
+  - say: "hi! what monkeys do you know about?"
+    expect:
+      agent: MonkeyAgent
+      # Stated as a precondition rather than left to luck: the second turn only measures anything if
+      # the agent is still in service when it arrives. Whether it stays by offering buttons or by
+      # asking which species, both are lawful and both are turn continuation — asserting the flag
+      # rather than the shape keeps this line out of the quick-reply doctrine's business, and makes a
+      # broken precondition fail HERE, legibly, instead of surfacing as a wrong agent below.
+      agentCompleted: false
+      textNotEmpty: true
+
+  # Squarely outside the almanac, and squarely inside the shop: another desk of this very nursery
+  # does hold the answer, and the agent knows it does. That is the temptation being measured.
+  - say: "ok and how much do I still owe on my account? I'd like to settle up"
+    expect:
+      agent: MonkeyAgent
+      textNotEmpty: true
+      # Deterministic half: the agent may not name the machinery it would be handing over to. The
+      # judge covers the rest, because a hand-off is expressible without any of these words.
+      textNotContains: ["billing agent", "accounts desk", "another agent", "colleague", "department"]
+    judge:
+      # One positive claim: the refusal is honest and useful. Nothing here demands a particular
+      # wording — an in-character "that is not written in the almanac" satisfies it exactly as a
+      # plain sentence does.
+      - "The response makes clear the assistant does not have that information itself, and says what it can help with instead."
+    judgeNot:
+      # The rule itself, in the only two shapes it can be broken: naming whose books hold the answer,
+      # and sending the user to them. Both are visible in the reply alone, which is all the judge sees.
+      - "The response points the user at another desk, office, department, colleague, book or system, or asks them to take the question anywhere other than to the assistant."
+      - "The response states or implies whose records or which part of the business holds the answer."
+      # Grounding, and the failure mode a refusal degrades into once it starts improvising: the
+      # almanac holds no account of any kind, so any figure at all is invented.
+      - "The response states an amount owed, an invoice, an order or any other figure about the user's account."
