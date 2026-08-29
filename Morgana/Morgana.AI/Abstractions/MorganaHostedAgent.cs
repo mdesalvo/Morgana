@@ -43,10 +43,9 @@ public sealed class MorganaHostedAgent : AIAgent
     private readonly IPromptComposerService promptComposerService;
 
     /// <summary>
-    /// Resolves the actor system lazily. It is the actor system that constructs Morgana's agents
-    /// through its dependency resolver, so it cannot be injected into a service those agents reach.
+    /// Hands back the actor system, resolved on the turn that needs it rather than on construction.
     /// </summary>
-    private readonly IServiceProvider serviceProvider;
+    private readonly Func<ActorSystem> actorSystemResolver;
 
     /// <summary>How long to wait for the serving actor before reporting the agent unreachable.</summary>
     private readonly TimeSpan requestTimeout;
@@ -61,14 +60,19 @@ public sealed class MorganaHostedAgent : AIAgent
     public override string Description => description;
 
     /// <summary>Publishes one intent, which must be handled by a registered Morgana agent.</summary>
+    /// <param name="intent">Intent published under this name, and the agent's own name on its card.</param>
     /// <param name="description">Purpose of the agent, as advertised on its card.</param>
+    /// <param name="agentRegistryService">Resolves the intent to the agent type serving it.</param>
+    /// <param name="promptComposerService">Composes the note declaring that this turn serves a colleague.</param>
+    /// <param name="actorSystemResolver">Hands back the actor system on the turn that needs it — see the field's own remarks for why it arrives as a delegate.</param>
     /// <param name="requestTimeout">Maximum wait for the serving actor's answer.</param>
+    /// <param name="logger">Records requests that name no conversation, no agent, or that go unanswered.</param>
     public MorganaHostedAgent(
         string intent,
         string description,
         IAgentRegistryService agentRegistryService,
         IPromptComposerService promptComposerService,
-        IServiceProvider serviceProvider,
+        Func<ActorSystem> actorSystemResolver,
         TimeSpan requestTimeout,
         ILogger logger)
     {
@@ -76,7 +80,7 @@ public sealed class MorganaHostedAgent : AIAgent
         this.description = description;
         this.agentRegistryService = agentRegistryService;
         this.promptComposerService = promptComposerService;
-        this.serviceProvider = serviceProvider;
+        this.actorSystemResolver = actorSystemResolver;
         this.requestTimeout = requestTimeout;
         this.logger = logger;
     }
@@ -85,10 +89,6 @@ public sealed class MorganaHostedAgent : AIAgent
     /// Carries the request to the actor serving this intent in the conversation the session names,
     /// answering with the serialized <see cref="Records.PeerConsultationResponse"/> envelope.
     /// </summary>
-    /// <remarks>
-    /// Never throws: the caller is an agent mid-turn with a user waiting, so an unreachable actor is
-    /// reported as an answer saying so rather than as a fault that fails that user's turn.
-    /// </remarks>
     protected override async Task<AgentResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,
         AgentSession? session,
@@ -100,22 +100,33 @@ public sealed class MorganaHostedAgent : AIAgent
         if (session is not MorganaHostedAgentSession hostedAgentSession)
         {
             logger.LogError("Hosted agent '{Intent}' was invoked with session type '{SessionType}', which carries no conversation", intent, session?.GetType().Name ?? "null");
-            return Envelope($"The request for '{intent}' named no conversation and cannot be served.");
+            return BuildAgentResponseFromMessage($"The request for '{intent}' named no conversation and cannot be served.");
         }
 
+        // One question out of however many parts the protocol delivered: A2A carries a message, not a
+        // sentence, and the colleague is owed the whole of what was asked in a single turn — it has
+        // no way to come back for the rest.
         string question = string.Join("\n", messages.Select(m => m.Text).Where(text => !string.IsNullOrWhiteSpace(text))).Trim();
+
+        // Who is asking travels as metadata beside the message rather than inside it, which is what
+        // keeps the question the caller's own words: an agent introducing itself in prose would be
+        // spending the colleague's reading on its own name.
         string callerIntent = ReadCallerIntent(options);
 
+        // Asked of the registry per request, never assumed from the fact that this endpoint answers.
+        // Publication is decided once at startup, while the endpoint is open to anything that speaks
+        // A2A — so a request naming an intent this installation no longer serves is an ordinary
+        // request with a plain answer, not a fault to throw at a caller mid-turn.
         Type? agentType = agentRegistryService.ResolveAgentFromIntent(intent);
         if (agentType is null)
         {
             logger.LogError("Hosted agent '{Intent}' has no Morgana agent behind it", intent);
-            return Envelope($"No agent answers for '{intent}'.");
+            return BuildAgentResponseFromMessage($"No agent answers for '{intent}'.");
         }
 
         try
         {
-            ActorSystem actorSystem = (ActorSystem)serviceProvider.GetService(typeof(ActorSystem))!;
+            ActorSystem actorSystem = actorSystemResolver();
 
             // Deliberately the same resolution the router performs, so an agent reached over A2A is
             // the very same actor instance a user request would have been routed to: one session per
@@ -127,17 +138,26 @@ public sealed class MorganaHostedAgent : AIAgent
             // turn, and it is the only thing telling the agent its reader is not the user.
             string declaredQuestion = await promptComposerService.ComposeConsultationRequestAsync(callerIntent) + question;
 
+            // Ask, where the pipeline's own convention is Tell. That convention exists for streaming —
+            // an actor pushing chunks to a channel as they come — and there is no channel here: a
+            // colleague's answer is read whole, by a model, with a caller blocked on it. The timeout
+            // is the pipeline's own, so a silent actor lands in the catch below as an answer instead
+            // of hanging the user's turn.
             Records.PeerConsultationResponse response = await agentActor.Ask<Records.PeerConsultationResponse>(
                 new Records.PeerConsultation(hostedAgentSession.ConversationId, callerIntent, declaredQuestion),
                 requestTimeout,
                 cancellationToken);
 
-            return new AgentResponse(new ChatMessage(ChatRole.Assistant, Serialize(response)));
+            // The envelope travels serialized inside an assistant message because that is the only
+            // shape A2A carries, but it is DATA and not prose: what the asking agent receives is a
+            // tool result to read and decide against, never something to relay to the user as it
+            // stands.
+            return new AgentResponse(new ChatMessage(ChatRole.Assistant, SerializePeerConsultationResponse(response)));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Hosted agent '{Intent}' failed to serve a request from '{CallerIntent}' on conversation '{ConversationId}'", intent, callerIntent, hostedAgentSession.ConversationId);
-            return Envelope($"The agent for '{intent}' did not answer in time. Proceed without it.");
+            return BuildAgentResponseFromMessage($"The agent for '{intent}' did not answer in time. Proceed without it.");
         }
     }
 
@@ -175,8 +195,8 @@ public sealed class MorganaHostedAgent : AIAgent
         JsonSerializerOptions? jsonSerializerOptions = null,
         CancellationToken cancellationToken = default)
         => ValueTask.FromResult<AgentSession>(
-            JsonSerializer.Deserialize<MorganaHostedAgentSession>(serializedState, jsonSerializerOptions)
-            ?? throw new InvalidOperationException($"The serialized session handed to hosted agent '{intent}' names no conversation."));
+            serializedState.Deserialize<MorganaHostedAgentSession>(jsonSerializerOptions)
+             ?? throw new InvalidOperationException($"The serialized session handed to hosted agent '{intent}' names no conversation."));
 
     /// <summary>
     /// Reads the asking agent's intent from the run options the A2A layer rebuilt from the request's
@@ -192,11 +212,11 @@ public sealed class MorganaHostedAgent : AIAgent
     /// Wraps a framework-authored message in the same envelope a real answer travels in, so the
     /// asking model always parses one shape whatever happened.
     /// </summary>
-    private static AgentResponse Envelope(string message)
+    private static AgentResponse BuildAgentResponseFromMessage(string message)
         => new AgentResponse(new ChatMessage(ChatRole.Assistant,
-            Serialize(new Records.PeerConsultationResponse(message, false))));
+            SerializePeerConsultationResponse(new Records.PeerConsultationResponse(message, false))));
 
     /// <summary>Renders the envelope the asking agent's model receives as the tool result.</summary>
-    private static string Serialize(Records.PeerConsultationResponse response)
-        => JsonSerializer.Serialize(response, Records.DefaultJsonSerializerOptions);
+    private static string SerializePeerConsultationResponse(Records.PeerConsultationResponse peerConsultationResponse)
+        => JsonSerializer.Serialize(peerConsultationResponse, Records.DefaultJsonSerializerOptions);
 }

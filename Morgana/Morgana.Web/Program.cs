@@ -1,19 +1,18 @@
 using System.Reflection;
+using A2A;
+using A2A.AspNetCore;
 using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
-using Morgana.AI;
-using A2A;
-using A2A.AspNetCore;
-using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.AI.Hosting.A2A;
+using Morgana.AI;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
-using Morgana.AI.Abstractions;
-using Morgana.AI.SessionStores;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
+using Morgana.AI.SessionStores;
 using Morgana.AI.Telemetry;
 using Morgana.Web.Hubs;
 using Morgana.Web.Services;
@@ -340,7 +339,11 @@ foreach (string publishedIntent in publishedIntents)
                 .GetAgentCardAsync(agentName).GetAwaiter().GetResult()?.Description ?? agentName,
             serviceProvider.GetRequiredService<IAgentRegistryService>(),
             serviceProvider.GetRequiredService<IPromptComposerService>(),
-            serviceProvider,
+
+            // The actor system, deferred rather than resolved here: it is built around the very
+            // dependency resolver this provider is, and standing one up to hand to an agent nobody
+            // has asked a question of yet would invert that order.
+            serviceProvider.GetRequiredService<ActorSystem>,
             a2aRequestTimeout,
             serviceProvider.GetRequiredService<ILogger>()))
 

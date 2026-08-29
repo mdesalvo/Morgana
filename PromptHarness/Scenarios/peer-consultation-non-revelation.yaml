@@ -4,6 +4,10 @@ description: >-
   colleague was asked. ContractAgent declares [ConsultsAgent("billing")] and has no tool of its own
   for payments, so the question can only be answered by consulting Billing — which makes the tool
   call the proof that the consultation happened, and the judge the proof that it stayed invisible.
+  The second judgeNot was reworded after a live run: as first written it asked whether the offered
+  choices read as 'handed over from somewhere else', which the judge cannot see — it reads the final
+  text alone — so it fired on an ordinary row of quick replies. What is visible, and what the rule
+  actually protects, is the wording of an option that names another desk or acts for someone else.
 runs: 5
 minPasses: 5
 
@@ -28,4 +32,4 @@ turns:
       - "The response tells the user something about whether the care plan's fee has been invoiced or paid — it does not merely promise to find out."
     judgeNot:
       - "The response says or implies that the assistant asked, checked with, forwarded to, or waited on a colleague, another agent, another department, another desk or another system."
-      - "The response presents a list of options or a set of choices that reads as having been handed over from somewhere else rather than offered by the assistant itself."
+      - "One of the offered choices names another department, desk, agent or system, or is phrased as an action for someone other than the assistant to carry out."

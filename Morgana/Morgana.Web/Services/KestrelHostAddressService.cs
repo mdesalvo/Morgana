@@ -61,10 +61,8 @@ public class KestrelHostAddressService : IHostAddressService
     {
         string trimmedAddress = boundAddress.TrimEnd('/');
 
-        if (!Uri.TryCreate(trimmedAddress, UriKind.Absolute, out Uri? parsedAddress))
-            return trimmedAddress;
-
-        if (!WildcardHosts.Contains(parsedAddress.Host, StringComparer.OrdinalIgnoreCase))
+        if (!Uri.TryCreate(trimmedAddress, UriKind.Absolute, out Uri? parsedAddress)
+             || !WildcardHosts.Contains(parsedAddress.Host, StringComparer.OrdinalIgnoreCase))
             return trimmedAddress;
 
         string loopbackAddress = $"{parsedAddress.Scheme}://127.0.0.1:{parsedAddress.Port}";

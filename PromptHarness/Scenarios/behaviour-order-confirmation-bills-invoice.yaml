@@ -18,6 +18,11 @@ description: >-
   the agent asking "Shall I proceed?" every single run rather than treating the front-loaded seal
   word as sufficient. That is correct behaviour, not a bug — the scenario is written to match it.
 
+  The invoice judgeNot was reworded after a live run: 'a specific invoice total, amount or line item'
+  fired on the remaining stock and the invoiceId that this agent's own Formatting REQUIRES on the
+  Confirmed card, so the judge and the prose were asking for opposite things. What the rule protects
+  is that the greenhouse never reads the invoice out — its money, not its existence.
+
 turns:
   - say: "Hi, I'd like to order 1 pack of the wildflower seed mix, my customer code is T780C"
     expect:
@@ -59,4 +64,4 @@ turns:
       - "The response confirms the order is now settled or binding."
       - "The response tells the customer, in some form, that this purchase has been billed to them and that they can ask about the invoice."
     judgeNot:
-      - "The response states a specific invoice total, amount or line item."
+      - "The response describes the invoice itself — how much it is for, its tax, or the lines on it — rather than only saying the purchase has been billed."

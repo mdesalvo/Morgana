@@ -21,6 +21,13 @@ description: >-
   calling the tool, 5/5 runs. That is correct behaviour, not a bug — the scenario is written to
   match it, the same way behaviour-order-confirmation-bills-invoice does for Inventory.
 
+  Two judgeNots were reworded after a live run, neither because the agent was right to fail them.
+  'States a specific invoice total' fired on the plan's own monthly fee, which GetPlanOverview gave
+  the agent in turn 1 and which it is entitled to restate; and 'claims the plan is already active'
+  fired on the future-tense restatement of what enrolling will do — which is precisely what the
+  positive proposition of that same turn demands before the go-ahead. Both now judge the tense and
+  the subject rather than the presence of a number.
+
 customerCodes: [M455D, M455E, M455F, M455G, M455H]
 
 turns:
@@ -53,7 +60,7 @@ turns:
       - "The response restates the plan's terms (monthly fee, and at least one other term such as coverage, visit frequency or the guarantee) before asking anything else."
       - "The response asks the customer for a final, explicit go-ahead before enrollment becomes binding."
     judgeNot:
-      - "The response claims the plan is already active or already billed."
+      - "The response presents the plan as already active or the first month as already billed — something done rather than what will happen once the customer gives the go-ahead."
 
   - say: "Yes, proceed"
     expect:
@@ -65,4 +72,4 @@ turns:
       - "The response confirms the Green Care Plan is now active for the customer."
       - "The response tells the customer, in some form, that the first month has been billed and that they can ask about the invoice."
     judgeNot:
-      - "The response states a specific invoice total, amount or line item."
+      - "The response describes the invoice itself — how much it is for, its tax, or the lines on it — rather than only saying the first month has been billed. Restating the plan's own monthly fee, already given earlier in the conversation, is not describing the invoice."
