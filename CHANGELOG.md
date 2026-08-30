@@ -6,13 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.29.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: A2A — Morgana Speaks Agent-to-Agent
+Morgana now speaks the **A2A protocol**, end to end and through Microsoft's own stack. An agent declares `[ConsultsAgent("billing")]` and that colleague becomes a `consult_{intent}` function in its tool list; the agent so named is published at `/a2a/{intent}` with a well-known agent card, discoverable and callable by anything that speaks A2A.
+So an agent stops sending the user back and forth between desks and Morgana stops being a closed system: the same protocol serves a colleague in this process, a colleague in another Morgana and an orchestrator that is not Morgana at all.
+It is **opt-in and pays for itself only where declared**: nothing is published for an agent nobody consults, an agent that neither declares a colleague nor is named as one gets no endpoint, no policy and not one extra token.
+A domain without `[ConsultsAgent]` anywhere — or a deployment with `Morgana:AgentToAgent:Enabled` false — is exactly the Morgana it was before.
+
 ### ✨ Added
+- **`[ConsultsAgent("intent")]`** — a new attribute naming the colleagues an agent may consult, one per declaration
+- **A2A endpoints** — `/a2a/{intent}` and its `/.well-known/agent-card.json`, stood up only for the agents somebody declares as a colleague and authenticated like the rest of the API
+- **`ConsultMeFor`** — a new section of a domain prompt, stating what this desk answers for. It is what a colleague reads before asking
+- **`PeerConsultation`** — a new global policy: what is licit to ask a colleague and how one answers
 
 ### 🔄 Changed
 
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
+- **Agents beyond this process** — the asking side holds a standard `A2AAgent` resolved from a card, so a remote colleague is a matter of where that card is fetched from, not of new machinery
+- **Morgana inside someone else's system** — a domain modelled here is now reusable by orchestrators Morgana knows nothing about
 
 
 ## [0.28.0] - 2026-08-23
