@@ -60,7 +60,7 @@ own.
 | `Services/` | Default implementations of all interfaces |
 | `Telemetry/` | `MorganaTelemetry` (ActivitySource, metrics), `OpenTelemetryExtensions` |
 | `Records.cs` | All immutable record types (DTOs) for actor messages, configuration |
-| `Constants.cs` | The framework's glossary, peer of `Records.cs`: every literal that is a *contract between two parties who cannot see each other* — prompt IDs, policy and injection names, base tool names, actor name prefixes, ephemeral context keys, message-property markers, prompt placeholders, parameter scopes, the `other` intent, the A2A prefixes and issuer, and `ObservableLogs` (the three `MorganaTool` context lines and the provider's declaration line, whose templates the PromptHarness parses — the one case where a log message is a contract, and both ends now build from the same const). Deliberately not there: log text, display names, prompt prose, and configuration keys (those bind through `IConfiguration`, where they are read). `MorganaTelemetry` keeps its own span/attribute glossary beside the ActivitySource that emits it |
+| `Constants.cs` | The framework's glossary, peer of `Records.cs`: every literal that is a *contract between two parties who cannot see each other*. It opens with `Morgana` itself — the name of the system, and the literal with the most readers: the sender a channel displays when the pipeline speaks in its own voice, the id of the framework prompt, the role a framework charge is booked under, the default service name, and the word the persistence layer compares case-insensitively when attributing a stored turn. Then the framework prompt ids, actor name prefixes, ephemeral context keys, message-property markers, prompt placeholders, parameter scopes, the `other` intent, the A2A prefixes and issuer, the structural markers, and `ObservableLogs` (the three `MorganaTool` context lines and the provider's declaration line, whose templates the PromptHarness parses — the one case where a log message is a contract, and both ends now build from the same const). The test is a **resolver, not a mention**: a name only rendered from `morgana.json` is read by the model and by whoever edits the prompt, and a copy here would be an index no rename ever breaks — which is why only `PeerConsultation` of the nine policies is named, only the base tools whose calls outlive the turn, and no display name of a domain agent. Also deliberately absent: log text, prompt prose, and configuration keys (those bind through `IConfiguration`, where they are read). `MorganaTelemetry` keeps its own span/attribute glossary beside the ActivitySource that emits it |
 | `morgana.json` | Framework-level prompts (Morgana, Classifier, Guard, Presentation, ChannelAdapter) with global policies, base tools, error answers |
 
 ### Morgana.Web (host)
@@ -244,7 +244,11 @@ so the turn's tools and the chained-consultation guard read the session actually
 loaded into it and nothing is persisted out of it: **the colleague that answers is not the agent the
 user may later meet**. Shared context is hydrated exactly as on a user turn — the one channel that
 reaches an ephemeral session, and one carrying values, never history — so a colleague already knows
-the `customerCode` nobody re-asked for. What comes back is the serialized
+the `customerCode` nobody re-asked for. That channel runs one way only: `OnSharedContextUpdate`
+declines while a consultation is being served, so a shared write made to answer a colleague stays in
+the session that made it and dies with it. Otherwise the one thing that outlives an exchange leaving
+no trace would be a value nobody ever confirmed to the user, made binding on every agent for the rest
+of the conversation by the registry's first-write-wins. What comes back is the serialized
 `Records.PeerConsultationResponse` envelope — answer, whether the colleague awaits a reply, and any
 options or rich card it attached — handed over as **data** the asking agent reads and acts on, never
 as buttons to render.

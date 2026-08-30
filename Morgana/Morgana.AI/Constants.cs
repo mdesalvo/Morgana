@@ -93,18 +93,12 @@ public static class Constants
     }
 
     /// <summary>
-    /// The base tools declared in <c>morgana.json</c> and implemented on <c>MorganaTool</c>. Their
-    /// names travel further than the tool loop: a stored function call is recognised by name when a
-    /// conversation's history is replayed, long after the agent that made it is gone.
+    /// The base tools whose names travel further than the tool loop: a stored function call is
+    /// recognised by name when a conversation's history is replayed, long after the agent that made
+    /// it is gone.
     /// </summary>
     public static class Tools
     {
-        /// <summary>Reads a context variable.</summary>
-        public const string GetContextVariable = "GetContextVariable";
-
-        /// <summary>Writes a context variable, and shares it when the configuration declares it shared.</summary>
-        public const string SetContextVariable = "SetContextVariable";
-
         /// <summary>Declares out-of-band that the agent awaits the user's next turn.</summary>
         public const string SetTurnContinuation = "SetTurnContinuation";
 
