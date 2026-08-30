@@ -90,6 +90,9 @@ public sealed class TurnObserver : IDisposable
     /// <summary>Closed <c>morgana.guard</c> spans, per conversation, in completion order.</summary>
     private readonly ConcurrentDictionary<string, List<GuardSpan>> guardSpans = new ConcurrentDictionary<string, List<GuardSpan>>();
 
+    /// <summary>Consultation spans per conversation — several may close within one turn.</summary>
+    private readonly ConcurrentDictionary<string, List<ConsultationObservation>> consultationSpans = new ConcurrentDictionary<string, List<ConsultationObservation>>();
+
     /// <summary>Closed <c>morgana.classifier</c> spans, per conversation, in completion order.</summary>
     private readonly ConcurrentDictionary<string, List<ClassifierSpan>> classifierSpans = new ConcurrentDictionary<string, List<ClassifierSpan>>();
 
@@ -147,7 +150,8 @@ public sealed class TurnObserver : IDisposable
             agentSpans.TryGetValue(conversationId, out List<AgentSpan>? spans) ? spans.Count : 0,
             guardSpans.TryGetValue(conversationId, out List<GuardSpan>? guards) ? guards.Count : 0,
             classifierSpans.TryGetValue(conversationId, out List<ClassifierSpan>? classifiers) ? classifiers.Count : 0,
-            llmMark);
+            llmMark,
+            consultationSpans.TryGetValue(conversationId, out List<ConsultationObservation>? consultations) ? consultations.Count : 0);
     }
 
     /// <summary>
@@ -222,6 +226,13 @@ public sealed class TurnObserver : IDisposable
             ? classifiers[^1]
             : null;
 
+        // Every consultation that closed during the turn, not just the latest: one turn may ask
+        // more than one colleague, and which of them was asked is the whole point of reading these.
+        IReadOnlyList<ConsultationObservation> consulted =
+            consultationSpans.TryGetValue(scope.ConversationId, out List<ConsultationObservation>? served) && served.Count > scope.ConsultationSpanCount
+                ? [.. served.Skip(scope.ConsultationSpanCount)]
+                : [];
+
         // LLM spans are process-wide, not per-conversation (see the field's own remarks on why),
         // so isolating this turn's usage means skipping every span that existed before BeginTurn's
         // mark and summing whatever landed after — sound only because the suite runs serially.
@@ -242,6 +253,7 @@ public sealed class TurnObserver : IDisposable
             guard?.Violation,
             classifier?.Intent,
             classifier?.Confidence,
+            consulted,
             conversationLogMark is { } mark ? output.Since(mark) : []);
     }
 
@@ -288,6 +300,20 @@ public sealed class TurnObserver : IDisposable
                 Append(agentSpans, conversationId, new AgentSpan(
                     activity.GetTagItem(MorganaTelemetry.AgentName) as string,
                     [.. toolsInvoked.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]));
+                break;
+
+            case MorganaTelemetry.ConsultationActivity:
+                // Same comma-joined tag the agent span carries, set on the answering agent's side:
+                // this is the only place the harness can see which tools the colleague reached for.
+                string consultationTools = activity.GetTagItem(MorganaTelemetry.AgentToolsInvoked) as string ?? string.Empty;
+
+                Append(consultationSpans, conversationId, new ConsultationObservation(
+                    activity.GetTagItem(MorganaTelemetry.ConsultationCaller) as string,
+                    activity.GetTagItem(MorganaTelemetry.ConsultationTarget) as string,
+                    [.. consultationTools.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)],
+                    activity.GetTagItem(MorganaTelemetry.ConsultationAwaitingReply) as bool?,
+                    activity.GetTagItem(MorganaTelemetry.ConsultationQuestion) as string,
+                    activity.GetTagItem(MorganaTelemetry.ConsultationAnswer) as string));
                 break;
 
             case MorganaTelemetry.GuardActivity:
@@ -393,6 +419,7 @@ public sealed record TokenUsage(
 /// <param name="LogMark">Index into the captured log at the moment the turn was sent.</param>
 /// <param name="SpanCount">Agent spans already recorded for the conversation.</param>
 /// <param name="GuardSpanCount">Guard spans already recorded for the conversation.</param>
+/// <param name="ConsultationSpanCount">Consultation spans already recorded for the conversation.</param>
 /// <param name="ClassifierSpanCount">Classifier spans already recorded for the conversation.</param>
 /// <param name="LlmSpanCount">LLM spans already recorded, process-wide.</param>
-public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount);
+public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount, int ConsultationSpanCount);

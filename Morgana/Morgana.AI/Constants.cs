@@ -112,6 +112,9 @@ public static class Constants
 
         /// <summary>Placed in front of a colleague's question, telling the answering agent who its reader is.</summary>
         public const string PeerConsultationDeclaration = "PeerConsultationDeclaration";
+
+        /// <summary>Spliced into a peer-capable agent's own instructions, naming the colleagues it holds.</summary>
+        public const string ColleaguesDeclaration = "ColleaguesDeclaration";
     }
 
     /// <summary>
@@ -182,12 +185,6 @@ public static class Constants
         /// </summary>
         public const string TurnText = "morgana:turn_text";
 
-        /// <summary>
-        /// Written on every message an agent appends while answering a colleague rather than the user,
-        /// and dropped from every user-facing history.
-        /// </summary>
-        public const string Consultation = "morgana:consultation";
-
         /// <summary>A2A message metadata naming the agent that asked. Dotted, not colon-separated, because it travels the protocol.</summary>
         public const string CallerIntent = "morgana:caller";
 
@@ -207,11 +204,11 @@ public static class Constants
         /// <summary>In <see cref="Injections.HeldContextDeclaration"/> — the held variables as name: value pairs.</summary>
         public const string HeldVariables = "((held_variables))";
 
-        /// <summary>In <see cref="Injections.PeerConsultationGuidance"/> — the competences the colleague's card advertises.</summary>
-        public const string PeerSkills = "((peer_skills))";
-
         /// <summary>In <see cref="Injections.PeerConsultationDeclaration"/> — the intent of the agent asking.</summary>
         public const string ConsultationCaller = "((caller))";
+
+        /// <summary>In <see cref="Injections.ColleaguesDeclaration"/> — one line per colleague: function name and territory.</summary>
+        public const string Colleagues = "((colleagues))";
 
         /// <summary>In the <see cref="Prompts.Classifier"/> prompt — the configured intents, formatted for ranking.</summary>
         public const string FormattedIntents = "((formattedIntents))";

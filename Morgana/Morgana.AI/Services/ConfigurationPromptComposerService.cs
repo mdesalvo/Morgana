@@ -129,13 +129,30 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         if (consultationGuidance.Length == 0)
             return peerCard.Description ?? "";
 
-        // A card with no skills is legitimate (an agent whose competences are only known once its
-        // MCP servers answer), and says so rather than leaving the placeholder dangling.
-        string skills = peerCard.Skills is { Count: > 0 }
-            ? string.Join("; ", peerCard.Skills.Select(skill => $"{skill.Name} — {skill.Description}"))
-            : "not declared in advance";
+        // The guidance comes first and the colleague's own words after it, the same order in which a
+        // consulted agent reads the Declaration ahead of the question put to it. The card's skills
+        // are deliberately not here: an inventory of the colleague's functions is what a caller
+        // audits to rule a question out, and what falls to that desk is the colleague's to state.
+        return $"{consultationGuidance}\n\n{peerCard.Description}";
+    }
 
-        return $"{peerCard.Description}\n\n{consultationGuidance.Replace(Constants.Placeholders.PeerSkills, skills)}";
+    /// <inheritdoc />
+    public async Task<string?> ComposeColleaguesDeclarationAsync(IReadOnlyDictionary<string, string> colleagues)
+    {
+        if (colleagues.Count == 0)
+            return null;
+
+        FrameworkLayer framework = await frameworkLayer.Value;
+
+        string declaration = Records.GlobalPolicy.ResolveTemplate(framework.Policies, Constants.Injections.ColleaguesDeclaration);
+        if (declaration.Length == 0)
+            return null;
+
+        // One line per colleague, the callable name in front of the territory it covers: what the
+        // model has to join is "this request is theirs" with "this is the function that reaches them".
+        string lines = string.Join("\n", colleagues.Select(kvp => $"- {kvp.Key}: {kvp.Value}"));
+
+        return declaration.Replace(Constants.Placeholders.Colleagues, lines);
     }
 
     /// <inheritdoc />

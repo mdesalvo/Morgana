@@ -229,6 +229,8 @@ turns:
       noContextWrites: true
       noContextAccess: true
       contextVocabulary: [customerCode] # every name touched must appear here
+      historyExcludesAgents: [billing]  # no message in the persisted history belongs to that agent
+      historyUserMessages: 2            # …and exactly one user message per turn played so far
       textNotEmpty: true
       textNotContains: ["#INT#"]
     judge:                        # propositions an LLM must find TRUE
@@ -237,11 +239,17 @@ turns:
       - "The response mentions variables, context or memory."
 ```
 
+The two `history*` keys are the only ones costing a round trip to the host, so they are fetched
+solely for the turns that declare them. They read the conversation as a resuming channel would see
+it, which is where a consultation between two agents is observably absent: the colleague owns no
+message, and its inbound question — stored with the user role — never shows up as a message the
+person did not send.
+
 Two layers, and the split is deliberate: **structural** assertions are deterministic and read only
 span, log and message data; the **judge** is for what no structural assertion can reach ("asks in
-prose without enumerating options"). The judge sees only what a user would see — text, buttons,
-whether a card was rendered — never the tool trace, so it cannot justify a verdict from evidence the
-user never had.
+prose without enumerating options"). The judge sees exactly what a user would see — text, buttons,
+and the card's rendered content — never the tool trace, so it cannot justify a verdict from evidence
+the user never had, nor be convicted of missing what the screen did carry.
 
 **Thresholds.** Repetition with a pass threshold is the only honest shape when the system under test
 is a language model: a prompt that works four times in five is materially different from one that

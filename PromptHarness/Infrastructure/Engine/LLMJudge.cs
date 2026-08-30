@@ -22,9 +22,11 @@ public sealed record JudgeVerdict(bool Holds, string Reason);
 /// construction uses the cheapest configured tier. That keeps the suite's judging cost proportional
 /// to the deployment it is testing, and adds no provider, key or dependency of its own.</para>
 ///
-/// <para>It is deliberately given only what a user would see — text, quick replies, whether a card
-/// was rendered. Feeding it the tool trace would let it justify a verdict from evidence the user
-/// never had, which is exactly the class of judgement the structural layer already owns.</para>
+/// <para>It is deliberately given exactly what a user would see — the text, the button labels and
+/// the card as rendered — and nothing else. Feeding it the tool trace would let it justify a verdict
+/// from evidence the user never had, which is exactly the class of judgement the structural layer
+/// already owns; showing it less than the screen is the opposite error, and convicts a response that
+/// answered on a card.</para>
 /// </remarks>
 public sealed class LLMJudge
 {
@@ -133,16 +135,17 @@ public sealed class LLMJudge
     /// <summary>Judges a single proposition, retrying twice, with waits, before giving up.</summary>
     private async Task<JudgeVerdict> EvaluateAsync(string proposition, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard)
     {
-        // Deliberately only what a user would see: text, button labels, and whether a card was
-        // shown (with its title, not its full JSON payload) — never the tool trace, the context
-        // accesses, or anything else only the structural layer is allowed to reach.
+        // Exactly what a user would see: text, button labels, and the card's own rendered content —
+        // never the tool trace, the context accesses, or anything else only the structural layer is
+        // allowed to reach. The card is rendered through the same RichCardText the structural layer
+        // reads, so a proposition and a richCardContains can never be told different things.
         string userPrompt =
             $"""
              RESPONSE TEXT:
              {text}
 
              QUICK REPLY BUTTONS SHOWN: {(quickReplies.Count == 0 ? "none" : string.Join(" | ", quickReplies.Select(reply => reply.Label)))}
-             RICH CARD SHOWN: {(richCard is null ? "no" : $"yes, titled \"{richCard.Title}\"")}
+             RICH CARD SHOWN: {(richCard is null ? "no" : $"yes, and it reads:\n{RichCardText.Flatten(richCard)}")}
 
              PROPOSITION:
              {proposition}

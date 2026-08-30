@@ -215,7 +215,8 @@ hosting expects one long-lived agent per name, while Morgana's agents are per-co
   resolves the very actor the router would have reached, and `Ask`s it a `Records.PeerConsultation`.
 
 **Consumption.** `ConfigurationAgentDirectoryService` projects each agent's `AgentCard` from the
-domain configuration (intent → name and purpose, declared tools → `AgentSkill`s) and resolves a
+domain configuration (intent → name, the agent's own `ConsultMeFor` → description, declared tools →
+`AgentSkill`s) and resolves a
 colleague with `A2ACardResolver.GetAIAgentAsync` — so what the asking agent holds is
 `Microsoft.Agents.AI.A2A`'s `A2AAgent`, the identical object an agent in another process would get.
 `A2AAgent.CreateSessionAsync(conversationId)` binds the A2A context to the conversation, and
@@ -235,19 +236,26 @@ a stream. The cap is a safety net, not the mechanism: convergence is asked of th
 prose, by `PeerConsultationDeclaration`.
 
 **The answering turn** runs in `MorganaAgent.ServeConsultationAsync`, deliberately not an
-`AgentRequest`: it never streams, never reaches the supervisor, and is persisted as inactive so
-answering a colleague can never make that agent the conversation's active agent. Shared context is
-hydrated exactly as on a user turn, so a colleague already knows the `customerCode` nobody re-asked
-for. What comes back is the serialized `Records.PeerConsultationResponse` envelope — answer, whether
-the colleague awaits a reply, and any options or rich card it attached — handed over as **data** the
-asking agent reads and acts on, never as buttons to render.
+`AgentRequest`: it never streams and never reaches the supervisor. Nor does it run on the agent's own
+session. A2A distinguishes a **message** — direct, stateless, answered immediately — from a **task**,
+which carries state; a consultation is the first, and is served on a session created for that
+exchange and dropped with it (`consultationSession`, which `CurrentSession` exposes for its duration
+so the turn's tools and the chained-consultation guard read the session actually running). Nothing is
+loaded into it and nothing is persisted out of it: **the colleague that answers is not the agent the
+user may later meet**. Shared context is hydrated exactly as on a user turn — the one channel that
+reaches an ephemeral session, and one carrying values, never history — so a colleague already knows
+the `customerCode` nobody re-asked for. What comes back is the serialized
+`Records.PeerConsultationResponse` envelope — answer, whether the colleague awaits a reply, and any
+options or rich card it attached — handed over as **data** the asking agent reads and acts on, never
+as buttons to render.
 
-**The exchange leaves no trace in the conversation**, and that takes two distinct erasures:
-- Every message the answering turn appended is stamped `MorganaChatHistoryProvider.ConsultationMarkerKey`
-  and dropped by `GetConversationHistoryAsync` before any of its processing passes. The
-  `UserFacingMarkerKey` alone cannot do this — it marks which assistant message of a turn survives,
-  while whole turns, question included, must disappear, and an agent whose session holds nothing but
-  consultations carries no marker for the filter to work from at all.
+**The exchange leaves no trace**, at either end, and each end reaches that differently:
+- The answering side leaves none because there is nothing to erase: its turn ran on a session no
+  writer ever saw and no reader will. That is what makes an agent later consulted again, or activated
+  by the classifier, begin with nothing — it never has to answer the user from a memory of having
+  been consulted, which is data it would not re-read from its own books. The consultation message
+  marker and the history filter reading it are both gone with it: an erasure is not needed where
+  nothing is ever written.
 - `MorganaAgent.StripPeerConsultations` removes the `consult_*` call and its result from the **asking**
   agent's own history once read, as a matched pair (a stored call without its result is rejected by
   the provider on the next turn). A colleague's answer is worth exactly one reading: left in place it
@@ -267,10 +275,11 @@ for an agent inside the A2A topology — one that declares `[ConsultsAgent]`, or
 else declares (`MorganaAgentAdapter.IsConsultedByAnyAgent`, the same condition under which
 Morgana.Web publishes an intent, since an unpublished agent is never asked) — and the switch is the
 `peerCapable` argument of `ComposeAgentInstructionsAsync`, so the peer-capability of an agent is
-decided where the topology is known rather than inside the composer. `PeerConsultationGuidance` lives
-on a colleague's function description, so an agent with no `[ConsultsAgent]` never carries one;
-`PeerConsultationDeclaration` is spliced into an inbound question, so an agent pays it only on the
-turns it is actually being consulted. An agent that neither consults nor is consulted reads not one
+decided where the topology is known rather than inside the composer. `ColleaguesDeclaration` closes
+the instructions of an agent that holds colleagues, so one that declares no `[ConsultsAgent]` never
+carries it; `PeerConsultationDeclaration` is spliced into an inbound question, so an agent pays it
+only on the turns it is actually being consulted. A `ConsultMeFor` is paid by whoever *reads* it,
+never by the agent that wrote it: it leaves on the card and comes back in somebody else's prompt. An agent that neither consults nor is consulted reads not one
 extra token, exactly as before any of this existed.
 
 OTel: a `morgana.consultation` span (`consultation.caller`, `consultation.target`,
@@ -286,8 +295,8 @@ OTel: a `morgana.consultation` span (`consultation.caller`, `consultation.target
 | `LLMGuardRailService` | `IGuardRailService` | Async LLM policy check against the Guard prompt. Fails open on LLM error |
 | `LLMPresenterService` | `IPresenterService` | LLM-generated welcome message + quick replies. Falls back to `FallbackMessage` + intent-derived buttons on LLM failure. Never throws |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json` (embedded in Morgana.AI) + domain prompts from `agents.json` (via `IAgentConfigurationService`). Case-insensitive lookup |
-| `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer system prompt, the tool descriptions (splicing `ToolDescriptionContextGuidance`), the per-turn `HeldContextDeclaration`, and the two peer-consultation fragments (`PeerConsultationGuidance` on a colleague's function description, `PeerConsultationDeclaration` in front of a colleague's question). Sibling of the resolver and its client — the resolver abstracts *where prompts come from*, the composer *how they become what the model reads*, so swapping prompt storage for a database does not drag the layer fences along. Caches the framework layer on first resolution |
-| `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery: projects an `AgentCard` per agent from the domain configuration (intent → name and purpose, declared tools → `AgentSkill`s, plus the interface this installation publishes it under), and resolves a colleague into an `AIAgent` via `A2ACardResolver`. Cards cached per intent, built on demand |
+| `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer system prompt, the tool descriptions (splicing `ToolDescriptionContextGuidance`), the per-turn `HeldContextDeclaration`, the `ColleaguesDeclaration` closing a peer-capable agent's own instructions, and the `PeerConsultationDeclaration` spliced in front of a colleague's question. Sibling of the resolver and its client — the resolver abstracts *where prompts come from*, the composer *how they become what the model reads*, so swapping prompt storage for a database does not drag the layer fences along. Caches the framework layer on first resolution |
+| `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery: projects an `AgentCard` per agent from the domain configuration (intent → name, `ConsultMeFor` → description, declared tools → `AgentSkill`s, plus the interface this installation publishes it under), and resolves a colleague into an `AIAgent` via `A2ACardResolver`. Cards cached per intent, built on demand |
 | `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Scans all loaded assemblies for `agents.json` embedded resources. Graceful degradation if none found (agentless mode) |
 | `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents via `[HandlesIntent]` reflection scanning. Bidirectional validation: every configured intent must have an agent and vice versa. Throws on mismatch at startup. Delegates LLM tier validation to `ILLMTierValidationService` |
 | `RequiresLLMTierValidationService` | `ILLMTierValidationService` | Validates every discovered agent's `[RequiresLLMTier]` declaration against the active provider's configured tiers. Startup-fatal on missing attribute or unconfigured tier |
@@ -330,7 +339,7 @@ Startup validation: `ILLMTierValidationService` (`RequiresLLMTierValidationServi
 ## Agent Authoring (how to create a new agent)
 
 1. **Define intent** in `agents.json` Intents array: Name, Description, Label, DefaultValue
-2. **Define prompt** in `agents.json` Agents array: ID matching the intent name, Target, Instructions, Personality, Formatting, Tools array
+2. **Define prompt** in `agents.json` Agents array: ID matching the intent name, Target, Instructions, Personality, Formatting, ConsultMeFor, Tools array
 3. **Create agent class** extending `MorganaAgent`, decorated with `[HandlesIntent("myintent")]` **and** `[RequiresLLMTier(LLMTier.X)]` (mandatory — declares the fixed die, `Efficiency` or `Performance`, the agent runs on; validated at startup against the active provider's `Tiers` map). Constructor calls `MorganaAgentAdapter.CreateAgent()` which returns `(AIAgent, MorganaAIContextProvider, MorganaChatHistoryProvider)`
 4. **Create tool class** (optional) extending `MorganaTool`, decorated with `[ProvidesToolForIntent("myintent")]`. Method names must match tool Names in JSON. Constructor signature: `(ILogger, Func<ToolContext>)`
 5. **Or use MCP** — decorate agent with `[UsesMCPServer("url")]` (Http) or `[UsesMCPServer(MCPTransport.Stdio, "cmd", args)]` for auto-discovered remote tools. Supports multiple `[UsesMCPServer]` on one agent
@@ -412,6 +421,15 @@ Two-layer prompt composition in `IPromptComposerService.ComposeAgentInstructions
 1. **Framework layer** (from `morgana.json`): Target + Personality + GlobalPolicies + Instructions + Formatting
 2. **Domain layer** (from `agents.json`): Target + Personality + Instructions + Formatting
 
+A domain prompt carries a **fifth authored section, `ConsultMeFor`, which is never composed into this
+agent's own prompt**: it is the one section whose reader is another agent. It states what falls to
+this desk — a territory, not a list of what the agent can do — and travels out on the A2A card as its
+description, to be read by whoever holds a `consult_{intent}` function for it (see Inter-agent
+consultation above). Every agent declares one, whether or not anybody consults it today: it costs its
+author nothing, since nothing it says is ever paid for in that agent's own prompt, and a domain
+without it falls back to the intent description — a routing phrase written for the classifier, which
+tells a colleague which user utterances land here rather than what this desk answers for.
+
 **The two layers are fenced, and the fences are load-bearing.** Both carry the same four section
 labels, so an unfenced composition shows `[TARGET]`, `[PERSONALITY]`, `[INSTRUCTIONS]` and
 `[FORMATTING]` twice with nothing marking which is which — the framework asserts precedence over "the
@@ -437,7 +455,7 @@ if two agents need the same sentence, that is a policy gap to be filled above, n
 Framework prompts (`morgana.json`):
 - **Morgana**: base personality, global policies — P0-P8, all `Critical`: ContextHandling, QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage, ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation. `PeerConsultation` (P8) is the **only conditionally rendered policy**: it carries the whole two-role contract of a consultation and is read solely by agents inside the A2A topology (see Inter-agent consultation above), which is why it can sit in the policy list at all without every agent paying for it. Last in the order, so it names the policies it suspends rather than forward-referencing them. It carries **only what nothing else can say**: when a consultation is worth one (and that it is worth exactly one question), that a colleague may never be asked for what only the user can give, and that a gap a colleague leaves is closed by asking the user in your own voice. Everything a reader might expect to find here and does not is deliberate — how to answer a colleague is in the `PeerConsultationDeclaration`, which arrives on the very turn it governs; that no invented action may be offered is `ToolGrounding`; that tool output is not passed through is `MandatoryTextualResponse`; that the machinery is never narrated is that same policy, which is why **no pre-existing policy was edited to make room for peer consultation**. Non-revelation is enforced at the source instead, on the answering side: the `Declaration` tells the consulted agent that what it writes may reach the user in its colleague's words, so it names no desk and sends nobody anywhere. The `QuickReplyDoctrine` (P1) is the unifying master rule the other quick-reply policies instantiate — see Design Philosophy. `GlobalPoliciesHeader` states the "these are binding" emphasis once, above the list, rather than each policy repeating it in its own opening words; `GlobalPoliciesFooter` closes the block, because an opening claim about what follows otherwise scopes over the framework's own Instructions and Formatting and the whole domain layer beneath them.
   Its `Target` is the composed prompt's **preamble, not a role description**: it names the two layers, says this one governs how a turn is formed while the domain layer governs what the conversation is about, and settles precedence. It deliberately promises no capability: a claim like "solve problems through the support scenarios you can handle" sits in the primacy slot unbacked, and `ToolGrounding` then has to spend a clause defending against it. Its `Instructions` carry the **order of a turn** (resolve inputs → call the domain tool → decide presentation → write the text once), which no single policy states: each policy governs one aspect, and the observed defects are overwhelmingly sequencing failures
-  Two further entries govern peer consultation, both `Type: "Injection"`, and the split between them and the policy is by **who pays and when**. `PeerConsultationGuidance` is spliced by `ComposePeerDescriptionAsync` into the description under which a colleague is offered as a function, and says only who that colleague is: `((peer_skills))` resolved from its card, read at the rung where the model decides whether this is the right colleague at all. `PeerConsultationDeclaration` is composed by `ComposeConsultationRequestAsync` and spliced by `MorganaHostedAgent` in front of the incoming question rather than into the answering agent's prompt, with `((caller))` resolved to the asking agent — a prompt is composed once, while whether a turn serves a colleague changes turn by turn. It carries the whole of **how to answer one**: reader is an agent, the rules on buttons, cards, continuation and voice suspended, facts only, complete in one turn, and nothing in the answer that names a desk or sends the user anywhere. That is deliberately not in the policy: it would be read on every turn of an agent's life to govern the few where a colleague asks.
+  Two further entries govern peer consultation, both `Type: "Injection"`, and the split between them and the policy is by **who pays and when**. `ColleaguesDeclaration` closes the composed instructions of an agent that holds colleagues, resolving `((colleagues))` to one line per colleague — the callable `consult_{intent}` name and that colleague's own `ConsultMeFor`. It is the rung that decides whether the one below is ever read: a colleague's own description reaches the model only once it is already weighing that function, which is exactly what an agent about to answer "this is not on my books" never does. Static for the agent's life, so unlike `HeldContextDeclaration` it rides in the cached prefix. It deliberately carries no inventory of the colleague's tools: a caller handed the list audits it and rules its question out, which is the failure the declaration exists to prevent — `ComposePeerDescriptionAsync` accordingly offers a colleague under its `ConsultMeFor` alone, and the card's `AgentSkill`s reach external A2A consumers only. `PeerConsultationDeclaration` is composed by `ComposeConsultationRequestAsync` and spliced by `MorganaHostedAgent` in front of the incoming question rather than into the answering agent's prompt, with `((caller))` resolved to the asking agent — a prompt is composed once, while whether a turn serves a colleague changes turn by turn. It carries the whole of **how to answer one**: reader is an agent, the rules on buttons, cards, continuation and voice suspended, facts only, complete in one turn, and nothing in the answer that names a desk or sends the user anywhere. That is deliberately not in the policy: it would be read on every turn of an agent's life to govern the few where a colleague asks.
   Two further entries in the same array carry `Type: "Injection"`. They are **not policies but templates** — `FormatGlobalPolicies` skips both of them (it filters on `IsInjectionTemplate`, not by name, so this list grows without touching that method) — and each has one splice site. `ToolDescriptionContextGuidance` is spliced by `IPromptComposerService.ComposeToolDescriptionAsync` (called from `MorganaToolAdapter`) into the description of every tool declaring context-scoped parameters; rendered in the system prompt it would be an instruction with no referent ("BEFORE INVOKING THIS TOOL" names no tool there), re-paid on every round trip. `HeldContextDeclaration` is spliced per turn by `IPromptComposerService.ComposeHeldContextDeclarationAsync`, called from `MorganaAIContextProvider.ProvideAIContextAsync` — it resolves `((held_variables))` to **name: value** pairs for the context variables the session currently holds, minus the framework's ephemeral keys, so an agent waking on a shared variable it never asked for has nothing left to look up (a names-only variant relied on the model choosing to call `GetContextVariable`, which proved unreliable). An empty session gets no injection at all (a lighter "nothing held, still check" variant was tried and dropped — it never earned its per-turn token cost). The declaration is prefixed with a code-level marker (`ConfigurationPromptComposerService.DynamicInstructionsMarker`) that `MorganaAnthropicClient.MarkLeadingSystemForCache` uses to split it off the stable framework+domain prefix before caching, so a turn's declaration changing never busts the cache for the whole prompt. `HeldContextDeclaration` is the one entry carrying a *fact* rather than a rule, and the only one that can: tool descriptions are built once at agent creation, so `((context_parameters))` can only ever state the **contract** ("this tool takes a `customerCode`"), true even against an empty store — never the **state** ("`customerCode` is held right now"), which nobody knows at build time. That distinction is what the second splice site buys, and it extends the placement ladder one rung: a parameter description is read once the model is already invoking the tool, a tool description when it weighs the tool, and the per-turn injection before any tool is weighed at all — which is where an agent activated first time mid-conversation fails, deciding to ask on an empty (per-agent) history without ever selecting the domain tool whose description carries the guidance
 - **Classifier**: JSON response `{intents: [{intent, confidence}, ...]}`, ranked most-confident first, with `((formattedIntents))` placeholder. One entry for a clean match; more only for a genuine collision, resolved deterministically by `LLMClassifierService` — see Classifier disambiguation above. Carries a `DisambiguationMessage` additional property alongside `UnrecognizedIntentError`
 - **Guard**: JSON response `{compliant, violation}`

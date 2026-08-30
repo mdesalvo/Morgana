@@ -228,6 +228,11 @@ public class DraftValidationService : IDraftValidationService
                 "The agent has no Target.",
                 "Target is the domain layer's first section and states what the agent is for; composed empty, the agent inherits only the framework's generic purpose."));
 
+        if (string.IsNullOrWhiteSpace(agent.ConsultMeFor))
+            findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
+                "The agent has nothing to say to a colleague consulting it.",
+                "ConsultMeFor is what a colleague reads to decide whether a question is this agent's; without it the card falls back to the intent description, which is a routing phrase written for the classifier."));
+
         if (string.IsNullOrWhiteSpace(agent.Instructions))
             findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                 "The agent has no Instructions.",

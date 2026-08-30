@@ -336,7 +336,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             return ProcessMessagesForHistory(
                 conversationId, 
                 allMessages: [
-                    .. allMessages.Where(m => m.message.Role != ChatRole.Tool && !IsConsultation(m.message))
+                    .. allMessages.Where(m => m.message.Role != ChatRole.Tool)
                                   .OrderBy(m => m.message.CreatedAt?.UtcDateTime ?? DateTime.UtcNow)
                 ], jsonSerializerOptions);
         }
@@ -754,17 +754,6 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     /// Processes raw messages from AgentSession into UI-ready MorganaChatMessage array.
     /// Handles quick reply extraction, message filtering, and chronological ordering.
     /// </summary>
-    /// <summary>
-    /// Whether a message belongs to a turn an agent spent answering a colleague rather than the user.
-    /// </summary>
-    /// <remarks>
-    /// Excluded before any of the processing passes, so a rich card or quick replies a colleague
-    /// attached for another agent to read can never bind to a message the user sees either.
-    /// </remarks>
-    /// <param name="message">Message read back from a persisted agent session.</param>
-    private static bool IsConsultation(ChatMessage message)
-        => message.AdditionalProperties?.ContainsKey(Constants.MessageProperties.Consultation) == true;
-
     private MorganaChatMessage[] ProcessMessagesForHistory(
         string conversationId,
         List<(string agentName, bool agentCompleted, ChatMessage message)> allMessages,

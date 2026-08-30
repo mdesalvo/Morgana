@@ -142,6 +142,7 @@ public sealed class ExamplesDomainFixture : IAsyncLifetime
     {
         ID = agent.ID,
         Target = agent.Target,
+        ConsultMeFor = agent.ConsultMeFor,
         Personality = agent.Personality,
         Instructions = agent.Instructions,
         Formatting = agent.Formatting,

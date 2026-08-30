@@ -163,6 +163,7 @@ public class DraftImportService : IDraftImportService
             Type = prompt.Type,
             SubType = prompt.SubType,
             Target = prompt.Target,
+            ConsultMeFor = prompt.ConsultMeFor,
             Instructions = prompt.Instructions,
             Formatting = prompt.Formatting,
             Personality = prompt.Personality,

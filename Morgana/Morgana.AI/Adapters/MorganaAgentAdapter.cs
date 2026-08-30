@@ -266,12 +266,14 @@ public class MorganaAgentAdapter
         //     already AIFunctions and bypass the native adapter entirely — they are not declared in
         //     agents.json, are not implemented by any MorganaTool, and their prose is the colleague's
         //     own card rather than something this agent's author wrote.
+        Dictionary<string, string> peerTerritories = [];
         List<AIFunction> peerAgents = await RegisterPeerAgentsAsync(
             agentType,
             intentAttribute.Intent,
             conversationId,
             sessionAccessor,
-            morganaAIContextProvider);
+            morganaAIContextProvider,
+            peerTerritories);
 
         // 7) Resolve THIS agent's own tier client/pricing (never the framework-default
         //    client) and wrap it in a per-agent dust meter. The role label
@@ -313,14 +315,16 @@ public class MorganaAgentAdapter
                 // Give the agent its instructions and tools
                 ChatOptions = new ChatOptions
                 {
-                    Instructions = await promptComposerService.ComposeAgentInstructionsAsync(
+                    // Instructions of the agent may add A2A peer consultation directives
+                    Instructions = await ComposeInstructionsWithColleaguesAsync(
                         agentPrompt,
 
                         // Both ends of the topology, not just the asking one: an agent nobody
                         // consults and that consults nobody never reads the peer-consultation rules,
                         // while one that is only ever asked reads them because a colleague's question
                         // can land on it at any turn.
-                        peerAgents.Count > 0 || IsConsultedByAnyAgent(intentAttribute.Intent)),
+                        peerAgents.Count > 0 || IsConsultedByAnyAgent(intentAttribute.Intent),
+                        peerTerritories),
                     Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents]
                 }
             });
@@ -539,6 +543,29 @@ public class MorganaAgentAdapter
            && consultedIntents.Value.Contains(intent);
 
     /// <summary>
+    /// Composes the agent's two-layer instructions and closes them with the colleagues it holds.
+    /// </summary>
+    /// <remarks>
+    /// The block is appended here rather than inside the composer because which colleagues actually
+    /// resolved is known only to this method: the composer is handed a topology, never asked to
+    /// discover one. It stays ahead of the per-turn held-context tail, so it rides in the cached
+    /// prefix — the roster is fixed for the agent's life, unlike the context it is composed beside.
+    /// </remarks>
+    /// <param name="agentPrompt">The agent's own domain prompt.</param>
+    /// <param name="peerCapable">Whether this agent sits inside the A2A topology at either end.</param>
+    /// <param name="peerTerritories">Function name → the colleague's own statement of what falls to it.</param>
+    private async Task<string> ComposeInstructionsWithColleaguesAsync(
+        Records.Prompt agentPrompt,
+        bool peerCapable,
+        IReadOnlyDictionary<string, string> peerTerritories)
+    {
+        string instructions = await promptComposerService.ComposeAgentInstructionsAsync(agentPrompt, peerCapable);
+        string? colleagues = await promptComposerService.ComposeColleaguesDeclarationAsync(peerTerritories);
+
+        return colleagues is null ? instructions : $"{instructions}\n{colleagues}\n";
+    }
+
+    /// <summary>
     /// Builds one callable function per colleague the agent declares with <c>[ConsultsAgent]</c>.
     /// </summary>
     /// <remarks>
@@ -548,13 +575,15 @@ public class MorganaAgentAdapter
     /// </remarks>
     /// <param name="conversationId">Conversation the consultations are scoped to, carried as the A2A context id</param>
     /// <param name="contextProvider">Context store of the asking agent, holding the per-turn consultation budget</param>
+    /// <param name="peerTerritories">Filled with function name → the colleague's own ConsultMeFor, for the declaration spliced into this agent's instructions</param>
     /// <returns>One AIFunction per resolvable colleague, empty if none is declared</returns>
     private async Task<List<AIFunction>> RegisterPeerAgentsAsync(
         Type agentType,
         string callerIntent,
         string conversationId,
         Func<AgentSession?> sessionAccessor,
-        MorganaAIContextProvider contextProvider)
+        MorganaAIContextProvider contextProvider,
+        Dictionary<string, string> peerTerritories)
     {
         ConsultsAgentAttribute[] attributes = [.. agentType.GetCustomAttributes<ConsultsAgentAttribute>()];
 
@@ -625,13 +654,17 @@ public class MorganaAgentAdapter
             // The function name is what the model calls, so it is derived from the colleague's intent
             // rather than from the card's free-form name, and sanitized because a name is constrained
             // where a card's name is not.
+            string peerFunctionName = ToFunctionName(attribute.Intent);
+
             peerAgents.Add(guardedPeerAgent.AsAIFunction(
                 new AIFunctionFactoryOptions
                 {
-                    Name = ToFunctionName(attribute.Intent),
+                    Name = peerFunctionName,
                     Description = await promptComposerService.ComposePeerDescriptionAsync(peerCard)
                 },
                 peerSession));
+
+            peerTerritories[peerFunctionName] = peerCard.Description ?? "";
 
             logger.LogInformation("Agent {AgentTypeName} may consult '{PeerIntent}'", agentType.Name, attribute.Intent);
         }

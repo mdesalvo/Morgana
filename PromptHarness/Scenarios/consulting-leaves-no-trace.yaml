@@ -1,0 +1,63 @@
+id: consulting-leaves-no-trace
+description: >-
+  B is born, answers, and dies without leaving anything behind — in the conversation or in the
+  context. That is the whole scenario and its only subject: nothing here judges what was said, only
+  what survived. ContractAgent owns no payment tool, so whether the plan's fee was invoiced can only
+  come from Billing, and consult_billing on turn 2 is what makes a colleague exist at all; the turn
+  then asserts the three residues it could have left.
+  In the persisted history there are two, and both are structural. No message is attributed to
+  Billing — its answer would otherwise surface as an assistant message the conversation never had —
+  and the user messages are exactly the turns the harness played, because a colleague's inbound
+  question is stored with the USER role and a surviving one would read as a message the person never
+  sent. What A may keep of the exchange is tool traffic, a call and its result; what it may never
+  keep is a message of conversation, and that is what these two count.
+  The third residue is the context registry: only A holds and writes context here, so turn 2 must
+  write nothing at all. A colleague that set a variable while answering would have left the one kind
+  of trace that outlives the turn, the conversation and itself.
+  Turn 4 is the proof from the other end: Billing is activated as an agent in its own right and is
+  born knowing nothing. It reaches for its own tool rather than answering from a memory of the
+  exchange, and takes the customerCode as Declared, from the shared registry — the one channel that
+  reaches it, and one that carries values, never conversations. Turn 3 is the release that makes
+  turn 4 reachable: the same idiom context-cross-agent uses, handing control back to Morgana so the
+  next message is classified at all.
+runs: 4
+minPasses: 4
+
+turns:
+  - say: "Hi, my customer code is P994E — summarize my Green Care Plan"
+    expect:
+      agent: ContractAgent
+      contextWrites: [customerCode]
+      textNotEmpty: true
+
+  - say: "And has its fee been invoiced to me yet?"
+    expect:
+      agent: ContractAgent
+      toolsCalled: [consult_billing]
+      # The three residues, all read after the exchange has happened: no message belongs to the
+      # colleague, the only user messages are the two the harness sent, and nothing was written to
+      # the context registry by either party.
+      historyExcludesAgents: [billing]
+      historyUserMessages: 2
+      noContextWrites: true
+      textNotEmpty: true
+
+  # What the exit_agent quick reply sends: it releases the active agent so the next message goes
+  # back through classification and can reach Billing as an agent in its own right.
+  - say: "We're done, thanks"
+    expect:
+      agent: ContractAgent
+      agentCompleted: true
+      quickReplies: none
+      textNotEmpty: true
+
+  - say: "Now show me everything I still owe across all my invoices"
+    expect:
+      agent: BillingAgent
+      # Born with nothing: the tool call is what an agent with no history has to do, and Declared is
+      # what an agent that learnt the code from the shared registry looks like — neither is what an
+      # agent carrying the earlier exchange in its session would produce.
+      toolsCalled: [GetOutstandingBalance]
+      contextReads: [Declared:customerCode]
+      historyUserMessages: 4
+      textNotEmpty: true

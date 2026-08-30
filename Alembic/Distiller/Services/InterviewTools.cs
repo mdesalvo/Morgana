@@ -37,6 +37,9 @@ public class InterviewTools
     /// <summary>Section label carried by an agent's Personality.</summary>
     internal const string PersonalityMarker = "[PERSONALITY]";
 
+    /// <summary>Section marker for the statement a colleague reads before consulting this agent.</summary>
+    internal const string ConsultMeForMarker = "[CONSULT ME FOR]";
+
     /// <summary>Section label carried by an agent's Instructions.</summary>
     internal const string InstructionsMarker = "[INSTRUCTIONS]";
 
@@ -210,6 +213,23 @@ public class InterviewTools
     {
         interviewState.Agent.Target = Marked(TargetMarker, target);
         return Shaped("Target", target, 2, 4);
+    }
+
+    /// <summary>
+    /// Records what a colleague reads before consulting this agent.
+    /// </summary>
+    /// <remarks>
+    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
+    /// <see cref="ConsultMeForMarker"/>. Written by the same pass and from the same scope, because it
+    /// is that scope addressed to a different reader: a colleague deciding whether a question is this
+    /// desk's. So it names a territory and never a list of what the agent can do — a caller handed an
+    /// inventory rules questions out instead of asking them. Short by nature, which is why the shape
+    /// it reports against is tighter than the Target's.
+    /// </remarks>
+    public string SetAgentConsultMeFor(string consultMeFor)
+    {
+        interviewState.Agent.ConsultMeFor = Marked(ConsultMeForMarker, consultMeFor);
+        return Shaped("ConsultMeFor", consultMeFor, 1, 3);
     }
 
     /// <summary>

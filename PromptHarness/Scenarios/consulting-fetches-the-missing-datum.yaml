@@ -1,0 +1,44 @@
+id: consulting-fetches-the-missing-datum
+description: >-
+  The mechanism, in its two halves. BillingAgent keeps the accounts desk's books and owns no order
+  tool at all, so what an invoice line actually bought is a datum only the greenhouse holds. Turn 1
+  is answerable from Billing's own books and must therefore reach for no colleague; turn 2 needs the
+  order behind the aloe line (ORD-3D7C8B55, 2 x ALOE-702, Confirmed), which is on Inventory's, and
+  the consult_inventory call is the proof the desk asked for exactly the datum it was missing rather
+  than refusing a question that is squarely its own to answer.
+  What the turn asserts about the answer is the one fact the consultation exists to produce, and
+  nothing else: this group measures whether the mechanism fires, on demand and for the right reason.
+  It deliberately does not sweep the response for phrasings it should have avoided — a judge sent
+  hunting for what must not be said finds it.
+  The datum is one Inventory can serve on either of two ungated routes: GetOrderHistory keys on the
+  customerCode the consultation hydrates from shared context, GetOrderStatus on the orderId the
+  invoice line itself carries. Neither wants the seal word — that pair guards ConfirmOrder and
+  CancelOrder, the two acts, and is the one thing only the customer can produce, so no colleague
+  may ever be asked for it.
+runs: 4
+minPasses: 4
+
+turns:
+  # Squarely on Billing's own books. Half the "on demand" property is that a colleague is NOT
+  # reached when the answer is already at hand, and it is only observable on a turn like this one.
+  - say: "Hi, my customer code is P994E — show me invoice INV-0247"
+    expect:
+      agent: BillingAgent
+      toolsCalled: [GetInvoiceDetails]
+      toolsNotCalled: [consult_inventory]
+      contextWrites: [customerCode]
+      textNotEmpty: true
+
+  # The invoice line already tells Billing what was bought and how many; whether the order behind it
+  # ever went through is nowhere on its books. That single missing datum is the whole reason to ask.
+  - say: "That aloe line on it — did that order actually go through?"
+    expect:
+      agent: BillingAgent
+      # The colleague is a tool like any other from the caller's side, which is what makes the
+      # consultation structurally observable rather than only inferable from the wording.
+      toolsCalled: [consult_inventory]
+      textNotEmpty: true
+    judge:
+      # One proposition, one act, and it is the datum the colleague was asked for — answered in the
+      # asking agent's own voice, which is all the framework promises the user will ever see.
+      - "The response states whether that order went through."

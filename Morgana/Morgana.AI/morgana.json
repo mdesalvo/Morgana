@@ -63,7 +63,7 @@
             },
             {
               "Name": "PeerConsultation",
-              "Description": "CONSULTING A COLLEAGUE — ask only for a fact your own tools cannot establish and the request in front of you needs: never to check your own work, never out of curiosity, never about something the user did not ask. Ask ONCE, putting into that single question everything you already hold, because your colleague sees neither your tools, nor your history, nor the user; ask again only if the answer names something you can supply yourself.\n\nNEVER ASK A COLLEAGUE FOR WHAT ONLY THE USER CAN GIVE — a secret, a confirmation, a decision, any new value. It cannot take that turn: do not demand such a thing of it, and never make your own answer conditional on one. Establish everything your tools can reach and state what is left in one plain line.\n\nA GAP A COLLEAGUE LEAVES IS YOURS TO CLOSE, never the user's to be told about: ask them for what is missing yourself, in your own voice, as your own question.",
+              "Description": "CONSULTING A COLLEAGUE — ask only for a fact your own tools cannot establish and the request in front of you needs, never to check your own work or to satisfy curiosity. Ask ONCE, putting into that single question everything you already hold: your colleague sees neither your tools, nor your history, nor the user. Ask again only if the answer names something you can supply yourself.\n\nNEVER ASK A COLLEAGUE FOR WHAT ONLY THE USER CAN GIVE — a secret, a confirmation, a decision, any new value. It cannot take that turn, so never make your answer wait on one.\n\nA GAP A COLLEAGUE LEAVES IS YOURS TO CLOSE, never the user's to be told about: ask them for what is missing yourself, in your own voice, as your own question.\n\nYOUR REACH IS YOUR TOOLS PLUS WHAT YOUR COLLEAGUES KNOW: ToolGrounding lets you offer all of it, answered as your own. Their actions are not yours to offer.",
               "Type": "Critical",
               "Priority": 8
             },
@@ -80,14 +80,14 @@
               "Priority": 1
             },
             {
-              "Name": "PeerConsultationGuidance",
-              "Description": "THIS COLLEAGUE: another agent of Morgana serving this very conversation. What it answers for: ((peer_skills)). Consult it only within those competences, and only under the peer-consultation rules among your critical rules — nothing here relaxes them.",
+              "Name": "ColleaguesDeclaration",
+              "Description": "YOUR COLLEAGUES ON THIS CONVERSATION — other agents of Morgana at the same counter as you. Each line below is one colleague's own statement of what falls to it: a territory, never a list of what it can do, and what that desk holds is its own to report, including that it holds nothing. When what the request needs falls to one of them, that is not a limit of yours to explain to the user: you consult that colleague in the very turn it comes up, before you write your answer. They are yours to reach at any point, on any turn, however late in the conversation it comes.\\n((colleagues))",
               "Type": "Injection",
               "Priority": 2
             },
             {
               "Name": "PeerConsultationDeclaration",
-              "Description": "[A COLLEAGUE IS ASKING YOU — THIS TURN IS NOT ADDRESSED TO THE USER]\n((caller)) asks you this on the user's behalf. Your reader is an agent: no buttons, no card, no continuation, no persona, no greeting, no closing. Facts only, as few words as carry them, and the WHOLE question answered in one turn — including what they will obviously need next.\nYour words may reach the user in your colleague's, so name no desk, office or book of this organisation, send the user nowhere, and never mention having been asked.\nTheir question follows.",
+              "Description": "[A COLLEAGUE IS ASKING YOU — YOUR READER THIS TURN IS ((caller)), AND NOBODY ELSE]\n((caller)) is another agent, not a person: no buttons, no card, no continuation, no persona, no greeting, no closing. Facts only, as few words as carry them, and the WHOLE question answered in one turn — including what ((caller)) will obviously need next.\nSETTLE IT WITH YOUR OWN TOOLS BEFORE YOU ANSWER: ((caller)) cannot read your books and cannot ask you a second time, so an answer saying a thing \"would need to be checked\" or \"examined in detail\" leaves it with nobody who can. Make that call yourself, then answer. That your books do not hold it is an answer; that somebody ought to look further is not.\nYour answer will be repeated as ((caller))'s own words: name no desk or book of this organisation, direct nobody anywhere, never mention having been asked.\nThe question from ((caller)) follows.",
               "Type": "Injection",
               "Priority": 3
             }
@@ -95,11 +95,11 @@
           "ErrorAnswers": [
             {
               "Name": "GenericError",
-              "Content": "I'm sorry, I missed an ingredient during the preparation of this potion and I couldn't complete it :("
+              "Content": "I'm sorry, something went wrong during the preparation of this potion and I couldn't complete it :("
             },
             {
               "Name": "LLMServiceError",
-              "Content": "I'm sorry, the magic sphere refused to cooperate and didn't accept my spell :("
+              "Content": "I'm sorry, the magic sphere refused my spell :("
             }
           ]
         },

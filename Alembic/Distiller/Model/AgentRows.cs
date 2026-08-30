@@ -37,6 +37,7 @@ public static class AgentRows
             new Row("button", Button(interviewState.Intent),
                 interviewState.Changed.Contains("intentLabel") || interviewState.Changed.Contains("intentDefaultValue")),
             new Row("Target", Plain(interviewState.Agent.Target), interviewState.Changed.Contains("agentTarget")),
+            new Row("Consult me for", Plain(interviewState.Agent.ConsultMeFor), interviewState.Changed.Contains("agentConsultMeFor")),
             new Row("Personality", Plain(interviewState.Agent.Personality), interviewState.Changed.Contains("agentPersonality"))
         ];
 

@@ -408,12 +408,22 @@ cannot be written before it exists.
 | Pass | Runs | Settles | Cannot touch |
 |---|---|---|---|
 | `DomainMapper` | once | the whole `Intents` section: every name, description, label and opening sentence | everything about every agent |
-| `AgentTarget` | per entry | the agent's `Target` | the intents, its voice, tools, `Instructions`, `Formatting` |
+| `AgentTarget` | per entry | the agent's `Target`, and the `ConsultMeFor` it writes from it | the intents, its voice, tools, `Instructions`, `Formatting` |
 | `AgentPersonality` | per entry | the agent's `Personality` | everything else, the `Target` included |
 | `AgentToolkit` | per entry | the tools, their descriptions, their parameters, scopes and sharing | what the agent *is*, `Instructions`, `Formatting` |
 | `AgentInstructions` | per entry | `Instructions` | everything already settled, `Formatting` included |
 | `AgentFormatting` | per entry | `Formatting` | everything else, all of it settled |
 | `DomainColleagues` | once, at the end | which agents may consult which, and the boundary sentence each edge contradicts | every intent, and every section of every agent but that one sentence |
+
+**`ConsultMeFor` is written by the `AgentTarget` pass and never asked for.** It is the same scope the
+`Target` settles, addressed to a different reader — a colleague deciding whether a question belongs to
+this desk — so asking the client would be asking them to answer twice. The pass writes it itself the
+way `AgentPersonality` writes prose from traits, and `MissingTarget` holds the pass open until both
+stand: an agent finished for itself and mute to every colleague is not finished. It states a
+territory, never a list of what the agent can do, because a caller handed an inventory of functions
+rules its question out instead of asking it; and it never carries a rule about consulting, which the
+framework's own `PeerConsultation` policy already binds. Every agent gets one, edges or none — it is
+published on the agent's A2A card and read only by others, so it costs its author nothing.
 
 **`Target` and `Personality` are two passes, not two questions of one.** A `Target` is *dictated* —
 the client knows the work and can say it — while a voice is *recognised*: nobody has a ready sentence
@@ -813,6 +823,12 @@ positional. The Draft is the *editing* model, and an interview in progress is in
 definition — a tool whose description has not been asked for is a different state from one whose
 description is deliberately empty, and only a nullable field distinguishes them. Every nullable
 string in `DomainDraft.cs` means "not asked yet."
+
+**The fifth section.** `AgentDraft.ConsultMeFor` is modelled like the other four and travels the
+round trip with them — `DraftImportService` reads it off an uploaded prompt and `DraftProjection`
+writes it back — which matters more here than for a section Alembic authors freely: it is a top-level
+member of `Records.Prompt`, not an `AdditionalProperties` key, so `UnmodelledProperties` would not
+have caught it and a client's uploaded statement would have been silently dropped on export.
 
 **What survives that Alembic does not understand.** AdditionalProperties keys other than `Tools`
 are kept verbatim in `AgentDraft.UnmodelledProperties` and written back untouched — the round-trip

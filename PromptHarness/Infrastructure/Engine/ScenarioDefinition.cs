@@ -118,6 +118,14 @@ public sealed class ExpectSpec
     /// <summary>Tools that must appear among the turn's invocations.</summary>
     public List<string>? ToolsCalled { get; init; }
 
+    /// <summary>
+    /// Tools that must appear exactly once. What "ask a colleague ONCE" looks like from outside:
+    /// the invocation list keeps repetitions deliberately, so a second call to the same tool inside
+    /// one turn is the signal — an agent that got an unsatisfying answer and went round again
+    /// instead of owning the gap.
+    /// </summary>
+    public List<string>? ToolsCalledOnce { get; init; }
+
     /// <summary>Tools that must not appear.</summary>
     public List<string>? ToolsNotCalled { get; init; }
 
@@ -180,6 +188,22 @@ public sealed class ExpectSpec
 
     /// <summary>Assert that the delivered text carries no Markdown syntax.</summary>
     public bool? TextNotMarkdown { get; init; }
+
+    /// <summary>
+    /// Agents that must own no message in the conversation's persisted history as it stands after
+    /// this turn — named by intent (<c>billing</c>), matched against the history's own
+    /// <c>Morgana (Billing)</c> attribution. The proof that a consulted colleague left nothing
+    /// behind: it answered, and the conversation has no record of it ever having spoken.
+    /// </summary>
+    public List<string>? HistoryExcludesAgents { get; init; }
+
+    /// <summary>
+    /// Exact number of user messages the persisted history must carry after this turn — one per
+    /// turn played so far, and nothing else. The other half of the same proof, from the question's
+    /// side: a colleague's inbound question is stored with the user role, so a consultation that
+    /// survived would show up here as a message the person never sent.
+    /// </summary>
+    public int? HistoryUserMessages { get; init; }
 
     /// <summary>
     /// Assert that the chat-history reducer actually shrank the conversation before this turn ran —

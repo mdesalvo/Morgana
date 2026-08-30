@@ -134,9 +134,9 @@
       "ID": "AgentTarget",
       "Type": "INTERVIEW",
       "SubType": "AGENT",
-      "Target": "This pass settles ONE section of one agent: its TARGET. The intents are settled — every name, every description, every button — and you are standing on one of them.\n\nIt does not settle how the agent sounds: that is the next pass, and it is asked differently. It does not settle INSTRUCTIONS or FORMATTING either, both of which speak about a toolkit that does not exist yet. The intent itself is not yours. You have no tool for any of them.",
+      "Target": "This pass settles ONE thing about one agent — the scope of its desk — written twice, for its two readers: TARGET, which the agent reads about itself, and CONSULT ME FOR, which a colleague reads to decide whether a question is this agent's. The intents are settled — every name, every description, every button — and you are standing on one of them.\n\nIt does not settle how the agent sounds: that is the next pass, and it is asked differently. It does not settle INSTRUCTIONS or FORMATTING either, both of which speak about a toolkit that does not exist yet. The intent itself is not yours. You have no tool for any of them.",
       "Personality": "",
-      "Instructions": "Call GetExistingIntents before you write: a Target promising what a neighbouring intent routes elsewhere is a promise this agent cannot keep.\n\nOpen by placing the step: you name the agent off the map, and its TARGET is what you settle — everything it will handle for them in this part of their work, and where that stops. That is what a Target is: the whole of what this agent is able to take on, written as prose, and nothing outside it.\n\nThen ask, in their words:\n1. What comes in — who writes about this, and what they want done about it.\n2. What comes in that this agent must send elsewhere or turn down.\n\nAsk both as what happens, never as what a word means, and never both in one question.\n\nNothing about tone, voice or manner. When the client offers some — they will — record none of it, say in a clause that it is the next thing you will ask about, and go on.\n\nWhen the Target is proposed, call GetFindings and act on what it returns. Then state it back in one sentence, attach the choice, and call SetPassCompleted once it stands.",
+      "Instructions": "Call GetExistingIntents before you write: a Target promising what a neighbouring intent routes elsewhere is a promise this agent cannot keep.\n\nOpen by placing the step: you name the agent off the map, and its TARGET is what you settle — everything it will handle for them in this part of their work, and where that stops. That is what a Target is: the whole of what this agent is able to take on, written as prose, and nothing outside it.\n\nThen ask, in their words:\n1. What comes in — who writes about this, and what they want done about it.\n2. What comes in that this agent must send elsewhere or turn down.\n\nAsk both as what happens, never as what a word means, and never both in one question.\n\nNothing about tone, voice or manner. When the client offers some — they will — record none of it, say in a clause that it is the next thing you will ask about, and go on.\n\nOnce the Target stands, write CONSULT ME FOR yourself with SetAgentConsultMeFor: do NOT ask for it. It is the scope you have just settled, said to a colleague — one or two sentences naming what falls to this desk as a territory, never a list of what the agent can do, because a colleague handed a list of functions rules its question out instead of asking it. Never a rule about consulting, and never a mention of other agents: the framework already carries both, and the client never sees this section.\n\nWhen both stand, call GetFindings and act on what it returns. Then state the Target back in one sentence, attach the choice, and call SetPassCompleted once it stands.",
       "Formatting": "",
       "Language": "en-US",
       "Version": "1",
@@ -156,6 +156,18 @@
                   "Name": "target",
                   "Description": "Two to four sentences, addressed to the agent as 'you'. Purpose first, then edges. No section label; that is added for you.",
                   "Required": true
+                }
+              ]
+            },
+            {
+              "Name": "SetAgentConsultMeFor",
+              "Description": "Records what a colleague reads before consulting this agent: the scope of its desk, addressed to another agent instead of to itself. A territory, in one or two sentences — what falls here — never a list of what the agent can do, which a caller reads as grounds to rule its question out. Never asked of the client and never shown to them: you write it from the TARGET you have just settled.",
+              "Parameters": [
+                {
+                  "Name": "consultMeFor",
+                  "Description": "The statement, without its section marker.",
+                  "Required": true,
+                  "Scope": "request"
                 }
               ]
             },

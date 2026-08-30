@@ -296,6 +296,7 @@ public sealed class InterviewState
         ["intentLabel"] = Intent.Label,
         ["intentDefaultValue"] = Intent.DefaultValue,
         ["agentTarget"] = Agent.Target,
+        ["agentConsultMeFor"] = Agent.ConsultMeFor,
         ["agentPersonality"] = Agent.Personality,
         ["agentInstructions"] = Agent.Instructions,
         ["agentFormatting"] = Agent.Formatting,
@@ -379,8 +380,21 @@ public sealed class InterviewState
     /// This pass owns one field, which is why it has one tool that writes — the two facts agree
     /// because they are the same fact stated in the two places that enforce it.
     /// </remarks>
-    private List<string> MissingTarget() =>
-        string.IsNullOrWhiteSpace(Agent.Target) ? ["agentTarget"] : [];
+    private List<string> MissingTarget()
+    {
+        List<string> missing = [];
+
+        if (string.IsNullOrWhiteSpace(Agent.Target))
+            missing.Add("agentTarget");
+
+        // Settled by the same pass and drawn from the same scope, so it closes with it: an agent
+        // whose Target stands and whose colleagues cannot read it is finished for itself and mute
+        // to everyone else.
+        if (string.IsNullOrWhiteSpace(Agent.ConsultMeFor))
+            missing.Add("agentConsultMeFor");
+
+        return missing;
+    }
 
     /// <summary>
     /// How the agent sounds.

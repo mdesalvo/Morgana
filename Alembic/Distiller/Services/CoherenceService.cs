@@ -194,7 +194,10 @@ public class CoherenceService : ICoherenceService
             sb.AppendLine($"## {agent.ID}");
             sb.AppendLine();
 
-            foreach (string? section in new[] { agent.Target, agent.Instructions, agent.Personality, agent.Formatting })
+            // ConsultMeFor rides with the four an agent reads about itself, though nobody but a
+            // colleague ever reads it: a desk claiming a territory its own Instructions refuse is a
+            // contradiction visible only when the two are set side by side, which is this pass's job.
+            foreach (string? section in new[] { agent.Target, agent.ConsultMeFor, agent.Instructions, agent.Personality, agent.Formatting })
                 if (!string.IsNullOrWhiteSpace(section))
                     sb.AppendLine(section);
 

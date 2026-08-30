@@ -169,6 +169,8 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         if (definition is null)
             return null;
 
+        Records.Prompt prompt = await promptResolverService.ResolveAsync(intent);
+
         // Left empty when the server has not bound yet, which is the normal case: cards are projected
         // while the endpoints are being mapped, and PublishInterfacesAsync fills them in the moment
         // the address is known — before any request can read one.
@@ -177,9 +179,13 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         return new AgentCard
         {
             Name = definition.Name,
-            Description = definition.Description,
+
+            // The agent's own address to whoever might consult it. The intent description stands in
+            // when there is none, but it is a routing phrase written for the classifier — it tells a
+            // caller which user utterances land here, never what this desk answers for.
+            Description = string.IsNullOrWhiteSpace(prompt.ConsultMeFor) ? definition.Description : prompt.ConsultMeFor,
             Version = LocalCardVersion,
-            Skills = await ProjectSkillsAsync(intent),
+            Skills = ProjectSkills(prompt),
 
             // A consultation is a single question answered in full: the answering turn has no user
             // watching it, and there is nobody to push anything to.
@@ -194,12 +200,13 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// <remarks>
     /// Reserved framework tools are absent by construction, being declared in <c>morgana.json</c>
     /// rather than in the agent's own prompt. An MCP-only agent advertises no skills, honestly: its
-    /// competences are known only once its servers answer.
+    /// competences are known only once its servers answer. These reach an external consumer of the
+    /// card and nobody else: a sibling agent is offered its colleague's ConsultMeFor, never this
+    /// inventory, which invites the caller to rule out a question the colleague has never seen.
     /// </remarks>
-    private async Task<List<A2A.AgentSkill>> ProjectSkillsAsync(string intent)
+    /// <param name="prompt">The agent's already-resolved prompt.</param>
+    private static List<A2A.AgentSkill> ProjectSkills(Records.Prompt prompt)
     {
-        Records.Prompt prompt = await promptResolverService.ResolveAsync(intent);
-
         return
         [
             .. prompt.GetAdditionalPropertyOrDefault<Records.ToolDefinition[]>("Tools", [])

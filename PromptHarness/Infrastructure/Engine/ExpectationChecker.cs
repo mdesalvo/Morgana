@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using System.Text.RegularExpressions;
 using Markdig;
 using Markdig.Syntax;
@@ -29,7 +28,12 @@ public static partial class ExpectationChecker
     private static partial Regex SummarizationLogPattern { get; }
 
     /// <summary>Returns one message per violated expectation; empty when the turn conforms.</summary>
-    public static IReadOnlyList<string> Check(ExpectSpec expect, TurnResult turn)
+    /// <param name="history">
+    /// The conversation's persisted history, fetched by the runner only when the turn declares an
+    /// expectation about it — every other signal here is already in hand when the turn ends, while
+    /// this one costs a round trip to the host.
+    /// </param>
+    public static IReadOnlyList<string> Check(ExpectSpec expect, TurnResult turn, IReadOnlyList<MorganaChatMessage>? history = null)
     {
         List<string> failures = [];
 
@@ -54,8 +58,41 @@ public static partial class ExpectationChecker
         CheckGuard(expect, turn, failures);
         CheckClassifier(expect, turn, failures);
         CheckSummarization(expect, turn, failures);
+        CheckHistory(expect, history, failures);
 
         return failures;
+    }
+
+    /// <summary>What the conversation's persisted history does and does not carry.</summary>
+    private static void CheckHistory(ExpectSpec expect, IReadOnlyList<MorganaChatMessage>? history, List<string> failures)
+    {
+        if (expect.HistoryExcludesAgents is not { Count: > 0 } && expect.HistoryUserMessages is null)
+            return;
+
+        // A null history here means the runner was never asked for one, which can only happen if a
+        // check above was added without teaching it to fetch — reported rather than passed silently.
+        if (history is null)
+        {
+            failures.Add("history: expectation declared but no history was fetched for this turn");
+            return;
+        }
+
+        foreach (string agent in expect.HistoryExcludesAgents ?? [])
+        {
+            // Matched on the parenthesised intent the persistence layer appends to the display name,
+            // so an agent's own messages are distinguished from the framework's unqualified "Morgana".
+            string attribution = $"({agent})";
+            int owned = history.Count(message => message.AgentName.Contains(attribution, StringComparison.OrdinalIgnoreCase));
+            if (owned > 0)
+                failures.Add($"historyExcludesAgents: '{agent}' owns {owned} message(s) in the persisted history");
+        }
+
+        if (expect.HistoryUserMessages is { } expectedUserMessages)
+        {
+            int actual = history.Count(message => message.Type == ChatMessageType.User);
+            if (actual != expectedUserMessages)
+                failures.Add($"historyUserMessages: expected {expectedUserMessages}, got {actual}");
+        }
     }
 
     /// <summary>Verdict of the <c>morgana.guard</c> span.</summary>
@@ -204,52 +241,12 @@ public static partial class ExpectationChecker
         if (expect.RichCardContains is not { Count: > 0 } required)
             return;
 
-        string flattened = turn.Message.RichCard is null ? string.Empty : FlattenRichCard(turn.Message.RichCard);
+        string flattened = turn.Message.RichCard is null ? string.Empty : RichCardText.Flatten(turn.Message.RichCard);
 
         foreach (string substring in required)
         {
             if (!flattened.Contains(substring, StringComparison.OrdinalIgnoreCase))
                 failures.Add($"richCardContains: '{substring}' not found in the rich card (got: {(turn.Message.RichCard is null ? "no card" : $"'{flattened}'")})");
-        }
-    }
-
-    /// <summary>Concatenates every piece of text a rich card actually renders, recursing into nested sections.</summary>
-    private static string FlattenRichCard(RichCard card)
-    {
-        StringBuilder text = new StringBuilder();
-        text.Append(card.Title).Append(' ').Append(card.Subtitle).Append(' ');
-        AppendComponents(card.Components, text);
-        return text.ToString();
-    }
-
-    /// <summary>Recursive half of <see cref="FlattenRichCard"/>, one branch per known component type.</summary>
-    private static void AppendComponents(IEnumerable<CardComponent> components, StringBuilder text)
-    {
-        foreach (CardComponent component in components)
-        {
-            switch (component)
-            {
-                case TextBlockComponent textBlock:
-                    text.Append(textBlock.Content).Append(' ');
-                    break;
-                case KeyValueComponent keyValue:
-                    text.Append(keyValue.Key).Append(' ').Append(keyValue.Value).Append(' ');
-                    break;
-                case ListComponent list:
-                    text.Append(string.Join(' ', list.Items)).Append(' ');
-                    break;
-                case SectionComponent section:
-                    text.Append(section.Title).Append(' ').Append(section.Subtitle).Append(' ');
-                    AppendComponents(section.Components, text);
-                    break;
-                case GridComponent grid:
-                    foreach (GridItem item in grid.Items)
-                        text.Append(item.Key).Append(' ').Append(item.Value).Append(' ');
-                    break;
-                case BadgeComponent badge:
-                    text.Append(badge.Text).Append(' ');
-                    break;
-            }
         }
     }
 
@@ -262,6 +259,13 @@ public static partial class ExpectationChecker
         {
             if (!invoked.Contains(tool, StringComparer.OrdinalIgnoreCase))
                 failures.Add($"toolsCalled: '{tool}' was not invoked (got {FormatList(invoked)})");
+        }
+
+        foreach (string tool in expect.ToolsCalledOnce ?? [])
+        {
+            int calls = invoked.Count(name => string.Equals(name, tool, StringComparison.OrdinalIgnoreCase));
+            if (calls != 1)
+                failures.Add($"toolsCalledOnce: '{tool}' was invoked {calls} time(s) (got {FormatList(invoked)})");
         }
 
         foreach (string tool in expect.ToolsNotCalled ?? [])

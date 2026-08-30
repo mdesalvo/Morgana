@@ -316,6 +316,19 @@ public sealed class AgentDraft
     public string? Target { get; set; }
 
     /// <summary>
+    /// What falls to this agent, addressed to a colleague who might consult it.
+    /// </summary>
+    /// <remarks>
+    /// The one section whose reader is another agent: it never enters this agent's own prompt, it is
+    /// published on its A2A card and read by whoever holds a <c>consult_</c> function for it. Settled
+    /// by the <c>AgentTarget</c> pass, which writes it from the scope it has just fixed rather than
+    /// asking the client the same question twice — same content, a different reader. Every agent
+    /// carries one, whether or not anybody consults it: a domain where nothing does today is one
+    /// declaration away from a domain where something does, and an unread one costs nothing.
+    /// </remarks>
+    public string? ConsultMeFor { get; set; }
+
+    /// <summary>
     /// Domain-specific behavioural rules. Written after the toolkit, because they speak about it.
     /// </summary>
     /// <remarks><c>null</c> until the <c>AgentInstructions</c> pass runs, which is why the pass order

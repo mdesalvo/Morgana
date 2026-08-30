@@ -42,25 +42,31 @@ public interface IPromptComposerService
     Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition);
 
     /// <summary>
-    /// Produces the description under which a colleague is offered as a callable function: its own
-    /// card, then the framework's rules for consulting one, with <c>((peer_skills))</c> resolved to
-    /// the competences that card advertises.
+    /// Produces the description under which a colleague is offered as a callable function: the
+    /// framework's rules for consulting one, then the colleague's own statement of what falls to it
+    /// (its <c>ConsultMeFor</c>, carried on the card as its description).
     /// </summary>
-    /// <remarks>
-    /// The rung of the placement ladder where the decision is made: the model reads it while weighing
-    /// whether to ask at all, which is where an exchange is kept short or allowed to sprawl.
-    /// </remarks>
     /// <returns>The description to expose on the generated <c>AIFunction</c>.</returns>
     Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard);
+
+    /// <summary>
+    /// Produces the block naming the colleagues an agent holds, spliced into its own instructions.
+    /// </summary>
+    /// <remarks>
+    /// One rung above <see cref="ComposePeerDescriptionAsync"/> on the placement ladder, and the rung
+    /// that decides whether the lower one is ever read: a colleague's own description reaches the
+    /// model only once it is already weighing that function, which is exactly what an agent about to
+    /// answer "this is not on my books" never does. Static for the agent's life, so it rides in the
+    /// cached prefix rather than being re-sent per turn like the held-context declaration.
+    /// </remarks>
+    /// <param name="colleagues">Function name to the colleague's own statement of what falls to it.</param>
+    /// <returns>The block to append, or <c>null</c> when there are no colleagues or no template.</returns>
+    Task<string?> ComposeColleaguesDeclarationAsync(IReadOnlyDictionary<string, string> colleagues);
 
     /// <summary>
     /// Produces the note placed in front of a colleague's question — the one signal telling the
     /// answering agent that this turn's reader is not the user.
     /// </summary>
-    /// <remarks>
-    /// It travels inside the question, not as a system-prompt injection: a prompt is composed once,
-    /// while whether a turn serves a colleague changes turn by turn.
-    /// </remarks>
     /// <returns>The note, or an empty string when the prompt layer declares no such template.</returns>
     Task<string> ComposeConsultationRequestAsync(string callerIntent);
 

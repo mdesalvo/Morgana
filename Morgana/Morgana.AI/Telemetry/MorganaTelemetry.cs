@@ -209,6 +209,18 @@ public static class MorganaTelemetry
     /// <summary>Whether the answering agent declared the exchange unfinished — the signal that an exchange is failing to converge.</summary>
     public const string ConsultationAwaitingReply = "consultation.awaiting_reply";
 
+    /// <summary>
+    /// The question a colleague was asked, whole, alongside <see cref="ConsultationAnswer"/>. The
+    /// two are the only record of an exchange the conversation deliberately keeps no trace of, so
+    /// they are the one place a preview would defeat the purpose: a truncated question and a
+    /// truncated answer leave a consultation that went wrong showing a caller, a target, a tool
+    /// list and the opening words of each — never the sentence that actually caused it.
+    /// </summary>
+    public const string ConsultationQuestion = "consultation.question";
+
+    /// <summary>What the colleague answered, whole, for the same reason.</summary>
+    public const string ConsultationAnswer = "consultation.answer";
+
     // ==============================================================================
     // EVENT NAMES
     // ==============================================================================

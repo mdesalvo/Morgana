@@ -742,6 +742,7 @@ public static class Records
     /// <param name="Language">BCP 47 language code (e.g., "en-US", "it-IT")</param>
     /// <param name="Version">Prompt version string for tracking iteration history and regression detection</param>
     /// <param name="AdditionalProperties">List of structured properties: Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc</param>
+    /// <param name="ConsultMeFor">Optional: what falls to this agent, addressed to a colleague who might consult it</param>
     public record Prompt(
         string ID,
         string Type,
@@ -752,7 +753,8 @@ public static class Records
         string? Personality,
         string Language,
         string Version,
-        List<Dictionary<string, object>> AdditionalProperties)
+        List<Dictionary<string, object>> AdditionalProperties,
+        string? ConsultMeFor = null)
     {
         /// <summary>
         /// Gets additional property value (Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc).
