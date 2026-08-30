@@ -107,7 +107,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // Load intents from domain-specific configuration
         List<Records.IntentDefinition> allIntents = agentConfigService.GetIntentsAsync().GetAwaiter().GetResult();
 
-        // Extract intent names, excluding "other" (special fallback intent with no dedicated agent)
+        // Extract intent names, excluding Intents.Other (the fallback intent, by design agentless)
         HashSet<string> classifierIntents =
         [
             .. allIntents

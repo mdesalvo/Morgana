@@ -147,12 +147,6 @@ public class MorganaTool
     /// plus the optional <c>termination</c> flag.
     /// </param>
     /// <returns>Confirmation message for the LLM.</returns>
-    /// <remarks>
-    /// <para>The parameter is a strongly-typed array (not a stringified JSON blob): the LLM emits the
-    /// buttons as a native JSON array and <c>AIFunctionFactory</c> binds them directly to
-    /// <see cref="QuickReply"/> instances. The values are re-serialized to JSON before being stored
-    /// in the ephemeral <c>quick_replies</c> context variable, where downstream readers expect a string.</para>
-    /// </remarks>
     public async Task<object> SetQuickReplies(List<QuickReply> quickReplies)
     {
         // Validate input — empty list is a no-op

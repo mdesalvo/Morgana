@@ -104,8 +104,13 @@ public sealed class MorganaHostedAgent : AIAgent
 
         // Who is asking travels as metadata beside the message rather than inside it, which is what
         // keeps the question the caller's own words: an agent introducing itself in prose would be
-        // spending the colleague's reading on its own name.
-        string callerIntent = ReadCallerIntent(options);
+        // spending the colleague's reading on its own name. Only an agent of this installation
+        // declares itself, and the endpoint answers anything that speaks A2A — so an unnamed caller
+        // is ordinary, and what to call it is the composer's word to choose, not this method's.
+        string? callerIntent =
+            options?.AdditionalProperties?.TryGetValue(Constants.MessageProperties.CallerIntent, out object? caller) == true
+                ? caller?.ToString()
+                : null;
 
         // Asked of the registry per request, never assumed from the fact that this endpoint answers.
         // Publication is decided once at startup, while the endpoint is open to anything that speaks
@@ -138,16 +143,15 @@ public sealed class MorganaHostedAgent : AIAgent
             // colleague's answer is read whole, by a model, with a caller blocked on it. The timeout
             // is the pipeline's own, so a silent actor lands in the catch below as an answer instead
             // of hanging the user's turn.
-            Records.PeerConsultationResponse response = await agentActor.Ask<Records.PeerConsultationResponse>(
+            Records.PeerConsultationResponse peerConsultationResponse = await agentActor.Ask<Records.PeerConsultationResponse>(
                 new Records.PeerConsultation(hostedAgentSession.ConversationId, callerIntent, declaredQuestion),
                 requestTimeout,
                 cancellationToken);
 
             // The envelope travels serialized inside an assistant message because that is the only
             // shape A2A carries, but it is DATA and not prose: what the asking agent receives is a
-            // tool result to read and decide against, never something to relay to the user as it
-            // stands.
-            return new AgentResponse(new ChatMessage(ChatRole.Assistant, SerializePeerConsultationResponse(response)));
+            // tool result to read and decide against, never something to relay to the user as it stands.
+            return new AgentResponse(new ChatMessage(ChatRole.Assistant, SerializePeerConsultationResponse(peerConsultationResponse)));
         }
         catch (Exception ex)
         {
@@ -167,8 +171,13 @@ public sealed class MorganaHostedAgent : AIAgent
         AgentRunOptions? options,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        // The whole consultation runs here, awaited, and only then is emitted as one update: asking
+        // for a stream is not a second path into a colleague, so the Ask, its timeout and the
+        // serialized envelope hold identically whichever form the caller picked.
         AgentResponse response = await RunCoreAsync(messages, session, options, cancellationToken);
 
+        // The envelope is the text, so a single update carries it whole — split across updates it
+        // would reach the caller as fragments of JSON nobody can deserialize until the last one.
         yield return new AgentResponseUpdate(ChatRole.Assistant, response.Text);
     }
 
@@ -192,16 +201,6 @@ public sealed class MorganaHostedAgent : AIAgent
         => ValueTask.FromResult<AgentSession>(
             serializedState.Deserialize<MorganaHostedAgentSession>(jsonSerializerOptions)
              ?? throw new InvalidOperationException($"The serialized session handed to hosted agent '{intent}' names no conversation."));
-
-    /// <summary>
-    /// Reads the asking agent's intent from the run options the A2A layer rebuilt from the request's
-    /// metadata, falling back to a neutral label when the caller is not a Morgana agent.
-    /// </summary>
-    /// <param name="options">Run options assembled by the A2A hosting layer for this request.</param>
-    private static string ReadCallerIntent(AgentRunOptions? options)
-        => options?.AdditionalProperties?.TryGetValue(Constants.MessageProperties.CallerIntent, out object? caller) == true && caller is not null
-            ? caller.ToString() ?? "unknown"
-            : "unknown";
 
     /// <summary>
     /// Wraps a framework-authored message in the same envelope a real answer travels in, so the

@@ -8,15 +8,18 @@ namespace Morgana.AI;
 public static class Constants
 {
     /// <summary>
+    /// The name of the system, on which everything else rests...
+    /// </summary>
+    public const string Morgana = "Morgana";
+
+    /// <summary>
     /// IDs of the framework prompts in <c>morgana.json</c>, resolved through
     /// <c>IPromptResolverService</c>. They name framework actors rather than domain concepts, which
-    /// is why a domain intent never collides with one.
+    /// is why a domain intent never collides with one. The framework layer's own prompt is not here:
+    /// it is filed under the system's name itself, <see cref="Morgana"/>.
     /// </summary>
     public static class Prompts
     {
-        /// <summary>The framework layer every agent's prompt opens with: personality, global policies, base tools.</summary>
-        public const string Morgana = "Morgana";
-
         /// <summary>The intent classifier's prompt.</summary>
         public const string Classifier = "Classifier";
 
@@ -55,41 +58,16 @@ public static class Constants
     }
 
     /// <summary>
-    /// Names of the global policies carried by the <c>Morgana</c> prompt, in the order they are
-    /// rendered. The list mirrors <c>morgana.json</c> in full even where code reads only some of
-    /// them: the policies ARE the framework's behaviour, and a reader looking for what binds a turn
-    /// should find the whole set in one place rather than the subset that happens to be referenced.
+    /// Names of the global policies that code resolves by name. The rest of the list lives in
+    /// <c>morgana.json</c> and nowhere else: a policy the framework only renders is read by the model
+    /// and by whoever edits the prompt, and naming it here would be an index that no rename breaks.
     /// </summary>
     public static class Policies
     {
-        /// <summary>P0 — the closed variable vocabulary and the lookup-before-asking cycle.</summary>
-        public const string ContextHandling = "ContextHandling";
-
-        /// <summary>P1 — the master quick-reply rule every other quick-reply instruction instantiates.</summary>
-        public const string QuickReplyDoctrine = "QuickReplyDoctrine";
-
-        /// <summary>P2 — when a turn must declare that it awaits the user.</summary>
-        public const string TurnContinuation = "TurnContinuation";
-
-        /// <summary>P3 — a new request after a closure is a new request, not a farewell to mirror.</summary>
-        public const string SessionContinuation = "SessionContinuation";
-
-        /// <summary>P4 — fresh data from tools over cached answers from history.</summary>
-        public const string ToolUsage = "ToolUsage";
-
-        /// <summary>P5 — only actions a declared tool can execute may be offered.</summary>
-        public const string ToolGrounding = "ToolGrounding";
-
-        /// <summary>P6 — every turn carries text for the user, and never narrates the machinery.</summary>
-        public const string MandatoryTextualResponse = "MandatoryTextualResponse";
-
-        /// <summary>P7 — when structured data becomes a card, and how that card is shaped.</summary>
-        public const string RichCardUsage = "RichCardUsage";
-
         /// <summary>
-        /// P8 — the two-role contract of a consultation. The one policy rendered conditionally:
+        /// P8 — the two-role contract of a consultation, and the one policy rendered conditionally:
         /// only an agent inside the A2A topology reads it (see <c>ComposeAgentInstructionsAsync</c>),
-        /// so this name is read by code on every composition, not only by whoever edits the prompt.
+        /// so this name is resolved on every composition rather than only edited in the prompt.
         /// </summary>
         public const string PeerConsultation = "PeerConsultation";
     }
@@ -106,9 +84,6 @@ public static class Constants
 
         /// <summary>Injected per turn, naming the context variables the session currently holds.</summary>
         public const string HeldContextDeclaration = "HeldContextDeclaration";
-
-        /// <summary>Appended to the description under which a colleague is offered as a callable function.</summary>
-        public const string PeerConsultationGuidance = "PeerConsultationGuidance";
 
         /// <summary>Placed in front of a colleague's question, telling the answering agent who its reader is.</summary>
         public const string PeerConsultationDeclaration = "PeerConsultationDeclaration";
@@ -218,9 +193,6 @@ public static class Constants
 
         /// <summary>In the <see cref="Prompts.ChannelAdapter"/> prompt — the target channel's capability budget, as JSON.</summary>
         public const string ChannelCapabilities = "((channel_capabilities))";
-
-        /// <summary>In an <c>ErrorAnswer</c> template — the underlying LLM failure.</summary>
-        public const string LLMError = "((llm_error))";
     }
 
     /// <summary>
@@ -331,16 +303,24 @@ public static class Constants
     }
 
     /// <summary>
-    /// Control characters used as structural markers inside composed text. Not prose: never rendered,
-    /// never typed by a human, never produced by a model, so they cannot collide with real content.
+    /// Characters that join or separate two pieces of composed text. Never prose: each one is
+    /// structure, and says nothing of its own to whoever reads the text it punctuates.
     /// </summary>
     public static class Markers
     {
         /// <summary>
         /// Separates the stable framework+domain prompt from the per-turn dynamic tail, so
         /// <c>MorganaAnthropicClient</c> can cache the former without a changing declaration busting
-        /// it. The actual ASCII Record Separator (U+001E), not its printable glyph.
+        /// it. The actual ASCII Record Separator (U+001E), not its printable glyph: never typed by a
+        /// human and never produced by a model, so it cannot collide with real content.
         /// </summary>
         public const string DynamicInstructions = "\u001E";
+
+        /// <summary>
+        /// Inserted between the text of two consecutive assistant messages of the same turn, both
+        /// while streaming and when batching, so two messages meant to be read apart do not weld
+        /// into one paragraph.
+        /// </summary>
+        public const string MessageSeparator = "\n\n";
     }
 }

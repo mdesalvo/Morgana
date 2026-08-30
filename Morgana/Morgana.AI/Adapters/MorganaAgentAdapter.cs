@@ -139,7 +139,7 @@ public class MorganaAgentAdapter
         this.configuration = configuration;
         this.logger = logger;
 
-        morganaPrompt = promptResolverService.ResolveAsync(Constants.Prompts.Morgana).GetAwaiter().GetResult();
+        morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
 
         morganaTools = [.. morganaPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools")
             .Select(t => t with { Reserved = true })];
@@ -283,8 +283,9 @@ public class MorganaAgentAdapter
         //    metered too, not silently free.
         string intent = intentAttribute.Intent;
         // Builds a human-readable label for the dust ledger and OTel tags, e.g. "billing" ->
-        // "Morgana (Billing/Efficiency)".
-        string dustRole = $"Morgana ({char.ToUpperInvariant(intent[0])}{intent[1..]}/{tierAttribute.Tier})";
+        // "Morgana (Billing/Efficiency)". Qualifies the same framework role the pipeline charges
+        // under, so a ledger grouped by prefix keeps every charge of one installation together.
+        string dustRole = $"{Constants.Morgana} ({char.ToUpperInvariant(intent[0])}{intent[1..]}/{tierAttribute.Tier})";
         IChatClient tierChatClient = llmService.GetChatClient(tierAttribute.Tier);
         Records.MagicDustPricing tierPricing = llmService.GetPricing(tierAttribute.Tier);
         IChatClient agentChatClient =

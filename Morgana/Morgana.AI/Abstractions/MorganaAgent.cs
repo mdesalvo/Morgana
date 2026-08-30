@@ -81,29 +81,26 @@ public class MorganaAgent : MorganaActor
     /// that turn's tools, and the guard refusing a chained consultation, must all read the session
     /// the turn is actually running on.
     /// </remarks>
-    public AgentSession? CurrentSession => consultationSession ?? aiAgentSession;
+    public AgentSession? CurrentSession
+        => consultationSession ?? aiAgentSession;
 
     /// <summary>
     /// Intent name handled by this agent, resolved from the mandatory
     /// <see cref="HandlesIntentAttribute"/> on the concrete subclass.
     /// </summary>
-    protected string AgentIntent => GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent
-                                     ?? throw new InvalidOperationException($"Agent {GetType().Name} must be decorated with [HandlesIntent] attribute");
+    protected string AgentIntent
+        => GetType().GetCustomAttribute<HandlesIntentAttribute>()?.Intent
+            ?? throw new InvalidOperationException($"Agent {GetType().Name} must be decorated with [HandlesIntent] attribute");
 
     /// <summary>
     /// Stable identifier for this agent within a conversation, formatted as
     /// <c>{AgentIntent}-{conversationId}</c>. Used as the persistence key for <see cref="AgentSession"/>.
     /// </summary>
-    protected string AgentIdentifier => $"{AgentIntent}-{conversationId}";
+    protected string AgentIdentifier
+        => $"{AgentIntent}-{conversationId}";
 
     /// <summary>
-    /// Inserted between the text of two consecutive assistant messages of the same turn.
-    /// </summary>
-    private const string MessageSeparator = "\n\n";
-
-    /// <summary>
-    /// Initializes the agent actor and wires message handlers for
-    /// <see cref="Records.AgentRequest"/> and <see cref="Records.FailureContext"/>.
+    /// Initializes the agent actor and wires the three messages it answers.
     /// </summary>
     /// <param name="conversationId">Conversation this agent is scoped to.</param>
     /// <param name="llmService">LLM service used by the underlying <see cref="AIAgent"/>.</param>
@@ -122,8 +119,15 @@ public class MorganaAgent : MorganaActor
         this.persistenceService = persistenceService;
         this.agentLogger = agentLogger;
 
+        // The user's turn, dispatched by the router once the supervisor has routed the intent here.
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
+
+        // A colleague's question, arriving from MorganaHostedAgent over A2A. It never passes through
+        // the supervisor, so it is the one turn this actor runs outside the conversation's pipeline.
         ReceiveAsync<Records.PeerConsultation>(ServeConsultationAsync);
+
+        // A turn that threw, sent to Self so the answer to the waiting sender is composed on the
+        // actor's own thread rather than inside the catch that could not produce one.
         ReceiveAsync<Records.FailureContext>(HandleAgentFailureAsync);
     }
 
@@ -137,6 +141,8 @@ public class MorganaAgent : MorganaActor
         JsonElement serializedState,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
+        // What comes back is the agent's own session from here on: the callback rewired below, and
+        // every later turn, act on this instance rather than on whatever the actor held before.
         aiAgentSession = await aiAgent.DeserializeSessionAsync(serializedState, jsonSerializerOptions);
 
         // Reconnect the shared-write callback — delegates are not serialized.
@@ -163,6 +169,17 @@ public class MorganaAgent : MorganaActor
     /// <param name="value">Value to persist.</param>
     protected async Task OnSharedContextUpdate(string key, object value)
     {
+        // The write of a turn served for a colleague dies with the ephemeral session it was made on,
+        // exactly like everything else that turn wrote. Were it let through, first-write-wins would
+        // make a value nobody ever confirmed to the user binding on every agent for the rest of the
+        // conversation — an exchange that leaves no trace legislating for the whole shop.
+        if (consultationSession is not null)
+        {
+            agentLogger.LogInformation(
+                "Agent {AgentIntent} is serving a consultation: shared context variable '{Key}' stays local to the exchange", AgentIntent, key);
+            return;
+        }
+
         agentLogger.LogInformation("Agent {AgentIntent} writing shared context variable: {Key}", AgentIntent, key);
 
         // Awaited by the tool call that wrote the variable, itself running inside the agent's
@@ -193,6 +210,9 @@ public class MorganaAgent : MorganaActor
 
         try
         {
+            // Read from the database once per actor lifetime: on later turns the field already holds
+            // the live session, and re-reading would discard everything this actor has appended since.
+            // The agent hands itself over because deserializing a session is its own responsibility.
             aiAgentSession ??= await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
             if (aiAgentSession != null)
             {
@@ -202,6 +222,8 @@ public class MorganaAgent : MorganaActor
             }
             else
             {
+                // No row under this identifier: first time this agent is activated in the conversation.
+                // It starts with an empty history — the shared registry below is all it inherits.
                 aiAgentSession = await aiAgent.CreateSessionAsync();
 
                 agentLogger.LogInformation("Created new conversation session for {AgentIdentifier}", AgentIdentifier);
@@ -226,10 +248,14 @@ public class MorganaAgent : MorganaActor
                 agentLogger.LogInformation(
                     "Agent '{AgentIntent}' hydrating {Count} shared variable(s) from registry: {Keys}",
                     AgentIntent, sharedFromRegistry.Count, string.Join(", ", sharedFromRegistry.Keys));
+
+                // Merged into the agent's own session, so the values survive the turn and are persisted
+                // with it — unlike a consultation, which merges the same registry into a session that dies.
                 aiContextProvider.MergeSharedContext(aiAgentSession, sharedFromRegistry);
             }
 
-            StringBuilder fullResponse = new StringBuilder();
+            // Stamped server-side because the history of a conversation is reassembled by merging every
+            // agent's own session chronologically: a message without a timestamp cannot be placed.
             ChatMessage userMessage = new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow };
 
             // History length before this turn runs: everything appended past this point belongs to
@@ -249,12 +275,15 @@ public class MorganaAgent : MorganaActor
             if (!channelSupportsStreaming)
                 agentLogger.LogInformation("Agent '{AgentIntent}' bypassing LLM streaming: channel does not advertise SupportsStreaming", AgentIntent);
 
+            StringBuilder fullResponse = new StringBuilder();
             if (useStreaming)
             {
                 Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
                 bool firstChunkEmitted = false;
                 string? lastTextMessageId = null;
 
+                // The whole turn runs here — tool calls included, which surface as chunks carrying no text.
+                // The session is written as the stream advances, so it is already complete when it ends.
                 await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(userMessage, aiAgentSession))
                 {
                     if (!string.IsNullOrEmpty(chunk.Text))
@@ -267,11 +296,11 @@ public class MorganaAgent : MorganaActor
                              && !string.Equals(chunk.MessageId, lastTextMessageId, StringComparison.Ordinal)
                              && NeedsMessageSeparator(fullResponse, chunk.Text))
                         {
-                            fullResponse.Append(MessageSeparator);
+                            fullResponse.Append(Constants.Markers.MessageSeparator);
 
                             // Streamed too, so the live text matches the final one the client is about to
                             // overwrite it with, instead of showing the weld for the rest of the turn.
-                            senderRef.Tell(new Records.AgentStreamChunk(MessageSeparator));
+                            senderRef.Tell(new Records.AgentStreamChunk(Constants.Markers.MessageSeparator));
                         }
 
                         lastTextMessageId = chunk.MessageId;
@@ -295,12 +324,14 @@ public class MorganaAgent : MorganaActor
             else
             {
                 Stopwatch responseStopwatch = Stopwatch.StartNew();
+                // Same turn as the streaming branch, awaited whole: nothing reaches the channel until the
+                // model, and every tool it decided to call, are done.
                 AgentResponse response = await aiAgent.RunAsync(userMessage, aiAgentSession);
                 responseStopwatch.Stop();
 
                 // Assembled message by message rather than through AgentResponse.Text, which is
                 // documented to concatenate every message's text and so produces exactly the weld
-                // MessageSeparator exists to prevent. Here every element is a whole message, so the
+                // Markers.MessageSeparator exists to prevent. Here every element is a whole message, so the
                 // boundary needs no detecting — unlike the streaming path above.
                 foreach (ChatMessage responseMessage in response.Messages)
                 {
@@ -308,7 +339,7 @@ public class MorganaAgent : MorganaActor
                         continue;
 
                     if (NeedsMessageSeparator(fullResponse, responseMessage.Text))
-                        fullResponse.Append(MessageSeparator);
+                        fullResponse.Append(Constants.Markers.MessageSeparator);
 
                     fullResponse.Append(responseMessage.Text);
                 }
@@ -369,19 +400,7 @@ public class MorganaAgent : MorganaActor
             StripPeerConsultations(aiAgentSession, historyBaseline);
 
             // Tag this turn's user-facing assistant message — the LAST assistant message that
-            // actually carries text content. The Anthropic / OpenAI / etc. tool-use protocol
-            // persists one assistant message per tool-calling round (text + tool_call →
-            // tool_result → text + tool_call → ... → final). The visible answer can land on the
-            // very last assistant or, for some models (e.g. Haiku 4.5 after a closing tool_result),
-            // on a slightly earlier one with the trailing assistant left empty. Picking the last
-            // assistant *with text* covers both layouts: an empty trailing assistant is skipped,
-            // and exactly one message per turn survives the history filter — which is what keeps a
-            // turn rendering as one bubble instead of one per tool-calling round.
-            //
-            // That message carries only its own fragment, though, and the reply the user read is
-            // llmResponseText: every text-bearing message of the turn, joined. So the assembled text
-            // rides along with the marker rather than being reconstructed on the way out, and the
-            // filter keeps deciding *which* message survives while this decides *what it says*.
+            // actually carries text content.
             ChatMessage? finalAssistantMessage = aiChatHistoryProvider
                 .GetMessages(aiAgentSession)
                 .LastOrDefault(m => m.Role == ChatRole.Assistant
@@ -393,6 +412,11 @@ public class MorganaAgent : MorganaActor
                 finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnText] = llmResponseText;
             }
 
+            // Written last, so what lands in the database is the history already stripped of the
+            // consultations and already carrying the user-facing marks the history endpoint reads
+            // back. Before the sender is answered: a turn the caller was told about but whose state
+            // never persisted would come back missing on resume. The completion flag travels with
+            // it as the row's active state, which is what a resumed conversation restores.
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
             agentLogger.LogInformation("Saved conversation state for {AgentIdentifier}", AgentIdentifier);
 
@@ -434,19 +458,12 @@ public class MorganaAgent : MorganaActor
     /// Answers a colleague of the same conversation, running a full LLM turn whose reader is another
     /// agent instead of the user.
     /// </summary>
-    /// <remarks>
-    /// Deliberately not an <see cref="Records.AgentRequest"/>: it never streams and never reaches
-    /// the supervisor. Nor is it served on the agent's own session — an A2A consultation is a
-    /// message, not a task, and it is answered on a session created for this exchange and dropped
-    /// with it. The colleague that answers is therefore not the agent the user may later meet: it
-    /// begins with nothing but the shared context, writes nothing anyone can read afterwards, and
-    /// leaves neither a later consultation nor an activation by the classifier anything to find.
-    /// Never throws — a failure is reported as an answer.
-    /// </remarks>
     protected virtual async Task ServeConsultationAsync(Records.PeerConsultation consultation)
     {
         IActorRef senderRef = Sender;
 
+        // Parented on the caller's turn context, which travelled with the question: the answer shows in
+        // the trace nested under the work of the agent that asked, not as a turn of its own.
         Activity? consultationSpan = MorganaTelemetry.Source.StartActivity(
             MorganaTelemetry.ConsultationActivity,
             ActivityKind.Internal,
@@ -472,12 +489,18 @@ public class MorganaAgent : MorganaActor
             if (sharedFromRegistry.Count > 0)
                 aiContextProvider.MergeSharedContext(consultationSession, sharedFromRegistry);
 
-            // Marks this turn as served for a colleague. Read by MorganaPeerGuardAgent to refuse
-            // a chained consultation.
-            await aiContextProvider.SetVariableAsync(consultationSession, Constants.ContextKeys.ServingConsultation, consultation.CallerIntent);
+            // Marks this turn as served for a colleague. Read by MorganaPeerGuardAgent to refuse a
+            // chained consultation, and read for its presence alone — so the mark is a flag and not
+            // the caller's name, which a caller that is not an agent of this installation never sent.
+            // Who asked is on the span and in the line below, where something actually reads it.
+            await aiContextProvider.SetVariableAsync(consultationSession, Constants.ContextKeys.ServingConsultation, true);
 
-            agentLogger.LogInformation("Agent '{AgentIntent}' is answering a consultation from '{CallerIntent}'", AgentIntent, consultation.CallerIntent);
+            agentLogger.LogInformation(
+                "Agent '{AgentIntent}' is answering a consultation from '{CallerIntent}'", AgentIntent, consultation.CallerIntent);
 
+            // The colleague's question enters as a user message because that is the only role a turn can
+            // start from; who really asked is carried by the declaration spliced in front of it. Never
+            // streamed: the reader is an agent waiting for one whole answer, not a channel.
             AgentResponse response = await aiAgent.RunAsync(
                 new ChatMessage(ChatRole.User, consultation.Question) { CreatedAt = DateTimeOffset.UtcNow },
                 consultationSession);
@@ -488,8 +511,9 @@ public class MorganaAgent : MorganaActor
             List<QuickReply>? quickReplies = GetQuickRepliesFromContext(consultationSession);
             RichCard? richCard = GetRichCardFromContext(consultationSession);
 
-            // From zero: this session holds the exchange and nothing else, so everything in it is
-            // the exchange's own.
+            // A baseline of 0 where a user turn passes its own: this session was created for the
+            // exchange and holds nothing else, so every tool call in it belongs to this answer and
+            // there is no earlier history to skip past.
             consultationSpan?.SetTag(MorganaTelemetry.ConsultationAwaitingReply, awaitsReply || quickReplies?.Count > 0);
             consultationSpan?.SetTag(MorganaTelemetry.AgentToolsInvoked, GetToolsInvoked(consultationSession, 0));
             consultationSpan?.SetTag(MorganaTelemetry.ConsultationAnswer, response.Text);
@@ -507,7 +531,8 @@ public class MorganaAgent : MorganaActor
         }
         catch (Exception ex)
         {
-            agentLogger.LogError(ex, "Agent '{AgentIntent}' failed to answer a consultation from '{CallerIntent}'", AgentIntent, consultation.CallerIntent);
+            agentLogger.LogError(
+                ex, "Agent '{AgentIntent}' failed to answer a consultation from '{CallerIntent}'", AgentIntent, consultation.CallerIntent);
             consultationSpan?.SetStatus(ActivityStatusCode.Error, ex.Message);
             consultationSpan?.AddException(ex);
             consultationSpan?.Dispose();
@@ -528,7 +553,7 @@ public class MorganaAgent : MorganaActor
     {
         agentLogger.LogError(failure.Failure.Cause, "Agent execution failed in {Name}", GetType().Name);
 
-        Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Morgana);
+        Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
         List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>("ErrorAnswers");
         Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
 
@@ -538,16 +563,14 @@ public class MorganaAgent : MorganaActor
     /// <summary>
     /// Removes this turn's peer-consultation calls, and their results, from the agent's own history.
     /// </summary>
-    /// <remarks>
-    /// A colleague's answer is read once and worthless afterwards: left in place it would be resent
-    /// to the LLM on every later turn, rich card included. Call and result go as a pair — a stored
-    /// call whose result is missing is rejected by the provider — and a message left empty is dropped.
-    /// </remarks>
     /// <param name="historyBaseline">Messages present before the turn ran; earlier turns cleared themselves.</param>
     protected void StripPeerConsultations(AgentSession session, int historyBaseline)
     {
+        // The session's live list, not a copy: removing from it is what actually clears the history.
         List<ChatMessage> messages = aiChatHistoryProvider.GetMessages(session);
 
+        // Only this turn's consultations: a call id from an earlier turn was already cleared by it, and
+        // matching on the id is what keeps a call and its result together across two separate messages.
         HashSet<string> consultationCallIds =
         [
             .. messages.Skip(historyBaseline)
@@ -556,15 +579,22 @@ public class MorganaAgent : MorganaActor
                 .Select(call => call.CallId)
         ];
 
+        // Nothing consulted this turn: leave the history untouched rather than walk it.
         if (consultationCallIds.Count == 0)
             return;
 
+        // Backwards from the end down to the baseline: removals shift everything after them, and the
+        // messages before the baseline belong to earlier turns that already cleared themselves.
         for (int index = messages.Count - 1; index >= historyBaseline; index--)
         {
             ChatMessage message = messages[index];
 
+            // One message can carry a consultation alongside a native tool call or the turn's own text,
+            // so it is emptied content by content instead of being dropped whole.
             for (int contentIndex = message.Contents.Count - 1; contentIndex >= 0; contentIndex--)
             {
+                // Call and result live in different messages and are recognised by the same id, which is
+                // what removes them as the pair the provider requires them to be.
                 bool belongsToConsultation = message.Contents[contentIndex] switch
                 {
                     FunctionCallContent call => consultationCallIds.Contains(call.CallId),
@@ -572,10 +602,13 @@ public class MorganaAgent : MorganaActor
                     _ => false
                 };
 
+                // Removed in place: what the provider will resend on the next turn is this very list.
                 if (belongsToConsultation)
                     message.Contents.RemoveAt(contentIndex);
             }
 
+            // A message whose only content was the consultation is now empty, and an empty message is
+            // rejected on the next turn, so it goes with it.
             if (message.Contents.Count == 0)
                 messages.RemoveAt(index);
         }
@@ -585,7 +618,7 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>
-    /// Whether <see cref="MessageSeparator"/> has to be inserted before appending <paramref name="incoming"/>
+    /// Whether <see cref="Constants.Markers.MessageSeparator"/> has to be inserted before appending <paramref name="incoming"/>
     /// to the text accumulated so far.
     /// </summary>
     /// <param name="accumulated">Response text assembled up to this point.</param>

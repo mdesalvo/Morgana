@@ -31,6 +31,14 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     private const string DomainLayerFooter = "======== END OF DOMAIN AGENT ========";
 
     /// <summary>
+    /// Stands in for the asking agent's intent when the request carries none — an A2A caller that is
+    /// not an agent of this installation. Reads as the truth in every sentence of the declaration,
+    /// possessive included, where a placeholder name would have the colleague address somebody who
+    /// does not exist.
+    /// </summary>
+    private const string UnnamedCaller = "the caller";
+
+    /// <summary>
     /// The framework layer and its global policies, resolved once on first use.
     /// </summary>
     private readonly Lazy<Task<FrameworkLayer>> frameworkLayer;
@@ -43,7 +51,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     {
         frameworkLayer = new Lazy<Task<FrameworkLayer>>(async () =>
         {
-            Records.Prompt prompt = await promptResolverService.ResolveAsync(Constants.Prompts.Morgana);
+            Records.Prompt prompt = await promptResolverService.ResolveAsync(Constants.Morgana);
             return new FrameworkLayer(
                 prompt,
                 prompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies"));
@@ -119,22 +127,13 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard)
-    {
-        FrameworkLayer framework = await frameworkLayer.Value;
-
-        string consultationGuidance = Records.GlobalPolicy.ResolveTemplate(
-            framework.Policies, Constants.Injections.PeerConsultationGuidance);
-
-        if (consultationGuidance.Length == 0)
-            return peerCard.Description ?? "";
-
-        // The guidance comes first and the colleague's own words after it, the same order in which a
-        // consulted agent reads the Declaration ahead of the question put to it. The card's skills
-        // are deliberately not here: an inventory of the colleague's functions is what a caller
-        // audits to rule a question out, and what falls to that desk is the colleague's to state.
-        return $"{consultationGuidance}\n\n{peerCard.Description}";
-    }
+    public Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard)
+        // The colleague's own words and nothing of the framework's: how to consult one is already
+        // carried by the policy every peer-capable agent reads, and repeating it per colleague would
+        // pay for it once per function. The card's skills are deliberately absent too — an inventory
+        // of the colleague's functions is what a caller audits to rule a question out, and what falls
+        // to that desk is the colleague's own to state.
+        => Task.FromResult(peerCard.Description ?? "");
 
     /// <inheritdoc />
     public async Task<string?> ComposeColleaguesDeclarationAsync(IReadOnlyDictionary<string, string> colleagues)
@@ -156,14 +155,19 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string> ComposeConsultationRequestAsync(string callerIntent)
+    public async Task<string> ComposeConsultationRequestAsync(string? callerIntent)
     {
         FrameworkLayer framework = await frameworkLayer.Value;
 
         string declaration = Records.GlobalPolicy.ResolveTemplate(
             framework.Policies, Constants.Injections.PeerConsultationDeclaration);
 
-        return declaration.Replace(Constants.Placeholders.ConsultationCaller, callerIntent);
+        // The caller names itself or it does not, and the wording of what an unnamed one is called
+        // belongs here, with the rest of the prose this layer authors, rather than at the call site
+        // that merely failed to find a name.
+        return declaration.Replace(
+            Constants.Placeholders.ConsultationCaller,
+            string.IsNullOrWhiteSpace(callerIntent) ? UnnamedCaller : callerIntent);
     }
 
     /// <inheritdoc />

@@ -37,7 +37,7 @@ public static class TelemetryExtensions
             return services;
 
         // OTel is also locally flaggable at exporter level
-        string serviceName = section.GetValue("ServiceName", "Morgana")!;
+        string serviceName = section.GetValue("ServiceName", Constants.Morgana)!;
         ExporterConfig[] exporters = section.GetSection("Exporters").Get<ExporterConfig[]>() ?? [];
         ExporterConfig? otlpExporter = exporters.FirstOrDefault(e => e.Name.Equals("otlp", StringComparison.OrdinalIgnoreCase) && e.Enabled);
         bool consoleEnabled = exporters.Any(e => e.Name.Equals("console", StringComparison.OrdinalIgnoreCase) && e.Enabled);

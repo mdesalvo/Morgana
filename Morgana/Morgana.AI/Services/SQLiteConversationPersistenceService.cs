@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Providers;
 using Morgana.Contracts;
 using static Morgana.AI.Records;
 
@@ -1059,8 +1058,8 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         // Format agent name for UI
         string displayAgentName = chatMessage.Role == ChatRole.User
             ? "User"
-            : string.IsNullOrEmpty(agentName) || agentName.Equals("morgana", StringComparison.OrdinalIgnoreCase)
-                ? "Morgana"
+            : string.IsNullOrEmpty(agentName) || agentName.Equals(Constants.Morgana, StringComparison.OrdinalIgnoreCase)
+                ? Constants.Morgana
                 : $"Morgana ({char.ToUpper(agentName[0])}{agentName[1..]})";
 
         return new MorganaChatMessage

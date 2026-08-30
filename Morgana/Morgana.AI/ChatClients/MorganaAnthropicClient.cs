@@ -3,7 +3,6 @@ using Anthropic.Models.Messages;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Morgana.AI.Services;
 
 namespace Morgana.AI.ChatClients;
 

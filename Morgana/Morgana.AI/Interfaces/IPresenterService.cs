@@ -17,7 +17,7 @@ public interface IPresenterService
     /// Generates the presentation message and quick reply buttons for the start of a conversation.
     /// </summary>
     /// <param name="displayableIntents">
-    /// Filtered list of intents to present to the user (already excludes <c>"other"</c>
+    /// Filtered list of intents to present to the user (already excludes <see cref="Constants.Intents.Other"/>
     /// and intents without a <c>Label</c>). Implementations use these to build quick reply buttons.
     /// </param>
     /// <param name="conversationId">

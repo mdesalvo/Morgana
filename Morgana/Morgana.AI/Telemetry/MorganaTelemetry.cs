@@ -122,7 +122,7 @@ public static class MorganaTelemetry
     public const string ConversationId = "conversation.id";
 
     /// <summary>Role that consumed dust on a charge: "Morgana" (framework actors) or
-    /// "Morgana (Intent)" (domain agents). Tag on <see cref="DustConsumed"/>.</summary>
+    /// "Morgana (Intent/Tier)" (domain agents). Tag on <see cref="DustConsumed"/>.</summary>
     public const string DustLlmRole = "dust.llm_role";
 
     // ==============================================================================

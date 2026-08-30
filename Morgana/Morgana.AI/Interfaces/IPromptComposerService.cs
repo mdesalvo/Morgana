@@ -43,8 +43,8 @@ public interface IPromptComposerService
 
     /// <summary>
     /// Produces the description under which a colleague is offered as a callable function: the
-    /// framework's rules for consulting one, then the colleague's own statement of what falls to it
-    /// (its <c>ConsultMeFor</c>, carried on the card as its description).
+    /// colleague's own statement of what falls to it (its <c>ConsultMeFor</c>, carried on the card as
+    /// its description), with nothing of the framework's added to it.
     /// </summary>
     /// <returns>The description to expose on the generated <c>AIFunction</c>.</returns>
     Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard);
@@ -67,8 +67,10 @@ public interface IPromptComposerService
     /// Produces the note placed in front of a colleague's question — the one signal telling the
     /// answering agent that this turn's reader is not the user.
     /// </summary>
+    /// <param name="callerIntent">Intent of the asking agent; <c>null</c> when the caller named none,
+    /// which the composer renders as an unnamed caller rather than as a name.</param>
     /// <returns>The note, or an empty string when the prompt layer declares no such template.</returns>
-    Task<string> ComposeConsultationRequestAsync(string callerIntent);
+    Task<string> ComposeConsultationRequestAsync(string? callerIntent);
 
     /// <summary>
     /// Produces the per-turn declaration handing the session's currently-held context variables

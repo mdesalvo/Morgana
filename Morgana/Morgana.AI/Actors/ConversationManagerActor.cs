@@ -412,7 +412,7 @@ public class ConversationManagerActor : MorganaActor
                 Text = response.Response,
                 MessageType = "assistant",
                 QuickReplies = response.QuickReplies,
-                AgentName = response.AgentName ?? "Morgana",
+                AgentName = response.AgentName ?? Constants.Morgana,
                 AgentCompleted = response.AgentCompleted,
                 Timestamp = response.OriginalTimestamp ?? DateTime.UtcNow,
                 RichCard = response.RichCard,
@@ -459,7 +459,7 @@ public class ConversationManagerActor : MorganaActor
                     Text = "An error occurred while sending the response.",
                     MessageType = "assistant",
                     ErrorReason = $"delivery_error: {ex.Message}",
-                    AgentName = "Morgana",
+                    AgentName = Constants.Morgana,
                     AgentCompleted = false
                 });
             }
@@ -508,7 +508,7 @@ public class ConversationManagerActor : MorganaActor
                 Text = FormatDustMessage(template, remaining),
                 MessageType = "system_warning",
                 ErrorReason = send90 ? "dust_budget_low_90" : "dust_budget_low_70",
-                AgentName = "Morgana",
+                AgentName = Constants.Morgana,
                 AgentCompleted = false,
                 ConversationMetadata = new ConversationMetadata(remaining)
             });
@@ -543,7 +543,7 @@ public class ConversationManagerActor : MorganaActor
                 Text = dustLimitingOptions.ErrorMessage,
                 MessageType = "error",
                 ErrorReason = "dust_budget_exhausted",
-                AgentName = "Morgana",
+                AgentName = Constants.Morgana,
                 AgentCompleted = false,
                 ConversationMetadata = new ConversationMetadata(0.0)
             });

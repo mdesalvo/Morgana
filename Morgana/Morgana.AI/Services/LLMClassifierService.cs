@@ -118,9 +118,9 @@ public class LLMClassifierService : IClassifierService
             ];
 
             // Step 3: an empty list (null response, null/empty Intents array) means the LLM gave us
-            // nothing usable. This is the same "couldn't tell" case the old single-intent
-            // implementation handled with its `?? "other"` fallback — we deliberately keep that same
-            // fail-safe behaviour.
+            // nothing usable. The contract is fail-safe rather than throwing: the turn proceeds on
+            // Intents.Other at middling confidence, which routes to no agent and is answered by the
+            // router's unrecognized-intent fallback.
             if (rankedIntentScores.Count == 0)
                 rankedIntentScores.Add(new Records.IntentScore(Constants.Intents.Other, 0.5));
 
@@ -132,9 +132,9 @@ public class LLMClassifierService : IClassifierService
 
             // Step 5: any candidate within disambiguationThreshold of the TOP score collides with
             // it — every qualifying entry, not just the runner-up, so a three-way tie disambiguates
-            // on all three. "other" never counts as a collision candidate: same exclusion as
+            // on all three. Intents.Other never counts as a collision candidate: same exclusion as
             // IntentCollection.GetDisplayableIntents, since it has no Label/DefaultValue to render
-            // as a quick reply — a real intent scoring close to "other" still routes normally.
+            // as a quick reply — a real intent scoring close to it still routes normally.
             List<string> collidingIntents =
             [
                 .. rankedIntentScores

@@ -450,7 +450,8 @@ public static class Records
         [property: JsonPropertyName("intents")] List<IntentScore> Intents);
 
     /// <summary>One candidate intent with its confidence score, as scored by the classifier LLM.</summary>
-    /// <param name="Intent">Candidate intent name (e.g., "billing", "contract", "other").</param>
+    /// <param name="Intent">Candidate intent name (e.g., "billing", "contract", or
+    /// <see cref="Constants.Intents.Other"/>).</param>
     /// <param name="Confidence">Confidence 0.0-1.0, this intent's own match quality — not a rank.</param>
     public record IntentScore(
         [property: JsonPropertyName("intent")] string Intent,
@@ -527,10 +528,14 @@ public static class Records
     /// actor and answered with a <see cref="PeerConsultationResponse"/>.
     /// </summary>
     /// <param name="ConversationId">Conversation both agents belong to; scopes session and shared context.</param>
+    /// <param name="CallerIntent">Intent of the asking agent, or <c>null</c> when the A2A caller is
+    /// not an agent of this installation and named none.</param>
+    /// <param name="Question">The colleague's question, already carrying the declaration spliced in
+    /// front of it, since the answering agent's prompt says nothing about serving a colleague.</param>
     /// <param name="TurnContext">OTel context of the user turn that triggered the consultation.</param>
     public record PeerConsultation(
         string ConversationId,
-        string CallerIntent,
+        string? CallerIntent,
         string Question,
         ActivityContext TurnContext = default);
 
@@ -702,7 +707,7 @@ public static class Records
         }
 
         /// <summary>
-        /// Returns intents for presentation quick replies, excluding "other" fallback and intents
+        /// Returns intents for presentation quick replies, excluding <see cref="Constants.Intents.Other"/> and intents
         /// without labels. Filters per UI displayability rules (non-user-selectable excluded).
         /// </summary>
         public List<IntentDefinition> GetDisplayableIntents()
@@ -834,7 +839,7 @@ public static class Records
     /// Used to provide consistent, user-friendly error messages across the system.
     /// </summary>
     /// <param name="Name">Error identifier (e.g., "GenericError", "LLMServiceError")</param>
-    /// <param name="Content">Error message template (may contain placeholders like ((llm_error)))</param>
+    /// <param name="Content">Error message template (may contain placeholders</param>
     public record ErrorAnswer(
         string Name,
         string Content);

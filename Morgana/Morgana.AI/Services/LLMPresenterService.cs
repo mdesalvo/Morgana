@@ -136,7 +136,7 @@ public class LLMPresenterService : IPresenterService
                 Text = presentationResult.Message,
                 MessageType = "presentation",
                 QuickReplies = presentationResult.QuickReplies,
-                AgentName = "Morgana",
+                AgentName = Constants.Morgana,
                 AgentCompleted = false
             }, channelCapabilities);
 

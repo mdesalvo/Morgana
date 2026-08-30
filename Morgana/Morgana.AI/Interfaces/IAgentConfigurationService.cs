@@ -10,7 +10,7 @@ public interface IAgentConfigurationService
     /// <summary>
     /// Returns intent definitions from agents.json (Name, Description, Label, DefaultValue). Used by ClassifierActor
     /// for LLM classification and Presentation for quick reply buttons. Returns empty list on missing config; system
-    /// supports graceful degradation with only "other" intent if needed.
+    /// supports graceful degradation with only the <see cref="Constants.Intents.Other"/> intent if needed.
     /// </summary>
     Task<List<Records.IntentDefinition>> GetIntentsAsync();
 

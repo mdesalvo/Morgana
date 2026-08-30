@@ -98,14 +98,6 @@ public class MorganaActor : ReceiveActor
     /// <list type="bullet">
     /// <item><term>ReceiveTimeout</term><description>Prevents dead letters from timeout messages in FSM states</description></item>
     /// </list>
-    /// <para><strong>Design Note:</strong></para>
-    /// <para>This method is protected so derived classes can call it in their behavior methods.
-    /// If additional common handlers are needed in the future (e.g., PoisonPill, system messages),
-    /// they should be added here to ensure all FSM states handle them consistently.</para>
-    /// <para><strong>Why Not Just Override Become():</strong></para>
-    /// <para>While we could override Become() to automatically re-register handlers, that would be
-    /// less explicit and harder to understand. The explicit call to RegisterCommonHandlers() in each
-    /// behavior makes it clear that common handlers are being maintained across state transitions.</para>
     /// </remarks>
     protected virtual void RegisterCommonHandlers()
     {

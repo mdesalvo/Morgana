@@ -3,7 +3,8 @@ namespace Morgana.AI.Interfaces;
 /// <summary>
 /// Service abstraction for intent classification. Decouples logic from ClassifierActor which delegates entirely to this.
 /// Default implementation: LLMClassifierService using agents.json intents + Classifier prompt from morgana.json.
-/// Fail-safe contract: on failure return ClassificationResult with intent="other" and confidence=0.0 (silent degradation);
+/// Fail-safe contract: on failure return ClassificationResult with intent <see cref="Constants.Intents.Other"/>
+/// and confidence 0.0 (silent degradation);
 /// only throw on non-transient configuration failures at startup (fail-fast). Swappable via DI.
 /// </summary>
 public interface IClassifierService
@@ -20,7 +21,7 @@ public interface IClassifierService
     /// <returns>
     /// A <see cref="Records.ClassificationResult"/> containing the top-ranked intent name and a
     /// metadata dictionary (at minimum a <c>"confidence"</c> key). On failure, implementations
-    /// must return a fallback result with intent <c>"other"</c> rather than throwing — see the
+    /// must return a fallback result with intent <see cref="Constants.Intents.Other"/> rather than throwing — see the
     /// fail-safe contract above. Callers that need to detect a genuine collision between two or
     /// more close-scoring candidates read the metadata's <c>"ambiguousIntents"</c> key, present
     /// only when the implementation actually flags one.
