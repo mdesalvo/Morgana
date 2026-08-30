@@ -372,11 +372,14 @@ public static class Records
     /// <param name="CallerId">The caller's unique identifier (from the <c>sub</c> claim), null if not authenticated</param>
     /// <param name="DisplayName">The caller's display name (from the <c>name</c> claim), null if not authenticated</param>
     /// <param name="Error">Description of why authentication failed, null if authenticated</param>
+    /// <param name="Issuer">The validated <c>iss</c>, set only on success. Names which door the
+    /// credential was cut for, so a gate can admit some issuers and not others.</param>
     public record AuthenticationResult(
         bool IsAuthenticated,
         string? CallerId = null,
         string? DisplayName = null,
-        string? Error = null);
+        string? Error = null,
+        string? Issuer = null);
 
     // ==========================================================================
     // USER MESSAGE HANDLING

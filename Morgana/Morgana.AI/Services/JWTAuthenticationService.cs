@@ -172,7 +172,10 @@ public class JWTAuthenticationService : IAuthenticationService
             // "name" is optional on a channel's self-issued token; falling back to the "sub" value
             // (the user id itself) means callers always get a non-null DisplayName to show.
             string? displayName = result.Claims.TryGetValue(JwtRegisteredClaimNames.Name, out object? nameValue) ? nameValue?.ToString() : callerId;
-            return new Records.AuthenticationResult(IsAuthenticated: true, CallerId: callerId, DisplayName: displayName);
+
+            // The issuer travels back with the result: it was proven by the signature check above
+            // and a gate admitting only some issuers has no other way to know which key opened it.
+            return new Records.AuthenticationResult(IsAuthenticated: true, CallerId: callerId, DisplayName: displayName, Issuer: issuer);
         }
         catch (Exception ex)
         {

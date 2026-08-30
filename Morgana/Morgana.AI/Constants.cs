@@ -227,7 +227,7 @@ public static class Constants
         /// <summary>Root of the published A2A routes: <c>/a2a/{intent}</c>, with the card one level below it.</summary>
         public const string AgentPathPrefix = "/a2a";
 
-        /// <summary>Issuer name Morgana signs its own peer requests under; must be declared in <c>Morgana:Authentication:Issuers</c> like any channel.</summary>
+        /// <summary>Issuer name Morgana signs its own peer requests under. The only issuer the A2A endpoints admit; must be declared in <c>Morgana:Authentication:Issuers</c> like any channel.</summary>
         public const string IssuerName = "morgana";
     }
 

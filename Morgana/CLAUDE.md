@@ -201,9 +201,11 @@ which reads the bound address and answers a wildcard binding (`http://+:8080`, t
 loopback on the same port. Configuring an address belongs to whoever *consumes* one — a channel holds
 Morgana's URL, and a remote peer would be declared on the consuming side — never to the application
 describing itself. So an
-agent of this installation is reachable and discoverable by anything that speaks A2A, not only by
-its siblings. The JSON-RPC endpoint carries `Morgana.Web/Filters/A2AAuthenticationFilter`, an `IEndpointFilter`
-applying the same `IAuthenticationService` gate the controller applies; the card itself stays open,
+agent of this installation is discoverable by anything that speaks A2A, not only by
+its siblings — and callable by whoever has been declared an issuer of this instance, which is the
+onboarding a channel goes through and not a lower bar. The JSON-RPC endpoint carries
+`Morgana.Web/Filters/A2AAuthenticationFilter`, an `IEndpointFilter` applying the same
+`IAuthenticationService` gate the controller applies, fail-closed; the card itself stays open,
 because discovery is what tells a caller how to authenticate.
 
 **What Morgana contributes is exactly two types**, and both exist to reconcile one mismatch: A2A
