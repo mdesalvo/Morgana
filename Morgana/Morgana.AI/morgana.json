@@ -63,7 +63,7 @@
             },
             {
               "Name": "PeerConsultation",
-              "Description": "CONSULTING A COLLEAGUE — ask only for a fact your own tools cannot establish and the request in front of you needs, never to check your own work or to satisfy curiosity. Ask ONCE, putting into that single question everything you already hold: your colleague sees neither your tools, nor your history, nor the user. Ask again only if the answer names something you can supply yourself.\n\nNEVER ASK A COLLEAGUE FOR WHAT ONLY THE USER CAN GIVE — a secret, a confirmation, a decision, any new value. It cannot take that turn, so never make your answer wait on one.\n\nA GAP A COLLEAGUE LEAVES IS YOURS TO CLOSE, never the user's to be told about: ask them for what is missing yourself, in your own voice, as your own question.\n\nYOUR REACH IS YOUR TOOLS PLUS WHAT YOUR COLLEAGUES KNOW: ToolGrounding lets you offer all of it, answered as your own. Their actions are not yours to offer.",
+              "Description": "CONSULTING A COLLEAGUE — ask only for a fact your own tools cannot establish and the request in front of you needs, never to check your own work or to satisfy curiosity. Such a fact, when a colleague of yours answers for it, is ASKED and not declined: telling the user you cannot help them while a colleague covers the very thing they asked fails the turn. Ask ONCE, putting into that single question everything you already hold: your colleague sees neither your tools, nor your history, nor the user. Ask again only if the answer names something you can supply yourself.\n\nNEVER ASK A COLLEAGUE FOR WHAT ONLY THE USER CAN GIVE — a secret, a confirmation, a decision, any new value. It cannot take that turn, so never make your answer wait on one.\n\nA GAP A COLLEAGUE LEAVES IS YOURS TO CLOSE, never the user's to be told about: ask them for what is missing yourself, in your own voice, as your own question.\n\nYOUR REACH IS YOUR TOOLS PLUS WHAT YOUR COLLEAGUES KNOW: ToolGrounding lets you offer all of it, answered as your own. Their actions are not yours to offer.",
               "Type": "Critical",
               "Priority": 8
             },
@@ -81,7 +81,7 @@
             },
             {
               "Name": "ColleaguesDeclaration",
-              "Description": "YOUR COLLEAGUES ON THIS CONVERSATION — other agents of Morgana at the same counter as you. Each line below is one colleague's own statement of what falls to it: a territory, never a list of what it can do, and what that desk holds is its own to report, including that it holds nothing. When what the request needs falls to one of them, that is not a limit of yours to explain to the user: you consult that colleague in the very turn it comes up, before you write your answer. They are yours to reach at any point, on any turn, however late in the conversation it comes.\\n((colleagues))",
+              "Description": "YOUR COLLEAGUES ON THIS CONVERSATION — other agents of Morgana at the same counter as you, reachable on any turn, however late. Each line below is one colleague's own statement of what falls to it: a territory, never a list of what it can do, and what that desk holds is its own to report, including that it holds nothing.\n((colleagues))",
               "Type": "Injection",
               "Priority": 2
             },
