@@ -50,12 +50,12 @@
     <!-- Agents -->
     <PackageReference Include="A2A" Version="1.0.0-preview2" />
     <PackageReference Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.19.0" />
-    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.19.0" />
-    <PackageReference Include="Microsoft.Agents.AI.A2A" Version="1.19.0-preview.260822.1" />
-    <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.19.0-preview.260822.1" />
-    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.19.0-preview.260822.1" />
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.19.0" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.20.0" />
+    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.20.0" />
+    <PackageReference Include="Microsoft.Agents.AI.A2A" Version="1.20.0-preview.260831.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.20.0-preview.260831.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.20.0-preview.260831.1" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.20.0" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.9.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.9.0" />
