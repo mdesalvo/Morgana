@@ -139,14 +139,6 @@ button.choice:disabled {
     font-style: italic;
 }
 
-/* "Nothing to report" is good news and should read as good news: a plain paragraph says the same
-   words a warning would, in the same colour, and the client has to read the sentence to know which
-   one they got. */
-.all-clear {
-    color: var(--alembic-success);
-    font-weight: 600;
-}
-
 /* A finding whose fix has landed, marked solved rather than removed: the row stays so the client
    can still read what was found and what was done about it, but nothing here asks to be clicked
    again. */
@@ -353,14 +345,15 @@ input[type="checkbox"] {
     font-size: 0.85rem;
 }
 
-/* The classes of defect the coherence pass can be asked for. A column and not a row of chips: each
-   one carries a line saying what ticking it goes looking for, and a client who has to hover to find
-   that out ticks whatever sounds most serious instead. */
+/* The classes of defect the coherence pass can be asked for, one accordion row each. A column and
+   not a row of chips: each carries a line saying what ticking it goes looking for, and a client who
+   has to hover to find that out ticks whatever sounds most serious instead. Rows are divided by a
+   rule rather than a gap, so an opened one reads as belonging to the row above it. */
 .aspects {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
     margin: 0 0 1.25rem;
+    border-top: 1px solid color-mix(in srgb, var(--alembic-border) 60%, transparent);
 }
 
 /* The checkbox sits against the label's first line rather than the middle of a two-line block. */

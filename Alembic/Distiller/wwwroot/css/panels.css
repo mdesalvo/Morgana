@@ -253,18 +253,103 @@ code {
 }
 
 /* ==========================================================================
-   Coherence findings.
+   Coherence: one accordion per class of defect.
 
-   A card each, not table rows: what is wrong, what it costs and what to do are
-   three paragraphs of prose the client reads in order, and the fix carries the
-   button that acts on it rather than one floating in a fourth column level with
-   the wrong line.
+   The checkbox picks whether to ask a class; after a run its row opens onto
+   that class's findings and nothing else, so six classes' findings are never a
+   single flat wall with the one the client came about buried in the middle.
+
+   A finding is a card: what is wrong, what it costs and what to do each under
+   its own label, and the fix carries the button that acts on it rather than one
+   floating level with the wrong line.
    ========================================================================== */
-.coherence-findings {
+.aspect-group {
+    border-bottom: 1px solid color-mix(in srgb, var(--alembic-border) 60%, transparent);
+}
+
+.aspect-group:last-child {
+    border-bottom: 0;
+}
+
+.aspect-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+}
+
+.aspect-row .switch.aspect {
+    flex: 1;
+}
+
+/* Label over its one-line note, so the row stays legible beside the toggle rather
+   than running the two together as one long string. */
+.aspect-row .switch.aspect > span {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    margin-top: 0.75rem;
+}
+
+/* Orphan rows (a kind matching no class we sent) carry the same shell but nothing
+   to click — the pointer would promise a toggle that is not there. */
+.aspect-row span.switch.aspect {
+    cursor: default;
+}
+
+/* The disclosure: how many findings, and a chevron that turns when open. Quieter
+   than the Apply buttons it reveals — it is a way in, not the action. */
+.aspect-toggle {
+    flex: none;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid var(--alembic-border-lit);
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--alembic-text);
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.aspect-toggle:hover {
+    border-color: var(--alembic-accent);
+}
+
+.aspect-count {
+    font-weight: 700;
+    color: var(--alembic-accent);
+}
+
+.aspect-toggle .chev {
+    display: inline-block;
+    font-size: 1.05rem;
+    line-height: 1;
+    transition: transform 0.12s ease;
+}
+
+.aspect-toggle.open .chev {
+    transform: rotate(90deg);
+}
+
+/* This class came back clean: said on its own row rather than as one global line
+   the client has to map back to which boxes they ticked. */
+.aspect-clear {
+    flex: none;
+    align-self: center;
+    color: var(--alembic-success);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* The findings of one class, revealed under its row and stepped in from it. */
+.aspect-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 0.1rem 0 0.9rem 1.4rem;
 }
 
 .finding {
@@ -286,19 +371,6 @@ code {
     align-items: center;
     gap: 0.5rem 0.7rem;
     margin-bottom: 0.6rem;
-}
-
-/* The machine name for the class of defect — a tag, not a heading: it labels the
-   card for a client scanning several, and the checkbox above already carries its
-   plain-language summary. */
-.finding-kind {
-    padding: 0.15rem 0.55rem;
-    border: 1px solid color-mix(in srgb, var(--alembic-gold) 55%, transparent);
-    border-radius: 1rem;
-    background: color-mix(in srgb, var(--alembic-gold) 12%, transparent);
-    color: var(--alembic-gold);
-    font-size: 0.78rem;
-    font-weight: 600;
 }
 
 .finding-where {
