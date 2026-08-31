@@ -466,8 +466,17 @@ What that prose must never carry is a rule about *when* to consult, how briefly,
 or what to do with the answer — nor that the answer is given in the agent's own voice, nor that the
 customer is not sent away. Every one of those is a critical rule of the framework, binding above
 anything the domain layer says, and a second copy below is a second voice claiming the same
-authority. What the rewritten sentence states is fact: what is on this agent's books, what is not on
-them but it can reach, and what it cannot reach at all.
+authority. Nor may it carry the **colleague's** territory. The moment an agent declares
+`[ConsultsAgent]`, `MorganaAgentAdapter` appends the colleague's own `ConsultMeFor` to the asking
+agent's prompt (`ComposeColleaguesDeclarationAsync`, one line per colleague: *function name →
+that colleague's statement of its scope*), beside the `PeerConsultation` policy that carries the how.
+So the asking agent already knows the colleague exists and what falls to it, in the colleague's own
+current words — restating that in the asking agent's `Instructions` is the same contradiction from
+the other side, stale the day the colleague revises its own scope. What the rewritten sentence states
+is fact about this agent's **own** books: what is on them, and — where a limit is still worth stating
+— what plainly is not, with nothing about where that goes instead. The defect the pass repairs is
+prose that *fights* that framework layer: a flat refusal of the subject, or a hand-off naming which
+other counter to try.
 
 What the client is asked is a question about **their own work** — whether the accounts desk really
 rings the greenhouse when a customer asks what a charge bought — never which agent should call which,
@@ -720,7 +729,12 @@ sending the customer elsewhere for what a declared colleague answers (the expens
 is offered, the flat instruction wins, and the consultation is paid for in prompt tokens and never
 happens), or prose promising to ask a colleague that is not declared. Its fix is **always prose**,
 and `CoherenceApplier` is told so: gaining or losing a colleague changes the client's C# and is
-theirs to do, on the interview's closing step or on the emit page.
+theirs to do, on the interview's closing step or on the emit page. The fix is also told what it is
+**not** — a signpost. The framework already appends the colleague's own `ConsultMeFor` to the asking
+agent's prompt (see *An edge and the prose it contradicts land together*), so the fix never writes
+"you can ask X about Y" into the agent's `Instructions`; it strikes the refusal or the hand-off that
+fights what the framework supplied and, where a boundary is still wanted, leaves only a fact about
+the agent's own books — never the colleague's territory, name or desk.
 
 It answers JSON, the one place in Alembic that does, since this output is sorted and tabulated rather
 than read as prose. And it **advises, never blocks**: a domain expert who disagrees with it about
