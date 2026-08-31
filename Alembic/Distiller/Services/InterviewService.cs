@@ -261,8 +261,7 @@ public class InterviewService : IInterviewService
         // from how this loop got here), but the walk from one settled pass to the next is the same
         // walk either way: the point of an edit is that a change to one section forces the model to
         // recheck every section after it, not to settle one and stop.
-        while (interviewState is { ReadyForReview: true, Error: null }
-               && interviewState.Pass is not (InterviewStep.AgentFormatting or InterviewStep.DomainColleagues))
+        while (interviewState is { ReadyForReview: true, Error: null, Pass: not (InterviewStep.AgentFormatting or InterviewStep.DomainColleagues) })
         {
             // Leaving the map is also stepping onto its first entry. The mapping pass settles no
             // agent, so there would be nothing for the functional pass to be about otherwise.
