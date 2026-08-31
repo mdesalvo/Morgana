@@ -1,4 +1,7 @@
 @page "/"
+@inject IInterviewService InterviewService
+@inject IDraftStateService DraftStateService
+@inject NavigationManager NavigationManager
 
 <div class="alembic-landing">
 
@@ -26,7 +29,15 @@
     *@
     <div class="gateways">
 
-        <a class="gateway primary-gateway" href="interview">
+        @*
+            Left-click discards an imported domain first: this door promises a new one, and a client
+            who imported a configuration and then came back here would otherwise begin the interview
+            on top of it, appending intents to a domain they meant to leave behind. Extending an
+            imported domain is Import's own "Distil a new agent" door, not this one. An interview
+            already running on a greenfield domain is left alone — it has nothing behind it to leave.
+            The href stays so a middle- or ctrl-click still opens a new tab, empty by construction.
+        *@
+        <a class="gateway primary-gateway" href="interview" @onclick="StartFresh" @onclick:preventDefault>
             <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M9.3 3h5.4M10.6 3.4v5.2M13.4 3.4v5.2" />
@@ -54,3 +65,26 @@
     </div>
 
 </div>
+
+@code {
+    /// <summary>
+    /// Enters the interview, discarding an imported domain still held in this circuit so the mapping
+    /// pass settles its intents into a new one rather than appending to it.
+    /// </summary>
+    /// <remarks>
+    /// <c>DraftStateService</c> and <c>InterviewService</c> are Scoped, so a configuration imported
+    /// earlier in the tab is still in hand here. Only an imported domain is dropped — a
+    /// <see cref="DomainDraft.Baseline"/> is what an import leaves and an interview never does — so a
+    /// greenfield interview already in progress is resumed, not thrown away.
+    /// </remarks>
+    private void StartFresh()
+    {
+        if (DraftStateService.Current?.Baseline is not null)
+        {
+            InterviewService.Abandon();
+            DraftStateService.Set(null);
+        }
+
+        NavigationManager.NavigateTo("interview");
+    }
+}
