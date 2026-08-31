@@ -162,63 +162,80 @@
             }
             else
             {
-                @* No bulk apply: the notice above says this is powerful and asks for care applying
-                   one at a time, and a button that fires every suggestion unread is the opposite of
-                   that — especially once a fix can touch more than one agent on its own. *@
-                <table>
-                    <thead>
-                        <tr><th>Kind</th><th>Where</th><th>What, and what it costs</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                        @for (int i = 0; i < coherence.Findings.Count; i++)
-                        {
-                            CoherenceFinding finding = coherence.Findings[i];
-                            int index = i;
-                            <tr>
-                                <td class="severity-warning">@finding.Kind</td>
-                                <td><code>@finding.Where</code></td>
-                                <td>
-                                    @if (RelatedFix(finding) is { } related)
-                                    {
-                                        @* Shares an agent with something just fixed: read at a glance this
-                                           looks like the same problem back, and it is not — it is what the
-                                           fix touched, seen from a different angle. Say so before the client
-                                           has to work that out from the Kind alone. *@
-                                        <div class="consequence-of">
-                                            &darr; surfaced by the @related.Finding.Kind fix on <code>@related.Finding.Where</code>
-                                        </div>
-                                    }
-                                    @finding.What
-                                    <div class="because">@finding.Why</div>
-                                    <div class="because"><strong>Proposed:</strong> @finding.Fix</div>
+                @* One card per finding, not a table row: the three things a client needs to read —
+                   what is wrong, what it costs, what to do — are paragraphs of prose, and a row that
+                   stacks all three in one cell against a button floating level with the first of
+                   them tells nobody which part the button acts on. The card gives each its own
+                   labelled place and puts "Apply" inside the fix it applies.
+
+                   No bulk apply: the notice above asks for care applying one at a time, and a button
+                   that fires every suggestion unread is the opposite of that — especially once a fix
+                   can touch more than one agent on its own. *@
+                <div class="coherence-findings">
+                    @for (int i = 0; i < coherence.Findings.Count; i++)
+                    {
+                        CoherenceFinding finding = coherence.Findings[i];
+                        int index = i;
+                        bool solved = applyResults.TryGetValue(index, out CoherenceApplyResult? applied) && applied.Applied;
+
+                        <article class="finding @(solved ? "finding-solved" : null)">
+                            <header class="finding-head">
+                                <span class="finding-kind">@AspectLabel(finding.Kind)</span>
+                                <code class="finding-where">@finding.Where</code>
+                                @if (solved)
+                                {
+                                    <span class="badge-solved">&check; Solved</span>
+                                }
+                            </header>
+
+                            @if (RelatedFix(finding) is { } related)
+                            {
+                                @* Shares an agent with something just fixed: read at a glance this
+                                   looks like the same problem back, and it is not — it is what the
+                                   fix touched, seen from a different angle. Say so before the client
+                                   has to work that out from the Kind alone. *@
+                                <p class="consequence-of">
+                                    &darr; surfaced by the &ldquo;@AspectLabel(related.Finding.Kind)&rdquo; fix on <code>@related.Finding.Where</code>
+                                </p>
+                            }
+
+                            <p class="finding-label">What is wrong</p>
+                            <p class="finding-text">@finding.What</p>
+
+                            <p class="finding-label">What it costs at runtime</p>
+                            <p class="finding-text">@finding.Why</p>
+
+                            <div class="finding-fix">
+                                <div class="finding-fix-body">
+                                    <p class="finding-label">Suggested fix</p>
+                                    <p class="finding-text">@finding.Fix</p>
                                     @if (applyResults.TryGetValue(index, out CoherenceApplyResult? result))
                                     {
-                                        <div class="because @(result.Applied ? "" : "severity-warning")">@result.Summary</div>
+                                        <p class="finding-outcome @(result.Applied ? null : "finding-outcome-failed")">@result.Summary</p>
                                     }
-                                </td>
-                                <td>
-                                    @if (applyResults.TryGetValue(index, out CoherenceApplyResult? applied) && applied.Applied)
-                                    {
-                                        <span class="badge-solved">&check; Solved</span>
-                                    }
-                                    else if (applyingIndex == index)
-                                    {
-                                        @* Not a button: a control the client cannot press is a control that
-                                           should not look pressable, and a disabled button with the same
-                                           chrome as an active one still invites the click it will refuse. *@
-                                        <span class="applying">Applying&hellip;</span>
-                                    }
-                                    else
-                                    {
-                                        <button class="agent-pick" @onclick="() => ApplyAsync(index, finding)" disabled="@applyingIndex.HasValue">
-                                            Apply suggestion
-                                        </button>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+                                </div>
+                                @if (!solved)
+                                {
+                                    <div class="finding-fix-act">
+                                        @if (applyingIndex == index)
+                                        {
+                                            @* Not a button: a control the client cannot press is a control that
+                                               should not look pressable, and a disabled button with the same
+                                               chrome as an active one still invites the click it will refuse. *@
+                                            <span class="applying">Applying&hellip;</span>
+                                        }
+                                        else
+                                        {
+                                            <button class="agent-pick" @onclick="() => ApplyAsync(index, finding)" disabled="@applyingIndex.HasValue">
+                                                Apply suggestion
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </article>
+                    }
+                </div>
 
                 @* Only once something has actually changed: re-running against a domain nobody
                    touched since the last pass would hand the model the exact same cards and spend
@@ -422,6 +439,13 @@
     /// </summary>
     private string Asking =>
         asked.Count == 1 ? "Ask about this one thing" : $"Ask about these {asked.Count} things";
+
+    /// <summary>
+    /// The finding's class in the same words its checkbox carried, so a card names the thing the
+    /// client ticked rather than the raw <c>kind</c> slug the model answered with.
+    /// </summary>
+    private string AspectLabel(string kind) =>
+        CoherenceService.Aspects.FirstOrDefault(a => a.Id == kind)?.Label ?? kind;
 
     /// <summary>
     /// What the last run was asked, in the labels the client ticked.

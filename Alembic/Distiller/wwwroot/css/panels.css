@@ -175,11 +175,11 @@ code {
     margin-top: 0.2rem;
 }
 
-/* Reads before .what, not after: a finding sharing an agent with a fix just applied looks, at a
-   glance, exactly like that fix having failed. Saying so first is what stops the client reading the
-   rest of the row already assuming that. */
+/* Sits right under the card's header, before the prose: a finding sharing an agent with a fix just
+   applied looks, at a glance, exactly like that fix having failed. Saying so first is what stops the
+   client reading the rest of the card already assuming that. */
 .consequence-of {
-    margin-bottom: 0.3rem;
+    margin: 0 0 0.3rem;
     color: var(--alembic-accent);
     font-size: 0.8rem;
 }
@@ -250,6 +250,123 @@ code {
 
 .panel details ul {
     margin-top: 0.5rem;
+}
+
+/* ==========================================================================
+   Coherence findings.
+
+   A card each, not table rows: what is wrong, what it costs and what to do are
+   three paragraphs of prose the client reads in order, and the fix carries the
+   button that acts on it rather than one floating in a fourth column level with
+   the wrong line.
+   ========================================================================== */
+.coherence-findings {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 0.75rem;
+}
+
+.finding {
+    border: 1px solid var(--alembic-border);
+    border-radius: 0.6rem;
+    padding: 1rem 1.15rem;
+    background: color-mix(in srgb, var(--alembic-bg) 35%, transparent);
+}
+
+/* Applied: kept on screen so the client can still read what was found and done,
+   dimmed so it is plainly behind them and not asking for a second look. */
+.finding-solved {
+    opacity: 0.7;
+}
+
+.finding-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.7rem;
+    margin-bottom: 0.6rem;
+}
+
+/* The machine name for the class of defect — a tag, not a heading: it labels the
+   card for a client scanning several, and the checkbox above already carries its
+   plain-language summary. */
+.finding-kind {
+    padding: 0.15rem 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--alembic-gold) 55%, transparent);
+    border-radius: 1rem;
+    background: color-mix(in srgb, var(--alembic-gold) 12%, transparent);
+    color: var(--alembic-gold);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.finding-where {
+    color: var(--alembic-muted);
+}
+
+.finding-head .badge-solved {
+    margin-left: auto;
+}
+
+/* The three prose blocks, each under its own small label so the client knows
+   which question this paragraph answers before reading it. */
+.finding-label {
+    margin: 0.7rem 0 0.15rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--alembic-muted);
+}
+
+.finding-text {
+    margin: 0;
+    color: var(--alembic-text);
+    font-size: 0.9rem;
+    line-height: 1.55;
+}
+
+/* The fix and the button that applies it, together: the one part of the card
+   the client acts on, boxed off from the two that are only read. */
+.finding-fix {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    margin-top: 0.9rem;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--alembic-border-lit);
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, var(--alembic-accent-deep) 10%, transparent);
+}
+
+.finding-fix-body {
+    flex: 1 1 20rem;
+}
+
+.finding-fix-body > .finding-label:first-child {
+    margin-top: 0;
+}
+
+.finding-fix-act {
+    flex: none;
+}
+
+.finding-fix-act .agent-pick {
+    margin: 0;
+}
+
+/* What the client's own applier said it changed, or why it could not. */
+.finding-outcome {
+    margin: 0.5rem 0 0;
+    font-size: 0.85rem;
+    color: var(--alembic-muted);
+}
+
+.finding-outcome-failed {
+    color: var(--alembic-gold);
 }
 
 .harness-section {
