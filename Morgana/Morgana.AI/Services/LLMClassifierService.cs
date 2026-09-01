@@ -42,7 +42,7 @@ public class LLMClassifierService : IClassifierService
     /// </summary>
     private static readonly Records.ClassificationResult FallbackResult =
         new Records.ClassificationResult(
-            "other",
+            Constants.Intents.Other,
             new Dictionary<string, string>
             {
                 ["confidence"] = "0.00",
@@ -80,10 +80,10 @@ public class LLMClassifierService : IClassifierService
             intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
 
         Records.Prompt classifierPrompt =
-            promptResolverService.ResolveAsync("Classifier").GetAwaiter().GetResult();
+            promptResolverService.ResolveAsync(Constants.Prompts.Classifier).GetAwaiter().GetResult();
 
         classifierSystemPrompt =
-            $"{classifierPrompt.Target.Replace("((formattedIntents))", formattedIntents)}\n{classifierPrompt.Instructions}\n{classifierPrompt.Formatting}";
+            $"{classifierPrompt.Target.Replace(Constants.Placeholders.FormattedIntents, formattedIntents)}\n{classifierPrompt.Instructions}\n{classifierPrompt.Formatting}";
     }
 
     /// <inheritdoc/>
@@ -118,11 +118,11 @@ public class LLMClassifierService : IClassifierService
             ];
 
             // Step 3: an empty list (null response, null/empty Intents array) means the LLM gave us
-            // nothing usable. This is the same "couldn't tell" case the old single-intent
-            // implementation handled with its `?? "other"` fallback — we deliberately keep that same
-            // fail-safe behaviour.
+            // nothing usable. The contract is fail-safe rather than throwing: the turn proceeds on
+            // Intents.Other at middling confidence, which routes to no agent and is answered by the
+            // router's unrecognized-intent fallback.
             if (rankedIntentScores.Count == 0)
-                rankedIntentScores.Add(new Records.IntentScore("other", 0.5));
+                rankedIntentScores.Add(new Records.IntentScore(Constants.Intents.Other, 0.5));
 
             // Step 4: the top of the ranked list is our "official" pick — the one that goes into
             // ClassificationResult.Intent and is used for normal (non-ambiguous) routing regardless
@@ -132,13 +132,13 @@ public class LLMClassifierService : IClassifierService
 
             // Step 5: any candidate within disambiguationThreshold of the TOP score collides with
             // it — every qualifying entry, not just the runner-up, so a three-way tie disambiguates
-            // on all three. "other" never counts as a collision candidate: same exclusion as
+            // on all three. Intents.Other never counts as a collision candidate: same exclusion as
             // IntentCollection.GetDisplayableIntents, since it has no Label/DefaultValue to render
-            // as a quick reply — a real intent scoring close to "other" still routes normally.
+            // as a quick reply — a real intent scoring close to it still routes normally.
             List<string> collidingIntents =
             [
                 .. rankedIntentScores
-                    .Where(candidate => !string.Equals(candidate.Intent, "other", StringComparison.OrdinalIgnoreCase))
+                    .Where(candidate => !string.Equals(candidate.Intent, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
                     .Where(candidate => topIntentScore - candidate.Confidence < disambiguationThreshold)
                     .Select(candidate => candidate.Intent)
             ];

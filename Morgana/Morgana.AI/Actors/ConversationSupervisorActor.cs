@@ -76,13 +76,13 @@ public class ConversationSupervisorActor : MorganaActor
         this.presenterService = presenterService;
 
         guard = Context.System.GetOrCreateActorAsync<GuardActor>(
-            "guard", conversationId).GetAwaiter().GetResult();
+            Constants.Actors.Guard, conversationId).GetAwaiter().GetResult();
 
         classifier = Context.System.GetOrCreateActorAsync<ClassifierActor>(
-            "classifier", conversationId).GetAwaiter().GetResult();
+            Constants.Actors.Classifier, conversationId).GetAwaiter().GetResult();
 
         router = Context.System.GetOrCreateActorAsync<RouterActor>(
-            "router", conversationId).GetAwaiter().GetResult();
+            Constants.Actors.Router, conversationId).GetAwaiter().GetResult();
 
         // Supervisor always starts in Idle state
         Idle();
@@ -172,10 +172,10 @@ public class ConversationSupervisorActor : MorganaActor
         hasPresented = true;
         actorLogger.Info("Generating presentation message via IPresenterService");
 
-        // GetIntentsAsync returns every configured intent, "other" and label-less ones included —
-        // GetDisplayableIntents then strips those down to the subset a user can actually click on
-        // a welcome-message quick reply (same filter LLMClassifierService's collision check now
-        // also applies, for the same reason: "other" has no Label/DefaultValue to show as a button).
+        // GetIntentsAsync returns every configured intent, Intents.Other and label-less ones
+        // included — GetDisplayableIntents then strips those down to the subset a user can actually
+        // click on a welcome-message quick reply (same filter LLMClassifierService's collision check
+        // applies, for the same reason: the catch-all has no Label/DefaultValue to show as a button).
         List<Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
         Records.IntentCollection intentCollection = new Records.IntentCollection(allIntents);
         List<Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
@@ -222,7 +222,7 @@ public class ConversationSupervisorActor : MorganaActor
                 Text = ctx.Message,
                 MessageType = "presentation",
                 QuickReplies = quickReplies,
-                AgentName = "Morgana",
+                AgentName = Constants.Morgana,
                 AgentCompleted = false
             });
 
@@ -287,7 +287,7 @@ public class ConversationSupervisorActor : MorganaActor
                     response.Violation!,
                     ctx.Classification?.Intent,
                     ctx.Classification?.Metadata,
-                    activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana",
+                    activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : Constants.Morgana,
                     false,
                     null,
                     null,
@@ -504,8 +504,8 @@ public class ConversationSupervisorActor : MorganaActor
         return;
         
         #region Locals
-        // Shared fallback-to-"other" path for both an explicit Status.Failure from ClassifierActor
-        // and a ReceiveTimeout (classifier service hung past the configured budget).
+        // Shared fallback-to-Intents.Other path for both an explicit Status.Failure from
+        // ClassifierActor and a ReceiveTimeout (classifier service hung past the configured budget).
         void FallbackToOther(string description, Exception? cause)
         {
             // Turns off the timeout: ClassifierActor did respond, even though with a failure, so
@@ -533,14 +533,14 @@ public class ConversationSupervisorActor : MorganaActor
             // path; "error" is the one extra key a successful classification never carries, kept
             // here purely for diagnostics.
             Records.ClassificationResult fallbackClassification = new Records.ClassificationResult(
-                "other",
+                Constants.Intents.Other,
                 new Dictionary<string, string>
                 {
                     ["confidence"] = "0.00",
                     ["error"] = $"classification_failed: {description}"
                 });
 
-            // Routing to "other" still goes through the router below, even though "other" has no
+            // Routing to Intents.Other still goes through the router below, even though it has no
             // registered agent by design (see HandlesIntentAgentRegistryService) — RouterActor
             // won't find one either and replies with its own unrecognized-intent fallback, which
             // AwaitingAgentResponse's bare Receive<AgentResponse> handler is exactly there to catch.
@@ -562,7 +562,7 @@ public class ConversationSupervisorActor : MorganaActor
             Become(() => AwaitingAgentResponse(updatedCtx));
 
             // Sends the request to RouterActor, same as the primary classification path above —
-            // it will find no agent for "other" and reply with its own unrecognized-intent fallback.
+            // it will find no agent for Intents.Other and reply with its unrecognized-intent fallback.
             router.Tell(new Records.AgentRequest(
                 ctx.OriginalMessage.ConversationId,
                 ctx.OriginalMessage.Text,
@@ -725,13 +725,13 @@ public class ConversationSupervisorActor : MorganaActor
                 // Sends the router's fallback text back to the client. AgentCompleted is
                 // hardcoded to true (not response.IsCompleted): there's no agent behind this
                 // reply to possibly continue with, so the turn is over by construction. AgentName
-                // is hardcoded to "Morgana" rather than resolved via GetAgentDisplayName, since no
+                // is hardcoded to Constants.Morgana rather than resolved via GetAgentDisplayName, since no
                 // specific agent handled this intent.
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
                     response.Response,
                     ctx.Classification?.Intent,
                     ctx.Classification?.Metadata,
-                    "Morgana",
+                    Constants.Morgana,
                     true,
                     response.QuickReplies,
                     DateTime.UtcNow,
@@ -752,7 +752,7 @@ public class ConversationSupervisorActor : MorganaActor
                     "I apologize, the grimoire slammed shut. Utter the words once more.",
                     ctx.Classification?.Intent,
                     ctx.Classification?.Metadata,
-                    "Morgana",
+                    Constants.Morgana,
                     false,
                     null,
                     DateTime.UtcNow,
@@ -795,7 +795,7 @@ public class ConversationSupervisorActor : MorganaActor
             Context.SetReceiveTimeout(null);
 
             // Drops the active agent entirely, unlike AwaitingClassification's FallbackToOther
-            // (no "other"-intent retry here) — the next message re-enters guard check with
+            // (no Intents.Other retry here) — the next message re-enters guard check with
             // activeAgent null and classifies as a brand-new request. timedOutIntent is saved
             // first so CloseTurnSpan below still has an intent to tag the span with.
             string? timedOutIntent = activeAgentIntent;
@@ -808,7 +808,7 @@ public class ConversationSupervisorActor : MorganaActor
                 "I apologize, the sands of time drained from the cauldron. Re-weave your spell.",
                 null,
                 null,
-                "Morgana",
+                Constants.Morgana,
                 false,
                 null,
                 DateTime.UtcNow,
@@ -846,7 +846,7 @@ public class ConversationSupervisorActor : MorganaActor
             string? currentIntent = activeAgentIntent;
             try
             {
-                string agentName = currentIntent != null ? GetAgentDisplayName(currentIntent) : "Morgana";
+                string agentName = currentIntent != null ? GetAgentDisplayName(currentIntent) : Constants.Morgana;
 
                 // Clears the active agent only once it's actually done: this is the same agent
                 // that was already active replying again, so while it keeps working
@@ -893,7 +893,7 @@ public class ConversationSupervisorActor : MorganaActor
                     "I apologize, the runes are misaligned. Cast your intent once more.",
                     null,
                     null,
-                    "Morgana",
+                    Constants.Morgana,
                     false,
                     null,
                     DateTime.UtcNow,
@@ -999,7 +999,7 @@ public class ConversationSupervisorActor : MorganaActor
         ];
 
         // Get the disambiguation message from the classifier's prompt
-        Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
+        Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Classifier);
         string disambiguationMessage = classifierPrompt.GetAdditionalProperty<string>("DisambiguationMessage");
 
         // Tell the response straight to the client — no router, no agent, exactly like a Guard
@@ -1010,7 +1010,7 @@ public class ConversationSupervisorActor : MorganaActor
             disambiguationMessage,
             ctx.Classification?.Intent,
             ctx.Classification?.Metadata,
-            "Morgana",
+            Constants.Morgana,
             false,
             quickReplies,
             ctx.OriginalMessage.Timestamp,
@@ -1036,12 +1036,12 @@ public class ConversationSupervisorActor : MorganaActor
         actorLogger.Warning("Content filter rejection received from agent, treating as guard rejection");
 
         // Sends the same shape as a guard rejection: no metadata, no quick replies, AgentName
-        // resolved from the active agent if this happened mid-follow-up, "Morgana" otherwise.
+        // resolved from the active agent if this happened mid-follow-up, Constants.Morgana otherwise.
         originalSender.Tell(new Records.ConversationResponse(
             "Content policy violation",
             activeAgentIntent,
             null,
-            activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : "Morgana",
+            activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : Constants.Morgana,
             false,
             null,
             DateTime.UtcNow,
@@ -1099,9 +1099,9 @@ public class ConversationSupervisorActor : MorganaActor
     /// </summary>
     private string GetAgentDisplayName(string? intent)
     {
-        // No intent, or the catch-all "other": shown as the bare persona, with no agent name attached.
-        if (string.IsNullOrEmpty(intent) || string.Equals(intent, "other", StringComparison.OrdinalIgnoreCase))
-            return "Morgana";
+        // No intent, or the catch-all Intents.Other: shown as the bare persona, with no agent name.
+        if (string.IsNullOrEmpty(intent) || string.Equals(intent, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
+            return Constants.Morgana;
 
         // Otherwise capitalizes the intent for display and qualifies the persona with it.
         string capitalizedIntent = char.ToUpper(intent[0]) + intent[1..];

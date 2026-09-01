@@ -30,9 +30,25 @@ namespace Distiller.Interfaces;
 public interface ICoherenceService
 {
     /// <summary>
-    /// Reviews the whole domain.
+    /// The classes of defect this pass can be asked for, as its own prompt declares them.
+    /// </summary>
+    /// <remarks>
+    /// Exposed because the client chooses among them: the checkboxes on Review are rendered from
+    /// this, so what they tick, what the model is handed and what it may answer with are one list.
+    /// </remarks>
+    IReadOnlyList<CoherenceAspect> Aspects { get; }
+
+    /// <summary>
+    /// Reviews the whole domain, for the classes of defect asked for.
     /// </summary>
     /// <param name="draft">The domain as it stands.</param>
+    /// <param name="aspects">
+    /// The <see cref="CoherenceAspect.Id"/>s to look for. The pass is composed of these and no
+    /// others — a surgical question about one class costs a fraction of the whole pass and, more to
+    /// the point, comes back with an answer about the thing that was asked rather than a table the
+    /// client has to sift. An empty selection is refused rather than read as "everything": a pass
+    /// nobody asked a question of is a Performance call spent on a list.
+    /// </param>
     /// <param name="resolved">
     /// Findings already applied earlier this sitting, if any. Each run is otherwise a one-shot read
     /// with no memory of the last one, so a client who fixed something and pressed "Run it again"
@@ -44,6 +60,7 @@ public interface ICoherenceService
     /// <returns>What the pass found, or an empty report when it found nothing.</returns>
     Task<CoherenceReport> ReviewAsync(
         DomainDraft draft,
+        IReadOnlyList<string> aspects,
         IReadOnlyList<ResolvedCoherenceFinding>? resolved = null,
         CancellationToken cancellationToken = default);
 }

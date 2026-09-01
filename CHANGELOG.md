@@ -6,13 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.29.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: A2A — Morgana Speaks A2A
+Morgana now speaks the **A2A protocol**, end to end and through Microsoft's own stack. An agent declares `[ConsultsAgent("billing")]` and that colleague becomes a `consult_{intent}` function in its tool list; the agent so named is published at `/a2a/{intent}` with a well-known agent card. The card is open, so anything that speaks A2A can discover it; the endpoint behind it is authenticated and Morgana signs its own peer traffic under the `morgana` issuer.
+So an agent stops sending the user back and forth between desks, and it does it over the A2A protocol rather than an internal call of Morgana's own invention. Colleagues live in this instance — a remote peer is not declarable yet, see Future Enablement — but the wire is the standard one at both ends.
+It is **opt-in and pays for itself only where declared**: nothing is published for an agent nobody consults, an agent that neither declares a colleague nor is named as one gets no endpoint, no policy and not one extra token.
+A domain without `[ConsultsAgent]` anywhere — or a deployment with `Morgana:AgentToAgent:Enabled` false — is exactly the Morgana it was before.
+
 ### ✨ Added
+- **`[ConsultsAgent("intent")]`** — a new attribute naming the colleagues an agent may consult, one per declaration
+- **A2A endpoints** — `/a2a/{intent}` and its `/.well-known/agent-card.json`, stood up only for the agents somebody declares as a colleague and authenticated like the rest of the API
+- **`ConsultMeFor`** — a new section of a domain prompt, stating what this desk answers for. It is what a colleague reads before asking
+- **`PeerConsultation`** — a new global policy: what is licit to ask a colleague and how one answers
 
 ### 🔄 Changed
+- Updated `Microsoft.Agents.AI` to 1.20.0
 
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
+- **Agents beyond this process** — the asking side already holds a standard `A2AAgent` resolved from a card, so a remote colleague needs a way to declare one (an address, an issuer of its own) rather than new machinery
+- **Morgana inside someone else's system** — the cards are published and the endpoints are open to whoever holds credentials, so a domain modelled here can be reached by orchestrators Morgana knows nothing about
 
 
 ## [0.28.0] - 2026-08-23

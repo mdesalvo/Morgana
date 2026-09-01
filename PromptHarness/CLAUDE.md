@@ -29,6 +29,9 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~HarnessSmokeTests"
 # the blocking group (context handling, 5/5 threshold)
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
 
+# the consulting group (4/4, blocking)
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ConsultingTests"
+
 # the behavioural group (default threshold)
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~BehaviourTests"
 
@@ -91,8 +94,11 @@ fixture refuses to start by design.
 **Two-layer assertions** (`Infrastructure/Engine/ScenarioDefinition.cs`, `ExpectationChecker.cs`, `LlmJudge.cs`).
 Structural checks are deterministic, read only span/log/message data (`expect:` block: tools called,
 context reads/writes, quick replies, rich card presence…). The judge layer is LLM-graded natural
-language propositions (`judge:` / `judgeNot:`) and sees only what a user would see — text, buttons,
-card presence — never the tool trace, so it can't justify a verdict on evidence the user never had.
+language propositions (`judge:` / `judgeNot:`) and sees exactly what a user would see — text, buttons,
+and the card as rendered (through the same `RichCardText` the structural layer reads) — never the tool
+trace, so it can't justify a verdict on evidence the user never had. Showing it less than the screen is
+the mirror error: an agent's Formatting routinely puts the figure that answers the question on the card,
+and a judge reading half the screen convicts a response that answered.
 The judge is skipped once a turn already fails structurally (saves a live call).
 
 **Scenario groups have different thresholds and mean different things:**
@@ -103,6 +109,16 @@ The judge is skipped once a turn already fails structurally (saves a live call).
   reverts the prose rather than lowering the threshold.
 - `BehaviourTests` — default threshold (`Harness:DefaultRuns`/`DefaultMinPasses`, 5/4). Protects
   visible presentation: button emission, card rendering, conversation closure.
+- `ConsultingTests` — blocking at 4/4, for the same reason as the group above: the failure is
+  silent. An agent that quietly stops consulting a colleague still answers, just with less than it
+  could have known. Unlike every other group it also depends on a **topology** — the scenarios name
+  agents that must still declare `[ConsultsAgent]` of one another — so a failure here has a second
+  thing it can mean, and the attributes are the first place to look. Both scenarios assert the
+  mechanism itself — a colleague reached on demand for a datum only it holds, and an exchange that
+  leaves the conversation as it found it (`historyExcludesAgents` / `historyUserMessages`, read from
+  the persisted history rather than from a judge). The prohibition side of consultation is
+  deliberately not swept for: hand a judge a broad "must not say" and it goes hunting through the
+  response until it convicts.
 - `GuardTests` / `ActorTests` — the **actors** group, aimed at the four framework prompts none of
   the above meaningfully exercise: Guard, Classifier, ChannelAdapter, Presentation. Three production
   mechanisms stood in the way of a straightforward scenario, and each got its own workaround rather

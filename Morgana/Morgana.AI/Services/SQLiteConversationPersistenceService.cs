@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Providers;
 using Morgana.Contracts;
 using static Morgana.AI.Records;
 
@@ -766,7 +765,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             .Where(m => m.message.Role == ChatRole.Assistant)
             .SelectMany(m => m.message.Contents?
                 .OfType<FunctionCallContent>()
-                .Where(fc => fc.Name == "SetRichCard") ?? [])
+                .Where(fc => fc.Name == Constants.Tools.SetRichCard) ?? [])
             .Select(fc => new
             {
                 CallId = fc.CallId,
@@ -784,7 +783,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             .Where(m => m.message.Role == ChatRole.Assistant)
             .SelectMany(m => m.message.Contents?
                 .OfType<FunctionCallContent>()
-                .Where(fc => fc.Name == "SetQuickReplies") ?? [])
+                .Where(fc => fc.Name == Constants.Tools.SetQuickReplies) ?? [])
             .Select(fc => new
             {
                 CallId = fc.CallId,
@@ -811,8 +810,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         [
             .. allMessages
                 .Where(m => m.message.Role == ChatRole.Assistant
-                            && m.message.AdditionalProperties?.ContainsKey(MorganaChatHistoryProvider
-                                .UserFacingMarkerKey) == true)
+                            && m.message.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true)
                 .Select(m => m.agentName)
         ];
 
@@ -842,7 +840,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             // Check for SetRichCard function call
             FunctionCallContent? setRichCardCall = chatMessage.Contents?
                 .OfType<FunctionCallContent>()
-                .FirstOrDefault(fc => fc.Name == "SetRichCard");
+                .FirstOrDefault(fc => fc.Name == Constants.Tools.SetRichCard);
             if (setRichCardCall != null)
             {
                 pendingRichCardCallId = setRichCardCall.CallId;
@@ -852,7 +850,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             // Check for SetQuickReplies function call
             FunctionCallContent? setQuickRepliesCall = chatMessage.Contents?
                 .OfType<FunctionCallContent>()
-                .FirstOrDefault(fc => fc.Name == "SetQuickReplies");
+                .FirstOrDefault(fc => fc.Name == Constants.Tools.SetQuickReplies);
             if (setQuickRepliesCall != null)
             {
                 pendingQuickRepliesCallId = setQuickRepliesCall.CallId;
@@ -863,7 +861,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             // marker is set by MorganaAgent at end-of-turn on the last assistant message that
             // actually carries text — see MorganaAgent.ExecuteAgentAsync.
             bool isUserFacing = chatMessage.Role == ChatRole.Assistant
-                             && chatMessage.AdditionalProperties?.ContainsKey(MorganaChatHistoryProvider.UserFacingMarkerKey) == true;
+                             && chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true;
 
             // Tool-call messages are normally skipped — their widgets attach to a later,
             // text-bearing assistant message. Exception: the user-facing message itself, when a
@@ -996,7 +994,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     /// The recorded turn text wins because it is what the user read. A turn that called a tool wrote
     /// its answer across several assistant messages and only the last survives the filter above, so
     /// extracting from this message alone would silently drop everything written before the tool call
-    /// — see <see cref="MorganaChatHistoryProvider.TurnTextKey"/>. Messages that carry no recorded turn
+    /// — see <see cref="Constants.MessageProperties.TurnText"/>. Messages that carry no recorded turn
     /// text (user turns, sessions persisted before this shipped) fall through to the original path.
     /// </remarks>
     private string ExtractTextFromMessage(ChatMessage chatMessage)
@@ -1017,7 +1015,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     }
 
     /// <summary>
-    /// Reads <see cref="MorganaChatHistoryProvider.TurnTextKey"/> off a message, or <c>null</c> when absent.
+    /// Reads <see cref="Constants.MessageProperties.TurnText"/> off a message, or <c>null</c> when absent.
     /// </summary>
     /// <remarks>
     /// Both shapes of the value are accepted: a live <see cref="string"/> for a session still in memory,
@@ -1027,7 +1025,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     /// </remarks>
     private static string? TryGetRecordedTurnText(ChatMessage chatMessage)
     {
-        if (chatMessage.AdditionalProperties?.TryGetValue(MorganaChatHistoryProvider.TurnTextKey, out object? value) != true)
+        if (chatMessage.AdditionalProperties?.TryGetValue(Constants.MessageProperties.TurnText, out object? value) != true)
             return null;
 
         return value switch
@@ -1060,8 +1058,8 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         // Format agent name for UI
         string displayAgentName = chatMessage.Role == ChatRole.User
             ? "User"
-            : string.IsNullOrEmpty(agentName) || agentName.Equals("morgana", StringComparison.OrdinalIgnoreCase)
-                ? "Morgana"
+            : string.IsNullOrEmpty(agentName) || agentName.Equals(Constants.Morgana, StringComparison.OrdinalIgnoreCase)
+                ? Constants.Morgana
                 : $"Morgana ({char.ToUpper(agentName[0])}{agentName[1..]})";
 
         return new MorganaChatMessage

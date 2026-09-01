@@ -25,17 +25,28 @@ Activated when the user says things like:
    without printing the ApiKey/Endpoint values, and tell the user which provider/tier models
    (`Tiers.Efficiency.Options.ModelId` / `Tiers.Performance.Options.ModelId`) this run will hit. This
    is the harness's own design (`PromptHarness/README.md`): it never has its own `Morgana:` config,
-   it inherits the host's.
+   it inherits the host's. The same file is where `Harness:HarnessDirectory` lives when the user has
+   overridden it (see step 7), so read both in one pass. Note the store is written with a UTF-8 BOM:
+   parse it as `utf-8-sig`, or a plain JSON read fails on the first character.
 
 2. **Ask the target scope** with `AskUserQuestion`, multi-select, one checkbox per test class:
    - Context (`ContextHandlingTests` — the blocking group: context cycle, closed vocabulary, cross-agent)
+   - Peer consultation (`PeerConsultationTests` — the second blocking group: an agent reaching a
+     colleague over A2A when only the colleague can answer, and the user never learning it happened)
    - Behavior (`BehaviourTests` — turn continuation, closure, rich cards)
    - Actors (`ActorTests` — classifier, channel adapter, presentation)
    - Guard (`GuardTests` — requires `Harness__EnableGuardrail=true`, off by default)
    - Summarizer (`SummarizationTests` — requires `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`, unset by default)
 
-   Offer "everything" as an implicit fifth option by allowing all five checkboxes selected at once.
+   Offer "everything" as an implicit extra option by allowing all six checkboxes selected at once.
    Do not default to any pre-checked selection — the user picks the perimeter explicitly every time.
+
+   **Peer consultation takes no flag of its own**, and the absence is worth stating because it is the
+   natural thing to go looking for: `Morgana:AgentToAgent:Enabled` defaults to true, and
+   `MorganaHostFixture` mints the per-run key for the `morgana` peer issuer itself, exactly as it
+   does for `harness`. What this group does depend on instead is a **topology** — the scenarios name
+   agents that must still declare `[ConsultsAgent]` of one another — so a failure here has a second
+   thing it can mean, and `Examples/Agents/*.cs` is the first place to look before the prose.
 
 3. **Ask the global run/pass threshold** with `AskUserQuestion` (single-select with the following
    presets, "Other" covers any custom pair):
@@ -66,6 +77,9 @@ Activated when the user says things like:
    ```
    # Context
    Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
+
+   # Peer consultation — no extra flag: A2A is on by default and the fixture mints the peer key
+   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PeerConsultationTests"
 
    # Behavior
    Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~BehaviourTests"
@@ -105,10 +119,10 @@ Activated when the user says things like:
    - Default location: `Harness:HarnessDirectory` in `PromptHarness/appsettings.Harness.json`
      (currently the relative value `"Harness"`, resolved against the PromptHarness project root, i.e.
      `PromptHarness/Harness/` — gitignored, never expect it in `git status`).
-   - The user running the suite may have their own `Harness__HarnessDirectory` override pointing
-     somewhere else entirely (a personal results folder, a shared drive) — confirm with them where
-     they're actually watching before assuming the in-repo default is it; do not assume two different
-     configured paths are the same run's output.
+   - The user running the suite may have their own `Harness:HarnessDirectory` override pointing
+     somewhere else entirely (a personal results folder, a shared drive) — it lives in the same User
+     Secrets store read in step 1, so look there rather than asking, and only ask when the store has
+     none. Do not assume two different configured paths are the same run's output.
    - If neither location has fresh files after a run that should have produced them, do not silently
      shrug — a scenario ID and phase both funnel into the file name, so an empty/missing folder is
      itself worth flagging rather than only relying on the `dotnet test` console summary.

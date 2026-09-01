@@ -61,6 +61,12 @@ public static class InterviewDriver
 
             if (state.Error is not null)
                 break;
+
+            // The closing step ends the interview from inside a turn rather than on an AcceptAsync:
+            // the colleagues are settled by the client's own agreement, and there is no agent left
+            // to let into the domain. Answering on past that would start a second interview.
+            if (interview.Current is null)
+                break;
         }
 
         return new DrivenInterview(state, exchanges);

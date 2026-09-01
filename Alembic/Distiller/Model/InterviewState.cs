@@ -43,7 +43,19 @@ public enum InterviewStep
     /// <summary>
     /// How the agent lays out what its tools return: its Formatting, and nothing else.
     /// </summary>
-    AgentFormatting
+    AgentFormatting,
+
+    /// <summary>
+    /// The colleagues: which of the finished agents needs to be able to put a question to another
+    /// one. Runs once, after the last entry of the map has its agent, and settles no agent's own
+    /// sections beyond the boundary sentence an edge contradicts.
+    /// </summary>
+    /// <remarks>
+    /// Last for the same reason the map is first, read the other way round: an edge is a relation,
+    /// and a relation cannot be asked about while half its ends are still unwritten. It sits outside
+    /// the lap because it is asked once over the whole domain, never once per entry.
+    /// </remarks>
+    DomainColleagues
 }
 
 /// <summary>
@@ -244,6 +256,17 @@ public sealed class InterviewState
     }
 
     /// <summary>
+    /// The colleagues declared by the closing step, none of them in the domain until the client
+    /// agrees to the set.
+    /// </summary>
+    /// <remarks>
+    /// Held here rather than written straight onto the agents for the reason the map is held here
+    /// too: what the step settles is a set, judged whole, and an edge dropped a turn after it was
+    /// declared must leave no trace on an agent that is already in the client's configuration.
+    /// </remarks>
+    public List<ConsultationDraft> Colleagues { get; } = [];
+
+    /// <summary>
     /// Why the last exchange failed, when it did. Null on a healthy interview.
     /// </summary>
     public string? Error { get; set; }
@@ -273,6 +296,7 @@ public sealed class InterviewState
         ["intentLabel"] = Intent.Label,
         ["intentDefaultValue"] = Intent.DefaultValue,
         ["agentTarget"] = Agent.Target,
+        ["agentConsultMeFor"] = Agent.ConsultMeFor,
         ["agentPersonality"] = Agent.Personality,
         ["agentInstructions"] = Agent.Instructions,
         ["agentFormatting"] = Agent.Formatting,
@@ -280,7 +304,12 @@ public sealed class InterviewState
         // The whole toolkit as one string: any tool added, dropped, renamed, redescribed or
         // reparametrised moves it, which is precisely when the toolkit panel deserves attention.
         ["tools"] = string.Join("|", Agent.Tools.Select(t =>
-            $"{t.Name}:{t.Description}:{string.Join(",", t.Parameters.Select(x => $"{x.Name}/{x.Scope}/{x.Required}/{x.Shared}/{x.Description}"))}"))
+            $"{t.Name}:{t.Description}:{string.Join(",", t.Parameters.Select(x => $"{x.Name}/{x.Scope}/{x.Required}/{x.Shared}/{x.Description}"))}")),
+
+        // The whole set as one string, for the same reason as the toolkit above: an edge declared,
+        // dropped or re-declared with different prose moves it, and nothing finer is worth a row.
+        ["colleagues"] = string.Join("|", Colleagues.Select(c =>
+            $"{c.Asking}->{c.Asked}:{c.AskingInstructions}:{c.AskedInstructions}"))
     };
 
     /// <summary>
@@ -301,6 +330,11 @@ public sealed class InterviewState
         InterviewStep.AgentToolkit => MissingToolkit(),
         InterviewStep.AgentInstructions => MissingInstructions(),
         InterviewStep.AgentFormatting => MissingFormatting(),
+
+        // Owns no field, like the toolkit pass and for the same kind of reason: a domain where no
+        // agent needs a colleague is the ordinary domain, not an unfinished one, so an empty set is
+        // a decision Alembic took with the client rather than a gate to hold the pass open.
+        InterviewStep.DomainColleagues => [],
         _ => []
     };
 
@@ -346,8 +380,21 @@ public sealed class InterviewState
     /// This pass owns one field, which is why it has one tool that writes — the two facts agree
     /// because they are the same fact stated in the two places that enforce it.
     /// </remarks>
-    private List<string> MissingTarget() =>
-        string.IsNullOrWhiteSpace(Agent.Target) ? ["agentTarget"] : [];
+    private List<string> MissingTarget()
+    {
+        List<string> missing = [];
+
+        if (string.IsNullOrWhiteSpace(Agent.Target))
+            missing.Add("agentTarget");
+
+        // Settled by the same pass and drawn from the same scope, so it closes with it: an agent
+        // whose Target stands and whose colleagues cannot read it is finished for itself and mute
+        // to everyone else.
+        if (string.IsNullOrWhiteSpace(Agent.ConsultMeFor))
+            missing.Add("agentConsultMeFor");
+
+        return missing;
+    }
 
     /// <summary>
     /// How the agent sounds.

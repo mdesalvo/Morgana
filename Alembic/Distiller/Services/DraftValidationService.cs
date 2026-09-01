@@ -1,5 +1,6 @@
 using Distiller.Interfaces;
 using Distiller.Model;
+using Morgana.AI;
 
 namespace Distiller.Services;
 
@@ -30,13 +31,13 @@ public class DraftValidationService : IDraftValidationService
     /// (quick replies, a rich card, a turn continuation) declares none at all, which is why the
     /// empty scope is legal rather than a third value.
     /// </summary>
-    private static readonly string[] KnownScopes = ["context", "request"];
+    private static readonly string[] KnownScopes = [Constants.Scopes.Context, Constants.Scopes.Request];
 
     /// <summary>
     /// The intent the framework reserves for "none of the above". It is the one intent exempt from
     /// needing an agent — <c>HandlesIntentAgentRegistryService</c> excludes it by name.
     /// </summary>
-    private const string OtherIntent = "other";
+    private const string OtherIntent = Constants.Intents.Other;
 
     /// <summary>
     /// C# keywords that cannot be used bare as an identifier. Not the full list: only the ones a
@@ -62,6 +63,7 @@ public class DraftValidationService : IDraftValidationService
 
         ValidateIntents(draft, findings);
         ValidateIntentAgentPairing(draft, findings);
+        ValidateConsultations(draft, findings);
 
         foreach (AgentDraft agent in draft.Agents)
             ValidateAgent(agent, findings);
@@ -161,6 +163,55 @@ public class DraftValidationService : IDraftValidationService
     }
 
     /// <summary>
+    /// Checks every declared colleague against the domain that has to satisfy it.
+    /// </summary>
+    /// <remarks>
+    /// <c>HandlesIntentAgentRegistryService</c> validates the same two things at startup and throws:
+    /// a <c>[ConsultsAgent]</c> naming an intent no agent handles, and one naming the declaring
+    /// agent's own. Here they cost nothing to fix. The third finding is not a startup rule at all
+    /// but the shape of the framework's own refusal — a colleague answering a consultation is denied
+    /// its own peer functions — so a chain reaches one hop and no further, and an author who drew a
+    /// chain expecting two is the person this exists to tell.
+    /// </remarks>
+    private static void ValidateConsultations(DomainDraft draft, List<ValidationFinding> findings)
+    {
+        HashSet<string> handled = new(
+            draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)).Select(a => a.ID!),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (AgentDraft agent in draft.Agents)
+        {
+            string where = $"agent '{agent.ID ?? "(unnamed)"}'";
+
+            foreach (string colleague in agent.Code.Consults)
+            {
+                if (string.Equals(colleague, agent.ID, StringComparison.OrdinalIgnoreCase))
+                {
+                    findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                        $"It declares itself as a colleague ('{colleague}').",
+                        "The startup registry refuses a [ConsultsAgent] naming the declaring agent's own intent: an agent cannot be its own second opinion."));
+                    continue;
+                }
+
+                if (!handled.Contains(colleague))
+                {
+                    findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                        $"It consults '{colleague}', which no agent of this domain handles.",
+                        "A consultation is resolved when the agent is created, so a name nothing answers is startup-fatal rather than a colleague that quietly never appears."));
+                    continue;
+                }
+
+                AgentDraft? far = draft.Agents.FirstOrDefault(a => string.Equals(a.ID, colleague, StringComparison.OrdinalIgnoreCase));
+
+                if (far?.Code.Consults.Count > 0)
+                    findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
+                        $"It consults '{colleague}', which consults a colleague of its own.",
+                        "While it answers a consultation the framework withholds its peer functions, so the second hop never happens: whatever the far agent would have asked for is not in the answer this one gets."));
+            }
+        }
+    }
+
+    /// <summary>
     /// Checks one agent's prose, its class names and its whole toolkit.
     /// </summary>
     private static void ValidateAgent(AgentDraft agent, List<ValidationFinding> findings)
@@ -176,6 +227,11 @@ public class DraftValidationService : IDraftValidationService
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 "The agent has no Target.",
                 "Target is the domain layer's first section and states what the agent is for; composed empty, the agent inherits only the framework's generic purpose."));
+
+        if (string.IsNullOrWhiteSpace(agent.ConsultMeFor))
+            findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
+                "The agent has nothing to say to a colleague consulting it.",
+                "ConsultMeFor is what a colleague reads to decide whether a question is this agent's; without it the card falls back to the intent description, which is a routing phrase written for the classifier."));
 
         if (string.IsNullOrWhiteSpace(agent.Instructions))
             findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
@@ -277,7 +333,7 @@ public class DraftValidationService : IDraftValidationService
                     "A parameter resolving an input declares 'context' or 'request'; one carrying a value the model itself authors declares none."));
 
             if (parameter.Shared
-                && !string.Equals(parameter.Scope, "context", StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(parameter.Scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, parameterWhere,
                     "The parameter is Shared but not context-scoped.",
                     "Shared publishes a resolved context variable to the conversation's shared_context registry, so it only means anything alongside Scope 'context'."));

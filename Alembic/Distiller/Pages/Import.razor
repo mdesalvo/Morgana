@@ -309,6 +309,12 @@
     /// </summary>
     private static string? Named(InterviewSitting sitting)
     {
+        // The closing step stands on no entry of the map — it is about the domain — so the branches
+        // below, which read the sitting's own place in that map, would report it as the map being
+        // drawn: the one phase it is furthest from.
+        if (sitting.Pass == InterviewStep.DomainColleagues)
+            return "You were settling which of your agents may ask another";
+
         if (sitting.At >= 0 && sitting.At < sitting.Map.Count)
         {
             IntentDraft entry = sitting.Map[sitting.At];

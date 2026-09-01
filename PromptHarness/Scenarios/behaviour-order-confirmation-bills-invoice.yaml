@@ -18,6 +18,16 @@ description: >-
   the agent asking "Shall I proceed?" every single run rather than treating the front-loaded seal
   word as sufficient. That is correct behaviour, not a bug — the scenario is written to match it.
 
+  The invoice judgeNot was reworded after a live run: 'a specific invoice total, amount or line item'
+  fired on the remaining stock and the invoiceId that this agent's own Formatting REQUIRES on the
+  Confirmed card, so the judge and the prose were asking for opposite things. What the rule protects
+  is that the greenhouse never reads the invoice out — its money, not its existence. That rule now
+  covers more ground than when it was written, and deliberately so: the judge reads the card's
+  rendered content along with the text, so an agent that keeps its prose clean and puts the invoice's
+  total on a card no longer slips past. The wording holds unchanged under the wider view — the
+  Confirmed card this Formatting prescribes carries orderId, remaining stock and invoiceId, and none
+  of those is a total, a tax or a charge line.
+
 turns:
   - say: "Hi, I'd like to order 1 pack of the wildflower seed mix, my customer code is T780C"
     expect:
@@ -28,10 +38,10 @@ turns:
       textNotEmpty: true
       # Structural, not judged: the seal word is customarily delivered inside the order's own rich
       # card (a key_value component), never spelled out in prose — the agent's flowery persona text
-      # only alludes to it ("keep that seal word safe"). LLMJudge deliberately never sees a card's
-      # body, only its title, so this is the one place the harness CAN check the literal value ever
-      # reached the customer: it's deterministic only because Harness:DeterministicSealWord pins
-      # InventoryTool.GenerateSealWord() to "534LW03D" for this run.
+      # only alludes to it ("keep that seal word safe"). A literal is a structural matter regardless
+      # of who else can see it: this asserts the exact value reached the customer, which no
+      # proposition should be asked to do. It is deterministic only because Harness:DeterministicSealWord
+      # pins InventoryTool.GenerateSealWord() to "534LW03D" for this run.
       richCard: present
       richCardContains: ["534LW03D"]
     judge:
@@ -45,7 +55,8 @@ turns:
       toolsNotCalled: [ConfirmOrder]
       textNotEmpty: true
     judge:
-      - "The response restates that confirming is binding (stock will be committed, or the action cannot easily be undone) and asks the customer for a final go-ahead."
+      - "The response says that confirming is binding: the stock will be committed, or the order cannot easily be undone afterwards."
+      - "The response asks the customer for a final go-ahead."
     judgeNot:
       - "The response claims the order is already confirmed or billed."
 
@@ -57,6 +68,9 @@ turns:
       textNotContains: ["#INT#", "invoiceId", "InvoiceLines"]
     judge:
       - "The response confirms the order is now settled or binding."
-      - "The response tells the customer, in some form, that this purchase has been billed to them and that they can ask about the invoice."
+      - "The response says the purchase has been billed to the customer."
+      - "The response tells the customer that invoice can be seen if they wish."
     judgeNot:
-      - "The response states a specific invoice total, amount or line item."
+      # Judged against everything the customer sees, card included. Naming the invoice is allowed and
+      # required; reading its money out is what this forbids, wherever it would be rendered.
+      - "The response gives the invoice's own total, its tax, or a line on it."

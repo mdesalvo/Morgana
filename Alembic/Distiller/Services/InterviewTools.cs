@@ -2,6 +2,7 @@ using System.Text.Json;
 using Distiller.Interfaces;
 using Distiller.Model;
 using Morgana.Contracts;
+using Morgana.AI;
 
 namespace Distiller.Services;
 
@@ -36,6 +37,9 @@ public class InterviewTools
     /// <summary>Section label carried by an agent's Personality.</summary>
     internal const string PersonalityMarker = "[PERSONALITY]";
 
+    /// <summary>Section marker for the statement a colleague reads before consulting this agent.</summary>
+    internal const string ConsultMeForMarker = "[CONSULT ME FOR]";
+
     /// <summary>Section label carried by an agent's Instructions.</summary>
     internal const string InstructionsMarker = "[INSTRUCTIONS]";
 
@@ -46,17 +50,17 @@ public class InterviewTools
     /// The intent name the framework reserves for the classifier's fallback. No authored agent may
     /// take it.
     /// </summary>
-    private const string ReservedFallbackIntent = "other";
+    private const string ReservedFallbackIntent = Constants.Intents.Other;
 
     /// <summary>
     /// The scope of a parameter Morgana resolves from the session's own context variables.
     /// </summary>
-    private const string ContextScope = "context";
+    private const string ContextScope = Constants.Scopes.Context;
 
     /// <summary>
     /// The scope of a parameter the agent obtains from the user in conversation.
     /// </summary>
-    private const string RequestScope = "request";
+    private const string RequestScope = Constants.Scopes.Request;
 
     /// <summary>The interview these tools write into — see the constructor.</summary>
     private readonly InterviewState interviewState;
@@ -209,6 +213,23 @@ public class InterviewTools
     {
         interviewState.Agent.Target = Marked(TargetMarker, target);
         return Shaped("Target", target, 2, 4);
+    }
+
+    /// <summary>
+    /// Records what a colleague reads before consulting this agent.
+    /// </summary>
+    /// <remarks>
+    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
+    /// <see cref="ConsultMeForMarker"/>. Written by the same pass and from the same scope, because it
+    /// is that scope addressed to a different reader: a colleague deciding whether a question is this
+    /// desk's. So it names a territory and never a list of what the agent can do — a caller handed an
+    /// inventory rules questions out instead of asking them. Short by nature, which is why the shape
+    /// it reports against is tighter than the Target's.
+    /// </remarks>
+    public string SetAgentConsultMeFor(string consultMeFor)
+    {
+        interviewState.Agent.ConsultMeFor = Marked(ConsultMeForMarker, consultMeFor);
+        return Shaped("ConsultMeFor", consultMeFor, 1, 3);
     }
 
     /// <summary>
@@ -539,6 +560,139 @@ public class InterviewTools
     }
 
     /// <summary>
+    /// Returns every agent of the finished domain, whole, with the colleagues already declared.
+    /// </summary>
+    /// <remarks>
+    /// The closing step runs with a fresh session like every other, and unlike every other it is
+    /// about the domain rather than about the agent in hand — there is none. So this is the whole of
+    /// what it knows, and it has to be the whole: an edge is a claim that one agent's question lands
+    /// on another's books, which is only decidable with both agents' Targets, toolkits and
+    /// boundaries in view at once.
+    /// </remarks>
+    public string GetDomainAgents()
+    {
+        List<AgentDraft> agents = [.. (draftStateService.Current?.Agents ?? []).Where(a => !string.IsNullOrWhiteSpace(a.ID))];
+
+        if (agents.Count == 0)
+            return "The domain holds no agent yet: there is nothing that could ask anything of anything.";
+
+        IEnumerable<string> rendered = agents.Select(a =>
+            $"- {a.ID}\n    what it is for: {AgentRows.Plain(a.Target) ?? "(nothing said)"}"
+            + $"\n    what it can reach: {(a.Tools.Count > 0 ? string.Join(", ", a.Tools.Select(t => t.Name ?? "(unnamed)")) : "no tool of its own")}"
+            + $"\n    how it goes about it: {AgentRows.Plain(a.Instructions) ?? "(nothing said)"}"
+            + $"\n    colleagues it may already ask: {(a.Code.Consults.Count > 0 ? string.Join(", ", a.Code.Consults) : "none")}");
+
+        return "The domain as it stands, every agent whole:\n" + string.Join("\n", rendered);
+    }
+
+    /// <summary>
+    /// Returns the colleagues declared this step, none of them in the domain yet.
+    /// </summary>
+    public string GetConsultations()
+    {
+        if (interviewState.Colleagues.Count == 0)
+            return "Nothing declared yet this step. A domain where no agent needs a colleague is an ordinary domain, "
+                   + "and settling the step with none is a legitimate answer.";
+
+        return "Declared so far, waiting on the client's word:\n"
+               + string.Join("\n", interviewState.Colleagues.Select(c =>
+                   $"- {c.Asking} may ask {c.Asked}"
+                   + (c.AskedInstructions is null ? string.Empty : $" (and {c.Asked}'s own instructions were reconciled too)")));
+    }
+
+    /// <summary>
+    /// Declares that one agent may put a question to another, and reconciles the prose that would
+    /// otherwise forbid it.
+    /// </summary>
+    /// <remarks>
+    /// The reconciled Instructions are a parameter and not an afterthought, because the edge without
+    /// them is the characteristic defect this step exists against: an agent offered a colleague as a
+    /// function while its own prose says the subject belongs to another bench and to say so plainly
+    /// reads two contradictory orders, and obeys the imperative one. What the prose must NOT do is
+    /// restate the framework's own rules about consulting — when to ask, how briefly, that the answer
+    /// is data — which are already on the function the agent will see.
+    /// <para>
+    /// Chained consultation is reported rather than refused: the framework denies a colleague its own
+    /// peer functions while it is answering, so an edge whose far end asks a third agent is legal,
+    /// simply narrower than it looks — and the model is told exactly that, in the answer, so it can
+    /// say it to the client instead of promising a reach the domain does not have.
+    /// </para>
+    /// </remarks>
+    public string DeclareConsultation(string asking, string asked, string askingInstructions, string? askedInstructions = null)
+    {
+        string from = (asking ?? string.Empty).Trim();
+        string to = (asked ?? string.Empty).Trim();
+
+        if (from.Length == 0 || to.Length == 0)
+            return "Nothing declared: an edge needs both the agent that asks and the colleague it asks.";
+
+        if (string.Equals(from, to, StringComparison.OrdinalIgnoreCase))
+            return $"Nothing declared: '{from}' cannot consult itself. The startup registry refuses that pairing outright.";
+
+        List<AgentDraft> agents = [.. draftStateService.Current?.Agents ?? []];
+
+        if (!agents.Any(a => string.Equals(a.ID, from, StringComparison.OrdinalIgnoreCase)))
+            return $"Nothing declared: no agent of this domain answers '{from}'.";
+
+        if (!agents.Any(a => string.Equals(a.ID, to, StringComparison.OrdinalIgnoreCase)))
+            return $"Nothing declared: no agent of this domain answers '{to}'.";
+
+        if (string.IsNullOrWhiteSpace(askingInstructions))
+            return $"Nothing declared: '{from}' needs its Instructions rewritten in the same call. An agent handed a "
+                   + "colleague while its own prose still says the subject belongs elsewhere and to stop there is being "
+                   + "given two orders, and the flat one wins.";
+
+        ConsultationDraft? existing = interviewState.Colleagues.FirstOrDefault(c =>
+            string.Equals(c.Asking, from, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(c.Asked, to, StringComparison.OrdinalIgnoreCase));
+
+        ConsultationDraft edge = existing ?? new ConsultationDraft { Asking = from, Asked = to };
+
+        edge.AskingInstructions = Marked(InstructionsMarker, askingInstructions)!;
+        edge.AskedInstructions = string.IsNullOrWhiteSpace(askedInstructions)
+            ? null
+            : Marked(InstructionsMarker, askedInstructions);
+
+        if (existing is null)
+            interviewState.Colleagues.Add(edge);
+
+        // An agent asks with two hands and its colleague answers with none: while it is serving a
+        // consultation, the framework refuses it its own peer functions. So an edge onto an agent
+        // that itself asks somebody is not an error and not a reach either.
+        bool secondHop = interviewState.Colleagues.Any(c =>
+                             string.Equals(c.Asking, to, StringComparison.OrdinalIgnoreCase))
+                         || agents.Any(a => string.Equals(a.ID, to, StringComparison.OrdinalIgnoreCase)
+                                            && a.Code.Consults.Count > 0);
+
+        return (existing is null ? $"'{from}' may now ask '{to}'." : $"The edge from '{from}' to '{to}' was revised.")
+               + $" Its Instructions were rewritten with it{(edge.AskedInstructions is null ? string.Empty : $", and '{to}'s too")}."
+               + (secondHop
+                   ? $" Note that '{to}' consults a colleague of its own: while it is answering '{from}' the framework "
+                     + "withholds its peer functions, so whatever it would have asked for is not part of this answer. Say "
+                     + "that plainly if the client is expecting the far end."
+                   : string.Empty);
+    }
+
+    /// <summary>
+    /// Takes back an edge declared this step.
+    /// </summary>
+    /// <remarks>
+    /// The Instructions that came with it go too. They were written to admit a colleague that is no
+    /// longer there, and leaving them in the domain would be the mirror of the defect the edge
+    /// exists against: prose licensing a question the agent has no function to ask.
+    /// </remarks>
+    public string DropConsultation(string asking, string asked)
+    {
+        int removed = interviewState.Colleagues.RemoveAll(c =>
+            string.Equals(c.Asking, asking?.Trim(), StringComparison.OrdinalIgnoreCase)
+            && string.Equals(c.Asked, asked?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        return removed > 0
+            ? $"Dropped: '{asking}' will not ask '{asked}', and the Instructions declared with it are dropped too."
+            : $"Nothing dropped: no edge from '{asking}' to '{asked}' was declared this step.";
+    }
+
+    /// <summary>
     /// Returns the intents already in the domain.
     /// </summary>
     /// <remarks>
@@ -564,6 +718,15 @@ public class InterviewTools
     }
 
     /// <summary>
+    /// True when some OTHER agent of the draft declares it may consult this one — the half of the
+    /// consultation relation an agent cannot see from its own <c>Consults</c> list.
+    /// </summary>
+    private bool IsConsultedByOthers(AgentDraft agent)
+        => (draftStateService.Current?.Agents ?? []).Any(other =>
+               other.ID != agent.ID &&
+               other.Code.Consults.Contains(agent.ID, StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>
     /// Returns the prompt this agent's model will really read.
     /// </summary>
     public async Task<string> GetComposedPrompt()
@@ -571,7 +734,9 @@ public class InterviewTools
         if (string.IsNullOrWhiteSpace(interviewState.Agent.Target))
             return "Nothing to compose yet: the agent has no target.";
 
-        AgentRecap recap = await recapService.ComposeAsync(interviewState.Agent);
+        AgentRecap recap = await recapService.ComposeAsync(
+            interviewState.Agent,
+            IsConsultedByOthers(interviewState.Agent));
 
         return "This is the whole of what this agent's model will read:\n\n" + recap.SystemPrompt;
     }
@@ -636,6 +801,7 @@ public class InterviewTools
                    InterviewStep.AgentTarget => "how this agent should sound to the people who write in.",
                    InterviewStep.AgentPersonality => "the toolkit — what this agent has to reach for outside the conversation.",
                    InterviewStep.AgentToolkit => "the agent's own instructions and the way it presents what its tools return.",
+                   InterviewStep.DomainColleagues => "nothing — the domain is finished, and they land on it whole, to read, weigh and take away.",
                    _ => "the agent joins the domain, and they can review or export it."
                };
     }

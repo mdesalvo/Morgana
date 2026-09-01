@@ -30,6 +30,29 @@ public enum ContextOperation
 public sealed record ContextAccess(ContextOperation Operation, string VariableName);
 
 /// <summary>
+/// One consultation served during a turn, read from the <c>morgana.consultation</c> span.
+/// </summary>
+/// <remarks>
+/// The only window there is onto the other side of the exchange. The asking agent's own span shows
+/// that a colleague was called; this shows what the colleague did about it — which of its tools it
+/// reached for, and whether it ended the exchange waiting for something back, which is what a
+/// colleague that demanded a value instead of answering looks like from outside.
+/// </remarks>
+/// <param name="Caller">Intent that asked.</param>
+/// <param name="Target">Intent that answered.</param>
+/// <param name="ToolsInvoked">Tools the answering agent called, in order.</param>
+/// <param name="AwaitingReply">Whether the colleague ended its turn awaiting a reply.</param>
+/// <param name="Question">The question as it was put to the colleague, whole.</param>
+/// <param name="Answer">What the colleague answered, whole.</param>
+public sealed record ConsultationObservation(
+    string? Caller,
+    string? Target,
+    IReadOnlyList<string> ToolsInvoked,
+    bool? AwaitingReply,
+    string? Question,
+    string? Answer);
+
+/// <summary>
 /// Everything the harness observed about one turn: what the user said, what the channel received,
 /// and the two structural signals read from inside the process.
 /// </summary>
@@ -45,6 +68,7 @@ public sealed record ContextAccess(ContextOperation Operation, string VariableNa
 /// <param name="GuardViolation">Violation text from the same span when <paramref name="GuardCompliant"/> is false.</param>
 /// <param name="ClassifierIntent">Intent from the <c>morgana.classifier</c> span; null on a follow-up turn, which skips classification entirely.</param>
 /// <param name="ClassifierConfidence">Confidence from the same span, parsed from its string tag.</param>
+/// <param name="Consultations">Consultations served during the turn, in the order they closed; empty on a turn that asked no colleague.</param>
 /// <param name="CumulativeLogLines">
 /// Host log lines since conversation start, not just since this turn began — empty unless the
 /// caller passed a conversation-start mark into <c>TurnObserver.CompleteTurnAsync</c>. What a
@@ -66,8 +90,12 @@ public sealed record TurnResult(
     string? GuardViolation = null,
     string? ClassifierIntent = null,
     double? ClassifierConfidence = null,
+    IReadOnlyList<ConsultationObservation>? Consultations = null,
     IReadOnlyList<string>? CumulativeLogLines = null)
 {
+    /// <summary>Consultations served during the turn, never null.</summary>
+    public IReadOnlyList<ConsultationObservation> Consulted => Consultations ?? [];
+
     /// <summary>Never null even when the caller didn't ask for cumulative tracking — see the parameter's own remarks.</summary>
     public IReadOnlyList<string> Cumulative => CumulativeLogLines ?? [];
 
@@ -93,6 +121,7 @@ public sealed record TurnResult(
             user: {UserMessage}
             {(GuardCompliant is null ? "" : $"guard: compliant={GuardCompliant} | violation={GuardViolation ?? "(none)"}\n            ")}{(ClassifierIntent is null ? "" : $"classifier: intent={ClassifierIntent} | confidence={ClassifierConfidence?.ToString("F2") ?? "(unknown)"}\n            ")}agent: {AgentName ?? "(no agent span)"} | completed={Message.AgentCompleted} | quickReplies={QuickReplies.Count} | richCard={(Message.RichCard is null ? "absent" : "present")}
             tools: {(ToolsInvoked.Count == 0 ? "(none)" : string.Join(", ", ToolsInvoked))}
+            {(Consultations is not { Count: > 0 } ? "" : string.Join("\n            ", Consultations.Select(c => $"consulted {c.Target}: tools={(c.ToolsInvoked.Count == 0 ? "(none)" : string.Join("/", c.ToolsInvoked))} | awaitingReply={c.AwaitingReply}\n              asked: {c.Question}\n              replied: {c.Answer}")) + "\n            ")}
             tokens: {Tokens}
             context: {(ContextAccesses.Count == 0 ? "(none)" : string.Join(", ", ContextAccesses.Select(a => $"{a.Operation}:{a.VariableName}")))}
             text: {Text}

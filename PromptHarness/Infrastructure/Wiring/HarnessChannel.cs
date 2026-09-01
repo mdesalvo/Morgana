@@ -257,6 +257,28 @@ public sealed class HarnessChannel : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Reads the conversation's persisted history over the same REST surface a channel resuming a
+    /// conversation would use.
+    /// </summary>
+    /// <remarks>
+    /// The only place a consultation's absence is observable: the exchange between two agents is
+    /// erased from what the endpoint returns, so a colleague that answered but was never activated
+    /// owns no message here at all. Spans and tool logs cannot show that — they record what happened
+    /// during a turn, never what survived it.
+    /// </remarks>
+    public async Task<IReadOnlyList<MorganaChatMessage>> GetHistoryAsync(string conversationId)
+    {
+        using HttpRequestMessage request = Authorized(HttpMethod.Get, $"/api/morgana/conversation/{conversationId}/history");
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        ConversationHistoryResponse? history = await response.Content.ReadFromJsonAsync<ConversationHistoryResponse>();
+
+        return history?.Messages ?? [];
+    }
+
     /// <summary>Ends a conversation and forgets its queues. Failures are swallowed: teardown is best-effort.</summary>
     public async Task EndConversationAsync(string conversationId)
     {

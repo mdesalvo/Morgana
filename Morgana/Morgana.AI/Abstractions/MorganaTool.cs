@@ -12,6 +12,18 @@ namespace Morgana.AI.Abstractions;
 /// (lazy-evaluated per tool invocation) to access in-flight AgentSession without exposing
 /// it to LLM schema inspection (session never appears in method signatures).
 /// </summary>
+/// <remarks>
+/// What a tool RETURNS is read by the model as the fourth voice in its prompt, after the framework
+/// layer, the domain layer and the tool descriptions — and it is the one voice with no declared
+/// precedence, because it arrives mid-turn from outside the composed prompt. So a return value
+/// states FACTS about the data and the record: what was written, what was not, what this response
+/// does and does not carry. It never instructs behaviour ("tell the user to…", "offer to…", "call X
+/// only after…"): behaviour is settled above, and a tool restating it is a second author of a rule
+/// it does not own — where the two ever drift apart, the model has no way to tell which one binds.
+/// A tool that needs the agent to behave a certain way is asking for a line of domain
+/// <c>Instructions</c>, or for a global policy where it holds for every domain. Free-text in tool
+/// output is also never a grant of capability: see the <c>ToolGrounding</c> policy in morgana.json.
+/// </remarks>
 public class MorganaTool
 {
     /// <summary>Logger for tool-level diagnostics.</summary>
@@ -61,13 +73,15 @@ public class MorganaTool
         if (value != null)
         {
             toolLogger.LogInformation(
-                "{MorganaToolName} ({Name}) HIT variable '{VariableName}' from agent context. Value is: {Value}", nameof(MorganaTool), GetType().Name, variableName, value);
+                Constants.ObservableLogs.ContextHit,
+                Constants.ObservableLogs.ToolName, GetType().Name, Constants.ObservableLogs.Hit, variableName, value);
 
             return Task.FromResult(value);
         }
 
         toolLogger.LogInformation(
-            "{MorganaToolName} ({Name}) MISS variable '{VariableName}' from agent context.", nameof(MorganaTool), GetType().Name, variableName);
+            Constants.ObservableLogs.ContextMiss,
+            Constants.ObservableLogs.ToolName, GetType().Name, Constants.ObservableLogs.Miss, variableName);
 
         return Task.FromResult<object>(
             $"Information {variableName} not available in context: you need to engage SetContextVariable to set it.");
@@ -88,7 +102,8 @@ public class MorganaTool
         await ctx.Provider.SetVariableAsync(ctx.Session, variableName, variableValue);
 
         toolLogger.LogInformation(
-            "{MorganaToolName} ({Name}) SET variable '{VariableName}' into agent context. Value is: {Value}", nameof(MorganaTool), GetType().Name, variableName, variableValue);
+            Constants.ObservableLogs.ContextSet,
+            Constants.ObservableLogs.ToolName, GetType().Name, Constants.ObservableLogs.Set, variableName, variableValue);
 
         return $"Information {variableName} inserted in context with value: {variableValue}";
     }
@@ -110,7 +125,7 @@ public class MorganaTool
     public async Task<object> SetTurnContinuation(bool turnContinuation)
     {
         ToolContext ctx = getToolContext();
-        await ctx.Provider.SetVariableAsync(ctx.Session, "turn_continuation", turnContinuation);
+        await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.TurnContinuation, turnContinuation);
 
         toolLogger.LogInformation("LLM set turn continuation to {TurnContinuation} via SetTurnContinuation tool", turnContinuation);
 
@@ -132,12 +147,6 @@ public class MorganaTool
     /// plus the optional <c>termination</c> flag.
     /// </param>
     /// <returns>Confirmation message for the LLM.</returns>
-    /// <remarks>
-    /// <para>The parameter is a strongly-typed array (not a stringified JSON blob): the LLM emits the
-    /// buttons as a native JSON array and <c>AIFunctionFactory</c> binds them directly to
-    /// <see cref="QuickReply"/> instances. The values are re-serialized to JSON before being stored
-    /// in the ephemeral <c>quick_replies</c> context variable, where downstream readers expect a string.</para>
-    /// </remarks>
     public async Task<object> SetQuickReplies(List<QuickReply> quickReplies)
     {
         // Validate input — empty list is a no-op
@@ -149,7 +158,7 @@ public class MorganaTool
 
         // Store serialized quick replies in ephemeral context; agents retrieve them via ExecuteAgentAsync before sending response
         ToolContext ctx = getToolContext();
-        await ctx.Provider.SetVariableAsync(ctx.Session, "quick_replies",
+        await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.QuickReplies,
             JsonSerializer.Serialize(quickReplies, Records.DefaultJsonSerializerOptions));
 
         toolLogger.LogInformation("LLM set {Count} quick reply buttons via SetQuickReplies tool", quickReplies.Count);
@@ -208,7 +217,7 @@ public class MorganaTool
 
             // Store original JSON string (not the parsed object) in ephemeral context; agents retrieve it via ExecuteAgentAsync
             ToolContext ctx = getToolContext();
-            await ctx.Provider.SetVariableAsync(ctx.Session, "rich_card", richCard);
+            await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.RichCard, richCard);
 
             toolLogger.LogInformation(
                 "LLM set rich card '{Title}' with {TotalComponents} components (depth: {Depth}) via SetRichCard tool",

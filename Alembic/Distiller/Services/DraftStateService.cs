@@ -33,11 +33,6 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
     private readonly Timer timer;
 
     /// <summary>
-    /// The Draft this circuit is working on.
-    /// </summary>
-    private DomainDraft? current;
-
-    /// <summary>
     /// The most recent snapshot, kept only so Save my work is never left with nothing to hand over.
     /// </summary>
     private byte[]? latest;
@@ -61,7 +56,7 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
     }
 
     /// <inheritdoc />
-    public DomainDraft? Current => current;
+    public DomainDraft? Current { get; private set; }
 
     /// <inheritdoc />
     public event Action? Changed;
@@ -69,7 +64,7 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
     /// <inheritdoc />
     public void Set(DomainDraft? draft)
     {
-        current = draft;
+        Current = draft;
         Changed?.Invoke();
     }
 
@@ -85,7 +80,7 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
     {
         // Read into a local first: the timer's thread and the circuit's own both arrive here, and a
         // Draft replaced between the check and the serialization would throw where nobody is looking.
-        if (current is not { } draft)
+        if (Current is not { } draft)
             return null;
 
         try

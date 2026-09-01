@@ -130,7 +130,7 @@ public class RouterActor : MorganaActor
         if (selectedAgent == null)
         {
             // No [HandlesIntent] agent is registered for this intent
-            Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync("Classifier");
+            Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Classifier);
             string unrecognizedIntentError = classifierPrompt.GetAdditionalProperty<string>("UnrecognizedIntentError");
             originalSender.Tell(new Records.AgentResponse(unrecognizedIntentError, true));
             return;

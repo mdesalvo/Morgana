@@ -9,6 +9,7 @@ using static Morgana.AI.Records;
 namespace Examples.Agents;
 
 [HandlesIntent("contract")]
+[ConsultsAgent("billing")]
 [RequiresLLMTier(LLMTier.Efficiency)]
 public class ContractAgent : MorganaAgent
 {

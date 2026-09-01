@@ -200,11 +200,18 @@ public sealed class ScenarioRunner
                 // Accumulated before the judge runs, so the measurement stays Morgana's cost only.
                 tokens += turn.Tokens;
 
+                // Fetched only for the turns that ask about it: every other structural signal is
+                // already in hand when the turn ends, while this one is a round trip to the host.
+                IReadOnlyList<MorganaChatMessage>? history =
+                    turnDefinition.Expect is { } spec && (spec.HistoryExcludesAgents is { Count: > 0 } || spec.HistoryUserMessages is not null)
+                        ? await channel.GetHistoryAsync(conversationId)
+                        : null;
+
                 // The structural layer runs first and is deterministic — no Expect block at all
                 // means nothing is checked and the turn cannot fail structurally.
                 IReadOnlyList<string> structural = turnDefinition.Expect is null
                     ? []
-                    : ExpectationChecker.Check(turnDefinition.Expect, turn);
+                    : ExpectationChecker.Check(turnDefinition.Expect, turn, history);
 
                 failures.AddRange(structural.Select(failure => $"turn {transcript.Count}: {failure}"));
 

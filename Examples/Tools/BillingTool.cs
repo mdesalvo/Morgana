@@ -167,8 +167,8 @@ public class BillingTool : MorganaTool
     }
 
     private const string NothingUnderThisCode =
-        "The accounts book holds nothing under this customer code. It may be a code from another bench of the "
-        + "nursery, or simply mistyped: offer to look again under a different one, and never invent one yourself.";
+        "The accounts book holds no record under this customer code. Nothing on these pages identifies the right "
+        + "one: the code names no account here, or it is mistyped.";
 
     // =========================================================================
     // TOOL METHODS

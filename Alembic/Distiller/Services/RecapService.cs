@@ -37,11 +37,13 @@ public class RecapService : IRecapService
     /// same split so what the client is shown here matches the two moments it actually happens.
     /// </remarks>
     /// <param name="agent">The agent to recap, projected into the framework's own <see cref="Records.Prompt"/> shape.</param>
+    /// <param name="consultedByOthers">True when some other agent of the domain declares it may consult this one.</param>
     /// <returns>The system prompt this agent's model will read, plus one <see cref="ToolRecap"/> per declared tool.</returns>
-    public async Task<AgentRecap> ComposeAsync(AgentDraft agent)
+    public async Task<AgentRecap> ComposeAsync(AgentDraft agent, bool consultedByOthers = false)
     {
         string systemPrompt = await promptComposerService.ComposeAgentInstructionsAsync(
-            DraftProjection.ToPrompt(agent));
+            DraftProjection.ToPrompt(agent),
+            agent.Code.Consults.Count > 0 || consultedByOthers);
 
         List<ToolRecap> tools = [];
 

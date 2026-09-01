@@ -7,8 +7,8 @@ namespace Morgana.AI.Services;
 
 /// <summary>
 /// Discovers agents via [HandlesIntent] attribute with bidirectional validation.
-/// Scans assemblies for MorganaAgent classes; validates: intents in config have agents, agents in code have config.
-/// Performs LLM tier validation; throws on any mismatch.
+/// Scans assemblies for MorganaAgent classes; validates: intents in config have agents, agents in code have config,
+/// and every declared peer consultation names an existing colleague. Performs LLM tier validation; throws on any mismatch.
 /// </summary>
 public class HandlesIntentAgentRegistryService : IAgentRegistryService
 {
@@ -50,17 +50,19 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
-    /// Scans assemblies for MorganaAgent classes, validates bidirectional intent↔agent mapping.
-    /// Collects all validation errors before throwing; catches ReflectionTypeLoadException gracefully.
+    /// Scans every loaded assembly for <see cref="MorganaAgent"/> subclasses declaring an intent,
+    /// and returns the intent-to-type map, without validating it.
     /// </summary>
-    /// <returns>Dictionary mapping intent names to agent types</returns>
-    /// <exception cref="InvalidOperationException">If validation fails (missing agents or configs)</exception>
-    private Dictionary<string, Type> InitializeRegistry()
+    /// <remarks>
+    /// Static and validation-free because the host needs the same map before the DI container is
+    /// built — to publish one A2A endpoint per agent — while this service needs it after, with the
+    /// startup checks applied. One implementation for both, rather than two that can drift.
+    /// </remarks>
+    /// <returns>Intent to agent type, case-insensitive; agents without <c>[HandlesIntent]</c> are skipped.</returns>
+    public static Dictionary<string, Type> DiscoverAgents()
     {
         Dictionary<string, Type> registry = new(StringComparer.OrdinalIgnoreCase);
 
-        // Discovery of available agents with their declared intent
-        // Scan ALL loaded assemblies, not just executing assembly
         IEnumerable<Type> morganaAgentTypes = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic)
             .SelectMany(a =>
@@ -87,16 +89,29 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 registry[handlesIntentAttribute.Intent] = morganaAgentType;
         }
 
+        return registry;
+    }
+
+    /// <summary>
+    /// Discovers the agents, then validates the bidirectional intent↔agent mapping.
+    /// Collects all validation errors before throwing, so a misconfigured deployment reports them at once.
+    /// </summary>
+    /// <returns>Dictionary mapping intent names to agent types</returns>
+    /// <exception cref="InvalidOperationException">If validation fails (missing agents or configs)</exception>
+    private Dictionary<string, Type> InitializeRegistry()
+    {
+        Dictionary<string, Type> registry = DiscoverAgents();
+
         #region Validation
         // Bidirectional validation of Morgana agents and intents
         // Load intents from domain-specific configuration
         List<Records.IntentDefinition> allIntents = agentConfigService.GetIntentsAsync().GetAwaiter().GetResult();
 
-        // Extract intent names, excluding "other" (special fallback intent with no dedicated agent)
+        // Extract intent names, excluding Intents.Other (the fallback intent, by design agentless)
         HashSet<string> classifierIntents =
         [
             .. allIntents
-                .Where(intent => !string.Equals(intent.Name, "other", StringComparison.OrdinalIgnoreCase))
+                .Where(intent => !string.Equals(intent.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
                 .Select(intent => intent.Name)
         ];
 
@@ -132,6 +147,26 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         catch (InvalidOperationException ex)
         {
             validationErrors.Add(ex.Message);
+        }
+
+        // Check 4: every [ConsultsAgent] declaration must name an agent that exists, never the
+        // declaring agent itself, and never the same colleague twice. A consultation is resolved at
+        // agent-creation time, long after startup, so each of these would otherwise surface on the
+        // first conversation: a typo as a colleague that silently never appears, a duplicate as two
+        // functions of the same name in the tool list, which the provider rejects outright.
+        foreach ((string declaredIntent, Type agentType) in registry)
+        {
+            HashSet<string> declaredColleagues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (ConsultsAgentAttribute consultsAgent in agentType.GetCustomAttributes<ConsultsAgentAttribute>())
+            {
+                if (string.Equals(consultsAgent.Intent, declaredIntent, StringComparison.OrdinalIgnoreCase))
+                    validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of itself ('{declaredIntent}')");
+                else if (!registry.ContainsKey(consultsAgent.Intent))
+                    validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of '{consultsAgent.Intent}', which no Morgana agent handles");
+                else if (!declaredColleagues.Add(consultsAgent.Intent))
+                    validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of '{consultsAgent.Intent}' more than once");
+            }
         }
 
         if (validationErrors.Count > 0)

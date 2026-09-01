@@ -111,6 +111,9 @@ public static class MorganaTelemetry
     /// <summary>Activity wrapping a MorganaAgent execution (includes streaming).</summary>
     public const string AgentActivity = "morgana.agent";
 
+    /// <summary>Activity wrapping one agent answering a colleague, nested under the asking agent's own activity.</summary>
+    public const string ConsultationActivity = "morgana.consultation";
+
     // ==============================================================================
     // ATTRIBUTE NAMES — CONVERSATION
     // ==============================================================================
@@ -119,7 +122,7 @@ public static class MorganaTelemetry
     public const string ConversationId = "conversation.id";
 
     /// <summary>Role that consumed dust on a charge: "Morgana" (framework actors) or
-    /// "Morgana (Intent)" (domain agents). Tag on <see cref="DustConsumed"/>.</summary>
+    /// "Morgana (Intent/Tier)" (domain agents). Tag on <see cref="DustConsumed"/>.</summary>
     public const string DustLlmRole = "dust.llm_role";
 
     // ==============================================================================
@@ -192,6 +195,31 @@ public static class MorganaTelemetry
 
     /// <summary>Time in milliseconds from agent start to first streaming chunk (TTFT).</summary>
     public const string AgentTtftMs = "agent.ttft_ms";
+
+    // ==============================================================================
+    // ATTRIBUTE NAMES — PEER CONSULTATION
+    // ==============================================================================
+
+    /// <summary>Intent of the agent that asked. Without it a consultation span names no requester.</summary>
+    public const string ConsultationCaller = "consultation.caller";
+
+    /// <summary>Intent of the agent that answered.</summary>
+    public const string ConsultationTarget = "consultation.target";
+
+    /// <summary>Whether the answering agent declared the exchange unfinished — the signal that an exchange is failing to converge.</summary>
+    public const string ConsultationAwaitingReply = "consultation.awaiting_reply";
+
+    /// <summary>
+    /// The question a colleague was asked, whole, alongside <see cref="ConsultationAnswer"/>. The
+    /// two are the only record of an exchange the conversation deliberately keeps no trace of, so
+    /// they are the one place a preview would defeat the purpose: a truncated question and a
+    /// truncated answer leave a consultation that went wrong showing a caller, a target, a tool
+    /// list and the opening words of each — never the sentence that actually caused it.
+    /// </summary>
+    public const string ConsultationQuestion = "consultation.question";
+
+    /// <summary>What the colleague answered, whole, for the same reason.</summary>
+    public const string ConsultationAnswer = "consultation.answer";
 
     // ==============================================================================
     // EVENT NAMES

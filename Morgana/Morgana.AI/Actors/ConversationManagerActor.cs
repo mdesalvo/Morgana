@@ -145,7 +145,7 @@ public class ConversationManagerActor : MorganaActor
             // Create the FSM orchestrator of the turn pipeline, named after this conversation
             // (/user/supervisor-{conversationId}), reusing it if the actor path already exists.
             supervisor = await Context.System.GetOrCreateActorAsync<ConversationSupervisorActor>(
-                "supervisor", msg.ConversationId);
+                Constants.Actors.Supervisor, msg.ConversationId);
 
             // Watch the supervisor so its death arrives here as a Terminated message
             // (handled above) instead of taking the manager down with a DeathPactException.
@@ -327,7 +327,7 @@ public class ConversationManagerActor : MorganaActor
         {
             // Recreate the FSM orchestrator under the same conversation-scoped path.
             supervisor = await Context.System.GetOrCreateActorAsync<ConversationSupervisorActor>(
-                "supervisor", msg.ConversationId);
+                Constants.Actors.Supervisor, msg.ConversationId);
 
             // Watch the new instance too, so a further death is again seen as Terminated
             // instead of a DeathPactException.
@@ -412,7 +412,7 @@ public class ConversationManagerActor : MorganaActor
                 Text = response.Response,
                 MessageType = "assistant",
                 QuickReplies = response.QuickReplies,
-                AgentName = response.AgentName ?? "Morgana",
+                AgentName = response.AgentName ?? Constants.Morgana,
                 AgentCompleted = response.AgentCompleted,
                 Timestamp = response.OriginalTimestamp ?? DateTime.UtcNow,
                 RichCard = response.RichCard,
@@ -459,7 +459,7 @@ public class ConversationManagerActor : MorganaActor
                     Text = "An error occurred while sending the response.",
                     MessageType = "assistant",
                     ErrorReason = $"delivery_error: {ex.Message}",
-                    AgentName = "Morgana",
+                    AgentName = Constants.Morgana,
                     AgentCompleted = false
                 });
             }
@@ -508,7 +508,7 @@ public class ConversationManagerActor : MorganaActor
                 Text = FormatDustMessage(template, remaining),
                 MessageType = "system_warning",
                 ErrorReason = send90 ? "dust_budget_low_90" : "dust_budget_low_70",
-                AgentName = "Morgana",
+                AgentName = Constants.Morgana,
                 AgentCompleted = false,
                 ConversationMetadata = new ConversationMetadata(remaining)
             });
@@ -543,7 +543,7 @@ public class ConversationManagerActor : MorganaActor
                 Text = dustLimitingOptions.ErrorMessage,
                 MessageType = "error",
                 ErrorReason = "dust_budget_exhausted",
-                AgentName = "Morgana",
+                AgentName = Constants.Morgana,
                 AgentCompleted = false,
                 ConversationMetadata = new ConversationMetadata(0.0)
             });

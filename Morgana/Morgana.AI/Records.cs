@@ -296,18 +296,6 @@ public static class Records
     }
 
     /// <summary>
-    /// Sentinel placeholder values used throughout appsettings.json for settings that MUST be
-    /// overridden via User Secrets or environment variables before the app is usable (see
-    /// CLAUDE.md "Conventions": <c>_SECURE_OVERRIDE_</c> for secrets, <c>_FUNCTIONAL_OVERRIDE_</c>
-    /// for non-secret required values). Lives here, next to <see cref="TierDefinition"/>, rather
-    /// than inside <c>MorganaLLM</c>, because recognizing an unfilled placeholder is a config
-    /// convention — not LLM-specific behavior — that any consumer of appsettings.json could
-    /// reasonably need to check, not just the LLM provider constructors that happen to be the
-    /// only ones checking it today.
-    /// </summary>
-    internal static readonly string[] OverridePlaceholders = ["_SECURE_OVERRIDE_", "_FUNCTIONAL_OVERRIDE_"];
-
-    /// <summary>
     /// Per-conversation lifetime dust budget (no sliding window, no reset). Orthogonal to RateLimitOptions.
     /// Message templates are English defaults; deployments override in Morgana:DustLimiting with own personality.
     /// Percent placeholder: fuel-gauge semantics (remaining as 0–100 integer, not dust units).
@@ -384,11 +372,14 @@ public static class Records
     /// <param name="CallerId">The caller's unique identifier (from the <c>sub</c> claim), null if not authenticated</param>
     /// <param name="DisplayName">The caller's display name (from the <c>name</c> claim), null if not authenticated</param>
     /// <param name="Error">Description of why authentication failed, null if authenticated</param>
+    /// <param name="Issuer">The validated <c>iss</c>, set only on success. Names which door the
+    /// credential was cut for, so a gate can admit some issuers and not others.</param>
     public record AuthenticationResult(
         bool IsAuthenticated,
         string? CallerId = null,
         string? DisplayName = null,
-        string? Error = null);
+        string? Error = null,
+        string? Issuer = null);
 
     // ==========================================================================
     // USER MESSAGE HANDLING
@@ -462,7 +453,8 @@ public static class Records
         [property: JsonPropertyName("intents")] List<IntentScore> Intents);
 
     /// <summary>One candidate intent with its confidence score, as scored by the classifier LLM.</summary>
-    /// <param name="Intent">Candidate intent name (e.g., "billing", "contract", "other").</param>
+    /// <param name="Intent">Candidate intent name (e.g., "billing", "contract", or
+    /// <see cref="Constants.Intents.Other"/>).</param>
     /// <param name="Confidence">Confidence 0.0-1.0, this intent's own match quality — not a rank.</param>
     public record IntentScore(
         [property: JsonPropertyName("intent")] string Intent,
@@ -529,6 +521,39 @@ public static class Records
     /// </summary>
     public record AgentStreamChunk(
         string Text);
+
+    // ==========================================================================
+    // PEER CONSULTATION MODELS
+    // ==========================================================================
+
+    /// <summary>
+    /// Question one agent puts to a colleague of the same conversation, sent to the colleague's
+    /// actor and answered with a <see cref="PeerConsultationResponse"/>.
+    /// </summary>
+    /// <param name="ConversationId">Conversation both agents belong to; scopes session and shared context.</param>
+    /// <param name="CallerIntent">Intent of the asking agent, or <c>null</c> when the A2A caller is
+    /// not an agent of this installation and named none.</param>
+    /// <param name="Question">The colleague's question, already carrying the declaration spliced in
+    /// front of it, since the answering agent's prompt says nothing about serving a colleague.</param>
+    /// <param name="TurnContext">OTel context of the user turn that triggered the consultation.</param>
+    public record PeerConsultation(
+        string ConversationId,
+        string? CallerIntent,
+        string Question,
+        ActivityContext TurnContext = default);
+
+    /// <summary>
+    /// A colleague's answer, both as the actor reply and — serialized — as the tool result the
+    /// asking agent's model reads, which is why every member carries an explicit JSON name.
+    /// </summary>
+    /// <param name="ColleagueAwaitsYourReply">True when the colleague is waiting, i.e. the exchange is unfinished.</param>
+    /// <param name="Options">Options offered, as data to choose from — never buttons to render.</param>
+    /// <param name="Card">Structured data presented, as data to read — never a card to render.</param>
+    public record PeerConsultationResponse(
+        [property: JsonPropertyName("answer")] string Answer,
+        [property: JsonPropertyName("colleagueAwaitsYourReply")] bool ColleagueAwaitsYourReply,
+        [property: JsonPropertyName("options")] List<QuickReply>? Options = null,
+        [property: JsonPropertyName("card")] RichCard? Card = null);
 
     /// <summary>
     /// LLM-generated presentation response from ConversationSupervisorActor.
@@ -685,7 +710,7 @@ public static class Records
         }
 
         /// <summary>
-        /// Returns intents for presentation quick replies, excluding "other" fallback and intents
+        /// Returns intents for presentation quick replies, excluding <see cref="Constants.Intents.Other"/> and intents
         /// without labels. Filters per UI displayability rules (non-user-selectable excluded).
         /// </summary>
         public List<IntentDefinition> GetDisplayableIntents()
@@ -693,7 +718,7 @@ public static class Records
             return
             [
                 .. Intents
-                    .Where(i => !string.Equals(i.Name, "other", StringComparison.OrdinalIgnoreCase)
+                    .Where(i => !string.Equals(i.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase)
                                 && !string.IsNullOrEmpty(i.Label))
             ];
         }
@@ -725,6 +750,7 @@ public static class Records
     /// <param name="Language">BCP 47 language code (e.g., "en-US", "it-IT")</param>
     /// <param name="Version">Prompt version string for tracking iteration history and regression detection</param>
     /// <param name="AdditionalProperties">List of structured properties: Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc</param>
+    /// <param name="ConsultMeFor">Optional: what falls to this agent, addressed to a colleague who might consult it</param>
     public record Prompt(
         string ID,
         string Type,
@@ -735,7 +761,8 @@ public static class Records
         string? Personality,
         string Language,
         string Version,
-        List<Dictionary<string, object>> AdditionalProperties)
+        List<Dictionary<string, object>> AdditionalProperties,
+        string? ConsultMeFor = null)
     {
         /// <summary>
         /// Gets additional property value (Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc).
@@ -794,19 +821,6 @@ public static class Records
         public const string InjectionType = "Injection";
 
         /// <summary>
-        /// Injection template names: ToolDescriptionContextGuidance, HeldContextDeclaration.
-        /// Contract between morgana.json and code. Resolved by Name — must match configuration exactly.
-        /// </summary>
-        public static class Templates
-        {
-            /// <summary>Appended to the description of a tool declaring context-scoped parameters.</summary>
-            public const string ToolDescriptionContext = "ToolDescriptionContextGuidance";
-
-            /// <summary>Injected per turn, naming the context variables the session currently holds.</summary>
-            public const string HeldContextDeclaration = "HeldContextDeclaration";
-        }
-
-        /// <summary>
         /// True when this entry is an injection template, spliced into tool/parameter descriptions
         /// instead of being rendered among the global policies.
         /// </summary>
@@ -814,7 +828,9 @@ public static class Records
             => string.Equals(Type, InjectionType, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Resolves template text by name from policies; returns empty string if not found (signals splice sites to skip).
+        /// Resolves an injection template's text by name (see <see cref="Constants.Injections"/>);
+        /// returns an empty string when the prompt layer declares none, which every splice site
+        /// reads as "inject nothing".
         /// </summary>
         public static string ResolveTemplate(IEnumerable<GlobalPolicy> policies, string name)
             => policies.FirstOrDefault(policy =>
@@ -826,7 +842,7 @@ public static class Records
     /// Used to provide consistent, user-friendly error messages across the system.
     /// </summary>
     /// <param name="Name">Error identifier (e.g., "GenericError", "LLMServiceError")</param>
-    /// <param name="Content">Error message template (may contain placeholders like ((llm_error)))</param>
+    /// <param name="Content">Error message template (may contain placeholders</param>
     public record ErrorAnswer(
         string Name,
         string Content);

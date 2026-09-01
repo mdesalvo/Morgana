@@ -33,17 +33,22 @@ public static class AgentRows
         List<Row> rows =
         [
             new Row("name", interviewState.Intent.Name, interviewState.Changed.Contains("intentName")),
-            new Row("description", interviewState.Intent.Description, interviewState.Changed.Contains("intentDescription")),
+            new Row("description", interviewState.Intent.Description,
+                interviewState.Changed.Contains("intentDescription")),
             new Row("button", Button(interviewState.Intent),
-                interviewState.Changed.Contains("intentLabel") || interviewState.Changed.Contains("intentDefaultValue")),
+                interviewState.Changed.Contains("intentLabel") ||
+                interviewState.Changed.Contains("intentDefaultValue")),
             new Row("Target", Plain(interviewState.Agent.Target), interviewState.Changed.Contains("agentTarget")),
-            new Row("Personality", Plain(interviewState.Agent.Personality), interviewState.Changed.Contains("agentPersonality"))
+            new Row("Consult me for", Plain(interviewState.Agent.ConsultMeFor),
+                interviewState.Changed.Contains("agentConsultMeFor")),
+            new Row("Personality", Plain(interviewState.Agent.Personality),
+                interviewState.Changed.Contains("agentPersonality")),
+            new Row("Toolkit", Toolkit(interviewState.Agent.Tools), interviewState.Changed.Contains("tools")),
+            new Row("Instructions", Plain(interviewState.Agent.Instructions),
+                interviewState.Changed.Contains("agentInstructions")),
+            new Row("Formatting", Plain(interviewState.Agent.Formatting),
+                interviewState.Changed.Contains("agentFormatting"))
         ];
-
-        rows.Add(new Row("Toolkit", Toolkit(interviewState.Agent.Tools), interviewState.Changed.Contains("tools")));
-
-        rows.Add(new Row("Instructions", Plain(interviewState.Agent.Instructions), interviewState.Changed.Contains("agentInstructions")));
-        rows.Add(new Row("Formatting", Plain(interviewState.Agent.Formatting), interviewState.Changed.Contains("agentFormatting")));
 
         return rows;
     }

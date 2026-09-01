@@ -78,32 +78,143 @@
             <details class="recap-section">
                 <summary>Coherence</summary>
             <p class="muted">
-                What only reading every agent at once reveals: overlaps, contested ground, values
-                that disagree between agents.
+                What only reading every agent at once reveals. Ask it for what you actually want to
+                know: each class below is a separate question about your domain, and the pass is
+                composed of the ones you tick and nothing else.
             </p>
 
             @*
-                Running the pass itself is optional and cheap to try; it is "Apply" that writes directly
-                into the domain the interview built, possibly across more than one agent, and the whole
-                loop is iterative with no guarantee it ends on its own...
+                Ticked one at a time rather than run whole, and the reason is not the token bill: a
+                report answering six questions when the client asked one is a table nobody finishes,
+                with the class they actually came about ranked beneath five they did not. So the
+                choice is theirs, nothing is ticked for them, and the pass cannot run until they
+                have said what they are looking for.
+
+                Each class is then its own accordion. The checkbox picks whether to ask it; once the
+                pass has run, the row opens onto that class's findings and nothing else. A run opens
+                the classes that came back with something and leaves the rest shut — a flat list of
+                every class's findings at once was the wall this exists to avoid.
             *@
-            <div class="power-notice">
-                <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M13 2 5 14h6l-1 8 9-13h-6z" />
-                </svg>
-                <div>
-                    <strong>100% AI-driven, applying its suggestions will modify what the interview built.</strong>
-                    Running it is optional &mdash; good practice, to see what it finds. Applying is
-                    where it acts: prose or tools, sometimes more than one agent, iterative, and it
-                    can cost more than one round.
-                </div>
+            <div class="aspects">
+                @foreach ((string id, string label, string summary, bool real) in AspectRows())
+                {
+                    List<(CoherenceFinding Finding, int Index)> group = FindingsFor(id).ToList();
+                    bool ranThis = coherence is { Error: null } && (ran.Contains(id) || group.Count > 0);
+                    bool open = expanded.Contains(id);
+
+                    <div class="aspect-group">
+                        <div class="aspect-row">
+                            @if (real)
+                            {
+                                <label class="switch aspect">
+                                    <input type="checkbox" checked="@asked.Contains(id)" @onchange="e => ToggleAspect(id, e)" />
+                                    <span>
+                                        @label
+                                        <span class="field-note">@summary</span>
+                                    </span>
+                                </label>
+                            }
+                            else
+                            {
+                                <span class="switch aspect">
+                                    <span>
+                                        @label
+                                        <span class="field-note">@summary</span>
+                                    </span>
+                                </span>
+                            }
+
+                            @if (ranThis && group.Count > 0)
+                            {
+                                <button type="button" class="aspect-toggle @(open ? "open" : null)"
+                                        @onclick="() => ToggleExpanded(id)"
+                                        aria-expanded="@(open ? "true" : "false")">
+                                    <span class="aspect-count">@group.Count</span>
+                                    @(group.Count == 1 ? "finding" : "findings")
+                                    <span class="chev" aria-hidden="true">&rsaquo;</span>
+                                </button>
+                            }
+                            else if (ranThis)
+                            {
+                                <span class="aspect-clear">&check; clear</span>
+                            }
+                        </div>
+
+                        @if (ranThis && open && group.Count > 0)
+                        {
+                            @* One card per finding: what is wrong, what it costs and the fix each
+                               under its own label, and "Apply" inside the fix box it acts on. No
+                               bulk apply — the notice above asks for care one at a time, more so
+                               once a fix can touch more than one agent. *@
+                            <div class="aspect-body">
+                                @foreach ((CoherenceFinding finding, int index) in group)
+                                {
+                                    bool solved = Solved(index);
+
+                                    <article class="finding @(solved ? "finding-solved" : null)">
+                                        <header class="finding-head">
+                                            <code class="finding-where">@finding.Where</code>
+                                            @if (solved)
+                                            {
+                                                <span class="badge-solved">&check; Solved</span>
+                                            }
+                                        </header>
+
+                                        @if (RelatedFix(finding) is { } related)
+                                        {
+                                            @* Shares an agent with something just fixed: at a glance
+                                               this looks like the same problem back, and it is not —
+                                               it is what the fix touched, from another angle. *@
+                                            <p class="consequence-of">
+                                                &darr; surfaced by the &ldquo;@AspectLabel(related.Finding.Kind)&rdquo; fix on <code>@related.Finding.Where</code>
+                                            </p>
+                                        }
+
+                                        <p class="finding-label">What is wrong</p>
+                                        <p class="finding-text">@finding.What</p>
+
+                                        <p class="finding-label">What it costs at runtime</p>
+                                        <p class="finding-text">@finding.Why</p>
+
+                                        <div class="finding-fix">
+                                            <div class="finding-fix-body">
+                                                <p class="finding-label">Suggested fix</p>
+                                                <p class="finding-text">@finding.Fix</p>
+                                                @if (applyResults.TryGetValue(index, out CoherenceApplyResult? result))
+                                                {
+                                                    <p class="finding-outcome @(result.Applied ? null : "finding-outcome-failed")">@result.Summary</p>
+                                                }
+                                            </div>
+                                            @if (!solved)
+                                            {
+                                                <div class="finding-fix-act">
+                                                    @if (applyingIndex == index)
+                                                    {
+                                                        @* Not a button: a control that cannot be pressed
+                                                           should not look pressable. *@
+                                                        <span class="applying">Applying&hellip;</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="agent-pick" @onclick="() => ApplyAsync(index, finding)" disabled="@applyingIndex.HasValue">
+                                                            Apply suggestion
+                                                        </button>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
             </div>
 
             @if (coherence is null)
             {
-                <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || draft.Agents.Count < 2)">
-                    @(isReviewing ? "Reading the domain…" : "Run the coherence pass")
+                <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || draft.Agents.Count < 2 || asked.Count == 0)">
+                    @(isReviewing ? "Reading the domain…" : Asking)
                 </button>
 
                 @if (draft.Agents.Count < 2)
@@ -112,91 +223,32 @@
                         One agent, so there is nothing to relate: this pass needs two.
                     </p>
                 }
+                else if (asked.Count == 0)
+                {
+                    <p class="muted">
+                        Nothing ticked yet, so there is no question to ask. Pick what you want looked at.
+                    </p>
+                }
             }
             else if (coherence.Error is not null)
             {
                 <p class="severity-warning">@coherence.Error</p>
                 <button class="agent-pick" @onclick="ReviewAsync" disabled="@isReviewing">Try again</button>
             }
-            else if (coherence.Findings.Count == 0)
-            {
-                @* No "Run it again" here: nothing in the domain can have changed since this same
-                   pass just read it clean, so a re-run would face the exact same domain and spend
-                   another Performance call to say the same thing again. *@
-                <p class="all-clear">&check; Nothing to report. No overlap, no contested capability, no value that disagrees with itself.</p>
-            }
             else
             {
-                @* No bulk apply: the notice above says this is powerful and asks for care applying
-                   one at a time, and a button that fires every suggestion unread is the opposite of
-                   that — especially once a fix can touch more than one agent on its own. *@
-                <table>
-                    <thead>
-                        <tr><th>Kind</th><th>Where</th><th>What, and what it costs</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                        @for (int i = 0; i < coherence.Findings.Count; i++)
-                        {
-                            CoherenceFinding finding = coherence.Findings[i];
-                            int index = i;
-                            <tr>
-                                <td class="severity-warning">@finding.Kind</td>
-                                <td><code>@finding.Where</code></td>
-                                <td>
-                                    @if (RelatedFix(finding) is { } related)
-                                    {
-                                        @* Shares an agent with something just fixed: read at a glance this
-                                           looks like the same problem back, and it is not — it is what the
-                                           fix touched, seen from a different angle. Say so before the client
-                                           has to work that out from the Kind alone. *@
-                                        <div class="consequence-of">
-                                            &darr; surfaced by the @related.Finding.Kind fix on <code>@related.Finding.Where</code>
-                                        </div>
-                                    }
-                                    @finding.What
-                                    <div class="because">@finding.Why</div>
-                                    <div class="because"><strong>Proposed:</strong> @finding.Fix</div>
-                                    @if (applyResults.TryGetValue(index, out CoherenceApplyResult? result))
-                                    {
-                                        <div class="because @(result.Applied ? "" : "severity-warning")">@result.Summary</div>
-                                    }
-                                </td>
-                                <td>
-                                    @if (applyResults.TryGetValue(index, out CoherenceApplyResult? applied) && applied.Applied)
-                                    {
-                                        <span class="badge-solved">&check; Solved</span>
-                                    }
-                                    else if (applyingIndex == index)
-                                    {
-                                        @* Not a button: a control the client cannot press is a control that
-                                           should not look pressable, and a disabled button with the same
-                                           chrome as an active one still invites the click it will refuse. *@
-                                        <span class="applying">Applying&hellip;</span>
-                                    }
-                                    else
-                                    {
-                                        <button class="agent-pick" @onclick="() => ApplyAsync(index, finding)" disabled="@applyingIndex.HasValue">
-                                            Apply suggestion
-                                        </button>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-
                 @* Only once something has actually changed: re-running against a domain nobody
                    touched since the last pass would hand the model the exact same cards and spend
-                   a call to hear the exact same findings back. *@
-                @if (AnyApplied)
+                   a call to hear the exact same findings back. A newly ticked class is a different
+                   question and does bring the button back. *@
+                @if (AnyApplied || AskedSomethingElse)
                 {
                     @if (coherenceRuns >= ChaseWarningThreshold)
                     {
-                        @* Nothing here stops the client — it advises, never blocks, same as every
-                           finding it reports — but a fix's own ripple can surface a fresh finding
-                           every time, and nothing about this loop guarantees it ever reaches zero.
-                           Past a few rounds the honest thing is to say so plainly, not to keep
-                           lighting the button as if one more press were the one that finishes it. *@
+                        @* Nothing here stops the client — it advises, never blocks — but a fix's own
+                           ripple can surface a fresh finding every time, and nothing about this loop
+                           guarantees it ever reaches zero. Past a few rounds the honest thing is to
+                           say so, not to keep lighting the button as if one more press finished it. *@
                         <p class="chase-warning">
                             @coherenceRuns passes this sitting, each one landing another change on
                             the domain the interview built. Weigh what is left yourself before
@@ -206,7 +258,7 @@
                     }
                     else
                     {
-                        <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue)">Run it again</button>
+                        <button class="primary" @onclick="ReviewAsync" disabled="@(isReviewing || applyingIndex.HasValue)">@(AskedSomethingElse ? Asking : "Run it again")</button>
                     }
                 }
             }
@@ -329,6 +381,28 @@
     /// <summary>Whether the coherence pass is in flight, so the button reads "Reading the domain…" and cannot be pressed twice.</summary>
     private bool isReviewing;
 
+    /// <summary>
+    /// The classes of defect the client has ticked, by <see cref="CoherenceAspect.Id"/>.
+    /// </summary>
+    /// <remarks>
+    /// Empty on arrival, deliberately: this pass is a question about their domain and there is no
+    /// question they are known to have. Ticking every box for them would put the old whole-pass
+    /// behaviour back under a control that says it is a choice.
+    /// </remarks>
+    private readonly HashSet<string> asked = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What the last run actually asked, so a re-run can tell a new question from the same one.
+    /// </summary>
+    private readonly HashSet<string> ran = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Which class accordions are open. Set by <see cref="ReviewAsync"/> to the classes that came
+    /// back with something, so a run opens straight onto what needs attention; the client toggles
+    /// the rest by hand.
+    /// </summary>
+    private readonly HashSet<string> expanded = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>The composed prompt for <see cref="selectedAgentId"/>, or <c>null</c> when no agent is picked.</summary>
     private AgentRecap? recap;
 
@@ -368,6 +442,74 @@
     private const int ChaseWarningThreshold = 2;
 
     /// <summary>
+    /// What the button offers to do, counted in the client's own ticks rather than named as a pass.
+    /// </summary>
+    private string Asking =>
+        asked.Count == 1 ? "Ask about this one thing" : $"Ask about these {asked.Count} things";
+
+    /// <summary>
+    /// The finding's class in the same words its checkbox carried, so a card names the thing the
+    /// client ticked rather than the raw <c>kind</c> slug the model answered with.
+    /// </summary>
+    private string AspectLabel(string kind) =>
+        CoherenceService.Aspects.FirstOrDefault(a => a.Id == kind)?.Label ?? kind;
+
+    /// <summary>
+    /// The rows the accordion draws: every class that can be asked for, then a bucket per class of
+    /// finding the model answered with that matches none of them — kept rather than dropped.
+    /// </summary>
+    private IEnumerable<(string Id, string Label, string Summary, bool Real)> AspectRows()
+    {
+        foreach (CoherenceAspect aspect in CoherenceService.Aspects)
+            yield return (aspect.Id, aspect.Label, aspect.Summary, true);
+
+        if (coherence is null)
+            yield break;
+
+        foreach (string kind in coherence.Findings.Select(f => f.Kind).Distinct()
+                     .Where(k => CoherenceService.Aspects.All(a => a.Id != k)))
+            yield return (kind, kind, "Reported outside the classes asked for.", false);
+    }
+
+    /// <summary>
+    /// One class's findings, each paired with its position in <see cref="coherence"/> — the key
+    /// <see cref="applyResults"/> and <see cref="applyingIndex"/> are held against.
+    /// </summary>
+    private IEnumerable<(CoherenceFinding Finding, int Index)> FindingsFor(string kind) =>
+        coherence is null
+            ? []
+            : coherence.Findings.Select((f, i) => (f, i)).Where(t => t.f.Kind == kind);
+
+    /// <summary>Whether the finding at this position has had its fix applied.</summary>
+    private bool Solved(int index) =>
+        applyResults.TryGetValue(index, out CoherenceApplyResult? r) && r.Applied;
+
+    /// <summary>Opens or closes one class accordion.</summary>
+    private void ToggleExpanded(string aspectId)
+    {
+        if (!expanded.Remove(aspectId))
+            expanded.Add(aspectId);
+    }
+
+    /// <summary>
+    /// Whether the ticks now differ from the ones the last run carried — the one thing that makes
+    /// another call worth making over a domain nobody has touched since.
+    /// </summary>
+    private bool AskedSomethingElse => asked.Count > 0 && !asked.SetEquals(ran);
+
+    /// <summary>
+    /// Takes a class of defect in or out of the next run. Nothing already reported is disturbed:
+    /// what is on screen is the answer to the question that was asked, and it stays true of it.
+    /// </summary>
+    private void ToggleAspect(string aspectId, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+            asked.Add(aspectId);
+        else
+            asked.Remove(aspectId);
+    }
+
+    /// <summary>
     /// Runs the deterministic checks against whatever Draft is already in the circuit — the
     /// coherence pass is never run here, since it costs a model call and the client has not asked
     /// for it yet.
@@ -401,8 +543,19 @@
         isReviewing = true;
         coherenceRuns++;
         applyResults.Clear();
-        try { coherence = await CoherenceService.ReviewAsync(draft, resolvedThisSitting); }
+        try { coherence = await CoherenceService.ReviewAsync(draft, [.. asked], resolvedThisSitting); }
         finally { isReviewing = false; }
+
+        // What was actually asked, recorded after the call rather than before it: the button that
+        // offers another run reads the difference between this and the ticks standing now.
+        ran.Clear();
+        ran.UnionWith(asked);
+
+        // Open every class that came back with something, so the run lands on what needs attention
+        // rather than on six shut rows the client has to try one by one.
+        expanded.Clear();
+        if (coherence is { Error: null })
+            expanded.UnionWith(coherence.Findings.Select(f => f.Kind));
     }
 
     /// <summary>
@@ -450,8 +603,17 @@
         }
 
         selectedAgentId = agent.ID;
-        recap = await RecapService.ComposeAsync(agent);
+        recap = await RecapService.ComposeAsync(agent, IsConsultedByOthers(agent));
     }
+
+    /// <summary>
+    /// True when some OTHER agent of the draft declares it may consult this one — the half of the
+    /// consultation relation an agent cannot see from its own <c>Consults</c> list.
+    /// </summary>
+    private bool IsConsultedByOthers(AgentDraft agent)
+        => DraftStateService.Current?.Agents.Any(other =>
+               other.ID != agent.ID &&
+               other.Code.Consults.Contains(agent.ID, StringComparer.OrdinalIgnoreCase)) ?? false;
 
     /// <summary>
     /// Applies one coherence finding and refreshes both the deterministic findings and the open
@@ -519,6 +681,6 @@
         DraftStateService.Set(draft);
 
         if (selectedAgentId is not null && draft.Agents.FirstOrDefault(a => a.ID == selectedAgentId) is { } selected)
-            recap = await RecapService.ComposeAsync(selected);
+            recap = await RecapService.ComposeAsync(selected, IsConsultedByOthers(selected));
     }
 }

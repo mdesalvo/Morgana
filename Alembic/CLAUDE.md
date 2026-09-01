@@ -361,8 +361,8 @@ by `AgentRows` so the tag's count can never disagree with the rows behind it. Th
 the agent's own `AgentSession` already remembers the conversation, so a second copy on screen would be
 a log to keep in step with one that already exists.
 
-**The rail has the shape of the process, and that shape is a loop.** `Domain Mapping` and `Domain
-Finalization` happen once; the six steps between them — `Target` through `Agent Acceptance` — repeat
+**The rail has the shape of the process, and that shape is a loop.** `Domain Mapping`, `Domain
+Colleagues` and `Domain Finalization` happen once; the six steps between the first and the last — `Target` through `Agent Acceptance` — repeat
 per entry inside a bordered lap, stacked like sheets while entries remain. Acceptance sits **inside**
 the lap, since it closes one entry's turn and the next opens on the step after the map — a rail read
 left to right cannot jump its own light backwards. The rail is visible from the first question, steps
@@ -408,11 +408,22 @@ cannot be written before it exists.
 | Pass | Runs | Settles | Cannot touch |
 |---|---|---|---|
 | `DomainMapper` | once | the whole `Intents` section: every name, description, label and opening sentence | everything about every agent |
-| `AgentTarget` | per entry | the agent's `Target` | the intents, its voice, tools, `Instructions`, `Formatting` |
+| `AgentTarget` | per entry | the agent's `Target`, and the `ConsultMeFor` it writes from it | the intents, its voice, tools, `Instructions`, `Formatting` |
 | `AgentPersonality` | per entry | the agent's `Personality` | everything else, the `Target` included |
 | `AgentToolkit` | per entry | the tools, their descriptions, their parameters, scopes and sharing | what the agent *is*, `Instructions`, `Formatting` |
 | `AgentInstructions` | per entry | `Instructions` | everything already settled, `Formatting` included |
 | `AgentFormatting` | per entry | `Formatting` | everything else, all of it settled |
+| `DomainColleagues` | once, at the end | which agents may consult which, and the boundary sentence each edge contradicts | every intent, and every section of every agent but that one sentence |
+
+**`ConsultMeFor` is written by the `AgentTarget` pass and never asked for.** It is the same scope the
+`Target` settles, addressed to a different reader — a colleague deciding whether a question belongs to
+this desk — so asking the client would be asking them to answer twice. The pass writes it itself the
+way `AgentPersonality` writes prose from traits, and `MissingTarget` holds the pass open until both
+stand: an agent finished for itself and mute to every colleague is not finished. It states a
+territory, never a list of what the agent can do, because a caller handed an inventory of functions
+rules its question out instead of asking it; and it never carries a rule about consulting, which the
+framework's own `PeerConsultation` policy already binds. Every agent gets one, edges or none — it is
+published on the agent's A2A card and read only by others, so it costs its author nothing.
 
 **`Target` and `Personality` are two passes, not two questions of one.** A `Target` is *dictated* —
 the client knows the work and can say it — while a voice is *recognised*: nobody has a ready sentence
@@ -425,6 +436,80 @@ facet of her this agent is, read back composed so a voice arguing with hers is v
 The `AgentFormatting` pass is the one place the loop stops for the client: letting a finished agent
 into the domain is the single decision of the interview that is theirs, and `AcceptAsync` opens the
 next `AgentTarget` pass automatically if the map has another entry.
+
+### The colleagues, last
+
+`[ConsultsAgent]` is the one thing about an agent that **cannot be settled while the agent is being
+written**: it is a relation, and half its ends do not exist yet. So it is asked once, at the end,
+over the whole domain — the agents of earlier sittings and uploads included, not only today's map —
+which makes `DomainColleagues` the mirror image of `DomainMapper`: the map opens the domain by
+settling every intent against every other, and this closes it by settling every agent against every
+other. Both sit outside the lap for the same reason, and neither settles an agent.
+
+`AcceptAsync` opens it when the map is spent, the domain holds more than one agent, and this is not
+an edit — a revision is one agent, and where it ends is the walk it was opened from, not a
+domain-wide question about all of them. It is also the one pass whose **own agreement ends the
+interview**: nothing is waiting to be let into the domain the way a finished agent is, so there is no
+acceptance gesture and `AnswerAsync` commits and abandons where the others hand over to the client.
+
+**An edge and the prose it contradicts land together, or the edge is a defect.** This is the failure
+the shipped `Examples` domain demonstrated before it was fixed: `BillingAgent` carried
+`[ConsultsAgent("inventory")]` while its own `Instructions` said orders *belong to another bench —
+say so plainly, never answer from the invoice*. The model reads a function offering the colleague and
+a flat imperative refusing the subject. Morgana's `PeerConsultation` policy now decides that
+collision by precedence — it is `Critical`, and the domain layer is subordinate — but an agent whose
+own prose has to be overruled on every turn is still a defect: the contradiction is paid in tokens
+and settled by a model rather than by its author. So `DeclareConsultation` takes the asking agent's rewritten
+`Instructions` **in the same call** — and optionally the colleague's, only where its own words would
+have it refuse what it is now asked — and `CommitColleagues` writes attribute and prose in one go.
+What that prose must never carry is a rule about *when* to consult, how briefly, what to expect back
+or what to do with the answer — nor that the answer is given in the agent's own voice, nor that the
+customer is not sent away. Every one of those is a critical rule of the framework, binding above
+anything the domain layer says, and a second copy below is a second voice claiming the same
+authority. Nor may it carry the **colleague's** territory. The moment an agent declares
+`[ConsultsAgent]`, `MorganaAgentAdapter` appends the colleague's own `ConsultMeFor` to the asking
+agent's prompt (`ComposeColleaguesDeclarationAsync`, one line per colleague: *function name →
+that colleague's statement of its scope*), beside the `PeerConsultation` policy that carries the how.
+So the asking agent already knows the colleague exists and what falls to it, in the colleague's own
+current words — restating that in the asking agent's `Instructions` is the same contradiction from
+the other side, stale the day the colleague revises its own scope. What the rewritten sentence states
+is fact about this agent's **own** books: what is on them, and — where a limit is still worth stating
+— what plainly is not, with nothing about where that goes instead. The defect the pass repairs is
+prose that *fights* that framework layer: a flat refusal of the subject, or a hand-off naming which
+other counter to try.
+
+What the client is asked is a question about **their own work** — whether the accounts desk really
+rings the greenhouse when a customer asks what a charge bought — never which agent should call which,
+which is machinery they were never shown. Alembic finds the candidates itself, by reading the domain
+for the shape that gives an edge away: an agent's own prose sending a customer to another bench for
+something that bench's tools can answer.
+
+An edge is touched in three places, and each does the one thing the others cannot:
+- **The interview asks.** Whether two desks ring each other is a fact about the business, not about
+  a deployment — unlike the tier and the MCP servers it sits beside in `AgentCodeFacts` — so it is
+  asked in the only place having that conversation, and it is the only place that can rewrite the
+  boundary sentence in the same gesture.
+- **The emit page holds it**, as one more C# fact beside the tier and the MCP servers, for the
+  upload path described below. It writes the attribute and never a word of prose.
+- **The coherence pass reports.** It cannot declare an edge — that is structural, and
+  `[ConsultsAgent]` naming an unhandled intent is startup-fatal — but it is the only one of the
+  three that reads the declaration against the prose, wherever either came from, and says they
+  disagree.
+
+And one thing it is deliberately not:
+- **Not the only way in, because an upload has no C# at all.** `agents.json` carries the attribute
+  no more than it carries a namespace, a tier or an MCP server — and those three are settled on the
+  emit page, which is where a client who uploaded a domain and only *walked* it meets its C# facts.
+  So the edge is settleable there too, as one more tick beside them. What that page cannot do is the
+  half this step exists for: it never touches the client's own prose, so a boundary left refusing
+  what the new colleague answers stays exactly as it was, and what reports it is the coherence pass's
+  `colleague-out-of-step`. Written domain: the interview does both at once. Uploaded domain: tick,
+  then ask the pass.
+
+The mode row still splices in, and it says *YOU ARE COMPOSING* — false of a step that only rewrites
+one sentence of finished prose. Rather than a conditional per pass, which is the arrangement
+`ModePromptTests` exists to prevent coming back, the pass's own `Target` states the fact flatly in
+its first line, and it is read last, where the most specific layer belongs.
 
 **The fallback intent is not on the map and never was.** `other` is where the classifier sends what it
 cannot place; `DomainDraft.EnsureFallbackIntent` puts it in every domain (greenfield at commit,
@@ -613,11 +698,43 @@ settles the map together (catching classifier collisions while words are still b
 writes each agent's prose alone: overlapping intents; two agents claiming the same capability; a value
 one publishes as `userId` another expects as `customerCode`; ground the domain implies and no agent
 covers; an agent promising what no tool backs; two toolkits reaching the same system under two
-different shapes. It's handed the domain's exact words, never a summary — a summary is precisely the
+different shapes; an agent whose declared colleagues and own prose contradict each other. It's handed
+the domain's exact words, never a summary — a summary is precisely the
 step that would smooth an overlap away before the model saw it. The last defect carries its own
 exception, or it fires on every domain: two agents needing the same lookup through their own tools is
 ordinary; the same work under two different shapes is the defect, since each shape is a separate
 integration to keep true.
+
+**The classes are data, not prose, and the client picks them.** Each one is an entry in the
+`DomainValidator` prompt's own `Aspects` declaration — `Id` (the `kind` it answers with), `Label` and
+`Summary` for the checkbox, `Description` for the block the model reads — so the boxes on Review, the
+prose the pass is composed from and the `kind` values it may return are one list read three ways,
+never three lists to keep in step. `CoherenceService` splices the selected blocks into `((aspects))`
+and their ids into `((kinds))`; **an unselected class is not sent at all**, rather than sent with a
+line withdrawing it, because a rule a prompt states and then takes back is read as a rule with an
+exception and the exception is what a model gets wrong.
+
+**Nothing is ticked on arrival, and the pass will not run until something is.** Running it whole was
+the earlier shape and it was worse in the way that matters: a client comes to this page with one
+question about their domain and a report answering six is a table to sift, with the class they came
+about ranked beneath five they did not ask for. The button counts their own ticks back to them
+(*Ask about these two things*), and it comes back after a clean result only when the ticks now differ
+from the ones the last run carried — the same question over an untouched domain would spend a
+Performance call to hear the same answer, a different question would not.
+
+**`colleague-out-of-step` is the one class that reads something outside the four sections.** An
+agent's colleagues live in its C#, so `Describe` states them per agent — either the list, or that it
+declares none — and the class catches the disagreement in both directions: a boundary sentence still
+sending the customer elsewhere for what a declared colleague answers (the expensive one: the function
+is offered, the flat instruction wins, and the consultation is paid for in prompt tokens and never
+happens), or prose promising to ask a colleague that is not declared. Its fix is **always prose**,
+and `CoherenceApplier` is told so: gaining or losing a colleague changes the client's C# and is
+theirs to do, on the interview's closing step or on the emit page. The fix is also told what it is
+**not** — a signpost. The framework already appends the colleague's own `ConsultMeFor` to the asking
+agent's prompt (see *An edge and the prose it contradicts land together*), so the fix never writes
+"you can ask X about Y" into the agent's `Instructions`; it strikes the refusal or the hand-off that
+fights what the framework supplied and, where a boundary is still wanted, leaves only a fact about
+the agent's own books — never the colleague's territory, name or desk.
 
 It answers JSON, the one place in Alembic that does, since this output is sorted and tabulated rather
 than read as prose. And it **advises, never blocks**: a domain expert who disagrees with it about
@@ -720,6 +837,12 @@ positional. The Draft is the *editing* model, and an interview in progress is in
 definition — a tool whose description has not been asked for is a different state from one whose
 description is deliberately empty, and only a nullable field distinguishes them. Every nullable
 string in `DomainDraft.cs` means "not asked yet."
+
+**The fifth section.** `AgentDraft.ConsultMeFor` is modelled like the other four and travels the
+round trip with them — `DraftImportService` reads it off an uploaded prompt and `DraftProjection`
+writes it back — which matters more here than for a section Alembic authors freely: it is a top-level
+member of `Records.Prompt`, not an `AdditionalProperties` key, so `UnmodelledProperties` would not
+have caught it and a client's uploaded statement would have been silently dropped on export.
 
 **What survives that Alembic does not understand.** AdditionalProperties keys other than `Tools`
 are kept verbatim in `AgentDraft.UnmodelledProperties` and written back untouched — the round-trip

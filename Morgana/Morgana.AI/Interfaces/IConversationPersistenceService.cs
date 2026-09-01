@@ -2,7 +2,6 @@ using System.Text.Json;
 using Microsoft.Agents.AI;
 using Morgana.AI.Providers;
 using Morgana.Contracts;
-using static Morgana.AI.Records;
 
 namespace Morgana.AI.Interfaces;
 

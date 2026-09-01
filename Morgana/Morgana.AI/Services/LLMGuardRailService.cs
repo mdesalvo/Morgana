@@ -46,7 +46,7 @@ public class LLMGuardRailService : IGuardRailService
         // this isn't deferred behind a Lazy<> — the Guard prompt is needed on essentially every
         // turn (guard check gates every user message), so eager beats lazy for the common case.
         Records.Prompt guardPrompt =
-            promptResolverService.ResolveAsync("Guard").GetAwaiter().GetResult();
+            promptResolverService.ResolveAsync(Constants.Prompts.Guard).GetAwaiter().GetResult();
 
         guardSystemPrompt = $"{guardPrompt.Target}\n{guardPrompt.Instructions}\n{guardPrompt.Formatting}";
     }

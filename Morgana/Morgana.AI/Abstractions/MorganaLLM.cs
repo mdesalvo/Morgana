@@ -121,7 +121,7 @@ public class MorganaLLM : ILLMService
 
         // Loads the framework prompt once at startup, so the error-message templates it
         // carries are ready before the first LLM call ever happens.
-        morganaPrompt = promptResolverService.ResolveAsync("Morgana").GetAwaiter().GetResult();
+        morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -132,7 +132,7 @@ public class MorganaLLM : ILLMService
     /// <param name="tier">Tier this model serves — the key it was registered under in the <c>Tiers</c> map.</param>
     /// <param name="modelName">
     /// The model/deployment identifier this tier resolves to (<c>TierDefinition.Options.ModelId</c>),
-    /// checked against <see cref="Records.OverridePlaceholders"/> before registration. Not
+    /// checked against <see cref="Constants.Overrides"/> before registration. Not
     /// stored — the client already has it baked in — this parameter exists purely so every
     /// provider gets the check for free instead of each duplicating it.
     /// </param>
@@ -157,7 +157,7 @@ public class MorganaLLM : ILLMService
         // RequiresLLMTierValidationService's "tier exists" check sees nothing wrong) — this is
         // the only point left where the raw, still-a-placeholder value is visible before it
         // disappears into an already-built client.
-        if (Records.OverridePlaceholders.Contains(modelName))
+        if (Constants.Overrides.All.Contains(modelName))
             throw new InvalidOperationException(
                 $"Morgana:LLM:{{Provider}}:Tiers:{tier} has a ModelId that is still the " +
                 $"placeholder '{modelName}'. Override it via User Secrets or environment variables before " +
@@ -229,14 +229,6 @@ public class MorganaLLM : ILLMService
     /// <c>Morgana:OpenTelemetry:Enabled</c> is true; otherwise <paramref name="innerChatClient"/>
     /// unchanged. Provider-agnostic — all four concrete providers go through this single hook.
     /// </returns>
-    /// <remarks>
-    /// <para>The activity source / meter name is fixed (<c>Morgana.AI.LLM</c>) so the OTel
-    /// pipeline registration is centralised; per-provider differentiation comes from the
-    /// <c>gen_ai.system</c> attribute that the MEAI decorator emits automatically.</para>
-    /// <para><c>EnableSensitiveData</c> is read from <c>Morgana:OpenTelemetry:EnableSensitiveData</c>
-    /// (default <c>false</c>): when true, the spans include the actual message contents — useful
-    /// in dev/troubleshooting, off in production for privacy.</para>
-    /// </remarks>
     protected IChatClient WrapWithTelemetry(IChatClient innerChatClient)
     {
         if (loggerFactory is null || !configuration.GetValue("Morgana:OpenTelemetry:Enabled", true))
@@ -273,11 +265,17 @@ public class MorganaLLM : ILLMService
             // GetChatClient(tier)/GetPricing(tier), and never touches this method or
             // frameworkChatClient at all.
             //
-            // Framework-actor calls are metered under the role "Morgana"
+            // Framework-actor calls are metered under the bare framework role, which is what tells a
+            // reader of the ledger that a charge belongs to the pipeline rather than to any agent.
             IChatClient client = dustLimitService is not null && dustPricing is not null
-                ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, dustPricing, "Morgana")
+                ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, dustPricing, Constants.Morgana)
                 : frameworkChatClient;
 
+            // These two messages are the entire request: no history, no session, no tools, and nothing
+            // carried over from the caller's previous call. That is what makes this method the
+            // stateless half of the LLM surface — a framework actor asks one question and is answered
+            // once, where an agent's turn accumulates in a session. The conversation id travels on the
+            // options so the call is attributable to the conversation that provoked it.
             ChatResponse response = await client.GetResponseAsync(
                 [
                     new ChatMessage(ChatRole.System, systemPrompt),

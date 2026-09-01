@@ -27,6 +27,11 @@ public interface IRecapService
     /// Composes one agent's system prompt, tool descriptions and hypothetical held-context injection.
     /// </summary>
     /// <param name="agent">The agent to compose.</param>
+    /// <param name="consultedByOthers">
+    /// True when another agent of the domain declares it may consult this one. The framework renders
+    /// its peer-consultation policy for either end of that relation, so an agent that only ever
+    /// answers colleagues still reads it — and the recap would understate its prompt without this.
+    /// </param>
     /// <returns>What the model reads, split by where in the turn it reads it.</returns>
-    Task<AgentRecap> ComposeAsync(AgentDraft agent);
+    Task<AgentRecap> ComposeAsync(AgentDraft agent, bool consultedByOthers = false);
 }

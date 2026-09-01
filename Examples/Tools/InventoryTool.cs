@@ -258,7 +258,7 @@ public class InventoryTool : MorganaTool
         // is the real Akka-assigned identifier, never exposed to or writable by the LLM, so it is
         // trustworthy in a way a request/context parameter never could be — see ToolContext's
         // remarks in MorganaTool.cs. orderId + sealWord together are the claim-check pair every
-        // later call to ConfirmOrder/CancelOrder/GetOrderStatus must present; sealWord is returned
+        // later call to ConfirmOrder/CancelOrder must present; sealWord is returned
         // to the caller exactly once, right below, and never stored anywhere the LLM can read it
         // back from later (no Get* tool in this class ever surfaces it again).
         ToolContext ctx = getToolContext();
@@ -294,7 +294,7 @@ public class InventoryTool : MorganaTool
             unitPrice = product.UnitPrice,
             totalPrice = Math.Round(product.UnitPrice * quantity, 2),
             status = "Pending",
-            note = "Order created but NOT yet committed: stock has not been touched. The sealWord is shown ONLY this once — tell the user to keep both orderId and sealWord, they are required together for ConfirmOrder, CancelOrder and GetOrderStatus, even in a future session. Call ConfirmOrder with this exact orderId and sealWord ONLY after the user has explicitly confirmed they want to proceed."
+            note = "Order created but NOT committed: stock is untouched and nothing is billed until ConfirmOrder runs on this exact orderId and sealWord. The sealWord appears in this response and in no other, now or later — ConfirmOrder and CancelOrder each require the pair, in this session and in any future one."
         }, GreenhouseDatabaseHelper.JsonOptions);
     }
 
@@ -434,7 +434,7 @@ public class InventoryTool : MorganaTool
             invoiceId,
             note = invoiceId == null
                 ? null
-                : "The order has been billed to this invoice as of this confirmation — tell the customer, in character, that their order is settled and that they can ask Morgana (or the accounts desk) to see this invoice, now or later. Never read out invoice totals or line items yourself: that belongs to the accounts desk."
+                : "The order has been billed to this invoice as of this confirmation. This response carries the invoice identifier and nothing else about it: its total and its line items are not on these pages."
         }, GreenhouseDatabaseHelper.JsonOptions);
     }
 
@@ -442,18 +442,14 @@ public class InventoryTool : MorganaTool
     /// Retrieves the current status and lifecycle timestamps of an existing order.
     /// </summary>
     /// <param name="orderId">Identifier of the order to inspect. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
-    /// <param name="sealWord">One-time seal word returned by CreatePurchaseOrder for this exact orderId. Tracked from the conversation itself, one per order — a customer with multiple orders in flight has a different seal word for each.</param>
     /// <returns>JSON object with order status and timestamps.</returns>
-    public async Task<string> GetOrderStatus(string orderId, string sealWord)
+    public async Task<string> GetOrderStatus(string orderId)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        // Same combined not-found/wrong-sealWord check as ConfirmOrder, same reason: a distinct
-        // "wrong seal word" message would confirm the orderId is real even when it isn't the
-        // caller's to inspect.
         Order? order = await FindOrderAsync(connection, orderId);
-        if (order == null || !string.Equals(order.SealWord, sealWord, StringComparison.OrdinalIgnoreCase))
-            return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, GreenhouseDatabaseHelper.JsonOptions);
+        if (order == null)
+            return JsonSerializer.Serialize(new { error = "No order matches that orderId", requestedOrderId = orderId }, GreenhouseDatabaseHelper.JsonOptions);
 
         return JsonSerializer.Serialize(new
         {
@@ -479,7 +475,7 @@ public class InventoryTool : MorganaTool
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        // Same combined not-found/wrong-sealWord check as ConfirmOrder/GetOrderStatus, same reason.
+        // Same combined not-found/wrong-sealWord check as ConfirmOrder, same reason.
         Order? order = await FindOrderAsync(connection, orderId);
         if (order == null || !string.Equals(order.SealWord, sealWord, StringComparison.OrdinalIgnoreCase))
             return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, GreenhouseDatabaseHelper.JsonOptions);
@@ -604,7 +600,7 @@ public class InventoryTool : MorganaTool
     /// Lists every order ever placed by a given customer, across ALL conversations/sessions —
     /// the full history behind a customerCode, not just the current chat. Summary only: sealWord is
     /// never included here (it is shown exactly once, by CreatePurchaseOrder), so seeing this
-    /// list is not enough to act on or fully inspect any specific past order.
+    /// list is not enough to act on any of the orders it names.
     /// </summary>
     /// <param name="customerCode">Identifier of the customer whose order history to retrieve (retrieved from shared context).</param>
     /// <returns>JSON array of that customer's orders across every conversation (no sealWord included).</returns>
@@ -613,7 +609,7 @@ public class InventoryTool : MorganaTool
         // customerCode is a shared context variable the LLM itself can write via SetContextVariable —
         // unlike GetOrders()'s ConversationId, it is not a trust boundary, which is exactly why
         // this tool deliberately stops at a summary (no sealWord, no ability to act on any
-        // of these orders) rather than granting the same access GetOrderStatus/ConfirmOrder do.
+        // of these orders) rather than granting the same access ConfirmOrder/CancelOrder do.
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         string? customerName = await FindCustomerNameAsync(connection, customerCode);

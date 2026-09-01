@@ -23,6 +23,14 @@
     server at runtime. That is a C# fact (AgentCodeFacts.MCPServers), never a domain question — the
     interview never asks it, because "MCP server" is a concept from whoever configures Morgana, not
     from the domain expert describing their work.
+
+    A fifth sits here on a different argument. Which colleagues an agent may consult IS a domain
+    question, and the interview's closing step asks it properly — reconciling the boundary prose an
+    edge contradicts, which is the half that matters and the half only that step can do. But an
+    uploaded agents.json carries no C# at all, so a domain that arrives and is only walked never
+    reaches that step, and every other C# fact it needs is already settled on this page. So the edge
+    is settleable here too, as the fact it is; the prose is not touched, and the coherence pass on
+    Review is what reports an agent left saying it cannot answer what its new colleague answers.
 *@
 
 <div class="alembic-page">
@@ -116,6 +124,7 @@
                             <th>Die <span class="th-note">which model it thinks with</span></th>
                             <th>Classes <span class="th-note">what Alembic will name its code</span></th>
                             <th>MCP <span class="th-note">servers it connects to at runtime for extra tools</span></th>
+                            <th>Colleagues <span class="th-note">other agents it may put a question to</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -207,23 +216,49 @@
                                         </button>
                                     }
                                 </td>
+                                <td>
+                                    @* One switch per other agent, not a free field: a colleague is an
+                                       intent this domain already handles, and [ConsultsAgent] naming
+                                       anything else is startup-fatal. Offering what cannot be wrong is
+                                       cheaper than validating what can. *@
+                                    @{
+                                        AgentDraft[] colleagues = [.. draft.Agents.Where(a =>
+                                            !string.IsNullOrWhiteSpace(a.ID)
+                                            && !string.Equals(a.ID, agent.ID, StringComparison.OrdinalIgnoreCase))];
+                                    }
+
+                                    @if (colleagues.Length == 0)
+                                    {
+                                        <span class="muted">&mdash; nobody to ask</span>
+                                    }
+                                    else
+                                    {
+                                        @foreach (AgentDraft colleague in colleagues)
+                                        {
+                                            string named = colleague.ID!;
+                                            <label class="switch">
+                                                <input type="checkbox"
+                                                       checked="@Consults(agent, named)"
+                                                       @onchange="e => ToggleColleague(agent, named, e)" />
+                                                <span><code>@named</code></span>
+                                            </label>
+                                        }
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>
                 </table>
 
-                <div class="power-notice">
-                    <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M13 2 5 14h6l-1 8 9-13h-6z" />
-                    </svg>
-                    <div>
-                        <strong>Performance is not an upgrade.</strong>
-                        The framework reserves it for an agent whose author declares an <b>existential
-                        need for deep reasoning</b>, and there is no fallback between dies: an agent
-                        asking for a die the deployment does not configure fails startup.
-                    </div>
-                </div>
+                <p class="muted">
+                    A colleague ticked here changes what an agent <em>can</em> do and not a word of what
+                    its own prose <em>says</em> — so an agent whose instructions still send the customer
+                    to another desk for that very subject will keep doing exactly that, and the
+                    consultation is paid for in prompt tokens and never happens. Run
+                    <b>colleagues out of step</b> on Review, which is the pass that reads the two
+                    against each other. The interview's own closing step does both at once, and is
+                    where this belongs when a domain is being written rather than uploaded.
+                </p>
             </div>
 
             <div class="panel">
@@ -615,6 +650,38 @@
         {
             agent.Code.MCPServers.Clear();
             mcpTests.Remove(agent);
+        }
+
+        package = null;
+    }
+
+    /// <summary>
+    /// Whether this agent already declares that colleague, matched the way Morgana matches an
+    /// intent name.
+    /// </summary>
+    private static bool Consults(AgentDraft agent, string colleague) =>
+        agent.Code.Consults.Any(c => string.Equals(c, colleague, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Adds or removes one <c>[ConsultsAgent]</c> declaration, and invalidates any archive already
+    /// built — the attribute is on the agent class, so the emitted file is no longer the one on disk.
+    /// </summary>
+    /// <remarks>
+    /// The prose is deliberately left alone. On this page the Instructions are the client's own —
+    /// uploaded or written in an interview that already settled them — and Alembic does not rewrite
+    /// a sentence nobody asked it to touch. What reads the two against each other is the coherence
+    /// pass, which reports rather than repairs, exactly as it does for every other relation.
+    /// </remarks>
+    private void ToggleColleague(AgentDraft agent, string colleague, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+        {
+            if (!Consults(agent, colleague))
+                agent.Code.Consults.Add(colleague);
+        }
+        else
+        {
+            agent.Code.Consults.RemoveAll(c => string.Equals(c, colleague, StringComparison.OrdinalIgnoreCase));
         }
 
         package = null;

@@ -1,3 +1,5 @@
+using Morgana.AI;
+
 namespace Distiller.Model;
 
 /// <summary>
@@ -82,7 +84,7 @@ public sealed class DomainDraft
     /// <summary>
     /// The name the classifier falls back to when it cannot place a message at all.
     /// </summary>
-    public const string FallbackIntent = "other";
+    public const string FallbackIntent = Constants.Intents.Other;
 
     /// <summary>
     /// Puts the fallback intent in the domain if it is not already there.
@@ -157,6 +159,48 @@ public sealed class InterviewSitting
     /// agent being revised rather than a fresh entry being written.
     /// </summary>
     public AgentRevision? Revision { get; set; }
+
+    /// <summary>
+    /// The colleagues declared so far by the closing step, none of which is in the domain yet.
+    /// </summary>
+    /// <remarks>
+    /// They are settled together and committed together — an edge is only correct next to the other
+    /// edges, the way a map entry is only correct next to the other entries — so between the first
+    /// declaration and the client's agreement they live nowhere but here, and a tab closed in
+    /// between must not lose them.
+    /// </remarks>
+    public List<ConsultationDraft> Colleagues { get; set; } = [];
+}
+
+/// <summary>
+/// One agent's licence to put a question to another: the edge, and the boundary prose that changes
+/// with it.
+/// </summary>
+/// <remarks>
+/// The prose travels with the edge because without it the edge is a defect. An agent whose
+/// Instructions say a subject belongs to another bench and stops there is being told, in the same
+/// prompt, that it may ask and that it may not — and the imperative sentence wins. So the tool that
+/// declares an edge takes the asking agent's reconciled Instructions in the same call, and the two
+/// land in the domain together or not at all.
+/// </remarks>
+public sealed class ConsultationDraft
+{
+    /// <summary>The intent of the agent that gains the <c>[ConsultsAgent]</c> declaration.</summary>
+    public string Asking { get; set; } = string.Empty;
+
+    /// <summary>The intent of the colleague it may put a question to.</summary>
+    public string Asked { get; set; } = string.Empty;
+
+    /// <summary>The asking agent's Instructions, rewritten so its own boundary admits the colleague.</summary>
+    public string AskingInstructions { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The colleague's Instructions, rewritten only where its own prose would have it refuse what it
+    /// is now being asked for. <c>null</c> whenever they stand as they are, which is the ordinary
+    /// case: answering a colleague is a turn the framework already governs, and a refusal to say
+    /// something to a *user* is not one to reopen here.
+    /// </summary>
+    public string? AskedInstructions { get; set; }
 }
 
 /// <summary>
@@ -270,6 +314,19 @@ public sealed class AgentDraft
     /// <remarks><c>null</c> until the <c>AgentTarget</c> pass settles it — the field
     /// <see cref="InterviewState.MissingTarget"/> tests to decide whether that pass may close.</remarks>
     public string? Target { get; set; }
+
+    /// <summary>
+    /// What falls to this agent, addressed to a colleague who might consult it.
+    /// </summary>
+    /// <remarks>
+    /// The one section whose reader is another agent: it never enters this agent's own prompt, it is
+    /// published on its A2A card and read by whoever holds a <c>consult_</c> function for it. Settled
+    /// by the <c>AgentTarget</c> pass, which writes it from the scope it has just fixed rather than
+    /// asking the client the same question twice — same content, a different reader. Every agent
+    /// carries one, whether or not anybody consults it: a domain where nothing does today is one
+    /// declaration away from a domain where something does, and an unread one costs nothing.
+    /// </remarks>
+    public string? ConsultMeFor { get; set; }
 
     /// <summary>
     /// Domain-specific behavioural rules. Written after the toolkit, because they speak about it.
@@ -442,6 +499,24 @@ public sealed class AgentCodeFacts
     /// MCP server declarations, one per <c>[UsesMCPServer]</c> attribute.
     /// </summary>
     public List<string> MCPServers { get; set; } = [];
+
+    /// <summary>
+    /// The colleagues this agent may put a question to, one intent name per
+    /// <c>[ConsultsAgent]</c> attribute.
+    /// </summary>
+    /// <remarks>
+    /// A C# fact like <see cref="MCPServers"/> — <c>agents.json</c> carries no trace of it, so an
+    /// imported domain arrives with none and the colleagues step is where they are settled. It is
+    /// nonetheless a domain question and not an infrastructural one: whether the accounts desk has
+    /// to ring the greenhouse is something only the client knows about their own work, which is why
+    /// it is asked in the interview rather than ticked on the emit page beside the tier.
+    /// <para>
+    /// The framework refuses a second hop — an agent answering a colleague finds its own peer
+    /// functions refused — so an edge is worth declaring only where the colleague can answer out of
+    /// its own books.
+    /// </para>
+    /// </remarks>
+    public List<string> Consults { get; set; } = [];
 
     /// <summary>
     /// Whether the values above were inferred by Alembic rather than stated by the client.

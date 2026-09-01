@@ -56,6 +56,24 @@ things a child process could not — an `ActivityListener` that reads spans with
 loop, and a tee on stdout that reads tool log lines. Both are read-only observers of instrumentation
 that already exists for production reasons.
 
+**One proposition, one act.** A judge is a model, and every extra thing asked of it in one line is
+another thing it can get wrong — so a proposition names a single act, in a single clause. A list of
+synonyms for the same act is fine (`another desk, office or department`); a conjunction of two
+distinct claims is not (`says it was billed **and** invites them to ask about the invoice` — two
+propositions), and neither is a comparative (`describes the invoice **rather than** merely saying it
+was billed`), which asks for a judgement of proportion instead of a fact. A proposition needing a
+carve-out sentence to be fair is a proposition that was written wrong: fix the act, do not coach the
+judge. This holds for `judgeNot` above all, where the failure mode is asymmetric — a broad
+prohibition puts the judge on a hunt, and a model on a hunt finds something; every false red spent
+there is trust in the suite spent with it.
+
+Those log lines are the only place a context variable's **name** becomes observable — a span carries
+tool names and no data — so the whole context-handling group rests on their shape. `TurnObserver`
+therefore does not carry a copy of them: it builds its patterns from `Constants.ObservableLogs`, the
+same message templates `MorganaTool` and `MorganaAIContextProvider` log with. Reword a line in the
+framework and the reader moves with it; rename a placeholder and the pattern stops matching in the
+same commit, instead of the suite passing on an assertion that can no longer fire.
+
 The harness channel declares the **full** capability profile with no length budget by default, so
 `MorganaChannelAdapter` short-circuits and most scenarios measure undegraded output. One scenario
 opts into a degraded profile instead (`ScenarioDefinition.DegradedChannel`, mirroring Rune's "poor
@@ -211,6 +229,8 @@ turns:
       noContextWrites: true
       noContextAccess: true
       contextVocabulary: [customerCode] # every name touched must appear here
+      historyExcludesAgents: [billing]  # no message in the persisted history belongs to that agent
+      historyUserMessages: 2            # …and exactly one user message per turn played so far
       textNotEmpty: true
       textNotContains: ["#INT#"]
     judge:                        # propositions an LLM must find TRUE
@@ -219,11 +239,17 @@ turns:
       - "The response mentions variables, context or memory."
 ```
 
+The two `history*` keys are the only ones costing a round trip to the host, so they are fetched
+solely for the turns that declare them. They read the conversation as a resuming channel would see
+it, which is where a consultation between two agents is observably absent: the colleague owns no
+message, and its inbound question — stored with the user role — never shows up as a message the
+person did not send.
+
 Two layers, and the split is deliberate: **structural** assertions are deterministic and read only
 span, log and message data; the **judge** is for what no structural assertion can reach ("asks in
-prose without enumerating options"). The judge sees only what a user would see — text, buttons,
-whether a card was rendered — never the tool trace, so it cannot justify a verdict from evidence the
-user never had.
+prose without enumerating options"). The judge sees exactly what a user would see — text, buttons,
+and the card's rendered content — never the tool trace, so it cannot justify a verdict from evidence
+the user never had, nor be convicted of missing what the screen did carry.
 
 **Thresholds.** Repetition with a pass threshold is the only honest shape when the system under test
 is a language model: a prompt that works four times in five is materially different from one that

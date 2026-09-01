@@ -48,6 +48,7 @@
         </li>
 
         @Station(7)
+        @Station(8)
     </ol>
 
     @*
@@ -133,6 +134,7 @@
         /*Agent Modeling*/ "Instructions",
         /*Agent Modeling*/ "Formatting",
         "Agent Acceptance",
+        "Domain Colleagues",
         "Domain Finalization"
     ];
 
@@ -217,7 +219,13 @@
     // never lit here: reaching it means leaving this page for the finished domain.
     private string Standing(int index)
     {
-        int here = Written ? Accepting : (int)State.Pass;
+        // The pass is the index for the first six and no further: acceptance is a step of the rail
+        // that no pass conducts, so everything outside the lap sits one place further along than its
+        // enum value. Written as two exceptions rather than a table — the lap is the rule, and the
+        // two things that happen once are what the rule is stated against.
+        int here = Written ? Accepting
+            : State.Pass == InterviewStep.DomainColleagues ? Colleagues
+            : (int)State.Pass;
 
         return index == here ? "here" : index < here ? "done" : string.Empty;
     }
@@ -226,6 +234,12 @@
     /// Where acceptance sits on the rail: the last step of the lap.
     /// </summary>
     private const int Accepting = 6;
+
+    /// <summary>
+    /// Where the closing step sits: outside the lap, after the last agent has been let in and before
+    /// the finished domain.
+    /// </summary>
+    private const int Colleagues = 7;
 
     /// <summary>
     /// Whether the rows behind the entry's tag are open.
