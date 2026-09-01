@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.29.0] - UNDER DEVELOPMENT
-### 🎯 Major Feature: A2A — Morgana Speaks A2A
+### 🎯 Major Feature: Morgana speaks Agent-to-Agent
 Morgana now speaks the **A2A protocol**, end to end and through Microsoft's own stack. An agent declares `[ConsultsAgent("billing")]` and that colleague becomes a `consult_{intent}` function in its tool list; the agent so named is published at `/a2a/{intent}` with a well-known agent card. The card is open, so anything that speaks A2A can discover it; the endpoint behind it is authenticated and Morgana signs its own peer traffic under the `morgana` issuer.
 So an agent stops sending the user back and forth between desks, and it does it over the A2A protocol rather than an internal call of Morgana's own invention. Colleagues live in this instance — a remote peer is not declarable yet, see Future Enablement — but the wire is the standard one at both ends.
 It is **opt-in and pays for itself only where declared**: nothing is published for an agent nobody consults, an agent that neither declares a colleague nor is named as one gets no endpoint, no policy and not one extra token.
