@@ -258,7 +258,7 @@ dotnet build ./Channels/Rune
 # 🔨 Alembic, the authoring workbench (optional)
 #    Not part of a running Morgana: it talks to no backend, only to an LLM,
 #    so it is profile-gated in compose and never started by `up`.
-dotnet build ./Alembic
+dotnet build ./Alembic/Distiller
 
 # 🐳 Build Docker images
 docker compose --env-file .env --env-file .env.versions build
