@@ -24,7 +24,6 @@ Morgana now speaks the **A2A protocol** end to end. An agent declares `[Consults
 - **Agents beyond this process** — the asking side already holds a standard `A2AAgent` resolved from a card, so a remote colleague needs a way to declare one (an address, an issuer of its own) rather than new machinery
 - **Morgana inside someone else's system** — the cards are published and the endpoints are open to whoever holds credentials, so a domain modelled here can be reached by orchestrators Morgana knows nothing about
 
-
 ## [0.28.0] - 2026-08-23
 ### 🎯 Major Feature: Alembic — Turnkey Domain Onboarding
 This release introduces **Alembic**, a Blazor Server workbench that distils a live interview with a domain expert into a complete, ready-to-build **Morgana domain** — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — **with no prompt ever authored by hand**.
