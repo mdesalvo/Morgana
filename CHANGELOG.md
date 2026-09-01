@@ -12,7 +12,7 @@ Morgana now speaks the **A2A protocol** end to end. An agent declares `[Consults
 ### ✨ Added
 - **`[ConsultsAgent("intent")]`** — a new attribute naming the colleagues an agent may consult, opening Morgana to A2A collaboration
 - **A2A endpoints** — `/a2a/{intent}` and its `/.well-known/agent-card.json`, stood up only for the agents somebody declares as a colleague and authenticated like the rest of the API
-- **`ConsultMeFor`** — a new section of an agent's domain prompt, stating the territory this desk answers for. It is what a colleague reads before asking
+- **`ConsultMeFor`** — a new section of domain prompt, stating the territory this desk answers for. It is what a colleague reads before asking
 - **`PeerConsultation`** — a new global policy: what is licit to ask a colleague and how one answers
 
 ### 🔄 Changed
