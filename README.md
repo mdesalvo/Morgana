@@ -240,7 +240,7 @@ Conversations survive restarts and agent handoffs without losing this context. U
 
 ---
 
-## 🚀 Quick Start (Docker Hub)
+## 🚀 Quick Start
 
 ```bash
 # 📋 Copy the development template
