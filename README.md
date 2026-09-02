@@ -18,7 +18,7 @@ Morgana is a modern and flexible **conversational AI framework** designed to han
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
 > [!IMPORTANT]
-> *Morgana acts as an enchanted LLM seamlessly bound to your application domain; her grimoire holds every spell and tool required to serve your specific world of intents, as you (as developer) are the sole master who whispers the teachings that shape her personality and her magical capabilities 🔮*
+> *Morgana looks like an enchanted LLM seamlessly bound to your application domain: her grimoire holds every spell and tool required to serve your specific world of intents, as you (as developer) are the sole master who whispers the teachings that shape her personality and magical capabilities 🔮*
 
 <table style="border:none;">
   <tr>
@@ -91,7 +91,7 @@ Morgana leverages the **actor model** to create a fault-tolerant, scalable orche
 - **Classifier**: Analyzes user intent through LLM-powered classification
 - **Router**: Dynamically routes requests to appropriate agents
 
-This architecture ensures that failures are isolated, system state remains consistent, and conversations can scale horizontally without bottlenecks.
+This architecture ensures that failures are isolated, system state remains consistent and conversations can scale horizontally without bottlenecks.
 
 **Actors Conversation Flow**
 
@@ -146,12 +146,13 @@ Agents in Morgana are **domain specialists** that self-register through **declar
 ```csharp
 [HandlesIntent("billing")]
 [RequiresLLMTier(LLMTier.Efficiency)]
+[ConsultsAgent("inventory")]
 public class BillingAgent : MorganaAgent { ... }
 ```
 
-At startup, Morgana automatically discovers all agents across configured assemblies and validates bidirectional consistency between declared intents and classifier configuration—**fail-fast guarantees** ensure errors are caught before reaching production.
+At startup, Morgana automatically discovers all agents across configured assemblies and validates bidirectional consistency between declared intents and classifier configuration: **fail-fast guarantees** ensure errors are caught before reaching production.
 
-Agents express their capabilities through **tools**, which can be native implementations (inherited from `MorganaTool`) or dynamically acquired from external MCP servers:
+Agents express their capabilities through **tools**, which can be native implementations (inherited from `MorganaTool`) and also dynamically acquired from external MCP servers:
 
 ```csharp
 [ProvidesToolForIntent("billing")]
@@ -166,9 +167,9 @@ public class BillingTool : MorganaTool
 public class MonkeyAgent : MorganaAgent { ... }  // Acquires tools at runtime!
 ```
 
-The **MCP integration** is particularly powerful: agents can extend their capabilities by consuming **Model Context Protocol servers**, where external tools become indistinguishable from native implementations. This enables rapid prototyping, microservice integration, and ecosystem-driven feature development—all without writing a single line of tool implementation code.
+The **MCP integration** is particularly powerful: agents can extend their capabilities by consuming **Model Context Protocol servers**, where external tools become indistinguishable from native implementations. This enables rapid prototyping, microservice integration and ecosystem-driven feature development, all without writing a single line of tool implementation code.
 
-The framework provides adapters (`MorganaAgentAdapter`, `MorganaToolAdapter`) that bridge the declarative configuration with runtime activation, handling validation, dependency injection, and lifecycle management transparently.
+The framework provides adapters (`MorganaAgentAdapter`, `MorganaToolAdapter`) that bridge the declarative configuration with runtime activation, handling validation, dependency injection and lifecycle management transparently.
 
 **Agents Conversation Flow**
 
@@ -212,22 +213,20 @@ graph LR
 ### 📝 Morgana Prompt System
 *First-class artifacts with layered personality architecture and structured behavioral policies*
 
-Prompts are not hardcoded strings in Morgana—they are **versioned, maintainable project artifacts** managed through the `IPromptResolverService`. This separation of concerns enables prompt engineering teams to iterate independently from application logic, supporting A/B testing, localization, and behavioral evolution without redeployment.
+Prompts are not hardcoded strings in Morgana—they are **versioned, maintainable project artifacts** managed through the `IPromptResolverService`. This separation of concerns enables prompt engineering teams to iterate independently from application logic, supporting A/B testing, localization and behavioral evolution without redeployment.
 
 The system distinguishes between two prompt categories:
-- **System prompts** (`morgana.json`): Define actor behaviors, global policies, and orchestration rules
-- **Domain prompts** (`agents.json`): Define agent personalities, instructions, and tool configurations
+- **System prompts** (`morgana.json`): Define actor behaviors, global policies and orchestration rules
+- **Domain prompts** (`agents.json`): Define agent personalities, instructions and tool configurations
 
 A unique characteristic of Morgana is its **Layered Personality System**. Every interaction maintains a consistent global personality (Morgana's core character) while allowing agents to express domain-appropriate specializations:
 
-- **Global Layer**: Defines Morgana's fundamental character, tone, and values
+- **Global Layer**: Defines Morgana's fundamental character, tone and values
 - **Agent Layer**: Adds contextual traits that complement (never contradict) the global personality
 
 For example, BillingAgent might be "a pragmatic and concrete witch" while ContractAgent is "a patient and empathetic witch"—both remain recognizably "Morgana" while adapting to domain-specific user needs. This creates vertical consistency across conversations with horizontal variation per expertise area, delivering a **unified brand experience that feels naturally specialized**.
 
 Prompts also define **Global Policies** that are automatically composed into agent instructions, ensuring **system-wide behavioral consistency** without repetition.
-
-Because prompt quality can't be verified by a compiler, Morgana ships **PromptHarness**, a dedicated automated test suite that runs real conversations against live LLM calls and checks how agents actually behave—not just that the configuration is well-formed. This turns changing a global policy or an agent's personality into an ordinary, checkable engineering step instead of a leap of faith, keeping one of the most delicate parts of an AI application easy to maintain over time.
 
 ### 💾 Morgana Context System
 *Private by default, self-synchronizing where it matters*
@@ -276,4 +275,4 @@ docker compose --env-file .env --env-file .env.versions down
 ```
 
 > [!TIP]
-> **Don't hand-write your first domain — distill it.** [**Alembic**](https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Alembic-Handbook.html) is Morgana's authoring workbench: an AI-conducted interview that turns a domain expert's own words into a ready-to-use Morgana domain (intents, agent prose, tool contracts, C# assets and starter non-regression scenarios), instead of writing `agents.json` and C# by hand. Hand-authoring against the `Morgana.AI` NuGet package is still fully supported for those who prefer it — Alembic is simply the preferred path to **onboard a new domain**, or extend an existing one.
+> **Don't hand-write your first domain — distill it.** [**Alembic**](https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Alembic-Handbook.html) is Morgana's authoring workbench: an AI-conducted interview that turns a domain expert's own words into a ready-to-use Morgana domain (intents, agent prose, tool contracts, C# assets and starter non-regression scenarios), instead of writing `agents.json` and C# by hand. Hand-authoring against the `Morgana.AI` NuGet package is still fully supported for those who prefer it: Alembic is the preferred path to **onboard a new domain** or extend an existing one.
