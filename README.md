@@ -91,8 +91,6 @@ Morgana leverages the **actor model** to create a fault-tolerant, scalable orche
 - **Classifier**: Analyzes user intent through LLM-powered classification
 - **Router**: Dynamically routes requests to appropriate agents
 
-This architecture ensures that failures are isolated, system state remains consistent and conversations can scale horizontally without bottlenecks.
-
 **Actors Conversation Flow**
 
 ```mermaid
