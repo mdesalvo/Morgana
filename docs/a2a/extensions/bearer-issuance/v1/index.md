@@ -35,16 +35,22 @@ The extension is declared in the agent card's `capabilities.extensions`:
   },
   "securitySchemes": {
     "morgana-bearer": {
-      "type": "http",
-      "scheme": "bearer",
-      "bearerFormat": "JWT"
+      "httpAuthSecurityScheme": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
     }
   },
   "securityRequirements": [
-    { "morgana-bearer": [] }
+    { "schemes": { "morgana-bearer": { "list": [] } } }
   ]
 }
 ```
+
+The security scheme is written as A2A defines it — a discriminated union whose member is named by
+its own field, not by a `type` discriminator — and the requirement in the form the reference .NET
+implementation emits. Neither belongs to this extension: they are shown only so the excerpt above is
+a card that exists, rather than a fragment assembled by hand.
 
 ### `params`
 
