@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using A2A;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Configuration;
@@ -187,9 +188,45 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             Version = LocalCardVersion,
             Skills = ProjectSkills(prompt),
 
-            // A consultation is a single question answered in full: the answering turn has no user
-            // watching it, and there is nobody to push anything to.
-            Capabilities = new AgentCapabilities { Streaming = false, PushNotifications = false },
+            Capabilities = new AgentCapabilities
+            {
+                Streaming = false,
+                PushNotifications = false,
+
+                // How to mint the token the requirement below asks for. The scheme states that a
+                // bearer is needed and stops there, leaving the two claim values this installation
+                // validates to be agreed out of band — which is the coupling discovery exists to remove.
+                Extensions = [BuildBearerIssuanceExtension()]
+            },
+
+            // Bearer, in the standard form every A2A consumer reads. The card is what tells a caller
+            // how to pass the gate the endpoints behind it already apply, which is exactly why it is
+            // itself served open: a discovery document that required a token could not be discovered.
+            SecuritySchemes = new Dictionary<string, SecurityScheme>
+            {
+                [Constants.AgentToAgent.BearerSchemeName] = new SecurityScheme
+                {
+                    HttpAuthSecurityScheme = new HttpAuthSecurityScheme
+                    {
+                        Scheme = Constants.AgentToAgent.BearerScheme,
+                        BearerFormat = Constants.AgentToAgent.BearerFormat,
+                        Description = "Short-lived token signed with the key this installation shares with its peers."
+                    }
+                }
+            },
+
+            // The requirement names no scopes, because none are honoured: a caller proven to be the
+            // peer issuer may consult this agent, and the card promises nothing finer than that.
+            SecurityRequirements =
+            [
+                new SecurityRequirement
+                {
+                    Schemes = new Dictionary<string, StringList>
+                    {
+                        [Constants.AgentToAgent.BearerSchemeName] = new StringList()
+                    }
+                }
+            ],
 
             // Where this installation answers for the agent.
             SupportedInterfaces = baseAddress is null ? [] : [BuildInterface(baseAddress, intent)]
@@ -237,8 +274,40 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// </summary>
     /// <returns>The issuer's key (null when the issuer is not declared) and the configured audience.</returns>
     private (string? SymmetricKey, string Audience) ResolvePeerCredentials()
-        => (ResolvePeerSigningKey(configuration),
-            configuration["Morgana:Authentication:Audience"] ?? "morgana.ai");
+        => (ResolvePeerSigningKey(configuration), ResolveAudience());
+
+    /// <summary>
+    /// The audience this installation validates an inbound token against, and therefore the one its
+    /// cards ask a caller to name. An opaque identifier compared for equality: it is neither a
+    /// hostname nor a resource anybody has to own.
+    /// </summary>
+    private string ResolveAudience()
+        => configuration["Morgana:Authentication:Audience"] ?? "morgana.ai";
+
+    /// <summary>
+    /// Builds the extension by which the card declares the two claim values a caller must mint its
+    /// bearer token with.
+    /// </summary>
+    /// <remarks>
+    /// Declared as not required, deliberately: the obligation to authenticate is already stated in
+    /// standard form by the card's own security requirement, and this says only how to satisfy it.
+    /// So a consumer that has never heard of the extension is held to exactly what any A2A consumer
+    /// is held to, and one holding a token issued out of band is unaffected. The URI names a
+    /// published specification because it is read on somebody else's card, by an implementation that
+    /// will never see this code.
+    /// </remarks>
+    private AgentExtension BuildBearerIssuanceExtension()
+        => new AgentExtension
+        {
+            Uri = Constants.AgentToAgent.BearerIssuanceExtensionUri,
+            Description = "Issuer and audience a caller must mint its bearer token under.",
+            Required = false,
+            Params = JsonSerializer.SerializeToElement(new Dictionary<string, string>
+            {
+                [Constants.AgentToAgent.BearerIssuerParameter] = Constants.AgentToAgent.IssuerName,
+                [Constants.AgentToAgent.BearerAudienceParameter] = ResolveAudience()
+            })
+        };
 
     /// <summary>
     /// The key Morgana signs its own peer traffic with, or <c>null</c> when the <c>morgana</c> issuer

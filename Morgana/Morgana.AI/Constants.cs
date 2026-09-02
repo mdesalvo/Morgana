@@ -229,6 +229,29 @@ public static class Constants
 
         /// <summary>Issuer name Morgana signs its own peer requests under. The only issuer the A2A endpoints admit; must be declared in <c>Morgana:Authentication:Issuers</c> like any channel.</summary>
         public const string IssuerName = "morgana";
+
+        /// <summary>
+        /// URI of the agent-card extension by which a published agent declares how a caller mints its
+        /// bearer token. Names a specification that resolves: an extension URI is read on somebody
+        /// else's card, by an implementation that has never seen this code, and must lead them to what
+        /// it means.
+        /// </summary>
+        public const string BearerIssuanceExtensionUri = "https://mdesalvo.github.io/Morgana/a2a/extensions/bearer-issuance/v1";
+
+        /// <summary>Name the bearer scheme is declared under on a card, and referenced by in its requirements.</summary>
+        public const string BearerSchemeName = "morgana-bearer";
+
+        /// <summary>HTTP authentication scheme a card requires, in the spelling the A2A schema uses.</summary>
+        public const string BearerScheme = "bearer";
+
+        /// <summary>Format the bearer token is advertised in, as a hint to whoever has to produce one.</summary>
+        public const string BearerFormat = "JWT";
+
+        /// <summary>Extension parameter naming the issuer a caller must sign under.</summary>
+        public const string BearerIssuerParameter = "issuer";
+
+        /// <summary>Extension parameter naming the audience a caller must address.</summary>
+        public const string BearerAudienceParameter = "audience";
     }
 
     /// <summary>
