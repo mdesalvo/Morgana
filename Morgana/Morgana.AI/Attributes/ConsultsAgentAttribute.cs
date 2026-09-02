@@ -34,6 +34,8 @@ public class ConsultsAgentAttribute : Attribute
             throw new ArgumentException("A consulted agent must be declared by a non-empty intent name.", nameof(intent));
 
         Intent = intent;
-        Partner = string.IsNullOrWhiteSpace(partner) ? null : partner;
+        // Trimmed rather than taken as typed: the name is matched against a configuration entry, and
+        // a stray space is a partner nobody declared — an error whose cause is invisible on screen.
+        Partner = string.IsNullOrWhiteSpace(partner) ? null : partner.Trim();
     }
 }

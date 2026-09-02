@@ -155,7 +155,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         else
         {
             partner = ResolvePartners(configuration)
-                .FirstOrDefault(candidate => string.Equals(candidate.Name, peer.Partner, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(candidate => string.Equals(candidate.Name.Trim(), peer.Partner, StringComparison.OrdinalIgnoreCase));
 
             if (partner is null)
             {

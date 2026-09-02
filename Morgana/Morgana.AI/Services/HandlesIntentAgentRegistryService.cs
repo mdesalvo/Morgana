@@ -203,10 +203,13 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                     // the declaration names something addressable and signable, which is the whole of
                     // what this side must bring.
                     Records.PartnerOptions? partner = partners
-                        .FirstOrDefault(candidate => string.Equals(candidate.Name, consultsAgent.Partner, StringComparison.OrdinalIgnoreCase));
+                        .FirstOrDefault(candidate => string.Equals(candidate.Name.Trim(), consultsAgent.Partner, StringComparison.OrdinalIgnoreCase));
 
                     if (partner is null)
-                        validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of {colleague}, which is not declared under Morgana:AgentToAgent:Partners");
+                        validationErrors.Add(
+                            $"Agent '{agentType.Name}' declares a consultation of {colleague}, which is not declared under Morgana:AgentToAgent:Partners "
+                            + $"(declared: {(partners.Count > 0 ? string.Join(", ", partners.Select(declared => $"'{declared.Name}'")) : "none")}). "
+                            + "The name on the attribute and the Name on the entry must be the same, spelling and spacing included");
                     else if (!Uri.TryCreate(partner.Url, UriKind.Absolute, out _))
                         validationErrors.Add($"Partner '{partner.Name}', consulted by agent '{agentType.Name}', declares no absolute Url");
                     else if (string.IsNullOrWhiteSpace(partner.SymmetricKey)
