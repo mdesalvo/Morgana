@@ -139,7 +139,7 @@ graph LR
 ```
 
 ### 🤖 Morgana Agent System
-*Declarative specialization with automatic discovery and dynamic capabilities*
+*Declarative specialization with automatic discovery and dynamic capabilities (MCP + A2A)*
 
 Agents in Morgana are **domain specialists** that self-register through **declarative attributes**, eliminating manual configuration and enabling true plugin-based extensibility. Each agent inherits from `MorganaAgent` and declares its responsibilities through simple annotations:
 
