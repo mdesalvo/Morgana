@@ -17,13 +17,23 @@ public class ConsultsAgentAttribute : Attribute
     /// </summary>
     public string Intent { get; }
 
-    /// <summary>Declares one consultable colleague, whose intent must be handled by a registered agent.</summary>
+    /// <summary>
+    /// Partner publishing the colleague, as named in <c>Morgana:AgentToAgent:Partners</c>, or
+    /// <c>null</c> when it is an agent of this installation. A name and not an address: whose desk to
+    /// call is the agent author's decision, where that desk runs is the deployment's.
+    /// </summary>
+    public string? Partner { get; }
+
+    /// <summary>Declares one consultable colleague, of this installation or of a declared partner.</summary>
+    /// <param name="intent">Intent the colleague handles; must be handled by a registered agent when it is local.</param>
+    /// <param name="partner">Partner publishing it, omitted for a colleague of this installation.</param>
     /// <exception cref="ArgumentException">Thrown when the intent is null or blank.</exception>
-    public ConsultsAgentAttribute(string intent)
+    public ConsultsAgentAttribute(string intent, string? partner = null)
     {
         if (string.IsNullOrWhiteSpace(intent))
             throw new ArgumentException("A consulted agent must be declared by a non-empty intent name.", nameof(intent));
 
         Intent = intent;
+        Partner = string.IsNullOrWhiteSpace(partner) ? null : partner;
     }
 }

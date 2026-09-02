@@ -366,6 +366,45 @@ public static class Records
     }
 
     /// <summary>
+    /// Another Morgana installation whose agents this one may consult.
+    /// </summary>
+    /// <remarks>
+    /// An entry describes an installation, not an agent: every agent it publishes is reachable
+    /// underneath the same address, so declaring a partner once opens as many colleagues as it
+    /// serves. This is the mirror image of <see cref="IssuerOptions"/> — there a caller is admitted,
+    /// here one is addressed — and the same per-entry key discipline applies for the same reason.
+    /// A partner is not necessarily somebody else's: a second deployment of one's own is declared
+    /// exactly the same way.
+    /// </remarks>
+    public record PartnerOptions
+    {
+        /// <summary>
+        /// Name this partner is declared under in <c>[ConsultsAgent]</c>, and never a hostname: an
+        /// attribute names whose desk is being called, while where that desk runs is deployment.
+        /// </summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Absolute address the installation answers on — everything before the published agent path,
+        /// which is appended from the intent being consulted.
+        /// </summary>
+        public string Url { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Key this side signs its requests to that partner with (HMAC-SHA256, at least 256 bits).
+        /// The receiving side must hold the same key under the issuer named below.
+        /// </summary>
+        public string SymmetricKey { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Issuer to sign under, overriding what the partner's own card declares. Left unset in the
+        /// ordinary case; set when a partner cut a key for this caller alone, so that revoking it
+        /// does not rotate the key every other caller uses.
+        /// </summary>
+        public string? Issuer { get; set; }
+    }
+
+    /// <summary>
     /// Result of a token authentication operation.
     /// </summary>
     /// <param name="IsAuthenticated">Whether the token was successfully validated</param>
@@ -525,6 +564,15 @@ public static class Records
     // ==========================================================================
     // PEER CONSULTATION MODELS
     // ==========================================================================
+
+    /// <summary>
+    /// Names one consultable colleague.
+    /// </summary>
+    /// <param name="Intent">Intent the colleague handles, as its own installation publishes it.</param>
+    /// <param name="Partner">Installation publishing it, declared in <c>Morgana:AgentToAgent:Partners</c>;
+    /// <c>null</c> for an agent of this one. Two colleagues handling the same intent at two
+    /// installations are two colleagues, which is why the pair and not the intent is the name.</param>
+    public record PeerReference(string Intent, string? Partner = null);
 
     /// <summary>
     /// Question one agent puts to a colleague of the same conversation, sent to the colleague's

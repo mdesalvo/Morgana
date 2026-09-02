@@ -322,6 +322,10 @@ string[] publishedIntents = builder.Configuration.GetValue("Morgana:AgentToAgent
     [
         .. discoveredAgents.Values
             .SelectMany(agentType => agentType.GetCustomAttributes<ConsultsAgentAttribute>())
+
+            // A colleague declared at a partner is published there, not here: naming it is a
+            // statement about whom this installation asks, never about whom it answers.
+            .Where(consultsAgent => consultsAgent.Partner is null)
             .Select(consultsAgent => consultsAgent.Intent)
             .Where(discoveredAgents.ContainsKey)
             .Distinct(StringComparer.OrdinalIgnoreCase)

@@ -118,13 +118,35 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     }
 
     /// <inheritdoc />
-    public async Task<(AIAgent Agent, AgentCard Card)?> ResolvePeerAgentAsync(string intent, string callerIntent)
+    public async Task<(AIAgent Agent, AgentCard Card)?> ResolvePeerAgentAsync(Records.PeerReference peer, string callerIntent)
     {
-        string? baseAddress = hostAddressService.ResolveBaseAddress();
-        if (baseAddress is null)
+        // An agent of this installation is reached where this installation answers, an agent of a
+        // peer where that peer was declared to answer. Everything past this point is one path: a
+        // card is fetched, read and satisfied the same way whichever side of the boundary it came from.
+        Records.PartnerOptions? partner = null;
+        string? baseAddress;
+
+        if (peer.Partner is null)
         {
-            logger.LogError("This instance reports no address it answers on; '{Intent}' cannot be consulted", intent);
-            return null;
+            baseAddress = hostAddressService.ResolveBaseAddress();
+            if (baseAddress is null)
+            {
+                logger.LogError("This instance reports no address it answers on; '{Intent}' cannot be consulted", peer.Intent);
+                return null;
+            }
+        }
+        else
+        {
+            partner = ResolvePartners(configuration)
+                .FirstOrDefault(candidate => string.Equals(candidate.Name, peer.Partner, StringComparison.OrdinalIgnoreCase));
+
+            if (partner is null)
+            {
+                logger.LogError("Partner '{Partner}' is not declared under Morgana:AgentToAgent:Partners; '{Intent}' cannot be consulted", peer.Partner, peer.Intent);
+                return null;
+            }
+
+            baseAddress = partner.Url.TrimEnd('/');
         }
 
         try
@@ -136,12 +158,12 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             // consumer in another process makes, so a card that is unpublished or unreachable fails
             // here, at the directory, rather than at the first consultation.
             A2ACardResolver resolver = new A2ACardResolver(
-                new Uri($"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{intent}/"),
+                new Uri($"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{peer.Intent}/"),
                 new HttpClient());
 
             AgentCard card = await resolver.GetAgentCardAsync();
 
-            HttpClient? peerHttpClient = BuildPeerHttpClient(card, intent, callerIntent);
+            HttpClient? peerHttpClient = BuildPeerHttpClient(card, peer, partner, callerIntent);
             if (peerHttpClient is null)
                 return null;
 
@@ -149,16 +171,31 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             // said it answers, never a path assembled from an assumption about how it is published.
             AIAgent peerAgent = card.AsAIAgent(peerHttpClient);
 
-            logger.LogInformation("Resolved peer agent '{Intent}' for '{CallerIntent}' from its published A2A card", intent, callerIntent);
+            logger.LogInformation(
+                "Resolved peer agent '{Intent}' at '{BaseAddress}' for '{CallerIntent}' from its published A2A card",
+                peer.Intent, baseAddress, callerIntent);
 
             return (peerAgent, card);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Could not resolve peer agent '{Intent}' from its published A2A card", intent);
+            logger.LogError(ex, "Could not resolve peer agent '{Intent}' at '{BaseAddress}' from its published A2A card", peer.Intent, baseAddress);
             return null;
         }
     }
+
+    /// <summary>
+    /// The partners this installation may consult, as configuration declares them.
+    /// </summary>
+    /// <remarks>
+    /// Static and public because the startup checks must read the very list resolution reads: a
+    /// colleague that validates cleanly and then resolves to nothing on the first conversation is
+    /// precisely the silent failure those checks exist to prevent.
+    /// </remarks>
+    /// <param name="configuration">Application configuration.</param>
+    public static List<Records.PartnerOptions> ResolvePartners(IConfiguration configuration)
+        => configuration.GetSection("Morgana:AgentToAgent:Partners")
+               .Get<List<Records.PartnerOptions>>() ?? [];
 
     /// <summary>
     /// Builds the client a colleague is called through, carrying whatever that colleague's own card
@@ -170,10 +207,15 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// requiring nothing is called bare, which is what makes an open peer reachable.
     /// </remarks>
     /// <param name="card">The colleague's card, already fetched.</param>
-    /// <param name="intent">Intent being resolved, named in the diagnostics.</param>
+    /// <param name="peer">The colleague being resolved, named in the diagnostics.</param>
+    /// <param name="partner">Declaration of the partner publishing it, or <c>null</c> when it is an agent of this installation.</param>
     /// <param name="callerIntent">Asking agent, recorded as the subject of the minted token.</param>
     /// <returns>The client to call the colleague with, or <c>null</c> when its requirements cannot be met.</returns>
-    private HttpClient? BuildPeerHttpClient(AgentCard card, string intent, string callerIntent)
+    private HttpClient? BuildPeerHttpClient(
+        AgentCard card,
+        Records.PeerReference peer,
+        Records.PartnerOptions? partner,
+        string callerIntent)
     {
         // A2A states alternatives, and satisfying one is enough — so these are candidates to try, not
         // a set to meet.
@@ -190,23 +232,31 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
                 || !string.Equals(httpAuthScheme.Scheme, Constants.AgentToAgent.BearerScheme, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            string? symmetricKey = ResolvePeerSigningKey(configuration);
-            if (symmetricKey is null)
+            // A partner's key is the one it cut for this caller; this installation's own key is the
+            // one it shares with itself. Either way the secret is configured here and never discovered.
+            string? symmetricKey = partner is null
+                ? ResolvePeerSigningKey(configuration)
+                : partner.SymmetricKey;
+
+            if (string.IsNullOrWhiteSpace(symmetricKey))
             {
                 logger.LogError(
-                    "Peer consultation needs an issuer named '{IssuerName}' under Morgana:Authentication:Issuers to sign its own requests; '{Intent}' cannot be consulted",
-                    Constants.AgentToAgent.IssuerName, intent);
+                    "No usable signing key for '{Intent}': declare the '{IssuerName}' issuer under Morgana:Authentication:Issuers for an agent of this installation, or a SymmetricKey on the partner entry for one published elsewhere",
+                    peer.Intent, Constants.AgentToAgent.IssuerName);
                 return null;
             }
 
             (string issuer, string audience) = ReadBearerIssuance(card);
 
-            return new HttpClient(new MorganaPeerAuthenticationHandler(symmetricKey, issuer, audience, callerIntent));
+            // A partner that cut a key for this caller alone names the issuer it filed that key
+            // under, which its public card cannot say without naming it to everyone else too.
+            return new HttpClient(new MorganaPeerAuthenticationHandler(
+                symmetricKey, partner?.Issuer ?? issuer, audience, callerIntent));
         }
 
         logger.LogError(
             "Agent '{Intent}' requires security scheme(s) '{SchemeNames}', none of which this installation can satisfy",
-            intent, string.Join(", ", requiredSchemeNames));
+            peer.Intent, string.Join(", ", requiredSchemeNames));
 
         return null;
     }

@@ -1,5 +1,7 @@
 ﻿using System.Reflection;
+using Microsoft.Extensions.Configuration;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 
@@ -26,6 +28,13 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     private readonly ILLMTierValidationService llmTierValidationService;
 
     /// <summary>
+    /// Application configuration, read for the partners a consultation may name. Held here because a
+    /// colleague published elsewhere is declared in configuration and not in code, so the startup
+    /// check has nowhere else to learn that the name resolves to anything.
+    /// </summary>
+    private readonly IConfiguration configuration;
+
+    /// <summary>
     /// Registry mapping intent names to agent types.
     /// Built during service initialization via assembly scanning.
     /// Case-insensitive string comparison for intent matching.
@@ -35,11 +44,16 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// <summary>Discovers agents and runs bidirectional intent↔agent validation (lazily — see field above).</summary>
     /// <param name="agentConfigService">Loads intent configuration from agents.json.</param>
     /// <param name="llmTierValidationService">Validates each agent's [RequiresLLMTier], delegated as a separate concern.</param>
+    /// <param name="configuration">Application configuration, read for the declared partners.</param>
     /// <exception cref="InvalidOperationException">Validation fails: missing agents or missing configuration.</exception>
-    public HandlesIntentAgentRegistryService(IAgentConfigurationService agentConfigService, ILLMTierValidationService llmTierValidationService)
+    public HandlesIntentAgentRegistryService(
+        IAgentConfigurationService agentConfigService,
+        ILLMTierValidationService llmTierValidationService,
+        IConfiguration configuration)
     {
         this.agentConfigService = agentConfigService;
         this.llmTierValidationService = llmTierValidationService;
+        this.configuration = configuration;
 
         // Lazy rather than run in the constructor: InitializeRegistry does a full-AppDomain
         // reflection scan plus the startup-fatal bidirectional validation below, and both need to
@@ -149,23 +163,59 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             validationErrors.Add(ex.Message);
         }
 
-        // Check 4: every [ConsultsAgent] declaration must name an agent that exists, never the
+        // Check 4: every [ConsultsAgent] declaration must name a colleague that can actually be
+        // reached — an agent of this installation, or an intent at a declared peer — never the
         // declaring agent itself, and never the same colleague twice. A consultation is resolved at
         // agent-creation time, long after startup, so each of these would otherwise surface on the
         // first conversation: a typo as a colleague that silently never appears, a duplicate as two
         // functions of the same name in the tool list, which the provider rejects outright.
+        List<Records.PartnerOptions> partners = ConfigurationAgentDirectoryService.ResolvePartners(configuration);
+
         foreach ((string declaredIntent, Type agentType) in registry)
         {
             HashSet<string> declaredColleagues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (ConsultsAgentAttribute consultsAgent in agentType.GetCustomAttributes<ConsultsAgentAttribute>())
             {
-                if (string.Equals(consultsAgent.Intent, declaredIntent, StringComparison.OrdinalIgnoreCase))
-                    validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of itself ('{declaredIntent}')");
-                else if (!registry.ContainsKey(consultsAgent.Intent))
-                    validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of '{consultsAgent.Intent}', which no Morgana agent handles");
-                else if (!declaredColleagues.Add(consultsAgent.Intent))
-                    validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of '{consultsAgent.Intent}' more than once");
+                // What must be unique is the name the colleague is offered under, not the pair that
+                // produced it: partners are named by people ("Newco Finance"), and a function name is
+                // constrained where a partner name is not — so two distinct declarations can sanitize
+                // to one function, which the provider rejects outright. Derived by the very method the
+                // adapter will use, so the check and the tool list cannot disagree.
+                string peerFunctionName = MorganaAgentAdapter.ToFunctionName(
+                    new Records.PeerReference(consultsAgent.Intent, consultsAgent.Partner));
+
+                string colleague = consultsAgent.Partner is null
+                    ? $"'{consultsAgent.Intent}'"
+                    : $"'{consultsAgent.Intent}' at partner '{consultsAgent.Partner}'";
+
+                if (consultsAgent.Partner is null)
+                {
+                    if (string.Equals(consultsAgent.Intent, declaredIntent, StringComparison.OrdinalIgnoreCase))
+                        validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of itself ('{declaredIntent}')");
+                    else if (!registry.ContainsKey(consultsAgent.Intent))
+                        validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of '{consultsAgent.Intent}', which no Morgana agent handles");
+                }
+                else
+                {
+                    // What a partner publishes cannot be verified from here — that is the point of a
+                    // card, and it is fetched on the first consultation. What can be verified is that
+                    // the declaration names something addressable and signable, which is the whole of
+                    // what this side must bring.
+                    Records.PartnerOptions? partner = partners
+                        .FirstOrDefault(candidate => string.Equals(candidate.Name, consultsAgent.Partner, StringComparison.OrdinalIgnoreCase));
+
+                    if (partner is null)
+                        validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of {colleague}, which is not declared under Morgana:AgentToAgent:Partners");
+                    else if (!Uri.TryCreate(partner.Url, UriKind.Absolute, out _))
+                        validationErrors.Add($"Partner '{partner.Name}', consulted by agent '{agentType.Name}', declares no absolute Url");
+                    else if (string.IsNullOrWhiteSpace(partner.SymmetricKey)
+                             || string.Equals(partner.SymmetricKey.Trim(), Constants.Overrides.Secure, StringComparison.Ordinal))
+                        validationErrors.Add($"Partner '{partner.Name}', consulted by agent '{agentType.Name}', carries no usable SymmetricKey (User Secrets or environment)");
+                }
+
+                if (!declaredColleagues.Add(peerFunctionName))
+                    validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of {colleague} under a name it already offers another colleague under ('{peerFunctionName}')");
             }
         }
 

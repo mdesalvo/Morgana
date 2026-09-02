@@ -28,8 +28,8 @@ public interface IAgentDirectoryService
     Task PublishInterfacesAsync();
 
     /// <summary>
-    /// Resolves the agent handling <paramref name="intent"/> by fetching its published card, binding
-    /// a client to the interface that card advertises and satisfying the credentials it requires.
+    /// Resolves the agent <paramref name="peer"/> names by fetching its published card, binding a
+    /// client to the interface that card advertises and satisfying the credentials it requires.
     /// </summary>
     /// <remarks>
     /// Best-effort by contract: an unreachable or unpublished agent, or one whose stated requirements
@@ -38,6 +38,7 @@ public interface IAgentDirectoryService
     /// because it is the one an implementation actually read: for a colleague published elsewhere
     /// there is no local projection to describe it by.
     /// </remarks>
+    /// <param name="peer">Colleague to resolve: its intent, and the installation publishing it.</param>
     /// <param name="callerIntent">Asking agent, recorded on the credentials the resolved agent presents.</param>
-    Task<(AIAgent Agent, AgentCard Card)?> ResolvePeerAgentAsync(string intent, string callerIntent);
+    Task<(AIAgent Agent, AgentCard Card)?> ResolvePeerAgentAsync(Records.PeerReference peer, string callerIntent);
 }

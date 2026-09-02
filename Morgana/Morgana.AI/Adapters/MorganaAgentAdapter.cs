@@ -529,6 +529,10 @@ public class MorganaAgentAdapter
         return new HashSet<string>(
             discoveredAgents.Values
                 .SelectMany(agentType => agentType.GetCustomAttributes<ConsultsAgentAttribute>())
+
+                // A colleague named at a partner is published by that partner, and says nothing about
+                // whether an agent of the same name here is ever asked anything.
+                .Where(consultsAgent => consultsAgent.Partner is null)
                 .Select(consultsAgent => consultsAgent.Intent)
                 .Where(discoveredAgents.ContainsKey),
             StringComparer.OrdinalIgnoreCase);
@@ -614,8 +618,10 @@ public class MorganaAgentAdapter
             // agent in another process would obtain for the same colleague. The card comes back with
             // it, and it is that fetched card the model is told about: the colleague describes itself,
             // rather than being described by whatever this installation believes about it.
+            Records.PeerReference peer = new Records.PeerReference(attribute.Intent, attribute.Partner);
+
             (AIAgent Agent, AgentCard Card)? resolvedPeer =
-                await agentDirectoryService.ResolvePeerAgentAsync(attribute.Intent, callerIntent);
+                await agentDirectoryService.ResolvePeerAgentAsync(peer, callerIntent);
 
             if (resolvedPeer is not (AIAgent peerAgent, AgentCard peerCard))
             {
@@ -652,7 +658,7 @@ public class MorganaAgentAdapter
             // The function name is what the model calls, so it is derived from the colleague's intent
             // rather than from the card's free-form name, and sanitized because a name is constrained
             // where a card's name is not.
-            string peerFunctionName = ToFunctionName(attribute.Intent);
+            string peerFunctionName = ToFunctionName(peer);
 
             peerAgents.Add(guardedPeerAgent.AsAIFunction(
                 new AIFunctionFactoryOptions
@@ -748,10 +754,19 @@ public class MorganaAgentAdapter
     /// <remarks>
     /// Intents are authored freely while a function name is not, so anything outside the permitted
     /// alphabet folds to an underscore; the prefix keeps a colleague visibly distinct from the
-    /// agent's own tools in the model's tool list.
+    /// agent's own tools in the model's tool list. A colleague published by a partner carries that
+    /// partner in the name, so an agent may hold two colleagues handling the same intent at two desks
+    /// without them colliding. Public because the startup check must derive the same name: partner
+    /// names are written by people and two of them can fold to one function, which is a startup error
+    /// rather than something to discover when the provider rejects the tool list.
     /// </remarks>
-    private static string ToFunctionName(string peerIntent)
-        => $"{Constants.AgentToAgent.PeerFunctionNamePrefix}{new string([.. peerIntent.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_')])}";
+    /// <param name="peer">Colleague being offered.</param>
+    public static string ToFunctionName(Records.PeerReference peer)
+    {
+        string peerName = peer.Partner is null ? peer.Intent : $"{peer.Partner}_{peer.Intent}";
+
+        return $"{Constants.AgentToAgent.PeerFunctionNamePrefix}{new string([.. peerName.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_')])}";
+    }
 
     /// <summary>
     /// Discovers tools from every MCP server declared on the agent.
