@@ -91,7 +91,7 @@ Morgana leverages the **actor model** to create a fault-tolerant, scalable orche
 - **Classifier**: Analyzes user intent through LLM-powered classification
 - **Router**: Dynamically routes requests to appropriate agents
 
-**Actors Conversation Flow**
+**Conversation Flow**
 
 ```mermaid
 graph LR
@@ -170,45 +170,6 @@ The **MCP integration** permits agents to extend their capabilities by consuming
 The **A2A integration** allows agents to collaborate behind the scenes, consulting their peers on-demand via competence-driven queries to deliver cross-cutting answers that horizontally cover the entire application domain. This enables seamless peer collaboration, autonomous knowledge sharing and cross-domain reasoning, all without user-facing friction or explicit inter-agent configuration.
 
 The framework provides adapters (`MorganaAgentAdapter`, `MorganaToolAdapter`) that bridge the declarative configuration with runtime activation, handling validation, dependency injection and lifecycle management transparently.
-
-**Agents Conversation Flow**
-
-```mermaid
-graph LR
-  U@{shape: circle, label: "👤 User"}
-
-  %% Channels (reference clients, out-of-the-box)
-  subgraph Channels["Channels"]
-    CLD@{shape: rounded, label: "🌐 Cauldron"}
-    RUN@{shape: rounded, label: "📟 Grimoire/Rune"}
-  end
-
-  %% Backend boundary
-  subgraph Morgana["Morgana"]
-    CM@{shape: rounded, label: "Manager"}
-    SV@{shape: rounded, label: "Supervisor"}
-
-    G@{shape: rounded, label: "Guard"}
-    MA@{shape: rounded, label: "Agent"}
-  end
-
-  %% User → Channel
-  U -- HTML --> CLD
-  U -- TTY --> RUN
-
-  %% Channel → BE
-  CLD -- SignalR --> CM
-  RUN -- Webhook --> CM
-  CM -- 1. Continues conversation and engages actor --> SV
-
-  %% Internal BE flow
-  SV -- 2. Asks for language compliance --> G
-  SV -- 4. Engages agent for intent handling --> MA
-
-  %% External systems
-  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Anthropic, Azure OpenAI, Ollama, OpenAI)"}
-  MA -. 5 Intent handling .-> LLM
-```
 
 ### 📝 Morgana Prompt System
 *First-class artifacts with layered personality architecture and structured behavioral policies*
