@@ -53,6 +53,23 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// <summary>Guards <see cref="cardsByIntent"/>: agents are created concurrently across conversations.</summary>
     private readonly SemaphoreSlim cardsLock = new(1, 1);
 
+    /// <summary>
+    /// The one connection pool every call to a colleague goes through, card discovery included.
+    /// </summary>
+    /// <remarks>
+    /// A client is built per colleague per conversation, so a handler per client would open its own
+    /// sockets and hold them for as long as the conversation lives. The lifetime bound is the other
+    /// half: connections are recycled, so a partner that moves is followed instead of being pinned to
+    /// the address it happened to have when it was first reached. This is what a host with
+    /// <c>IHttpClientFactory</c> would obtain from it, done here because a library should not grow a
+    /// dependency to reach a handler it can simply hold — this service is a singleton, and the pool
+    /// lives exactly as long as it does.
+    /// </remarks>
+    private readonly SocketsHttpHandler connectionPool = new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2)
+    };
+
     /// <summary>Builds the directory over the configuration it projects cards from.</summary>
     /// <param name="agentConfigurationService">Loads the configured intents.</param>
     /// <param name="promptResolverService">Resolves an agent's prompt, and with it its tool definitions.</param>
@@ -159,7 +176,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             // here, at the directory, rather than at the first consultation.
             A2ACardResolver resolver = new A2ACardResolver(
                 new Uri($"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{peer.Intent}/"),
-                new HttpClient());
+                new HttpClient(connectionPool, disposeHandler: false));
 
             AgentCard card = await resolver.GetAgentCardAsync();
 
@@ -223,7 +240,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             [.. (card.SecurityRequirements ?? []).SelectMany(requirement => requirement.Schemes?.Keys.AsEnumerable() ?? [])];
 
         if (requiredSchemeNames.Count == 0)
-            return new HttpClient();
+            return new HttpClient(connectionPool, disposeHandler: false);
 
         foreach (string schemeName in requiredSchemeNames)
         {
@@ -250,8 +267,9 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
 
             // A partner that cut a key for this caller alone names the issuer it filed that key
             // under, which its public card cannot say without naming it to everyone else too.
-            return new HttpClient(new MorganaPeerAuthenticationHandler(
-                symmetricKey, partner?.Issuer ?? issuer, audience, callerIntent));
+            return new HttpClient(
+                new MorganaPeerAuthenticationHandler(connectionPool, symmetricKey, partner?.Issuer ?? issuer, audience, callerIntent),
+                disposeHandler: false);
         }
 
         logger.LogError(
@@ -464,6 +482,8 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// Per request, not once on the client: an <c>A2AAgent</c> keeps its <see cref="HttpClient"/> for
     /// the whole conversation, far longer than a token should live. Morgana appears in its own issuer
     /// list like a channel does, so protecting reachable endpoints costs one entry and no new concept.
+    /// One of these is built per colleague, all of them over the same shared pool, which is why the
+    /// inner handler arrives from outside and is never disposed with the client that used it.
     /// </remarks>
     private sealed class MorganaPeerAuthenticationHandler : DelegatingHandler
     {
@@ -486,12 +506,13 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         private readonly string callerIntent;
 
         /// <summary>Builds the handler over the key Morgana shares with the agent being called.</summary>
+        /// <param name="innerHandler">Shared connection pool this handler sends through; owned by the directory, never by this handler.</param>
         /// <param name="symmetricKey">Signing key of the issuer named below; at least 256 bits.</param>
         /// <param name="issuer">Issuer name to sign under, taken from the callee's own card.</param>
         /// <param name="audience">Audience the receiving instance validates against.</param>
         /// <param name="callerIntent">Intent of the asking agent, recorded as the token's subject.</param>
-        public MorganaPeerAuthenticationHandler(string symmetricKey, string issuer, string audience, string callerIntent)
-            : base(new HttpClientHandler())
+        public MorganaPeerAuthenticationHandler(HttpMessageHandler innerHandler, string symmetricKey, string issuer, string audience, string callerIntent)
+            : base(innerHandler)
         {
             signingCredentials = new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(symmetricKey)),
