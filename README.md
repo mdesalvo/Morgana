@@ -169,8 +169,6 @@ The **MCP integration** permits agents to extend their capabilities by consuming
 
 The **A2A integration** allows agents to collaborate behind the scenes, consulting their peers on-demand via competence-driven queries to deliver cross-cutting answers that horizontally cover the entire application domain. This enables seamless peer collaboration, autonomous knowledge sharing and cross-domain reasoning, all without user-facing friction or explicit inter-agent configuration.
 
-The framework provides adapters (`MorganaAgentAdapter`, `MorganaToolAdapter`) that bridge the declarative configuration with runtime activation, handling validation, dependency injection and lifecycle management transparently.
-
 ### 📝 Morgana Prompt System
 *First-class artifacts with layered personality architecture and structured behavioral policies*
 
