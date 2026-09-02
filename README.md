@@ -144,8 +144,13 @@ Agents in Morgana are **domain specialists** that self-register through **declar
 ```csharp
 [HandlesIntent("billing")]
 [RequiresLLMTier(LLMTier.Efficiency)]
-[ConsultsAgent("inventory")]
+[ConsultsAgent("inventory")] // A2A automatic agent discovery
 public class BillingAgent : MorganaAgent { ... }
+
+[HandlesIntent("monkeys")]
+[RequiresLLMTier(LLMTier.Efficiency)]
+[UsesMCPServer("https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/")] // MCP automatic tool discovery
+public class MonkeyAgent : MorganaAgent { ... }
 ```
 
 At startup, Morgana automatically discovers all agents across configured assemblies and validates bidirectional consistency between declared intents and classifier configuration: **fail-fast guarantees** ensure errors are caught before reaching production.
@@ -158,11 +163,6 @@ public class BillingTool : MorganaTool
 {
     public async Task<string> GetInvoices(string customerCode, int count) { ... }
 }
-
-[HandlesIntent("monkeys")]
-[RequiresLLMTier(LLMTier.Efficiency)]
-[UsesMCPServer("https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/")]
-public class MonkeyAgent : MorganaAgent { ... }  // Acquires tools at runtime!
 ```
 
 The **MCP integration** is particularly powerful: agents can extend their capabilities by consuming **Model Context Protocol servers**, where external tools become indistinguishable from native implementations. This enables rapid prototyping, microservice integration and ecosystem-driven feature development, all without writing a single line of tool implementation code.
