@@ -1,0 +1,105 @@
+---
+---
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;600;700&display=swap');
+
+// Morgana's own palette, the one the two handbooks are drawn in: the site and the
+// documents it serves are one thing, and a visitor should not be able to tell where
+// the theme ends and the handbook begins.
+$morgana-ground:          #0d0b1a;
+$morgana-surface:         #151228;
+$morgana-border:          #2d2654;
+$morgana-purple-deep:     #4c1d95;
+$morgana-purple-mid:      #9333ea;
+$morgana-purple-light:    #c084fc;
+$morgana-magenta:         #d946ef;
+$morgana-text-primary:    #e8e0f0;
+$morgana-text-secondary:  #a89ec4;
+$morgana-text-muted:      #6b6189;
+
+// Cayman's own variables, all declared !default in the theme, so assigning them here
+// wins without touching the theme's rules.
+$header-bg-color:           $morgana-purple-mid;
+$header-bg-color-secondary: $morgana-purple-deep;
+$header-heading-color:      $morgana-text-primary;
+$section-headings-color:    $morgana-purple-light;
+$body-text-color:           $morgana-text-secondary;
+$body-link-color:           $morgana-purple-light;
+$blockquote-text-color:     $morgana-text-muted;
+$code-bg-color:             $morgana-surface;
+$code-text-color:           $morgana-text-primary;
+$border-color:              $morgana-border;
+$table-border-color:        $morgana-border;
+$hr-border-color:           $morgana-border;
+
+@import "{{ site.theme }}";
+
+// The dark ground itself is not a theme variable: Cayman assumes a white page and only
+// colours what sits on it.
+body {
+  background-color: $morgana-ground;
+  color: $body-text-color;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+
+// The banner reads as the handbook covers do: a serif name over a purple wash, spaced
+// out rather than merely large.
+.page-header {
+  background-image: linear-gradient(135deg, $morgana-purple-deep, $morgana-purple-mid 55%, $morgana-magenta);
+}
+
+.project-name {
+  font-family: 'Cinzel', Georgia, serif;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+}
+
+.project-tagline {
+  color: rgba($morgana-text-primary, 0.85);
+}
+
+.btn {
+  border-color: rgba($morgana-text-primary, 0.35);
+
+  &:hover {
+    border-color: rgba($morgana-text-primary, 0.7);
+    background-color: rgba($morgana-text-primary, 0.12);
+  }
+}
+
+.main-content {
+  color: $body-text-color;
+
+  h1, h2, h3, h4, h5, h6 { color: $section-headings-color; }
+
+  // Section headers carry the rule the handbooks give them, which is what makes a long
+  // specification scannable.
+  h2 {
+    padding-bottom: 8px;
+    border-bottom: 1px solid $morgana-border;
+  }
+
+  strong { color: $morgana-text-primary; }
+
+  a {
+    text-decoration: none;
+
+    &:hover { color: $morgana-magenta; text-decoration: underline; }
+  }
+
+  pre, code { border-color: $morgana-border; }
+
+  blockquote { border-left-color: $morgana-purple-mid; }
+
+  // Cayman paints its own table rows in a light grey chosen for a white page.
+  table {
+    th { background-color: $morgana-surface; color: $morgana-text-primary; }
+    tr:nth-child(2n) { background-color: rgba($morgana-purple-mid, 0.07); }
+  }
+}
+
+.site-footer { border-top-color: $morgana-border; }
+
+.site-footer-owner { color: $morgana-text-secondary; }
+
+.site-footer-credits { color: $morgana-text-muted; }
