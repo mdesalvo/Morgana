@@ -1,4 +1,4 @@
-<a href="https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Morgana-Handbook.html" title="Morgana Handbook">
+<a href="https://mdesalvo.github.io/Morgana/Morgana-Handbook.html" title="Morgana Handbook">
   <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Banner.jpg" alt="Morgana Logo" width="100%" />
 </a>
 
@@ -234,4 +234,4 @@ docker compose --env-file .env --env-file .env.versions down
 ```
 
 > [!TIP]
-> **Don't hand-write your first domain — distill it.** [**Alembic**](https://htmlpreview.github.io/?https://github.com/mdesalvo/Morgana/blob/main/Alembic-Handbook.html) is Morgana's authoring workbench: an AI-conducted interview that turns a domain expert's own words into a ready-to-use Morgana domain (intents, agent prose, tool contracts, C# assets and starter non-regression scenarios), instead of writing `agents.json` and C# by hand. Hand-authoring against the `Morgana.AI` NuGet package is still fully supported for those who prefer it: Alembic is the preferred path to **onboard a new domain** or extend an existing one.
+> **Don't hand-write your first domain — distill it.** [**Alembic**](https://mdesalvo.github.io/Morgana/Alembic-Handbook.html) is Morgana's authoring workbench: an AI-conducted interview that turns a domain expert's own words into a ready-to-use Morgana domain (intents, agent prose, tool contracts, C# assets and starter non-regression scenarios), instead of writing `agents.json` and C# by hand. Hand-authoring against the `Morgana.AI` NuGet package is still fully supported for those who prefer it: Alembic is the preferred path to **onboard a new domain** or extend an existing one.
