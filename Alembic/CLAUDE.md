@@ -490,7 +490,19 @@ An edge is touched in three places, and each does the one thing the others canno
   asked in the only place having that conversation, and it is the only place that can rewrite the
   boundary sentence in the same gesture.
 - **The emit page holds it**, as one more C# fact beside the tier and the MCP servers, for the
-  upload path described below. It writes the attribute and never a word of prose.
+  upload path described below. It writes the attribute and never a word of prose. It is also the
+  **only** place a colleague published by a *partner* — another Morgana, declared under that
+  deployment's `Morgana:AgentToAgent:Partners` — can be declared at all, and that is not a gap in
+  the interview but the same criterion applied one step further: which Morgana answers is not a fact
+  about the client's business, and the emit page is the one point of the workbench where the hand on
+  the keyboard is a developer's, finalizing a domain already distilled. The two are told apart on
+  sight there, because they can be trusted differently: the tick list is drawn from the domain and
+  cannot be wrong, while a partner colleague is two free fields — an intent and a partner — neither
+  of which anything can check, here or at startup. The partner's own agent card is what knows, read
+  on the first consultation, so a mistyped intent is a run-time warning and a colleague quietly
+  missing rather than a startup failure; a mistyped *partner* is startup-fatal, since that name must
+  match a configuration entry. The migration report says so on every report, naming the partner to
+  declare and stating that neither its address nor its key travels in the archive.
 - **The coherence pass reports.** It cannot declare an edge — that is structural, and
   `[ConsultsAgent]` naming an unhandled intent is startup-fatal — but it is the only one of the
   three that reads the declaration against the prose, wherever either came from, and says they
@@ -504,7 +516,9 @@ And one thing it is deliberately not:
   half this step exists for: it never touches the client's own prose, so a boundary left refusing
   what the new colleague answers stays exactly as it was, and what reports it is the coherence pass's
   `colleague-out-of-step`. Written domain: the interview does both at once. Uploaded domain: tick,
-  then ask the pass.
+  then ask the pass. A partner colleague takes that second path whichever way the domain arrived,
+  for the reason above — and the boundary it contradicts is repaired the same way, by the pass that
+  reads the two against each other.
 
 The mode row still splices in, and it says *YOU ARE COMPOSING* — false of a step that only rewrites
 one sentence of finished prose. Rather than a conditional per pass, which is the arrangement
@@ -869,7 +883,10 @@ exported JSON is semantically equal field by field, re-importing yields an ident
 exporting that Draft again is byte-for-byte stable — a fixed point, so a file that has been through
 Alembic once stops moving.
 
-`AgentCodeFacts` holds what `agents.json` cannot: namespace, class names, tier, MCP servers. On import
+`AgentCodeFacts` holds what `agents.json` cannot: namespace, class names, tier, MCP servers, and the
+colleagues an agent may consult — each a `Records.PeerReference`, the framework's own type, carrying
+an intent and the partner publishing it where that is not this domain (the same reuse as
+`Records.LLMTier` beside it: a second vocabulary for one thing is what makes two projects drift). On import
 all of it is unknown, so Alembic proposes class names from the framework's naming convention and
 flags the record `Inferred`; namespace and tier are left null rather than guessed, since a confident
 wrong value is worse than an empty one the interview will ask about. The inference is a genuine guess
