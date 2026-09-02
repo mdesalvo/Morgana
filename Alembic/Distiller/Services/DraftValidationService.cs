@@ -172,6 +172,12 @@ public class DraftValidationService : IDraftValidationService
     /// but the shape of the framework's own refusal — a colleague answering a consultation is denied
     /// its own peer functions — so a chain reaches one hop and no further, and an author who drew a
     /// chain expecting two is the person this exists to tell.
+    /// <para>
+    /// None of the three can be said of a colleague at a partner. Its intent is answered by a domain
+    /// this one cannot see, its own edges are unknowable, and an agent consulting a namesake of its
+    /// own at another installation is ordinary rather than circular. So what is checked there is the
+    /// only thing this side owns: that the partner was named at all.
+    /// </para>
     /// </remarks>
     private static void ValidateConsultations(DomainDraft draft, List<ValidationFinding> findings)
     {
@@ -183,29 +189,39 @@ public class DraftValidationService : IDraftValidationService
         {
             string where = $"agent '{agent.ID ?? "(unnamed)"}'";
 
-            foreach (string colleague in agent.Code.Consults)
+            foreach (Morgana.AI.Records.PeerReference colleague in agent.Code.Consults)
             {
-                if (string.Equals(colleague, agent.ID, StringComparison.OrdinalIgnoreCase))
+                if (colleague.Partner is not null)
+                {
+                    if (string.IsNullOrWhiteSpace(colleague.Partner))
+                        findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                            $"It consults '{colleague.Intent}' at a partner with no name.",
+                            "The name is matched against an entry under Morgana:AgentToAgent:Partners, and a blank one matches nothing: startup refuses it."));
+
+                    continue;
+                }
+
+                if (string.Equals(colleague.Intent, agent.ID, StringComparison.OrdinalIgnoreCase))
                 {
                     findings.Add(new ValidationFinding(FindingSeverity.Error, where,
-                        $"It declares itself as a colleague ('{colleague}').",
+                        $"It declares itself as a colleague ('{colleague.Intent}').",
                         "The startup registry refuses a [ConsultsAgent] naming the declaring agent's own intent: an agent cannot be its own second opinion."));
                     continue;
                 }
 
-                if (!handled.Contains(colleague))
+                if (!handled.Contains(colleague.Intent))
                 {
                     findings.Add(new ValidationFinding(FindingSeverity.Error, where,
-                        $"It consults '{colleague}', which no agent of this domain handles.",
+                        $"It consults '{colleague.Intent}', which no agent of this domain handles.",
                         "A consultation is resolved when the agent is created, so a name nothing answers is startup-fatal rather than a colleague that quietly never appears."));
                     continue;
                 }
 
-                AgentDraft? far = draft.Agents.FirstOrDefault(a => string.Equals(a.ID, colleague, StringComparison.OrdinalIgnoreCase));
+                AgentDraft? far = draft.Agents.FirstOrDefault(a => string.Equals(a.ID, colleague.Intent, StringComparison.OrdinalIgnoreCase));
 
                 if (far?.Code.Consults.Count > 0)
                     findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
-                        $"It consults '{colleague}', which consults a colleague of its own.",
+                        $"It consults '{colleague.Intent}', which consults a colleague of its own.",
                         "While it answers a consultation the framework withholds its peer functions, so the second hop never happens: whatever the far agent would have asked for is not in the answer this one gets."));
             }
         }

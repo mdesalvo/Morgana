@@ -752,3 +752,51 @@ dl.fields dd {
     float: right;
     cursor: pointer;
 }
+
+/* Two bands in one cell, because the question they answer is one question with two answers: which
+   colleague, and on whose Morgana. The tick list above can only be right — its names come from the
+   domain — while the rows below can only be taken on trust, so they are set apart rather than
+   merely listed after: a rule down the left, the accent that marks everything leaving this
+   installation, and a caption on each so neither band is read as a continuation of the other. */
+.colleague-scope {
+    margin: 0 0 0.35rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--alembic-muted);
+}
+
+.colleague-scope.remote {
+    color: var(--alembic-accent);
+}
+
+.partner-colleagues {
+    margin-top: 0.75rem;
+    padding: 0.6rem 0 0.1rem 0.65rem;
+    border-left: 2px solid color-mix(in srgb, var(--alembic-accent) 55%, transparent);
+    border-top: 1px solid var(--alembic-border);
+}
+
+.partner-colleague-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.4rem;
+}
+
+/* The intent takes what is left, the partner takes a fixed share: a name like "Newco Finance" is
+   read at a glance, while an intent is compared against the domain's own vocabulary. */
+.partner-colleague-row input:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.partner-colleague-row input:not(:first-child) {
+    flex: 0 0 9rem;
+    min-width: 0;
+}
+
+.partner-colleague-row .agent-pick {
+    margin: 0;
+    flex-shrink: 0;
+}

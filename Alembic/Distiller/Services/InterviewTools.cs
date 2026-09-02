@@ -580,7 +580,7 @@ public class InterviewTools
             $"- {a.ID}\n    what it is for: {AgentRows.Plain(a.Target) ?? "(nothing said)"}"
             + $"\n    what it can reach: {(a.Tools.Count > 0 ? string.Join(", ", a.Tools.Select(t => t.Name ?? "(unnamed)")) : "no tool of its own")}"
             + $"\n    how it goes about it: {AgentRows.Plain(a.Instructions) ?? "(nothing said)"}"
-            + $"\n    colleagues it may already ask: {(a.Code.Consults.Count > 0 ? string.Join(", ", a.Code.Consults) : "none")}");
+            + $"\n    colleagues it may already ask: {PeerNaming.Describe(a.Code.Consults)}");
 
         return "The domain as it stands, every agent whole:\n" + string.Join("\n", rendered);
     }
@@ -724,7 +724,9 @@ public class InterviewTools
     private bool IsConsultedByOthers(AgentDraft agent)
         => (draftStateService.Current?.Agents ?? []).Any(other =>
                other.ID != agent.ID &&
-               other.Code.Consults.Contains(agent.ID, StringComparer.OrdinalIgnoreCase));
+               other.Code.Consults.Any(colleague =>
+                   colleague.Partner is null
+                   && string.Equals(colleague.Intent, agent.ID, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
     /// Returns the prompt this agent's model will really read.

@@ -613,7 +613,9 @@
     private bool IsConsultedByOthers(AgentDraft agent)
         => DraftStateService.Current?.Agents.Any(other =>
                other.ID != agent.ID &&
-               other.Code.Consults.Contains(agent.ID, StringComparer.OrdinalIgnoreCase)) ?? false;
+               other.Code.Consults.Any(colleague =>
+                   colleague.Partner is null
+                   && string.Equals(colleague.Intent, agent.ID, StringComparison.OrdinalIgnoreCase))) ?? false;
 
     /// <summary>
     /// Applies one coherence finding and refreshes both the deterministic findings and the open

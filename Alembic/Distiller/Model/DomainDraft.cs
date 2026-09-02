@@ -189,6 +189,12 @@ public sealed class ConsultationDraft
     public string Asking { get; set; } = string.Empty;
 
     /// <summary>The intent of the colleague it may put a question to.</summary>
+    /// <remarks>
+    /// Always an agent of this domain. A colleague published by a partner is outside everything this
+    /// interview can see — its intent cannot be checked, its <c>ConsultMeFor</c> cannot be read, and
+    /// its prose is not ours to reconcile — so it is declared on the emit page, where the hand on the
+    /// keyboard is a developer's and not the domain author's.
+    /// </remarks>
     public string Asked { get; set; } = string.Empty;
 
     /// <summary>The asking agent's Instructions, rewritten so its own boundary admits the colleague.</summary>
@@ -501,8 +507,8 @@ public sealed class AgentCodeFacts
     public List<string> MCPServers { get; set; } = [];
 
     /// <summary>
-    /// The colleagues this agent may put a question to, one intent name per
-    /// <c>[ConsultsAgent]</c> attribute.
+    /// The colleagues this agent may put a question to, one entry per <c>[ConsultsAgent]</c>
+    /// attribute: an intent, and the partner publishing it where that is not this domain.
     /// </summary>
     /// <remarks>
     /// A C# fact like <see cref="MCPServers"/> — <c>agents.json</c> carries no trace of it, so an
@@ -516,7 +522,7 @@ public sealed class AgentCodeFacts
     /// its own books.
     /// </para>
     /// </remarks>
-    public List<string> Consults { get; set; } = [];
+    public List<Morgana.AI.Records.PeerReference> Consults { get; set; } = [];
 
     /// <summary>
     /// Whether the values above were inferred by Alembic rather than stated by the client.

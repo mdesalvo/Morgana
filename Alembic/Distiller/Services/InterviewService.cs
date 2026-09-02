@@ -555,12 +555,16 @@ public class InterviewService : IInterviewService
 
             // Both ends have to be there. An agent the client removed from the walk between the
             // declaration and the word that commits it leaves an edge naming nothing, and a
-            // [ConsultsAgent] onto an intent no agent handles is startup-fatal.
+            // [ConsultsAgent] onto an intent no agent handles is startup-fatal. A colleague at a
+            // partner has no second end here at all, which is why it is declared where a developer
+            // finalizes the domain rather than in a conversation with its author.
             if (asking is null || asked is null)
                 continue;
 
-            if (!asking.Code.Consults.Any(c => string.Equals(c, edge.Asked, StringComparison.OrdinalIgnoreCase)))
-                asking.Code.Consults.Add(edge.Asked);
+            Morgana.AI.Records.PeerReference colleague = new Morgana.AI.Records.PeerReference(edge.Asked);
+
+            if (!asking.Code.Consults.Any(declared => PeerNaming.Same(declared, colleague)))
+                asking.Code.Consults.Add(colleague);
 
             Reconcile(asking, edge.AskingInstructions);
             Reconcile(asked, edge.AskedInstructions);
@@ -993,7 +997,7 @@ public class InterviewService : IInterviewService
     /// compared without asking each field in turn.
     /// </summary>
     private static string Fingerprint(InterviewState interviewState) =>
-        string.Join(" ", interviewState.Snapshot()
+        string.Join("\0", interviewState.Snapshot()
             .OrderBy(field => field.Key, StringComparer.Ordinal)
             .Select(field => $"{field.Key}={field.Value}"));
 

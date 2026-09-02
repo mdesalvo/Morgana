@@ -206,7 +206,7 @@ public class CoherenceService : ICoherenceService
             // answers is invisible from the prose alone.
             sb.AppendLine();
             sb.AppendLine(agent.Code.Consults.Count > 0
-                ? $"May consult, and is handed each as a function of its own: {string.Join(", ", agent.Code.Consults)}."
+                ? $"May consult, and is handed each as a function of its own: {PeerNaming.Describe(agent.Code.Consults)}."
                 : "Declares no colleagues: it can put a question to no other agent.");
 
             if (agent.Tools.Count == 0)

@@ -109,8 +109,23 @@ public class MigrationReportService : IMigrationReportService
             // declared can show up here.
             if (was is not null && !Same(was.Code.Consults, agent.Code.Consults))
                 entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised,
-                    $"Colleagues changed to {(agent.Code.Consults.Count > 0 ? string.Join(", ", agent.Code.Consults) : "none")}. "
+                    $"Colleagues changed to {PeerNaming.Describe(agent.Code.Consults)}. "
                     + "[ConsultsAgent] lives on the agent class: re-emit it, and check the intent it names is one your plugin registers."));
+
+            // Unconditional, and unlike everything else here it is not about what changed: a colleague
+            // at a partner needs an address and a key this archive deliberately does not carry — a URL
+            // is the deployment's word, and a shared secret has no business in a file that is
+            // downloaded. Said on every report because a partner entry that was never added is a
+            // startup failure, and one added under a differently spelled name is the same failure
+            // wearing a plausible configuration.
+            foreach (Morgana.AI.Records.PeerReference colleague in agent.Code.Consults.Where(c => c.Partner is not null))
+                entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised,
+                    $"Consults '{colleague.Intent}' at partner '{colleague.Partner}'. Declare that partner under "
+                    + $"Morgana:AgentToAgent:Partners with its Url and the key it issued to you, under exactly the name "
+                    + $"'{colleague.Partner}' — spelling and spacing included, or startup refuses the agent. Neither the "
+                    + "address nor the key is in this archive. That the partner really publishes an agent for "
+                    + $"'{colleague.Intent}' is its own card's word, read on the first consultation: a mistake there is a "
+                    + "warning at run time and the colleague quietly missing, not a startup error."));
 
             CompareTools(agent, was, entries);
         }
@@ -130,6 +145,14 @@ public class MigrationReportService : IMigrationReportService
     private static bool Same(IEnumerable<string> was, IEnumerable<string> now) =>
         new HashSet<string>(was, StringComparer.OrdinalIgnoreCase)
             .SetEquals(new HashSet<string>(now, StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>Whether two colleague sets name the same colleagues, partners included.</summary>
+    /// <param name="was">The baseline's colleagues.</param>
+    /// <param name="now">The draft's colleagues.</param>
+    private static bool Same(
+        IEnumerable<Morgana.AI.Records.PeerReference> was,
+        IEnumerable<Morgana.AI.Records.PeerReference> now) =>
+        Same(was.Select(PeerNaming.Describe), now.Select(PeerNaming.Describe));
 
     /// <summary>
     /// One agent's toolkit, with the signature comparison the compiled half depends on.
