@@ -609,18 +609,15 @@ public class MorganaAgentAdapter
 
         foreach (ConsultsAgentAttribute attribute in attributes)
         {
-            AgentCard? peerCard = await agentDirectoryService.GetAgentCardAsync(attribute.Intent);
-            if (peerCard is null)
-            {
-                logger.LogWarning("Agent {AgentTypeName} declares a consultation of '{PeerIntent}', which the directory does not know", agentType.Name, attribute.Intent);
-                continue;
-            }
-
             // Resolved through A2A discovery, so what comes back is Microsoft.Agents.AI.A2A's own
             // A2AAgent over the interface the colleague's card advertises — the identical object an
-            // agent in another process would obtain for the same colleague.
-            AIAgent? peerAgent = await agentDirectoryService.ResolvePeerAgentAsync(attribute.Intent, callerIntent);
-            if (peerAgent is null)
+            // agent in another process would obtain for the same colleague. The card comes back with
+            // it, and it is that fetched card the model is told about: the colleague describes itself,
+            // rather than being described by whatever this installation believes about it.
+            (AIAgent Agent, AgentCard Card)? resolvedPeer =
+                await agentDirectoryService.ResolvePeerAgentAsync(attribute.Intent, callerIntent);
+
+            if (resolvedPeer is not (AIAgent peerAgent, AgentCard peerCard))
             {
                 logger.LogWarning("Agent {AgentTypeName} cannot reach declared colleague '{PeerIntent}'; it will run without it", agentType.Name, attribute.Intent);
                 continue;

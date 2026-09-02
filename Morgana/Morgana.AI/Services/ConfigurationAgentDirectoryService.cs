@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using A2A;
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.A2A;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -117,7 +118,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     }
 
     /// <inheritdoc />
-    public async Task<AIAgent?> ResolvePeerAgentAsync(string intent, string callerIntent)
+    public async Task<(AIAgent Agent, AgentCard Card)?> ResolvePeerAgentAsync(string intent, string callerIntent)
     {
         string? baseAddress = hostAddressService.ResolveBaseAddress();
         if (baseAddress is null)
@@ -126,28 +127,31 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             return null;
         }
 
-        (string? symmetricKey, string audience) = ResolvePeerCredentials();
-        if (symmetricKey is null)
-        {
-            logger.LogError(
-                "Peer consultation needs an issuer named '{IssuerName}' under Morgana:Authentication:Issuers to sign its own requests; '{Intent}' cannot be consulted",
-                Constants.AgentToAgent.IssuerName, intent);
-            return null;
-        }
-
         try
         {
-            // The card is fetched rather than read from the projection above, deliberately: this is
-            // the same call a consumer in another process makes, so a card that is unpublished or
-            // unreachable fails here, at the directory, rather than at the first consultation.
-            HttpClient httpClient = new HttpClient(new MorganaPeerAuthenticationHandler(symmetricKey, audience, callerIntent));
-            A2ACardResolver resolver = new A2ACardResolver(new Uri($"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{intent}/"), httpClient);
+            // Two phases, and the order is the whole point. The card is fetched with no credentials —
+            // it is served open precisely so a caller can learn what the endpoint behind it will
+            // demand — and only then is a client built to satisfy what it turned out to ask for. It is
+            // also fetched rather than read from the projection above: this is the same call a
+            // consumer in another process makes, so a card that is unpublished or unreachable fails
+            // here, at the directory, rather than at the first consultation.
+            A2ACardResolver resolver = new A2ACardResolver(
+                new Uri($"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{intent}/"),
+                new HttpClient());
 
-            AIAgent peerAgent = await resolver.GetAIAgentAsync(httpClient);
+            AgentCard card = await resolver.GetAgentCardAsync();
+
+            HttpClient? peerHttpClient = BuildPeerHttpClient(card, intent, callerIntent);
+            if (peerHttpClient is null)
+                return null;
+
+            // Bound to the interface the card advertises, so what this side calls is where the agent
+            // said it answers, never a path assembled from an assumption about how it is published.
+            AIAgent peerAgent = card.AsAIAgent(peerHttpClient);
 
             logger.LogInformation("Resolved peer agent '{Intent}' for '{CallerIntent}' from its published A2A card", intent, callerIntent);
 
-            return peerAgent;
+            return (peerAgent, card);
         }
         catch (Exception ex)
         {
@@ -155,6 +159,89 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             return null;
         }
     }
+
+    /// <summary>
+    /// Builds the client a colleague is called through, carrying whatever that colleague's own card
+    /// declares it requires.
+    /// </summary>
+    /// <remarks>
+    /// Fail-closed on a requirement this side cannot satisfy: a colleague is not called at all rather
+    /// than called without the credentials it asked for, and the asking agent runs without it. A card
+    /// requiring nothing is called bare, which is what makes an open peer reachable.
+    /// </remarks>
+    /// <param name="card">The colleague's card, already fetched.</param>
+    /// <param name="intent">Intent being resolved, named in the diagnostics.</param>
+    /// <param name="callerIntent">Asking agent, recorded as the subject of the minted token.</param>
+    /// <returns>The client to call the colleague with, or <c>null</c> when its requirements cannot be met.</returns>
+    private HttpClient? BuildPeerHttpClient(AgentCard card, string intent, string callerIntent)
+    {
+        // A2A states alternatives, and satisfying one is enough — so these are candidates to try, not
+        // a set to meet.
+        List<string> requiredSchemeNames =
+            [.. (card.SecurityRequirements ?? []).SelectMany(requirement => requirement.Schemes?.Keys.AsEnumerable() ?? [])];
+
+        if (requiredSchemeNames.Count == 0)
+            return new HttpClient();
+
+        foreach (string schemeName in requiredSchemeNames)
+        {
+            if (card.SecuritySchemes?.TryGetValue(schemeName, out SecurityScheme? securityScheme) != true
+                || securityScheme?.HttpAuthSecurityScheme is not { } httpAuthScheme
+                || !string.Equals(httpAuthScheme.Scheme, Constants.AgentToAgent.BearerScheme, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            string? symmetricKey = ResolvePeerSigningKey(configuration);
+            if (symmetricKey is null)
+            {
+                logger.LogError(
+                    "Peer consultation needs an issuer named '{IssuerName}' under Morgana:Authentication:Issuers to sign its own requests; '{Intent}' cannot be consulted",
+                    Constants.AgentToAgent.IssuerName, intent);
+                return null;
+            }
+
+            (string issuer, string audience) = ReadBearerIssuance(card);
+
+            return new HttpClient(new MorganaPeerAuthenticationHandler(symmetricKey, issuer, audience, callerIntent));
+        }
+
+        logger.LogError(
+            "Agent '{Intent}' requires security scheme(s) '{SchemeNames}', none of which this installation can satisfy",
+            intent, string.Join(", ", requiredSchemeNames));
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads the claims a card asks a caller to mint its token with.
+    /// </summary>
+    /// <remarks>
+    /// A card that does not carry the extension — one published before it existed, or by an
+    /// implementation that has never heard of it — is answered with this installation's own values,
+    /// which is what the caller assumed unconditionally before the card could say.
+    /// </remarks>
+    /// <param name="card">The colleague's card, already fetched.</param>
+    private (string Issuer, string Audience) ReadBearerIssuance(AgentCard card)
+    {
+        JsonElement? bearerIssuanceParameters = card.Capabilities.Extensions?
+            .FirstOrDefault(extension => string.Equals(extension.Uri, Constants.AgentToAgent.BearerIssuanceExtensionUri, StringComparison.OrdinalIgnoreCase))?
+            .Params;
+
+        return (ReadStringParameter(bearerIssuanceParameters, Constants.AgentToAgent.BearerIssuerParameter) ?? Constants.AgentToAgent.IssuerName,
+                ReadStringParameter(bearerIssuanceParameters, Constants.AgentToAgent.BearerAudienceParameter) ?? ResolveAudience());
+    }
+
+    /// <summary>
+    /// Reads one string parameter out of an extension's free-form parameters, which are whatever the
+    /// publisher put there and are therefore never trusted to have a shape.
+    /// </summary>
+    /// <param name="parameters">The extension's parameters, absent when it declared none.</param>
+    /// <param name="parameterName">Parameter to read.</param>
+    private static string? ReadStringParameter(JsonElement? parameters, string parameterName)
+        => parameters is { ValueKind: JsonValueKind.Object } parametersElement
+           && parametersElement.TryGetProperty(parameterName, out JsonElement value)
+           && value.ValueKind is JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     /// <summary>
     /// Builds one card from the intent and prompt declared for <paramref name="intent"/>, including
@@ -269,14 +356,6 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         };
 
     /// <summary>
-    /// Resolves the key Morgana signs its own peer traffic with, and the audience the receiving side
-    /// validates against.
-    /// </summary>
-    /// <returns>The issuer's key (null when the issuer is not declared) and the configured audience.</returns>
-    private (string? SymmetricKey, string Audience) ResolvePeerCredentials()
-        => (ResolvePeerSigningKey(configuration), ResolveAudience());
-
-    /// <summary>
     /// The audience this installation validates an inbound token against, and therefore the one its
     /// cards ask a caller to name. An opaque identifier compared for equality: it is neither a
     /// hostname nor a resource anybody has to own.
@@ -350,20 +429,25 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         /// <summary>Audience the receiving Morgana validates against.</summary>
         private readonly string audience;
 
+        /// <summary>Issuer name the receiving side expects, as its own card declared it.</summary>
+        private readonly string issuer;
+
         /// <summary>Intent of the agent requests are signed on behalf of, carried as the subject claim.</summary>
         private readonly string callerIntent;
 
-        /// <summary>Builds the handler over the key Morgana shares with itself.</summary>
-        /// <param name="symmetricKey">Signing key of the <c>morgana</c> issuer; at least 256 bits.</param>
+        /// <summary>Builds the handler over the key Morgana shares with the agent being called.</summary>
+        /// <param name="symmetricKey">Signing key of the issuer named below; at least 256 bits.</param>
+        /// <param name="issuer">Issuer name to sign under, taken from the callee's own card.</param>
         /// <param name="audience">Audience the receiving instance validates against.</param>
         /// <param name="callerIntent">Intent of the asking agent, recorded as the token's subject.</param>
-        public MorganaPeerAuthenticationHandler(string symmetricKey, string audience, string callerIntent)
+        public MorganaPeerAuthenticationHandler(string symmetricKey, string issuer, string audience, string callerIntent)
             : base(new HttpClientHandler())
         {
             signingCredentials = new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(symmetricKey)),
                 SecurityAlgorithms.HmacSha256);
 
+            this.issuer = issuer;
             this.audience = audience;
             this.callerIntent = callerIntent;
         }
@@ -380,7 +464,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         private string MintToken()
             => new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
             {
-                Issuer = Constants.AgentToAgent.IssuerName,
+                Issuer = issuer,
                 Audience = audience,
                 Expires = DateTime.UtcNow.Add(TokenLifetime),
                 SigningCredentials = signingCredentials,
