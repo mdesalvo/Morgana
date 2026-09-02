@@ -14,7 +14,7 @@ public static class PeerNaming
     /// <summary>Names one colleague, saying where it lives only when that is not this domain.</summary>
     /// <param name="peer">The declared colleague.</param>
     public static string Describe(Morgana.AI.Records.PeerReference peer)
-        => peer.Partner is null ? peer.Intent : $"{peer.Intent} at {peer.Partner}";
+        => peer.Instance is null ? peer.Intent : $"{peer.Intent} at {peer.Instance}";
 
     /// <summary>Names a set of colleagues, or says there are none.</summary>
     /// <param name="peers">The declared colleagues.</param>
@@ -26,10 +26,10 @@ public static class PeerNaming
     }
 
     /// <summary>
-    /// True when the two name the same colleague: same intent, at the same partner or both at home.
+    /// True when the two name the same colleague: same intent, at the same instance or both at home.
     /// </summary>
     /// <remarks>
-    /// Case-insensitive on both halves, the way the framework matches an intent and a partner entry.
+    /// Case-insensitive on both halves, the way the framework matches an intent and an instance entry.
     /// The pair and not the intent, because one desk may hold a colleague of the same name at two
     /// installations, which the framework offers as two distinct functions.
     /// </remarks>
@@ -37,5 +37,5 @@ public static class PeerNaming
     /// <param name="other">The other.</param>
     public static bool Same(Morgana.AI.Records.PeerReference peer, Morgana.AI.Records.PeerReference other)
         => string.Equals(peer.Intent, other.Intent, StringComparison.OrdinalIgnoreCase)
-           && string.Equals(peer.Partner, other.Partner, StringComparison.OrdinalIgnoreCase);
+           && string.Equals(peer.Instance, other.Instance, StringComparison.OrdinalIgnoreCase);
 }

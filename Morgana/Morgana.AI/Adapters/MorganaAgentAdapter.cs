@@ -530,22 +530,30 @@ public class MorganaAgentAdapter
             discoveredAgents.Values
                 .SelectMany(agentType => agentType.GetCustomAttributes<ConsultsAgentAttribute>())
 
-                // A colleague named at a partner is published by that partner, and says nothing about
+                // A colleague named at an instance is published by that instance, and says nothing about
                 // whether an agent of the same name here is ever asked anything.
-                .Where(consultsAgent => consultsAgent.Partner is null)
+                .Where(consultsAgent => consultsAgent.Instance is null)
                 .Select(consultsAgent => consultsAgent.Intent)
                 .Where(discoveredAgents.ContainsKey),
             StringComparer.OrdinalIgnoreCase);
     }, LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>
-    /// True when some agent of this installation declares it may consult the given intent — the same
-    /// condition under which Morgana.Web publishes that intent over A2A, since an unpublished agent
-    /// is unreachable and therefore never asked.
+    /// True when this intent can be asked a question at all — because an agent of this installation
+    /// declares it may consult it, or because the deployment exposes it to its instances. The same
+    /// condition under which Morgana.Web publishes it over A2A, since an unpublished agent is
+    /// unreachable and therefore never asked.
     /// </summary>
+    /// <remarks>
+    /// The exposed half is read per call rather than cached with the other: the attribute-derived set
+    /// is decided by the assemblies loaded at startup and cannot change, while a configuration value
+    /// belongs to whoever reads it, and this one is read once per agent creation.
+    /// </remarks>
     private bool IsConsultedByAnyAgent(string intent)
         => configuration.GetValue("Morgana:AgentToAgent:Enabled", true)
-           && consultedIntents.Value.Contains(intent);
+           && (consultedIntents.Value.Contains(intent)
+               || ConfigurationAgentDirectoryService.ResolveExposedAgents(configuration)
+                      .Contains(intent, StringComparer.OrdinalIgnoreCase));
 
     /// <summary>
     /// Composes the agent's two-layer instructions and closes them with the colleagues it holds.
@@ -618,7 +626,7 @@ public class MorganaAgentAdapter
             // agent in another process would obtain for the same colleague. The card comes back with
             // it, and it is that fetched card the model is told about: the colleague describes itself,
             // rather than being described by whatever this installation believes about it.
-            Records.PeerReference peer = new Records.PeerReference(attribute.Intent, attribute.Partner);
+            Records.PeerReference peer = new Records.PeerReference(attribute.Intent, attribute.Instance);
 
             (AIAgent Agent, AgentCard Card)? resolvedPeer =
                 await agentDirectoryService.ResolvePeerAgentAsync(peer, callerIntent);
@@ -754,16 +762,16 @@ public class MorganaAgentAdapter
     /// <remarks>
     /// Intents are authored freely while a function name is not, so anything outside the permitted
     /// alphabet folds to an underscore; the prefix keeps a colleague visibly distinct from the
-    /// agent's own tools in the model's tool list. A colleague published by a partner carries that
-    /// partner in the name, so an agent may hold two colleagues handling the same intent at two desks
-    /// without them colliding. Public because the startup check must derive the same name: partner
+    /// agent's own tools in the model's tool list. A colleague published by an instance carries that
+    /// instance in the name, so an agent may hold two colleagues handling the same intent at two desks
+    /// without them colliding. Public because the startup check must derive the same name: instance
     /// names are written by people and two of them can fold to one function, which is a startup error
     /// rather than something to discover when the provider rejects the tool list.
     /// </remarks>
     /// <param name="peer">Colleague being offered.</param>
     public static string ToFunctionName(Records.PeerReference peer)
     {
-        string peerName = peer.Partner is null ? peer.Intent : $"{peer.Partner}_{peer.Intent}";
+        string peerName = peer.Instance is null ? peer.Intent : $"{peer.Instance}_{peer.Intent}";
 
         return $"{Constants.AgentToAgent.PeerFunctionNamePrefix}{new string([.. peerName.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_')])}";
     }

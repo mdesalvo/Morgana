@@ -145,7 +145,7 @@ Agents in Morgana are **domain specialists** that self-register through **declar
 [HandlesIntent("billing")]
 [RequiresLLMTier(LLMTier.Efficiency)]
 [ConsultsAgent("inventory")] // A2A colleague of this installation
-[ConsultsAgent("shipping", "acme")] // A2A colleague published by a partner Morgana
+[ConsultsAgent("shipping", "acme")] // A2A colleague published by another Morgana
 public class BillingAgent : MorganaAgent { ... }
 
 [HandlesIntent("monkeys")]
@@ -169,8 +169,6 @@ public class BillingTool : MorganaTool
 The **MCP integration** permits agents to extend their capabilities by consuming **Model Context Protocol servers**, making external tools indistinguishable from native implementations. This enables rapid prototyping, microservice integration and ecosystem-driven feature development, all without writing a single line of tool implementation code.
 
 The **A2A integration** allows agents to collaborate behind the scenes, consulting their peers on-demand via competence-driven queries to deliver cross-cutting answers that horizontally cover the entire application domain. This enables seamless peer collaboration, autonomous knowledge sharing and cross-domain reasoning, all without user-facing friction or explicit inter-agent configuration.
-
-A colleague does **not have to live in this installation**: naming a *partner* — another Morgana declared under `Morgana:AgentToAgent:Partners` with its address and the key it issued to you — makes its published agents consultable exactly like the ones next door, indistinguishable in the tool list and never mentioned in any prompt, because where a colleague runs is deployment and the model is not told. Discovery does the rest: a colleague's **agent card** is fetched with no credentials, and it is that card which states where the agent answers *and* how to authenticate against it, so nothing about a partner is hardcoded on the calling side beyond the shared secret. That contract is the standard one at both ends — Morgana publishes cards anything speaking A2A can read, and consults any A2A agent whose requirements it can satisfy.
 
 ### 📝 Morgana Prompt System
 *First-class artifacts with layered personality architecture and structured behavioral policies*

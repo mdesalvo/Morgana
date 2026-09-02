@@ -725,7 +725,7 @@ public class InterviewTools
         => (draftStateService.Current?.Agents ?? []).Any(other =>
                other.ID != agent.ID &&
                other.Code.Consults.Any(colleague =>
-                   colleague.Partner is null
+                   colleague.Instance is null
                    && string.Equals(colleague.Intent, agent.ID, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>

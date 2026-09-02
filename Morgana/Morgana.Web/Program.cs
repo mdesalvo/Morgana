@@ -317,16 +317,36 @@ builder.Services.AddHostedService<AkkaHostedService>();
 
 Dictionary<string, Type> discoveredAgents = HandlesIntentAgentRegistryService.DiscoverAgents();
 
+// Two sources, one union, because there are two ways an agent of this installation can be asked a
+// question and neither implies the other. A colleague of its own siblings is discovered from their
+// declarations; an agent answering somebody else's installation is not discoverable at all, since the
+// declaration that reaches it was written over there. Without the second, an installation exposes an
+// agent only where it happens to need that agent itself — federation by accident rather than by word.
+List<string> exposedAgents = ConfigurationAgentDirectoryService.ResolveExposedAgents(builder.Configuration);
+
+// A deployment declaring it answers for an intent nothing handles is asserting something false about
+// itself, and the endpoint it asked for would answer every caller with "no agent answers for this".
+string[] unhandledExposedAgents = [.. exposedAgents.Where(intent => !discoveredAgents.ContainsKey(intent))];
+
+if (unhandledExposedAgents.Length > 0)
+{
+    throw new InvalidOperationException(
+        $"Morgana:AgentToAgent:ExposedAgents names {unhandledExposedAgents.Length} intent(s) no agent of this "
+        + $"installation handles ({string.Join(", ", unhandledExposedAgents)}). An installation can only "
+        + "expose what it can answer for.");
+}
+
 string[] publishedIntents = builder.Configuration.GetValue("Morgana:AgentToAgent:Enabled", true)
     ?
     [
         .. discoveredAgents.Values
             .SelectMany(agentType => agentType.GetCustomAttributes<ConsultsAgentAttribute>())
 
-            // A colleague declared at a partner is published there, not here: naming it is a
+            // A colleague declared at an instance is published there, not here: naming it is a
             // statement about whom this installation asks, never about whom it answers.
-            .Where(consultsAgent => consultsAgent.Partner is null)
+            .Where(consultsAgent => consultsAgent.Instance is null)
             .Select(consultsAgent => consultsAgent.Intent)
+            .Concat(exposedAgents)
             .Where(discoveredAgents.ContainsKey)
             .Distinct(StringComparer.OrdinalIgnoreCase)
     ]

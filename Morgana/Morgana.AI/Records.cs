@@ -370,16 +370,16 @@ public static class Records
     /// </summary>
     /// <remarks>
     /// An entry describes an installation, not an agent: every agent it publishes is reachable
-    /// underneath the same address, so declaring a partner once opens as many colleagues as it
+    /// underneath the same address, so declaring an instance once opens as many colleagues as it
     /// serves. This is the mirror image of <see cref="IssuerOptions"/> — there a caller is admitted,
     /// here one is addressed — and the same per-entry key discipline applies for the same reason.
-    /// A partner is not necessarily somebody else's: a second deployment of one's own is declared
+    /// A instance is not necessarily somebody else's: a second deployment of one's own is declared
     /// exactly the same way.
     /// </remarks>
-    public record PartnerOptions
+    public record ConsultableInstanceOptions
     {
         /// <summary>
-        /// Name this partner is declared under in <c>[ConsultsAgent]</c>, and never a hostname: an
+        /// Name this instance is declared under in <c>[ConsultsAgent]</c>, and never a hostname: an
         /// attribute names whose desk is being called, while where that desk runs is deployment.
         /// </summary>
         public string Name { get; set; } = string.Empty;
@@ -391,14 +391,14 @@ public static class Records
         public string Url { get; set; } = string.Empty;
 
         /// <summary>
-        /// Key this side signs its requests to that partner with (HMAC-SHA256, at least 256 bits).
+        /// Key this side signs its requests to that instance with (HMAC-SHA256, at least 256 bits).
         /// The receiving side must hold the same key under the issuer named below.
         /// </summary>
         public string SymmetricKey { get; set; } = string.Empty;
 
         /// <summary>
-        /// Issuer to sign under, overriding what the partner's own card declares. Left unset in the
-        /// ordinary case; set when a partner cut a key for this caller alone, so that revoking it
+        /// Issuer to sign under, overriding what the instance's own card declares. Left unset in the
+        /// ordinary case; set when an instance cut a key for this caller alone, so that revoking it
         /// does not rotate the key every other caller uses.
         /// </summary>
         public string? Issuer { get; set; }
@@ -569,10 +569,10 @@ public static class Records
     /// Names one consultable colleague.
     /// </summary>
     /// <param name="Intent">Intent the colleague handles, as its own installation publishes it.</param>
-    /// <param name="Partner">Installation publishing it, declared in <c>Morgana:AgentToAgent:Partners</c>;
+    /// <param name="Instance">Installation publishing it, declared in <c>Morgana:AgentToAgent:ConsultableInstances</c>;
     /// <c>null</c> for an agent of this one. Two colleagues handling the same intent at two
     /// installations are two colleagues, which is why the pair and not the intent is the name.</param>
-    public record PeerReference(string Intent, string? Partner = null);
+    public record PeerReference(string Intent, string? Instance = null);
 
     /// <summary>
     /// Question one agent puts to a colleague of the same conversation, sent to the colleague's

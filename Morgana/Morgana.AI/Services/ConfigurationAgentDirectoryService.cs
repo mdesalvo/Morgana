@@ -59,7 +59,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// <remarks>
     /// A client is built per colleague per conversation, so a handler per client would open its own
     /// sockets and hold them for as long as the conversation lives. The lifetime bound is the other
-    /// half: connections are recycled, so a partner that moves is followed instead of being pinned to
+    /// half: connections are recycled, so an instance that moves is followed instead of being pinned to
     /// the address it happened to have when it was first reached. This is what a host with
     /// <c>IHttpClientFactory</c> would obtain from it, done here because a library should not grow a
     /// dependency to reach a handler it can simply hold — this service is a singleton, and the pool
@@ -140,10 +140,10 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         // An agent of this installation is reached where this installation answers, an agent of a
         // peer where that peer was declared to answer. Everything past this point is one path: a
         // card is fetched, read and satisfied the same way whichever side of the boundary it came from.
-        Records.PartnerOptions? partner = null;
+        Records.ConsultableInstanceOptions? consultableInstance = null;
         string? baseAddress;
 
-        if (peer.Partner is null)
+        if (peer.Instance is null)
         {
             baseAddress = hostAddressService.ResolveBaseAddress();
             if (baseAddress is null)
@@ -154,16 +154,16 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         }
         else
         {
-            partner = ResolvePartners(configuration)
-                .FirstOrDefault(candidate => string.Equals(candidate.Name.Trim(), peer.Partner, StringComparison.OrdinalIgnoreCase));
+            consultableInstance = ResolveConsultableInstances(configuration)
+                .FirstOrDefault(candidate => string.Equals(candidate.Name.Trim(), peer.Instance, StringComparison.OrdinalIgnoreCase));
 
-            if (partner is null)
+            if (consultableInstance is null)
             {
-                logger.LogError("Partner '{Partner}' is not declared under Morgana:AgentToAgent:Partners; '{Intent}' cannot be consulted", peer.Partner, peer.Intent);
+                logger.LogError("Instance '{Instance}' is not declared under Morgana:AgentToAgent:ConsultableInstances; '{Intent}' cannot be consulted", peer.Instance, peer.Intent);
                 return null;
             }
 
-            baseAddress = partner.Url.TrimEnd('/');
+            baseAddress = consultableInstance.Url.TrimEnd('/');
         }
 
         try
@@ -180,7 +180,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
 
             AgentCard card = await resolver.GetAgentCardAsync();
 
-            HttpClient? peerHttpClient = BuildPeerHttpClient(card, peer, partner, callerIntent);
+            HttpClient? peerHttpClient = BuildPeerHttpClient(card, peer, consultableInstance, callerIntent);
             if (peerHttpClient is null)
                 return null;
 
@@ -202,7 +202,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     }
 
     /// <summary>
-    /// The partners this installation may consult, as configuration declares them.
+    /// The instances this installation may consult, as configuration declares them.
     /// </summary>
     /// <remarks>
     /// Static and public because the startup checks must read the very list resolution reads: a
@@ -210,9 +210,26 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// precisely the silent failure those checks exist to prevent.
     /// </remarks>
     /// <param name="configuration">Application configuration.</param>
-    public static List<Records.PartnerOptions> ResolvePartners(IConfiguration configuration)
-        => configuration.GetSection("Morgana:AgentToAgent:Partners")
-               .Get<List<Records.PartnerOptions>>() ?? [];
+    public static List<Records.ConsultableInstanceOptions> ResolveConsultableInstances(IConfiguration configuration)
+        => configuration.GetSection("Morgana:AgentToAgent:ConsultableInstances")
+               .Get<List<Records.ConsultableInstanceOptions>>() ?? [];
+
+    /// <summary>
+    /// The intents this installation exposes to its instances, whether or not any agent of its own
+    /// consults them.
+    /// </summary>
+    /// <remarks>
+    /// The other direction of the same relation, and the only one that could not be inferred:
+    /// publication was driven by what agents here declare, which serves a colleague at the next desk
+    /// and nobody outside — an installation that answers for an instance has no agent of its own asking
+    /// the question, so without this it exposes an agent only by the accident of needing it itself.
+    /// Configuration and not an attribute, for the same reason an instance is: whether an installation
+    /// opens itself to the outside is a posture of the deployment, and the same plugin belongs in one
+    /// that federates and in one that does not.
+    /// </remarks>
+    /// <param name="configuration">Application configuration.</param>
+    public static List<string> ResolveExposedAgents(IConfiguration configuration)
+        => configuration.GetSection("Morgana:AgentToAgent:ExposedAgents").Get<List<string>>() ?? [];
 
     /// <summary>
     /// Builds the client a colleague is called through, carrying whatever that colleague's own card
@@ -225,13 +242,13 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// </remarks>
     /// <param name="card">The colleague's card, already fetched.</param>
     /// <param name="peer">The colleague being resolved, named in the diagnostics.</param>
-    /// <param name="partner">Declaration of the partner publishing it, or <c>null</c> when it is an agent of this installation.</param>
+    /// <param name="consultableInstance">Declaration of the instance publishing it, or <c>null</c> when it is an agent of this installation.</param>
     /// <param name="callerIntent">Asking agent, recorded as the subject of the minted token.</param>
     /// <returns>The client to call the colleague with, or <c>null</c> when its requirements cannot be met.</returns>
     private HttpClient? BuildPeerHttpClient(
         AgentCard card,
         Records.PeerReference peer,
-        Records.PartnerOptions? partner,
+        Records.ConsultableInstanceOptions? consultableInstance,
         string callerIntent)
     {
         // A2A states alternatives, and satisfying one is enough — so these are candidates to try, not
@@ -249,26 +266,26 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
                 || !string.Equals(httpAuthScheme.Scheme, Constants.AgentToAgent.BearerScheme, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            // A partner's key is the one it cut for this caller; this installation's own key is the
+            // A instance's key is the one it cut for this caller; this installation's own key is the
             // one it shares with itself. Either way the secret is configured here and never discovered.
-            string? symmetricKey = partner is null
+            string? symmetricKey = consultableInstance is null
                 ? ResolvePeerSigningKey(configuration)
-                : partner.SymmetricKey;
+                : consultableInstance.SymmetricKey;
 
             if (string.IsNullOrWhiteSpace(symmetricKey))
             {
                 logger.LogError(
-                    "No usable signing key for '{Intent}': declare the '{IssuerName}' issuer under Morgana:Authentication:Issuers for an agent of this installation, or a SymmetricKey on the partner entry for one published elsewhere",
+                    "No usable signing key for '{Intent}': declare the '{IssuerName}' issuer under Morgana:Authentication:Issuers for an agent of this installation, or a SymmetricKey on the instance entry for one published elsewhere",
                     peer.Intent, Constants.AgentToAgent.IssuerName);
                 return null;
             }
 
             (string issuer, string audience) = ReadBearerIssuance(card);
 
-            // A partner that cut a key for this caller alone names the issuer it filed that key
+            // A instance that cut a key for this caller alone names the issuer it filed that key
             // under, which its public card cannot say without naming it to everyone else too.
             return new HttpClient(
-                new MorganaPeerAuthenticationHandler(connectionPool, symmetricKey, partner?.Issuer ?? issuer, audience, callerIntent),
+                new MorganaPeerAuthenticationHandler(connectionPool, symmetricKey, consultableInstance?.Issuer ?? issuer, audience, callerIntent),
                 disposeHandler: false);
         }
 

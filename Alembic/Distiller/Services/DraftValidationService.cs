@@ -173,10 +173,10 @@ public class DraftValidationService : IDraftValidationService
     /// its own peer functions — so a chain reaches one hop and no further, and an author who drew a
     /// chain expecting two is the person this exists to tell.
     /// <para>
-    /// None of the three can be said of a colleague at a partner. Its intent is answered by a domain
+    /// None of the three can be said of a colleague at an instance. Its intent is answered by a domain
     /// this one cannot see, its own edges are unknowable, and an agent consulting a namesake of its
     /// own at another installation is ordinary rather than circular. So what is checked there is the
-    /// only thing this side owns: that the partner was named at all.
+    /// only thing this side owns: that the instance was named at all.
     /// </para>
     /// </remarks>
     private static void ValidateConsultations(DomainDraft draft, List<ValidationFinding> findings)
@@ -191,12 +191,12 @@ public class DraftValidationService : IDraftValidationService
 
             foreach (Morgana.AI.Records.PeerReference colleague in agent.Code.Consults)
             {
-                if (colleague.Partner is not null)
+                if (colleague.Instance is not null)
                 {
-                    if (string.IsNullOrWhiteSpace(colleague.Partner))
+                    if (string.IsNullOrWhiteSpace(colleague.Instance))
                         findings.Add(new ValidationFinding(FindingSeverity.Error, where,
-                            $"It consults '{colleague.Intent}' at a partner with no name.",
-                            "The name is matched against an entry under Morgana:AgentToAgent:Partners, and a blank one matches nothing: startup refuses it."));
+                            $"It consults '{colleague.Intent}' at an instance with no name.",
+                            "The name is matched against an entry under Morgana:AgentToAgent:ConsultableInstances, and a blank one matches nothing: startup refuses it."));
 
                     continue;
                 }

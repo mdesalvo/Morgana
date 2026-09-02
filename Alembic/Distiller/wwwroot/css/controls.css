@@ -770,33 +770,33 @@ dl.fields dd {
     color: var(--alembic-accent);
 }
 
-.partner-colleagues {
+.consultableInstance-colleagues {
     margin-top: 0.75rem;
     padding: 0.6rem 0 0.1rem 0.65rem;
     border-left: 2px solid color-mix(in srgb, var(--alembic-accent) 55%, transparent);
     border-top: 1px solid var(--alembic-border);
 }
 
-.partner-colleague-row {
+.consultableInstance-colleague-row {
     display: flex;
     align-items: center;
     gap: 0.35rem;
     margin-bottom: 0.4rem;
 }
 
-/* The intent takes what is left, the partner takes a fixed share: a name like "Newco Finance" is
+/* The intent takes what is left, the consultableInstance takes a fixed share: a name like "Newco Finance" is
    read at a glance, while an intent is compared against the domain's own vocabulary. */
-.partner-colleague-row input:first-child {
+.consultableInstance-colleague-row input:first-child {
     flex: 1;
     min-width: 0;
 }
 
-.partner-colleague-row input:not(:first-child) {
+.consultableInstance-colleague-row input:not(:first-child) {
     flex: 0 0 9rem;
     min-width: 0;
 }
 
-.partner-colleague-row .agent-pick {
+.consultableInstance-colleague-row .agent-pick {
     margin: 0;
     flex-shrink: 0;
 }

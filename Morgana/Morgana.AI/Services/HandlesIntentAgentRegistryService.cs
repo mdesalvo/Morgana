@@ -28,7 +28,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     private readonly ILLMTierValidationService llmTierValidationService;
 
     /// <summary>
-    /// Application configuration, read for the partners a consultation may name. Held here because a
+    /// Application configuration, read for the instances a consultation may name. Held here because a
     /// colleague published elsewhere is declared in configuration and not in code, so the startup
     /// check has nowhere else to learn that the name resolves to anything.
     /// </summary>
@@ -44,7 +44,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// <summary>Discovers agents and runs bidirectional intent↔agent validation (lazily — see field above).</summary>
     /// <param name="agentConfigService">Loads intent configuration from agents.json.</param>
     /// <param name="llmTierValidationService">Validates each agent's [RequiresLLMTier], delegated as a separate concern.</param>
-    /// <param name="configuration">Application configuration, read for the declared partners.</param>
+    /// <param name="configuration">Application configuration, read for the declared instances.</param>
     /// <exception cref="InvalidOperationException">Validation fails: missing agents or missing configuration.</exception>
     public HandlesIntentAgentRegistryService(
         IAgentConfigurationService agentConfigService,
@@ -169,7 +169,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // agent-creation time, long after startup, so each of these would otherwise surface on the
         // first conversation: a typo as a colleague that silently never appears, a duplicate as two
         // functions of the same name in the tool list, which the provider rejects outright.
-        List<Records.PartnerOptions> partners = ConfigurationAgentDirectoryService.ResolvePartners(configuration);
+        List<Records.ConsultableInstanceOptions> consultableInstances = ConfigurationAgentDirectoryService.ResolveConsultableInstances(configuration);
 
         foreach ((string declaredIntent, Type agentType) in registry)
         {
@@ -178,18 +178,18 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             foreach (ConsultsAgentAttribute consultsAgent in agentType.GetCustomAttributes<ConsultsAgentAttribute>())
             {
                 // What must be unique is the name the colleague is offered under, not the pair that
-                // produced it: partners are named by people ("Newco Finance"), and a function name is
-                // constrained where a partner name is not — so two distinct declarations can sanitize
+                // produced it: instances are named by people ("Newco Finance"), and a function name is
+                // constrained where an instance name is not — so two distinct declarations can sanitize
                 // to one function, which the provider rejects outright. Derived by the very method the
                 // adapter will use, so the check and the tool list cannot disagree.
                 string peerFunctionName = MorganaAgentAdapter.ToFunctionName(
-                    new Records.PeerReference(consultsAgent.Intent, consultsAgent.Partner));
+                    new Records.PeerReference(consultsAgent.Intent, consultsAgent.Instance));
 
-                string colleague = consultsAgent.Partner is null
+                string colleague = consultsAgent.Instance is null
                     ? $"'{consultsAgent.Intent}'"
-                    : $"'{consultsAgent.Intent}' at partner '{consultsAgent.Partner}'";
+                    : $"'{consultsAgent.Intent}' at instance '{consultsAgent.Instance}'";
 
-                if (consultsAgent.Partner is null)
+                if (consultsAgent.Instance is null)
                 {
                     if (string.Equals(consultsAgent.Intent, declaredIntent, StringComparison.OrdinalIgnoreCase))
                         validationErrors.Add($"Agent '{agentType.Name}' declares a consultation of itself ('{declaredIntent}')");
@@ -198,23 +198,23 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 }
                 else
                 {
-                    // What a partner publishes cannot be verified from here — that is the point of a
+                    // What an instance publishes cannot be verified from here — that is the point of a
                     // card, and it is fetched on the first consultation. What can be verified is that
                     // the declaration names something addressable and signable, which is the whole of
                     // what this side must bring.
-                    Records.PartnerOptions? partner = partners
-                        .FirstOrDefault(candidate => string.Equals(candidate.Name.Trim(), consultsAgent.Partner, StringComparison.OrdinalIgnoreCase));
+                    Records.ConsultableInstanceOptions? consultableInstance = consultableInstances
+                        .FirstOrDefault(candidate => string.Equals(candidate.Name.Trim(), consultsAgent.Instance, StringComparison.OrdinalIgnoreCase));
 
-                    if (partner is null)
+                    if (consultableInstance is null)
                         validationErrors.Add(
-                            $"Agent '{agentType.Name}' declares a consultation of {colleague}, which is not declared under Morgana:AgentToAgent:Partners "
-                            + $"(declared: {(partners.Count > 0 ? string.Join(", ", partners.Select(declared => $"'{declared.Name}'")) : "none")}). "
+                            $"Agent '{agentType.Name}' declares a consultation of {colleague}, which is not declared under Morgana:AgentToAgent:ConsultableInstances "
+                            + $"(declared: {(consultableInstances.Count > 0 ? string.Join(", ", consultableInstances.Select(declared => $"'{declared.Name}'")) : "none")}). "
                             + "The name on the attribute and the Name on the entry must be the same, spelling and spacing included");
-                    else if (!Uri.TryCreate(partner.Url, UriKind.Absolute, out _))
-                        validationErrors.Add($"Partner '{partner.Name}', consulted by agent '{agentType.Name}', declares no absolute Url");
-                    else if (string.IsNullOrWhiteSpace(partner.SymmetricKey)
-                             || string.Equals(partner.SymmetricKey.Trim(), Constants.Overrides.Secure, StringComparison.Ordinal))
-                        validationErrors.Add($"Partner '{partner.Name}', consulted by agent '{agentType.Name}', carries no usable SymmetricKey (User Secrets or environment)");
+                    else if (!Uri.TryCreate(consultableInstance.Url, UriKind.Absolute, out _))
+                        validationErrors.Add($"Instance '{consultableInstance.Name}', consulted by agent '{agentType.Name}', declares no absolute Url");
+                    else if (string.IsNullOrWhiteSpace(consultableInstance.SymmetricKey)
+                             || string.Equals(consultableInstance.SymmetricKey.Trim(), Constants.Overrides.Secure, StringComparison.Ordinal))
+                        validationErrors.Add($"Instance '{consultableInstance.Name}', consulted by agent '{agentType.Name}', carries no usable SymmetricKey (User Secrets or environment)");
                 }
 
                 if (!declaredColleagues.Add(peerFunctionName))

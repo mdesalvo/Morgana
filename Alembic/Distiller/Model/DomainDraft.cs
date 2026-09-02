@@ -190,7 +190,7 @@ public sealed class ConsultationDraft
 
     /// <summary>The intent of the colleague it may put a question to.</summary>
     /// <remarks>
-    /// Always an agent of this domain. A colleague published by a partner is outside everything this
+    /// Always an agent of this domain. A colleague published by an instance is outside everything this
     /// interview can see — its intent cannot be checked, its <c>ConsultMeFor</c> cannot be read, and
     /// its prose is not ours to reconcile — so it is declared on the emit page, where the hand on the
     /// keyboard is a developer's and not the domain author's.
@@ -508,7 +508,7 @@ public sealed class AgentCodeFacts
 
     /// <summary>
     /// The colleagues this agent may put a question to, one entry per <c>[ConsultsAgent]</c>
-    /// attribute: an intent, and the partner publishing it where that is not this domain.
+    /// attribute: an intent, and the instance publishing it where that is not this domain.
     /// </summary>
     /// <remarks>
     /// A C# fact like <see cref="MCPServers"/> — <c>agents.json</c> carries no trace of it, so an

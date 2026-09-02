@@ -252,39 +252,39 @@
                                     @* The other half of the same question: on WHICH Morgana that desk
                                        answers. Everything above answers "this one" — the domain in
                                        front of you — and everything here answers "another one", where
-                                       both names are the partner's word and neither can be checked
+                                       both names are the consultableInstance's word and neither can be checked
                                        from here. It is a free field for exactly that reason. *@
-                                    <div class="partner-colleagues">
+                                    <div class="consultableInstance-colleagues">
                                         <p class="colleague-scope remote">On another Morgana</p>
 
                                         @for (int i = 0; i < agent.Code.Consults.Count; i++)
                                         {
                                             int index = i;
 
-                                            if (agent.Code.Consults[index].Partner is null)
+                                            if (agent.Code.Consults[index].Instance is null)
                                                 continue;
 
-                                            <div class="partner-colleague-row">
+                                            <div class="consultableInstance-colleague-row">
                                                 <input type="text" class="mono"
                                                        value="@agent.Code.Consults[index].Intent"
                                                        placeholder="intent"
                                                        spellcheck="false" autocomplete="off"
-                                                       @oninput="e => SetPartnerColleagueIntent(agent, index, e)" />
+                                                       @oninput="e => SetRemoteColleagueIntent(agent, index, e)" />
                                                 <span class="muted">at</span>
                                                 <input type="text"
-                                                       value="@agent.Code.Consults[index].Partner"
-                                                       placeholder="partner"
+                                                       value="@agent.Code.Consults[index].Instance"
+                                                       placeholder="instance"
                                                        spellcheck="false" autocomplete="off"
-                                                       @oninput="e => SetPartnerColleaguePartner(agent, index, e)" />
+                                                       @oninput="e => SetRemoteColleagueInstance(agent, index, e)" />
                                                 <button type="button" class="agent-pick icon"
                                                         title="Remove this colleague"
-                                                        @onclick="() => RemovePartnerColleague(agent, index)">
+                                                        @onclick="() => RemoveRemoteColleague(agent, index)">
                                                     &times;
                                                 </button>
                                             </div>
                                         }
 
-                                        <button type="button" class="agent-pick" @onclick="() => AddPartnerColleague(agent)">
+                                        <button type="button" class="agent-pick" @onclick="() => AddRemoteColleague(agent)">
                                             + On another Morgana
                                         </button>
                                     </div>
@@ -295,11 +295,11 @@
                 </table>
 
                 <p class="muted">
-                    A colleague at another Morgana is named twice over &mdash; the intent, and the partner
+                    A colleague at another Morgana is named twice over &mdash; the intent, and the consultableInstance
                     publishing it &mdash; and neither name is checked here or at startup, because the only
-                    thing that knows is that partner's own agent card, read on the first consultation.
-                    The partner itself must be declared in the deployment's configuration under
-                    <code>Morgana:AgentToAgent:Partners</code>, spelled exactly as it is here; the
+                    thing that knows is that consultableInstance's own agent card, read on the first consultation.
+                    The consultableInstance itself must be declared in the deployment's configuration under
+                    <code>Morgana:AgentToAgent:ConsultableInstances</code>, spelled exactly as it is here; the
                     migration report in the archive says so again, with the address and key it
                     deliberately does not carry.
                 </p>
@@ -715,11 +715,11 @@
     /// </summary>
     /// <remarks>
     /// Agents of this domain only. The boxes on this page are drawn from the domain, so a colleague
-    /// at a partner has none to be ticked in — it is declared in the interview, where the client can
+    /// at an instance has none to be ticked in — it is declared in the interview, where the client can
     /// say whose desk it is, and it must survive every toggle here untouched.
     /// </remarks>
     private static bool Consults(AgentDraft agent, string colleague) =>
-        agent.Code.Consults.Any(c => c.Partner is null && string.Equals(c.Intent, colleague, StringComparison.OrdinalIgnoreCase));
+        agent.Code.Consults.Any(c => c.Instance is null && string.Equals(c.Intent, colleague, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Adds or removes one <c>[ConsultsAgent]</c> declaration, and invalidates any archive already
@@ -740,7 +740,7 @@
         }
         else
         {
-            agent.Code.Consults.RemoveAll(c => c.Partner is null && string.Equals(c.Intent, colleague, StringComparison.OrdinalIgnoreCase));
+            agent.Code.Consults.RemoveAll(c => c.Instance is null && string.Equals(c.Intent, colleague, StringComparison.OrdinalIgnoreCase));
         }
 
         package = null;
@@ -750,40 +750,40 @@
     /// Opens a row for a colleague published by another Morgana.
     /// </summary>
     /// <remarks>
-    /// Blank on both halves, and deliberately so: an empty partner is what the validator reports, and
-    /// guessing either name here would be inventing the one thing only the partner's card knows.
+    /// Blank on both halves, and deliberately so: an empty instance is what the validator reports, and
+    /// guessing either name here would be inventing the one thing only the instance's card knows.
     /// </remarks>
-    private void AddPartnerColleague(AgentDraft agent)
+    private void AddRemoteColleague(AgentDraft agent)
     {
         agent.Code.Consults.Add(new Morgana.AI.Records.PeerReference(string.Empty, string.Empty));
         package = null;
     }
 
-    /// <summary>Renames the intent a partner-published colleague answers for.</summary>
+    /// <summary>Renames the intent an instance-published colleague answers for.</summary>
     /// <remarks>
     /// The declaration is a record, so it is replaced rather than mutated; the row is addressed by
     /// its index in the agent's own list, which is what the markup iterates.
     /// </remarks>
-    private void SetPartnerColleagueIntent(AgentDraft agent, int index, ChangeEventArgs e)
+    private void SetRemoteColleagueIntent(AgentDraft agent, int index, ChangeEventArgs e)
     {
         agent.Code.Consults[index] = agent.Code.Consults[index] with { Intent = e.Value?.ToString() ?? string.Empty };
         package = null;
     }
 
-    /// <summary>Renames the partner publishing a colleague.</summary>
+    /// <summary>Renames the instance publishing a colleague.</summary>
     /// <remarks>
-    /// Never emptied back to null here: a row that lost its partner would silently become a
+    /// Never emptied back to null here: a row that lost its instance would silently become a
     /// consultation on this Morgana, which is a different declaration and a different attribute.
-    /// Removing the row is how a partner colleague is taken back.
+    /// Removing the row is how an instance colleague is taken back.
     /// </remarks>
-    private void SetPartnerColleaguePartner(AgentDraft agent, int index, ChangeEventArgs e)
+    private void SetRemoteColleagueInstance(AgentDraft agent, int index, ChangeEventArgs e)
     {
-        agent.Code.Consults[index] = agent.Code.Consults[index] with { Partner = e.Value?.ToString() ?? string.Empty };
+        agent.Code.Consults[index] = agent.Code.Consults[index] with { Instance = e.Value?.ToString() ?? string.Empty };
         package = null;
     }
 
     /// <summary>Takes back one colleague published by another Morgana.</summary>
-    private void RemovePartnerColleague(AgentDraft agent, int index)
+    private void RemoveRemoteColleague(AgentDraft agent, int index)
     {
         agent.Code.Consults.RemoveAt(index);
         package = null;

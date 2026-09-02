@@ -18,24 +18,24 @@ public class ConsultsAgentAttribute : Attribute
     public string Intent { get; }
 
     /// <summary>
-    /// Partner publishing the colleague, as named in <c>Morgana:AgentToAgent:Partners</c>, or
-    /// <c>null</c> when it is an agent of this installation. A name and not an address: whose desk to
+    /// Instance publishing the colleague, as named in <c>Morgana:AgentToAgent:ConsultableInstances</c>, or
+    /// <c>null</c> when it is an agent of THIS installation. A name and not an address: whose desk to
     /// call is the agent author's decision, where that desk runs is the deployment's.
     /// </summary>
-    public string? Partner { get; }
+    public string? Instance { get; }
 
-    /// <summary>Declares one consultable colleague, of this installation or of a declared partner.</summary>
+    /// <summary>Declares one consultable colleague, of this installation or of a declared instance.</summary>
     /// <param name="intent">Intent the colleague handles; must be handled by a registered agent when it is local.</param>
-    /// <param name="partner">Partner publishing it, omitted for a colleague of this installation.</param>
+    /// <param name="instance">Instance publishing it, omitted for a colleague of this installation.</param>
     /// <exception cref="ArgumentException">Thrown when the intent is null or blank.</exception>
-    public ConsultsAgentAttribute(string intent, string? partner = null)
+    public ConsultsAgentAttribute(string intent, string? instance = null)
     {
         if (string.IsNullOrWhiteSpace(intent))
             throw new ArgumentException("A consulted agent must be declared by a non-empty intent name.", nameof(intent));
 
         Intent = intent;
         // Trimmed rather than taken as typed: the name is matched against a configuration entry, and
-        // a stray space is a partner nobody declared — an error whose cause is invisible on screen.
-        Partner = string.IsNullOrWhiteSpace(partner) ? null : partner.Trim();
+        // a stray space is an instance nobody declared — an error whose cause is invisible on screen.
+        Instance = string.IsNullOrWhiteSpace(instance) ? null : instance.Trim();
     }
 }

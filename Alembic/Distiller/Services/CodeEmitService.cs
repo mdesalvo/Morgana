@@ -103,13 +103,13 @@ public class CodeEmitService : ICodeEmitService
         // One per colleague, and each one becomes a consult_{intent} function in this agent's tool
         // list at assembly time. Startup refuses an intent no agent handles and refuses the agent's
         // own, which is why the interview settles them against the finished domain. A colleague at a
-        // partner is checked differently — startup verifies the partner is declared, addressable and
-        // signable, and leaves the intent to that partner's own card.
+        // instance is checked differently — startup verifies the instance is declared, addressable and
+        // signable, and leaves the intent to that instance's own card.
 
         foreach (Morgana.AI.Records.PeerReference colleague in agent.Code.Consults)
-            sb.AppendLine(colleague.Partner is null
+            sb.AppendLine(colleague.Instance is null
                 ? $"[ConsultsAgent(\"{colleague.Intent}\")]"
-                : $"[ConsultsAgent(\"{colleague.Intent}\", \"{colleague.Partner}\")]");
+                : $"[ConsultsAgent(\"{colleague.Intent}\", \"{colleague.Instance}\")]");
 
         sb.AppendLine($"public partial class {agentClass} : MorganaAgent");
         sb.AppendLine("{");

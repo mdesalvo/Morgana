@@ -556,7 +556,7 @@ public class InterviewService : IInterviewService
             // Both ends have to be there. An agent the client removed from the walk between the
             // declaration and the word that commits it leaves an edge naming nothing, and a
             // [ConsultsAgent] onto an intent no agent handles is startup-fatal. A colleague at a
-            // partner has no second end here at all, which is why it is declared where a developer
+            // instance has no second end here at all, which is why it is declared where a developer
             // finalizes the domain rather than in a conversation with its author.
             if (asking is null || asked is null)
                 continue;
