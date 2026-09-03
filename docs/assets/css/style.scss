@@ -42,35 +42,23 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
 }
 
-// The banner reads as the handbook covers do: a serif name over a purple wash, spaced
-// out rather than merely large.
-.page-header {
-  background-image: linear-gradient(135deg, $morgana-purple-deep, $morgana-purple-mid 55%, $morgana-magenta);
-}
-
-.project-name {
-  font-family: 'Cinzel', Georgia, serif;
-  letter-spacing: 5px;
-  text-transform: uppercase;
-}
-
-.project-tagline {
-  color: rgba($morgana-text-primary, 0.85);
-}
-
-.btn {
-  border-color: rgba($morgana-text-primary, 0.35);
-
-  &:hover {
-    border-color: rgba($morgana-text-primary, 0.7);
-    background-color: rgba($morgana-text-primary, 0.12);
-  }
-}
+// Cayman opens on a full-width hero carrying the project name, a tagline and a button —
+// half a screen spent restating what the first paragraph says better. The page introduces
+// itself in prose instead, the way the README does.
+.page-header { display: none; }
 
 .main-content {
   color: $body-text-color;
 
   h1, h2, h3, h4, h5, h6 { color: $section-headings-color; }
+
+  // The name the hero used to carry, now the page's own first line: the handbook covers
+  // spell it the same way, so nothing of the identity was in the banner.
+  h1 {
+    font-family: 'Cinzel', Georgia, serif;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+  }
 
   // Section headers carry the rule the handbooks give them, which is what makes a long
   // specification scannable.
