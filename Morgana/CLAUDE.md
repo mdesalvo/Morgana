@@ -211,10 +211,13 @@ card — `IAgentDirectoryService.PublishInterfacesAsync` fills them in from `IHo
 which reads the bound address and answers a wildcard binding (`http://+:8080`, the Docker case) with
 loopback on the same port. Configuring an address belongs to whoever *consumes* one — a channel holds
 Morgana's URL, and a remote peer would be declared on the consuming side — never to the application
-describing itself. So an
-agent of this installation is discoverable by anything that speaks A2A, not only by
-its siblings — and callable by whoever has been declared an issuer of this instance, which is the
-onboarding a channel goes through and not a lower bar. The JSON-RPC endpoint carries
+describing itself. So **every** agent of this installation is discoverable by anything that speaks
+A2A — a sibling desk, another Morgana, an orchestrator this installation knows nothing about — and
+callable by whoever has been declared an issuer of this instance, which is the onboarding a channel
+goes through and not a lower bar. **The gate is the issuer, not the topology**: with the ring whole,
+admitting an issuer admits it to every published agent, so an agent that must not be answerable from
+outside belongs in an installation that does not admit that caller, never in one that declines to
+publish it. The JSON-RPC endpoint carries
 `Morgana.Web/Filters/A2AAuthenticationFilter`, an `IEndpointFilter` applying the same
 `IAuthenticationService` gate the controller applies, fail-closed; the card itself stays open,
 because discovery is what tells a caller how to authenticate.
@@ -534,6 +537,7 @@ JWT-based, per-issuer trust model:
 - **Morgana side**: `JWTAuthenticationService` peeks the `iss` claim, looks up the matching entry in `Morgana:Authentication:Issuers`, validates signature with that issuer's key, plus audience and lifetime (30s clock skew). Unknown issuers are rejected. Extracts `sub`→CallerId, `name`→DisplayName
 - **Shared key per channel**: each channel's secret matches the `SymmetricKey` of its own `Issuers[]` entry on Morgana — leaking one channel's key does not compromise the others
 - **Onboarding a new channel**: any channel beyond Cauldron must be declared as an `Issuers[]` entry on the destination Morgana instance — its `Name` must equal the channel's `iss` claim, and its `SymmetricKey` must match the secret the channel uses to sign tokens. A channel whose issuer name is not declared, or whose key does not match, is rejected at the very first request (fail-closed)
+- **What an issuer buys**: the same entry admits a caller to the REST API and to every published A2A endpoint alike — the gate is one `IAuthenticationService` applied in two places, and the A2A ring is raised whole. Declaring an issuer is therefore a statement about a peer being trusted with this installation's agents, all of them, and not with one of them
 
 ## Observability
 
