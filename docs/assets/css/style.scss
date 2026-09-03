@@ -103,3 +103,61 @@ body {
 .site-footer-owner { color: $morgana-text-secondary; }
 
 .site-footer-credits { color: $morgana-text-muted; }
+
+// ── HANDBOOK CARDS ──
+// The two doors out of this page, drawn as the pillar cards inside the handbooks they
+// open: same ground, same border, same gradient hairline on top. The whole card is the
+// link, so there is nothing to aim at — which is also why these rules sit inside
+// .main-content: the theme's own anchor styling is more specific than a bare class and
+// would repaint and underline the card on hover.
+.main-content {
+  .handbooks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 18px 0 8px;
+
+    @media screen and (max-width: 42em) { grid-template-columns: 1fr; }
+  }
+
+  a.handbook {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    padding: 20px 22px;
+    background-color: $morgana-surface;
+    border: 1px solid $morgana-border;
+    border-radius: 10px;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background-image: linear-gradient(90deg, $morgana-purple-mid, $morgana-magenta);
+    }
+
+    &:hover {
+      border-color: $morgana-purple-mid;
+      transform: translateY(-2px);
+      text-decoration: none;
+    }
+
+    .icon { font-size: 28px; line-height: 1; margin-bottom: 8px; }
+
+    h4 {
+      font-family: 'Cinzel', Georgia, serif;
+      font-size: 16px;
+      font-weight: 600;
+      color: $morgana-purple-light;
+      margin: 0 0 8px;
+    }
+
+    p {
+      font-size: 15px;
+      color: $morgana-text-secondary;
+      margin: 0;
+    }
+  }
+}

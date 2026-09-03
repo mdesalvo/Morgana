@@ -10,10 +10,20 @@ The source, the issue tracker and the releases live in the
 
 ## Handbooks
 
-- [**Morgana Handbook**](Morgana-Handbook.html) — the framework: architecture, pipeline, agent
-  authoring, prompt composition, channels, persistence, observability.
-- [**Alembic Handbook**](Alembic-Handbook.html) — the authoring workbench that distils an interview
-  with a domain expert into a complete, buildable Morgana domain.
+<div class="handbooks">
+  <a class="handbook" href="Morgana-Handbook.html">
+    <div class="icon">&#x1F52E;</div>
+    <h4>Morgana Handbook</h4>
+    <p>The framework: architecture, pipeline, agent authoring, prompt composition, channels,
+       persistence, observability.</p>
+  </a>
+  <a class="handbook" href="Alembic-Handbook.html">
+    <div class="icon">&#x2697;&#xFE0F;</div>
+    <h4>Alembic Handbook</h4>
+    <p>The authoring workbench that distils an interview with a domain expert into a complete,
+       buildable Morgana domain.</p>
+  </a>
+</div>
 
 ## Specifications
 
