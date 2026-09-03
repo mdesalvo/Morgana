@@ -92,23 +92,23 @@ body {
 
 .site-footer-credits { color: $morgana-text-muted; }
 
-// ── HANDBOOK CARDS ──
-// The two doors out of this page, drawn as the pillar cards inside the handbooks they
-// open: same ground, same border, same gradient hairline on top. The whole card is the
+// ── TILES ──
+// Every door out of this page, drawn as the pillar cards inside the handbooks two of them
+// open: same ground, same border, same gradient hairline on top. The whole tile is the
 // link, so there is nothing to aim at — which is also why these rules sit inside
 // .main-content: the theme's own anchor styling is more specific than a bare class and
-// would repaint and underline the card on hover.
+// would repaint and underline the tile on hover.
 .main-content {
-  .handbooks {
+  .tiles {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
     margin: 18px 0 8px;
 
-    @media screen and (max-width: 42em) { grid-template-columns: 1fr; }
+    @media screen and (max-width: 64em) { grid-template-columns: 1fr; }
   }
 
-  a.handbook {
+  a.tile {
     display: block;
     position: relative;
     overflow: hidden;

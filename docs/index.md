@@ -11,28 +11,23 @@ Models (LLMs) while maintaining strict governance through guard rails and policy
 The source, the issue tracker and the releases live in the
 [repository](https://github.com/mdesalvo/Morgana).
 
-## Handbooks
-
-<div class="handbooks">
-  <a class="handbook" href="Morgana-Handbook.html">
+<div class="tiles">
+  <a class="tile" href="Morgana-Handbook.html">
     <div class="icon">&#x1F52E;</div>
     <h4>Morgana Handbook</h4>
     <p>The framework: architecture, pipeline, agent authoring, prompt composition, channels,
        persistence, observability.</p>
   </a>
-  <a class="handbook" href="Alembic-Handbook.html">
+  <a class="tile" href="Alembic-Handbook.html">
     <div class="icon">&#x2697;&#xFE0F;</div>
     <h4>Alembic Handbook</h4>
     <p>The authoring workbench that distils an interview with a domain expert into a complete,
        buildable Morgana domain.</p>
   </a>
+  <a class="tile" href="a2a/extensions/bearer-issuance/v1/">
+    <div class="icon">&#x1F511;</div>
+    <h4>A2A Bearer Issuance</h4>
+    <p>The agent-card extension by which a published agent declares the JWT issuer and audience a
+       caller must mint its bearer token under.</p>
+  </a>
 </div>
-
-## Specifications
-
-Morgana speaks open protocols, and where one leaves a gap the extension that fills it is published
-here rather than kept private.
-
-- [**A2A bearer issuance, v1**](a2a/extensions/bearer-issuance/v1/) — the A2A agent-card extension
-  by which a published agent declares the JWT issuer and audience a caller must mint its bearer
-  token under.
