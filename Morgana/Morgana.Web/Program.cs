@@ -1,4 +1,3 @@
-using System.Reflection;
 using A2A;
 using A2A.AspNetCore;
 using Akka.Actor;
@@ -9,7 +8,6 @@ using Microsoft.Agents.AI.Hosting.A2A;
 using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
-using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.AI.SessionStores;
@@ -302,54 +300,25 @@ builder.Services.AddHostedService<AkkaHostedService>();
 // ==============================================================================
 // SECTION 9.5: A2A Publication - agents of this installation, exposed to agents
 // ==============================================================================
-// An agent named by somebody's [ConsultsAgent] is published as an A2A agent, so that colleague is
-// reached through the protocol rather than through a private path. The chain is entirely Microsoft's:
-// AddA2AServer wraps the agent in an AIHostAgent and an A2AAgentHandler, MapA2AJsonRpc exposes it,
-// and MapWellKnownAgentCard makes it discoverable. Morgana contributes exactly two pieces: the agent
+// Every agent of this installation is published as an A2A agent, so a colleague is reached through
+// the protocol rather than through a private path. The chain is entirely Microsoft's: AddA2AServer
+// wraps the agent in an AIHostAgent and an A2AAgentHandler, MapA2AJsonRpc exposes it, and
+// MapWellKnownAgentCard makes it discoverable. Morgana contributes exactly two pieces: the agent
 // carrying a request to the conversation's actor (MorganaHostedAgent) and the session store turning
 // the A2A context id into that conversation's identity (MorganaHostedAgentSessionStore).
 //
-// NOTHING below is stood up when no agent declares a colleague, or when the feature is switched off:
-// no hosted agent, no server, no route, no card. A deployment whose agents do not consult one another
-// is the deployment it was before any of this existed, and pays for A2A neither in surface nor in
-// startup work. Only the intents actually named are published, so an agent nobody consults exposes
-// no endpoint either — publish everything discovered instead, and it becomes one line here.
+// The ring is raised whole or not at all. Publishing only the intents somebody happens to name makes
+// what this installation answers for a side effect of its own internal topology: an agent nobody
+// here consults is unreachable from outside, and a deployment wanting to federate it has to restate
+// in configuration a fact its own plugins already carry. What an installation offers is instead what
+// it can answer — every agent it discovered. NOTHING below is stood up when the feature is switched
+// off: no hosted agent, no server, no route, no card. That deployment is the deployment it was
+// before any of this existed, and pays for A2A neither in surface nor in startup work.
 
 Dictionary<string, Type> discoveredAgents = HandlesIntentAgentRegistryService.DiscoverAgents();
 
-// Two sources, one union, because there are two ways an agent of this installation can be asked a
-// question and neither implies the other. A colleague of its own siblings is discovered from their
-// declarations; an agent answering somebody else's installation is not discoverable at all, since the
-// declaration that reaches it was written over there. Without the second, an installation exposes an
-// agent only where it happens to need that agent itself — federation by accident rather than by word.
-List<string> exposedAgents = ConfigurationAgentDirectoryService.ResolveExposedAgents(builder.Configuration);
-
-// A deployment declaring it answers for an intent nothing handles is asserting something false about
-// itself, and the endpoint it asked for would answer every caller with "no agent answers for this".
-string[] unhandledExposedAgents = [.. exposedAgents.Where(intent => !discoveredAgents.ContainsKey(intent))];
-
-if (unhandledExposedAgents.Length > 0)
-{
-    throw new InvalidOperationException(
-        $"Morgana:AgentToAgent:ExposedAgents names {unhandledExposedAgents.Length} intent(s) no agent of this "
-        + $"installation handles ({string.Join(", ", unhandledExposedAgents)}). An installation can only "
-        + "expose what it can answer for.");
-}
-
 string[] publishedIntents = builder.Configuration.GetValue("Morgana:AgentToAgent:Enabled", true)
-    ?
-    [
-        .. discoveredAgents.Values
-            .SelectMany(agentType => agentType.GetCustomAttributes<ConsultsAgentAttribute>())
-
-            // A colleague declared at an instance is published there, not here: naming it is a
-            // statement about whom this installation asks, never about whom it answers.
-            .Where(consultsAgent => consultsAgent.Instance is null)
-            .Select(consultsAgent => consultsAgent.Intent)
-            .Concat(exposedAgents)
-            .Where(discoveredAgents.ContainsKey)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-    ]
+    ? [.. discoveredAgents.Keys]
     : [];
 
 // An installation that publishes A2A endpoints must be able to CALL them: every outbound

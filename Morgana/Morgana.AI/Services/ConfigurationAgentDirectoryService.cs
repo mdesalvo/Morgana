@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using A2A;
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.A2A;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -213,23 +212,6 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     public static List<Records.ConsultableInstanceOptions> ResolveConsultableInstances(IConfiguration configuration)
         => configuration.GetSection("Morgana:AgentToAgent:ConsultableInstances")
                .Get<List<Records.ConsultableInstanceOptions>>() ?? [];
-
-    /// <summary>
-    /// The intents this installation exposes to its instances, whether or not any agent of its own
-    /// consults them.
-    /// </summary>
-    /// <remarks>
-    /// The other direction of the same relation, and the only one that could not be inferred:
-    /// publication was driven by what agents here declare, which serves a colleague at the next desk
-    /// and nobody outside — an installation that answers for an instance has no agent of its own asking
-    /// the question, so without this it exposes an agent only by the accident of needing it itself.
-    /// Configuration and not an attribute, for the same reason an instance is: whether an installation
-    /// opens itself to the outside is a posture of the deployment, and the same plugin belongs in one
-    /// that federates and in one that does not.
-    /// </remarks>
-    /// <param name="configuration">Application configuration.</param>
-    public static List<string> ResolveExposedAgents(IConfiguration configuration)
-        => configuration.GetSection("Morgana:AgentToAgent:ExposedAgents").Get<List<string>>() ?? [];
 
     /// <summary>
     /// Builds the client a colleague is called through, carrying whatever that colleague's own card

@@ -320,11 +320,10 @@ public class MorganaAgentAdapter
                     Instructions = await ComposeInstructionsWithColleaguesAsync(
                         agentPrompt,
 
-                        // Both ends of the topology, not just the asking one: an agent nobody
-                        // consults and that consults nobody never reads the peer-consultation rules,
-                        // while one that is only ever asked reads them because a colleague's question
-                        // can land on it at any turn.
-                        peerAgents.Count > 0 || IsConsultedByAnyAgent(intentAttribute.Intent),
+                        // Both ends of the topology, not just the asking one: an agent that consults
+                        // nobody still reads the peer-consultation rules, because with the ring raised
+                        // whole a colleague's question can land on it at any turn.
+                        PeerConsultationEnabled,
                         peerTerritories),
                     Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents]
                 }
@@ -516,44 +515,15 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// The intents named by somebody's <c>[ConsultsAgent]</c>, i.e. the agents that can be asked a
-    /// question. Computed once: the set is decided by the plugins loaded at startup and cannot
-    /// change afterwards, while agents are created per conversation.
-    /// </summary>
-    private static readonly Lazy<HashSet<string>> consultedIntents = new(() =>
-    {
-        Dictionary<string, Type> discoveredAgents = HandlesIntentAgentRegistryService.DiscoverAgents();
-
-        // Case-insensitive like every other intent lookup in the framework: the attribute carries
-        // whatever casing its author typed, the registry keys do not have to agree with it.
-        return new HashSet<string>(
-            discoveredAgents.Values
-                .SelectMany(agentType => agentType.GetCustomAttributes<ConsultsAgentAttribute>())
-
-                // A colleague named at an instance is published by that instance, and says nothing about
-                // whether an agent of the same name here is ever asked anything.
-                .Where(consultsAgent => consultsAgent.Instance is null)
-                .Select(consultsAgent => consultsAgent.Intent)
-                .Where(discoveredAgents.ContainsKey),
-            StringComparer.OrdinalIgnoreCase);
-    }, LazyThreadSafetyMode.ExecutionAndPublication);
-
-    /// <summary>
-    /// True when this intent can be asked a question at all — because an agent of this installation
-    /// declares it may consult it, or because the deployment exposes it to its instances. The same
-    /// condition under which Morgana.Web publishes it over A2A, since an unpublished agent is
-    /// unreachable and therefore never asked.
+    /// True when this installation takes part in peer consultation at all — which is also the whole
+    /// of what decides whether an agent may be asked a question, since the ring is raised whole and
+    /// every agent discovered is published over A2A.
     /// </summary>
     /// <remarks>
-    /// The exposed half is read per call rather than cached with the other: the attribute-derived set
-    /// is decided by the assemblies loaded at startup and cannot change, while a configuration value
-    /// belongs to whoever reads it, and this one is read once per agent creation.
+    /// Read per agent creation rather than cached: a configuration value belongs to whoever reads it.
     /// </remarks>
-    private bool IsConsultedByAnyAgent(string intent)
-        => configuration.GetValue("Morgana:AgentToAgent:Enabled", true)
-           && (consultedIntents.Value.Contains(intent)
-               || ConfigurationAgentDirectoryService.ResolveExposedAgents(configuration)
-                      .Contains(intent, StringComparer.OrdinalIgnoreCase));
+    private bool PeerConsultationEnabled
+        => configuration.GetValue("Morgana:AgentToAgent:Enabled", true);
 
     /// <summary>
     /// Composes the agent's two-layer instructions and closes them with the colleagues it holds.

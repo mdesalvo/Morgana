@@ -85,8 +85,8 @@ public sealed class MorganaHostedAgent : AIAgent
     /// </summary>
     protected override async Task<AgentResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,
-        AgentSession? session,
-        AgentRunOptions? options,
+        AgentSession? session = null,
+        AgentRunOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         // The conversation arrives as the session the store built from the A2A context id. Any other
@@ -167,8 +167,8 @@ public sealed class MorganaHostedAgent : AIAgent
     /// </remarks>
     protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(
         IEnumerable<ChatMessage> messages,
-        AgentSession? session,
-        AgentRunOptions? options,
+        AgentSession? session = null,
+        AgentRunOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         // The whole consultation runs here, awaited, and only then is emitted as one update: asking

@@ -31,10 +31,10 @@ public sealed class AgentCardTests
     public AgentCardTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     /// <summary>
-    /// The two intents the example domain publishes, being the ones its agents declare a consultation
-    /// of. An intent nobody consults is deliberately not published, so it has no card to fetch.
+    /// Every agent of the example domain, because the ring is raised whole: an installation publishes
+    /// what it can answer, so an intent nobody here consults still serves a card.
     /// </summary>
-    public static TheoryData<string> PublishedIntents => ["billing", "inventory"];
+    public static TheoryData<string> PublishedIntents => ["billing", "contract", "inventory", "monkeys"];
 
     [Theory]
     [MemberData(nameof(PublishedIntents))]

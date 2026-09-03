@@ -194,22 +194,17 @@ coexist in one tool list. Nothing downstream of the address distinguishes the tw
 does decides the base address and the signing key, and the whole of the rest is one path. The prose
 distinguishes them not at all: where a colleague runs is deployment, and the model is never told.
 
-**Publication (Morgana.Web, Section 9.5).** An intent is published for either of two reasons, and
-neither implies the other: it is **named by somebody's `[ConsultsAgent]`** here, or the deployment
-**declares it exposed** in `Morgana:AgentToAgent:ExposedAgents`. The first is discovered from the agents
-loaded; the second cannot be discovered at all, because the declaration that reaches an agent
-answering another installation was written over there. Without it an installation exposes an agent only
-where it happens to consult that agent itself — federation as a side effect of somebody's internal
-topology rather than as a word said on purpose. A name there that no agent handles is startup-fatal:
-a deployment claiming to answer for something it cannot is asserting a falsehood about itself. A
-published intent is
-registered with `AddAIAgent` and `AddA2AServer` (`Microsoft.Agents.AI.Hosting.A2A`), then mapped with
-`MapA2AJsonRpc` at `/a2a/{intent}` and `MapWellKnownAgentCard` at
-`/a2a/{intent}/.well-known/agent-card.json`. **Nothing is stood up when no agent declares a
-colleague and nothing is exposed**, or when `Morgana:AgentToAgent:Enabled` is false: no hosted agent, no server, no route,
-no card — such a deployment is the deployment it was before any of this existed, and pays for A2A
-neither in prompt tokens nor in surface. An agent nobody consults exposes no endpoint either;
-publishing everything discovered instead is one line in that loop. The
+**Publication (Morgana.Web, Section 9.5).** The ring is raised whole or not at all: when
+`Morgana:AgentToAgent:Enabled` is true, **every agent discovered here is published**, whether or not
+a sibling consults it. Publishing only what somebody happens to name would make what an installation
+answers for a side effect of its own internal topology — an agent nobody here consults would be
+unreachable from outside, and a deployment wanting to federate it would have to restate in
+configuration a fact its plugins already carry. What an installation offers is instead what it can
+answer. Each published intent is registered with `AddAIAgent` and `AddA2AServer` (`Microsoft.Agents.AI.Hosting.A2A`),
+then mapped with`MapA2AJsonRpc` at `/a2a/{intent}` and `MapWellKnownAgentCard` at
+`/a2a/{intent}/.well-known/agent-card.json`. **Nothing is stood up when `Morgana:AgentToAgent:Enabled`
+is false**: no hosted agent, no server, no route, no card — such a deployment is the deployment it was
+before any of this existed, and pays for A2A neither in prompt tokens nor in surface. The
 address those cards advertise is never configured: cards are projected while the endpoints are still
 being mapped, and at `ApplicationStarted` — once Kestrel has bound and before any request can read a
 card — `IAgentDirectoryService.PublishInterfacesAsync` fills them in from `IHostAddressService`,
@@ -319,17 +314,19 @@ own, and the answering side that it may never demand of a colleague what only th
 each is the other's counterpart, and either alone leaves the pair that produced the defect it
 addresses. It sits last so it can name the policies it suspends instead of forward-referencing them.
 
-**Nor is any of it paid by an agent it does not concern**, the policy included. It is rendered only
-for an agent inside the A2A topology — one that declares `[ConsultsAgent]`, or whose intent somebody
-else declares (`MorganaAgentAdapter.IsConsultedByAnyAgent`, the same condition under which
-Morgana.Web publishes an intent, since an unpublished agent is never asked) — and the switch is the
+**Nor is any of it paid by a deployment it does not concern**, the policy included. It is rendered
+for every agent of an installation that takes part in peer consultation at all
+(`MorganaAgentAdapter.PeerConsultationEnabled`, the same condition under which Morgana.Web publishes
+an intent, since an unpublished agent is never asked) and for none of an installation that does not —
+the ring being whole, any agent may be the one a question lands on. The switch is the
 `peerCapable` argument of `ComposeAgentInstructionsAsync`, so the peer-capability of an agent is
 decided where the topology is known rather than inside the composer. `ColleaguesDeclaration` closes
 the instructions of an agent that holds colleagues, so one that declares no `[ConsultsAgent]` never
 carries it; `PeerConsultationDeclaration` is spliced into an inbound question, so an agent pays it
 only on the turns it is actually being consulted. A `ConsultMeFor` is paid by whoever *reads* it,
-never by the agent that wrote it: it leaves on the card and comes back in somebody else's prompt. An agent that neither consults nor is consulted reads not one
-extra token, exactly as before any of this existed.
+never by the agent that wrote it: it leaves on the card and comes back in somebody else's prompt. An
+agent of an installation with peer consultation switched off reads not one extra token, exactly as
+before any of this existed.
 
 OTel: a `morgana.consultation` span (`consultation.caller`, `consultation.target`,
 `consultation.awaiting_reply`) nested under the answering agent's work.
@@ -560,7 +557,7 @@ At application startup, comprehensive validation is performed:
 4. **ProvidesToolForIntentRegistryService**: warns on agents without tools (MCP-only is valid), warns on orphaned tools, errors on duplicate tool registrations for same intent
 5. **EmbeddedAgentConfigurationService**: warns if no `agents.json` found (agentless mode is allowed)
 6. **MorganaLLM provider constructors**: reject a `Tiers` entry whose `ModelId` is still an override placeholder, or an empty `Tiers` map
-7. **Program.cs, section 9.5**: every intent named in `Morgana:AgentToAgent:ExposedAgents` must be handled by a registered agent — an installation can only expose what it can answer for. And when at least one intent is published over A2A, from either source, the `morgana` issuer must carry a real `SymmetricKey` — undeclared, blank or still on `_SECURE_OVERRIDE_` throws. An outbound consultation is signed under that issuer, so without it a colleague resolves to nothing and never appears in the asking agent's tool list: the topology validates cleanly and fails silently on the first conversation, which is precisely what check 3 exists to prevent. The predicate is `ConfigurationAgentDirectoryService.ResolvePeerSigningKey`, the same one the signing handler reads, so the check and the runtime cannot disagree. Publishing nothing (no `[ConsultsAgent]` anywhere, or `Morgana:AgentToAgent:Enabled=false`) asks for no key
+7. **Program.cs, section 9.5**: when at least one intent is published over A2A — i.e. whenever peer consultation is enabled and the installation has agents at all — the `morgana` issuer must carry a real `SymmetricKey` — undeclared, blank or still on `_SECURE_OVERRIDE_` throws. An outbound consultation is signed under that issuer, so without it a colleague resolves to nothing and never appears in the asking agent's tool list: the topology validates cleanly and fails silently on the first conversation, which is precisely what check 3 exists to prevent. The predicate is `ConfigurationAgentDirectoryService.ResolvePeerSigningKey`, the same one the signing handler reads, so the check and the runtime cannot disagree. Publishing nothing (no `[ConsultsAgent]` anywhere, or `Morgana:AgentToAgent:Enabled=false`) asks for no key
 
 ## Key Configuration Sections (appsettings.json)
 
@@ -568,7 +565,7 @@ At application startup, comprehensive validation is performed:
 |-----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `Morgana:LLM:Provider`                              | LLM provider: `Anthropic`, `AzureOpenAI`, `Ollama`, `OpenAI`                                                                                                                                                                  |
 | `Morgana:LLM:{Provider}`                            | Provider credentials (ApiKey, Endpoint) + `Tiers` map keyed by die (`Efficiency`/`Performance`), each entry with `Options` (`ModelId`, optional `MaxOutputTokens`) and per-model `MagicDust` pricing |
-| `Morgana:AgentToAgent`                              | `Enabled` (default true — off means agents never see their declared colleagues and run exactly as before), `MaxRoundsPerTurn` (default 4, safety net on an exchange that fails to converge), `ExposedAgents[]` — the intents this installation answers for whoever is entitled to ask, whether or not an agent of its own consults them, which is the only way to publish an agent **for another installation** rather than for a sibling; and `ConsultableInstances[]` — the other Morgana installations whose agents this one may consult, each `{ Name, Url, SymmetricKey, Issuer? }`. `Name` is what `[ConsultsAgent]` names and never a hostname; `Url` is everything before the published agent path; `SymmetricKey` is the key that instance issued to this caller; `Issuer` overrides what its own card declares, for a key cut for this caller alone. **This installation is not among them and needs no entry** — it knows its own address by binding and already holds its own key, for validating what it receives. There is deliberately **no address setting for itself**: an application does not declare its own URL — see `IHostAddressService`. The wait on a colleague reuses `ActorSystem:TimeoutSeconds` |
+| `Morgana:AgentToAgent`                              | `Enabled` (default true — off means agents never see their declared colleagues and run exactly as before), `MaxRoundsPerTurn` (default 4, safety net on an exchange that fails to converge), and `ConsultableInstances[]` — the other Morgana installations whose agents this one may consult, each `{ Name, Url, SymmetricKey, Issuer? }`. `Name` is what `[ConsultsAgent]` names and never a hostname; `Url` is everything before the published agent path; `SymmetricKey` is the key that instance issued to this caller; `Issuer` overrides what its own card declares, for a key cut for this caller alone. **This installation is not among them and needs no entry** — it knows its own address by binding and already holds its own key, for validating what it receives. There is deliberately **no address setting for itself**: an application does not declare its own URL — see `IHostAddressService`. The wait on a colleague reuses `ActorSystem:TimeoutSeconds` |
 | `Morgana:ActorSystem:TimeoutSeconds`                | Actor/agent receive timeout (default 180s)                                                                                                                                                                                    |
 | `Morgana:ActorSystem:EnableGuardrail`               | Toggle guard rail (useful for local dev)                                                                                                                                                                                      |
 | `Morgana:ActorSystem:IntentCollisionThreshold` | Confidence-gap threshold (default `0.10`, on the classifier's 0-1 scale) below which two or more ranked intents count as a collision. `LLMClassifierService` applies it; `ConversationSupervisorActor` turns a collision into a disambiguation quick reply instead of routing to an agent — see Classifier disambiguation |
