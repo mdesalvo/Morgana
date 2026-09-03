@@ -6,17 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.30.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Cross-Instance collaboration over A2A
+Morgana now speaks the **A2A protocol** instance to instance. She takes in **every agent of the instance**, each published at `/a2a/{intent}` with its well-known agent card. Agents can consult peers on **other Morgana instances**: `[ConsultsAgent("shipping", "acme")]` names an "acme" installation trusted under `Morgana:AgentToAgent:ConsultableInstances` on which the collegue "shipping" can be consulted.
+
 ### ✨ Added
+- **`[ConsultsAgent("intent", "instance")]`** and **`ConsultableInstances[]`** — a colleague published by another instance, offered to the model as `consult_{instance}_{intent}`
+- **A2A bearer issuance, v1** — the card extension naming the issuer and audience a caller mints under, published on every card Morgana serves and read on every card she consults
+- **Transport and authentication on the card** — the absolute address this installation bound, the bearer scheme and the requirement pointing at it
 
 ### 🔄 Changed
 
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
+- **Scoped trust between installations** — an issuer today is welcomed at every desk of the ring, which is exactly right among peers that trust each other and generous for a partner who should only ever ask about shipping. Since the card already declares its security in standard form, admitting a caller *to a named subset of agents* is a claim to validate rather than machinery to build — and it turns Morgana into an installation you can safely open to a customer, a supplier or a marketplace, one desk at a time
+- **A federation of Morgana** — every installation already describes itself completely on an open card, so nothing stands between today and a **directory of peers**: point a Morgana at a list of addresses and its agents discover, in one pass, every competence the federation can answer for. The pieces are all published; what is left is the collecting
 
 ## [0.29.0] - 2026-09-01
 ### 🎯 Major Feature: Cross-Agent collaboration over A2A
-Morgana now speaks the **A2A protocol** end to end. An agent declares `[ConsultsAgent("billing")]` and that colleague becomes a `consult_{intent}` function in its tool list; the agent so named is published at `/a2a/{intent}` with a well-known agent card. The card is open, so anything that speaks A2A can discover it; the endpoint behind it is authenticated and Morgana signs its own peer traffic under the `morgana` issuer. So an agent stops sending the user back and forth between desks and collaborates with the collegue _behind the hood_ over the A2A protocol. Colleagues live in this instance — a remote peer is not declarable yet (see Future Enablement) but the wire is the standard one at both ends. It is **opt-in and pays for itself only where declared**: nothing is published for an agent nobody consults and an agent that neither declares a colleague nor is named as one gets no endpoint, no policy and no extra tokens. A domain without `[ConsultsAgent]` anywhere, or a deployment with `Morgana:AgentToAgent:Enabled` false, is exactly the Morgana it was before.
+Morgana now speaks the **A2A protocol** end to end. An agent declares `[ConsultsAgent("billing")]` and that colleague becomes a `consult_{intent}` function in its tool list; the agent so named is published at `/a2a/{intent}` with a well-known agent card. The card is open, so anything that speaks A2A can discover it; the endpoint behind it is authenticated and Morgana signs its own peer traffic under the `morgana` issuer. So an agent stops sending the user back and forth between desks and collaborates with the collegue _behind the hood_ over the A2A protocol.
+Colleagues live in this instance — a remote peer is not declarable yet (see Future Enablement) but the wire is the standard one at both ends. It is **opt-in and pays for itself only where declared**: nothing is published for an agent nobody consults and an agent that neither declares a colleague nor is named as one gets no endpoint, no policy and no extra tokens. A domain without `[ConsultsAgent]` anywhere, or a deployment with `Morgana:AgentToAgent:Enabled` false, is exactly the Morgana it was before.
 
 ### ✨ Added
 - **`[ConsultsAgent("intent")]`** — a new attribute naming the colleagues an agent may consult, opening Morgana to A2A collaboration
