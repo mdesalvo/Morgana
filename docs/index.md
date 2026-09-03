@@ -1,9 +1,12 @@
 # Morgana
 
-Morgana is a multi-agent, multi-channel **conversational AI framework** for .NET 10, built on the
-actor model (Akka.NET) and Microsoft.Agents.AI. Domain experts model agents declaratively — prompt
-and tools in JSON, a thin C# class — and the framework handles orchestration, streaming,
-persistence, guard rails, channel adaptation and observability.
+Morgana is a modern and flexible **conversational AI framework** designed to handle complex scenarios
+through a sophisticated **multi-agent, intent-driven architecture**. Built on cutting-edge **.NET 10**
+and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that
+collaborate to understand, classify and resolve customer inquiries with precision and context awareness.
+
+The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language
+Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
 The source, the issue tracker and the releases live in the
 [repository](https://github.com/mdesalvo/Morgana).
