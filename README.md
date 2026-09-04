@@ -144,8 +144,8 @@ Agents in Morgana are **domain specialists** that self-register through **declar
 ```csharp
 [HandlesIntent("billing")]
 [RequiresLLMTier(LLMTier.Efficiency)]
-[ConsultsAgent("inventory")] // A2A colleague of this installation
-[ConsultsAgent("shipping", "acme")] // A2A colleague published by another Morgana
+[ConsultsAgent("inventory")] // A2A agent discovery (local)
+[ConsultsAgent("shipping", "acme")] // A2A agent discovery (remote)
 public class BillingAgent : MorganaAgent { ... }
 
 [HandlesIntent("monkeys")]
@@ -233,6 +233,3 @@ docker compose --env-file .env --env-file .env.versions run --rm --service-ports
 # 🛑 Stop the containers
 docker compose --env-file .env --env-file .env.versions down
 ```
-
-> [!TIP]
-> **Don't hand-write your first domain — distill it.** [**Alembic**](https://mdesalvo.github.io/Morgana/Alembic-Handbook.html) is Morgana's authoring workbench: an AI-conducted interview that turns a domain expert's own words into a ready-to-use Morgana domain (intents, agent prose, tool contracts, C# assets and starter non-regression scenarios), instead of writing `agents.json` and C# by hand. Hand-authoring against the `Morgana.AI` NuGet package is still fully supported for those who prefer it: Alembic is the preferred path to **onboard a new domain** or extend an existing one.
