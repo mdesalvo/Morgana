@@ -144,8 +144,8 @@ Agents in Morgana are **domain specialists** that self-register through **declar
 ```csharp
 [HandlesIntent("billing")]
 [RequiresLLMTier(LLMTier.Efficiency)]
-[ConsultsAgent("inventory")] // A2A colleague of this installation
-[ConsultsAgent("shipping", "acme")] // A2A colleague published by another Morgana
+[ConsultsAgent("inventory")] // A2A peer discovery (local)
+[ConsultsAgent("shipping", "acme")] // A2A peer discovery (remote)
 public class BillingAgent : MorganaAgent { ... }
 
 [HandlesIntent("monkeys")]
