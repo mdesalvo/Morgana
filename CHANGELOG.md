@@ -10,16 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Morgana now speaks the **A2A protocol** instance to instance. She takes in **every agent of the instance**, each published at `/a2a/{intent}` with its well-known agent card. Agents can consult peers on **other Morgana instances**: `[ConsultsAgent("shipping", "acme")]` names an "acme" installation trusted under `Morgana:AgentToAgent:ConsultableInstances` on which the collegue "shipping" can be consulted.
 
 ### ✨ Added
-- **`[ConsultsAgent("intent", "instance")]`** and **`ConsultableInstances[]`** — a colleague published by another instance, offered to the model as `consult_{instance}_{intent}`
+- **`[ConsultsAgent("intent", "system")]`** and **`OutboundSystems[]`** — a colleague published by another system, offered to the model as `consult_{system}_{intent}`
 - **A2A bearer issuance, v1** — the card extension naming the issuer and audience a caller mints under, published on every card Morgana serves and read on every card she consults
 - **Transport and authentication on the card** — the absolute address this installation bound, the bearer scheme and the requirement pointing at it
+- **`AgentCardTests` now measures the gate, not only the card** — the three refusals (no token; a channel's own valid token; a system's valid token at a desk it is not admitted to) and the admission that keeps them from passing for the wrong reason. Deterministic, no LLM call, no cost
+- **Scoped trust: `Type` on an issuer, and `InboundSystems[]`** — an issuer declares what it is to this installation (`channel` or `system`), and a system declares how far it reaches among the published agents. `{ "Issuer": "acme-logistics", "Agents": ["inventory"] }` opens one desk to a partner and nothing else; an entry naming no `Agents` opens the ring, which is the previous behaviour written down. Identity and reach stay separate questions: `Issuers` says who may knock, `InboundSystems` how far the knocker gets, and it admits nobody on its own
 
 ### 🔄 Changed
+- **BREAKING (configuration)**: every entry under `Morgana:Authentication:Issuers` must now declare a **`Type`** — `channel` for a client carrying users, `system` for a peer consulting published agents over A2A — and the two are exclusive: a channel is refused at `/a2a`, a system at the conversation API. A caller is a channel or a colleague, never both, and the two doors are not equally guarded — behind the A2A one a request reaches an agent's actor with none of the guard, classifier, rate limit and dust budget a channel's path goes through. Migration: add `"Type": "channel"` to every channel entry, `"Type": "system"` to `morgana`, and — if any agent consults a colleague of this installation — `"InboundSystems": [ { "Issuer": "morgana" } ]`. Startup names whichever is missing
+- **Relaxed**: the `morgana` signing key is now required only when an agent declares a colleague **of this installation**, not merely because agents are published. A consultation of a local colleague is signed under that issuer and comes back in through the A2A filter, so it is needed at both ends; a colleague elsewhere is signed with that system's own key and never knocks at this door. An installation that publishes its desks for a partner and consults nobody itself — a pure supplier — now runs with no `morgana` entry at all
 
 ### 🐛 Fixed
 
 ### 🚀 Future Enablement
-- **Scoped trust between installations** — an issuer today is welcomed at every desk of the ring, which is exactly right among peers that trust each other and generous for a partner who should only ever ask about shipping. Since the card already declares its security in standard form, admitting a caller *to a named subset of agents* is a claim to validate rather than machinery to build — and it turns Morgana into an installation you can safely open to a customer, a supplier or a marketplace, one desk at a time
 - **A federation of Morgana** — every installation already describes itself completely on an open card, so nothing stands between today and a **directory of peers**: point a Morgana at a list of addresses and its agents discover, in one pass, every competence the federation can answer for. The pieces are all published; what is left is the collecting
 
 ## [0.29.0] - 2026-09-01

@@ -64,6 +64,23 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// </summary>
     private string peerIssuerKey = string.Empty;
 
+    /// <summary>
+    /// Issuer this run declares as a system admitted to <see cref="ScopedSystemAgent"/> and to no
+    /// other desk, so the scope half of the A2A gate has something to actually refuse.
+    /// </summary>
+    /// <remarks>
+    /// Declared per run rather than shipped in the host's appsettings: it exists to be turned away,
+    /// and a deployment carrying a partner nobody onboarded would be a worse default than the test
+    /// is worth. Everything about it is pushed in as environment overrides, like every other knob.
+    /// </remarks>
+    public const string ScopedSystemIssuerName = "harness-peer";
+
+    /// <summary>The one published agent <see cref="ScopedSystemIssuerName"/> is admitted to.</summary>
+    public const string ScopedSystemAgent = "inventory";
+
+    /// <summary>Symmetric key minted for this run under <see cref="ScopedSystemIssuerName"/>.</summary>
+    public string ScopedSystemKey { get; private set; } = string.Empty;
+
     /// <summary>Tee on the host's stdout; the turn observer reads tool log lines from it.</summary>
     public HostOutputCapture Output { get; private set; } = null!;
 
@@ -102,6 +119,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // disk) and a scratch directory for the SQLite databases this run's conversations create.
         IssuerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         peerIssuerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        ScopedSystemKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         storagePath = Path.Combine(Path.GetTempPath(), "morgana-harness", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(storagePath);
 
@@ -273,6 +291,20 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // so a run would not even boot without it.
         Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ResolveIssuerIndex(HarnessChannel.IssuerName)}__SymmetricKey", IssuerKey);
         Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ResolveIssuerIndex(PeerIssuerName)}__SymmetricKey", peerIssuerKey);
+
+        // One more issuer than the host declares, appended past the last index its appsettings uses:
+        // a system admitted to a single desk, which is the only way the scope half of the A2A gate
+        // can be observed at all — refusing an unauthenticated call proves the door is shut, not that
+        // it is shut selectively. Both halves of the declaration are pushed, because either alone is
+        // startup-fatal by design: an issuer with no reach, or a reach for nobody.
+        int scopedIssuerIndex = Configuration.GetSection("Morgana:Authentication:Issuers").GetChildren().Count();
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{scopedIssuerIndex}__Name", ScopedSystemIssuerName);
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{scopedIssuerIndex}__SymmetricKey", ScopedSystemKey);
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{scopedIssuerIndex}__Type", "system");
+
+        int scopedInboundIndex = Configuration.GetSection("Morgana:AgentToAgent:InboundSystems").GetChildren().Count();
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__InboundSystems__{scopedInboundIndex}__Issuer", ScopedSystemIssuerName);
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__InboundSystems__{scopedInboundIndex}__Agents__0", ScopedSystemAgent);
 
 
         // Framework categories at Information, everything else quiet: the tool log lines the turn

@@ -1,14 +1,19 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// Checks the agent card a published agent serves: that it is reachable without credentials, that
-/// it states how to obtain them, and that the endpoint it points at demands them.
+/// Checks the agent card a published agent serves — that it is reachable without credentials, that
+/// it states how to obtain them — and the gate behind it: which credentials that endpoint demands,
+/// and how far the ones it accepts actually reach.
 /// </summary>
 /// <remarks>
 /// The only group here that costs nothing and grades nothing: a card is a wire contract, not prose,
@@ -111,6 +116,83 @@ public sealed class AgentCardTests
             new { jsonrpc = "2.0", id = "1", method = "message/send" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Agent_endpoint_refuses_a_channels_own_credentials()
+    {
+        // A caller is a channel or a colleague, never both. The harness authenticates as a channel
+        // and its token is entirely valid — signed with a key this host declared, current, addressed
+        // to the right audience — which is the whole point: what is refused here is not a bad
+        // credential but a good one presented at a door it was not cut for. Behind this one a request
+        // reaches an agent's actor with none of the guard, classifier, rate limit and dust budget the
+        // conversation API applies.
+        HttpResponseMessage response = await CallAgentAsync(
+            MorganaHostFixture.ScopedSystemAgent, HarnessChannel.IssuerName, fixture.IssuerKey);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Every published agent this run's scoped system is NOT admitted to — the theory data above
+    /// minus <see cref="MorganaHostFixture.ScopedSystemAgent"/>, spelled out for the same reason
+    /// everything else here is: what must be noticed is the published surface changing shape.
+    /// </summary>
+    [Theory]
+    [InlineData("billing")]
+    [InlineData("contract")]
+    [InlineData("monkeys")]
+    public async Task Agent_endpoint_refuses_a_system_not_admitted_to_it(string closedAgent)
+    {
+        // Proven to be a colleague, and still turned away: this run declares its scoped system as
+        // admitted to one desk, and every other desk of the same installation answers it exactly as
+        // it answers a stranger. That is what lets an installation be opened to a customer, a
+        // supplier or a marketplace one agent at a time, rather than whole or not at all.
+        HttpResponseMessage response = await CallAgentAsync(
+            closedAgent, MorganaHostFixture.ScopedSystemIssuerName, fixture.ScopedSystemKey);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Agent_endpoint_admits_a_system_scoped_to_it()
+    {
+        // The other half, and the one that keeps the two above from passing for the wrong reason: a
+        // gate refusing everything would satisfy them both. Only the gate is under test here, so the
+        // assertion stops at "not turned away" — what the A2A handler makes of a deliberately
+        // incomplete JSON-RPC body is its business, and asserting it would tie this test to a
+        // protocol shape it is not measuring.
+        HttpResponseMessage response = await CallAgentAsync(
+            MorganaHostFixture.ScopedSystemAgent, MorganaHostFixture.ScopedSystemIssuerName, fixture.ScopedSystemKey);
+
+        Assert.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Calls one published agent's JSON-RPC endpoint with a token minted here, the way any A2A
+    /// consumer holding a key would mint one.
+    /// </summary>
+    /// <param name="intent">Published agent to call.</param>
+    /// <param name="issuer">Issuer to sign under, which is what the gate reads.</param>
+    /// <param name="symmetricKey">Key that issuer is declared with on the host under test.</param>
+    private async Task<HttpResponseMessage> CallAgentAsync(string intent, string issuer, string symmetricKey)
+    {
+        string token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+        {
+            Issuer = issuer,
+            Audience = fixture.Configuration["Morgana:Authentication:Audience"],
+            Subject = new ClaimsIdentity([new Claim(JwtRegisteredClaimNames.Sub, issuer)]),
+            Expires = DateTime.UtcNow.AddMinutes(5),
+            SigningCredentials = new SigningCredentials(
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(symmetricKey)), SecurityAlgorithms.HmacSha256)
+        });
+
+        using HttpClient httpClient = new HttpClient();
+        httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        return await httpClient.PostAsJsonAsync(
+            $"{fixture.BaseAddress}/a2a/{intent}",
+            new { jsonrpc = "2.0", id = "1", method = "message/send" });
     }
 
     /// <summary>Well-known address of one published agent's card on the host under test.</summary>

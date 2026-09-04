@@ -115,15 +115,15 @@ public class MigrationReportService : IMigrationReportService
             // Unconditional, and unlike everything else here it is not about what changed: a colleague
             // at an instance needs an address and a key this archive deliberately does not carry — a URL
             // is the deployment's word, and a shared secret has no business in a file that is
-            // downloaded. Said on every report because an instance entry that was never added is a
+            // downloaded. Said on every report because a system entry that was never added is a
             // startup failure, and one added under a differently spelled name is the same failure
             // wearing a plausible configuration.
             foreach (Morgana.AI.Records.PeerReference colleague in agent.Code.Consults.Where(c => c.Instance is not null))
                 entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised,
-                    $"Consults '{colleague.Intent}' at instance '{colleague.Instance}'. Declare that instance under "
-                    + $"Morgana:AgentToAgent:ConsultableInstances with its Url and the key it issued to you, under exactly the name "
+                    $"Consults '{colleague.Intent}' at system '{colleague.Instance}'. Declare that system under "
+                    + $"Morgana:AgentToAgent:OutboundSystems with its Url and the key it issued to you, under exactly the name "
                     + $"'{colleague.Instance}' — spelling and spacing included, or startup refuses the agent. Neither the "
-                    + "address nor the key is in this archive. That the consultableInstance really publishes an agent for "
+                    + "address nor the key is in this archive. That the system really publishes an agent for "
                     + $"'{colleague.Intent}' is its own card's word, read on the first consultation: a mistake there is a "
                     + "warning at run time and the colleague quietly missing, not a startup error."));
 

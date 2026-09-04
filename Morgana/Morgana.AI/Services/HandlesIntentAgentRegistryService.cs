@@ -164,12 +164,12 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         }
 
         // Check 4: every [ConsultsAgent] declaration must name a colleague that can actually be
-        // reached — an agent of this installation, or an intent at a declared peer — never the
+        // reached — an agent of this installation, or an intent at a declared system — never the
         // declaring agent itself, and never the same colleague twice. A consultation is resolved at
         // agent-creation time, long after startup, so each of these would otherwise surface on the
         // first conversation: a typo as a colleague that silently never appears, a duplicate as two
         // functions of the same name in the tool list, which the provider rejects outright.
-        List<Records.ConsultableInstanceOptions> consultableInstances = ConfigurationAgentDirectoryService.ResolveConsultableInstances(configuration);
+        List<Records.OutboundSystemOptions> outboundSystems = ConfigurationAgentDirectoryService.ResolveOutboundSystems(configuration);
 
         foreach ((string declaredIntent, Type agentType) in registry)
         {
@@ -178,8 +178,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             foreach (ConsultsAgentAttribute consultsAgent in agentType.GetCustomAttributes<ConsultsAgentAttribute>())
             {
                 // What must be unique is the name the colleague is offered under, not the pair that
-                // produced it: instances are named by people ("Newco Finance"), and a function name is
-                // constrained where an instance name is not — so two distinct declarations can sanitize
+                // produced it: systems are named by people ("Newco Finance"), and a function name is
+                // constrained where a system name is not — so two distinct declarations can sanitize
                 // to one function, which the provider rejects outright. Derived by the very method the
                 // adapter will use, so the check and the tool list cannot disagree.
                 string peerFunctionName = MorganaAgentAdapter.ToFunctionName(
@@ -187,7 +187,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
                 string colleague = consultsAgent.Instance is null
                     ? $"'{consultsAgent.Intent}'"
-                    : $"'{consultsAgent.Intent}' at instance '{consultsAgent.Instance}'";
+                    : $"'{consultsAgent.Intent}' at system '{consultsAgent.Instance}'";
 
                 if (consultsAgent.Instance is null)
                 {
@@ -198,23 +198,23 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 }
                 else
                 {
-                    // What an instance publishes cannot be verified from here — that is the point of a
+                    // What a system publishes cannot be verified from here — that is the point of a
                     // card, and it is fetched on the first consultation. What can be verified is that
                     // the declaration names something addressable and signable, which is the whole of
                     // what this side must bring.
-                    Records.ConsultableInstanceOptions? consultableInstance = consultableInstances
+                    Records.OutboundSystemOptions? outboundSystem = outboundSystems
                         .FirstOrDefault(candidate => string.Equals(candidate.Name.Trim(), consultsAgent.Instance, StringComparison.OrdinalIgnoreCase));
 
-                    if (consultableInstance is null)
+                    if (outboundSystem is null)
                         validationErrors.Add(
-                            $"Agent '{agentType.Name}' declares a consultation of {colleague}, which is not declared under Morgana:AgentToAgent:ConsultableInstances "
-                            + $"(declared: {(consultableInstances.Count > 0 ? string.Join(", ", consultableInstances.Select(declared => $"'{declared.Name}'")) : "none")}). "
+                            $"Agent '{agentType.Name}' declares a consultation of {colleague}, which is not declared under Morgana:AgentToAgent:OutboundSystems "
+                            + $"(declared: {(outboundSystems.Count > 0 ? string.Join(", ", outboundSystems.Select(declared => $"'{declared.Name}'")) : "none")}). "
                             + "The name on the attribute and the Name on the entry must be the same, spelling and spacing included");
-                    else if (!Uri.TryCreate(consultableInstance.Url, UriKind.Absolute, out _))
-                        validationErrors.Add($"Instance '{consultableInstance.Name}', consulted by agent '{agentType.Name}', declares no absolute Url");
-                    else if (string.IsNullOrWhiteSpace(consultableInstance.SymmetricKey)
-                             || string.Equals(consultableInstance.SymmetricKey.Trim(), Constants.Overrides.Secure, StringComparison.Ordinal))
-                        validationErrors.Add($"Instance '{consultableInstance.Name}', consulted by agent '{agentType.Name}', carries no usable SymmetricKey (User Secrets or environment)");
+                    else if (!Uri.TryCreate(outboundSystem.Url, UriKind.Absolute, out _))
+                        validationErrors.Add($"System '{outboundSystem.Name}', consulted by agent '{agentType.Name}', declares no absolute Url");
+                    else if (string.IsNullOrWhiteSpace(outboundSystem.SymmetricKey)
+                             || string.Equals(outboundSystem.SymmetricKey.Trim(), Constants.Overrides.Secure, StringComparison.Ordinal))
+                        validationErrors.Add($"System '{outboundSystem.Name}', consulted by agent '{agentType.Name}', carries no usable SymmetricKey (User Secrets or environment)");
                 }
 
                 if (!declaredColleagues.Add(peerFunctionName))

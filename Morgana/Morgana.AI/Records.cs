@@ -323,6 +323,18 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
+    /// What a declared issuer is to this installation, and therefore which door its token opens.
+    /// </summary>
+    public enum IssuerType
+    {
+        /// <summary>Carries people: the REST API and SignalR, and nothing published under <c>/a2a</c>.</summary>
+        Channel,
+
+        /// <summary>Carries agent work over A2A: the published agents its <see cref="InboundSystemOptions"/> entry allows, and nothing else.</summary>
+        System
+    }
+
+    /// <summary>
     /// Per-issuer trust model: each channel declares own IssuerOptions entry with own signing key (compromise isolation).
     /// Tokens with undeclared iss claim are rejected. Onboarding new channel: add IssuerOptions where Name=iss claim,
     /// SymmetricKey=channel's signing secret. Rejected at first request if not declared or key mismatch.
@@ -363,23 +375,30 @@ public static class Records
         /// environment variables in production.
         /// </summary>
         public string SymmetricKey { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Which door this issuer's token opens. Mandatory on every entry, channels included:
+        /// a role that may be omitted is a role that gets guessed, and the guess would decide
+        /// whether a caller reaches an agent's actor bypassing the whole conversation pipeline.
+        /// </summary>
+        public IssuerType? Type { get; set; }
     }
 
     /// <summary>
-    /// Another Morgana installation whose agents this one may consult.
+    /// Another system whose agents this installation may consult.
     /// </summary>
     /// <remarks>
-    /// An entry describes an installation, not an agent: every agent it publishes is reachable
-    /// underneath the same address, so declaring an instance once opens as many colleagues as it
-    /// serves. This is the mirror image of <see cref="IssuerOptions"/> — there a caller is admitted,
+    /// An entry describes a system, not an agent: every agent it publishes is reachable underneath
+    /// the same address, so declaring one opens as many colleagues as it serves. A system need not
+    /// be another Morgana, nor somebody else's — a second deployment of one's own, a partner's
+    /// installation and an orchestrator that never heard of Morgana are declared exactly alike.
+    /// This is the outbound half of <see cref="InboundSystemOptions"/> — there one is admitted,
     /// here one is addressed — and the same per-entry key discipline applies for the same reason.
-    /// A instance is not necessarily somebody else's: a second deployment of one's own is declared
-    /// exactly the same way.
     /// </remarks>
-    public record ConsultableInstanceOptions
+    public record OutboundSystemOptions
     {
         /// <summary>
-        /// Name this instance is declared under in <c>[ConsultsAgent]</c>, and never a hostname: an
+        /// Name this system is declared under in <c>[ConsultsAgent]</c>, and never a hostname: an
         /// attribute names whose desk is being called, while where that desk runs is deployment.
         /// </summary>
         public string Name { get; set; } = string.Empty;
@@ -391,17 +410,43 @@ public static class Records
         public string Url { get; set; } = string.Empty;
 
         /// <summary>
-        /// Key this side signs its requests to that instance with (HMAC-SHA256, at least 256 bits).
+        /// Key this side signs its requests to that system with (HMAC-SHA256, at least 256 bits).
         /// The receiving side must hold the same key under the issuer named below.
         /// </summary>
         public string SymmetricKey { get; set; } = string.Empty;
 
         /// <summary>
-        /// Issuer to sign under, overriding what the instance's own card declares. Left unset in the
-        /// ordinary case; set when an instance cut a key for this caller alone, so that revoking it
+        /// Issuer to sign under, overriding what the system's own card declares. Left unset in the
+        /// ordinary case; set when a system cut a key for this caller alone, so that revoking it
         /// does not rotate the key every other caller uses.
         /// </summary>
         public string? Issuer { get; set; }
+    }
+
+    /// <summary>
+    /// How far a system reaches once inside, among the agents this installation publishes.
+    /// </summary>
+    /// <remarks>
+    /// This list admits nobody: identity is settled in <c>Morgana:Authentication:Issuers</c>, and an
+    /// entry here only narrows a caller already proven there and typed <see cref="IssuerType.System"/>.
+    /// Every such issuer needs one, because the dangerous direction is silence: a system declared and
+    /// then forgotten here would be handed the whole ring by omission.
+    /// </remarks>
+    public record InboundSystemOptions
+    {
+        /// <summary>
+        /// Issuer this entry scopes, matching the <c>Name</c> of an <see cref="IssuerOptions"/> entry.
+        /// Identified by what actually arrives in a token, never by the outbound
+        /// <see cref="OutboundSystemOptions.Name"/> an attribute writes.
+        /// </summary>
+        public string Issuer { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Published agents this system may consult, or <c>null</c> to admit it to every one of them.
+        /// Never set for this installation's own issuer: its internal topology is declared by
+        /// <c>[ConsultsAgent]</c>, and a second author of it could only contradict the first.
+        /// </summary>
+        public List<string>? Agents { get; set; }
     }
 
     /// <summary>
@@ -413,12 +458,15 @@ public static class Records
     /// <param name="Error">Description of why authentication failed, null if authenticated</param>
     /// <param name="Issuer">The validated <c>iss</c>, set only on success. Names which door the
     /// credential was cut for, so a gate can admit some issuers and not others.</param>
+    /// <param name="IssuerType">Role that issuer was declared under, set only on success. Each gate
+    /// admits one role and refuses the other, so this is what tells the two apart.</param>
     public record AuthenticationResult(
         bool IsAuthenticated,
         string? CallerId = null,
         string? DisplayName = null,
         string? Error = null,
-        string? Issuer = null);
+        string? Issuer = null,
+        IssuerType? IssuerType = null);
 
     // ==========================================================================
     // USER MESSAGE HANDLING
@@ -569,7 +617,7 @@ public static class Records
     /// Names one consultable colleague.
     /// </summary>
     /// <param name="Intent">Intent the colleague handles, as its own installation publishes it.</param>
-    /// <param name="Instance">Installation publishing it, declared in <c>Morgana:AgentToAgent:ConsultableInstances</c>;
+    /// <param name="Instance">Installation publishing it, declared in <c>Morgana:AgentToAgent:OutboundSystems</c>;
     /// <c>null</c> for an agent of this one. Two colleagues handling the same intent at two
     /// installations are two colleagues, which is why the pair and not the intent is the name.</param>
     public record PeerReference(string Intent, string? Instance = null);

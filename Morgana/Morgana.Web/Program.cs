@@ -8,6 +8,7 @@ using Microsoft.Agents.AI.Hosting.A2A;
 using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
+using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.AI.SessionStores;
@@ -161,7 +162,7 @@ builder.Services.AddSingleton<ILLMService>(sp => {
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
     string llmProvider = builder.Configuration["Morgana:LLM:Provider"]!;
 
-    Morgana.AI.Abstractions.MorganaLLM llm = llmProvider.ToLowerInvariant() switch
+    MorganaLLM llm = llmProvider.ToLowerInvariant() switch
     {
         "anthropic"   => new Morgana.AI.Abstractions.LLMs.Anthropic(config, promptResolver, loggerFactory),
         "azureopenai" => new Morgana.AI.Abstractions.LLMs.AzureOpenAI(config, promptResolver, loggerFactory),
@@ -201,7 +202,6 @@ builder.Services.Configure<Records.ConversationPersistenceOptions>(
     builder.Configuration.GetSection("Morgana:ConversationPersistence"));
 builder.Services.AddSingleton<IConversationPersistenceService, SQLiteConversationPersistenceService>();
 
-
 // ==============================================================================
 // SECTION 7.2: Rate Limiting
 // ==============================================================================
@@ -218,7 +218,6 @@ builder.Services.AddSingleton<IConversationPersistenceService, SQLiteConversatio
 builder.Services.Configure<Records.RateLimitOptions>(
     builder.Configuration.GetSection("Morgana:RateLimiting"));
 builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
-
 
 // ==============================================================================
 // SECTION 7.3: Dust Limiting (token budget)
@@ -237,7 +236,7 @@ builder.Services.Configure<Records.DustLimitingOptions>(
 builder.Services.AddSingleton<IDustLimitService, SQLiteDustLimitService>();
 
 // ==============================================================================
-// SECTION 7.3: Authentication
+// SECTION 7.4: Authentication
 // ==============================================================================
 // Validates bearer tokens on incoming requests using a shared symmetric key (HMAC-SHA256).
 // Fail-closed: unauthenticated requests are rejected with 401 when enabled.
@@ -293,7 +292,7 @@ builder.Services.AddSingleton(sp =>
     BootstrapSetup bootstrap = BootstrapSetup.Create();
     DependencyResolverSetup di = DependencyResolverSetup.Create(sp);
     ActorSystemSetup actorSystemSetup = bootstrap.And(di);
-    return ActorSystem.Create("Morgana", actorSystemSetup);
+    return ActorSystem.Create(Constants.Morgana, actorSystemSetup);
 });
 builder.Services.AddHostedService<AkkaHostedService>();
 
@@ -321,21 +320,121 @@ string[] publishedIntents = builder.Configuration.GetValue("Morgana:AgentToAgent
     ? [.. discoveredAgents.Keys]
     : [];
 
-// An installation that publishes A2A endpoints must be able to CALL them: every outbound
-// consultation is signed under the "morgana" issuer, and without that key a colleague resolves to
-// nothing and simply never appears in the asking agent's tool list — a topology that validated
-// cleanly at startup, failing silently on the first conversation. That is the same defect the
-// [ConsultsAgent] checks exist to prevent, so it is refused in the same place and at the same time
-// rather than logged as a warning nobody reads. Fail fast, and say which of the two ways out to take.
-if (publishedIntents.Length > 0
-    && ConfigurationAgentDirectoryService.ResolvePeerSigningKey(builder.Configuration) is null)
+// Who may call these endpoints is declared, never assumed. Identity is settled in
+// Morgana:Authentication:Issuers, where every entry carries the role its key was cut for; how far an
+// admitted system then reaches among the published agents is Morgana:AgentToAgent:InboundSystems.
+// The three checks below all guard the same failure shape — a topology that validates cleanly at
+// startup and fails, or opens, silently on the first consultation — so they are refused here, at the
+// same time and in the same place as the [ConsultsAgent] checks, rather than logged as warnings.
+if (publishedIntents.Length > 0)
 {
-    throw new InvalidOperationException(
-        $"Peer consultation is enabled and {publishedIntents.Length} agent(s) are published over A2A "
-        + $"({string.Join(", ", publishedIntents)}), but no usable signing key is configured for the "
-        + $"'{Constants.AgentToAgent.IssuerName}' issuer: declare it under Morgana:Authentication:Issuers "
-        + "with a real SymmetricKey (User Secrets or environment), or set Morgana:AgentToAgent:Enabled "
-        + "to false to run without peer consultation.");
+    List<Records.IssuerOptions> declaredIssuers = builder.Configuration
+        .GetSection("Morgana:Authentication:Issuers").Get<List<Records.IssuerOptions>>() ?? [];
+
+    List<Records.InboundSystemOptions> inboundSystems =
+        ConfigurationAgentDirectoryService.ResolveInboundSystems(builder.Configuration);
+
+    // A consultation of a colleague of THIS installation goes out over HTTP signed under the
+    // "morgana" issuer and comes back in through the very filter below, so that issuer is needed at
+    // both ends — the key to sign with, the admission to be let back in. Only a local one: a
+    // colleague elsewhere is signed with that system's own key and never knocks at this door. An
+    // installation whose agents consult nobody here is therefore asked for neither, which is what a
+    // pure supplier is: it publishes its desks for a partner and holds no ring of its own.
+    bool consultsLocally = discoveredAgents.Values.Any(agentType =>
+        agentType.GetCustomAttributes(typeof(ConsultsAgentAttribute), inherit: false)
+                 .Cast<ConsultsAgentAttribute>()
+                 .Any(consultsAgent => consultsAgent.Instance is null));
+
+    if (consultsLocally)
+    {
+        Records.IssuerOptions? peerIssuer = declaredIssuers.FirstOrDefault(issuer =>
+            string.Equals(issuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase));
+
+        if (ConfigurationAgentDirectoryService.ResolvePeerSigningKey(builder.Configuration) is null)
+        {
+            throw new InvalidOperationException(
+                $"Agents of this installation consult colleagues of their own, but no usable signing key is "
+                + $"configured for the '{Constants.AgentToAgent.IssuerName}' issuer: declare it under "
+                + "Morgana:Authentication:Issuers with a real SymmetricKey (User Secrets or environment), "
+                + "or set Morgana:AgentToAgent:Enabled to false to run without peer consultation.");
+        }
+
+        if (peerIssuer?.Type is not Records.IssuerType.System)
+        {
+            throw new InvalidOperationException(
+                $"Issuer '{Constants.AgentToAgent.IssuerName}' must declare \"Type\": \"system\": it is what this "
+                + "installation signs its own consultations with, and they are admitted at the A2A door like any other peer's.");
+        }
+
+        if (!inboundSystems.Any(system =>
+                string.Equals(system.Issuer?.Trim(), Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"Agents of this installation consult colleagues of their own, but '{Constants.AgentToAgent.IssuerName}' "
+                + "is not declared under Morgana:AgentToAgent:InboundSystems: add { \"Issuer\": "
+                + $"\"{Constants.AgentToAgent.IssuerName}\" }}, which admits it to every published agent.");
+        }
+    }
+
+    // A system declared and then forgotten in InboundSystems would be handed the whole ring by
+    // omission, and an omission is exactly what nobody notices. So the scope is required of every
+    // system, and admitting it to everything stays a sentence somebody wrote.
+    foreach (Records.IssuerOptions systemIssuer in declaredIssuers.Where(issuer => issuer.Type is Records.IssuerType.System))
+    {
+        if (!inboundSystems.Any(system => string.Equals(system.Issuer?.Trim(), systemIssuer.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"Issuer '{systemIssuer.Name}' is declared as a system but has no entry under "
+                + "Morgana:AgentToAgent:InboundSystems. Declare how far it reaches — a list of published agents in "
+                + $"\"Agents\", or the entry alone to admit it to all of them ({string.Join(", ", publishedIntents)}).");
+        }
+    }
+
+    foreach (Records.InboundSystemOptions inboundSystem in inboundSystems)
+    {
+        string declaredIssuer = inboundSystem.Issuer?.Trim() ?? string.Empty;
+
+        Records.IssuerOptions? scopedIssuer = declaredIssuers.FirstOrDefault(issuer =>
+            string.Equals(issuer.Name, declaredIssuer, StringComparison.OrdinalIgnoreCase));
+
+        // Scoping admits nobody: an entry naming an issuer that cannot prove who it is, or one whose
+        // key was cut for a channel, describes an admission that will never happen.
+        if (scopedIssuer is null)
+        {
+            throw new InvalidOperationException(
+                $"Morgana:AgentToAgent:InboundSystems declares '{declaredIssuer}', which is not among "
+                + "Morgana:Authentication:Issuers. Scoping narrows a caller that can already prove who it is.");
+        }
+
+        if (scopedIssuer.Type is not Records.IssuerType.System)
+        {
+            throw new InvalidOperationException(
+                $"Morgana:AgentToAgent:InboundSystems declares '{scopedIssuer.Name}', which is declared as a channel. "
+                + "A caller is a channel or a colleague, never both.");
+        }
+
+        // This installation's own topology has one author, [ConsultsAgent], validated at startup.
+        // A scope on the "morgana" issuer would be a second author of it, able only to contradict
+        // the first — and to do so at runtime, as a 401 on a consultation the plugin declares.
+        if (string.Equals(scopedIssuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)
+            && inboundSystem.Agents is not null)
+        {
+            throw new InvalidOperationException(
+                $"Morgana:AgentToAgent:InboundSystems declares \"Agents\" for '{Constants.AgentToAgent.IssuerName}'. "
+                + "Which colleagues an agent of this installation may consult is declared by [ConsultsAgent] and validated "
+                + "at startup; narrowing it here could only contradict that. Remove \"Agents\" from the entry.");
+        }
+
+        foreach (string scopedAgent in inboundSystem.Agents ?? [])
+        {
+            if (!publishedIntents.Any(intent => string.Equals(intent, scopedAgent?.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    $"Morgana:AgentToAgent:InboundSystems admits '{scopedIssuer.Name}' to '{scopedAgent}', which this "
+                    + $"installation does not publish (published: {string.Join(", ", publishedIntents)}).");
+            }
+        }
+    }
 }
 
 TimeSpan a2aRequestTimeout = TimeSpan.FromSeconds(
@@ -403,9 +502,15 @@ if (publishedIntents.Length > 0)
             continue;
 
         // These endpoints are the hosting layer's, not a controller's, so they carry no gate of
-        // their own until one is put on them: A2AAuthenticationFilter is the same gate MorganaController applies.
+        // their own until one is put on them: A2AAuthenticationFilter is the same gate
+        // MorganaController applies, narrowed to the systems this particular agent admits. The scope
+        // is resolved here, once, so the gate enforces the very declaration the checks above validated.
         app.MapA2AJsonRpc(publishedIntent, agentPath)
-           .AddEndpointFilter<IEndpointConventionBuilder, A2AAuthenticationFilter>();
+           .AddEndpointFilter(new A2AAuthenticationFilter(
+               app.Services.GetRequiredService<IAuthenticationService>(),
+               publishedIntent,
+               ConfigurationAgentDirectoryService.ResolveAdmittedIssuers(app.Configuration, publishedIntent),
+               app.Services.GetRequiredService<ILogger>()));
 
         // The card itself stays open: discovery is what tells a caller how to authenticate, and a
         // card behind authentication cannot be found by anyone not already knowing how to reach it.

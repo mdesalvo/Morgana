@@ -4,11 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-PromptHarness is the non-regression suite for Morgana's **prompts**, not for its code. A domain
-agent in Morgana is its prose — `morgana.json`, `agents.json`, tool descriptions — and prose has no
-compiler. Every test here answers one question: does the model still do what the prompt tells it to
-do? Nothing is mocked, the LLM is real, and a run costs real tokens. This is not a unit-test project
-and never becomes a build/CI gate — it is on-demand only.
+PromptHarness is Morgana's testing project, and it is aimed at the half of Morgana that has no
+compiler: a domain agent *is* its prose — `morgana.json`, `agents.json`, tool descriptions — so most
+of what is here answers one question, does the model still do what the prompt tells it to do?
+Nothing is mocked there, the LLM is real, and a run costs real tokens. Static tests on code are
+legitimate here too, and cheap by comparison: where a contract is deterministic — a published wire
+document, a gate's status codes — it is asserted as plain unit testing, no runs, no threshold, no
+judge (see `AgentCardTests`). What holds for both kinds is the last clause: the suite **never becomes
+a build/CI gate** — it is on-demand only, because the expensive half cannot be.
 
 It is its own solution (`PromptHarness.slnx`), a sibling of `../Morgana/` and `../Examples/` rather
 than a project inside `Morgana.slnx`. It reaches the framework through project references only, and
@@ -40,6 +43,9 @@ Harness__EnableGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQu
 
 # the rest of the actors group — classifier, channel adaptation, presentation
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ActorTests"
+
+# the card-and-gate group — deterministic, no LLM call, no cost
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~AgentCardTests"
 
 # the summarization group — requires a lowered boot-time reducer trigger, unset by default
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"
@@ -139,6 +145,18 @@ The judge is skipped once a turn already fails structurally (saves a live call).
   `MorganaChatHistoryProvider`'s per-turn log line (the only signal — no span exists) and compares
   the before/after message counts it reports, since the line itself fires every turn a reducer is
   configured, whether or not anything actually shrank.
+- `AgentCardTests` — the one group that is neither layer, grades nothing and costs nothing: no LLM
+  call, no run threshold, no judge. A card and its gate are **wire contracts** rather than prose, so
+  they are asserted deterministically on the JSON and the status codes a foreign implementation would
+  actually see. Two contracts, and they are complementary halves: the card is served open (a caller
+  that must authenticate to learn how to authenticate can never begin) precisely because what it
+  points at is not. The gate is asserted on all three of its refusals — no token; a **channel's** own
+  valid token, which is refused for being cut for the other door; and a **system's** valid token at a
+  desk its `InboundSystems` entry does not name — plus the admission that keeps those from passing for
+  the wrong reason, since a gate refusing everything would satisfy all three. Every literal is spelled
+  out in the test rather than read from `Constants`: a test comparing a constant against itself
+  asserts that a constant equals a constant, while the point is to notice a published document, or a
+  door, changing shape under whoever consumes it.
 
 **The journey is the point of the suite.** Every `ScenarioRunner.RunAsync` call writes a row to
 `<scenario-id>.md` via `HarnessWriter` — one row per revision phase, with pass rate, token

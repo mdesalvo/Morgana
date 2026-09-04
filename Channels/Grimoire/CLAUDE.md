@@ -104,7 +104,7 @@ Morgana's controller gate additionally requires `callbackUrl` to be an absolute 
 **Trust model is asymmetric by design**: Grimoire signs its outbound calls toward Morgana; Morgana does **not** sign the inbound webhook POST toward Grimoire. This matches `WebhookChannelService`'s convention (GitHub / Stripe / Twilio style) and is not a gap.
 
 **Onboarding checklist for a fresh Morgana instance:**
-1. Add an entry to `Morgana:Authentication:Issuers[]` in the destination Morgana configuration: `{ "Name": "grimoire", "SymmetricKey": "<at least 256 bit, base64>" }`
+1. Add an entry to `Morgana:Authentication:Issuers[]` in the destination Morgana configuration: `{ "Name": "grimoire", "SymmetricKey": "<at least 256 bit, base64>", "Type": "channel" }`. `Type` is mandatory on every entry and decides which door the key opens: `channel` admits it to the conversation API (REST + SignalR) and to nothing published under `/a2a`
 2. Put the same `SymmetricKey` under `Grimoire:Authentication:SymmetricKey` via user-secrets or env var (never commit)
 3. Start Morgana (`:5001`), then `dotnet run` from `Channels/Grimoire/` (`:5004`)
 

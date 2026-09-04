@@ -492,7 +492,7 @@ An edge is touched in three places, and each does the one thing the others canno
 - **The emit page holds it**, as one more C# fact beside the tier and the MCP servers, for the
   upload path described below. It writes the attribute and never a word of prose. It is also the
   **only** place a colleague published by *another Morgana*, declared under that
-  deployment's `Morgana:AgentToAgent:ConsultableInstances` — can be declared at all, and that is not a gap in
+  deployment's `Morgana:AgentToAgent:OutboundSystems` — can be declared at all, and that is not a gap in
   the interview but the same criterion applied one step further: which Morgana answers is not a fact
   about the client's business, and the emit page is the one point of the workbench where the hand on
   the keyboard is a developer's, finalizing a domain already distilled. The two are told apart on

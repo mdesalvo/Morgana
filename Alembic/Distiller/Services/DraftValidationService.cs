@@ -195,8 +195,8 @@ public class DraftValidationService : IDraftValidationService
                 {
                     if (string.IsNullOrWhiteSpace(colleague.Instance))
                         findings.Add(new ValidationFinding(FindingSeverity.Error, where,
-                            $"It consults '{colleague.Intent}' at an instance with no name.",
-                            "The name is matched against an entry under Morgana:AgentToAgent:ConsultableInstances, and a blank one matches nothing: startup refuses it."));
+                            $"It consults '{colleague.Intent}' at a system with no name.",
+                            "The name is matched against an entry under Morgana:AgentToAgent:OutboundSystems, and a blank one matches nothing: startup refuses it."));
 
                     continue;
                 }

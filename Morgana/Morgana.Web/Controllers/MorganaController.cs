@@ -462,6 +462,16 @@ public class MorganaController : ControllerBase
             return (Unauthorized(new { error = authResult.Error }), null);
         }
 
+        // A caller is a channel or a colleague, never both. A system's key was cut to consult this
+        // installation's agents over A2A, where a scope may hold it to a few desks; letting it open a
+        // conversation here would hand it every agent back through the classifier, past the very
+        // boundary that scope draws.
+        if (authResult.IssuerType is Records.IssuerType.System)
+        {
+            logger.LogWarning("Authentication rejected: issuer '{Issuer}' is a system, and the conversation API serves channels", authResult.Issuer);
+            return (Unauthorized(new { error = "This API serves channels; a system consults published agents over A2A." }), null);
+        }
+
         return (null, authResult.CallerId);
     }
 

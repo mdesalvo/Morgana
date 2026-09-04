@@ -18,7 +18,7 @@ public class ConsultsAgentAttribute : Attribute
     public string Intent { get; }
 
     /// <summary>
-    /// Instance publishing the colleague, as named in <c>Morgana:AgentToAgent:ConsultableInstances</c>, or
+    /// Instance publishing the colleague, as named in <c>Morgana:AgentToAgent:OutboundSystems</c>, or
     /// <c>null</c> when it is an agent of THIS installation. A name and not an address: whose desk to
     /// call is the agent author's decision, where that desk runs is the deployment's.
     /// </summary>

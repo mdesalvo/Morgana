@@ -139,7 +139,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         // An agent of this installation is reached where this installation answers, an agent of a
         // peer where that peer was declared to answer. Everything past this point is one path: a
         // card is fetched, read and satisfied the same way whichever side of the boundary it came from.
-        Records.ConsultableInstanceOptions? consultableInstance = null;
+        Records.OutboundSystemOptions? consultableInstance = null;
         string? baseAddress;
 
         if (peer.Instance is null)
@@ -153,12 +153,12 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         }
         else
         {
-            consultableInstance = ResolveConsultableInstances(configuration)
+            consultableInstance = ResolveOutboundSystems(configuration)
                 .FirstOrDefault(candidate => string.Equals(candidate.Name.Trim(), peer.Instance, StringComparison.OrdinalIgnoreCase));
 
             if (consultableInstance is null)
             {
-                logger.LogError("Instance '{Instance}' is not declared under Morgana:AgentToAgent:ConsultableInstances; '{Intent}' cannot be consulted", peer.Instance, peer.Intent);
+                logger.LogError("System '{Instance}' is not declared under Morgana:AgentToAgent:OutboundSystems; '{Intent}' cannot be consulted", peer.Instance, peer.Intent);
                 return null;
             }
 
@@ -201,7 +201,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     }
 
     /// <summary>
-    /// The instances this installation may consult, as configuration declares them.
+    /// The systems this installation may consult, as configuration declares them.
     /// </summary>
     /// <remarks>
     /// Static and public because the startup checks must read the very list resolution reads: a
@@ -209,9 +209,41 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// precisely the silent failure those checks exist to prevent.
     /// </remarks>
     /// <param name="configuration">Application configuration.</param>
-    public static List<Records.ConsultableInstanceOptions> ResolveConsultableInstances(IConfiguration configuration)
-        => configuration.GetSection("Morgana:AgentToAgent:ConsultableInstances")
-               .Get<List<Records.ConsultableInstanceOptions>>() ?? [];
+    public static List<Records.OutboundSystemOptions> ResolveOutboundSystems(IConfiguration configuration)
+        => configuration.GetSection("Morgana:AgentToAgent:OutboundSystems")
+               .Get<List<Records.OutboundSystemOptions>>() ?? [];
+
+    /// <summary>
+    /// How far each admitted system reaches, as configuration declares it.
+    /// </summary>
+    /// <remarks>
+    /// The inbound half of <see cref="ResolveOutboundSystems"/>, and read by the same two parties for
+    /// the same reason: the gate that enforces a scope and the startup check that validates it must
+    /// not be able to disagree about what was declared.
+    /// </remarks>
+    /// <param name="configuration">Application configuration.</param>
+    public static List<Records.InboundSystemOptions> ResolveInboundSystems(IConfiguration configuration)
+        => configuration.GetSection("Morgana:AgentToAgent:InboundSystems")
+               .Get<List<Records.InboundSystemOptions>>() ?? [];
+
+    /// <summary>
+    /// The issuers admitted to one published agent, resolved once so a gate need not read
+    /// configuration per request.
+    /// </summary>
+    /// <remarks>
+    /// An entry declaring no <c>Agents</c> reaches every published agent, which is what an
+    /// installation federating with peers it trusts wholly declares — and what this installation
+    /// declares about itself, since its own consultations come back in through the same door.
+    /// </remarks>
+    /// <param name="configuration">Application configuration.</param>
+    /// <param name="intent">Published agent whose admitted callers are being resolved.</param>
+    public static HashSet<string> ResolveAdmittedIssuers(IConfiguration configuration, string intent)
+        => new HashSet<string>(
+               ResolveInboundSystems(configuration)
+                   .Where(system => system.Agents is null
+                                    || system.Agents.Any(agent => string.Equals(agent?.Trim(), intent, StringComparison.OrdinalIgnoreCase)))
+                   .Select(system => system.Issuer.Trim()),
+               StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Builds the client a colleague is called through, carrying whatever that colleague's own card
@@ -230,7 +262,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     private HttpClient? BuildPeerHttpClient(
         AgentCard card,
         Records.PeerReference peer,
-        Records.ConsultableInstanceOptions? consultableInstance,
+        Records.OutboundSystemOptions? consultableInstance,
         string callerIntent)
     {
         // A2A states alternatives, and satisfying one is enough — so these are candidates to try, not

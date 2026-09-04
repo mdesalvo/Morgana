@@ -4,12 +4,24 @@ using Morgana.AI.Interfaces;
 namespace Morgana.Web.Filters;
 
 /// <summary>
-/// Applies Morgana's own authentication to the A2A JSON-RPC endpoints: the same issuer whitelist,
+/// Applies Morgana's own authentication to one published A2A endpoint: the same issuer whitelist,
 /// the same audience, fail-closed, that <c>MorganaController</c> applies to every REST call — then
-/// narrows it to the peer issuer alone.
+/// narrows it to the systems admitted to <em>this</em> agent.
 /// </summary>
+/// <remarks>
+/// Built once per published agent rather than resolved per request, so the scope it enforces is
+/// settled at startup beside the checks that validate it — exactly as the issuers themselves are
+/// baked once into <c>IAuthenticationService</c>.
+/// </remarks>
 /// <param name="authenticationService">Validates the bearer token, exactly as the controller does.</param>
-public sealed class A2AAuthenticationFilter(IAuthenticationService authenticationService) : IEndpointFilter
+/// <param name="publishedIntent">Agent this filter guards, named in the diagnostics.</param>
+/// <param name="admittedIssuers">Issuers whose inbound declaration reaches this agent.</param>
+/// <param name="logger">Records who was turned away and why: the caller only ever sees a bare 401.</param>
+public sealed class A2AAuthenticationFilter(
+    IAuthenticationService authenticationService,
+    string publishedIntent,
+    HashSet<string> admittedIssuers,
+    ILogger logger) : IEndpointFilter
 {
     /// <summary>Scheme every caller must present, peers included.</summary>
     private const string BearerPrefix = "Bearer ";
@@ -37,11 +49,27 @@ public sealed class A2AAuthenticationFilter(IAuthenticationService authenticatio
 
         // Authentic is not enough here: behind this filter a request reaches an agent's actor
         // directly, with none of the guard, classifier, rate limit and dust budget a channel's own
-        // path goes through. So only the issuer this installation signs peer traffic under is let
-        // in — a channel's key opens the door it was cut for, not this one. Compared the way the
-        // signing key is resolved, so the gate and the signer cannot disagree on who a peer is.
-        return string.Equals(authentication.Issuer, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)
-            ? await next(context)
-            : Results.Unauthorized();
+        // path goes through. A caller is a channel or a colleague, never both, so a channel's key
+        // opens the door it was cut for and not this one.
+        if (authentication.IssuerType is not Records.IssuerType.System)
+        {
+            logger.LogWarning(
+                "A2A call to '{Intent}' refused: issuer '{Issuer}' is declared as a channel, not a system",
+                publishedIntent, authentication.Issuer);
+            return Results.Unauthorized();
+        }
+
+        // Proven to be a colleague, and now: which desks. An issuer admitted to the installation is
+        // not thereby admitted to every agent of it — that is what makes this installation openable
+        // to a partner one desk at a time.
+        if (authentication.Issuer is null || !admittedIssuers.Contains(authentication.Issuer))
+        {
+            logger.LogWarning(
+                "A2A call to '{Intent}' refused: system '{Issuer}' is not admitted to it under Morgana:AgentToAgent:InboundSystems",
+                publishedIntent, authentication.Issuer);
+            return Results.Unauthorized();
+        }
+
+        return await next(context);
     }
 }

@@ -96,6 +96,8 @@ On top of that it overrides, per run:
 | `RateLimiting:Enabled`, `DustLimiting:Enabled` → false | a repeated-run suite would throttle itself |
 | `ActorSystem:EnableGuardrail` → `Harness:EnableGuardrail` | off by default: no scenario asserts moderation, and every guarded turn is an extra LLM call |
 | `Authentication:Issuers[harness]:SymmetricKey` → random | minted per run, never written to disk |
+| `Authentication:Issuers[morgana]:SymmetricKey` → random | the key the host signs its own agent-to-agent traffic with; separate from the one above, because two issuers sharing a key would defeat the per-issuer trust model under test |
+| `Authentication:Issuers[harness-peer]` + its `InboundSystems` entry → appended | a system admitted to `inventory` and to no other desk, declared per run rather than shipped: it exists to be turned away, which is the only way `AgentCardTests` can observe that the A2A gate is shut *selectively* and not merely shut |
 
 The only thing the repository must carry is the `harness` entry in
 `Morgana.Web/appsettings.json` → `Morgana:Authentication:Issuers`, with the usual

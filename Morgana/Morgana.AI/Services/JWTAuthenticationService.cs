@@ -23,6 +23,13 @@ public class JWTAuthenticationService : IAuthenticationService
     private readonly Dictionary<string, TokenValidationParameters> validationParametersByIssuer;
 
     /// <summary>
+    /// Role each declared issuer was given, travelling back on a successful result. Kept here rather
+    /// than re-read at every gate: the issuers are baked once at construction, and two gates reading
+    /// the same list separately could drift apart on what a caller is.
+    /// </summary>
+    private readonly Dictionary<string, Records.IssuerType> issuerTypesByName;
+
+    /// <summary>
     /// Stateless, thread-safe token reader/validator, shared across all calls.
     /// </summary>
     private readonly JsonWebTokenHandler jsonWebTokenHandler = new JsonWebTokenHandler();
@@ -53,6 +60,7 @@ public class JWTAuthenticationService : IAuthenticationService
         #endregion
 
         validationParametersByIssuer = new Dictionary<string, TokenValidationParameters>(StringComparer.Ordinal);
+        issuerTypesByName = new Dictionary<string, Records.IssuerType>(StringComparer.Ordinal);
 
         foreach (Records.IssuerOptions issuer in config.Issuers)
         {
@@ -72,6 +80,17 @@ public class JWTAuthenticationService : IAuthenticationService
             // HMAC-SHA256 needs a key at least as long as its output (256 bits / 32 bytes) to
             // deliver its full security margin — a shorter key is startup-fatal, not a warning,
             // because a weak signing key is silently exploitable, not silently degraded.
+            // A caller is a channel or a colleague, never both, and the two doors are not equally
+            // guarded — so the role is declared, never inferred. Absent means absent here, which is
+            // why the option is nullable: defaulting it would silently classify by enum ordering.
+            if (issuer.Type is null)
+            {
+                throw new InvalidOperationException(
+                            $"Morgana authentication issuer '{issuer.Name}' declares no Type. "
+                            + "Every entry must declare one: 'channel' for a client carrying users (REST and SignalR), "
+                            + "'system' for a peer consulting this installation's agents over A2A.");
+            }
+
             byte[] keyBytes = Encoding.UTF8.GetBytes(issuer.SymmetricKey);
             if (keyBytes.Length < 32)
             {
@@ -98,11 +117,14 @@ public class JWTAuthenticationService : IAuthenticationService
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.FromSeconds(30)
             };
+
+            issuerTypesByName[issuer.Name] = issuer.Type.Value;
         }
 
         this.logger.LogInformation(
             "JWT authentication initialized — audience: {Audience}, issuers: [{Issuers}]",
-            config.Audience, string.Join(", ", validationParametersByIssuer.Keys));
+            config.Audience,
+            string.Join(", ", issuerTypesByName.Select(declared => $"{declared.Key} ({declared.Value.ToString().ToLowerInvariant()})")));
     }
 
     /// <inheritdoc />
@@ -173,9 +195,15 @@ public class JWTAuthenticationService : IAuthenticationService
             // (the user id itself) means callers always get a non-null DisplayName to show.
             string? displayName = result.Claims.TryGetValue(JwtRegisteredClaimNames.Name, out object? nameValue) ? nameValue?.ToString() : callerId;
 
-            // The issuer travels back with the result: it was proven by the signature check above
-            // and a gate admitting only some issuers has no other way to know which key opened it.
-            return new Records.AuthenticationResult(IsAuthenticated: true, CallerId: callerId, DisplayName: displayName, Issuer: issuer);
+            // The issuer travels back with the result, and its role beside it: both were proven by
+            // the signature check above, and a gate admitting only some callers has no other way to
+            // know which key opened it or what that key was cut for.
+            return new Records.AuthenticationResult(
+                IsAuthenticated: true,
+                CallerId: callerId,
+                DisplayName: displayName,
+                Issuer: issuer,
+                IssuerType: issuerTypesByName[issuer]);
         }
         catch (Exception ex)
         {
