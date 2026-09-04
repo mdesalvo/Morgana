@@ -64,6 +64,20 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
+    /// Whether any discovered agent declares a colleague of this same installation.
+    /// </summary>
+    /// <remarks>
+    /// The predicate the "morgana" issuer hangs on: only a LOCAL consultation is signed with this
+    /// installation's own key and comes back in through its own A2A door.
+    /// </remarks>
+    /// <param name="discoveredAgents">The intent-to-type map <see cref="DiscoverAgents"/> returned.</param>
+    /// <returns><c>true</c> when at least one agent declares <c>[ConsultsAgent]</c> naming no system.</returns>
+    public static bool DeclaresLocalConsultations(IReadOnlyDictionary<string, Type> discoveredAgents)
+        => discoveredAgents.Values.Any(agentType =>
+               agentType.GetCustomAttributes<ConsultsAgentAttribute>()
+                        .Any(consultsAgent => consultsAgent.Instance is null));
+
+    /// <summary>
     /// Scans every loaded assembly for <see cref="MorganaAgent"/> subclasses declaring an intent,
     /// and returns the intent-to-type map, without validating it.
     /// </summary>

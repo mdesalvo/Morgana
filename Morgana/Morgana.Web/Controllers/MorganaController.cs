@@ -108,7 +108,7 @@ public class MorganaController : ControllerBase
             // gate above, just narrower. Other transports (signalr, future pull/duplex modes) leave
             // CallbackUrl null; no requirement applies to them.
             string normalisedDeliveryMode = request.ChannelMetadata.Coordinates.DeliveryMode.Trim().ToLowerInvariant();
-            if (normalisedDeliveryMode == "webhook"
+            if (normalisedDeliveryMode == Constants.DeliveryModes.Webhook
                  && (string.IsNullOrWhiteSpace(request.ChannelMetadata.Coordinates.CallbackUrl)
                      || !Uri.TryCreate(request.ChannelMetadata.Coordinates.CallbackUrl, UriKind.Absolute, out _)))
             {

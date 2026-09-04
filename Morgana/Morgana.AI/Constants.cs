@@ -216,6 +216,23 @@ public static class Constants
     }
 
     /// <summary>
+    /// Transport dispatch keys: a channel announces one at the handshake, and the host must have a
+    /// service registered under exactly that spelling or the conversation is refused at ingress.
+    /// </summary>
+    /// <remarks>
+    /// The set is deliberately open — <c>ChannelCoordinates.DeliveryMode</c> stays a free-form string
+    /// so a new transport needs no contract change — and these are the two this framework ships.
+    /// </remarks>
+    public static class DeliveryModes
+    {
+        /// <summary>Duplex push over a hub; needs no callback address.</summary>
+        public const string SignalR = "signalr";
+
+        /// <summary>Outbound POST to the address the channel declared, which the ingress gate therefore requires.</summary>
+        public const string Webhook = "webhook";
+    }
+
+    /// <summary>
     /// The agent-to-agent surface: how a colleague is named to a model, where its card lives, and
     /// under whose name this installation signs its own peer traffic.
     /// </summary>

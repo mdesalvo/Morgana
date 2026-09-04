@@ -69,9 +69,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// other desk, so the scope half of the A2A gate has something to actually refuse.
     /// </summary>
     /// <remarks>
-    /// Declared per run rather than shipped in the host's appsettings: it exists to be turned away,
-    /// and a deployment carrying a partner nobody onboarded would be a worse default than the test
-    /// is worth. Everything about it is pushed in as environment overrides, like every other knob.
+    /// Declared per run rather than shipped: it exists to be turned away, and a deployment carrying a
+    /// partner nobody onboarded would be a worse default than the test is worth.
     /// </remarks>
     public const string ScopedSystemIssuerName = "harness-peer";
 

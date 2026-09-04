@@ -1,34 +1,19 @@
-using A2A;
-using A2A.AspNetCore;
 using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
-using Microsoft.Agents.AI.Hosting;
-using Microsoft.Agents.AI.Hosting.A2A;
 using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
-using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
-using Morgana.AI.SessionStores;
 using Morgana.AI.Telemetry;
-using Morgana.Web.Filters;
+using Morgana.Web.Extensions;
 using Morgana.Web.Hubs;
 using Morgana.Web.Services;
 
 // ==============================================================================
 // MORGANA - AI CONVERSATION FRAMEWORK
 // ==============================================================================
-// Actor-based AI conversation framework routing requests to specialized agents by intent.
-// Stack: ASP.NET Core REST + SignalR real-time + Akka.NET orchestration + plugin-based agents.
-// LLM providers: Anthropic, Azure OpenAI, OpenAI, Ollama. Pipeline: Guard → Classifier → Router → Agents.
-// ==============================================================================
-
-// Microsoft marks the A2A hosting run-mode API experimental (MEAI001). It is the documented way to
-// declare that an agent answers inline rather than as a background task, which is exactly what a
-// consultation is, so it is used deliberately — as MorganaAgentAdapter already does for IChatReducer.
-#pragma warning disable MEAI001
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -53,15 +38,16 @@ builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSingleton<IChannelMetadataStore, ChannelMetadataStore>();
 
+//SignalR
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<SignalRChannelService>();
 builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
-    new ChannelServiceRegistration("signalr", sp.GetRequiredService<SignalRChannelService>()));
-
+    new ChannelServiceRegistration(Constants.DeliveryModes.SignalR, sp.GetRequiredService<SignalRChannelService>()));
+//WebHook
 builder.Services.AddHttpClient(WebhookChannelService.HttpClientName);
 builder.Services.AddSingleton<WebhookChannelService>();
 builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
-    new ChannelServiceRegistration("webhook", sp.GetRequiredService<WebhookChannelService>()));
+    new ChannelServiceRegistration(Constants.DeliveryModes.Webhook, sp.GetRequiredService<WebhookChannelService>()));
 
 builder.Services.AddSingleton<IChannelServiceFactory, ChannelServiceFactory>();
 builder.Services.AddSingleton<AdaptingChannelService>(sp =>
@@ -107,7 +93,7 @@ builder.Services.AddMorganaOpenTelemetry(builder.Configuration);
 // Actor loggers are created separately within each actor
 
 builder.Services.AddSingleton<ILogger>(sp =>
-    sp.GetRequiredService<ILoggerFactory>().CreateLogger("Morgana"));
+    sp.GetRequiredService<ILoggerFactory>().CreateLogger(Constants.Morgana));
 
 // ==============================================================================
 // SECTION 5: Plugin System - Dynamic Agent Loading
@@ -300,19 +286,12 @@ builder.Services.AddHostedService<AkkaHostedService>();
 // SECTION 9.5: A2A Publication - agents of this installation, exposed to agents
 // ==============================================================================
 // Every agent of this installation is published as an A2A agent, so a colleague is reached through
-// the protocol rather than through a private path. The chain is entirely Microsoft's: AddA2AServer
-// wraps the agent in an AIHostAgent and an A2AAgentHandler, MapA2AJsonRpc exposes it, and
-// MapWellKnownAgentCard makes it discoverable. Morgana contributes exactly two pieces: the agent
-// carrying a request to the conversation's actor (MorganaHostedAgent) and the session store turning
-// the A2A context id into that conversation's identity (MorganaHostedAgentSessionStore).
+// the protocol rather than through a private path. What is decided here is WHICH agents; how they
+// are stood up is A2APublicationExtensions, in the two halves this section calls.
 //
-// The ring is raised whole or not at all. Publishing only the intents somebody happens to name makes
-// what this installation answers for a side effect of its own internal topology: an agent nobody
-// here consults is unreachable from outside, and a deployment wanting to federate it has to restate
-// in configuration a fact its own plugins already carry. What an installation offers is instead what
-// it can answer — every agent it discovered. NOTHING below is stood up when the feature is switched
-// off: no hosted agent, no server, no route, no card. That deployment is the deployment it was
-// before any of this existed, and pays for A2A neither in surface nor in startup work.
+// The ring is raised whole or not at all: what an installation offers is what it can answer, never a
+// side effect of which agents happen to consult one another here. Switched off, nothing below is
+// stood up — no hosted agent, no server, no route, no card.
 
 Dictionary<string, Type> discoveredAgents = HandlesIntentAgentRegistryService.DiscoverAgents();
 
@@ -320,155 +299,19 @@ string[] publishedIntents = builder.Configuration.GetValue("Morgana:AgentToAgent
     ? [.. discoveredAgents.Keys]
     : [];
 
-// Who may call these endpoints is declared, never assumed. Identity is settled in
-// Morgana:Authentication:Issuers, where every entry carries the role its key was cut for; how far an
-// admitted system then reaches among the published agents is Morgana:AgentToAgent:InboundSystems.
-// The three checks below all guard the same failure shape — a topology that validates cleanly at
-// startup and fails, or opens, silently on the first consultation — so they are refused here, at the
-// same time and in the same place as the [ConsultsAgent] checks, rather than logged as warnings.
-if (publishedIntents.Length > 0)
-{
-    List<Records.IssuerOptions> declaredIssuers = builder.Configuration
-        .GetSection("Morgana:Authentication:Issuers").Get<List<Records.IssuerOptions>>() ?? [];
+// Who may call these endpoints is declared, never assumed, and the rules live beside what they
+// validate rather than here: identity in Morgana:Authentication:Issuers, where every entry carries
+// the role its key was cut for, and reach in Morgana:AgentToAgent:InboundSystems. Throws on the
+// first incoherence, naming what to add.
+ConfigurationAgentDirectoryService.ValidateTrustConfiguration(
+    builder.Configuration,
+    publishedIntents,
+    HandlesIntentAgentRegistryService.DeclaresLocalConsultations(discoveredAgents));
 
-    List<Records.InboundSystemOptions> inboundSystems =
-        ConfigurationAgentDirectoryService.ResolveInboundSystems(builder.Configuration);
-
-    // A consultation of a colleague of THIS installation goes out over HTTP signed under the
-    // "morgana" issuer and comes back in through the very filter below, so that issuer is needed at
-    // both ends — the key to sign with, the admission to be let back in. Only a local one: a
-    // colleague elsewhere is signed with that system's own key and never knocks at this door. An
-    // installation whose agents consult nobody here is therefore asked for neither, which is what a
-    // pure supplier is: it publishes its desks for a partner and holds no ring of its own.
-    bool consultsLocally = discoveredAgents.Values.Any(agentType =>
-        agentType.GetCustomAttributes(typeof(ConsultsAgentAttribute), inherit: false)
-                 .Cast<ConsultsAgentAttribute>()
-                 .Any(consultsAgent => consultsAgent.Instance is null));
-
-    if (consultsLocally)
-    {
-        Records.IssuerOptions? peerIssuer = declaredIssuers.FirstOrDefault(issuer =>
-            string.Equals(issuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase));
-
-        if (ConfigurationAgentDirectoryService.ResolvePeerSigningKey(builder.Configuration) is null)
-        {
-            throw new InvalidOperationException(
-                $"Agents of this installation consult colleagues of their own, but no usable signing key is "
-                + $"configured for the '{Constants.AgentToAgent.IssuerName}' issuer: declare it under "
-                + "Morgana:Authentication:Issuers with a real SymmetricKey (User Secrets or environment), "
-                + "or set Morgana:AgentToAgent:Enabled to false to run without peer consultation.");
-        }
-
-        if (peerIssuer?.Type is not Records.IssuerType.System)
-        {
-            throw new InvalidOperationException(
-                $"Issuer '{Constants.AgentToAgent.IssuerName}' must declare \"Type\": \"system\": it is what this "
-                + "installation signs its own consultations with, and they are admitted at the A2A door like any other peer's.");
-        }
-
-        if (!inboundSystems.Any(system =>
-                string.Equals(system.Issuer?.Trim(), Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException(
-                $"Agents of this installation consult colleagues of their own, but '{Constants.AgentToAgent.IssuerName}' "
-                + "is not declared under Morgana:AgentToAgent:InboundSystems: add { \"Issuer\": "
-                + $"\"{Constants.AgentToAgent.IssuerName}\" }}, which admits it to every published agent.");
-        }
-    }
-
-    // A system declared and then forgotten in InboundSystems would be handed the whole ring by
-    // omission, and an omission is exactly what nobody notices. So the scope is required of every
-    // system, and admitting it to everything stays a sentence somebody wrote.
-    foreach (Records.IssuerOptions systemIssuer in declaredIssuers.Where(issuer => issuer.Type is Records.IssuerType.System))
-    {
-        if (!inboundSystems.Any(system => string.Equals(system.Issuer?.Trim(), systemIssuer.Name, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException(
-                $"Issuer '{systemIssuer.Name}' is declared as a system but has no entry under "
-                + "Morgana:AgentToAgent:InboundSystems. Declare how far it reaches — a list of published agents in "
-                + $"\"Agents\", or the entry alone to admit it to all of them ({string.Join(", ", publishedIntents)}).");
-        }
-    }
-
-    foreach (Records.InboundSystemOptions inboundSystem in inboundSystems)
-    {
-        string declaredIssuer = inboundSystem.Issuer?.Trim() ?? string.Empty;
-
-        Records.IssuerOptions? scopedIssuer = declaredIssuers.FirstOrDefault(issuer =>
-            string.Equals(issuer.Name, declaredIssuer, StringComparison.OrdinalIgnoreCase));
-
-        // Scoping admits nobody: an entry naming an issuer that cannot prove who it is, or one whose
-        // key was cut for a channel, describes an admission that will never happen.
-        if (scopedIssuer is null)
-        {
-            throw new InvalidOperationException(
-                $"Morgana:AgentToAgent:InboundSystems declares '{declaredIssuer}', which is not among "
-                + "Morgana:Authentication:Issuers. Scoping narrows a caller that can already prove who it is.");
-        }
-
-        if (scopedIssuer.Type is not Records.IssuerType.System)
-        {
-            throw new InvalidOperationException(
-                $"Morgana:AgentToAgent:InboundSystems declares '{scopedIssuer.Name}', which is declared as a channel. "
-                + "A caller is a channel or a colleague, never both.");
-        }
-
-        // This installation's own topology has one author, [ConsultsAgent], validated at startup.
-        // A scope on the "morgana" issuer would be a second author of it, able only to contradict
-        // the first — and to do so at runtime, as a 401 on a consultation the plugin declares.
-        if (string.Equals(scopedIssuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)
-            && inboundSystem.Agents is not null)
-        {
-            throw new InvalidOperationException(
-                $"Morgana:AgentToAgent:InboundSystems declares \"Agents\" for '{Constants.AgentToAgent.IssuerName}'. "
-                + "Which colleagues an agent of this installation may consult is declared by [ConsultsAgent] and validated "
-                + "at startup; narrowing it here could only contradict that. Remove \"Agents\" from the entry.");
-        }
-
-        foreach (string scopedAgent in inboundSystem.Agents ?? [])
-        {
-            if (!publishedIntents.Any(intent => string.Equals(intent, scopedAgent?.Trim(), StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new InvalidOperationException(
-                    $"Morgana:AgentToAgent:InboundSystems admits '{scopedIssuer.Name}' to '{scopedAgent}', which this "
-                    + $"installation does not publish (published: {string.Join(", ", publishedIntents)}).");
-            }
-        }
-    }
-}
-
-TimeSpan a2aRequestTimeout = TimeSpan.FromSeconds(
-    builder.Configuration.GetValue("Morgana:ActorSystem:TimeoutSeconds", 180));
-
-foreach (string publishedIntent in publishedIntents)
-{
-    builder.Services
-        .AddAIAgent(publishedIntent, (serviceProvider, agentName) => new MorganaHostedAgent(
-            agentName,
-            serviceProvider.GetRequiredService<IAgentDirectoryService>()
-                .GetAgentCardAsync(agentName).GetAwaiter().GetResult()?.Description ?? agentName,
-            serviceProvider.GetRequiredService<IAgentRegistryService>(),
-            serviceProvider.GetRequiredService<IPromptComposerService>(),
-
-            // The actor system, deferred rather than resolved here: it is built around the very
-            // dependency resolver this provider is, and standing one up to hand to an agent nobody
-            // has asked a question of yet would invert that order.
-            serviceProvider.GetRequiredService<ActorSystem>,
-            a2aRequestTimeout,
-            serviceProvider.GetRequiredService<ILogger>()))
-
-        // The session store is where a request's A2A context id becomes a Morgana conversation.
-        // Not isolation-key scoped: the context id IS the partition here, and Morgana's own
-        // per-conversation database already isolates everything the conversation owns.
-        .WithSessionStore(
-            (serviceProvider, agentName) => new MorganaHostedAgentSessionStore(serviceProvider.GetRequiredService<ILogger>()),
-            ServiceLifetime.Singleton,
-            false)
-
-        // Runs the agent inline and answers with a Message rather than a Task: a consultation is a
-        // single question answered in full, which is what the published card advertises.
-        .AddA2AServer(options => options.AgentRunMode = AgentRunMode.DisallowBackground);
-}
+// One hosted agent and one A2A server per published intent. Its other half, MapMorganaA2AAsync, runs
+// on the built application in section 10 — the container is sealed in between, so the pass cannot be
+// one. What must not drift is the list, and it does not: both halves are handed this same one.
+builder.AddMorganaA2A(publishedIntents);
 
 // ==============================================================================
 // SECTION 10: Application Pipeline Configuration
@@ -485,44 +328,9 @@ app.UseAuthorization();                 // Enable authorization middleware
 app.MapControllers();                   // Map REST API controllers
 app.MapHub<MorganaHub>("/morganaHub");  // Map SignalR hub endpoint
 
-// One JSON-RPC endpoint and one well-known agent card per published agent. The card is what makes
-// the agent discoverable: A2ACardResolver reads it to learn which interface to bind a client to, and
-// Morgana's own directory resolves a colleague through that same fetch rather than short-circuiting
-// to an in-process object.
-if (publishedIntents.Length > 0)
-{
-    IAgentDirectoryService agentDirectory = app.Services.GetRequiredService<IAgentDirectoryService>();
-
-    foreach (string publishedIntent in publishedIntents)
-    {
-        string agentPath = $"{Constants.AgentToAgent.AgentPathPrefix}/{publishedIntent}";
-
-        AgentCard? publishedCard = await agentDirectory.GetAgentCardAsync(publishedIntent);
-        if (publishedCard is null)
-            continue;
-
-        // These endpoints are the hosting layer's, not a controller's, so they carry no gate of
-        // their own until one is put on them: A2AAuthenticationFilter is the same gate
-        // MorganaController applies, narrowed to the systems this particular agent admits. The scope
-        // is resolved here, once, so the gate enforces the very declaration the checks above validated.
-        app.MapA2AJsonRpc(publishedIntent, agentPath)
-           .AddEndpointFilter(new A2AAuthenticationFilter(
-               app.Services.GetRequiredService<IAuthenticationService>(),
-               publishedIntent,
-               ConfigurationAgentDirectoryService.ResolveAdmittedIssuers(app.Configuration, publishedIntent),
-               app.Services.GetRequiredService<ILogger>()));
-
-        // The card itself stays open: discovery is what tells a caller how to authenticate, and a
-        // card behind authentication cannot be found by anyone not already knowing how to reach it.
-        app.MapWellKnownAgentCard(publishedCard, agentPath);
-    }
-
-    // The cards above were projected while the endpoints were still being mapped, before Kestrel had
-    // bound anything, so none of them names an address yet. The moment it has, the directory fills
-    // them in — the well-known endpoint serialises its card on every request, so a card read after
-    // this point carries the interface, and nothing ever had to be told the application's own URL.
-    app.Lifetime.ApplicationStarted.Register(() => agentDirectory.PublishInterfacesAsync().GetAwaiter().GetResult());
-}
+// The publication's second half: the endpoints, the cards, and the address they learn once Kestrel
+// has bound. Declared in section 9.5 and mapped here, because a route needs the built application.
+await app.MapMorganaA2AAsync(publishedIntents);
 
 // ==============================================================================
 // SECTION 11: Application Startup

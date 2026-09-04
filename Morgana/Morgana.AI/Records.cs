@@ -388,12 +388,9 @@ public static class Records
     /// Another system whose agents this installation may consult.
     /// </summary>
     /// <remarks>
-    /// An entry describes a system, not an agent: every agent it publishes is reachable underneath
-    /// the same address, so declaring one opens as many colleagues as it serves. A system need not
-    /// be another Morgana, nor somebody else's — a second deployment of one's own, a partner's
-    /// installation and an orchestrator that never heard of Morgana are declared exactly alike.
-    /// This is the outbound half of <see cref="InboundSystemOptions"/> — there one is admitted,
-    /// here one is addressed — and the same per-entry key discipline applies for the same reason.
+    /// An entry describes a system, not an agent: declaring one opens as many colleagues as it serves.
+    /// A system need not be another Morgana, nor somebody else's. This is the outbound half of
+    /// <see cref="InboundSystemOptions"/> — there one is admitted, here one is addressed.
     /// </remarks>
     public record OutboundSystemOptions
     {
@@ -427,10 +424,9 @@ public static class Records
     /// How far a system reaches once inside, among the agents this installation publishes.
     /// </summary>
     /// <remarks>
-    /// This list admits nobody: identity is settled in <c>Morgana:Authentication:Issuers</c>, and an
-    /// entry here only narrows a caller already proven there and typed <see cref="IssuerType.System"/>.
-    /// Every such issuer needs one, because the dangerous direction is silence: a system declared and
-    /// then forgotten here would be handed the whole ring by omission.
+    /// This list admits nobody: it only narrows a caller already proven in
+    /// <c>Morgana:Authentication:Issuers</c>. Required of every system, since a forgotten entry would
+    /// hand one the whole ring by omission.
     /// </remarks>
     public record InboundSystemOptions
     {

@@ -217,9 +217,8 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// How far each admitted system reaches, as configuration declares it.
     /// </summary>
     /// <remarks>
-    /// The inbound half of <see cref="ResolveOutboundSystems"/>, and read by the same two parties for
-    /// the same reason: the gate that enforces a scope and the startup check that validates it must
-    /// not be able to disagree about what was declared.
+    /// The inbound half of <see cref="ResolveOutboundSystems"/>, read by the gate and by the startup
+    /// check alike so the two cannot disagree on what was declared.
     /// </remarks>
     /// <param name="configuration">Application configuration.</param>
     public static List<Records.InboundSystemOptions> ResolveInboundSystems(IConfiguration configuration)
@@ -231,9 +230,8 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// configuration per request.
     /// </summary>
     /// <remarks>
-    /// An entry declaring no <c>Agents</c> reaches every published agent, which is what an
-    /// installation federating with peers it trusts wholly declares — and what this installation
-    /// declares about itself, since its own consultations come back in through the same door.
+    /// An entry declaring no <c>Agents</c> reaches every published agent — what a wholly trusted peer
+    /// gets, and what this installation declares about itself.
     /// </remarks>
     /// <param name="configuration">Application configuration.</param>
     /// <param name="intent">Published agent whose admitted callers are being resolved.</param>
@@ -244,6 +242,125 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
                                     || system.Agents.Any(agent => string.Equals(agent?.Trim(), intent, StringComparison.OrdinalIgnoreCase)))
                    .Select(system => system.Issuer.Trim()),
                StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Refuses a trust configuration that would publish agents nobody can reach, or reach agents
+    /// nobody declared. Throws on the first incoherence; returns silently when nothing is published.
+    /// </summary>
+    /// <remarks>
+    /// Beside the resolvers it reads, so a check and the runtime depending on it cannot disagree.
+    /// All of it guards one shape: a topology that validates cleanly, then fails or opens silently.
+    /// </remarks>
+    /// <param name="configuration">Application configuration.</param>
+    /// <param name="publishedIntents">Agents this installation publishes over A2A; empty switches every check off.</param>
+    /// <param name="consultsLocally">Whether any agent here consults a colleague of this same installation.</param>
+    /// <exception cref="InvalidOperationException">Thrown on the first incoherent declaration, naming what to add.</exception>
+    public static void ValidateTrustConfiguration(
+        IConfiguration configuration,
+        IReadOnlyCollection<string> publishedIntents,
+        bool consultsLocally)
+    {
+        if (publishedIntents.Count == 0)
+            return;
+
+        List<Records.IssuerOptions> declaredIssuers = configuration
+            .GetSection("Morgana:Authentication:Issuers").Get<List<Records.IssuerOptions>>() ?? [];
+
+        List<Records.InboundSystemOptions> inboundSystems =
+            ResolveInboundSystems(configuration);
+
+        if (consultsLocally)
+        {
+            Records.IssuerOptions? peerIssuer = declaredIssuers.FirstOrDefault(issuer =>
+                string.Equals(issuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase));
+
+            if (ResolvePeerSigningKey(configuration) is null)
+            {
+                throw new InvalidOperationException(
+                    $"Agents of this installation consult colleagues of their own, but no usable signing key is "
+                    + $"configured for the '{Constants.AgentToAgent.IssuerName}' issuer: declare it under "
+                    + "Morgana:Authentication:Issuers with a real SymmetricKey (User Secrets or environment), "
+                    + "or set Morgana:AgentToAgent:Enabled to false to run without peer consultation.");
+            }
+
+            if (peerIssuer?.Type is not Records.IssuerType.System)
+            {
+                throw new InvalidOperationException(
+                    $"Issuer '{Constants.AgentToAgent.IssuerName}' must declare \"Type\": \"system\": it is what this "
+                    + "installation signs its own consultations with, and they are admitted at the A2A door like any other peer's.");
+            }
+
+            if (!inboundSystems.Any(system =>
+                    string.Equals(system.Issuer?.Trim(), Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    $"Agents of this installation consult colleagues of their own, but '{Constants.AgentToAgent.IssuerName}' "
+                    + "is not declared under Morgana:AgentToAgent:InboundSystems: add { \"Issuer\": "
+                    + $"\"{Constants.AgentToAgent.IssuerName}\" }}, which admits it to every published agent.");
+            }
+        }
+
+        // A system declared and then forgotten in InboundSystems would be handed the whole ring by
+        // omission, and an omission is exactly what nobody notices. So the scope is required of every
+        // system, and admitting it to everything stays a sentence somebody wrote.
+        foreach (Records.IssuerOptions systemIssuer in declaredIssuers.Where(issuer => issuer.Type is Records.IssuerType.System))
+        {
+            if (!inboundSystems.Any(system => string.Equals(system.Issuer?.Trim(), systemIssuer.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    $"Issuer '{systemIssuer.Name}' is declared as a system but has no entry under "
+                    + "Morgana:AgentToAgent:InboundSystems. Declare how far it reaches — a list of published agents in "
+                    + $"\"Agents\", or the entry alone to admit it to all of them ({string.Join(", ", publishedIntents)}).");
+            }
+        }
+
+        foreach (Records.InboundSystemOptions inboundSystem in inboundSystems)
+        {
+            string declaredIssuer = inboundSystem.Issuer?.Trim() ?? string.Empty;
+
+            Records.IssuerOptions? scopedIssuer = declaredIssuers.FirstOrDefault(issuer =>
+                string.Equals(issuer.Name, declaredIssuer, StringComparison.OrdinalIgnoreCase));
+
+            // Scoping admits nobody: an entry naming an issuer that cannot prove who it is, or one whose
+            // key was cut for a channel, describes an admission that will never happen.
+            if (scopedIssuer is null)
+            {
+                throw new InvalidOperationException(
+                    $"Morgana:AgentToAgent:InboundSystems declares '{declaredIssuer}', which is not among "
+                    + "Morgana:Authentication:Issuers. Scoping narrows a caller that can already prove who it is.");
+            }
+
+            if (scopedIssuer.Type is not Records.IssuerType.System)
+            {
+                throw new InvalidOperationException(
+                    $"Morgana:AgentToAgent:InboundSystems declares '{scopedIssuer.Name}', which is declared as a channel. "
+                    + "A caller is a channel or a colleague, never both.");
+            }
+
+            // This installation's own topology has one author, [ConsultsAgent], validated at startup.
+            // A scope on the "morgana" issuer would be a second author of it, able only to contradict
+            // the first — and to do so at runtime, as a 401 on a consultation the plugin declares.
+            if (string.Equals(scopedIssuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)
+                && inboundSystem.Agents is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Morgana:AgentToAgent:InboundSystems declares \"Agents\" for '{Constants.AgentToAgent.IssuerName}'. "
+                    + "Which colleagues an agent of this installation may consult is declared by [ConsultsAgent] and validated "
+                    + "at startup; narrowing it here could only contradict that. Remove \"Agents\" from the entry.");
+            }
+
+            foreach (string scopedAgent in inboundSystem.Agents ?? [])
+            {
+                if (!publishedIntents.Any(intent => string.Equals(intent, scopedAgent?.Trim(), StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new InvalidOperationException(
+                        $"Morgana:AgentToAgent:InboundSystems admits '{scopedIssuer.Name}' to '{scopedAgent}', which this "
+                        + $"installation does not publish (published: {string.Join(", ", publishedIntents)}).");
+                }
+            }
+        }
+    }
+
 
     /// <summary>
     /// Builds the client a colleague is called through, carrying whatever that colleague's own card
