@@ -48,7 +48,7 @@ own.
 
 | Folder | Purpose |
 |---|---|
-| `Abstractions/` | Morgana's own implementations of a framework base type: `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool`, and `MorganaHostedAgent` — the `AIAgent` under which an intent is published over A2A, carrying an inbound request to the conversation's actor |
+| `Abstractions/` | Morgana's own implementations of a framework base type: `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool`, and `MorganaHostedAgent` — the `AIAgent` under which an intent is published over A2A, carrying an inbound request to the conversation's actor and reporting back what serving it cost |
 | `Actors/` | Pipeline actors: `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, and the peer-consultation surface), `MorganaToolAdapter` (tool→AIFunction), `MorganaChannelAdapter` (rich→plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
@@ -220,8 +220,10 @@ topology**: publication stays whole, and what narrows is admission — an issuer
 `Type: "system"` in `Morgana:Authentication:Issuers` and its reach among the published agents in
 `Morgana:AgentToAgent:InboundSystems`, an entry naming `Agents` holding it to those, an entry naming
 none admitting it to all. So an agent that must not be answerable by a given caller is kept from it
-by that caller's scope, never by declining to publish it — and an installation opens to a customer,
-a supplier or a marketplace one desk at a time. The JSON-RPC endpoint carries
+by that caller's scope, never by declining to publish it — which is how one company's several
+installations, one per business function, let each other reach only the desks that concern them.
+A customer or an end user is not this surface at all: they arrive as a **channel**, through the whole
+pipeline, and what a deployment answers for them is decided by the agents its plugin carries. The JSON-RPC endpoint carries
 `Morgana.Web/Filters/A2AAuthenticationFilter`, an `IEndpointFilter` applying the same
 `IAuthenticationService` gate the controller applies, fail-closed; the card itself stays open,
 because discovery is what tells a caller how to authenticate.
@@ -300,6 +302,19 @@ of the conversation by the registry's first-write-wins. What comes back is the s
 options or rich card it attached — handed over as **data** the asking agent reads and acts on, never
 as buttons to render.
 
+**What the answer cost travels with it, one way only.** The tokens a consultation burns are burned on
+the *answering* installation, which until now made them invisible to the budget that is supposed to
+say what a conversation cost. So `MorganaHostedAgent` asks its ledger what the served turn spent and
+puts the figure on the envelope, and `MorganaAgentAdapter.ImportPeerDustAsync` charges it to the
+asking conversation under `Morgana ({intent}@{system})`, then strips it before the envelope reaches a
+model — accounting is machinery, and a model given a number will eventually narrate it. Two
+conditions, each removing a way of counting the same tokens twice or reporting them to nobody: the
+figure is set **only when the caller declared itself** (`CallerIntent`, which only an agent of a
+Morgana sends — anything else that speaks A2A has no ledger to charge), and imported **only from a
+colleague published elsewhere**, since one of this installation's own already charged this very
+conversation. Every dust question — the reading, the delta, the clamping, the charge — belongs to
+`IDustLimitService`; neither end computes any of it.
+
 **The exchange leaves no trace**, at either end, and each end reaches that differently:
 - The answering side leaves none because there is nothing to erase: its turn ran on a session no
   writer ever saw and no reader will. That is what makes an agent later consulted again, or activated
@@ -357,7 +372,7 @@ OTel: a `morgana.consultation` span (`consultation.caller`, `consultation.target
 | `MCPClientRegistryService` | `IMCPClientRegistryService` | MCP client connection pool: keyed by URI (Http) or `stdio:{command}` (Stdio). Thread-safe via `ConcurrentDictionary`. Contains `MCPClient` wrapper over `McpClient` from ModelContextProtocol.Core |
 | `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite DB (`morgana-{id}.db`). AES-256-CBC encrypted `AgentSession` BLOBs + `shared_context` registry (first-write-wins). Schema v4: tables `morgana` + `rate_limit_log` + `channel_metadata` + `shared_context`. Manages `UpsertSharedVariableAsync` and `LoadSharedVariablesAsync` for cross-agent context synchronization |
 | `SQLiteRateLimitService` | `IRateLimitService` | Sliding window algorithm (per-minute/hour/day) in same SQLite DB. Fails open on error. Delegates DB init to persistence service |
-| `SQLiteDustLimitService` | `IDustLimitService` | Per-conversation token budget enforcement. Tracks cumulative dust consumed (tokens weighted by I/O asymmetry and cache tiers). Three thresholds: 70% warning (one-shot), 90% warning (one-shot), 100% lockout (blocks new turns, conversation stays alive). Fails open on DB error. Emits OTel counter `morgana.dust.consumed` tagged by LLM role |
+| `SQLiteDustLimitService` | `IDustLimitService` | Per-conversation token budget enforcement. Owns every dust question asked anywhere: besides charging and the thresholds, `GetConsumedAsync` and `GetConsumedSinceAsync` answer what a conversation has spent and what a stretch of work cost, so no caller ever does the arithmetic itself. Tracks cumulative dust consumed (tokens weighted by I/O asymmetry and cache tiers). Three thresholds: 70% warning (one-shot), 90% warning (one-shot), 100% lockout (blocks new turns, conversation stays alive). Fails open on DB error. Emits OTel counter `morgana.dust.consumed` tagged by LLM role |
 | `JWTAuthenticationService` | `IAuthenticationService` | Validates JWT tokens: HMAC-SHA256, issuer whitelist, audience, lifetime (30s clock skew). Extracts `sub`→CallerId, `name`→DisplayName |
 | `HistoryReducerService` | *(factory, not an interface)* | Creates `MorganaChatReducer` from `Morgana:HistoryReducer` config — named after the section it binds, not the reducer it returns, which has already changed once. Returns `null` when disabled, which `MorganaChatHistoryProvider` reads as "hand the LLM the full history". Threshold (hysteresis buffer above target, default 12) plus target count (default 8) drives summarization: reduction triggers when message count > target + threshold |
 | `MorganaChatReducer` | `IChatReducer` | Summarizing reducer replacing MEAI's `SummarizingChatReducer`, which builds the summarizer's input by **dropping every message carrying function-call or function-result content** — so in a tool-driven agent the summarizing model sees a text-only skeleton and reports, accurately for its view, that no tool ran and no identifier was produced. The cut logic (hysteresis, the walk-back that never separates a call from its result, the user-role boundary preference) is a faithful port; only the summarizer's input differs, rendering tool activity as `[tool call]`/`[tool result]` lines. The kept window is handed back as the untouched originals. Keeps MEAI's `__summary__` property name, so sessions summarized before it shipped still resume |

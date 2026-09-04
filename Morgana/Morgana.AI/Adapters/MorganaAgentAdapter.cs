@@ -614,6 +614,16 @@ public class MorganaAgentAdapter
                 ? await a2aPeerAgent.CreateSessionAsync(conversationId)
                 : await peerAgent.CreateSessionAsync();
 
+            // Lifted out of the attribute before the closure is built: what a lambda captures should be
+            // a value, not a reference to the loop's current attribute, whose identity means nothing
+            // once the iteration has moved on.
+            string peerIntent = attribute.Intent;
+
+            // Null for a colleague of this installation, which runs on this very conversation and has
+            // already charged it — importing what it reports would bill the same tokens twice. Only a
+            // colleague elsewhere spent someone else's ledger, which is the one worth bringing home.
+            string? peerSystem = attribute.Instance;
+
             // Morgana's rules sit above the colleague as pipeline middleware, in the shape the agent
             // framework defines, leaving the resolved A2AAgent untouched. The closure holds nothing
             // that can go stale: it captures immutables only, reads the live session through
@@ -621,15 +631,33 @@ public class MorganaAgentAdapter
             // in by the pipeline on every call. One closure per declared colleague per agent, and
             // agents are per-conversation, so none is shared. The streaming delegate is left null and
             // the framework bridges streaming onto the run delegate, so the guards cannot be skipped.
-            string peerIntent = attribute.Intent;
             AIAgent guardedPeerAgent = new AIAgentBuilder(peerAgent)
                 .Use(async (messages, session, options, innerAgent, cancellationToken) =>
                 {
+                    // The two rules a consultation is bound by, evaluated against the CALLER's live
+                    // session — not the peer session this function was built with — because both are
+                    // facts about the turn asking: whether it is itself serving a colleague, and how
+                    // many rounds it has already spent. Passing means the round is charged.
                     string? refusal = await ApplyPeerGuardsAsync(callerIntent, peerIntent, sessionAccessor(), maxRoundsPerTurn, contextProvider);
 
-                    return refusal is not null
-                        ? new AgentResponse(new ChatMessage(ChatRole.Assistant, refusal))
-                        : await innerAgent.RunAsync(messages, session, WithDeclaredCaller(options, callerIntent), cancellationToken);
+                    // Refused, and the colleague is never reached: the model gets the refusal in the
+                    // very envelope a real answer travels in, so it reads one shape whatever happened
+                    // and cannot mistake a rule for a colleague's opinion.
+                    if (refusal is not null)
+                        return new AgentResponse(new ChatMessage(ChatRole.Assistant, refusal));
+
+                    // The colleague itself, reached through whatever the pipeline handed in. Who is
+                    // asking is added to the options here rather than to the question, so the caller's
+                    // name travels as metadata and the question stays the caller's own words.
+                    AgentResponse peerResponse =
+                        await innerAgent.RunAsync(messages, session, WithDeclaredCaller(options, callerIntent), cancellationToken);
+
+                    // A colleague of this installation is handed back untouched — its spend is already
+                    // on this conversation's books. One elsewhere may have reported what it cost, and
+                    // that figure is brought home and taken out of the envelope before a model sees it.
+                    return peerSystem is null
+                        ? peerResponse
+                        : await ImportPeerDustAsync(peerResponse, conversationId, peerIntent, peerSystem);
                 }, null)
                 .Build();
 
@@ -638,6 +666,10 @@ public class MorganaAgentAdapter
             // where a card's name is not.
             string peerFunctionName = ToFunctionName(peer);
 
+            // The colleague becomes one more callable function in this agent's tool list, bound to the
+            // session created above so every call of it belongs to the same A2A exchange. It is offered
+            // under its own ConsultMeFor and nothing else: an inventory of its tools would invite the
+            // caller to rule out a question the colleague has never seen.
             peerAgents.Add(guardedPeerAgent.AsAIFunction(
                 new AIFunctionFactoryOptions
                 {
@@ -646,11 +678,18 @@ public class MorganaAgentAdapter
                 },
                 peerSession));
 
+            // The same territory, kept a second time under the callable name: the prompt's
+            // ColleaguesDeclaration lists who this agent holds, and it must name them the way the tool
+            // list does. Empty rather than absent for a card with no description — a colleague still
+            // exists when it failed to say what it is for.
             peerTerritories[peerFunctionName] = peerCard.Description ?? "";
 
             logger.LogInformation("Agent {AgentTypeName} may consult '{PeerIntent}'", agentType.Name, attribute.Intent);
         }
 
+        // Whatever was reachable, which is not necessarily everything declared: a colleague that could
+        // not be resolved was logged and skipped above, and the agent runs without it rather than not
+        // running at all.
         return peerAgents;
     }
 
@@ -671,6 +710,9 @@ public class MorganaAgentAdapter
         int maxRoundsPerTurn,
         MorganaAIContextProvider contextProvider)
     {
+        // No session means no turn has run yet, so neither rule has anything to read: there is no
+        // consultation in progress to refuse a second hop to, and no round count to have exceeded.
+        // Letting it through is the only answer that is not invented.
         if (callerSession is null)
             return null;
 
@@ -682,6 +724,9 @@ public class MorganaAgentAdapter
             return RefusalEnvelope("You are currently answering a colleague, and a colleague may not consult a further colleague. Answer with what you know.");
         }
 
+        // The second rule: a cap on how many rounds one user turn may spend talking to colleagues.
+        // It is a safety net and not the mechanism — convergence is asked of the prose, in the
+        // PeerConsultation policy — so hitting it is a warning rather than a fault.
         int roundsSoFar = ReadConsultationRounds(callerSession, contextProvider);
         if (roundsSoFar >= maxRoundsPerTurn)
         {
@@ -689,10 +734,15 @@ public class MorganaAgentAdapter
             return RefusalEnvelope($"This exchange has run for {roundsSoFar} rounds and must end now. Answer with what you already have.");
         }
 
+        // Charged before the colleague is called, not after it answers: a consultation that hangs or
+        // throws has still spent its round, and counting only successful ones would let a failing
+        // colleague be retried without limit for the whole turn.
         await contextProvider.SetVariableAsync(callerSession, Constants.ContextKeys.ConsultationRounds, roundsSoFar + 1);
 
         logger.LogInformation("Agent '{CallerIntent}' is consulting '{PeerIntent}' (round {Round})", callerIntent, peerIntent, roundsSoFar + 1);
 
+        // Null is the permission: both rules passed and the round is on the books, so the caller may
+        // reach the colleague.
         return null;
     }
 
@@ -723,6 +773,59 @@ public class MorganaAgentAdapter
             string text when int.TryParse(text, out int parsed) => parsed,
             _ => 0
         };
+
+    /// <summary>
+    /// Charges what a colleague elsewhere reports having spent to this conversation, and returns the
+    /// answer with that figure removed.
+    /// </summary>
+    /// <remarks>
+    /// Two reasons the number cannot simply be left where it arrived. It is the caller's budget that
+    /// must state what the whole conversation cost, wherever the tokens burned; and the envelope is
+    /// read by a model, which has no use for accounting and every opportunity to narrate it. An
+    /// envelope that will not parse is handed back untouched: a colleague that answered is not made
+    /// to fail over bookkeeping.
+    /// </remarks>
+    /// <param name="peerResponse">The colleague's answer, carrying the serialized envelope.</param>
+    /// <param name="conversationId">Conversation charged for what the colleague spent.</param>
+    /// <param name="peerIntent">Colleague consulted, named in the metric.</param>
+    /// <param name="peerSystem">System publishing it, named in the metric beside the intent.</param>
+    private async Task<AgentResponse> ImportPeerDustAsync(
+        AgentResponse peerResponse,
+        string conversationId,
+        string peerIntent,
+        string peerSystem)
+    {
+        try
+        {
+            // The colleague's answer is the serialized envelope, so reading what it cost means reading
+            // the envelope: there is no side channel, and none is wanted — this is Morgana's own JSON
+            // at both ends, which no hosting layer in between has to agree to carry.
+            Records.PeerConsultationResponse? envelope = JsonSerializer.Deserialize<Records.PeerConsultationResponse>(
+                peerResponse.Text, Records.DefaultJsonSerializerOptions);
+
+            // Nothing to charge and nothing to hide: an answer from an installation that does not
+            // report, or one that reported zero, is left exactly as it arrived rather than rebuilt.
+            if (envelope?.DustConsumed is not > 0)
+                return peerResponse;
+
+            // Attributed to the desk that burned it and the system it runs on, so a conversation's
+            // spend stays readable as a bill: this agent's own turns, and this much bought elsewhere.
+            await dustLimitService.ChargeAsync(
+                conversationId, envelope.DustConsumed.Value, $"{Constants.Morgana} ({peerIntent}@{peerSystem})");
+
+            // Re-serialized without the figure, which has done its job the moment it was charged. The
+            // response is rebuilt rather than edited in place because what the model reads is the text
+            // of this message, and it must not contain a number it has no use for.
+            return new AgentResponse(new ChatMessage(
+                ChatRole.Assistant,
+                JsonSerializer.Serialize(envelope with { DustConsumed = null }, Records.DefaultJsonSerializerOptions)));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not read what '{PeerIntent}' at '{PeerSystem}' spent; its answer stands and the charge is lost", peerIntent, peerSystem);
+            return peerResponse;
+        }
+    }
 
     /// <summary>Renders a refusal in the envelope a colleague's real answer travels in.</summary>
     private static string RefusalEnvelope(string message)

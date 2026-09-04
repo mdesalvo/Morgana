@@ -150,6 +150,39 @@ public class SQLiteDustLimitService : IDustLimitService
     }
 
     /// <inheritdoc/>
+    public async Task<double> GetConsumedAsync(string conversationId)
+    {
+        // Nothing was metered with the limiter off, and a conversation with no database has burned
+        // nothing yet — both answer zero rather than reaching for a table that may not exist.
+        if (!options.Enabled || !persistenceService.ConversationExists(conversationId))
+            return 0.0;
+
+        try
+        {
+            // The same cumulative total the budget check reads, handed over in units instead of as a
+            // fraction of a budget: a caller asking what was spent may have no budget in mind at all.
+            return await ReadConsumedAsync(conversationId);
+        }
+        catch (Exception ex)
+        {
+            // Fails open like every other method here: a storage fault must never become a turn that
+            // does not happen, and reporting zero only ever under-states a cost, never invents one.
+            logger.LogError(ex, "Dust consumption query failed for {ConversationId} — returning 0.0", conversationId);
+            return 0.0;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<double> GetConsumedSinceAsync(string conversationId, double baseline)
+    {
+        // Clamped here rather than at the call site: a ledger that appears to run backwards is this
+        // service's problem to absorb — a disabled limiter, a failed read, a database that vanished
+        // between the two — and never a negative cost handed to whoever asked what the work cost.
+        double consumed = await GetConsumedAsync(conversationId);
+        return consumed > baseline ? consumed - baseline : 0.0;
+    }
+
+    /// <inheritdoc/>
     public async Task<double> GetUsageRatioAsync(string conversationId)
     {
         if (!options.Enabled || options.BudgetPerConversation <= 0)

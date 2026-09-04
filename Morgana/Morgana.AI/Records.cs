@@ -641,11 +641,15 @@ public static class Records
     /// <param name="ColleagueAwaitsYourReply">True when the colleague is waiting, i.e. the exchange is unfinished.</param>
     /// <param name="Options">Options offered, as data to choose from — never buttons to render.</param>
     /// <param name="Card">Structured data presented, as data to read — never a card to render.</param>
+    /// <param name="DustConsumed">What answering cost the colleague, in its own dust. Set only when the
+    /// caller declared itself an agent of a Morgana, since nothing else knows what to do with it, and
+    /// removed by the asking side before the envelope reaches a model.</param>
     public record PeerConsultationResponse(
         [property: JsonPropertyName("answer")] string Answer,
         [property: JsonPropertyName("colleagueAwaitsYourReply")] bool ColleagueAwaitsYourReply,
         [property: JsonPropertyName("options")] List<QuickReply>? Options = null,
-        [property: JsonPropertyName("card")] RichCard? Card = null);
+        [property: JsonPropertyName("card")] RichCard? Card = null,
+        [property: JsonPropertyName("dustConsumed")] double? DustConsumed = null);
 
     /// <summary>
     /// LLM-generated presentation response from ConversationSupervisorActor.

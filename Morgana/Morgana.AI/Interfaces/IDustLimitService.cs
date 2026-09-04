@@ -25,6 +25,20 @@ public interface IDustLimitService
     Task<bool> IsOverBudgetAsync(string conversationId);
 
     /// <summary>
+    /// Dust consumed so far by a conversation, in units. 0.0 when nothing was consumed, when dust
+    /// limiting is disabled, or on error — so a caller reading it as a delta under-reports rather
+    /// than invents. Distinct from the ratio below, which only makes sense against a budget.
+    /// </summary>
+    Task<double> GetConsumedAsync(string conversationId);
+
+    /// <summary>
+    /// Dust consumed by a conversation since a <paramref name="baseline"/> a previous
+    /// <see cref="GetConsumedAsync"/> returned — what the work between the two reads cost.
+    /// Never negative, and 0.0 whenever the reading itself is unavailable.
+    /// </summary>
+    Task<double> GetConsumedSinceAsync(string conversationId, double baseline);
+
+    /// <summary>
     /// Ratio of consumed dust to the configured budget (0.0 to &gt;1.0). 0.0 when the
     /// conversation has no usage yet, when dust limiting is disabled, or on error.
     /// </summary>

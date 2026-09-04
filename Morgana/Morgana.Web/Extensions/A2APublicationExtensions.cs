@@ -58,6 +58,7 @@ public static class A2APublicationExtensions
                         serviceProvider.GetRequiredService<IPromptComposerService>(),
                         serviceProvider.GetRequiredService<ActorSystem>,
                         a2aRequestTimeout,
+                        serviceProvider.GetRequiredService<IDustLimitService>(),
                         serviceProvider.GetRequiredService<ILogger>()))
 
                 // The session store is where a request's A2A context id becomes a Morgana conversation.
@@ -73,6 +74,8 @@ public static class A2APublicationExtensions
                 .AddA2AServer(options => options.AgentRunMode = AgentRunMode.DisallowBackground);
         }
 
+        // Handed back so this call can sit in a chain of registrations like every other Add* in the
+        // host's manifest, and for no other reason: nothing was replaced, only added to.
         return builder;
     }
 

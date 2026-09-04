@@ -45,6 +45,12 @@ public sealed class MorganaHostedAgent : AIAgent
     private readonly TimeSpan requestTimeout;
 
     /// <summary>Logger for inbound-request diagnostics.</summary>
+    /// <summary>
+    /// The conversation's ledger, asked what serving one consultation cost so the answer can carry
+    /// it back. Every dust question — reading, delta, clamping — is its own, never computed here.
+    /// </summary>
+    private readonly IDustLimitService dustLimitService;
+
     private readonly ILogger logger;
 
     /// <inheritdoc />
@@ -60,6 +66,7 @@ public sealed class MorganaHostedAgent : AIAgent
     /// <param name="promptComposerService">Composes the note declaring that this turn serves a colleague.</param>
     /// <param name="actorSystemResolver">Hands back the actor system on the turn that needs it — see the field's own remarks for why it arrives as a delegate.</param>
     /// <param name="requestTimeout">Maximum wait for the serving actor's answer.</param>
+    /// <param name="dustLimitService">Ledger consulted for what the served turn cost.</param>
     /// <param name="logger">Records requests that name no conversation, no agent, or that go unanswered.</param>
     public MorganaHostedAgent(
         string intent,
@@ -68,6 +75,7 @@ public sealed class MorganaHostedAgent : AIAgent
         IPromptComposerService promptComposerService,
         Func<ActorSystem> actorSystemResolver,
         TimeSpan requestTimeout,
+        IDustLimitService dustLimitService,
         ILogger logger)
     {
         this.intent = intent;
@@ -76,6 +84,7 @@ public sealed class MorganaHostedAgent : AIAgent
         this.promptComposerService = promptComposerService;
         this.actorSystemResolver = actorSystemResolver;
         this.requestTimeout = requestTimeout;
+        this.dustLimitService = dustLimitService;
         this.logger = logger;
     }
 
@@ -138,6 +147,11 @@ public sealed class MorganaHostedAgent : AIAgent
             // turn, and it is the only thing telling the agent its reader is not the user.
             string declaredQuestion = await promptComposerService.ComposeConsultationRequestAsync(callerIntent) + question;
 
+            // Taken before the turn so the ledger can be asked afterwards what happened in between.
+            // The reading is of the whole conversation rather than of this exchange, which has no
+            // ledger of its own — the difference is what isolates the answer's own cost.
+            double dustBaseline = await dustLimitService.GetConsumedAsync(hostedAgentSession.ConversationId);
+
             // Ask, where the pipeline's own convention is Tell. That convention exists for streaming —
             // an actor pushing chunks to a channel as they come — and there is no channel here: a
             // colleague's answer is read whole, by a model, with a caller blocked on it. The timeout
@@ -147,6 +161,18 @@ public sealed class MorganaHostedAgent : AIAgent
                 new Records.PeerConsultation(hostedAgentSession.ConversationId, callerIntent, declaredQuestion),
                 requestTimeout,
                 cancellationToken);
+
+            // What the answer cost travels back only to a caller that declared itself an agent of a
+            // Morgana: anything else that speaks A2A has no ledger to charge it to, and would carry a
+            // number it cannot read. Unreported, the spend simply stays ours — it is on our own books
+            // either way, and this line only decides whether the asker gets to see it.
+            if (callerIntent is not null)
+            {
+                peerConsultationResponse = peerConsultationResponse with
+                {
+                    DustConsumed = await dustLimitService.GetConsumedSinceAsync(hostedAgentSession.ConversationId, dustBaseline)
+                };
+            }
 
             // The envelope travels serialized inside an assistant message because that is the only
             // shape A2A carries, but it is DATA and not prose: what the asking agent receives is a
