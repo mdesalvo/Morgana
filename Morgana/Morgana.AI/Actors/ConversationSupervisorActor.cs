@@ -627,6 +627,12 @@ public class ConversationSupervisorActor : MorganaActor
             ctx.OriginalSender.Tell(chunk);
         });
 
+        // Renews the same window for work the user cannot see: a tool running, a colleague answering.
+        // The client is told nothing — there is nothing to show — and an agent that stops sending
+        // these is one that has genuinely stopped.
+        Receive<Records.AgentStillWorking>(_ =>
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"]))));
+
         // ActiveAgentResponse comes from RouterActor when it found and ran a real agent for the
         // classified intent; AgentResponse below is the OTHER possible reply, RouterActor's own
         // fallback when no agent handles that intent at all (see UnrecognizedIntentError).
@@ -831,6 +837,11 @@ public class ConversationSupervisorActor : MorganaActor
             // Passes the chunk through unchanged to the client that sent the follow-up message.
             originalSender.Tell(chunk);
         });
+
+        // Renews the window for text-less work, same reasoning as AwaitingAgentResponse's identical
+        // handler above: the follow-up turn is where an active agent consults a colleague.
+        Receive<Records.AgentStillWorking>(_ =>
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"]))));
 
         // Handles the already-active agent's reply to this follow-up message.
         Receive<Records.AgentResponse>(response =>

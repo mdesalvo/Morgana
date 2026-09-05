@@ -319,6 +319,15 @@ public class MorganaAgent : MorganaActor
                             MorganaTelemetry.AgentTtftHistogram.Record(ttft);
                         }
                     }
+                    else
+                    {
+                        // The turn is advancing on something with no text in it — a tool being called
+                        // or a colleague being asked. The supervisor's wait counts silence and a
+                        // consultation is a whole turn at another desk: unannounced, it reads as an
+                        // agent that has died and the user's turn is abandoned while its answer is
+                        // still being written.
+                        senderRef.Tell(new Records.AgentStillWorking());
+                    }
                 }
             }
             else

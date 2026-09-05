@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Akka.Actor;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Morgana.AI.Attributes;
 using Morgana.Contracts;
 
@@ -605,9 +606,58 @@ public static class Records
     public record AgentStreamChunk(
         string Text);
 
+    /// <summary>
+    /// Reports that an agent's turn is advancing on something the user cannot see — a tool running,
+    /// a colleague being consulted. It carries nothing and never reaches the channel.
+    /// </summary>
+    /// <remarks>
+    /// The supervisor's wait on an agent is a budget on silence and is renewed by every streamed
+    /// chunk, so a turn that keeps writing is never cut short. Work producing no text would
+    /// otherwise be indistinguishable from an agent that has died and the longest such work — a
+    /// consultation, which is a whole turn at another desk — is precisely the one most likely to
+    /// outlast the budget.
+    /// </remarks>
+    public record AgentStillWorking;
+
     // ==========================================================================
     // PEER CONSULTATION MODELS
     // ==========================================================================
+
+    /// <summary>
+    /// How long each party to a consultation waits, as one ladder derived from the pipeline's own
+    /// turn budget.
+    /// </summary>
+    /// <remarks>
+    /// The parties cannot see each other, so the order is what makes a failure legible instead of
+    /// merely loud: the colleague gives up first and what comes back to the asking model is its
+    /// envelope; the asking agent gives up next and still has a turn left to answer the user in;
+    /// only then would the supervisor conclude nobody is coming. Stated once here because a party
+    /// deriving its own wait from the same setting would be free to derive it differently.
+    /// </remarks>
+    /// <param name="Turn">The pipeline's budget on one turn and the outermost of the three.</param>
+    /// <param name="Caller">Wait of the agent asking, on the wire.</param>
+    /// <param name="Callee">Wait of the installation answering, on the actor that serves it.</param>
+    public record PeerConsultationWaits(TimeSpan Turn, TimeSpan Caller, TimeSpan Callee)
+    {
+        /// <summary>Share of the turn left to the asking agent, the rest being what the turn keeps to answer with.</summary>
+        private const double CallerShareOfTurn = 0.9;
+
+        /// <summary>Share of the turn left to the answering installation, one step further in.</summary>
+        private const double CalleeShareOfTurn = 0.8;
+
+        /// <summary>
+        /// Reads the ladder off the pipeline's turn budget, which is the only thing configured: the
+        /// steps are proportions rather than subtracted seconds, so shortening the turn cannot
+        /// invert the order or leave a party waiting for no time at all.
+        /// </summary>
+        /// <param name="configuration">Application configuration, read for the turn budget.</param>
+        public static PeerConsultationWaits From(IConfiguration configuration)
+        {
+            TimeSpan turn = TimeSpan.FromSeconds(configuration.GetValue("Morgana:ActorSystem:TimeoutSeconds", 180));
+
+            return new PeerConsultationWaits(turn, turn * CallerShareOfTurn, turn * CalleeShareOfTurn);
+        }
+    }
 
     /// <summary>
     /// Names one consultable colleague.

@@ -73,6 +73,9 @@ public class RouterActor : MorganaActor
         // Forward streaming chunks from agents to supervisor
         Receive<Records.AgentStreamChunk>(HandleAgentStreamChunk);
 
+        // Carry an agent's sign of life to the supervisor, which is the only party timing it.
+        Receive<Records.AgentStillWorking>(stillWorking => ForwardToSupervisor(stillWorking, "sign of life"));
+
         // Handle agent restoration requests from supervisor
         ReceiveAsync<Records.RestoreAgentRequest>(HandleRestoreAgentRequestAsync);
     }
@@ -187,27 +190,39 @@ public class RouterActor : MorganaActor
     /// </summary>
     /// <param name="chunk">Streaming chunk from agent</param>
     private void HandleAgentStreamChunk(Records.AgentStreamChunk chunk)
+        => ForwardToSupervisor(chunk, "streaming chunk");
+
+    /// <summary>
+    /// Carries what an agent emits mid-turn to the supervisor waiting on it.
+    /// </summary>
+    /// <remarks>
+    /// Both a partial response and a bare sign of life travel this way and for the same reason: the
+    /// supervisor is the party timing the turn and the agent has no reference to it.
+    /// </remarks>
+    /// <param name="message">What the agent emitted.</param>
+    /// <param name="description">What it was, for the diagnostics when there is nowhere to put it.</param>
+    private void ForwardToSupervisor(object message, string description)
     {
         IActorRef agentSender = Sender;
 
         if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
         {
-            // Forward chunk to original sender (supervisor)
-            originalSender.Tell(chunk);
+            // Forward to original sender (supervisor)
+            originalSender.Tell(message);
         }
         else if (supervisorRef is not null)
         {
             // Fallback: streamingContexts has already been cleaned up (e.g. late chunk after
             // AgentResponse). Forward to the cached supervisor ref — Context.Parent would
             // resolve to /user (router is flat under the guardian) and land in dead letters.
-            actorLogger.Warning($"Late streaming chunk from {agentSender.Path}, forwarding to supervisor");
-            supervisorRef.Tell(chunk);
+            actorLogger.Warning($"Late {description} from {agentSender.Path}, forwarding to supervisor");
+            supervisorRef.Tell(message);
         }
         else
         {
             // No AgentRequest has been routed yet, so we have no supervisor ref to fall back to.
             // Dropping is correct: the message has no legitimate destination at this point.
-            actorLogger.Warning($"Streaming chunk from {agentSender.Path} before any AgentRequest; dropping");
+            actorLogger.Warning($"{description} from {agentSender.Path} before any AgentRequest; dropping");
         }
     }
 

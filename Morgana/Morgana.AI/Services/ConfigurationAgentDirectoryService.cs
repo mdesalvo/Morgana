@@ -21,9 +21,6 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// <summary>Version stamped on every locally projected card, tracking the framework's own contract.</summary>
     private const string LocalCardVersion = "1.0";
 
-    /// <summary>Margin by which the wait on the wire exceeds the answering side's wait on its actor.</summary>
-    private static readonly TimeSpan PeerRequestTimeoutMargin = TimeSpan.FromSeconds(15);
-
     /// <summary>Wait on a card: a static document with no model behind it, so nothing like a consultation.</summary>
     private static readonly TimeSpan CardDiscoveryTimeout = TimeSpan.FromSeconds(30);
 
@@ -60,8 +57,9 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     private readonly ILogger logger;
 
     /// <summary>
-    /// Wait on the wire, longer than the answering side's own so that side gives up first: what comes
-    /// back is then its envelope, which the model reads, not a cancelled request faulting the turn.
+    /// Wait on the wire: longer than the answering side's own, so that side gives up first and what
+    /// comes back is its envelope rather than a cancelled request faulting the turn; shorter than
+    /// the turn containing it, so the asking agent is still owed an answer when it gives up.
     /// </summary>
     private readonly TimeSpan peerRequestTimeout;
 
@@ -129,9 +127,9 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         this.hostAddressService = hostAddressService;
         this.logger = logger;
 
-        // The key the answering side reads for its own wait, so the two agree when configured alike.
-        peerRequestTimeout = TimeSpan.FromSeconds(
-            configuration.GetValue("Morgana:ActorSystem:TimeoutSeconds", 180)) + PeerRequestTimeoutMargin;
+        // The same ladder the answering side reads its own step off, so the two cannot disagree about
+        // which of them is meant to give up first.
+        peerRequestTimeout = Records.PeerConsultationWaits.From(configuration).Caller;
     }
 
     /// <inheritdoc />
