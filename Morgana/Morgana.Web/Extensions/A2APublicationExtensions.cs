@@ -53,7 +53,7 @@ public static class A2APublicationExtensions
                     publishedIntent,
                     (serviceProvider, agentName) => new MorganaHostedAgent(
                         agentName,
-                        serviceProvider.GetRequiredService<IAgentDirectoryService>().GetAgentCardAsync(agentName).GetAwaiter().GetResult()?.Description ?? agentName,
+                        serviceProvider.GetRequiredService<IAgentDirectoryService>().TryGetProjectedCard(agentName)?.Description ?? agentName,
                         serviceProvider.GetRequiredService<IAgentRegistryService>(),
                         serviceProvider.GetRequiredService<IPromptComposerService>(),
                         serviceProvider.GetRequiredService<ActorSystem>,

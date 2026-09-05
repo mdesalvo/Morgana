@@ -182,7 +182,14 @@ public sealed class MorganaHostedAgent : AIAgent
         catch (Exception ex)
         {
             logger.LogError(ex, "Hosted agent '{Intent}' failed to serve a request from '{CallerIntent}' on conversation '{ConversationId}'", intent, callerIntent, hostedAgentSession.ConversationId);
-            return BuildAgentResponseFromMessage($"The agent for '{intent}' did not answer in time. Proceed without it.");
+
+            // Only a desk that went silent is reported as one. Anything else — an answer that would
+            // not serialize, an actor that could not be reached — told the asking model to expect a
+            // slow colleague when what it had was a broken one, which is a different thing to decide
+            // against. Either way the instruction is the same: this answer is not coming.
+            return BuildAgentResponseFromMessage(ex is AskTimeoutException or OperationCanceledException
+                ? $"The agent for '{intent}' did not answer in time. Proceed without it."
+                : $"The agent for '{intent}' could not answer. Proceed without it.");
         }
     }
 

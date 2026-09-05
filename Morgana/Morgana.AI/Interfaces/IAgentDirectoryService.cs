@@ -19,6 +19,12 @@ public interface IAgentDirectoryService
     /// </summary>
     Task<AgentCard?> GetAgentCardAsync(string intent);
 
+    /// <summary>
+    /// The card already projected for <paramref name="intent"/>, or <c>null</c> when none has been
+    /// asked for yet. It projects nothing itself.
+    /// </summary>
+    AgentCard? TryGetProjectedCard(string intent);
+
     /// <summary>Fills in, on every card already projected, the interface this instance answers on.</summary>
     /// <remarks>
     /// Cards are projected while the endpoints are still being mapped, before the server has bound.
