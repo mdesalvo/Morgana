@@ -16,16 +16,16 @@ namespace Distiller.Services;
 /// <para>
 /// Alembic is an agent of Morgana, so it is assembled the way one is — <c>MorganaToolAdapter</c>
 /// binds each tool's declaration in <c>alembic.json</c> to its delegate and materialises the
-/// <c>AIFunction</c>s, and <c>IChatClient.AsAIAgent</c> makes the agent. Not <c>MorganaAgent</c>
+/// <c>AIFunction</c>s and <c>IChatClient.AsAIAgent</c> makes the agent. Not <c>MorganaAgent</c>
 /// via <c>MorganaAgentAdapter</c>, which belongs to the routed world of <c>agents.json</c>,
 /// <c>[HandlesIntent]</c>, base tools and per-conversation persistence: Alembic has none of that.
 /// The reuse stops exactly where the resemblance does.
 /// </para>
 /// <para>
-/// Tools rather than a structured reply, and the difference is not stylistic. Alembic now simply
-/// <em>talks</em> to the client, and carries the configuration out of band — so the reply text and
+/// Tools rather than a structured reply and the difference is not stylistic. Alembic now simply
+/// <em>talks</em> to the client and carries the configuration out of band — so the reply text and
 /// the proposal stop being welded into one object, a malformed answer stops costing the client a
-/// turn of their own interview, and a tool can answer back when a section arrives the wrong shape.
+/// turn of their own interview and a tool can answer back when a section arrives the wrong shape.
 /// </para>
 /// </remarks>
 public class InterviewService : IInterviewService
@@ -96,7 +96,7 @@ public class InterviewService : IInterviewService
     private readonly ILLMService llmService;
 
     /// <summary>
-    /// The Draft under construction for this circuit, and the sitting <see cref="Keep"/> writes into
+    /// The Draft under construction for this circuit and the sitting <see cref="Keep"/> writes into
     /// it every turn so the save file is never behind what is on screen.
     /// </summary>
     private readonly IDraftStateService draftStateService;
@@ -144,7 +144,7 @@ public class InterviewService : IInterviewService
     {
         Current = new InterviewState();
 
-        // An interview brought back in a save file resumes where it stopped, and resumes the way a
+        // An interview brought back in a save file resumes where it stopped and resumes the way a
         // step back does: the step is re-entered with a fresh agent and a fresh session reading what
         // is already written as settled fact. The conversation is not restored because it was never
         // the memory — the configuration is.
@@ -162,7 +162,7 @@ public class InterviewService : IInterviewService
 
             await EnterPassAsync(Current, sitting.Pass, cancellationToken, revisiting: true);
 
-            // The reopening turn writes its own example when it has one, and that fresh one wins.
+            // The reopening turn writes its own example when it has one and that fresh one wins.
             // Only when it stayed silent does the one standing at save time come back, so the box
             // a client saved with does not go empty just because the model saw no reason to repeat
             // itself.
@@ -192,7 +192,7 @@ public class InterviewService : IInterviewService
 
         // Both or neither. An agent whose intent is missing is a domain that would not start at all,
         // and opening a section of it would have the client polishing something the classifier can
-        // never reach. Review is where that is reported, and repairing it is not this gesture's work.
+        // never reach. Review is where that is reported and repairing it is not this gesture's work.
         if (agentDraft is null || intentDraft is null)
             return false;
 
@@ -208,7 +208,7 @@ public class InterviewService : IInterviewService
             }
         };
 
-        // A map of one, and it is the honest one: this interview is about this agent and stops when
+        // A map of one and it is the honest one: this interview is about this agent and stops when
         // it is back in the domain. The rest of the domain is still on the screen — the strip under
         // the rail shows every intent that is not on today's map — so what the client sees is their
         // whole domain with the one they opened lit inside it, which is what it is.
@@ -243,11 +243,11 @@ public class InterviewService : IInterviewService
 
         // The seam belongs to the model. Once the state machine has CONFIRMED the pass settled —
         // SetPassCompleted is checked against Missing(), never believed — the next one opens in the
-        // same turn, and the client simply gets the next question. Asking them to press a button
+        // same turn and the client simply gets the next question. Asking them to press a button
         // between two passes was asking them to acknowledge a boundary that is Alembic's alone: they
-        // are having one interview, and the only thing they can say about a pass boundary is yes.
+        // are having one interview and the only thing they can say about a pass boundary is yes.
         //
-        // A loop rather than an if, and it terminates: EnterPassAsync clears ReadyForReview, so it
+        // A loop rather than an if and it terminates: EnterPassAsync clears ReadyForReview, so it
         // takes a fresh confirmation from the new pass to go round again. A pass that genuinely
         // settles the moment it opens is legal — a toolkit the client has already described in full
         // — and would otherwise strand the interview one question short of moving.
@@ -256,7 +256,7 @@ public class InterviewService : IInterviewService
         // into the domain is the one decision of the interview that is theirs.
         //
         // An edit chains exactly the way a fresh compose does — this loop no longer tells the two
-        // apart. Editing re-enters at Target (ReviseAsync) rather than at DomainMapper, and every
+        // apart. Editing re-enters at Target (ReviseAsync) rather than at DomainMapper and every
         // pass runs in Correcting mode throughout (EnterPassAsync derives that from Revision, not
         // from how this loop got here), but the walk from one settled pass to the next is the same
         // walk either way: the point of an edit is that a change to one section forces the model to
@@ -273,7 +273,7 @@ public class InterviewService : IInterviewService
 
         // The closing step is the one pass whose own agreement ends the interview. There is nothing
         // waiting to be let into the domain the way a finished agent is — the agents are all in it
-        // already — so the gesture that would let it in does not exist, and what settles the set of
+        // already — so the gesture that would let it in does not exist and what settles the set of
         // colleagues writes it and puts the client on their finished domain.
         if (interviewState is { ReadyForReview: true, Error: null, Pass: InterviewStep.DomainColleagues })
         {
@@ -294,7 +294,7 @@ public class InterviewService : IInterviewService
 
         // Every domain has the fallback, including one being written from nothing this minute. It is
         // the single intent no interview authors and no client edits: the classifier goes there when
-        // it cannot place a message, and a domain without it has nowhere to put what it does not
+        // it cannot place a message and a domain without it has nowhere to put what it does not
         // cover.
         draft.EnsureFallbackIntent();
 
@@ -306,7 +306,7 @@ public class InterviewService : IInterviewService
         interviewState.Agent.Origin = origin;
         // Only where there is none. A fresh agent has no ID until it is let into the domain and takes
         // the name of the intent that reaches it; one that came out of the client's own configuration
-        // already has one, and it already reaches it — Morgana matches the two case-insensitively, so
+        // already has one and it already reaches it — Morgana matches the two case-insensitively, so
         // an agent written 'Contract' answers an intent named 'contract'. Assigning here regardless
         // rewrote that ID to the intent's own casing, which is an edit nobody asked for in a field
         // nobody opened, arriving in the client's diff and in the migration report as a change they
@@ -323,7 +323,7 @@ public class InterviewService : IInterviewService
             interviewState.Agent.Code.Inferred = true;
             interviewState.Agent.Code.AgentClassName = ProposeClassName(interviewState.Intent.Name, "Agent");
 
-            // An agent with no native tools gets no tool class, and that is a legal shape rather than
+            // An agent with no native tools gets no tool class and that is a legal shape rather than
             // a gap: an MCP-only agent's tools arrive at runtime and never appear in agents.json.
             interviewState.Agent.Code.ToolClassName = interviewState.Agent.Tools.Count > 0
                 ? ProposeClassName(interviewState.Intent.Name, "Tool")
@@ -333,14 +333,14 @@ public class InterviewService : IInterviewService
         {
             // The one C# fact an edit can genuinely create: an agent that had no native tools and now
             // has some has nowhere for them to be emitted. Proposed by the same convention as a fresh
-            // one, and nothing else about the record is touched.
+            // one and nothing else about the record is touched.
             interviewState.Agent.Code.ToolClassName = ProposeClassName(interviewState.Intent.Name, "Tool");
         }
 
         Restore(draft.Intents, revision?.IntentAt ?? -1, interviewState.Intent);
         Restore(draft.Agents, revision?.AgentAt ?? -1, interviewState.Agent);
 
-        // The map is spent the moment this was the last of it, and an interview nobody is having is
+        // The map is spent the moment this was the last of it and an interview nobody is having is
         // not something to resume into.
         draft.Sitting = interviewState.At + 1 < interviewState.Map.Count
             ? new InterviewSitting
@@ -357,7 +357,7 @@ public class InterviewService : IInterviewService
         draftStateService.Set(draft);
 
         // Down the map, not out of the interview. The map is the promise the client made when they
-        // said what their business gets asked, and an interview that stopped at the first agent
+        // said what their business gets asked and an interview that stopped at the first agent
         // would leave them to remember the rest of their own list.
         if (interviewState.At + 1 < interviewState.Map.Count)
         {
@@ -368,12 +368,12 @@ public class InterviewService : IInterviewService
             return true;
         }
 
-        // The map is spent, and one question is still owed: which of these agents has to be able to
-        // ask another. It could not be asked earlier — an edge is a relation, and half its ends were
+        // The map is spent and one question is still owed: which of these agents has to be able to
+        // ask another. It could not be asked earlier — an edge is a relation and half its ends were
         // still unwritten — and it is asked over the whole domain, the agents of earlier sittings and
         // uploads included, not only over today's map.
         //
-        // Not on an edit. A revision is one agent and its map is one entry, and where it ends is the
+        // Not on an edit. A revision is one agent and its map is one entry and where it ends is the
         // walk the client opened it from; carrying them into a domain-wide step from there would
         // answer a gesture about one agent with a question about all of them.
         if (revision is null && draft.Agents.Count > 1)
@@ -398,7 +398,7 @@ public class InterviewService : IInterviewService
             return false;
 
         // An agent waiting to be let in steps back into the step it is waiting on rather than the one
-        // before it: what the client is looking at is what was just written, and what they want is to
+        // before it: what the client is looking at is what was just written and what they want is to
         // change a line of it. That is always the last of the five, Formatting, whichever job this
         // is — composing and correcting both chain through every pass now, so ReadyForReview cannot
         // be observably true anywhere else: AnswerAsync's loop drains it the instant an earlier pass
@@ -418,16 +418,16 @@ public class InterviewService : IInterviewService
             // Behind the closing step is the last entry of the map, whose agent is in the domain
             // already: it comes back out and into the client's hands exactly as stepping between two
             // entries does. The edges declared so far survive — they are this step's own working set,
-            // not that agent's, and re-entering reads them back.
+            // not that agent's and re-entering reads them back.
             case InterviewStep.DomainColleagues when interviewState.Map.Count > 0:
                 interviewState.At = interviewState.Map.Count - 1;
                 Uncommit(interviewState);
                 await EnterPassAsync(interviewState, InterviewStep.AgentFormatting, cancellationToken, revisiting: true);
                 return true;
 
-            // An edit is one agent and no map: the client opened it from the walk at its Target, and
+            // An edit is one agent and no map: the client opened it from the walk at its Target and
             // behind that first pass is that screen rather than a step of anything. Where they came
-            // in is where they leave, and the walk's own way back is what takes them.
+            // in is where they leave and the walk's own way back is what takes them.
             case InterviewStep.AgentTarget when interviewState.Revision is not null:
                 return false;
 
@@ -458,7 +458,7 @@ public class InterviewService : IInterviewService
     /// What Alembic actually asked the client this turn: the last question, not everything it wrote.
     /// </summary>
     /// <remarks>
-    /// A run can hold several assistant messages — the model writes its question, calls a tool, and
+    /// A run can hold several assistant messages — the model writes its question, calls a tool and
     /// writes again — and <c>AgentResponse.Text</c> is all of them joined, so a question repeated
     /// after a tool call reached the screen twice over. The last message is not the answer either:
     /// the tail of a run is often the model narrating its own work ("I'll wait for their answer
@@ -468,7 +468,7 @@ public class InterviewService : IInterviewService
     /// So what is shown is the last message that actually asks something. The test is the question
     /// mark, which is the same law the interviewer is held to in prose — one sentence, one question
     /// mark — and this is the screen that law exists for. The fallback is still the last thing said:
-    /// a turn that asks nothing at all is a defect, and showing it is how anyone finds out.
+    /// a turn that asks nothing at all is a defect and showing it is how anyone finds out.
     /// </remarks>
     private static string LastAsked(AgentResponse response)
     {
@@ -538,9 +538,9 @@ public class InterviewService : IInterviewService
     /// </summary>
     /// <remarks>
     /// Together, because either alone is a defect: the attribute without the prose hands an agent a
-    /// function its own Instructions forbid it to use, and the prose without the attribute licenses
+    /// function its own Instructions forbid it to use and the prose without the attribute licenses
     /// a question it has no function to ask. This is the one write of the interview that lands on
-    /// agents already in the configuration, which is why it happens once, at the client's word, and
+    /// agents already in the configuration, which is why it happens once, at the client's word and
     /// never as each edge is proposed.
     /// </remarks>
     private void CommitColleagues(InterviewState interviewState)
@@ -554,7 +554,7 @@ public class InterviewService : IInterviewService
             AgentDraft? asked = Named(draft, edge.Asked);
 
             // Both ends have to be there. An agent the client removed from the walk between the
-            // declaration and the word that commits it leaves an edge naming nothing, and a
+            // declaration and the word that commits it leaves an edge naming nothing and a
             // [ConsultsAgent] onto an intent no agent handles is startup-fatal. A colleague at a
             // instance has no second end here at all, which is why it is declared where a developer
             // finalizes the domain rather than in a conversation with its author.
@@ -570,18 +570,18 @@ public class InterviewService : IInterviewService
             Reconcile(asked, edge.AskedInstructions);
         }
 
-        // The interview is over, and an interview nobody is having is not something to resume into.
+        // The interview is over and an interview nobody is having is not something to resume into.
         draft.Sitting = null;
         draftStateService.Set(draft);
     }
 
     /// <summary>
-    /// Replaces an agent's Instructions with the ones written for it here, and says so in its
+    /// Replaces an agent's Instructions with the ones written for it here and says so in its
     /// provenance.
     /// </summary>
     /// <remarks>
     /// An imported agent whose prose this step rewrote becomes Revised: the migration report's whole
-    /// job is naming which of the agents the client brought were touched, and an edge that changed a
+    /// job is naming which of the agents the client brought were touched and an edge that changed a
     /// sentence of one of them touched it.
     /// </remarks>
     private static void Reconcile(AgentDraft agent, string? instructions)
@@ -610,15 +610,15 @@ public class InterviewService : IInterviewService
     }
 
     /// <summary>
-    /// Moves the interview into a pass: new agent, new session, and the pass's opening question.
+    /// Moves the interview into a pass: new agent, new session and the pass's opening question.
     /// </summary>
     /// <remarks>
-    /// The session does not carry over, and that is the design rather than a limitation. A toolkit
+    /// The session does not carry over and that is the design rather than a limitation. A toolkit
     /// pass holding the entire functional interview in its context spends it re-litigating decisions
-    /// already taken, and every turn of it thereafter. What must survive a pass boundary is the
+    /// already taken and every turn of it thereafter. What must survive a pass boundary is the
     /// configuration, which is what <c>GetAgentSoFar</c> and <c>GetToolkit</c> hand back — read as
     /// settled fact rather than replayed as a conversation. The client's transcript is untouched:
-    /// they are having one interview, and only the model starts again.
+    /// they are having one interview and only the model starts again.
     /// </remarks>
     private async Task EnterPassAsync(
         InterviewState interviewState,
@@ -674,7 +674,7 @@ public class InterviewService : IInterviewService
     /// What the agent is sent to open a pass.
     /// </summary>
     /// <remarks>
-    /// Every pass past the map runs once per entry, and where it is standing is a fact the state
+    /// Every pass past the map runs once per entry and where it is standing is a fact the state
     /// machine holds: which entry of how many, which intent, what is already written on that agent
     /// and what this step is about to give it. All of it goes in the opening message, because a pass
     /// that has to work it out either spends a tool call on it or guesses — and the client is owed a
@@ -688,18 +688,18 @@ public class InterviewService : IInterviewService
 
         // The closing step stands on the domain rather than on an entry of the map, so the sentence
         // that places every other step — entry n of m, this intent, what is written on it — has
-        // nothing to say here. What it is standing on is the whole list, and it reads that for
-        // itself: the agents are in the configuration, whole, and GetDomainAgents hands them back.
+        // nothing to say here. What it is standing on is the whole list and it reads that for
+        // itself: the agents are in the configuration, whole and GetDomainAgents hands them back.
         if (interviewPass == InterviewStep.DomainColleagues)
             return "Every entry of the map has its agent and the domain is complete. " + BootstrapMessages[interviewPass];
 
-        // Which of the two jobs this is, and it is stated as a FACT rather than as an instruction:
-        // what to do about each is one rule in the shared layer, read by every pass, and repeating it
+        // Which of the two jobs this is and it is stated as a FACT rather than as an instruction:
+        // what to do about each is one rule in the shared layer, read by every pass and repeating it
         // here would be the same rule in two places drifting apart at the first edit to either.
         //
         // An agent is corrected whether this pass was reached by stepping back into it, by resuming a
         // saved sitting, by opening an edit off the walk, or by the chain moving on from the pass
-        // before it — an edit walks every one of the five exactly the way a compose does, and all of
+        // before it — an edit walks every one of the five exactly the way a compose does and all of
         // them arrive here identically, because to the pass in front of the client it is one
         // situation either way: the agent is written and this is not a first draft.
         string standing = correcting
@@ -723,13 +723,13 @@ public class InterviewService : IInterviewService
     /// blank. The doctrine already says where a pass is standing is told and never inferred; this is
     /// the same rule applied to what it is standing on.
     /// <para>
-    /// Whole rather than only the section being changed, and in the opening message rather than
+    /// Whole rather than only the section being changed and in the opening message rather than
     /// through <c>GetAgentSoFar</c>. Both are deliberate. Correcting a Target over an agent whose
     /// Instructions speak about a toolkit it no longer covers is the ordinary way a revision goes
     /// wrong, so the step needs all of it in view; and the turn where it matters most is the first
     /// one, the sentence the client actually reads, which is precisely the turn a model may spend on
     /// asking instead of on fetching. A live run did exactly that twice — the Target step of an agent
-    /// that had one opened with the mapping question, and the Personality step offered a cloud of
+    /// that had one opened with the mapping question and the Personality step offered a cloud of
     /// words to an agent that already had a voice.
     /// </para>
     /// <para>
@@ -757,7 +757,7 @@ public class InterviewService : IInterviewService
             sections.Add($"Formatting: {formatting}");
 
         // A step reopened over an agent nobody has written anything on yet — a sitting saved mid-first
-        // answer. There is nothing to read back, and the ordinary sentence about what stands is the
+        // answer. There is nothing to read back and the ordinary sentence about what stands is the
         // true one.
         if (sections.Count == 0)
             return Stands(agent);
@@ -777,17 +777,17 @@ public class InterviewService : IInterviewService
     /// one of the four ways a step is entered — an interview running straight down is the one where
     /// the Toolkit pass really does open with the Target and the Personality behind it and nothing
     /// else. Stepping back, resuming a saved sitting and correcting an agent from the walk all arrive
-    /// at the same pass over a differently-filled agent, and the pass cannot tell which.
+    /// at the same pass over a differently-filled agent and the pass cannot tell which.
     /// <para>
     /// The failure it exists against is one a live run produced: the Target step of an agent that
     /// already had one opened with "nothing of its agent is written yet", the model believed the
-    /// concrete claim over the abstract instruction not to open from nothing, and the client was
+    /// concrete claim over the abstract instruction not to open from nothing and the client was
     /// asked what kind of request reaches this agent — the mapping question, three steps behind
     /// where they were standing.
     /// </para>
     /// <para>
     /// A missing Toolkit is not reported as unwritten: an agent with no native tools is the legal
-    /// MCP-only shape, and there is no state here that tells it apart from one nobody has been asked
+    /// MCP-only shape and there is no state here that tells it apart from one nobody has been asked
     /// about. The pass that owns it says what it settles regardless.
     /// </para>
     /// </remarks>
@@ -816,17 +816,17 @@ public class InterviewService : IInterviewService
     }
 
     /// <summary>
-    /// Assembles the agent for one pass: its prompt, and only the tools that pass is allowed.
+    /// Assembles the agent for one pass: its prompt and only the tools that pass is allowed.
     /// </summary>
     /// <remarks>
     /// The toolset comes from the pass's own <c>Tools</c> declaration in <c>alembic.json</c>, so
     /// what a pass may write is settled by which tools exist rather than by a sentence asking it to
-    /// abstain. The functional pass has no tool for an agent's instructions or formatting, and that
+    /// abstain. The functional pass has no tool for an agent's instructions or formatting and that
     /// is the whole of the constraint.
     /// <para>
     /// The two jobs share every one of those tools and differ only in prose, which is why the mode
     /// goes to <c>ComposeAsync</c> and not into this toolset: correcting a Toolkit and writing one
-    /// both come down to DeclareTool and DropTool, and a pass that could not drop a tool while
+    /// both come down to DeclareTool and DropTool and a pass that could not drop a tool while
     /// correcting would be a pass that cannot do the one thing it was reopened for.
     /// </para>
     /// </remarks>
@@ -901,7 +901,7 @@ public class InterviewService : IInterviewService
     }
 
     /// <summary>
-    /// One round trip: the client's words in, Alembic's words out, and whatever its tools wrote
+    /// One round trip: the client's words in, Alembic's words out and whatever its tools wrote
     /// along the way already in the interviewState.
     /// </summary>
     private async Task ExchangeAsync(InterviewState interviewState, string message, CancellationToken cancellationToken)
@@ -970,24 +970,24 @@ public class InterviewService : IInterviewService
     /// What an element's provenance becomes when the client lets it into the domain.
     /// </summary>
     /// <remarks>
-    /// Authored is a claim that this exists in no uploaded file, and it stays true of an agent
+    /// Authored is a claim that this exists in no uploaded file and it stays true of an agent
     /// written today and edited an hour later. What an imported one becomes is Revised — the
     /// migration report's whole job is saying which of the ten agents the client brought were
-    /// touched, and it can only say it if the edit says so here.
+    /// touched and it can only say it if the edit says so here.
     /// </remarks>
     private static Provenance Committed(AgentRevision? revision, InterviewState interviewState)
     {
         if (revision is null)
             return Provenance.Authored;
 
-        // Opened and left as it was. The walk lets a client read a section on their way past, and
+        // Opened and left as it was. The walk lets a client read a section on their way past and
         // reading it is not touching it: what goes back is what came out, under the provenance it
         // came out with.
         if (revision.Was == Fingerprint(interviewState))
             return revision.Origin;
 
         // An agent written today and edited an hour later exists in no uploaded file either way, so
-        // Authored stays true of it. Revised is what an imported one becomes, and saying so is the
+        // Authored stays true of it. Revised is what an imported one becomes and saying so is the
         // migration report's whole job.
         return revision.Origin == Provenance.Authored ? Provenance.Authored : Provenance.Revised;
     }

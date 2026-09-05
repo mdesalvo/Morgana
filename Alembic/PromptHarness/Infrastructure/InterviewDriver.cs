@@ -29,7 +29,7 @@ public sealed record DrivenInterview(InterviewState FinalState, IReadOnlyList<Dr
 /// This is deliberately not a mock of the interview: every exchange is a live call through
 /// <see cref="IInterviewService.AnswerAsync"/>, on Alembic's own Performance tier. What is scripted
 /// is only the client's half of the conversation — Alembic's own conducting is exactly what is
-/// under test, and stubbing it would test nothing.
+/// under test and stubbing it would test nothing.
 /// </remarks>
 public static class InterviewDriver
 {
@@ -63,7 +63,7 @@ public static class InterviewDriver
                 break;
 
             // The closing step ends the interview from inside a turn rather than on an AcceptAsync:
-            // the colleagues are settled by the client's own agreement, and there is no agent left
+            // the colleagues are settled by the client's own agreement and there is no agent left
             // to let into the domain. Answering on past that would start a second interview.
             if (interview.Current is null)
                 break;

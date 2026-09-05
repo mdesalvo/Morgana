@@ -5,14 +5,14 @@
 #@   patient. The failure is the one users notice fastest: being asked for it again three turns
 #@   later, as though nothing had been said.
 #@   Turn one is the ordinary request that establishes it. Turn two asks for something else the same
-#@   value is needed for, and names it nowhere. Assert the second tool ran, and assert through the
+#@   value is needed for and names it nowhere. Assert the second tool ran and assert through the
 #@   judge that the reply does not ask for the value again.
 #@   Say nothing about how the value is kept. That machinery is Morgana's and she tests it; what is
 #@   yours is that this domain's own value is one the user should only ever give once.
 
 id: "{{intent}}-established-context-not-reasked"
 description: >-
-  {{one sentence: the value given once, and the later request that must not ask for it again}}
+  {{one sentence: the value given once and the later request that must not ask for it again}}
 
 # Asking twice is not a lapse the agent recovers from: the user has already decided it is not listening.
 runs: 3

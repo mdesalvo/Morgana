@@ -49,7 +49,7 @@ public sealed class ConsoleUiService
     /// <see cref="BuildBody"/> derives the viewport on the fly by wrap-rendering the whole
     /// list into a flat row stream and taking the last <c>bodyRows</c> rows — head rows are
     /// dropped naturally as the stream grows or the terminal shrinks, the tail (warm rows)
-    /// is always preserved, and the sacred user prompt is rendered separately under the
+    /// is always preserved and the sacred user prompt is rendered separately under the
     /// stream and is never sacrificed.
     /// </summary>
     private readonly List<DisplayedMessage> history = [];
@@ -204,7 +204,7 @@ public sealed class ConsoleUiService
     /// <summary>Serializes mutations of <see cref="history"/>, <see cref="currentInput"/>, <see cref="currentSpeaker"/> and the paired <see cref="LiveDisplayContext.UpdateTarget"/>/<see cref="LiveDisplayContext.Refresh"/> calls. The resize callback runs on its own thread (SIGWINCH handler / polling task) and would otherwise race with <see cref="ReadKeysLoop"/> and <see cref="DrainInboundLoop"/> over the shared list. Uses <see cref="System.Threading.Lock"/> (.NET 9+) instead of <c>object</c> so the compiler emits the optimised primitive and rejects misuse (e.g. passing the lock as an <c>object</c>).</summary>
     private readonly Lock renderLock = new();
 
-    /// <summary>Reads the <c>Grimoire:AgentExitMessage</c> template, falling back to <see cref="DefaultAgentExitMessage"/>, the typewriter cadence settings, and captures the injected resize watcher and the three DI-registered renderers.</summary>
+    /// <summary>Reads the <c>Grimoire:AgentExitMessage</c> template, falling back to <see cref="DefaultAgentExitMessage"/>, the typewriter cadence settings and captures the injected resize watcher and the three DI-registered renderers.</summary>
     public ConsoleUiService(
         IConfiguration configuration,
         IViewportResizeWatcher viewportResizeWatcher,
@@ -456,7 +456,7 @@ public sealed class ConsoleUiService
 
     /// <summary>
     /// Commits a final <see cref="ChannelMessage"/> to history, updates the dust gauge / header /
-    /// dead-state latch, and refreshes the live view. Invoked either inline by
+    /// dead-state latch and refreshes the live view. Invoked either inline by
     /// <see cref="HandleInboundMessage"/> (no streaming) or by <see cref="TypewriterTick"/> once
     /// the buffer drains.
     /// </summary>
@@ -510,7 +510,7 @@ public sealed class ConsoleUiService
             // it BEFORE wasting a keystroke. Morgana's text says "start a new
             // one to keep going" — true for Cauldron, NOT for Grimoire, which has no
             // in-process restart. So latch a one-way dead state: the red banner
-            // line above stays as Morgana's canonical word, and BuildInputRows
+            // line above stays as Morgana's canonical word and BuildInputRows
             // overrides the prompt with a Grimoire-honest "quit and relaunch" hint.
             if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
             {
@@ -890,7 +890,7 @@ public sealed class ConsoleUiService
         // scrolled up (content below). Each glyph is lit in the user colour when that direction is
         // available, dim otherwise; the whole segment is omitted unless at least one is actionable
         // so a live, fully-visible conversation keeps a clean header. BuildBody set these flags
-        // for this same frame (see BuildLayout's ordering), and only when scrolling is enabled.
+        // for this same frame (see BuildLayout's ordering) and only when scrolling is enabled.
         string scrollSegment = scrollHasAbove || scrollHasBelow
             ? $"   {(scrollHasAbove ? $"[{UserColor}]▲[/]" : "[grey50]▲[/]")}{(scrollHasBelow ? $"[{UserColor}]▼[/]" : "[grey50]▼[/]")}"
             : string.Empty;
@@ -899,7 +899,7 @@ public sealed class ConsoleUiService
         // while awaiting a reply, NOT on the dead latch, NOT in quick-reply mode (no buffer there),
         // and only once at least one char is in the buffer. It's the prompt's own "dust gauge":
         // white → orange at ≥70% → red at ≥100% (reusing the dust palette), so a line creeping
-        // toward the cap telegraphs the same unease as a depleting budget, and the swallowed
+        // toward the cap telegraphs the same unease as a depleting budget and the swallowed
         // keystrokes at the top read as "you hit the cap" rather than a glitch.
         string countSegment = string.Empty;
         if (!awaitingResponse && !conversationDead && !quickReplyActive && currentInput.Length >= 1)
@@ -1015,7 +1015,7 @@ public sealed class ConsoleUiService
             return [];
 
         // No speaker prefix on the streaming pane (matches prior behaviour); no caching —
-        // the buffer changes every tick, and Markdig is cheap on these small payloads.
+        // the buffer changes every tick and Markdig is cheap on these small payloads.
         return [.. markdownRenderer.RenderToRows(streamingDisplayed, MorganaAgentColor, null, termWidth)];
     }
 
@@ -1197,7 +1197,7 @@ public sealed class ConsoleUiService
 
     /// <summary>
     /// A single history entry: speaker name, raw (markdown) text, the base Spectre colour token
-    /// for the speaker, and an optional <see cref="Card"/> rendered beneath the text. Carries a
+    /// for the speaker and an optional <see cref="Card"/> rendered beneath the text. Carries a
     /// per-width memo of the rendered rows so the typewriter's per-tick full-body redraw doesn't
     /// re-parse markdown/cards for stable history on every frame — see <see cref="RenderMessageRows"/>.
     /// A class (not a record) because the cache fields are mutated in place after construction.

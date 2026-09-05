@@ -3,16 +3,16 @@
 @*
     One question, alone, because that is the whole of what the client is being asked to do right now.
 
-    The question and the box it is answered in, and nothing else. No standing reassurance under the
+    The question and the box it is answered in and nothing else. No standing reassurance under the
     box either — a line promising that half an answer will do is read once and is furniture from the
-    second turn on, and Alembic says the same thing better by actually inferring the rest and showing
+    second turn on and Alembic says the same thing better by actually inferring the rest and showing
     what it inferred.
 *@
 
 <div class="scene">
     @if (Busy)
     {
-        @* Three dots that breathe: a spinner says "loading", and this is somebody composing. *@
+        @* Three dots that breathe: a spinner says "loading" and this is somebody composing. *@
         <div class="thinking"><span>&bull;</span><span>&bull;</span><span>&bull;</span></div>
     }
     else
@@ -20,7 +20,7 @@
         <p class="asked">@Asked</p>
 
         @*
-            One button, and it is a short circuit: it carries the answer that adds nothing — that is
+            One button and it is a short circuit: it carries the answer that adds nothing — that is
             everything, nothing missing, nothing the agent should avoid — so a client in that
             position settles the turn with a press instead of a typed sentence and a round trip
             nobody learns anything from. An offer and never a gate: the box below stays open,
@@ -35,9 +35,9 @@
 
         @*
             The cloud, on the one question the client cannot dictate: nobody has a ready sentence
-            about how their own staff should sound, and recognising a word is what they can do
+            about how their own staff should sound and recognising a word is what they can do
             instead. Several at a time, or none — which is why these are not buttons: a button is a
-            whole answer, and one of these is not.
+            whole answer and one of these is not.
         *@
         @if (Traits is { Count: > 0 })
         {
@@ -55,7 +55,7 @@
                 The worked example is real text in the box, not a ghost placeholder: it is a whole
                 answer somebody could send as it stands, so it starts already there rather than typed
                 first. Italic marks it as still exactly what was offered — the moment one character
-                differs it reads as their own words and loses the tilt, and it is not a one-way door:
+                differs it reads as their own words and loses the tilt and it is not a one-way door:
                 typing the same character back is enough to match the example again and the tilt
                 returns, because "unedited" is a fact about the text, not a flag that was tripped once.
             *@
@@ -65,7 +65,7 @@
 
             @*
                 Everything the client can do, on one row. The way back is their decision as much as
-                the answer is, and keeping the work is the only defence they have against losing the
+                the answer is and keeping the work is the only defence they have against losing the
                 afternoon — so all three are here, at one size, where the hands already are. The
                 gap holds the way back on the left: going back is about what is behind, the other
                 two are about what is in front.
@@ -111,7 +111,7 @@
     /// It guards one case and not the whole cloud: a client who types "less formal" and sends, having
     /// left the words alone, would otherwise have 'formal' travel with them as a word they want,
     /// because it was lit before they arrived. Where they typed nothing the lit set is exactly their
-    /// answer — keep this voice — and where they took or gave back a word the whole set is, and it is
+    /// answer — keep this voice — and where they took or gave back a word the whole set is and it is
     /// complete: what stayed lit is what they kept.
     /// </remarks>
     private bool touched;
@@ -171,7 +171,7 @@
     public bool Busy { get; set; }
 
     /// <summary>
-    /// How many exchanges have happened. The caret follows it, and nothing else.
+    /// How many exchanges have happened. The caret follows it and nothing else.
     /// </summary>
     [Parameter]
     public int Turn { get; set; }
@@ -192,40 +192,40 @@
     /// Whether there is nothing to send.
     /// </summary>
     // Read off what would actually travel, rather than off the box and the cloud separately: a cloud
-    // lit only because the voice already carries those words holds nothing the client has said, and
+    // lit only because the voice already carries those words holds nothing the client has said and
     // an enabled button that sends nothing is worse than a disabled one.
     private bool Empty => Said.Length == 0;
 
     /// <summary>
-    /// The answer as it would reach Alembic: what they typed, and what they did with the cloud.
+    /// The answer as it would reach Alembic: what they typed and what they did with the cloud.
     /// </summary>
     private string Said => string.Join(" ", new[] { answer.Trim(), Voice(answer.Trim()) }
         .Where(part => part.Length > 0));
 
     /// <summary>
-    /// What the cloud contributes to the answer, and nothing when it is not the client speaking.
+    /// What the cloud contributes to the answer and nothing when it is not the client speaking.
     /// </summary>
     /// <remarks>
     /// The words go as a sentence rather than as a list, because what reaches the model is one
     /// person's answer either way and a bare enumeration reads as a form return. Anything typed
-    /// stays first: it is their own account, and the words are what they recognised in it.
+    /// stays first: it is their own account and the words are what they recognised in it.
     /// </remarks>
     private string Voice(string typed)
     {
         // The one case lit words must not travel: they wrote a sentence and left the cloud alone, so
-        // those words are not their claim — they are lit because the voice already carries them, and
+        // those words are not their claim — they are lit because the voice already carries them and
         // 'formal' going out beside "less formal" contradicts the sentence it is attached to.
         if (!touched && typed.Length > 0)
             return string.Empty;
 
         // Everywhere else the set IS the answer, the untouched one included: a cloud lit off a voice
         // that already exists, sent as it stands, says keep it — which is a real answer to a question
-        // that has just read that voice back, and one the client would otherwise have no way to give.
+        // that has just read that voice back and one the client would otherwise have no way to give.
         if (picked.Count > 0)
             return $"The voice I would want here: {string.Join(", ", picked)}.";
 
         // Giving every word back is an answer, once they have actually given them back. An empty
-        // cloud nobody has touched is an agent with no voice yet, and there is nothing to send.
+        // cloud nobody has touched is an agent with no voice yet and there is nothing to send.
         return touched ? "None of those words is the voice I want." : string.Empty;
     }
 
@@ -255,7 +255,7 @@
         primedOn = Turn;
         answer = Prompting;
 
-        // The cloud is primed on the same key as the box, and for the same reason: a render that
+        // The cloud is primed on the same key as the box and for the same reason: a render that
         // changed nothing about the question must not put words back under a client who has just
         // taken them off. What it opens showing is the voice the agent already has — nothing at all
         // on one being written for the first time, which has no voice yet to read back.

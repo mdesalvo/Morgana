@@ -14,7 +14,7 @@
     Dependency-free on purpose. A widget lands in a page whose stack it cannot know, so
     every library it brings is a version it might fight with. The three things a chat
     launcher actually needs are browser primitives, not packages: Shadow DOM for style
-    isolation, an <iframe> for execution isolation, and CSS transitions for motion.
+    isolation, an <iframe> for execution isolation and CSS transitions for motion.
 */
 
 (function () {
@@ -42,7 +42,7 @@
     })();
 
     if (!ownScript || !ownScript.src) {
-        // Without a resolvable src there is no way to know which Cauldron to talk to, and a
+        // Without a resolvable src there is no way to know which Cauldron to talk to and a
         // launcher pointing nowhere is worse than no launcher.
         console.error('[Morgana] widget script has no resolvable src; not mounting.');
         return;
@@ -57,7 +57,7 @@
     // ========================================================================
     // A closed shadow root, so the widget's CSS and the host page's CSS cannot reach each
     // other in either direction: no reset/utility framework on the page can restyle the
-    // launcher, and nothing here leaks out onto the host's own elements. Closed rather than
+    // launcher and nothing here leaks out onto the host's own elements. Closed rather than
     // open so host-page scripts cannot walk into the widget's internals either.
 
     var host = document.createElement('div');
@@ -84,7 +84,7 @@
     launcher.type = 'button';
     launcher.setAttribute('aria-expanded', 'false');
     launcher.setAttribute('aria-label', 'Consult Morgana');
-    // The dismiss glyph is a chevron rather than a cross, and the wording follows it: closing
+    // The dismiss glyph is a chevron rather than a cross and the wording follows it: closing
     // hides the panel while the conversation keeps running behind it, so a cross — which
     // everywhere else means "discard this" — would promise a teardown that does not happen.
     launcher.innerHTML =
@@ -140,7 +140,7 @@
         frame.src = cauldronUrl;
 
         // allow-same-origin reads as a hole but is not one here: it grants the frame its own
-        // origin (Cauldron's), not the host page's, and Cauldron needs it for the localStorage
+        // origin (Cauldron's), not the host page's and Cauldron needs it for the localStorage
         // its conversation persistence is built on. Everything the frame does stays walled off
         // from the embedding document either way.
         frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox');

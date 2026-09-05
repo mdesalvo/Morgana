@@ -1,4 +1,3 @@
-using A2A;
 using A2A.AspNetCore;
 using Akka.Actor;
 using Microsoft.Agents.AI.Hosting;
@@ -44,6 +43,14 @@ public static class A2APublicationExtensions
         // gives up before the desk that asked, which gives up before the turn carrying them both.
         TimeSpan a2aRequestTimeout = Records.PeerConsultationWaits.From(builder.Configuration).Callee;
 
+        // The session store has to know which system is asking and the hosting layer hands it only a
+        // context id, so the request the gate proved is reached through the one thing that spans both.
+        builder.Services.AddHttpContextAccessor();
+
+        // How many conversations each admitted system may open, counted in a ledger of its own
+        // because an issuer spans every conversation it opens.
+        builder.Services.AddSingleton<IPeerAdmissionService, SQLitePeerAdmissionService>();
+
         foreach (string publishedIntent in publishedIntents)
         {
             builder.Services
@@ -59,13 +66,21 @@ public static class A2APublicationExtensions
                         serviceProvider.GetRequiredService<ActorSystem>,
                         a2aRequestTimeout,
                         serviceProvider.GetRequiredService<IDustLimitService>(),
+                        serviceProvider.GetRequiredService<IPeerAdmissionService>(),
+                        serviceProvider.GetRequiredService<IConversationPersistenceService>(),
                         serviceProvider.GetRequiredService<ILogger>()))
 
                 // The session store is where a request's A2A context id becomes a Morgana conversation.
                 // Not isolation-key scoped: the context id IS the partition here and Morgana's own
                 // per-conversation database already isolates everything the conversation owns.
                 .WithSessionStore(
-                    (serviceProvider, agentName) => new MorganaHostedAgentSessionStore(serviceProvider.GetRequiredService<ILogger>()),
+                    (serviceProvider, agentName) => new MorganaHostedAgentSessionStore(
+                        // Who is asking, as the endpoint filter proved it on the request being served.
+                        // Read at the moment a session is asked for rather than when the store is built,
+                        // which is once for every request that will ever arrive.
+                        () => serviceProvider.GetRequiredService<IHttpContextAccessor>()
+                                             .HttpContext?.Items[A2AAuthenticationFilter.CallerIssuerItemKey] as string,
+                        serviceProvider.GetRequiredService<ILogger>()),
                     ServiceLifetime.Singleton,
                     false)
 
@@ -106,9 +121,8 @@ public static class A2APublicationExtensions
             string agentPath = $"{Constants.AgentToAgent.AgentPathPrefix}/{publishedIntent}";
 
             // No card means no intent by that name in the domain configuration: nothing to publish,
-            // and unreachable rather than broken. Startup already refused the incoherences that break.
-            AgentCard? publishedCard = await agentDirectory.GetAgentCardAsync(publishedIntent);
-            if (publishedCard is null)
+            // unreachable rather than broken. Startup already refused the incoherences that break.
+            if (await agentDirectory.GetAgentCardAsync(publishedIntent) is null)
                 continue;
 
             // These endpoints are the hosting layer's, not a controller's, so they carry no gate of
@@ -122,15 +136,13 @@ public static class A2APublicationExtensions
                    ConfigurationAgentDirectoryService.ResolveAdmittedIssuers(app.Configuration, publishedIntent),
                    app.Services.GetRequiredService<ILogger>()));
 
-            // The card itself stays open: discovery is what tells a caller how to authenticate and a
-            // card behind authentication cannot be found by anyone not already knowing how to reach it.
-            app.MapWellKnownAgentCard(publishedCard, agentPath);
+            // Asked for on the request rather than handed over here. The card projected a moment ago
+            // cannot yet name where this instance answers — Kestrel has bound nothing — and a document
+            // completed later by mutating it would be read, by whoever asked in between, in whatever
+            // state that pass had reached. Resolved per request there is no such moment.
+            app.MapGet(
+                $"{agentPath}/{Constants.AgentToAgent.WellKnownAgentCardPath}",
+                async () => Results.Ok(await agentDirectory.GetAgentCardAsync(publishedIntent)));
         }
-
-        // The cards above were projected while the endpoints were still being mapped, before Kestrel had
-        // bound anything, so none of them names an address yet. The moment it has, the directory fills
-        // them in — the well-known endpoint serialises its card on every request, so a card read after
-        // this point carries the interface and nothing ever had to be told the application's own URL.
-        app.Lifetime.ApplicationStarted.Register(() => agentDirectory.PublishInterfacesAsync().GetAwaiter().GetResult());
     }
 }

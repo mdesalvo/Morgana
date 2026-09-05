@@ -1,9 +1,9 @@
 /* ==========================================================================
-   The landing: the alembic at full size, and the two ways in.
+   The landing: the alembic at full size and the two ways in.
    ========================================================================== */
 
-/* The banner, and the room it stands in. Rectangular rather than the vessel it replaces — the
-   scene it shows (Morgana at her alembic, a whole room) is composed for a wide frame, and forcing
+/* The banner and the room it stands in. Rectangular rather than the vessel it replaces — the
+   scene it shows (Morgana at her alembic, a whole room) is composed for a wide frame and forcing
    it into a circle would crop the composition rather than frame it. The glow stays a sibling
    rather than a shadow on the image, because a box-shadow would trace the image's own corners.
    No max-width of its own: it fills the same column the two doors below it fill, so the banner
@@ -21,7 +21,7 @@
     aspect-ratio: 1376 / 768;
 }
 
-/* On its own layer. A blurred radial gradient is repainted every time anything over it changes, and
+/* On its own layer. A blurred radial gradient is repainted every time anything over it changes and
    the image over it changes exactly once — at the handoff from the prerendered page to the live
    circuit — which is where the flicker was coming from. Composited once, it stops being redrawn. */
 .banner::before {
@@ -59,7 +59,7 @@
     font-size: 1.05rem;
 }
 
-/* The two ways in. Doors, not leaflets: a drawn sigil, the name of the thing, and the word for
+/* The two ways in. Doors, not leaflets: a drawn sigil, the name of the thing and the word for
    going through — anything more and the client is reading instead of choosing. Side by side and
    the same size, because they are the same kind of act; the first is lit because it is the one
    most people want. What each actually involves is Morgana's to show once you are inside. */
@@ -107,7 +107,7 @@
 
 /* Drawn rather than typed. The alchemical characters this used to use (🜍, 🜚) have no font on
    most Linux desktops and land as tofu or as nothing — an icon that depends on the reader
-   having a glyph is an icon that is sometimes absent, and the space is spent on it either way. */
+   having a glyph is an icon that is sometimes absent and the space is spent on it either way. */
 .gateway .sigil {
     width: 3rem;
     height: 3rem;
@@ -161,11 +161,11 @@
 
 /* Four doorways instead of two, for the page you land on after bringing a file: same shape as the
    landing's, because they are the same kind of thing — a way on, not a description. They are the
-   four intentions somebody arrives with, and correcting what came in is one of them: not adding to
+   four intentions somebody arrives with and correcting what came in is one of them: not adding to
    the domain, not weighing it, not packaging it.
 
    Two by two rather than four in a row, because four doors across a wide page make each one a strip
-   too shallow for its own sigil, and the sigil is what is read before the words are. */
+   too shallow for its own sigil and the sigil is what is read before the words are. */
 .gateways-four {
     grid-template-columns: repeat(2, 1fr);
 }

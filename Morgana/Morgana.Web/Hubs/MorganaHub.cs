@@ -27,7 +27,7 @@ public class MorganaHub : Hub
     /// <remarks>
     /// <strong>Call this BEFORE <c>POST api/morgana/conversation/start</c>.</strong> The channel mints the
     /// conversation id and a group is just a string key, so joining first is always possible — and it is
-    /// the only ordering that works: the presentation is sent the moment the conversation starts, and
+    /// the only ordering that works: the presentation is sent the moment the conversation starts and
     /// SignalR discards a group send with no members without a trace.
     /// </remarks>
     public async Task JoinConversation(string conversationId)

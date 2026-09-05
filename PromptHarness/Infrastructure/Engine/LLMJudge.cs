@@ -20,12 +20,12 @@ public sealed record JudgeVerdict(bool Holds, string Reason);
 /// <remarks>
 /// <para>The judge runs through <see cref="ILLMService.CompleteWithSystemPromptAsync"/>, which by
 /// construction uses the cheapest configured tier. That keeps the suite's judging cost proportional
-/// to the deployment it is testing, and adds no provider, key or dependency of its own.</para>
+/// to the deployment it is testing and adds no provider, key or dependency of its own.</para>
 ///
 /// <para>It is deliberately given exactly what a user would see — the text, the button labels and
 /// the card as rendered — and nothing else. Feeding it the tool trace would let it justify a verdict
 /// from evidence the user never had, which is exactly the class of judgement the structural layer
-/// already owns; showing it less than the screen is the opposite error, and convicts a response that
+/// already owns; showing it less than the screen is the opposite error and convicts a response that
 /// answered on a card.</para>
 /// </remarks>
 public sealed class LLMJudge
@@ -126,7 +126,7 @@ public sealed class LLMJudge
 
     /// <summary>
     /// Waits before each judging attempt: none, then a short one, then a longer one. Three entries
-    /// mean three attempts, and the list IS the retry policy — there is no separate count to keep
+    /// mean three attempts and the list IS the retry policy — there is no separate count to keep
     /// in step with it.
     /// </summary>
     private static readonly TimeSpan[] JudgeRetryWaits =
@@ -135,7 +135,7 @@ public sealed class LLMJudge
     /// <summary>Judges a single proposition, retrying twice, with waits, before giving up.</summary>
     private async Task<JudgeVerdict> EvaluateAsync(string proposition, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard)
     {
-        // Exactly what a user would see: text, button labels, and the card's own rendered content —
+        // Exactly what a user would see: text, button labels and the card's own rendered content —
         // never the tool trace, the context accesses, or anything else only the structural layer is
         // allowed to reach. The card is rendered through the same RichCardText the structural layer
         // reads, so a proposition and a richCardContains can never be told different things.
@@ -145,7 +145,7 @@ public sealed class LLMJudge
              {text}
 
              QUICK REPLY BUTTONS SHOWN: {(quickReplies.Count == 0 ? "none" : string.Join(" | ", quickReplies.Select(reply => reply.Label)))}
-             RICH CARD SHOWN: {(richCard is null ? "no" : $"yes, and it reads:\n{RichCardText.Flatten(richCard)}")}
+             RICH CARD SHOWN: {(richCard is null ? "no" : $"yes and it reads:\n{RichCardText.Flatten(richCard)}")}
 
              PROPOSITION:
              {proposition}
@@ -154,7 +154,7 @@ public sealed class LLMJudge
         // Three attempts, spaced. Two of the failures this exists for are unparseable answers, which
         // an immediate retry fixes; the third is the provider itself refusing under load (429, 529),
         // against which two calls in the same instant are one call. The waits are what separate a
-        // busy provider from a broken judge, and a paid run must not be lost to the former.
+        // busy provider from a broken judge and a paid run must not be lost to the former.
         string lastFailure = "no answer";
 
         foreach (TimeSpan wait in JudgeRetryWaits)

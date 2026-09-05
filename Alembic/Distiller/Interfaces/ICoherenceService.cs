@@ -11,7 +11,7 @@ namespace Distiller.Interfaces;
 /// cannot do. That one decides everything decidable by reading the Draft — a name that cannot be a
 /// C# identifier, an intent nothing routes to — and asks no model, because none would help. Whether
 /// two intent descriptions overlap enough to collide in the classifier is the opposite kind of
-/// question: it is about meaning, it has no mechanical answer, and it is the single most expensive
+/// question: it is about meaning, it has no mechanical answer and it is the single most expensive
 /// defect a multi-agent domain can carry.
 /// </para>
 /// <para>
@@ -23,8 +23,8 @@ namespace Distiller.Interfaces;
 /// per-agent pass can see any of it.
 /// </para>
 /// <para>
-/// It is advisory, and stays advisory. Nothing here blocks an export: a judgement about meaning is
-/// not a verdict, and a client who disagrees with it is often right about their own domain.
+/// It is advisory and stays advisory. Nothing here blocks an export: a judgement about meaning is
+/// not a verdict and a client who disagrees with it is often right about their own domain.
 /// </para>
 /// </remarks>
 public interface ICoherenceService
@@ -88,7 +88,7 @@ public sealed record CoherenceFinding(
     string Fix);
 
 /// <summary>
-/// A finding from an earlier pass this sitting, and what the client's own applier said it did.
+/// A finding from an earlier pass this sitting and what the client's own applier said it did.
 /// </summary>
 /// <param name="Finding">What the earlier pass reported.</param>
 /// <param name="Resolution">What <see cref="ICoherenceApplyService"/> said it changed.</param>

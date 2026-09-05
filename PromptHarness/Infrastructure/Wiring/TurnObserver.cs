@@ -30,9 +30,9 @@ public sealed class TurnObserver : IDisposable
     /// </summary>
     /// <remarks>
     /// These lines are the only place a context variable's NAME becomes observable — a span carries
-    /// tool names and no data — so the whole context-handling group rests on them, and a reworded
+    /// tool names and no data — so the whole context-handling group rests on them and a reworded
     /// log line would otherwise turn into a silent pass. Deriving the pattern from
-    /// <see cref="Constants.ObservableLogs"/> makes that impossible: the wording travels, and a
+    /// <see cref="Constants.ObservableLogs"/> makes that impossible: the wording travels and a
     /// renamed placeholder stops matching here at the same commit it changes there.
     /// </remarks>
     private static readonly Regex ContextAccessPattern = new Regex(
@@ -59,7 +59,7 @@ public sealed class TurnObserver : IDisposable
 
     /// <summary>
     /// Turns a logging message template into a regex: everything outside the placeholders is matched
-    /// literally, and each named placeholder is replaced by what the caller wants read out of it.
+    /// literally and each named placeholder is replaced by what the caller wants read out of it.
     /// </summary>
     /// <remarks>
     /// The template is escaped FIRST and the placeholders are then found in their escaped form, so a
@@ -99,7 +99,7 @@ public sealed class TurnObserver : IDisposable
     /// <summary>
     /// Token usage of every closed LLM span, in completion order. Not keyed by conversation: the
     /// MEAI spans carry <c>gen_ai.*</c> attributes and no conversation id, so they are attributed
-    /// to a turn by position in this list — sound for the same reason the log correlation is, and
+    /// to a turn by position in this list — sound for the same reason the log correlation is and
     /// no more.
     /// </summary>
     private readonly List<TokenUsage> llmSpans = [];
@@ -122,7 +122,7 @@ public sealed class TurnObserver : IDisposable
         listener = new ActivityListener
         {
             // "Morgana" carries the pipeline spans; "Morgana.AI.LLM" is the MEAI decorator every
-            // provider is wrapped in, and is where token usage lives.
+            // provider is wrapped in and is where token usage lives.
             ShouldListenTo = source => source.Name is "Morgana" or "Morgana.AI.LLM",
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = OnActivityStopped
@@ -142,7 +142,7 @@ public sealed class TurnObserver : IDisposable
             llmMark = llmSpans.Count;
 
         // Five independent marks — log line count, agent/guard/classifier span counts for this
-        // conversation, and global LLM-span count — each a watermark that CompleteTurnAsync will
+        // conversation and global LLM-span count — each a watermark that CompleteTurnAsync will
         // read everything *past* to isolate what happened during this one turn specifically.
         return new TurnScope(
             conversationId,
@@ -227,7 +227,7 @@ public sealed class TurnObserver : IDisposable
             : null;
 
         // Every consultation that closed during the turn, not just the latest: one turn may ask
-        // more than one colleague, and which of them was asked is the whole point of reading these.
+        // more than one colleague and which of them was asked is the whole point of reading these.
         IReadOnlyList<ConsultationObservation> consulted =
             consultationSpans.TryGetValue(scope.ConversationId, out List<ConsultationObservation>? served) && served.Count > scope.ConsultationSpanCount
                 ? [.. served.Skip(scope.ConsultationSpanCount)]
@@ -357,7 +357,7 @@ public sealed class TurnObserver : IDisposable
     /// <summary>
     /// Reads a token count that providers report as any integral type, or as a string on some
     /// paths. Missing or unparseable means zero: a token count is a measurement, never an
-    /// assertion, and it must not be able to fail a scenario.
+    /// assertion and it must not be able to fail a scenario.
     /// </summary>
     private static long ReadTokenTag(Activity activity, string tag)
         => activity.GetTagItem(tag) switch
@@ -394,7 +394,7 @@ public sealed record TokenUsage(
     long CacheWriteTokens,
     int Calls)
 {
-    /// <summary>The empty measurement, and the seed of every aggregation.</summary>
+    /// <summary>The empty measurement and the seed of every aggregation.</summary>
     public static readonly TokenUsage Zero = new TokenUsage(0, 0, 0, 0, 0);
 
     /// <summary>Sums two measurements.</summary>
@@ -412,7 +412,7 @@ public sealed record TokenUsage(
 }
 
 /// <summary>
-/// Marks the start of a turn's observation window: where the log stood, and how many agent, guard
+/// Marks the start of a turn's observation window: where the log stood and how many agent, guard
 /// and classifier spans the conversation had already produced.
 /// </summary>
 /// <param name="ConversationId">Conversation being observed.</param>

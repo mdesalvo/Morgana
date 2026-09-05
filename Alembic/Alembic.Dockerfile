@@ -35,7 +35,7 @@ COPY Alembic/ Alembic/
 COPY Morgana/Morgana.AI/ Morgana/Morgana.AI/
 COPY Morgana/Morgana.Contracts/ Morgana/Morgana.Contracts/
 
-# Nothing of the repo-root PromptHarness is copied, and nothing needs to be. Alembic's own harness
+# Nothing of the repo-root PromptHarness is copied and nothing needs to be. Alembic's own harness
 # component is its own — the behavioural templates under Alembic/Distiller/Harness/Templates,
 # embedded — so the repo layout stopped being load-bearing for this build when they replaced the
 # linked scenario schema. Alembic/PromptHarness/ (the non-regression suite for Alembic itself) is

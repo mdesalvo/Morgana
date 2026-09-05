@@ -26,6 +26,17 @@ public sealed class A2AAuthenticationFilter(
     /// <summary>Scheme every caller must present, peers included.</summary>
     private const string BearerPrefix = "Bearer ";
 
+    /// <summary>
+    /// Where the proven identity of the caller is left for the rest of the request to read.
+    /// </summary>
+    /// <remarks>
+    /// The A2A hosting layer hands an agent a session built from the context id and never the
+    /// request, so the one party that knows who is calling is this gate. The session store reads it
+    /// back to decide whose conversation an inbound request is served on, which is what keeps one
+    /// caller out of another's.
+    /// </remarks>
+    public const string CallerIssuerItemKey = "morgana.a2a.caller_issuer";
+
     /// <inheritdoc />
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
@@ -69,6 +80,10 @@ public sealed class A2AAuthenticationFilter(
                 publishedIntent, authentication.Issuer);
             return Results.Unauthorized();
         }
+
+        // Left for the session store, the only other party that has to know who this is and the only
+        // one with no way to find out for itself.
+        context.HttpContext.Items[CallerIssuerItemKey] = authentication.Issuer;
 
         return await next(context);
     }

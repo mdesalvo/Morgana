@@ -1,4 +1,4 @@
-#@ use-case: Something the agent's own Formatting says must never be shown, and is not shown.
+#@ use-case: Something the agent's own Formatting says must never be shown and is not shown.
 #@ requires: always
 #@ derive: |
 #@   Read the Formatting section for what it keeps back even though a tool returns it — an internal

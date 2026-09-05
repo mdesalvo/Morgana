@@ -250,7 +250,7 @@ public static partial class ExpectationChecker
         }
     }
 
-    /// <summary>Which tools the turn invoked, and in what order.</summary>
+    /// <summary>Which tools the turn invoked and in what order.</summary>
     private static void CheckTools(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
         IReadOnlyList<string> invoked = turn.ToolsInvoked;

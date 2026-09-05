@@ -27,7 +27,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // ==============================================================================
 // On Windows the default OutputEncoding is the OEM/ANSI code page (CP437/CP850/CP1252),
 // none of which covers the BMP glyphs Rune renders: the header arrow (→ U+2192),
-// the input prompt chevron (› U+203A), the conversation-id ellipsis (… U+2026), and
+// the input prompt chevron (› U+203A), the conversation-id ellipsis (… U+2026) and
 // the courtesy dashes. Under those code pages the console falls back to the "symbol
 // for delete" glyph (␦), which looks like a tofu box to the user. Forcing both streams
 // to UTF-8 up front is idempotent on Linux/macOS (already UTF-8) and makes Spectre's
@@ -92,7 +92,7 @@ builder.Services.AddSingleton<TerminalCellService>();
 //   - POSIX (Linux + macOS): SIGWINCH delivered by the kernel — zero idle CPU.
 //   - Windows: no SIGWINCH equivalent at this layer, fall back to a 250 ms
 //     Console.Window* comparison loop.
-// The decision is made once, here, and the chosen implementation is injected
+// The decision is made once, here and the chosen implementation is injected
 // into ConsoleUiService via DI so the UI itself stays platform-agnostic.
 if (OperatingSystem.IsWindows())
     builder.Services.AddSingleton<IViewportResizeWatcher, PollingResizeWatcherService>();
@@ -108,7 +108,7 @@ WebApplication app = builder.Build();
 // on every platform. On POSIX, closing the host terminal window also sends SIGHUP
 // to the foreground process group, but SIGHUP is *not* handled by default:
 // without this registration, the docker CLI dies, the Rune container keeps
-// running, --rm never fires, and `compose down` then complains that
+// running, --rm never fires and `compose down` then complains that
 // morgana-network is still in use. Hooking SIGHUP to StopApplication makes the
 // brutal-close case clean. Skipped on Windows because SIGHUP has no mapping
 // there — the equivalent (CTRL_CLOSE_EVENT on the console X button) is already
@@ -154,7 +154,7 @@ app.MapPost("/morgana-hook", async (HttpContext httpContext, WebhookReceiverServ
 // ==============================================================================
 // Start Kestrel asynchronously (the UI must be on the main thread), wire the
 // webhook → UI callback, open a conversation with Morgana, hand over to the
-// ConsoleUiService loop, and on exit gracefully end the conversation and stop Kestrel.
+// ConsoleUiService loop and on exit gracefully end the conversation and stop Kestrel.
 await app.StartAsync();
 
 MorganaClientService morganaClientService = app.Services.GetRequiredService<MorganaClientService>();

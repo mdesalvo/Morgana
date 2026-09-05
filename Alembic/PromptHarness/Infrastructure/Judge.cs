@@ -12,13 +12,13 @@ public sealed record JudgeVerdict(bool Holds, string Reason);
 /// Evaluates natural-language propositions about a piece of authored prose — a near-direct port of
 /// <c>PromptHarness</c>'s <c>LLMJudge</c>, for the same reason it exists there: Alembic's own
 /// self-check inside <c>AgentFormatting</c> is the same conducting session re-reading its own work,
-/// which is not independence, and a live run has already shown it can follow a client's explicit
+/// which is not independence and a live run has already shown it can follow a client's explicit
 /// request straight past a rule it just wrote. This is a second, separate call that has never seen
 /// the interview and has no stake in defending it.
 /// </summary>
 /// <remarks>
 /// Judges the authored <c>Formatting</c>/<c>Instructions</c> prose directly, not a live simulated
-/// turn — cheaper and simpler than standing up a running agent, and sufficient for the class of
+/// turn — cheaper and simpler than standing up a running agent and sufficient for the class of
 /// defect it exists to catch: whether the INSTRUCTION a pass wrote itself commits the anti-pattern
 /// ("offer one button per open slot"), which is legible straight out of the prose without needing
 /// to watch a model act on it.
@@ -67,7 +67,7 @@ public sealed class Judge
 
         Rules:
         - Judge only what the turn actually says to the client. Do not infer intent, do not be
-          charitable, and do not credit a turn for what it presumably knew but did not say.
+          charitable and do not credit a turn for what it presumably knew but did not say.
         - If the proposition is only partially true, it is false.
         - The turn may be in any language; judge its meaning, not its language.
 

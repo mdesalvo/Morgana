@@ -29,7 +29,7 @@ points that way and no separate host or CDN is involved.
 <script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
 ```
 
-That is the whole contract, and it is plain HTML — the host page's server technology never
+That is the whole contract and it is plain HTML — the host page's server technology never
 enters into it. JSP, PHP, ASP, Rails, WordPress, a hand-written `.html`: if it can emit a
 `<script>` tag, it can host the widget.
 
@@ -51,7 +51,7 @@ One configuration key, on the **Cauldron** side (`Cauldron:Widget:AllowedEmbedOr
 Each entry is a site permitted to frame Cauldron, emitted as a CSP `frame-ancestors`
 directive. **The list is closed by default**: unconfigured, only Cauldron's own pages may
 frame it, so a fresh checkout can run `/widget/morgana.html` but no external site can embed
-the widget until its origin is listed. Adding origins is therefore a deliberate act, and
+the widget until its origin is listed. Adding origins is therefore a deliberate act and
 removing one revokes that site's ability to host the chat.
 
 Note this is the browser's enforcement of *who may frame Cauldron*, not authentication.
@@ -89,7 +89,7 @@ natively — which is why the professional widgets in this category (Intercom, C
 ship the same way.
 
 **Shadow DOM for style isolation.** The launcher lives in a closed shadow root, so the host
-page's resets, utility classes and `!important` rules cannot deform it, and nothing here
+page's resets, utility classes and `!important` rules cannot deform it and nothing here
 leaks onto the host's own elements. Inheritance still crosses the boundary, so the stylesheet
 restates every inherited property it depends on rather than trusting the host's typography.
 

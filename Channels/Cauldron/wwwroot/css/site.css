@@ -310,9 +310,9 @@ body {
     background: var(--bg-color);
 }
 
-/* Holds the actual conversation in natural top-to-bottom order, and carries the padding and gap
+/* Holds the actual conversation in natural top-to-bottom order and carries the padding and gap
    that used to sit on the scrolling container. It grows to fill the box so a short conversation
-   still starts at the top, and never shrinks, so a long one stays scrollable. */
+   still starts at the top and never shrinks, so a long one stays scrollable. */
 .messages-inner {
     display: flex;
     flex-direction: column;

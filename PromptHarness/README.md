@@ -4,14 +4,14 @@ A live, black-box suite that measures **prompt behaviour**. It exists because Mo
 prose — `morgana.json`, `agents.json`, the tool descriptions — and prose has no compiler. Every
 assertion here answers one question: *does the model still do the thing the prompt tells it to do?*
 
-It is not a unit-test project and will never become one. Nothing is mocked, the LLM is real, and a
+It is not a unit-test project and will never become one. Nothing is mocked, the LLM is real and a
 run costs real tokens.
 
 ## Where it lives
 
 Its own solution (`PromptHarness.slnx`), sibling of `Morgana/` and `Examples/` at the
 repository root — not a project inside `Morgana.slnx`. The harness is an instrument pointed **at** a
-Morgana instance, not a part of one, and the distinction is operational rather than tidy: the suite
+Morgana instance, not a part of one and the distinction is operational rather than tidy: the suite
 has to be able to run against a Morgana it did not ship with — an older tag of this one, or someone
 else's — and a project living inside the framework's solution quietly assumes it never will.
 
@@ -21,7 +21,7 @@ Examples/                   the example plugin (Examples.slnx)
 PromptHarness/              this harness (PromptHarness.slnx)
 ```
 
-Everything it needs from the framework arrives by project reference, and there are exactly two:
+Everything it needs from the framework arrives by project reference and there are exactly two:
 
 | Reference | Why | Assembly referenced |
 |---|---|---|
@@ -53,18 +53,18 @@ PromptHarness (test process)
 The host runs **in the test process** but is only ever addressed **over HTTP**: the same REST
 surface, the same JWT gate, the same webhook delivery any channel uses. In-process buys exactly two
 things a child process could not — an `ActivityListener` that reads spans with no exporter in the
-loop, and a tee on stdout that reads tool log lines. Both are read-only observers of instrumentation
+loop and a tee on stdout that reads tool log lines. Both are read-only observers of instrumentation
 that already exists for production reasons.
 
-**One proposition, one act.** A judge is a model, and every extra thing asked of it in one line is
+**One proposition, one act.** A judge is a model and every extra thing asked of it in one line is
 another thing it can get wrong — so a proposition names a single act, in a single clause. A list of
 synonyms for the same act is fine (`another desk, office or department`); a conjunction of two
 distinct claims is not (`says it was billed **and** invites them to ask about the invoice` — two
-propositions), and neither is a comparative (`describes the invoice **rather than** merely saying it
+propositions) and neither is a comparative (`describes the invoice **rather than** merely saying it
 was billed`), which asks for a judgement of proportion instead of a fact. A proposition needing a
 carve-out sentence to be fair is a proposition that was written wrong: fix the act, do not coach the
 judge. This holds for `judgeNot` above all, where the failure mode is asymmetric — a broad
-prohibition puts the judge on a hunt, and a model on a hunt finds something; every false red spent
+prohibition puts the judge on a hunt and a model on a hunt finds something; every false red spent
 there is trust in the suite spent with it.
 
 Those log lines are the only place a context variable's **name** becomes observable — a span carries
@@ -84,7 +84,7 @@ rewrite path — see `channeladapter-degrades-invoice-card` and `GuardTests`/`Ac
 
 The harness owns **no `Morgana:` configuration and no secrets**. It declares the same
 `UserSecretsId` as `Morgana.Web` (`374228be-…`), resolves that project's `appsettings.json` plus the
-shared secrets store, and republishes the result to the host as environment variables. Whatever
+shared secrets store and republishes the result to the host as environment variables. Whatever
 provider, tier and key your Morgana is currently wired to, the suite runs against it.
 
 On top of that it overrides, per run:
@@ -94,7 +94,7 @@ On top of that it overrides, per run:
 | `ConversationPersistence:StoragePath` → temp dir | throwaway SQLite databases, deleted on teardown |
 | `OpenTelemetry:Exporters[*]:Enabled` → false | the in-process listener needs no collector |
 | `RateLimiting:Enabled`, `DustLimiting:Enabled` → false | a repeated-run suite would throttle itself |
-| `ActorSystem:EnableGuardrail` → `Harness:EnableGuardrail` | off by default: no scenario asserts moderation, and every guarded turn is an extra LLM call |
+| `ActorSystem:EnableGuardrail` → `Harness:EnableGuardrail` | off by default: no scenario asserts moderation and every guarded turn is an extra LLM call |
 | `Authentication:Issuers[harness]:SymmetricKey` → random | minted per run, never written to disk |
 | `Authentication:Issuers[morgana]:SymmetricKey` → random | the key the host signs its own agent-to-agent traffic with; separate from the one above, because two issuers sharing a key would defeat the per-issuer trust model under test |
 | `Authentication:Issuers[harness-peer]` + its `InboundSystems` entry → appended | a system admitted to `inventory` and to no other desk, declared per run rather than shipped: it exists to be turned away, which is the only way `AgentCardTests` can observe that the A2A gate is shut *selectively* and not merely shut |
@@ -140,7 +140,7 @@ or the listener heard nothing.
 per proposition on structurally-passing turns. The default is 5 runs.
 
 **`P994E` is not an arbitrary string.** The example plugin models one shop, *The Greenhouse &
-Nursery*, on one SQLite system of record shipped as a seed (`Examples/Data/Examples.db`), and every
+Nursery*, on one SQLite system of record shipped as a seed (`Examples/Data/Examples.db`) and every
 desk of that shop keys on the customer code: `P994E` is the seeded customer who has invoices, a
 Green Care Plan and past orders. A code nobody is registered under is refused by Billing, by the
 plan and by any attempt to raise an order — so a scenario that hands the agent an invented code is
@@ -185,17 +185,17 @@ override a single run with `Harness__Phase=A2.3`. **Re-running a phase replaces 
 appending another: a phase is a state of the prose, not a count of how many times it was measured.
 
 `Harness/` is a local measurement log, not a repository artefact — it is not versioned. Every run is
-billed, and a token-count diff is not useful pull-request noise; the movement lives inside the
+billed and a token-count diff is not useful pull-request noise; the movement lives inside the
 artefact itself (one row per phase), so it stays comparable whether or not anyone diffs commits. The
 directory is `Harness:HarnessDirectory` in `appsettings.Harness.json` (default `Harness`, resolved
 against the project directory unless given an absolute path) — point it outside the checkout if
 several people run the suite and should not overwrite each other's rows.
 
-A prompt revision has three possible outcomes against the previous row, and only one of them is
+A prompt revision has three possible outcomes against the previous row and only one of them is
 success:
 
 - threshold held, tokens down → the outcome A2 is aiming for;
-- threshold held, tokens up → not a pass. The prose got longer, and the fixed payload is resent on
+- threshold held, tokens up → not a pass. The prose got longer and the fixed payload is resent on
   every round trip of every turn, forever;
 - threshold broken → a contradiction between two instructions read together. Fix the text, do not
   lower the threshold.
@@ -244,10 +244,10 @@ turns:
 The two `history*` keys are the only ones costing a round trip to the host, so they are fetched
 solely for the turns that declare them. They read the conversation as a resuming channel would see
 it, which is where a consultation between two agents is observably absent: the colleague owns no
-message, and its inbound question — stored with the user role — never shows up as a message the
+message and its inbound question — stored with the user role — never shows up as a message the
 person did not send.
 
-Two layers, and the split is deliberate: **structural** assertions are deterministic and read only
+Two layers and the split is deliberate: **structural** assertions are deterministic and read only
 span, log and message data; the **judge** is for what no structural assertion can reach ("asks in
 prose without enumerating options"). The judge sees exactly what a user would see — text, buttons,
 and the card's rendered content — never the tool trace, so it cannot justify a verdict from evidence
@@ -255,11 +255,11 @@ the user never had, nor be convicted of missing what the screen did carry.
 
 **Thresholds.** Repetition with a pass threshold is the only honest shape when the system under test
 is a language model: a prompt that works four times in five is materially different from one that
-works once, and a single run cannot tell them apart. The threshold makes each scenario's flakiness
+works once and a single run cannot tell them apart. The threshold makes each scenario's flakiness
 budget explicit instead of hiding it in a retry.
 
 **The context-handling group runs at 5/5 and is blocking.** Its three properties — the cycle, the
-closed vocabulary, non-revelation — are contract, not behaviour, and their failure mode is silent:
+closed vocabulary, non-revelation — are contract, not behaviour and their failure mode is silent:
 an agent that re-asks for something it already knows still looks like it works. A regression there
 stops the prompt revision and the text goes back, rather than the threshold going down.
 

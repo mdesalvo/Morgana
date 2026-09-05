@@ -13,14 +13,14 @@ namespace PromptHarness.Infrastructure.Reporting;
 /// <remarks>
 /// <para><strong>Why a journey and not a snapshot.</strong> The point of the harness is comparison,
 /// and a file that is overwritten on every run answers "where is it now" while losing "where it came
-/// from". Here the movement is inside the file: <c>v0</c> is the original assessment, and every
+/// from". Here the movement is inside the file: <c>v0</c> is the original assessment and every
 /// phase after it shows what the revision bought or cost.</para>
 ///
 /// <para>Re-running a phase replaces its row rather than appending a second one. A phase is a state
 /// of the prose, not a count of how many times it was measured: the three runs it took to settle
-/// A2.1 are one row, and the diff against A2.0 stays readable.</para>
+/// A2.1 are one row and the diff against A2.0 stays readable.</para>
 ///
-/// <para>A row is deliberately naked — numbers only. What a movement <em>means</em>, and which of
+/// <para>A row is deliberately naked — numbers only. What a movement <em>means</em> and which of
 /// them were regressions worth reverting, belongs to <c>JOURNEY.md</c> next to these files, written
 /// by hand.</para>
 ///
@@ -47,7 +47,7 @@ public static class HarnessWriter
             string directory = ResolveDirectory(harnessDirectory);
             System.IO.Directory.CreateDirectory(directory);
 
-            // Composes one Markdown table row: phase, date, pass fraction, threshold, and the
+            // Composes one Markdown table row: phase, date, pass fraction, threshold and the
             // per-run cost figures — averaged, since a scenario replays several times per phase.
             string path = Path.Combine(directory, $"{outcome.Scenario.Id}.md");
             string row =
@@ -96,7 +96,7 @@ public static class HarnessWriter
         return file.ToString();
     }
 
-    /// <summary>Replaces this phase's row if present, appends it otherwise, and refreshes the LLM line.</summary>
+    /// <summary>Replaces this phase's row if present, appends it otherwise and refreshes the LLM line.</summary>
     private static string Merge(string existing, string phase, string row, string llmDescriptor)
     {
         string[] lines = existing.TrimEnd('\n').Split('\n');

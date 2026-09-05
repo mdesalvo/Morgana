@@ -2,7 +2,7 @@
 
 ## What is Cauldron
 
-Cauldron is a **Blazor Server** web application that serves as the reference channel for Morgana. It provides a rich chat UI with real-time streaming, quick reply buttons, rich cards, typing indicators, and conversation persistence across browser sessions. Communicates with the Morgana backend via REST API (conversation lifecycle, message sending) and SignalR (real-time message delivery, streaming chunks).
+Cauldron is a **Blazor Server** web application that serves as the reference channel for Morgana. It provides a rich chat UI with real-time streaming, quick reply buttons, rich cards, typing indicators and conversation persistence across browser sessions. Communicates with the Morgana backend via REST API (conversation lifecycle, message sending) and SignalR (real-time message delivery, streaming chunks).
 
 Cauldron lives at `Channels/Cauldron/` in the repo root, alongside other reference channels, separate from the `Morgana/` working directory.
 
@@ -206,11 +206,11 @@ A host site of any technology (JSP, PHP, static HTML — the contract is plain b
 
 Two lifecycle rules matter, both dictated by Blazor Server: the iframe is created on **first open**, because loading Cauldron opens a circuit and pins per-visitor state on the server; and it is **never destroyed**, because that circuit is the conversation, so closing hides the panel instead of unmounting. Zero JS dependencies is deliberate — a widget cannot know the stack of the page it lands in.
 
-`/widget/morgana.html` is a mock third-party page — a fictitious plant nursery — carrying only the script tag; it works out of the box because the default `frame-ancestors 'self'` covers same-origin framing. `Widget.csproj` excludes it, and `demo/`, from **Release** builds — the configuration the Dockerfile uses — so a published image serves the launcher alone under `/widget/`: a customer hosts the widget on their own origin, where a fictitious nursery with invented opening hours does not belong. It is styled with **inline attributes only**: no stylesheet, no class name, no custom property, so there is nothing on the page that could collide with the widget's own CSS or inherit into its shadow root. The one thing that still crosses the boundary is plain inheritance from `<body>`, which is exactly what the widget's `:host` block pins — and what the page's serif type is there to put under pressure.
+`/widget/morgana.html` is a mock third-party page — a fictitious plant nursery — carrying only the script tag; it works out of the box because the default `frame-ancestors 'self'` covers same-origin framing. `Widget.csproj` excludes it and `demo/`, from **Release** builds — the configuration the Dockerfile uses — so a published image serves the launcher alone under `/widget/`: a customer hosts the widget on their own origin, where a fictitious nursery with invented opening hours does not belong. It is styled with **inline attributes only**: no stylesheet, no class name, no custom property, so there is nothing on the page that could collide with the widget's own CSS or inherit into its shadow root. The one thing that still crosses the boundary is plain inheritance from `<body>`, which is exactly what the widget's `:host` block pins — and what the page's serif type is there to put under pressure.
 
 ## UI Patterns
 
-- **Agent-specific theming**: border colors, CSS classes, and header animations change based on `CurrentAgentName` (base Morgana vs specialized agent)
+- **Agent-specific theming**: border colors, CSS classes and header animations change based on `CurrentAgentName` (base Morgana vs specialized agent)
 - **Quick reply gating**: textarea and send button are disabled while unselected quick replies or typing indicators are active
 - **Completion messages**: when an agent signals `AgentCompleted = true`, a presentation-style transition message is injected ("Morgana is back")
 - **History boundaries**: on resume, the lifecycle service detects agent-turn-boundary transitions and injects synthetic completion messages for visual continuity

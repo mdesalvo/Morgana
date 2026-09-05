@@ -66,7 +66,7 @@ Framing itself is **closed by default** — a site may host the widget only once
 - Updated `OpenTelemetry` to 1.18.0
 
 ### 🐛 Fixed
-- Text welded across tool calls — a turn that calls a tool writes several assistant messages, and their texts were concatenated with nothing in between.
+- Text welded across tool calls — a turn that calls a tool writes several assistant messages and their texts were concatenated with nothing in between.
 - History losing part of a reply on resume — only the last assistant message of a turn is marked user-facing, so everything written before a tool call vanished from the rendered history while the live reply had shown it.
 - **Cauldron (1)**
   - SignalR presentation race — a fresh conversation's greeting could reach an empty group and be discarded without a trace, since Cauldron joined the group only after the start response returned.
@@ -74,11 +74,11 @@ Framing itself is **closed by default** — a site may host the widget only once
 ### 🚀 Future Enablement
 - **Turnkey plugin onboarding at scale** — Alembic turns "write a Morgana domain" from a prompt-engineering exercise into a guided interview, opening the framework to domain experts who have never written a system prompt; its own non-regression suite (`Alembic/PromptHarness`, distinct from Morgana's own `PromptHarness`) keeps the workbench itself honest as it evolves.
 - **Morgana reaching users where they already are** — the widget turns adoption from "migrate a site onto Cauldron" into "paste one tag", making every existing web property a candidate surface without touching its stack or its release cycle. The per-origin allowlist makes each of those surfaces explicitly granted and individually revocable, which is the natural hook for per-site conversation policy, attribution and analytics.
-- **Embedding on sites outside the operator's control** — because the conversation runs in a sandboxed frame on Cauldron's own origin rather than inside the host document, a site can carry Morgana without being able to read what visitors say to her, and she cannot be reached by the host page's scripts. That boundary is the precondition for handing the widget to partners and to customers' own portals, rather than only to properties the Morgana operator already owns.
+- **Embedding on sites outside the operator's control** — because the conversation runs in a sandboxed frame on Cauldron's own origin rather than inside the host document, a site can carry Morgana without being able to read what visitors say to her and she cannot be reached by the host page's scripts. That boundary is the precondition for handing the widget to partners and to customers' own portals, rather than only to properties the Morgana operator already owns.
 
 ## [0.27.0] - 2026-08-06
 ### ✨ Added
-- **Intent collision detection with automatic disambiguation** — The classifier now returns its candidate intents *ranked* by confidence instead of a single pick, and any candidate falling within `Morgana:ActorSystem:IntentCollisionThreshold` (default `0.10`) of the top score is treated as a genuine collision rather than a clean match.
+- **Intent collision detection with automatic disambiguation** — The classifier now returns its candidate intents *ranked* by confidence instead of a single pick and any candidate falling within `Morgana:ActorSystem:IntentCollisionThreshold` (default `0.10`) of the top score is treated as a genuine collision rather than a clean match.
   When that happens the supervisor stops the turn before routing — no agent is ever invoked, nothing is guessed — and replies directly with a disambiguation message plus one quick reply per colliding intent, most-likely first, each carrying that intent's own `Label` and `DefaultValue` sample phrase, so tapping a button resubmits a phrasing that classifies unambiguously on the next turn.
 
 ### 🔄 Changed
@@ -94,7 +94,7 @@ Framing itself is **closed by default** — a site may host the widget only once
   - Starting a new conversation abandoned the old one without telling Morgana, which kept it alive in memory with nothing left to ever release it
   - Dismissing a warning banner before expiration failed to clear its timer, because the component's cleanup logic was never executed
   - The conversation did not follow new messages, which piled up below the fold and had to be scrolled into view by hand, streamed replies included
-  - The loading animation rested against the top of the message area instead of its centre, leaving an empty band underneath it — three stacked causes: a fixed-height block that refused to fill the area, a float animation drifting upward only, and text below the orb dragging the centring down
+  - The loading animation rested against the top of the message area instead of its centre, leaving an empty band underneath it — three stacked causes: a fixed-height block that refused to fill the area, a float animation drifting upward only and text below the orb dragging the centring down
   - A faded warning banner was never truly removed from the page: an invisible leftover kept holding its space, nudging the loader and the conversation off place until some unrelated event happened to redraw the page
   - Markdown rendered raw HTML and `javascript:`/`data:` links untouched, exposing an injection vector for any untrusted text reaching the chat; now sanitized via `HtmlSanitizer`
   - Markdown tables were rendered as literal pipe-separated text instead of an HTML table, because the Markdig pipeline never enabled GFM pipe-table syntax
@@ -115,9 +115,9 @@ In practice, the harness **has already surfaced multiple behavioral and authorit
 **Passing this suite on `Anthropic` and `OpenAI` is now a mandatory, non-negotiable precondition for deploying any prompt revision within this repository.**
 
 ### ✨ Added
-- **`SetTurnContinuation(bool)` base tool** — Turn continuation is now declared **out-of-band** through a system tool every agent owns, instead of being smuggled inside the response text as the `#INT#` token. The declaration lands in the ephemeral `turn_continuation` context variable alongside `quick_replies` and `rich_card`, and is dropped at the end of every turn. Continuation is stated per-turn and is never inherited.
+- **`SetTurnContinuation(bool)` base tool** — Turn continuation is now declared **out-of-band** through a system tool every agent owns, instead of being smuggled inside the response text as the `#INT#` token. The declaration lands in the ephemeral `turn_continuation` context variable alongside `quick_replies` and `rich_card` and is dropped at the end of every turn. Continuation is stated per-turn and is never inherited.
 - **`agent.tools_invoked` span attribute** — Captures the names of the tools invoked during the turn, in call order, on the `morgana.agent` span. Tool *arguments* are deliberately excluded, as span attributes reach every configured exporter and arguments routinely carry user-supplied values.
-- **`PromptHarness` non-regression harness** — Boots the real host in-process on an ephemeral Kestrel port and drives it black-box over HTTP as a webhook-based channel. It asserts on two layers: structural signals read from the `morgana.agent` span and `MorganaTool` log lines, and natural-language propositions judged by an LLM on the cheapest configured tier.
+- **`PromptHarness` non-regression harness** — Boots the real host in-process on an ephemeral Kestrel port and drives it black-box over HTTP as a webhook-based channel. It asserts on two layers: structural signals read from the `morgana.agent` span and `MorganaTool` log lines and natural-language propositions judged by an LLM on the cheapest configured tier.
 
 ### 🔄 Changed
 - Removed the keyword-based anti-profanity filter in favor of the complete AI-based guardrail
@@ -127,7 +127,7 @@ In practice, the harness **has already surfaced multiple behavioral and authorit
 
 ### 🐛 Fixed
 - Tool parameters were never described to the model, which had no way to know their meaning and had to guess from their name alone
-- MCP tool schemas were rebuilt lossily on discovery: optional parameters appeared required, nested objects and arrays were flattened, and argument values could be silently corrupted
+- MCP tool schemas were rebuilt lossily on discovery: optional parameters appeared required, nested objects and arrays were flattened and argument values could be silently corrupted
 - The router's per-agent cache was case-sensitive, so an intent whose casing didn't exactly match the classifier's output could spawn a duplicate agent instead of reusing the correct one
 
 ### 🚀 Future Enablement
@@ -137,7 +137,7 @@ In practice, the harness **has already surfaced multiple behavioral and authorit
 
 ## [0.25.0] - 2026-07-19
 ### 🎯 Major Feature: Two-Tier LLM — Efficiency/Performance for Agents
-This release breaks the "one model serves the whole process" constraint: each provider now publishes a **catalog of exactly two models, keyed by die type** (`Efficiency`/`Performance` — modeled on Intel's E-core/P-core split), and every agent **declares the die it binds to** via the new mandatory `[RequiresLLMTier]` attribute. `Efficiency` is the default for Morgana's own framework actors and any agent handling routine work; `Performance` is reserved exclusively for agents whose author declares an existential need for deep reasoning or high expressive power — not a "nicer to have" upgrade.
+This release breaks the "one model serves the whole process" constraint: each provider now publishes a **catalog of exactly two models, keyed by die type** (`Efficiency`/`Performance` — modeled on Intel's E-core/P-core split) and every agent **declares the die it binds to** via the new mandatory `[RequiresLLMTier]` attribute. `Efficiency` is the default for Morgana's own framework actors and any agent handling routine work; `Performance` is reserved exclusively for agents whose author declares an existential need for deep reasoning or high expressive power — not a "nicer to have" upgrade.
 A billing FAQ agent runs on the efficient model while a contract-analysis agent with a genuine need for headroom runs on the performance one, **within the same conversation**.
 
 ### ✨ Added
@@ -176,10 +176,10 @@ Architecturally it reaffirms that Morgana adapts on the **capability profile, no
 
 ### 🔄 Changed
 - **Rune gains conversation scrollback**, ported from Grimoire — the same pager (↑/PageUp · ↓/PageDown, ±5 rows, ▲/▼ header glyphs) so a long conversation that exceeds the viewport is no longer lost off the top
-- **Rune gains in-place prompt editing**, ported from Grimoire — ←/→ now walk a caret through the input line (the muscle-memory expectation in a text field) instead of scrolling the pager, with **Backspace** deleting the char before it, **Delete** the char under it, and typing splicing **at** the caret, so a line can be corrected in place rather than only chopped at the tail. The prompt is bounded by a configurable hard cap (`Rune:MaxInputLength`, default 500): typing past it is swallowed while caret moves and deletions stay live, and a sticky-header `chars N/500` counter styled like the dust gauge telegraphs how close the line is to the limit
+- **Rune gains in-place prompt editing**, ported from Grimoire — ←/→ now walk a caret through the input line (the muscle-memory expectation in a text field) instead of scrolling the pager, with **Backspace** deleting the char before it, **Delete** the char under it and typing splicing **at** the caret, so a line can be corrected in place rather than only chopped at the tail. The prompt is bounded by a configurable hard cap (`Rune:MaxInputLength`, default 500): typing past it is swallowed while caret moves and deletions stay live and a sticky-header `chars N/500` counter styled like the dust gauge telegraphs how close the line is to the limit
 - **Framework formatting policy** (`morgana.json`) no longer forbids markdown: agents are now free to emit light markdown (emphasis, inline code, lists, headings, rules) in their message text. Channels that can't render it are downgraded automatically downstream by the channel adapter, so the LLM expresses formatting freely and the right surface adapts — Cauldron and Grimoire render it, Rune strips it
 - **Wire contracts consolidated into `Morgana.Contracts`** — the DTOs exchanged between Morgana and its channels (handshake metadata/capabilities/coordinates, outbound message envelope, quick replies, rich cards and their components hierarchy, start/send request bodies and webhook `StreamChunkRequest` chunk body) were previously duplicated in 4 places (Morgana.AI + each of Cauldron/Rune/Grimoire). They now live once in a new **zero-dependency `Morgana.Contracts`** package: Morgana.AI references it and the 3 reference channels were rewired from their hand-maintained `Messages/Contracts/` copies to a **direct project reference** — a single source of truth, no more lockstep edits
-- **Deterministic container builds** — `Morgana.Examples` now references `Morgana.AI` by **project reference** instead of a version-pinned NuGet `PackageReference`, and the channel/server Dockerfiles stage the first-party project subtrees and mirror the repo layout under `/src`. The Docker build no longer has to resolve the in-development framework version from the public feed (which previously broke with `NU1102` until the version was published), making the **image build self-contained and reproducible**
+- **Deterministic container builds** — `Morgana.Examples` now references `Morgana.AI` by **project reference** instead of a version-pinned NuGet `PackageReference` and the channel/server Dockerfiles stage the first-party project subtrees and mirror the repo layout under `/src`. The Docker build no longer has to resolve the in-development framework version from the public feed (which previously broke with `NU1102` until the version was published), making the **image build self-contained and reproducible**
 
 ### 🐛 Fixed
 - Quick replies could silently fail to render when the model emitted them as a native JSON array: `SetQuickReplies` now takes a typed `List<QuickReply>` instead of a stringified blob, ending the `JsonException` that dropped the buttons
@@ -193,8 +193,8 @@ Architecturally it reaffirms that Morgana adapts on the **capability profile, no
 ## [0.23.0] - 2026-05-22
 ### 🎯 Major Feature: Magic Dust — Token-Budget Protection
 This release introduces **Magic Dust**, a per-conversation **lifetime token budget** that guards Morgana **orthogonally to the rate limiter**: where the rate limiter caps message *frequency*, Magic Dust caps token *consumption*.
-Every conversation is born with a finite budget of dust; each LLM call (guard, classifier, agent, presenter) burns some, and the running balance is **artistically represented as the quantity of magic dust left in the cauldron** — a fuel-gauge the user watches deplete.
-The budget is **cache-aware** (cached prompt tokens cost a fraction, 1-hour cache writes cost more, mirroring real provider economics), persisted in the per-conversation SQLite database so it survives actor decommission and resume, and enforced **fail-open** so a storage fault never blocks the user.
+Every conversation is born with a finite budget of dust; each LLM call (guard, classifier, agent, presenter) burns some and the running balance is **artistically represented as the quantity of magic dust left in the cauldron** — a fuel-gauge the user watches deplete.
+The budget is **cache-aware** (cached prompt tokens cost a fraction, 1-hour cache writes cost more, mirroring real provider economics), persisted in the per-conversation SQLite database so it survives actor decommission and resume and enforced **fail-open** so a storage fault never blocks the user.
 As the budget drains Morgana emits **one-shot advisory warnings at 70% and 90%**; once it is spent the conversation is **terminal** — the lockout is surfaced proactively at end of turn (and re-surfaced on resume) and the only way forward is a brand-new conversation.
 
 ### ✨ Added
@@ -251,7 +251,7 @@ Now every agent loads the shared registry at the start of each turn and merges i
 - Filter intermediate tool-use assistant messages from rendered history (observed on Haiku 4.5)
 
 ### 🚀 Future Enablement
-- **LLM Provider Cost Optimization via Cache Analytics** — With system prompt caching now active across Anthropic (and extensible to Azure OpenAI and other providers), Morgana can surface **cache performance dashboards** showing hit rate, token savings per provider, cost-per-conversation trends, and cache density metrics. Combined with OpenTelemetry's `gen_ai.usage.cache_*` attributes, operators gain data-driven visibility into which LLM providers and prompt strategies deliver best cost-performance, unlocking competitive cost optimization across multi-provider deployments.
+- **LLM Provider Cost Optimization via Cache Analytics** — With system prompt caching now active across Anthropic (and extensible to Azure OpenAI and other providers), Morgana can surface **cache performance dashboards** showing hit rate, token savings per provider, cost-per-conversation trends and cache density metrics. Combined with OpenTelemetry's `gen_ai.usage.cache_*` attributes, operators gain data-driven visibility into which LLM providers and prompt strategies deliver best cost-performance, unlocking competitive cost optimization across multi-provider deployments.
 - **Ephemeral Shared Context with Time-to-Live** — The conversation-scoped `shared_context` registry can evolve to support **per-variable TTL** (`expiresAt` timestamp), enabling agents to store temporary context (authorization tokens, session IDs, rate-limit state, derived computations) that auto-expire after configurable intervals. This unlocks session-like behavior where sensitive transient data never persists longer than needed, reducing storage footprint and improving security posture without explicit cleanup logic.
 
 
@@ -265,7 +265,7 @@ This release introduces **Rune**, a second reference channel that brings Morgana
 
 ### ✨ Added
 - Added **Markdown rendering** to Cauldron: assistant messages are now parsed through **Markdig** and rendered as styled HTML, with a dedicated `markdown.css` stylesheet that integrates with the existing dark theme and CSS variables
-- Introduced `IChannelService` as the **outbound channel abstraction** with a generic `ChannelMessage` DTO, so producers (supervisor, manager, presenter, controllers) target a transport-agnostic contract instead of `IHubContext<MorganaHub>` directly; `SignalRChannelService` ships as the first full-capability implementation, and the Cauldron client-side contracts are grouped under a dedicated `Cauldron.Messages.Contracts` namespace
+- Introduced `IChannelService` as the **outbound channel abstraction** with a generic `ChannelMessage` DTO, so producers (supervisor, manager, presenter, controllers) target a transport-agnostic contract instead of `IHubContext<MorganaHub>` directly; `SignalRChannelService` ships as the first full-capability implementation and the Cauldron client-side contracts are grouped under a dedicated `Cauldron.Messages.Contracts` namespace
 - Introduced `MorganaChannelAdapter` as the **producer-side degradation gate**: every outbound `ChannelMessage` is measured against the channel's advertised `ChannelCapabilities` and, when it exceeds the budget, rewritten by an LLM-guided pass that transcodes rich cards into prose, inlines quick replies, strips markdown and honours length limits — with a Markdig-based template fallback if the LLM call fails, so degradation is never silent
 - Introduced `AdaptingChannelService` as a **transparent decorator** around every `IChannelService` implementation: wraps every `SendMessageAsync` through the adapter without touching any producer, making degradation the default behaviour on the whole outbound path
 - Introduced **per-conversation `ChannelCapabilities` with a persistence-backed handshake**: clients announce their capability budget at `POST /conversation/start`; Morgana persists it in the new `channel_metadata` table (SQLite schema v3) and exposes it through the new `IChannelMetadataStore` registry, so `AdaptingChannelService` degrades per conversation and `ConversationSupervisorActor` stamps the budget on every agent turn
@@ -283,7 +283,7 @@ This release introduces **Rune**, a second reference channel that brings Morgana
 
 ### 🐛 Fixed
 - Race condition on conversation resume where `MorganaController` created the `ConversationSupervisorActor` directly in parallel to `ConversationManagerActor.HandleCreateConversationAsync`, causing an `InvalidActorNameException` ("Actor name supervisor-... is not unique"), killing the manager and leaving the conversation without registered channel metadata
-- Hard-coded `"Morgana"` sentinel was sent as `RestoreActiveAgent.AgentIntent` when no persisted active agent existed; the controller now simply skips the restore message entirely in that case, and the supervisor's corresponding sentinel branch has been removed
+- Hard-coded `"Morgana"` sentinel was sent as `RestoreActiveAgent.AgentIntent` when no persisted active agent existed; the controller now simply skips the restore message entirely in that case and the supervisor's corresponding sentinel branch has been removed
 - Ephemeral UI variables (`rich_card`, `quick_replies`) could leak across turns when the LLM populated them via `SetRichCard`/`SetQuickReplies` and the streaming phase or the persistence save threw before reaching the happy-path `DropVariable` calls
 - Reinforced `SetRichCard` prompting with mandatory JSON well-formedness rules both in the `RichCardUsage` global policy and in the tool parameter description, to reduce the rare cases where LLMs emit malformed JSON (missing braces, trailing commas) and the card is silently dropped
 - Added a new `SessionContinuation` critical global policy telling the agent to treat any current user message as a fresh, independent request when its history contains previous closure exchanges, instead of mirroring past farewells and producing another closure
@@ -306,7 +306,7 @@ This release introduces **Rune**, a second reference channel that brings Morgana
 ### 🎯 Major Feature: JWT Authentication between Cauldron and Morgana
 This release introduces **JWT bearer token authentication** to secure all communications between Cauldron (frontend) and Morgana (backend).
 Cauldron self-issues signed JWT tokens injected automatically into every HTTP request and SignalR connection; Morgana validates them at the API boundary before processing.
-The shared symmetric key is configured via environment variable (`JWT_SYMMETRIC_KEY`) or User Secrets, and the feature can be toggled off for development via `Morgana:Authentication:Enabled`.
+The shared symmetric key is configured via environment variable (`JWT_SYMMETRIC_KEY`) or User Secrets and the feature can be toggled off for development via `Morgana:Authentication:Enabled`.
 ### 🎯 Major Feature: Cauldron Extension Points
 This release completes the **Cauldron extension points** model: `IChatStateService`, `IConversationLifecycleService`, `IStreamingService` and `ILandingMessageService` join the existing suite of pluggable interfaces (`IConversationStorageService`, `IConversationHistoryService`), making every behavioural concern of Cauldron independently overridable via DI without touching a single line of code.
 
@@ -544,12 +544,12 @@ This release introduces **native streaming response delivery**, providing **imme
 
 ### 🚀 Future Enablement
 - **Token-level analytics and optimization** - Streaming architecture enables precise measurement of time-to-first-token (TTFT) and tokens-per-second (TPS) metrics, unlocking data-driven LLM provider selection and cost-per-performance optimization
-- **Progressive UI enhancements** - Platform for implementing streaming citations, dynamic content formatting (code blocks, tables), and live preview rendering as structured content arrives from LLMs
+- **Progressive UI enhancements** - Platform for implementing streaming citations, dynamic content formatting (code blocks, tables) and live preview rendering as structured content arrives from LLMs
 
 
 ## [0.13.0] - 2026-01-30
 ### 🎯 Major Feature: Conversation Rate Limiting Protection
-This release introduces **intelligent conversation rate limiting**, protecting Morgana from excessive usage and token consumption while maintaining excellent user experience through **configurable limits**, **graceful degradation**, and **user-friendly feedback**.
+This release introduces **intelligent conversation rate limiting**, protecting Morgana from excessive usage and token consumption while maintaining excellent user experience through **configurable limits**, **graceful degradation** and **user-friendly feedback**.
 
 ### ✨ Added
 **IRateLimitService**
@@ -604,7 +604,7 @@ CREATE TABLE rate_limit_log (
 
 ## [0.12.1] - 2026-01-25
 ### 🎯 Major Feature: Production-Ready Docker Deployment
-This release introduces **complete Docker containerization** of both **Morgana (backend)** and **Cauldron (frontend)**, enabling **single-command deployment**, **reproducible builds**, and **seamless distribution** via Docker Hub with automated CI/CD pipelines.
+This release introduces **complete Docker containerization** of both **Morgana (backend)** and **Cauldron (frontend)**, enabling **single-command deployment**, **reproducible builds** and **seamless distribution** via Docker Hub with automated CI/CD pipelines.
 
 ### ✨ Added
 **Docker Multi-Stage Builds**
@@ -648,7 +648,7 @@ This release introduces **complete Docker containerization** of both **Morgana (
 This release unlocks:
 - **Docker Hub distribution**: Public images available at `mdesalvo/morgana` and `mdesalvo/cauldron`
 - **Cloud deployment readiness**: Azure Container Instances, AWS ECS, Google Cloud Run
-- **CI/CD integration**: Automated testing, security scanning, and deployment pipelines
+- **CI/CD integration**: Automated testing, security scanning and deployment pipelines
 
 
 ## [0.11.0] - 2026-01-24
@@ -875,11 +875,11 @@ This release introduces a sophisticated **Quick Replies system** that enables LL
 ### ✨ Added
 **SetQuickReplies System Tool**
 - LLM-callable system tool `SetQuickReplies` for creating interactive button options dynamically during conversations
-- Supports JSON array input with `id`, `label` (emoji-enhanced display text), and `value` (message sent on click)
+- Supports JSON array input with `id`, `label` (emoji-enhanced display text) and `value` (message sent on click)
 - Automatic storage in `MorganaContextProvider` using private context key `__pending_quick_replies`
 - `MorganaAgent.GetQuickRepliesFromContext()` method for retrieving LLM-generated quick replies from context
 - JSON deserialization from context string storage to `List<QuickReply>` objects
-- Enhanced `AgentResponse`, `ActiveAgentResponse`, and `ConversationResponse` to propagate quick replies through actor pipeline
+- Enhanced `AgentResponse`, `ActiveAgentResponse` and `ConversationResponse` to propagate quick replies through actor pipeline
 
 **Completion Logic Enhancement**
 - Multi-heuristic agent completion detection: `!hasInteractiveToken && !endsWithQuestion && !hasQuickReplies`
@@ -895,7 +895,7 @@ This release introduces a sophisticated **Quick Replies system** that enables LL
 
 **Internationalization**
 - Complete English localization of Morgana/Cauldron codebase and configuration files
-- Removed all Italian language residuals from prompts, logs, and error messages
+- Removed all Italian language residuals from prompts, logs and error messages
 - Unified language consistency across `morgana.json` and `agents.json`
 
 ### 🔄 Changed
@@ -967,7 +967,7 @@ This release represents a fundamental shift in user interaction: **Morgana now i
 ### 🔄 Changed
 **CSS Modularization**
 - Split monolithic `site.css` into modular components (`site.css`, `cauldron.css`, `quick-reply.css`, `sparkle-loader.css`) for improved maintainability
-- Introduced welcome animation with magical sparkle effect featuring purple-white gradient core, orbiting particles, and expanding rings
+- Introduced welcome animation with magical sparkle effect featuring purple-white gradient core, orbiting particles and expanding rings
 
 **Actor Flow Modifications**
 - `ConversationManagerActor.HandleCreateConversationAsync()` now triggers `GeneratePresentationMessage`
@@ -1018,7 +1018,7 @@ This release represents a fundamental architectural improvement, transforming Mo
 
 **State Machine Behaviors (ConversationSupervisorActor)**
 - Explicit state machine with 5 behaviors: `Idle`, `AwaitingGuardCheck`, `AwaitingClassification`, `AwaitingAgentResponse`, `AwaitingFollowUpResponse`
-- Per-state handlers for success, failure, and timeout scenarios
+- Per-state handlers for success, failure and timeout scenarios
 - State transition logging: `→ State: [StateName]`
 
 **Context Wrapper Records**

@@ -5,18 +5,18 @@
 @*
     The walk: the domain's agents, one screen each, read rather than interviewed.
 
-    Nothing here calls a model and nothing here writes to the Draft, and both are the point. Somebody
+    Nothing here calls a model and nothing here writes to the Draft and both are the point. Somebody
     who imported a domain to correct something usually does not know where it is — they want to leaf
     through until they recognise it, the way a track is found by pressing next rather than by knowing
     its number. Leafing has to cost what leafing costs: a screen, instantly. A step that composed a
     question on the way past would charge a Performance call and a wait for a step nobody stopped at,
     which breaks the one gesture this page exists for.
 
-    So the agent is shown whole — its five sections as they stand — for reading, and reading only:
+    So the agent is shown whole — its five sections as they stand — for reading and reading only:
     none of the five is its own way in any more. A fix to one section can leave another wrong (a
-    Target that now promises something no tool of it backs is the ordinary way a domain drifts), and
+    Target that now promises something no tool of it backs is the ordinary way a domain drifts) and
     a client who could open exactly the section they meant to fix would have no reason to ever look
-    at the rest. So there is one way in per agent, and it always opens at Target: the interview it
+    at the rest. So there is one way in per agent and it always opens at Target: the interview it
     hands over to walks every section from there, forcing the model to recheck what the change moved
     rather than trusting the other four are still true. The two skips beside the header are for the
     case where the point is on another agent. The model, the session and the agent leaving the
@@ -44,8 +44,8 @@
         <div class="walk">
 
             @*
-                Which of how many, and the agents either side by name. A bare "3 of 7" says where the
-                client is but not what is next, and what is next is exactly what they are deciding
+                Which of how many and the agents either side by name. A bare "3 of 7" says where the
+                client is but not what is next and what is next is exactly what they are deciding
                 when they reach for the skip.
 
                 On the first agent there is nothing behind, so the skip is not drawn at all rather
@@ -73,7 +73,7 @@
 
                 @*
                     Past the last agent is the finished domain, which is where an interview ends when
-                    its map is spent. A walk that looped would have no way of saying it was over, and
+                    its map is spent. A walk that looped would have no way of saying it was over and
                     reviewing what you have just corrected is the thing you came to do next.
                 *@
                 <button class="walk-step" @onclick="Next">
@@ -138,7 +138,7 @@
 
 @code {
     /// <summary>
-    /// One section of the agent on screen: what it is called, and what it says.
+    /// One section of the agent on screen: what it is called and what it says.
     /// </summary>
     private sealed record Section(string Label, string? Written);
 
@@ -158,7 +158,7 @@
     /// </summary>
     /// <remarks>
     /// The fallback has no agent and is not one of these: it is where the classifier sends what it
-    /// cannot place, it belongs to every domain, and there is nothing about it for anyone to correct.
+    /// cannot place, it belongs to every domain and there is nothing about it for anyone to correct.
     /// </remarks>
     private IReadOnlyList<AgentDraft> Agents =>
         DraftStateService.Current?.Agents ?? [];

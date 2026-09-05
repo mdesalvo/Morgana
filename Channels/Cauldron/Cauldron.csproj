@@ -9,7 +9,7 @@
 
     <!-- Widget sits inside this project's directory, so Cauldron's recursive globs reach into
          it and would compile the nested project's generated obj/ files as if they were its
-         own — duplicate assembly attributes, and a build that fails on the second run rather
+         own — duplicate assembly attributes and a build that fails on the second run rather
          than the first. The subtree belongs to that project alone. -->
     <ItemGroup>
        <Compile Remove="Widget\**" />

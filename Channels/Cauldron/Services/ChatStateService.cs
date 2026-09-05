@@ -5,7 +5,7 @@ using Morgana.Contracts;
 namespace Cauldron.Services;
 
 /// <summary>
-/// Manages the chat UI state: message list, temporary messages, agent tracking, and sending state.
+/// Manages the chat UI state: message list, temporary messages, agent tracking and sending state.
 /// </summary>
 /// <summary>
 /// Holds every piece of UI state for one chat session: the message list, the transient banners,

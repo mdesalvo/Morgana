@@ -14,7 +14,7 @@ public sealed class HarnessOptions
 {
     /// <summary>
     /// Whether the guard rail stays enabled on the instance under test. Off by default: no scenario
-    /// asserts moderation behaviour, and every guarded turn costs one extra LLM round trip.
+    /// asserts moderation behaviour and every guarded turn costs one extra LLM round trip.
     /// </summary>
     public bool EnableGuardrail { get; init; }
 
@@ -68,7 +68,7 @@ public sealed class HarnessOptions
     public int? SummarizationTargetCount { get; init; }
 
     /// <summary>
-    /// Overrides <c>Morgana:DustLimiting:BudgetPerConversation</c> at boot, when set, and also
+    /// Overrides <c>Morgana:DustLimiting:BudgetPerConversation</c> at boot, when set and also
     /// switches <c>Morgana:DustLimiting:Enabled</c> on for the run — dust limiting is force-disabled
     /// otherwise (see <c>MorganaHostFixture.ApplyHostEnvironment</c>), the same reasoning as
     /// <see cref="SummarizationThreshold"/>: process-wide for the single assembly-shared host, so

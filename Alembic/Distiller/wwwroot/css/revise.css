@@ -17,8 +17,8 @@
     --walk-measure: 52rem;
 }
 
-/* Where you are, and what is either side. The two skips are the same size and the same weight as
-   each other because they are the same act in two directions, and they carry the neighbouring
+/* Where you are and what is either side. The two skips are the same size and the same weight as
+   each other because they are the same act in two directions and they carry the neighbouring
    agent's own name rather than an arrow alone: "next" tells the client the list continues, the
    name tells them whether to press it. */
 .walk-head {
@@ -76,7 +76,7 @@
 }
 
 /* Gone rather than dim on the first agent, where there genuinely is nothing behind — a disabled
-   button drawn anyway is a control that can never do anything, and that is not a quieter version
+   button drawn anyway is a control that can never do anything and that is not a quieter version
    of a control, it is one with nothing to press. Invisible rather than absent from the layout, so
    the head does not lurch sideways the one time it has no opposite number. */
 .walk-step-spacer {

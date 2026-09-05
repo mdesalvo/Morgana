@@ -13,7 +13,7 @@ namespace Distiller.Model;
 /// <para>
 /// A Draft field that is still <c>null</c> ("not asked yet") projects to the empty string, because
 /// the framework's records have no notion of unanswered. Validation is what distinguishes the two;
-/// this projection deliberately does not, and must not be read as accepting them as equivalent.
+/// this projection deliberately does not and must not be read as accepting them as equivalent.
 /// </para>
 /// </remarks>
 public static class DraftProjection
@@ -38,7 +38,7 @@ public static class DraftProjection
     /// AdditionalProperties alongside whatever else was carried through.
     /// </summary>
     /// <remarks>
-    /// The toolkit is written as its own entry, first, and the unmodelled entries follow. This does
+    /// The toolkit is written as its own entry, first and the unmodelled entries follow. This does
     /// not necessarily reproduce the grouping a file arrived with — AdditionalProperties is a list
     /// of dictionaries and the same content can be spread across it in several ways — which is
     /// precisely why the round-trip invariant is stated as equivalence and not byte identity.

@@ -9,7 +9,7 @@ namespace Distiller.Services;
 /// Default <see cref="IAssetPackageService"/>: assembles the archive in memory.
 /// </summary>
 /// <remarks>
-/// In memory, and that is not a size compromise — a whole domain is tens of kilobytes. It is the
+/// In memory and that is not a size compromise — a whole domain is tens of kilobytes. It is the
 /// same constraint that shapes everything else here: Alembic has no filesystem it may write to,
 /// because at runtime it lives wherever the client deployed it.
 /// </remarks>
@@ -20,7 +20,7 @@ public class AssetPackageService : IAssetPackageService
     /// </summary>
     /// <remarks>
     /// A zip carrying an <c>agents.json</c> is not evidence of that on its own: anyone can zip up a
-    /// bare configuration, and Import's own next-step doors read differently for an archive than for
+    /// bare configuration and Import's own next-step doors read differently for an archive than for
     /// a bare upload. This is the fact that check is allowed to trust, because it is the one thing a
     /// zip built anywhere else would have no reason to contain. Content over name, as everywhere else
     /// Alembic tells files apart: what matters is that the entry exists, not what is written in it.
@@ -138,12 +138,12 @@ public class AssetPackageService : IAssetPackageService
                 }
             }
 
-            // Last, and caught the same way. Scenarios are the most valuable thing in the archive on
-            // the day someone edits the prose, and the least valuable on the day it is downloaded —
-            // so a domain whose scenarios failed still ships, and says so.
+            // Last and caught the same way. Scenarios are the most valuable thing in the archive on
+            // the day someone edits the prose and the least valuable on the day it is downloaded —
+            // so a domain whose scenarios failed still ships and says so.
             //
             // Never an early return from inside this block: the archive's central directory is
-            // written when the ZipArchive is disposed, and a buffer read before that is a file no
+            // written when the ZipArchive is disposed and a buffer read before that is a file no
             // unzip program will open.
             foreach (AgentDraft agent in includeScenarios
                          ? draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID))
@@ -196,14 +196,14 @@ public class AssetPackageService : IAssetPackageService
     private const string Readme = """
         # What is in here
 
-        A Morgana domain: its configuration, the C# that backs it, and a report of what changed.
+        A Morgana domain: its configuration, the C# that backs it and a report of what changed.
 
         | Path | Yours or Alembic's |
         |---|---|
         | `*.csproj` / `*.slnx` | Alembic's. A ready project referencing the `Morgana.AI` package, named after your namespace |
         | `agents.json` | the configuration Morgana loads — intents and agent prose |
         | `Agents/*.g.cs` | Alembic's. Regenerated in full every time |
-        | `Tools/*.g.cs` | Alembic's. Attributes, constructor, and one `partial` signature per tool |
+        | `Tools/*.g.cs` | Alembic's. Attributes, constructor and one `partial` signature per tool |
         | `Tools/*.cs` | **yours.** Written once as a working mock, never written again |
         | `MIGRATION.md` | what this differs from, if anything was uploaded |
         | `Scenarios/*.yaml` | starter PromptHarness scenarios — yours from here |
@@ -213,11 +213,11 @@ public class AssetPackageService : IAssetPackageService
         ## The two halves
 
         A tool class is split so regeneration is not destructive. Alembic owns the `.g.cs`: the
-        attributes, the constructor, and a `partial` declaration for every tool in the
+        attributes, the constructor and a `partial` declaration for every tool in the
         configuration. You own the `.cs`: the bodies.
 
-        The split is not enforced anywhere, and does not need to be. A declaration without an
-        implementation does not compile, and a tool whose signature stops matching its declaration
+        The split is not enforced anywhere and does not need to be. A declaration without an
+        implementation does not compile and a tool whose signature stops matching its declaration
         in `agents.json` fails Morgana's startup in `MorganaToolAdapter.AddTool` — loudly, before a
         single conversation happens.
 
@@ -243,9 +243,9 @@ public class AssetPackageService : IAssetPackageService
 
         ## The scenarios
 
-        A domain agent is its prose, and prose gets edited. `Scenarios/` holds the starting set:
+        A domain agent is its prose and prose gets edited. `Scenarios/` holds the starting set:
         drop the files into PromptHarness's own `Scenarios` directory, point its plugin reference at
-        the project in this archive instead of Morgana's own example, and add a test that names each
+        the project in this archive instead of Morgana's own example and add a test that names each
         scenario (one `[InlineData("scenario-id")]` per file, same shape PromptHarness's own tests
         already use).
 
@@ -257,10 +257,10 @@ public class AssetPackageService : IAssetPackageService
         situation, keep the YAML — it costs nothing to hold onto — for the day it is.
 
         They are a floor, never a suite — Alembic knows what your agents were designed to do, which
-        is what a first scenario is made of, and knows nothing about what will actually go wrong,
+        is what a first scenario is made of and knows nothing about what will actually go wrong,
         which is what every scenario after it is made of.
 
-        They are **domain scenarios only**, and that is the whole of what they should be. The guard,
+        They are **domain scenarios only** and that is the whole of what they should be. The guard,
         the classifier, quick replies, turn continuation, rich cards, channel degradation, history
         summarization and the context cycle are framework behaviour: they hold for every domain and
         Morgana ships her own scenarios for them, maintained where the policies are. Yours sit beside
@@ -272,7 +272,7 @@ public class AssetPackageService : IAssetPackageService
 
         Each one is a behavioural use-case Alembic carries — the flow the agent exists for, the
         boundary it refuses, the confirmation it owes, the detail it withholds — derived against your
-        domain and written in your words. You will not have every one for every agent, and that is
+        domain and written in your words. You will not have every one for every agent and that is
         the point rather than a gap: an agent whose tools only look things up has no irreversible
         action to confirm, so that scenario was declined instead of invented.
         """;

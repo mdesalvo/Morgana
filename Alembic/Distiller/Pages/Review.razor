@@ -29,14 +29,14 @@
         @*
             One panel, not two: a deterministic check and a relational one are the same job seen at
             two depths, not two different jobs. The first is decidable by reading the Draft alone —
-            no model is asked, and none would help. The second needs the whole domain read at once,
+            no model is asked and none would help. The second needs the whole domain read at once,
             because whether two intents collide or two agents claim the same ground is invisible one
             agent at a time, which is exactly how the interview writes them. Together they are what
             "would stop this domain, or should give you pause" means in full.
         *@
         <div class="panel">
             <h2>Domain Validation</h2>
-            <p class="muted">What would stop this domain, and what only reading it whole reveals.</p>
+            <p class="muted">What would stop this domain and what only reading it whole reveals.</p>
 
             <details class="recap-section">
                 <summary>Deterministic checks</summary>
@@ -79,15 +79,15 @@
                 <summary>Coherence</summary>
             <p class="muted">
                 What only reading every agent at once reveals. Ask it for what you actually want to
-                know: each class below is a separate question about your domain, and the pass is
+                know: each class below is a separate question about your domain and the pass is
                 composed of the ones you tick and nothing else.
             </p>
 
             @*
-                Ticked one at a time rather than run whole, and the reason is not the token bill: a
+                Ticked one at a time rather than run whole and the reason is not the token bill: a
                 report answering six questions when the client asked one is a table nobody finishes,
                 with the class they actually came about ranked beneath five they did not. So the
-                choice is theirs, nothing is ticked for them, and the pass cannot run until they
+                choice is theirs, nothing is ticked for them and the pass cannot run until they
                 have said what they are looking for.
 
                 Each class is then its own accordion. The checkbox picks whether to ask it; once the
@@ -143,7 +143,7 @@
                         @if (ranThis && open && group.Count > 0)
                         {
                             @* One card per finding: what is wrong, what it costs and the fix each
-                               under its own label, and "Apply" inside the fix box it acts on. No
+                               under its own label and "Apply" inside the fix box it acts on. No
                                bulk apply — the notice above asks for care one at a time, more so
                                once a fix can touch more than one agent. *@
                             <div class="aspect-body">
@@ -163,7 +163,7 @@
                                         @if (RelatedFix(finding) is { } related)
                                         {
                                             @* Shares an agent with something just fixed: at a glance
-                                               this looks like the same problem back, and it is not —
+                                               this looks like the same problem back and it is not —
                                                it is what the fix touched, from another angle. *@
                                             <p class="consequence-of">
                                                 &darr; surfaced by the &ldquo;@AspectLabel(related.Finding.Kind)&rdquo; fix on <code>@related.Finding.Where</code>
@@ -246,7 +246,7 @@
                     @if (coherenceRuns >= ChaseWarningThreshold)
                     {
                         @* Nothing here stops the client — it advises, never blocks — but a fix's own
-                           ripple can surface a fresh finding every time, and nothing about this loop
+                           ripple can surface a fresh finding every time and nothing about this loop
                            guarantees it ever reaches zero. Past a few rounds the honest thing is to
                            say so, not to keep lighting the button as if one more press finished it. *@
                         <p class="chase-warning">
@@ -278,7 +278,7 @@
             @if (recap is not null)
             {
                 @* Two fenced blocks, split for the same reason they are fenced at all: they are
-                   read at two different moments of standing (Morgana's, then this agent's), and a
+                   read at two different moments of standing (Morgana's, then this agent's) and a
                    client weighing one prose against the other should never have to find the seam
                    by scrolling. The split point is the domain fence ComposeAgentInstructionsAsync
                    always writes — see SplitSystemPrompt. *@
@@ -290,7 +290,7 @@
                         <p class="muted">
                             Morgana's own layer, read once before anything else and binding on every
                             agent of hers &mdash; Alembic did not write a word of this and cannot: it
-                            is embedded in the Morgana.AI this Alembic was built against, and
+                            is embedded in the Morgana.AI this Alembic was built against and
                             customising it means forking the framework, not editing this domain.
                         </p>
                         <pre class="prompt">@frameworkPrompt</pre>
@@ -499,7 +499,7 @@
 
     /// <summary>
     /// Takes a class of defect in or out of the next run. Nothing already reported is disturbed:
-    /// what is on screen is the answer to the question that was asked, and it stays true of it.
+    /// what is on screen is the answer to the question that was asked and it stays true of it.
     /// </summary>
     private void ToggleAspect(string aspectId, ChangeEventArgs e)
     {
@@ -562,7 +562,7 @@
     /// The literal <c>ConfigurationPromptComposerService</c> writes to open the domain layer — see
     /// its <c>DomainLayerHeader</c>. Duplicated here rather than exposed by the framework because
     /// this is a display-only seam: nothing downstream of the model ever needs the two layers apart,
-    /// only this panel does, and the marker is fixed in code on both sides of the reference (the
+    /// only this panel does and the marker is fixed in code on both sides of the reference (the
     /// framework's own remarks call the fences "glue... not domain-tunable prose", so it does not
     /// move without the framework's prompt shape moving with it).
     /// </summary>

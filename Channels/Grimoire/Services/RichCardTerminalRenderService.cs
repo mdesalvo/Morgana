@@ -223,7 +223,7 @@ public sealed class RichCardTerminalRenderService
             // A divider carries no segments — its rule is drawn by FrameLine at full innerWidth —
             // so prefixing it with spaces would do nothing useful; pass it through untouched.
             // Every other child line is re-emitted with a leading two-space segment: that's the
-            // visual nesting, and it composes for nested sections (each level adds another indent).
+            // visual nesting and it composes for nested sections (each level adds another indent).
             if (child.IsDivider)
             {
                 output.Add(child);
@@ -237,7 +237,7 @@ public sealed class RichCardTerminalRenderService
 
     private List<CardLine> BuildGrid(GridComponent grid, int width)
     {
-        // Clamp the requested column count: at least 1, and at most width/2 so every cell keeps
+        // Clamp the requested column count: at least 1 and at most width/2 so every cell keeps
         // a usable ≥2-column slot even on a narrow terminal. Then each cell gets an equal share of
         // the width minus the (columns-1) single-space gutters between cells.
         int columns = Math.Clamp(grid.Columns <= 0 ? 1 : grid.Columns, 1, Math.Max(1, width / 2));
@@ -291,7 +291,7 @@ public sealed class RichCardTerminalRenderService
     private List<CardLine> BuildImage(ImageComponent image, int width)
     {
         // No bitmap rendering and no OSC 8 hyperlinks (the frozen low-effort decision): surface the
-        // image as honest text — an "[image: alt]" tag, the URL, and an optional italic caption.
+        // image as honest text — an "[image: alt]" tag, the URL and an optional italic caption.
         // All dim, since it's metadata about content the terminal can't actually show. The URL is
         // WRAPPED, not truncated: a clipped URL is useless (can't be read or copied), so we'd
         // rather spend a couple of rows and keep it whole.
@@ -375,7 +375,7 @@ public sealed class RichCardTerminalRenderService
     /// emoji shortcodes (<c>:white_check_mark:</c> → ✅) to real glyphs, then normalises emoji presentation so
     /// measured width matches what the terminal draws. Resolving shortcodes here — the single chokepoint every
     /// card builder funnels through — is what keeps them out of the rendered output: <see cref="Markup"/> does
-    /// not expand them in this path, and the badge builder upper-cases its text (turning <c>:tada:</c> into the
+    /// not expand them in this path and the badge builder upper-cases its text (turning <c>:tada:</c> into the
     /// non-shortcode <c>:TADA:</c>), so the conversion must happen before either step. A resolved glyph is then
     /// measured correctly by <c>GetCellWidth</c>, keeping the right border aligned.</summary>
     private string Plain(string? text) =>

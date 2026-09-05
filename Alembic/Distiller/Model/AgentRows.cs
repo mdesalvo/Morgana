@@ -6,7 +6,7 @@ namespace Distiller.Model;
 /// <remarks>
 /// A projection of the interview rather than a component's private business, because two things on
 /// the screen need it and they are not the same component: the entry's own tag says how much of it
-/// is written, and the panel that opens under that tag says what. Computed in one place so the count
+/// is written and the panel that opens under that tag says what. Computed in one place so the count
 /// on the tag can never disagree with the rows behind it.
 /// </remarks>
 public static class AgentRows
@@ -24,8 +24,8 @@ public static class AgentRows
     /// </summary>
     public static IReadOnlyList<Row> Of(InterviewState interviewState)
     {
-        // Nouns, and for the four sections the rail's own nouns. "It is theirs when", "how it meets
-        // them", "what it reaches for" were sentences with pronouns in them, and a column of those is
+        // Nouns and for the four sections the rail's own nouns. "It is theirs when", "how it meets
+        // them", "what it reaches for" were sentences with pronouns in them and a column of those is
         // read as prose rather than scanned as labels — the client has to work out what "them" is
         // before they can find the line they are looking for. Naming the sections exactly as the step
         // that settles them is named makes the panel and the rail the same vocabulary: what you were
@@ -54,10 +54,10 @@ public static class AgentRows
     }
 
     /// <summary>
-    /// A quick reply as the user will meet it: what is written on it, and what pressing it sends.
+    /// A quick reply as the user will meet it: what is written on it and what pressing it sends.
     /// </summary>
     // One row, because it is one thing. A button whose label is read apart from the sentence it sends
-    // is half of a button, and the half that is missing is the one that decides whether pressing it
+    // is half of a button and the half that is missing is the one that decides whether pressing it
     // does what it looked like it would.
     private static string? Button(IntentDraft intent) =>
         intent.Label is null && intent.DefaultValue is null
@@ -91,10 +91,10 @@ public static class AgentRows
     /// </summary>
     /// <remarks>
     /// Public because two screens read prose the interview wrote and neither should meet the fence:
-    /// the panel behind the entry's tag, and the walk over a domain's agents.
+    /// the panel behind the entry's tag and the walk over a domain's agents.
     /// </remarks>
     // [TARGET] is a marker for the model that reads the composed prompt, guaranteed in code precisely
-    // because it must not depend on anyone remembering it. It is not a word of this client's, and a
+    // because it must not depend on anyone remembering it. It is not a word of this client's and a
     // panel written for them is the wrong place to meet it.
     public static string? Plain(string? section) =>
         section is null ? null : Labelled.Replace(section, string.Empty).TrimStart();

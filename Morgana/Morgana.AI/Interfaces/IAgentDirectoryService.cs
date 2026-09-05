@@ -17,6 +17,11 @@ public interface IAgentDirectoryService
     /// Card published for the agent handling <paramref name="intent"/>, or <c>null</c> when no such
     /// agent is known — which callers treat as "nobody answers for this", never as an error.
     /// </summary>
+    /// <remarks>
+    /// The card names where this instance answers as soon as that is knowable, so a caller serving
+    /// it asks per request rather than holding one: nothing ever has to declare the application's
+    /// own URL; no moment has to be chosen at which every card learns it at once.
+    /// </remarks>
     Task<AgentCard?> GetAgentCardAsync(string intent);
 
     /// <summary>
@@ -24,14 +29,6 @@ public interface IAgentDirectoryService
     /// asked for yet. It projects nothing itself.
     /// </summary>
     AgentCard? TryGetProjectedCard(string intent);
-
-    /// <summary>Fills in, on every card already projected, the interface this instance answers on.</summary>
-    /// <remarks>
-    /// Cards are projected while the endpoints are still being mapped, before the server has bound.
-    /// Called once the address exists and before any request can read a card, so that nothing ever
-    /// has to declare the application's own URL.
-    /// </remarks>
-    Task PublishInterfacesAsync();
 
     /// <summary>
     /// Resolves the agent <paramref name="peer"/> names by fetching its published card, binding a

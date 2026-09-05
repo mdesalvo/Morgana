@@ -1,6 +1,6 @@
 id: behaviour-conversation-closure
 description: >-
-  Family B in both its wordings: escape appended to a choice list so the user is never trapped, and
+  Family B in both its wordings: escape appended to a choice list so the user is never trapped and
   closure withheld when the user has already said goodbye. Also where the removal of the
   endsWithQuestion heuristic shows — nothing but the tool decides that the agent is done.
 
@@ -26,8 +26,8 @@ turns:
       textNotEmpty: true
       textNotContains: ["#INT#"]
     judge:
-      # One act, and the cautions that used to trail it are gone: an in-character farewell IS a
-      # farewell, and saying so twice only gave the judge a second thing to weigh.
+      # One act and the cautions that used to trail it are gone: an in-character farewell IS a
+      # farewell and saying so twice only gave the judge a second thing to weigh.
       - "The response reads as a farewell or as an acknowledgement of thanks, in whatever words."
     judgeNot:
       - "The response asks a question or invites the user to continue the conversation."

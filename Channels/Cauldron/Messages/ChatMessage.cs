@@ -5,7 +5,7 @@ namespace Cauldron.Messages;
 /// <summary>
 /// One row of the chat as the UI knows it. Deliberately distinct from the wire contracts: it is
 /// mutable, it carries state the server never sees (typing indicator, streaming flag, which quick
-/// reply was picked), and it covers rows the server never sent, like the local error line.
+/// reply was picked) and it covers rows the server never sent, like the local error line.
 /// </summary>
 public class ChatMessage
 {

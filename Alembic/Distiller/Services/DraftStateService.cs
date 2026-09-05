@@ -8,14 +8,14 @@ namespace Distiller.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The Draft lives here, in this circuit, and goes when it goes. Nothing survives a restart and
-/// nothing is picked up on the way in: the landing page is the same door for everybody, and coming
+/// The Draft lives here, in this circuit and goes when it goes. Nothing survives a restart and
+/// nothing is picked up on the way in: the landing page is the same door for everybody and coming
 /// back to unfinished work means bringing the file back to it. A workbench that silently resumed
 /// something the client had not asked to resume would be deciding for them what they had come to do.
 /// </para>
 /// <para>
-/// What the timer keeps is a copy of the last few seconds, and it exists for one gesture: Save my
-/// work serializes the Draft as it stands when the button is pressed, and falls back to this when it
+/// What the timer keeps is a copy of the last few seconds and it exists for one gesture: Save my
+/// work serializes the Draft as it stands when the button is pressed and falls back to this when it
 /// cannot — a Draft caught mid-write, a serialization that throws. The client gets a file either way,
 /// at worst <c>AutosaveSeconds</c> behind what is on their screen.
 /// </para>
@@ -50,7 +50,7 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
 
         // Same interval for the due time and the period: the first snapshot fires one AutosaveSeconds
         // after the circuit opens (there is nothing to snapshot before then anyway — Current starts
-        // null), and every one after that on the same cadence, on the .NET thread pool rather than
+        // null) and every one after that on the same cadence, on the .NET thread pool rather than
         // the circuit's own synchronization context.
         timer = new Timer(_ => Snapshot(), null, autosave, autosave);
     }
@@ -70,7 +70,7 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
 
     /// <inheritdoc />
     /// <remarks>
-    /// Called both by the timer, on its own cadence, and directly by <c>SaveWork</c>'s own handler
+    /// Called both by the timer, on its own cadence and directly by <c>SaveWork</c>'s own handler
     /// for an up-to-the-second copy at the moment the client actually presses the button — the timer
     /// is a floor under that call, not a replacement for it.
     /// </remarks>
@@ -78,7 +78,7 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
     /// failed — in the latter case <see cref="latest"/> is left holding whatever snapshot preceded it.</returns>
     public byte[]? Snapshot()
     {
-        // Read into a local first: the timer's thread and the circuit's own both arrive here, and a
+        // Read into a local first: the timer's thread and the circuit's own both arrive here and a
         // Draft replaced between the check and the serialization would throw where nobody is looking.
         if (Current is not { } draft)
             return null;
@@ -89,7 +89,7 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
         }
         catch (Exception)
         {
-            // A Draft caught mid-edit is a snapshot not taken, and the one before it still stands.
+            // A Draft caught mid-edit is a snapshot not taken and the one before it still stands.
             // Letting this out of a timer callback would take the process down.
             return null;
         }

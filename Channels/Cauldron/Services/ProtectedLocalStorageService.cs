@@ -6,7 +6,7 @@ namespace Cauldron.Services;
 /// <summary>
 /// Persists the conversation id in the browser's localStorage through ProtectedLocalStorage,
 /// which encrypts it with the server's data-protection keys. That is what lets a returning
-/// visitor resume, and what makes the value useless if lifted from the browser.
+/// visitor resume and what makes the value useless if lifted from the browser.
 /// </summary>
 public class ProtectedLocalStorageService : IConversationStorageService
 {
@@ -59,7 +59,7 @@ public class ProtectedLocalStorageService : IConversationStorageService
         catch (Exception ex)
         {
             // Rethrown, unlike the other two: without a saved id the conversation cannot be
-            // resumed later, and silently continuing would hide that from the user.
+            // resumed later and silently continuing would hide that from the user.
             logger.LogError(ex, "Failed to save conversation ID to protected storage");
             throw;
         }

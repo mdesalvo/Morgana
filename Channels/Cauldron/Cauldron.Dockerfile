@@ -19,7 +19,7 @@ WORKDIR /src
 
 # Copy project files and dependencies (for optimal layer caching). The repo layout is
 # mirrored under /src so Cauldron's ProjectReference to ../../Morgana/Morgana.Contracts
-# resolves, and each project picks up its own Directory.Build.props (Cauldron's vs the
+# resolves and each project picks up its own Directory.Build.props (Cauldron's vs the
 # Morgana one that the zero-dependency Morgana.Contracts inherits).
 COPY ["Channels/Cauldron/Cauldron.csproj", "Channels/Cauldron/"]
 COPY ["Channels/Cauldron/Directory.Build.props", "Channels/Cauldron/"]

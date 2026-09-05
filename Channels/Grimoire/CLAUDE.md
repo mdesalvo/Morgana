@@ -4,7 +4,7 @@
 
 Grimoire is a minimal **.NET 10 console application** that serves as the rich-TTY reference channel for Morgana, sibling to Cauldron. Where Cauldron renders Morgana's full expressive surface in HTML (SignalR, streaming, rich cards, quick replies, markdown), Grimoire renders the **same** full profile inside a Spectre.Console terminal UI: every expressive feature on, no message-length cap, content arrives integral and is Spectrized locally. It is the **textual Cauldron** — what a power user sees when their workflow lives in the terminal.
 
-Grimoire lives at `Channels/Grimoire/` in the repo root, alongside Cauldron and Rune. Rune occupies the matrix's complementary cell (TTY-poor: 500-char cap, no rich features, exercises Morgana's degradation path); Grimoire is its rich sibling, and the two never run at the same time — only one can own stdin/stdout.
+Grimoire lives at `Channels/Grimoire/` in the repo root, alongside Cauldron and Rune. Rune occupies the matrix's complementary cell (TTY-poor: 500-char cap, no rich features, exercises Morgana's degradation path); Grimoire is its rich sibling and the two never run at the same time — only one can own stdin/stdout.
 
 ## Why "textual Cauldron"
 
@@ -15,7 +15,7 @@ A pure-text channel doesn't have to be poor. Grimoire's role is to demonstrate t
 | **Full**    | Cauldron    | **Grimoire**       |
 | **Poor**    | —           | Rune               |
 
-Grimoire is **not a Cauldron fork**. It is its own channel identity: self-issued JWTs under `iss=grimoire` with its own `SymmetricKey`, its own Kestrel port (`5004`), and a direct project reference to the shared `Morgana.Contracts` wire package. The per-issuer auth gate is closed end-to-end by a third channel identity, independent of Cauldron and Rune.
+Grimoire is **not a Cauldron fork**. It is its own channel identity: self-issued JWTs under `iss=grimoire` with its own `SymmetricKey`, its own Kestrel port (`5004`) and a direct project reference to the shared `Morgana.Contracts` wire package. The per-issuer auth gate is closed end-to-end by a third channel identity, independent of Cauldron and Rune.
 
 ## Project Structure
 
@@ -90,7 +90,7 @@ Capabilities = { SupportsRichCards: true, SupportsQuickReplies: true, SupportsSt
                  MaxMessageLength: null }
 ```
 
-Morgana's controller gate additionally requires `callbackUrl` to be an absolute URI when `deliveryMode=webhook` — enforced at handshake, fail-closed. The full capability profile means `MorganaChannelAdapter.AdaptAsync` short-circuits on every turn (`FitsWithin` returns true), the streaming path is **not** suppressed upstream, and the wire payload reaches Grimoire integral.
+Morgana's controller gate additionally requires `callbackUrl` to be an absolute URI when `deliveryMode=webhook` — enforced at handshake, fail-closed. The full capability profile means `MorganaChannelAdapter.AdaptAsync` short-circuits on every turn (`FitsWithin` returns true), the streaming path is **not** suppressed upstream and the wire payload reaches Grimoire integral.
 
 ## Authentication
 
@@ -112,7 +112,7 @@ Morgana's controller gate additionally requires `callbackUrl` to be an absolute 
 
 The wire DTOs (`ChannelMessage`, `ChannelMetadata`, `ChannelCoordinates` incl. `CallbackUrl`, `ChannelCapabilities`, `QuickReply`, `RichCard`/`CardComponent`, `StartConversationRequest`, `SendMessageRequest`, `StreamChunkRequest`) are **no longer duplicated**: Grimoire takes a direct `ProjectReference` to **`Morgana.Contracts`** (`..\..\Morgana\Morgana.Contracts\Morgana.Contracts.csproj`) — the single source of truth shared with Morgana.AI — and consumes them under the `Morgana.Contracts` namespace. Change a contract once, in `Morgana.Contracts`. `StreamChunkRequest` (the `{callbackUrl}/chunk` webhook body) now lives in `Morgana.Contracts` too and is consumed directly by Morgana.Web's `WebhookChannelService`, so there is no longer a private server-side copy to keep in lockstep.
 
-The contract types are immutable records (init-only / positional): `StartConversationRequest`/`SendMessageRequest` are constructed positionally, and `QuickReply.Termination` is now `bool?`. Channel identity lives channel-side in `Messages/GrimoireChannelMetadata.cs` (`GrimoireChannelMetadata.Build(callbackUrl)`), not on the shared contract.
+The contract types are immutable records (init-only / positional): `StartConversationRequest`/`SendMessageRequest` are constructed positionally and `QuickReply.Termination` is now `bool?`. Channel identity lives channel-side in `Messages/GrimoireChannelMetadata.cs` (`GrimoireChannelMetadata.Build(callbackUrl)`), not on the shared contract.
 
 The Docker build mirrors the repo layout under `/src` and stages the `Morgana.Contracts` subtree so the `ProjectReference` resolves (see `Grimoire.Dockerfile`).
 
@@ -122,8 +122,8 @@ Responses are contracts too: `StartConversationResponse` is consumed straight fr
 
 Built on Spectre.Console's `LiveDisplay` + `Layout`:
 
-- **Header** (sticky, 3 rows): panel with the current speaker name colored by role, a truncated conversation id, and the magic-dust gauge.
-- **Body** (scrolling): chat history with each line colored by speaker, a live streaming pane sandwiched between history and the input row (visible only while an agent is streaming), and a bottom-most input line with a blinking cursor.
+- **Header** (sticky, 3 rows): panel with the current speaker name colored by role, a truncated conversation id and the magic-dust gauge.
+- **Body** (scrolling): chat history with each line colored by speaker, a live streaming pane sandwiched between history and the input row (visible only while an agent is streaming) and a bottom-most input line with a blinking cursor.
 
 ### Colors (dark-theme palette)
 

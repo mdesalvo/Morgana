@@ -22,7 +22,7 @@ WORKDIR /src
 
 # Copy project files and dependencies (for optimal layer caching). The repo layout is
 # mirrored under /src so Rune's ProjectReference to ../../Morgana/Morgana.Contracts
-# resolves, and each project picks up its own Directory.Build.props (Rune's vs the
+# resolves and each project picks up its own Directory.Build.props (Rune's vs the
 # Morgana one that the zero-dependency Morgana.Contracts inherits).
 COPY ["Channels/Rune/Rune.csproj", "Channels/Rune/"]
 COPY ["Channels/Rune/Directory.Build.props", "Channels/Rune/"]

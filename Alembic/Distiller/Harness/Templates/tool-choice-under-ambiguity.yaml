@@ -1,7 +1,7 @@
 #@ use-case: Two of the agent's own tools could plausibly answer; it picks the right one.
 #@ requires: two-tools
 #@ derive: |
-#@   Find the two tools in this toolkit whose descriptions come closest to each other, and write
+#@   Find the two tools in this toolkit whose descriptions come closest to each other and write
 #@   the request that sits between them — the one a careless reader would route either way. This
 #@   is the scenario that fails when a tool description says what a tool does and not when to call
 #@   it, which is a defect no other artifact would ever surface.
@@ -10,7 +10,7 @@
 
 id: "{{intent}}-tool-choice-under-ambiguity"
 description: >-
-  {{one sentence: the request that sits between two tools, and which one owns it}}
+  {{one sentence: the request that sits between two tools and which one owns it}}
 
 # Which of two tools runs is a fact about their descriptions, not a tendency.
 runs: 3

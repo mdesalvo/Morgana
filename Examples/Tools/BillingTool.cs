@@ -10,7 +10,7 @@ namespace Examples.Tools;
 
 /// <summary>
 /// The accounts desk of The Greenhouse &amp; Nursery: the invoices issued to a customer for plants
-/// bought from the catalog and for the Green Care Plan, and the payments received against them.
+/// bought from the catalog and for the Green Care Plan and the payments received against them.
 /// Reads the same shared database the greenhouse ledger writes (see <see cref="GreenhouseDatabaseHelper"/>),
 /// which is what lets a detail line point at the very order that produced it — and it only ever
 /// reads: nothing here charges, credits or settles anything.
@@ -83,14 +83,14 @@ public class BillingTool : MorganaTool
     /// </summary>
     /// <remarks>
     /// Deliberately NOT a gate. A code the books have never seen is served exactly like one they
-    /// have and simply comes back empty: the nursery takes anyone at the counter, and an accounts
+    /// have and simply comes back empty: the nursery takes anyone at the counter and an accounts
     /// desk that refuses to look before it has recognised you is a worse demo and a worse shop.
     /// The name is a courtesy on the answer, never a permission to answer.
     /// </remarks>
     private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string customerCode)
     {
         // COLLATE NOCASE, like everywhere else in this plugin: the code travels through a chat
-        // transcript, typed from memory, and 'p994e' is the same customer as 'P994E'.
+        // transcript, typed from memory and 'p994e' is the same customer as 'P994E'.
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT DisplayName FROM Customers WHERE CustomerCode = $customerCode COLLATE NOCASE";
         command.Parameters.AddWithValue("$customerCode", customerCode);
@@ -249,7 +249,7 @@ public class BillingTool : MorganaTool
         string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
         // Scoped to the customer, not merely looked up by id: one customer's invoice is never
-        // readable by quoting its number in another customer's conversation, and an invoice that
+        // readable by quoting its number in another customer's conversation and an invoice that
         // belongs to someone else is reported exactly as one that does not exist.
         Invoice? invoice = null;
         await using (SqliteCommand command = connection.CreateCommand())
@@ -312,7 +312,7 @@ public class BillingTool : MorganaTool
                     : (int?)null
             },
             // Sku is read from the row but never surfaced: it is the greenhouse ledger's identifier
-            // for a plant, and an accounts desk that hands it out starts being asked catalog
+            // for a plant and an accounts desk that hands it out starts being asked catalog
             // questions. OrderId is a different thing — a reference to what was billed, which is
             // exactly what an invoice line is for.
             lineItems = lines.Select(line => new
@@ -375,7 +375,7 @@ public class BillingTool : MorganaTool
         }
 
         // The sum is computed here rather than left to whoever reads the list: money that a
-        // customer is told they owe is not a figure to be added up in prose, and a total that
+        // customer is told they owe is not a figure to be added up in prose and a total that
         // disagrees with the invoices under it is worse than no total at all.
         decimal totalDue = unpaid.Sum(invoice => invoice.Total);
         int worstDaysOverdue = unpaid.Max(invoice => Math.Max(0, -(invoice.DueDate - DateTime.UtcNow).Days));

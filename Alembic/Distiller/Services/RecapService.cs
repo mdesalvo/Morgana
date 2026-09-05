@@ -10,7 +10,7 @@ namespace Distiller.Services;
 /// </summary>
 /// <remarks>
 /// There is deliberately almost nothing in this class. Every byte the client is shown comes out of
-/// <see cref="IPromptComposerService"/>, and anything Alembic added on top would be a claim about
+/// <see cref="IPromptComposerService"/> and anything Alembic added on top would be a claim about
 /// the prompt rather than the prompt.
 /// </remarks>
 public class RecapService : IRecapService

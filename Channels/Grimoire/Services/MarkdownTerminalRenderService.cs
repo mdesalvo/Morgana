@@ -55,7 +55,7 @@ public sealed class MarkdownTerminalRenderService
     /// <summary>
     /// Full convenience path used by the UI: parse <paramref name="markdown"/> with the
     /// speaker's <paramref name="baseColor"/> as the prose colour, optionally seed the very
-    /// first row with a bold <paramref name="speakerPrefix"/> (e.g. <c>"Morgana: "</c>), and
+    /// first row with a bold <paramref name="speakerPrefix"/> (e.g. <c>"Morgana: "</c>) and
     /// wrap the result to single-row <see cref="Markup"/>s at <paramref name="width"/>.
     /// Streaming callers pass a null prefix.
     /// </summary>

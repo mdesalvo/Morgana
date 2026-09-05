@@ -150,7 +150,7 @@ public class RouterActor : MorganaActor
     }
 
     /// <summary>
-    /// Handles an agent's final response, once its own streaming (if any) has finished, and
+    /// Handles an agent's final response, once its own streaming (if any) has finished and
     /// forwards it to the supervisor wrapped with the agent reference it came from.
     /// </summary>
     /// <param name="response">Agent response from specialized agent</param>

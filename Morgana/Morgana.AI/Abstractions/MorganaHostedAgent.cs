@@ -44,13 +44,26 @@ public sealed class MorganaHostedAgent : AIAgent
     /// <summary>How long to wait for the serving actor before reporting the agent unreachable.</summary>
     private readonly TimeSpan requestTimeout;
 
-    /// <summary>Logger for inbound-request diagnostics.</summary>
     /// <summary>
     /// The conversation's ledger, asked what serving one consultation cost so the answer can carry
     /// it back. Every dust question — reading, delta, clamping — is its own, never computed here.
     /// </summary>
     private readonly IDustLimitService dustLimitService;
 
+    /// <summary>
+    /// How many conversations the asking system may still open. Behind this door the caller names
+    /// the conversation, so the conversation's own budget bounds the exchange but not the caller.
+    /// </summary>
+    private readonly IPeerAdmissionService peerAdmissionService;
+
+    /// <summary>
+    /// Owner of the conversation's storage, asked to open it before the turn runs. A partner's
+    /// exchange has no database of its own until one is made. Until then nothing that turn
+    /// spends is recorded anywhere.
+    /// </summary>
+    private readonly IConversationPersistenceService persistenceService;
+
+    /// <summary>Logger for inbound-request diagnostics.</summary>
     private readonly ILogger logger;
 
     /// <inheritdoc />
@@ -67,6 +80,8 @@ public sealed class MorganaHostedAgent : AIAgent
     /// <param name="actorSystemResolver">Hands back the actor system on the turn that needs it — see the field's own remarks for why it arrives as a delegate.</param>
     /// <param name="requestTimeout">Maximum wait for the serving actor's answer.</param>
     /// <param name="dustLimitService">Ledger consulted for what the served turn cost.</param>
+    /// <param name="peerAdmissionService">Weighs a system opening a conversation it has not opened before.</param>
+    /// <param name="persistenceService">Owner of the conversation's storage, opened before the turn runs.</param>
     /// <param name="logger">Records requests that name no conversation, no agent, or that go unanswered.</param>
     public MorganaHostedAgent(
         string intent,
@@ -76,6 +91,8 @@ public sealed class MorganaHostedAgent : AIAgent
         Func<ActorSystem> actorSystemResolver,
         TimeSpan requestTimeout,
         IDustLimitService dustLimitService,
+        IPeerAdmissionService peerAdmissionService,
+        IConversationPersistenceService persistenceService,
         ILogger logger)
     {
         this.intent = intent;
@@ -85,6 +102,8 @@ public sealed class MorganaHostedAgent : AIAgent
         this.actorSystemResolver = actorSystemResolver;
         this.requestTimeout = requestTimeout;
         this.dustLimitService = dustLimitService;
+        this.peerAdmissionService = peerAdmissionService;
+        this.persistenceService = persistenceService;
         this.logger = logger;
     }
 
@@ -134,6 +153,34 @@ public sealed class MorganaHostedAgent : AIAgent
 
         try
         {
+            // An exchange this installation has never seen. A caller admitted here reaches an agent
+            // directly, with none of the rate limit a channel's own path goes through. It also writes
+            // the name of the conversation it is served on — so a system free to keep writing new
+            // ones would draw a fresh budget with every one of them.
+            if (!persistenceService.ConversationExists(hostedAgentSession.ConversationId)
+                && hostedAgentSession.CallerIssuer is { } openingIssuer
+                && !await peerAdmissionService.TryAdmitNewConversationAsync(openingIssuer))
+            {
+                return BuildAgentResponseFromMessage($"The agent for '{intent}' cannot take on further conversations right now. Proceed without it.");
+            }
+
+            // Opened before the turn, because a partner's exchange has none until now: the ledger is
+            // where everything this turn spends is recorded. What is not recorded can be neither
+            // reported back to the caller nor held against the budget below.
+            await persistenceService.EnsureDatabaseInitializedAsync(hostedAgentSession.ConversationId);
+
+            // A conversation that has already spent its budget buys nothing more, whoever is asking.
+            // For a colleague of this installation this is the very budget the user's own turns are
+            // held to — reached over A2A instead of through the pipeline, held to it just the same.
+            if (await dustLimitService.IsOverBudgetAsync(hostedAgentSession.ConversationId))
+            {
+                logger.LogWarning(
+                    "Hosted agent '{Intent}' refused a request from '{CallerIntent}': conversation '{ConversationId}' is over budget",
+                    intent, callerIntent, hostedAgentSession.ConversationId);
+
+                return BuildAgentResponseFromMessage($"The agent for '{intent}' has no budget left on this conversation. Proceed without it.");
+            }
+
             // Resolve the actor system
             ActorSystem actorSystem = actorSystemResolver();
 
@@ -166,13 +213,10 @@ public sealed class MorganaHostedAgent : AIAgent
             // Morgana: anything else that speaks A2A has no ledger to charge it to and would carry a
             // number it cannot read. Unreported, the spend simply stays ours — it is on our own books
             // either way and this line only decides whether the asker gets to see it.
+            double dustSpent = await dustLimitService.GetConsumedSinceAsync(hostedAgentSession.ConversationId, dustBaseline);
+
             if (callerIntent is not null)
-            {
-                peerConsultationResponse = peerConsultationResponse with
-                {
-                    DustConsumed = await dustLimitService.GetConsumedSinceAsync(hostedAgentSession.ConversationId, dustBaseline)
-                };
-            }
+                peerConsultationResponse = peerConsultationResponse with { DustConsumed = dustSpent };
 
             // The envelope travels serialized inside an assistant message because that is the only
             // shape A2A carries, but it is DATA and not prose: what the asking agent receives is a

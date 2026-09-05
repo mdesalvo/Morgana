@@ -12,7 +12,7 @@ namespace Distiller.Interfaces;
 /// nothing else — which is the only reason a regenerated file can be safe to overwrite.
 /// </para>
 /// <para>
-/// What a template writes badly is a domain mock, and that is precisely what is <em>not</em> here:
+/// What a template writes badly is a domain mock and that is precisely what is <em>not</em> here:
 /// see <see cref="IToolMockService"/>. The split between the two services is the same split the
 /// archive carries as a file-name convention.
 /// </para>
@@ -24,7 +24,7 @@ public interface ICodeEmitService
     /// </summary>
     /// <param name="agent">The agent to emit.</param>
     /// <param name="intentName">The intent that routes to it — the <c>[HandlesIntent]</c> argument.</param>
-    /// <returns>One or two files: the agent, and its tool class where it declares native tools.</returns>
+    /// <returns>One or two files: the agent and its tool class where it declares native tools.</returns>
     IReadOnlyList<EmittedFile> Emit(AgentDraft agent, string intentName);
 }
 
@@ -42,7 +42,7 @@ public sealed record EmittedFile(string Path, string Content, FileOwnership Owne
 /// <remarks>
 /// The convention travels <b>inside the archive</b>, in the file names themselves, because Alembic
 /// never sees the client's tree and cannot enforce anything about it. It does not need to: a
-/// signature that drifts between the two halves is a compile error, and a tool whose declaration
+/// signature that drifts between the two halves is a compile error and a tool whose declaration
 /// stops matching its method fails Morgana's startup in
 /// <c>MorganaToolAdapter.AddTool</c>. The convention only has to be legible.
 /// </remarks>

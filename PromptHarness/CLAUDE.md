@@ -4,17 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-PromptHarness is Morgana's testing project, and it is aimed at the half of Morgana that has no
+PromptHarness is Morgana's testing project and it is aimed at the half of Morgana that has no
 compiler: a domain agent *is* its prose — `morgana.json`, `agents.json`, tool descriptions — so most
 of what is here answers one question, does the model still do what the prompt tells it to do?
-Nothing is mocked there, the LLM is real, and a run costs real tokens. Static tests on code are
-legitimate here too, and cheap by comparison: where a contract is deterministic — a published wire
+Nothing is mocked there, the LLM is real and a run costs real tokens. Static tests on code are
+legitimate here too and cheap by comparison: where a contract is deterministic — a published wire
 document, a gate's status codes — it is asserted as plain unit testing, no runs, no threshold, no
 judge (see `AgentCardTests`). What holds for both kinds is the last clause: the suite **never becomes
 a build/CI gate** — it is on-demand only, because the expensive half cannot be.
 
 It is its own solution (`PromptHarness.slnx`), a sibling of `../Morgana/` and `../Examples/` rather
-than a project inside `Morgana.slnx`. It reaches the framework through project references only, and
+than a project inside `Morgana.slnx`. It reaches the framework through project references only and
 one of them deliberately excludes the compiled assembly (`../Examples/Examples.csproj`,
 `ReferenceOutputAssembly=false`): the example plugin is copied into `plugins/` and discovered by
 Morgana's plugin loader at startup, exactly as a real deployment would discover it, never seen as a
@@ -85,15 +85,15 @@ PromptHarness (xUnit v3 test process, IsTestProject + OutputType=Exe)
 **In-process but black-box.** The host runs inside the test process, but the suite only ever talks
 to it over HTTP — same REST surface, same JWT gate, same webhook delivery any real channel uses.
 Being in-process buys exactly two things a child process couldn't: an `ActivityListener` reading
-spans with no exporter/collector in the loop, and a stdout tee reading tool log lines. Both are
+spans with no exporter/collector in the loop and a stdout tee reading tool log lines. Both are
 read-only observers of instrumentation that exists for production reasons, not test-only hooks.
 
 **Configuration.** The harness owns no `Morgana:` config and no secrets of its own — it shares
 `Morgana.Web`'s `UserSecretsId`, resolves that project's `appsettings.json` + the shared secrets
-store, and republishes the result to the host as environment variables (`MorganaHostFixture.
+store and republishes the result to the host as environment variables (`MorganaHostFixture.
 ApplyHostEnvironment`). It then layers a few overrides on top: throwaway SQLite storage path,
 telemetry exporters off, rate/dust limiting off, guard rail per `Harness:EnableGuardrail` (default
-off), and a random per-run symmetric key for the `harness` JWT issuer. The repo must carry a
+off) and a random per-run symmetric key for the `harness` JWT issuer. The repo must carry a
 `harness` entry under `Morgana.Web/appsettings.json` → `Morgana:Authentication:Issuers`, or the
 fixture refuses to start by design.
 
@@ -110,7 +110,7 @@ The judge is skipped once a turn already fails structurally (saves a live call).
 **Scenario groups have different thresholds and mean different things:**
 - `ContextHandlingTests` — the blocking group, always 5/5. Protects the context cycle (read before
   asking, ask only on a miss, write on the answer), the closed vocabulary (no invented context
-  names), and non-revelation (the user never learns context exists). Failure here is silent — an
+  names) and non-revelation (the user never learns context exists). Failure here is silent — an
   agent that re-asks for something it already knows still looks like it works — so a regression
   reverts the prose rather than lowering the threshold.
 - `BehaviourTests` — default threshold (`Harness:DefaultRuns`/`DefaultMinPasses`, 5/4). Protects
@@ -119,15 +119,15 @@ The judge is skipped once a turn already fails structurally (saves a live call).
   silent. An agent that quietly stops consulting a colleague still answers, just with less than it
   could have known. Unlike every other group it also depends on a **topology** — the scenarios name
   agents that must still declare `[ConsultsAgent]` of one another — so a failure here has a second
-  thing it can mean, and the attributes are the first place to look. Both scenarios assert the
-  mechanism itself — a colleague reached on demand for a datum only it holds, and an exchange that
+  thing it can mean and the attributes are the first place to look. Both scenarios assert the
+  mechanism itself — a colleague reached on demand for a datum only it holds and an exchange that
   leaves the conversation as it found it (`historyExcludesAgents` / `historyUserMessages`, read from
   the persisted history rather than from a judge). The prohibition side of consultation is
   deliberately not swept for: hand a judge a broad "must not say" and it goes hunting through the
   response until it convicts.
 - `GuardTests` / `ActorTests` — the **actors** group, aimed at the four framework prompts none of
   the above meaningfully exercise: Guard, Classifier, ChannelAdapter, Presentation. Three production
-  mechanisms stood in the way of a straightforward scenario, and each got its own workaround rather
+  mechanisms stood in the way of a straightforward scenario and each got its own workaround rather
   than a shared one: `MorganaHostFixture`'s `Harness:EnableGuardrail` is a whole-process boot flag
   with no per-scenario override, so Guard gets its own test class (`GuardTests`, 5/5 — a moderation
   false negative/positive is safety-adjacent, closer to `ContextHandlingTests`' "failure is silent"
@@ -148,7 +148,7 @@ The judge is skipped once a turn already fails structurally (saves a live call).
 - `AgentCardTests` — the one group that is neither layer, grades nothing and costs nothing: no LLM
   call, no run threshold, no judge. A card and its gate are **wire contracts** rather than prose, so
   they are asserted deterministically on the JSON and the status codes a foreign implementation would
-  actually see. Two contracts, and they are complementary halves: the card is served open (a caller
+  actually see. Two contracts and they are complementary halves: the card is served open (a caller
   that must authenticate to learn how to authenticate can never begin) precisely because what it
   points at is not. The gate is asserted on all three of its refusals — no token; a **channel's** own
   valid token, which is refused for being cut for the other door; and a **system's** valid token at a
@@ -160,7 +160,7 @@ The judge is skipped once a turn already fails structurally (saves a live call).
 
 **The journey is the point of the suite.** Every `ScenarioRunner.RunAsync` call writes a row to
 `<scenario-id>.md` via `HarnessWriter` — one row per revision phase, with pass rate, token
-cost, and the provider+model bound to each tier (a token count without the model is meaningless).
+cost and the provider+model bound to each tier (a token count without the model is meaningless).
 The phase name comes from `Harness:Phase` in `appsettings.Harness.json` (or `Harness__Phase` env
 override); re-running the same phase **replaces** its row, it never appends — a phase is a state of
 the prose, not a count of measurements. `JOURNEY.md` narrates what the movements mean, written by
@@ -169,13 +169,13 @@ directory unless absolute) — deliberately **not versioned** (see `.gitignore`)
 and a token-count diff is not useful pull-request noise. Read `README.md`'s "The journey" section
 before writing to these files by hand.
 
-A prompt revision has exactly three outcomes against the previous journey row, and only one is a
+A prompt revision has exactly three outcomes against the previous journey row and only one is a
 pass: threshold held + tokens down (the win); threshold held + tokens up (not a pass — the fixed
 payload is resent on every round trip, forever); threshold broken (a contradiction between two
 instructions read together — fix the text, never lower the threshold).
 
 **Writing a scenario.** One YAML file per flow under `Scenarios/`, file name == `id`. See the
-`ExpectSpec` fields in `Infrastructure/Engine/ScenarioDefinition.cs` for the full structural vocabulary, and the
+`ExpectSpec` fields in `Infrastructure/Engine/ScenarioDefinition.cs` for the full structural vocabulary and the
 "Writing a scenario" section of `README.md` for the annotated example. `HarnessSmokeTests.
 Every_scenario_file_parses` is the only guard that every `.yaml` under `Scenarios/` is well-formed —
 it does not run the scenario, just loads it.
@@ -185,5 +185,5 @@ it does not run the scenario, just loads it.
 There is no `Directory.Build.props` above this project on purpose — every build setting lives in
 `PromptHarness.csproj` itself, so the project carries unchanged across a move. To target a different
 Morgana instance (a customer's, an older tag), redirect the two `ProjectReference`s in the `.csproj`
-(or drop the `Examples` one and copy a different plugin into the build output's `plugins/`), and
+(or drop the `Examples` one and copy a different plugin into the build output's `plugins/`) and
 write scenarios naming that instance's own agents.

@@ -6,7 +6,7 @@ namespace Distiller.Model;
 /// </summary>
 /// <remarks>
 /// One place, because the same edge is rendered by the interview, the coherence pass, the validator
-/// and the report, and a colleague described four ways is four colleagues to whoever reads them
+/// and the report and a colleague described four ways is four colleagues to whoever reads them
 /// side by side.
 /// </remarks>
 public static class PeerNaming

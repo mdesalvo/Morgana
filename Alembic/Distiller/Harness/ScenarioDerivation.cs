@@ -4,7 +4,7 @@ using YamlDotNet.RepresentationModel;
 namespace Distiller.Harness;
 
 /// <summary>
-/// What came back from deriving one template against one domain, and whether it can be trusted.
+/// What came back from deriving one template against one domain and whether it can be trusted.
 /// </summary>
 /// <param name="Content">The scenario as it will be written, id imposed. Null when nothing usable came back.</param>
 /// <param name="NotApplicable">Why the model declined to derive this use-case, when it did.</param>
@@ -16,7 +16,7 @@ public sealed record DerivedScenario(string? Content, string? NotApplicable, str
 /// </summary>
 /// <remarks>
 /// <para>
-/// The check is a subset rule and nothing more: <b>a derivation may drop a key, and may never add
+/// The check is a subset rule and nothing more: <b>a derivation may drop a key and may never add
 /// one</b>. That is enough because the template is the vocabulary — every key in it is one Alembic
 /// authored knowing the harness binds it, so a key that was not there is a key nobody verified.
 /// </para>
@@ -25,12 +25,12 @@ public sealed record DerivedScenario(string? Content, string? NotApplicable, str
 /// is built <c>.IgnoreUnmatchedProperties()</c> — right where it is, since a suite that refused to
 /// load over one stray key would be brittle in the hands of the person editing it — which means an
 /// unrecognised key is <b>dropped without a sound</b>: the scenario loads, runs, passes and asserts
-/// nothing. It reads as coverage and is not, and a model reaching for a plausible key that does not
-/// exist (<c>textContains</c>, say) produces exactly that.
+/// nothing. It reads as coverage while being none. A model reaching for a plausible key that does
+/// not exist (<c>textContains</c>, say) produces exactly that.
 /// </para>
 /// <para>
 /// A derivation that fails still ships, with the problem written across its top. Alembic has no
-/// business deciding a client may not see its own artifact, and a silently missing scenario costs
+/// business deciding a client may not see its own artifact and a silently missing scenario costs
 /// them more than a visibly broken one.
 /// </para>
 /// </remarks>
@@ -57,8 +57,8 @@ public static class ScenarioDerivation
         if (text.Length == 0)
             return new DerivedScenario(null, null, "the model returned nothing");
 
-        // Declining is a first-class answer, and cheaper than a scenario nobody should have asked
-        // for: a read-only toolkit has no confirmation to protect, and pretending otherwise would
+        // Declining is a first-class answer and cheaper than a scenario nobody should have asked
+        // for: a read-only toolkit has no confirmation to protect and pretending otherwise would
         // hand the client a test that fails a correct agent.
         if (text.StartsWith(NotApplicableMarker, StringComparison.OrdinalIgnoreCase))
             return new DerivedScenario(null, text[NotApplicableMarker.Length..].Trim(), null);
@@ -78,7 +78,7 @@ public static class ScenarioDerivation
     /// </summary>
     /// <remarks>
     /// A scenario still carrying <c>{{the tool that produces the answer}}</c> is a template with a
-    /// domain glued to one half of it. It parses, and it asserts against a tool no agent has.
+    /// domain glued to one half of it. It parses and it asserts against a tool no agent has.
     /// </remarks>
     private static string? Unresolved(string text) =>
         text.Contains("{{", StringComparison.Ordinal)
@@ -111,12 +111,12 @@ public static class ScenarioDerivation
         // Stated as what Alembic knows rather than as what the harness does, because after the
         // templates became the only vocabulary it no longer knows the second thing. Both readings
         // are bad and the client can tell them apart at a glance: a key the harness does not bind
-        // asserts nothing at all, and one it does bind here asserts framework behaviour that
+        // asserts nothing at all and one it does bind here asserts framework behaviour that
         // Morgana's own suite already covers and that this suite has no business restating.
         return invented.Count == 0
             ? null
             : $"it uses {string.Join(", ", invented.Select(k => $"'{k}'"))}, which is outside the domain "
-              + "vocabulary — either the harness does not bind it, and the scenario runs, passes and "
+              + "vocabulary — either the harness does not bind it and the scenario runs, passes and "
               + "asserts nothing there, or it does and this is re-testing Morgana rather than your domain";
     }
 
@@ -180,7 +180,7 @@ public static class ScenarioDerivation
     /// Every key a document uses, which is how a template states its own vocabulary.
     /// </summary>
     /// <remarks>
-    /// The templates are the only description of the harness's schema that Alembic holds, and this
+    /// The templates are the only description of the harness's schema that Alembic holds and this
     /// is what reads it back out of them. Nothing is declared twice: a key exists for a derivation
     /// because a template Alembic ships put it there, having been written knowing the harness binds
     /// it.
@@ -192,7 +192,7 @@ public static class ScenarioDerivation
     /// </summary>
     /// <remarks>
     /// Flat rather than by path, deliberately. A key is bound by name to a property of one of three
-    /// types, and the interesting mistake is inventing a name — not putting a real key at the wrong
+    /// types and the interesting mistake is inventing a name — not putting a real key at the wrong
     /// depth, which a flat set still catches on the way in from the other direction.
     /// </remarks>
     private static HashSet<string> Keys(YamlNode? node)

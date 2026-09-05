@@ -88,7 +88,7 @@ public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, 
 /// <remarks>
 /// <para>Repetition with a threshold, rather than a single pass/fail, is the only honest shape for
 /// a suite whose system under test is a language model: a prompt that produces the right behaviour
-/// four times out of five is materially different from one that produces it once, and a single run
+/// four times out of five is materially different from one that produces it once and a single run
 /// cannot tell those apart. The threshold makes the flakiness budget explicit per scenario instead
 /// of hiding it in a retry.</para>
 ///
@@ -141,12 +141,12 @@ public sealed class ScenarioRunner
 
         ScenarioOutcome outcome = new ScenarioOutcome(scenario, required, outcomes);
 
-        // Deliberately not Console.WriteLine: stdout is teed into the host log capture, and a line
+        // Deliberately not Console.WriteLine: stdout is teed into the host log capture and a line
         // written there would resurface inside the next turn's captured log.
         TestContext.Current.TestOutputHelper?.WriteLine($"[Harness] {outcome.Summary()}");
 
         // Both writers run regardless of pass/fail — the journey row is written every time (a
-        // phase's history includes its failures), and the failure log self-manages whether to
+        // phase's history includes its failures) and the failure log self-manages whether to
         // write or delete based on whether every run held.
         HarnessWriter.Write(outcome, llmDescriptor, options.Phase, options.HarnessDirectory);
         FailureLog.Write(outcome, options.Phase, options.HarnessDirectory);
@@ -216,7 +216,7 @@ public sealed class ScenarioRunner
                 failures.AddRange(structural.Select(failure => $"turn {transcript.Count}: {failure}"));
 
                 // The judge is skipped once the turn already failed structurally: the run is lost
-                // either way, and judging costs a live LLM call.
+                // either way and judging costs a live LLM call.
                 if (structural.Count == 0)
                 {
                     IReadOnlyList<string> judged = await judge.EvaluateAsync(turnDefinition, turn);

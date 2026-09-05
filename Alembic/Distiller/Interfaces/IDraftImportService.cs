@@ -30,9 +30,9 @@ public interface IDraftImportService
 /// </summary>
 /// <param name="Draft">The imported Draft, or <c>null</c> when <paramref name="Error"/> is set.</param>
 /// <param name="Notices">
-/// What the client should know about what was read: counts, and anything Alembic met but does not
+/// What the client should know about what was read: counts and anything Alembic met but does not
 /// model. Never a validation verdict — checking whether the domain is coherent is a separate pass
-/// with a separate purpose, and conflating the two would report a malformed domain as a bad file.
+/// with a separate purpose and conflating the two would report a malformed domain as a bad file.
 /// </param>
 /// <param name="Error">Why the file could not be read at all, or <c>null</c> on success.</param>
 public sealed record DraftImportResult(

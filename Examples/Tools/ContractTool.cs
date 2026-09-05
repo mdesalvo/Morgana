@@ -13,7 +13,7 @@ namespace Examples.Tools;
 /// signs alongside their plants — tending visits, coverage, plant-health guarantee, fees, clauses
 /// and termination. Reads the same shared database the greenhouse ledger writes (see
 /// <see cref="GreenhouseDatabaseHelper"/>): the plan's terms are the shop's, the schedule is the
-/// customer's, and the monthly fee it sets is the one BillingTool's invoices charge. Reads for
+/// customer's and the monthly fee it sets is the one BillingTool's invoices charge. Reads for
 /// every existing plan; the one dispositive action it has is enrolling a customer in a NEW plan
 /// (see <see cref="SubscribeToGreenCarePlan"/>), which bills through the same shared backoffice
 /// path <see cref="InventoryTool"/>'s ConfirmOrder uses — see <see cref="GreenhouseDatabaseHelper.BillCustomerAsync"/>.
@@ -32,7 +32,7 @@ public class ContractTool : MorganaTool
     // ROWS AND LOOKUPS
     // =========================================================================
 
-    // The plan is two things at once, and the database keeps them apart: the PRODUCT (one row in
+    // The plan is two things at once and the database keeps them apart: the PRODUCT (one row in
     // PlanProducts with its features, services, clauses, termination steps and documents — the
     // same terms for everyone who signs it) and the SCHEDULE (one row in CarePlans per customer:
     // their contract number, their dates, their fee). Everything below reads that pairing.
@@ -280,7 +280,7 @@ public class ContractTool : MorganaTool
                 error = "Customer already has an active Green Care Plan",
                 existingContractId = existing.ContractId,
                 status = existing.Status,
-                note = "Only one Green Care Plan may be active per customer code at a time, and this code already holds one: nothing was opened and nothing was billed. GetContractDetails reads the existing plan, GetTerminationProcedure describes how one is ended."
+                note = "Only one Green Care Plan may be active per customer code at a time and this code already holds one: nothing was opened and nothing was billed. GetContractDetails reads the existing plan, GetTerminationProcedure describes how one is ended."
             }, GreenhouseDatabaseHelper.JsonOptions);
         }
 
@@ -479,7 +479,7 @@ public class ContractTool : MorganaTool
     }
 
     /// <summary>
-    /// Retrieves the customer's tending calendar: the visits already made, and when the next ones fall.
+    /// Retrieves the customer's tending calendar: the visits already made and when the next ones fall.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <returns>JSON object with the recent visits, the upcoming dates and this month's allowance</returns>

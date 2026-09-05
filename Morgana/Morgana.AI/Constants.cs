@@ -233,7 +233,7 @@ public static class Constants
     }
 
     /// <summary>
-    /// The agent-to-agent surface: how a colleague is named to a model, where its card lives, and
+    /// The agent-to-agent surface: how a colleague is named to a model, where its card lives and
     /// under whose name this installation signs its own peer traffic.
     /// </summary>
     public static class AgentToAgent
@@ -243,6 +243,12 @@ public static class Constants
 
         /// <summary>Root of the published A2A routes: <c>/a2a/{intent}</c>, with the card one level below it.</summary>
         public const string AgentPathPrefix = "/a2a";
+
+        /// <summary>
+        /// Where a published agent's card is served, relative to its own route. Fixed by the A2A
+        /// specification: it is the one address a caller that knows nothing else can try.
+        /// </summary>
+        public const string WellKnownAgentCardPath = ".well-known/agent-card.json";
 
         /// <summary>Issuer name Morgana signs its own peer requests under and is admitted back in under. Declared in <c>Morgana:Authentication:Issuers</c> like any caller, typed <c>system</c> and scoped in <c>Morgana:AgentToAgent:InboundSystems</c> like any other.</summary>
         public const string IssuerName = "morgana";

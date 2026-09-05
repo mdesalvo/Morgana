@@ -10,9 +10,9 @@ namespace Distiller.Model;
 /// <para>
 /// <b>Why a Draft rather than the <c>Records</c> types directly.</b> The <c>Records</c> types are
 /// the <em>serialization</em> model: immutable, complete, positional. The Draft is the
-/// <em>editing</em> model, and an interview in progress is by definition incomplete — a tool whose
+/// <em>editing</em> model and an interview in progress is by definition incomplete — a tool whose
 /// description has not been asked for yet is a different state from a tool whose description is
-/// deliberately empty, and only a nullable field can tell the two apart. Every nullable string
+/// deliberately empty and only a nullable field can tell the two apart. Every nullable string
 /// below means precisely "not asked yet". Nothing here duplicates a concept the framework already
 /// models: where a shape is final it IS the framework's own record.
 /// </para>
@@ -50,8 +50,8 @@ public sealed class DomainDraft
     /// The domain exactly as it was uploaded, frozen at import. <c>null</c> for a greenfield Draft.
     /// </summary>
     /// <remarks>
-    /// The migration report has to diff against something, and <see cref="Provenance"/> alone cannot
-    /// serve: it says an element was revised, never what it used to be, and "the parameter list
+    /// The migration report has to diff against something and <see cref="Provenance"/> alone cannot
+    /// serve: it says an element was revised, never what it used to be and "the parameter list
     /// changed" is only useful next to the list it changed from. Kept as a Draft rather than as the
     /// uploaded bytes so the diff compares like with like — two Drafts, one projection, no chance of
     /// reporting a difference that is really a parsing artefact.
@@ -73,7 +73,7 @@ public sealed class DomainDraft
     /// the ones already behind them.
     /// <para>
     /// What is saved is the configuration in hand, never the conversation: the map, which entry is
-    /// being written, which step of it, and what has been written so far. Resuming re-enters that
+    /// being written, which step of it and what has been written so far. Resuming re-enters that
     /// step the way stepping back into it does — a fresh agent and a fresh session reading what is
     /// there as settled fact — because the memory of this interview has always been the
     /// configuration rather than the transcript.
@@ -115,7 +115,7 @@ public sealed class DomainDraft
 }
 
 /// <summary>
-/// An interview interrupted: where it had got to, and what it had in hand.
+/// An interview interrupted: where it had got to and what it had in hand.
 /// </summary>
 /// <remarks>
 /// Everything here is a fact the state machine owns, which is why it is exactly what has to survive
@@ -166,21 +166,21 @@ public sealed class InterviewSitting
     /// <remarks>
     /// They are settled together and committed together — an edge is only correct next to the other
     /// edges, the way a map entry is only correct next to the other entries — so between the first
-    /// declaration and the client's agreement they live nowhere but here, and a tab closed in
+    /// declaration and the client's agreement they live nowhere but here and a tab closed in
     /// between must not lose them.
     /// </remarks>
     public List<ConsultationDraft> Colleagues { get; set; } = [];
 }
 
 /// <summary>
-/// One agent's licence to put a question to another: the edge, and the boundary prose that changes
+/// One agent's licence to put a question to another: the edge and the boundary prose that changes
 /// with it.
 /// </summary>
 /// <remarks>
 /// The prose travels with the edge because without it the edge is a defect. An agent whose
 /// Instructions say a subject belongs to another bench and stops there is being told, in the same
 /// prompt, that it may ask and that it may not — and the imperative sentence wins. So the tool that
-/// declares an edge takes the asking agent's reconciled Instructions in the same call, and the two
+/// declares an edge takes the asking agent's reconciled Instructions in the same call and the two
 /// land in the domain together or not at all.
 /// </remarks>
 public sealed class ConsultationDraft
@@ -191,7 +191,7 @@ public sealed class ConsultationDraft
     /// <summary>The intent of the colleague it may put a question to.</summary>
     /// <remarks>
     /// Always an agent of this domain. A colleague published by an instance is outside everything this
-    /// interview can see — its intent cannot be checked, its <c>ConsultMeFor</c> cannot be read, and
+    /// interview can see — its intent cannot be checked, its <c>ConsultMeFor</c> cannot be read and
     /// its prose is not ours to reconcile — so it is declared on the emit page, where the hand on the
     /// keyboard is a developer's and not the domain author's.
     /// </remarks>
@@ -203,26 +203,26 @@ public sealed class ConsultationDraft
     /// <summary>
     /// The colleague's Instructions, rewritten only where its own prose would have it refuse what it
     /// is now being asked for. <c>null</c> whenever they stand as they are, which is the ordinary
-    /// case: answering a colleague is a turn the framework already governs, and a refusal to say
+    /// case: answering a colleague is a turn the framework already governs and a refusal to say
     /// something to a *user* is not one to reopen here.
     /// </summary>
     public string? AskedInstructions { get; set; }
 }
 
 /// <summary>
-/// An agent taken out of the domain to be worked on, and what it needs to go back the way it came.
+/// An agent taken out of the domain to be worked on and what it needs to go back the way it came.
 /// </summary>
 /// <remarks>
 /// An agent being edited must not also be sitting in the configuration, or letting it back in would
 /// write it twice — the rule <c>BackAsync</c> already obeys when it steps out of one entry into the
-/// one before. So the domain is without it for the length of the edit, and this is what puts it back:
+/// one before. So the domain is without it for the length of the edit and this is what puts it back:
 /// its place in the two lists, since the order is the client's and an agent that walks to the bottom
 /// every time somebody fixes a sentence turns that order into a history of edits; and the provenance
 /// it arrived with, since an imported agent has to come back <see cref="Provenance.Revised"/> rather
 /// than as something Alembic claims to have authored.
 /// <para>
 /// It exists only while a section is actually being rewritten. Reading an agent on the way past
-/// creates none: leafing through a domain is not editing it, and an agent nobody has changed never
+/// creates none: leafing through a domain is not editing it and an agent nobody has changed never
 /// leaves the configuration at all.
 /// </para>
 /// </remarks>
@@ -242,9 +242,9 @@ public sealed class AgentRevision
     /// look.
     /// </summary>
     /// <remarks>
-    /// Opening a section is not changing it, and an agent that goes back exactly as it came must go
+    /// Opening a section is not changing it and an agent that goes back exactly as it came must go
     /// back <see cref="Provenance.Imported"/> — otherwise the migration report names it among the
-    /// things this sitting touched, and a report that lists everything the client opened is a report
+    /// things this sitting touched and a report that lists everything the client opened is a report
     /// they stop reading.
     /// </remarks>
     public string? Was { get; set; }
@@ -293,7 +293,7 @@ public sealed class IntentDraft
 }
 
 /// <summary>
-/// One domain agent under construction: its prose, its toolkit, and the facts about its C#
+/// One domain agent under construction: its prose, its toolkit and the facts about its C#
 /// that <c>agents.json</c> does not carry.
 /// </summary>
 public sealed class AgentDraft
@@ -330,7 +330,7 @@ public sealed class AgentDraft
     /// by the <c>AgentTarget</c> pass, which writes it from the scope it has just fixed rather than
     /// asking the client the same question twice — same content, a different reader. Every agent
     /// carries one, whether or not anybody consults it: a domain where nothing does today is one
-    /// declaration away from a domain where something does, and an unread one costs nothing.
+    /// declaration away from a domain where something does and an unread one costs nothing.
     /// </remarks>
     public string? ConsultMeFor { get; set; }
 
@@ -350,7 +350,7 @@ public sealed class AgentDraft
     public string? Formatting { get; set; }
 
     /// <summary>
-    /// Tone and voice. Optional in the framework, and optional here.
+    /// Tone and voice. Optional in the framework and optional here.
     /// </summary>
     /// <remarks><c>null</c> until the <c>AgentPersonality</c> pass; unlike <see cref="Target"/> etc. this
     /// one may legitimately stay <c>null</c> even once accepted, since a voice is optional.</remarks>
@@ -480,7 +480,7 @@ public sealed class AgentCodeFacts
     /// </summary>
     /// <remarks>
     /// Left <c>null</c> on import rather than guessed, unlike <see cref="AgentClassName"/> and
-    /// <see cref="ToolClassName"/>: a namespace follows from nothing in <c>agents.json</c>, and a
+    /// <see cref="ToolClassName"/>: a namespace follows from nothing in <c>agents.json</c> and a
     /// confident wrong value here is worse than one the interview will still ask about.
     /// </remarks>
     public string? Namespace { get; set; }
@@ -508,7 +508,7 @@ public sealed class AgentCodeFacts
 
     /// <summary>
     /// The colleagues this agent may put a question to, one entry per <c>[ConsultsAgent]</c>
-    /// attribute: an intent, and the instance publishing it where that is not this domain.
+    /// attribute: an intent and the instance publishing it where that is not this domain.
     /// </summary>
     /// <remarks>
     /// A C# fact like <see cref="MCPServers"/> — <c>agents.json</c> carries no trace of it, so an

@@ -30,12 +30,12 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// <c>MorganaChannelAdapter</c> itself (see <see cref="DegradedCapabilities"/>).</para>
 ///
 /// <para>Delivery is <c>webhook</c> rather than <c>signalr</c> for the same reason Rune and Grimoire
-/// use it: it needs no hub client, and the callback is an ordinary HTTP endpoint the harness can
+/// use it: it needs no hub client and the callback is an ordinary HTTP endpoint the harness can
 /// host and correlate on.</para>
 /// </remarks>
 public sealed class HarnessChannel : IAsyncDisposable
 {
-    /// <summary>Channel name announced at the handshake, and the issuer name the JWTs carry.</summary>
+    /// <summary>Channel name announced at the handshake and the issuer name the JWTs carry.</summary>
     public const string ChannelName = "harness";
 
     /// <inheritdoc cref="ChannelName" />
@@ -54,7 +54,7 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// <summary>
     /// Mirrors Rune's "poor but honest" profile — no rich cards, no quick replies, no streaming, no
     /// markdown, 500-character budget — the contract surface <c>MorganaChannelAdapter</c> degrades
-    /// toward, and the canonical capability set to actually engage its LLM rewrite path.
+    /// toward and the canonical capability set to actually engage its LLM rewrite path.
     /// </summary>
     public static readonly ChannelCapabilities DegradedCapabilities =
         new ChannelCapabilities(
@@ -188,11 +188,11 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// <see cref="DegradedChannelName"/> (or another distinct name) whenever <paramref name="capabilities"/>
     /// is overridden — see <see cref="DegradedChannelName"/>'s own remarks for why.
     /// </param>
-    /// <returns>The conversation id, and the presentation message that was drained.</returns>
+    /// <returns>The conversation id and the presentation message that was drained.</returns>
     public async Task<(string ConversationId, ChannelMessage Presentation)> StartConversationAsync(
         TimeSpan timeout, ChannelCapabilities? capabilities = null, string? channelName = null)
     {
-        // The conversation id is minted here, client-side, and handed to Morgana on the start
+        // The conversation id is minted here, client-side and handed to Morgana on the start
         // call — the queue for it must exist before the request is sent, since the presentation
         // message can arrive over the webhook before this method reaches ReceiveAsync below.
         string conversationId = Guid.NewGuid().ToString("N");

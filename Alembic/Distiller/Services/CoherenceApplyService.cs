@@ -15,7 +15,7 @@ namespace Distiller.Services;
 /// <remarks>
 /// One <see cref="AIAgent"/> per call rather than a reused one: the tool set is rebuilt against
 /// this call's <see cref="DomainDraft"/> instance every time (<see cref="CoherenceApplyTools"/>
-/// closes over it), and a finding is a single, self-contained instruction with no turn after it to
+/// closes over it) and a finding is a single, self-contained instruction with no turn after it to
 /// keep an agent alive for.
 /// </remarks>
 public class CoherenceApplyService : ICoherenceApplyService

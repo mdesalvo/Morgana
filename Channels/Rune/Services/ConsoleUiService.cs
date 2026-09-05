@@ -58,7 +58,7 @@ public sealed class ConsoleUiService
     /// <see cref="BuildBody"/> derives the viewport on the fly by wrap-rendering the whole
     /// list into a flat row stream and taking the last <c>bodyRows</c> rows — head rows are
     /// dropped naturally as the stream grows or the terminal shrinks, the tail (warm rows)
-    /// is always preserved, and the sacred user prompt is rendered separately under the
+    /// is always preserved and the sacred user prompt is rendered separately under the
     /// stream and is never sacrificed.
     /// </summary>
     private readonly List<DisplayedMessage> history = [];
@@ -143,7 +143,7 @@ public sealed class ConsoleUiService
     /// <summary>Serializes mutations of <see cref="history"/>, <see cref="currentInput"/>, <see cref="currentSpeaker"/> and the paired <see cref="LiveDisplayContext.UpdateTarget"/>/<see cref="LiveDisplayContext.Refresh"/> calls. The resize callback runs on its own thread (SIGWINCH handler / polling task) and would otherwise race with <see cref="ReadKeysLoop"/> and <see cref="DrainIncomingLoop"/> over the shared list. Uses <see cref="System.Threading.Lock"/> (.NET 9+) instead of <c>object</c> so the compiler emits the optimised primitive and rejects misuse (e.g. passing the lock as an <c>object</c>).</summary>
     private readonly Lock renderLock = new();
 
-    /// <summary>Reads the <c>Rune:AgentExitMessage</c> template, falling back to <see cref="DefaultAgentExitMessage"/>, and captures the injected resize watcher.</summary>
+    /// <summary>Reads the <c>Rune:AgentExitMessage</c> template, falling back to <see cref="DefaultAgentExitMessage"/> and captures the injected resize watcher.</summary>
     public ConsoleUiService(IConfiguration configuration, IViewportResizeWatcher viewportResizeWatcher, TerminalCellService cells)
     {
         agentExitTemplate = configuration["Rune:AgentExitMessage"] ?? DefaultAgentExitMessage;
@@ -285,7 +285,7 @@ public sealed class ConsoleUiService
                     // it BEFORE wasting a keystroke. Morgana's text says "start a new
                     // one to keep going" — true for Cauldron, NOT for Rune, which has no
                     // in-process restart. So latch a one-way dead state: the red banner
-                    // line above stays as Morgana's canonical word, and BuildInputRows
+                    // line above stays as Morgana's canonical word and BuildInputRows
                     // overrides the prompt with a Rune-honest "quit and relaunch" hint.
                     if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
                     {
@@ -582,17 +582,17 @@ public sealed class ConsoleUiService
         // scrolled up (content below). Each glyph is lit in the user colour when that direction is
         // available, dim otherwise; the whole segment is omitted unless at least one is actionable
         // so a live, fully-visible conversation keeps a clean header. BuildBody set these flags for
-        // this same frame (see BuildLayout's ordering), and only when scrolling is enabled.
+        // this same frame (see BuildLayout's ordering) and only when scrolling is enabled.
         string scrollSegment = scrollHasAbove || scrollHasBelow
             ? $"   {(scrollHasAbove ? $"[{UserColor}]▲[/]" : "[grey50]▲[/]")}{(scrollHasBelow ? $"[{UserColor}]▼[/]" : "[grey50]▼[/]")}"
             : string.Empty;
 
         // Input-length counter: shown only while a text prompt is actually being typed — i.e. NOT
-        // while awaiting a reply and NOT on the dead latch, and only once at least one char is in
+        // while awaiting a reply and NOT on the dead latch and only once at least one char is in
         // the buffer (Rune has no quick-reply mode, so there's no QR case to exclude). It's the
         // prompt's own "dust gauge": white → orange at ≥70% → red at ≥100% (reusing the dust
         // palette), so a line creeping toward the cap telegraphs the same unease as a depleting
-        // budget, and the swallowed keystrokes at the top read as "you hit the cap", not a glitch.
+        // budget and the swallowed keystrokes at the top read as "you hit the cap", not a glitch.
         string countSegment = string.Empty;
         if (!awaitingResponse && !conversationDead && currentInput.Length >= 1)
         {
@@ -700,14 +700,14 @@ public sealed class ConsoleUiService
 
         // Normalize before counting: trim leading/trailing whitespace and collapse blank-line
         // runs. Morgana authors replies for rich channels (trailing newlines, doubled blank
-        // lines); Rune has no markdown renderer to absorb them, and counting one row per '\n'
+        // lines); Rune has no markdown renderer to absorb them and counting one row per '\n'
         // would inflate the content height with invisible phantom rows — lighting the header's
         // ▲ scroll glyph on a conversation that fits the viewport. This is the Grimoire-port
         // adjustment for a channel that carries neither rich cards nor quick replies.
         // Resolve emoji shortcodes (:white_check_mark: → ✅) to real glyphs, mirroring Grimoire's
         // renderers. Rune renders verbatim and has no Markup expansion for shortcodes, so a model
         // that emits GitHub-style codes would otherwise leave them literal on screen. Glyphs are
-        // honest plain Unicode (not a "rich" capability), and Rune's rune/cell-based wrapper below
+        // honest plain Unicode (not a "rich" capability) and Rune's rune/cell-based wrapper below
         // measures the resolved glyph correctly. Order: resolve first, then strip variation
         // selectors from the produced glyphs so the cell-width accounting stays exact.
         string text = cells.StripVariationSelectors(BlankRunRegex.Replace(Emoji.Replace(message.Text.Trim()), "\n\n"));
@@ -910,6 +910,6 @@ public sealed class ConsoleUiService
     private static bool IsSpecializedAgent(string? agentName) =>
         agentName is not null && agentName.Contains('(') && agentName.Contains(')');
 
-    /// <summary>A single history row: speaker name, rendered text, and the Spectre color token used for the name.</summary>
+    /// <summary>A single history row: speaker name, rendered text and the Spectre color token used for the name.</summary>
     private record DisplayedMessage(string Who, string Text, string Color);
 }

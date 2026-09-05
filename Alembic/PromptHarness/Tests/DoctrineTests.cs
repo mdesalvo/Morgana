@@ -17,7 +17,7 @@ namespace PromptHarness.Tests;
 /// Every rule judged here is one CLAUDE.md already states as binding on every authored agent — this
 /// class does not invent doctrine, it makes doctrine already written down independently checkable.
 /// A proposition that fails here is either a real regression or a proposition that no longer
-/// reflects the doctrine, and either way is worth seeing named, not folded into a single broad
+/// reflects the doctrine and either way is worth seeing named, not folded into a single broad
 /// "does this look right" question a judge could pass by being right about only one section.
 /// </remarks>
 [Collection(BistroLunaCollection.Name)]
@@ -50,7 +50,7 @@ public sealed class DoctrineTests
 
     // Target's own job, per CLAUDE.md's doctrine table, is what the agent does and does not do —
     // existentially, not who it is: naming which facet of Morgana this agent is belongs to
-    // Personality alone ("Personality names which facet she is here"), and testing Target for a
+    // Personality alone ("Personality names which facet she is here") and testing Target for a
     // named persona was testing it against a job it was never given. What Target must still never
     // do is claim to BE one of the generic archetypes CLAUDE.md rules out — a virtual assistant, a
     // chatbot, a helpful bot, neutral customer service staff — which is the actual anti-pattern
@@ -73,7 +73,7 @@ public sealed class DoctrineTests
 
     // Self-awareness of being Morgana is real doctrine — "An authored agent is one agent of
     // Morgana, never a separate creature" — but it is a property of what the agent's own model
-    // actually reads, and that is never Agent.Target alone. IRecapService.ComposeAsync produces the
+    // actually reads and that is never Agent.Target alone. IRecapService.ComposeAsync produces the
     // same two layers the running agent gets: Morgana's own framework layer (her Personality, her
     // Target, resolved live from morgana.json) UNDER the domain layer this interview wrote. The
     // framework layer is where her identity lives; asking the bare domain Target to carry it too,

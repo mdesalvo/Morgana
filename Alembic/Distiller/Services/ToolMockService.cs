@@ -13,8 +13,8 @@ namespace Distiller.Services;
 /// </summary>
 /// <remarks>
 /// A single completion rather than an agent with tools, because nothing here is a conversation:
-/// there is one input, the toolkit, and one output, a file. The interview needed tools to hold a
-/// state machine steady across many turns; this needs none of that, and giving it an agent would be
+/// there is one input, the toolkit and one output, a file. The interview needed tools to hold a
+/// state machine steady across many turns; this needs none of that and giving it an agent would be
 /// machinery in place of a call.
 /// </remarks>
 public class ToolMockService : IToolMockService
@@ -125,7 +125,7 @@ public class ToolMockService : IToolMockService
                 continue;
 
             request.AppendLine();
-            request.AppendLine($"{tool.Name} — what the model is told to pass, and therefore what arrives:");
+            request.AppendLine($"{tool.Name} — what the model is told to pass and therefore what arrives:");
 
             foreach (ToolParameterDraft parameter in described)
                 request.AppendLine($"  {parameter.Name}: {parameter.Description}");

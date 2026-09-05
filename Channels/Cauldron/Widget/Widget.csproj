@@ -20,7 +20,7 @@
        </Description>
 
        <!-- Static assets only: no C#, no Razor components, nothing that runs server-side.
-            The whole deliverable is wwwroot/, and it is served by whichever app references
+            The whole deliverable is wwwroot/ and it is served by whichever app references
             this project — Cauldron. -->
        <StaticWebAssetBasePath>widget</StaticWebAssetBasePath>
        <GenerateDocumentationFile>false</GenerateDocumentationFile>
@@ -29,7 +29,7 @@
     <!-- The sample host page is a development aid, not part of the deliverable. A customer
          hosts the widget inside their own site, at their own origin; shipping a fictitious
          nursery — complete with invented opening hours and address — inside a production
-         image would put a page that reads as a real business on their domain, and cost them
+         image would put a page that reads as a real business on their domain and cost them
          ~390 KB of photography nobody ever requests. Debug keeps it, so `dotnet run` still
          serves /widget/morgana.html; Release, which is what the Dockerfile builds, drops it.
          The launcher itself is unaffected: it binds to the Cauldron that served it, so the

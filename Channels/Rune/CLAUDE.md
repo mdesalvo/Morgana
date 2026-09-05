@@ -101,7 +101,7 @@ Morgana's controller gate additionally requires `callbackUrl` to be an absolute 
 
 The wire DTOs (`ChannelMessage`, `ChannelMetadata`, `ChannelCoordinates` incl. `CallbackUrl`, `ChannelCapabilities`, `QuickReply`, `RichCard`/`CardComponent`, `StartConversationRequest`, `SendMessageRequest`) are **no longer duplicated**: Rune takes a direct `ProjectReference` to **`Morgana.Contracts`** (`..\..\Morgana\Morgana.Contracts\Morgana.Contracts.csproj`) — the single source of truth shared with Morgana.AI — and consumes them under the `Morgana.Contracts` namespace. Change a contract once, in `Morgana.Contracts`. (Rune still doesn't render `QuickReply`/`RichCard`; they just arrive as part of the shared contract and are stripped by the adapter upstream.)
 
-The contract types are immutable records (init-only / positional): `StartConversationRequest`/`SendMessageRequest` are constructed positionally, and `QuickReply.Termination` is now `bool?`. Channel identity lives channel-side in `Messages/RuneChannelMetadata.cs` (`RuneChannelMetadata.Build(callbackUrl, maxMessageLength)`), not on the shared contract.
+The contract types are immutable records (init-only / positional): `StartConversationRequest`/`SendMessageRequest` are constructed positionally and `QuickReply.Termination` is now `bool?`. Channel identity lives channel-side in `Messages/RuneChannelMetadata.cs` (`RuneChannelMetadata.Build(callbackUrl, maxMessageLength)`), not on the shared contract.
 
 The Docker build mirrors the repo layout under `/src` and stages the `Morgana.Contracts` subtree so the `ProjectReference` resolves (see `Rune.Dockerfile`).
 

@@ -13,7 +13,7 @@ namespace PromptHarness.Tests;
 /// </summary>
 /// <remarks>
 /// Deliberately outside <see cref="Fixtures.BistroLunaCollection"/>: this pass alone needs nothing
-/// past its own two-turn script, and joining the collection would buy it nothing but a wait for a
+/// past its own two-turn script and joining the collection would buy it nothing but a wait for a
 /// full interview it never reads.
 /// </remarks>
 [Trait("Stage", "Mapping")]
@@ -37,7 +37,7 @@ public sealed class MappingTests
             $"The mapping pass never settled within the driven exchanges.\n{driven}");
 
         // Exactly one entry: the client described one process ("check availability, then book"),
-        // never asked to name a second, and the doctrine is explicit that the map is a choice, not
+        // never asked to name a second and the doctrine is explicit that the map is a choice, not
         // an inventory — a script this narrow producing two or more entries would be the mapper
         // inventing scope nobody asked it to take on.
         Assert.True(driven.FinalState.Map.Count == 1,
@@ -46,7 +46,7 @@ public sealed class MappingTests
         IntentDraft intent = driven.FinalState.Map[0];
 
         // All four fields, per the doctrine's own reasoning: a description is read by the
-        // classifier against every other description, and a label against every other button —
+        // classifier against every other description and a label against every other button —
         // both only correct once the whole set exists, which is exactly what this pass is for.
         Assert.False(string.IsNullOrWhiteSpace(intent.Name), $"Intent has no Name.\n{driven}");
         Assert.False(string.IsNullOrWhiteSpace(intent.Description), $"Intent '{intent.Name}' has no Description.\n{driven}");

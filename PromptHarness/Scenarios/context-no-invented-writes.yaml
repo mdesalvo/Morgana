@@ -7,7 +7,7 @@ minPasses: 5
 
 turns:
   # "from your greenhouse" is a classifier anchor, not a hint to the agent: without a domain word
-  # the message is a bare preference, the classifier lawfully files it under "other", and the run
+  # the message is a bare preference, the classifier lawfully files it under "other" and the run
   # never reaches InventoryAgent — which measures routing instead of anti-invention. The temptation
   # under test is untouched: it is still the urge to mint a key for "roses".
   - say: "Remember that I prefer roses — I always order those from your greenhouse"

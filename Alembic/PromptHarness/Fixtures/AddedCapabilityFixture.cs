@@ -19,9 +19,9 @@ namespace PromptHarness.Fixtures;
 /// the Toolkit, where the same tool this fixture would use to compose one from scratch is available
 /// to close the gap.
 /// <para>
-/// <c>Inventory</c> is the subject, and it is the hardest of the four rather than the easiest. It
+/// <c>Inventory</c> is the subject and it is the hardest of the four rather than the easiest. It
 /// carries eight tools — catalogue, stock, orders, cancellation, history — so the toolkit quoted to
-/// the pass looks comprehensive, and none of the eight issues anything. A gap surrounded by that much
+/// the pass looks comprehensive and none of the eight issues anything. A gap surrounded by that much
 /// coverage is the one a pass is most likely to read past, which is exactly the case worth holding it
 /// to. An agent with no tools at all would prove nothing either way: that is the legal MCP-only
 /// shape.
@@ -60,7 +60,7 @@ public sealed class AddedCapabilityFixture : IAsyncLifetime
     /// <summary>Everything Alembic said across the correction, for the propositions that allow it anywhere.</summary>
     public string EverythingSaid { get; private set; } = string.Empty;
 
-    /// <summary>The agent's toolkit as it arrived, and as it stands after the correction.</summary>
+    /// <summary>The agent's toolkit as it arrived and as it stands after the correction.</summary>
     /// <remarks>
     /// Compared to each other rather than to a list written here, so the assertion stays true if
     /// somebody legitimately edits the Examples domain's other tools.

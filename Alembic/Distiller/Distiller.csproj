@@ -33,7 +33,7 @@
          Alembic's harness component: one YAML template per behavioural use-case worth protecting in
          any domain — a boundary refused, an irreversible action confirmed, a subject that is not
          there — with every domain word left as a placeholder. At the end of the journey each one is
-         derived against the domain just authored, and what comes out is 100% that domain's.
+         derived against the domain just authored and what comes out is 100% that domain's.
 
          Authored here and owned here. Nothing is linked or copied from PromptHarness: its suite
          tests framework policy, which is precisely the half a client must never duplicate, so there

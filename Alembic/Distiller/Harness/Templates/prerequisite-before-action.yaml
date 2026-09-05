@@ -9,7 +9,7 @@
 
 id: "{{intent}}-prerequisite-before-action"
 description: >-
-  {{one sentence: the value this action cannot proceed without, and that the agent asks for it}}
+  {{one sentence: the value this action cannot proceed without and that the agent asks for it}}
 
 # Acting on a value nobody supplied is the failure this guards: contract, not tendency.
 runs: 3

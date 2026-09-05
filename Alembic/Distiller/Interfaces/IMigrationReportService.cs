@@ -9,14 +9,14 @@ namespace Distiller.Interfaces;
 /// <para>
 /// <b>Unconditional.</b> It is produced for a greenfield domain too, where it says everything is
 /// new — because a report that only appears when something is wrong is a report nobody learns to
-/// read, and this one has to be read on the day it finally matters.
+/// read and this one has to be read on the day it finally matters.
 /// </para>
 /// <para>
 /// It exists because Alembic never sees the client's tree. It cannot know which C# is already
-/// there, cannot merge, and must not pretend to: what it can do is name every change precisely
+/// there, cannot merge and must not pretend to: what it can do is name every change precisely
 /// enough that a human applies it in a minute. The signature section is the load-bearing one — a
 /// tool whose parameters changed still compiles on the generated side and fails at Morgana's
-/// startup in <c>MorganaToolAdapter.AddTool</c>, and the client-owned half is exactly where that
+/// startup in <c>MorganaToolAdapter.AddTool</c> and the client-owned half is exactly where that
 /// fix has to be made by hand.
 /// </para>
 /// </remarks>
@@ -31,7 +31,7 @@ public interface IMigrationReportService
 }
 
 /// <summary>
-/// What changed, and what has to be done about it.
+/// What changed and what has to be done about it.
 /// </summary>
 /// <param name="BaselineName">The uploaded file this is diffed against, or <c>null</c> for greenfield.</param>
 /// <param name="Entries">Every change, most consequential first.</param>
@@ -76,7 +76,7 @@ public enum MigrationKind
 /// </remarks>
 public enum MigrationChange
 {
-    /// <summary>Gone from the configuration. Its C# is now dead, and may still be referenced.</summary>
+    /// <summary>Gone from the configuration. Its C# is now dead and may still be referenced.</summary>
     Removed,
 
     /// <summary>Its shape changed in a way compiled code can feel.</summary>

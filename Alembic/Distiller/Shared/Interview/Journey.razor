@@ -1,25 +1,25 @@
 @*
-    Where the interview stands, and what is still coming.
+    Where the interview stands and what is still coming.
 
     The rail is the whole shape of the process and it is on the screen from the first question, lit at
     the step in hand. An interview that shows only the question is a black box: the client cannot tell
-    whether they are two minutes from the end or twenty, and the one thing every wizard owes them is
-    the answer to that. So every step is visible, and the ones not reached are dim rather than absent.
+    whether they are two minutes from the end or twenty and the one thing every wizard owes them is
+    the answer to that. So every step is visible and the ones not reached are dim rather than absent.
 
-    Its shape is the process's shape. Two steps happen once — the map is drawn, and at the end the
+    Its shape is the process's shape. Two steps happen once — the map is drawn and at the end the
     finished domain is read and taken away — and everything between them happens again for every entry
     of that map, so those six are drawn inside a lap: bordered, stacked like sheets while entries
-    remain, and headed by the entry it is a lap of.
+    remain and headed by the entry it is a lap of.
 
     Under it, the entries of the map appear as they are named, in the client's own words.
 
-    Nothing here explains itself in prose, and nothing here restates the question. A line under the
+    Nothing here explains itself in prose and nothing here restates the question. A line under the
     rail saying what the step is after was tried and removed twice over: the question that opens a
     step already says it, in the model's own words and about this client's own work, so the line was
     either the same fact in a second wording — which reads as two facts to reconcile — or, once it had
     been made short enough not to be, a sentence true of any interview about any business.
 
-    The rail and the entries are two kinds of thing — the shape of the work, and what the domain
+    The rail and the entries are two kinds of thing — the shape of the work and what the domain
     holds — and the eye tells them apart without being told.
 *@
 
@@ -27,8 +27,8 @@
 
     @*
         Two steps on the line and six inside the lap, because that is the shape of the process: the
-        map is drawn once and the finished domain is read once, and everything between them happens
-        again for every entry of that map. A flat row of eight would say the opposite, and would have
+        map is drawn once and the finished domain is read once and everything between them happens
+        again for every entry of that map. A flat row of eight would say the opposite and would have
         the light jump backwards from the last step to the second every time an agent was accepted.
     *@
     <ol class="stations">
@@ -52,11 +52,11 @@
     </ol>
 
     @*
-        The map, and the entry being written is a tag that opens. What has been written down about an
-        agent belongs to that agent, and the agent is already named here, lit among its neighbours —
+        The map and the entry being written is a tag that opens. What has been written down about an
+        agent belongs to that agent and the agent is already named here, lit among its neighbours —
         so this tag is the trigger and the panel drops out of it. Kept at the foot of the page instead,
         under its own copy of the same name, it was two objects where there is one thing, in the least
-        looked-at place on the screen. The eye does not go down there, and nothing in a wizard should
+        looked-at place on the screen. The eye does not go down there and nothing in a wizard should
         need looking for.
     *@
     @if (Entries.Any())
@@ -114,7 +114,7 @@
     /// The whole interview, in the client's words: the map once, then the lap every entry of it goes
     /// through, then the finished domain.
     /// </summary>
-    // Each names its phase and nothing else, in one register: a rail is read at a glance, and a step
+    // Each names its phase and nothing else, in one register: a rail is read at a glance and a step
     // whose name is a whole clause is read as a sentence the eye has to finish. What the client is
     // actually being asked for is a different job and belongs to a different line — the one under the
     // rail, which names the entry and says in their own words what this phase wants and what it does
@@ -160,7 +160,7 @@
     /// What the lap is a lap of: the entry being written and how far along the map it is, or what is
     /// about to start once the map exists.
     /// </summary>
-    // Before the map exists the run has nothing to be a run of, and the head says only what it is.
+    // Before the map exists the run has nothing to be a run of and the head says only what it is.
     // Saying that it will come round for each entry would be describing a list the client is still
     // dictating, in the one moment they are deciding what goes on it.
     //
@@ -214,14 +214,14 @@
     /// Where the rail is lit.
     /// </summary>
     // The pass is the index by construction: the enum and this list are in the same order, the map
-    // included. Acceptance is the exception — no pass conducts it, and the interview stands there only
+    // included. Acceptance is the exception — no pass conducts it and the interview stands there only
     // once everything is settled and the agent is waiting for the client's word. The last step is
     // never lit here: reaching it means leaving this page for the finished domain.
     private string Standing(int index)
     {
         // The pass is the index for the first six and no further: acceptance is a step of the rail
         // that no pass conducts, so everything outside the lap sits one place further along than its
-        // enum value. Written as two exceptions rather than a table — the lap is the rule, and the
+        // enum value. Written as two exceptions rather than a table — the lap is the rule and the
         // two things that happen once are what the rule is stated against.
         int here = Written ? Accepting
             : State.Pass == InterviewStep.DomainColleagues ? Colleagues
@@ -250,7 +250,7 @@
     private bool Showing { get; set; }
 
     /// <summary>
-    /// What has been written down about the agent in hand: the count on the tag, and the panel's own
+    /// What has been written down about the agent in hand: the count on the tag and the panel's own
     /// rows, from the one projection so the two cannot disagree.
     /// </summary>
     private IReadOnlyList<AgentRows.Row> Rows => AgentRows.Of(State);

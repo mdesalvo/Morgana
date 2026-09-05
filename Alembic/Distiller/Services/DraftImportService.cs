@@ -11,7 +11,7 @@ namespace Distiller.Services;
 /// </summary>
 /// <remarks>
 /// The projection is deliberately lossless in both directions. Every field the framework models is
-/// mapped, and every AdditionalProperties key it does not is carried through verbatim in
+/// mapped and every AdditionalProperties key it does not is carried through verbatim in
 /// <see cref="AgentDraft.UnmodelledProperties"/> — because the round-trip invariant (import then
 /// export returns an equivalent file) must not depend on Alembic having a use for what it reads.
 /// </remarks>
@@ -54,7 +54,7 @@ public class DraftImportService : IDraftImportService
     /// This method only ever handles the configuration shape — a bare <c>agents.json</c>. Telling
     /// it apart from a resumed interview's own save file is the caller's job (by content, not by
     /// file name: a serialized Draft carries <c>CreatedAt</c> at the root and a configuration never
-    /// does), and a zip archive is unwrapped by the caller before either service sees it.
+    /// does) and a zip archive is unwrapped by the caller before either service sees it.
     /// </remarks>
     /// <param name="agentsJson">The uploaded file's raw bytes, positioned at its start.</param>
     /// <param name="fileName">The name the client uploaded it under, kept only for the Draft's own
@@ -90,8 +90,8 @@ public class DraftImportService : IDraftImportService
             ImportedFrom = fileName,
             Intents = [.. configuration.Intents.Select(ToIntentDraft)],
             Agents = [.. configuration.Agents.Select(agent => ToAgentDraft(agent, notices))],
-            // Frozen here, before anything can touch it, and by a second projection of the same parsed
-            // configuration rather than a copy of what was just built: the baseline is the file, and
+            // Frozen here, before anything can touch it and by a second projection of the same parsed
+            // configuration rather than a copy of what was just built: the baseline is the file and
             // deriving it the same way guarantees the migration report can only ever show a real edit.
             Baseline = new DomainDraft
             {
@@ -103,13 +103,13 @@ public class DraftImportService : IDraftImportService
 
         // On the working draft only. The baseline is the file as it arrived, so a domain that came
         // without a fallback shows the addition in the migration report, which is where the client
-        // should meet it — not silently, and not as something they have to write themselves.
+        // should meet it — not silently and not as something they have to write themselves.
         int before = draft.Intents.Count;
         draft.EnsureFallbackIntent();
 
         if (draft.Intents.Count > before)
             notices.Add($"This configuration had no '{DomainDraft.FallbackIntent}' intent, so one is in place: "
-                        + "it is where the classifier sends everything the domain does not cover, and it is the one intent no agent may claim.");
+                        + "it is where the classifier sends everything the domain does not cover and it is the one intent no agent may claim.");
 
         logger.LogInformation(
             "Imported {IntentCount} intents and {AgentCount} agents from {FileName}",
@@ -200,7 +200,7 @@ public class DraftImportService : IDraftImportService
     /// </summary>
     /// <remarks>
     /// Only the class names are proposed, from the framework's own naming convention. Namespace and
-    /// tier are left null rather than guessed: they are not derivable from anything in the file, and
+    /// tier are left null rather than guessed: they are not derivable from anything in the file and
     /// a confident-looking wrong value is worse than an empty one the interview will ask about.
     /// Everything here is flagged <see cref="AgentCodeFacts.Inferred"/> — a proposal for the client
     /// to confirm, never a finding.

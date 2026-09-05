@@ -329,7 +329,7 @@
 
     /// <summary>
     /// Handles incoming messages from SignalR with strongly-typed DTO.
-    /// Removes typing indicator, updates agent state, and adds message to UI.
+    /// Removes typing indicator, updates agent state and adds message to UI.
     /// </summary>
     /// <param name="message">Strongly-typed channel message DTO containing all message data</param>
     /// <returns>Task representing the async message handling</returns>
@@ -345,7 +345,7 @@
             try
             {
                 // Refresh the dust gauge from conversation metadata BEFORE any early return:
-                // warnings, the lockout error and ordinary turns all carry it, and the
+                // warnings, the lockout error and ordinary turns all carry it and the
                 // low-budget moments are exactly when the user wants to see the gauge move.
                 // Only overwrite when metadata is present, so a metadata-less message never
                 // clobbers a known level.
@@ -465,7 +465,7 @@
 
     /// <summary>
     /// Handles quick reply button selection.
-    /// Marks the selected reply, disables all buttons, and sends the reply value as user message.
+    /// Marks the selected reply, disables all buttons and sends the reply value as user message.
     /// </summary>
     /// <param name="reply">Selected quick reply definition</param>
     /// <param name="message">Message containing the quick replies</param>

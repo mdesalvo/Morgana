@@ -1,6 +1,6 @@
 /* ==========================================================================
    Controls and the small shared furniture: buttons, quick replies, the finished-agent panel, the
-   way back, and Blazor's own error banner.
+   way back and Blazor's own error banner.
    ========================================================================== */
 
 button.primary {
@@ -153,9 +153,9 @@ button.choice:disabled {
 }
 
 /* The cloud of words for a voice. Deliberately not the choices above: those are laid out as a row of
-   offers where one is taken and the row is spent, and these are a field to graze — several taken at
-   once, weightless until picked, and nothing spent by taking one. So they are quieter than a button
-   when idle and unmistakably held when picked, and their sizes vary a little because a cloud that
+   offers where one is taken and the row is spent and these are a field to graze — several taken at
+   once, weightless until picked and nothing spent by taking one. So they are quieter than a button
+   when idle and unmistakably held when picked and their sizes vary a little because a cloud that
    lines up is a menu again. */
 .traits {
     display: flex;
@@ -289,7 +289,7 @@ input[type="checkbox"] {
     font-family: "Cascadia Mono", "JetBrains Mono", ui-monospace, monospace;
 }
 
-/* A field that matters: its name above it rather than beside it, and whatever it needs to say about
+/* A field that matters: its name above it rather than beside it and whatever it needs to say about
    itself underneath, where the eye already is after typing. */
 .field {
     margin-bottom: 1.25rem;
@@ -346,7 +346,7 @@ input[type="checkbox"] {
 }
 
 /* The classes of defect the coherence pass can be asked for, one accordion row each. A column and
-   not a row of chips: each carries a line saying what ticking it goes looking for, and a client who
+   not a row of chips: each carries a line saying what ticking it goes looking for and a client who
    has to hover to find that out ticks whatever sounds most serious instead. Rows are divided by a
    rule rather than a gap, so an opened one reads as belonging to the row above it. */
 .aspects {
@@ -531,13 +531,13 @@ dl.fields dd {
     margin: 0.85rem 0 0;
 }
 
-/* A column, not a block: an agent with no tools has one step instead of two or three, and without
+/* A column, not a block: an agent with no tools has one step instead of two or three and without
    this its bar would sit wherever that shorter list happens to end — a row of cards where the bars
    do not line up. margin-top:auto on the bar pushes it flush to the card's own bottom regardless of
    how many step rows are above it, so every bar in a grid row aligns with its neighbours'. */
 /* Scoped to the grid it lives in, because Import draws an agent card too and means something else by
    it — one agent of a domain as its owner would recognise it, not one agent being emitted. Unscoped,
-   these rules reach that page as well: the class name is the same, the specificity is the same, and
+   these rules reach that page as well: the class name is the same, the specificity is the same and
    this file is loaded after import.css. */
 .distillation-agents .agent-card {
     display: flex;
@@ -638,7 +638,7 @@ dl.fields dd {
 }
 
 /* The one row that is not yet a fact: last in the log, since it is the newest thing happening —
-   bold against the settled rows above it, and turning rather than ticked, because nothing has
+   bold against the settled rows above it and turning rather than ticked, because nothing has
    landed for it yet. */
 .log-current {
     font-weight: 600;
@@ -686,9 +686,9 @@ dl.fields dd {
     font-weight: 600;
 }
 
-/* The reward at the end of the whole interview, and the one control on this page that has to be
+/* The reward at the end of the whole interview and the one control on this page that has to be
    unmistakable: not a link reading as a filename among paragraphs, but its own button — sized,
-   coloured apart from the purple used for "start an action" elsewhere, and carrying its own file
+   coloured apart from the purple used for "start an action" elsewhere and carrying its own file
    count and size so the client never has to look back up at the paragraph above it. */
 .download-archive {
     display: inline-flex;
@@ -754,10 +754,10 @@ dl.fields dd {
 }
 
 /* Two bands in one cell, because the question they answer is one question with two answers: which
-   colleague, and on whose Morgana. The tick list above can only be right — its names come from the
+   colleague and on whose Morgana. The tick list above can only be right — its names come from the
    domain — while the rows below can only be taken on trust, so they are set apart rather than
    merely listed after: a rule down the left, the accent that marks everything leaving this
-   installation, and a caption on each so neither band is read as a continuation of the other. */
+   installation and a caption on each so neither band is read as a continuation of the other. */
 .colleague-scope {
     margin: 0 0 0.35rem;
     font-size: 0.7rem;

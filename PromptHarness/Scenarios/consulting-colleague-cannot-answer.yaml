@@ -3,7 +3,7 @@ description: >-
   The consultation that comes back empty, which is the case the mechanism can actually deadlock on.
   The customer asks Billing which courier shipped the aloe line on INV-0247. It is not on the
   accounts desk's books, so the desk asks the greenhouse — and it is not on the greenhouse's either:
-  Inventory keeps a catalog, stock and an order lifecycle (created/confirmed/cancelled), and carries
+  Inventory keeps a catalog, stock and an order lifecycle (created/confirmed/cancelled) and carries
   no shipping information of any kind, so no tool of its own can produce the answer and no proxy
   value is close enough to pass for it.
   What the turn measures is the way out. Structurally: the colleague is asked exactly ONCE — the
@@ -31,7 +31,7 @@ turns:
   - say: "That aloe line on it — which courier shipped it?"
     expect:
       agent: BillingAgent
-      # Once, and no more: this is the whole anti-loop assertion, and it holds whether the colleague
+      # Once and no more: this is the whole anti-loop assertion and it holds whether the colleague
       # came back empty or the agent simply disliked the answer.
       toolsCalledOnce: [consult_inventory]
       # The turn ends with something in the customer's hands. An impasse that produced no text would

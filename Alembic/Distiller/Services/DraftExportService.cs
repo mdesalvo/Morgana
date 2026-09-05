@@ -29,11 +29,11 @@ public class DraftExportService : IDraftExportService
     /// <see cref="JsonIgnoreCondition.WhenWritingNull"/> keeps an unstated Personality out of the
     /// file rather than writing <c>null</c> into it, while leaving <c>false</c> booleans written
     /// explicitly: an omitted <c>Shared</c> and an explicit <c>"Shared": false</c> mean the same
-    /// thing to Morgana, and stating it is the clearer of the two.
+    /// thing to Morgana and stating it is the clearer of the two.
     /// <para>
     /// The relaxed encoder is chosen against System.Text.Json's default, which escapes every
     /// non-ASCII character and the apostrophe into <c>\u</c> sequences. A domain configuration is
-    /// prose the client reads, reviews and commits, and escaping all of it would leave the export
+    /// prose the client reads, reviews and commits and escaping all of it would leave the export
     /// semantically identical but textually unrecognisable next to the file it came from. It is
     /// safe here because this output is downloaded as a file, never interpolated into markup.
     /// </para>
@@ -42,7 +42,7 @@ public class DraftExportService : IDraftExportService
     /// <c>UnicodeRange</c>s, which stop at U+FFFF, so a character outside the BMP — every emoji in
     /// a quick-reply label — is still written as an escaped surrogate pair. Accented text, dashes
     /// and apostrophes come through literally; emoji do not. The first export therefore normalises
-    /// a hand-written configuration once, and every export after that is diffable against the one
+    /// a hand-written configuration once and every export after that is diffable against the one
     /// before it, which is the comparison that actually matters in use.
     /// </para>
     /// </remarks>

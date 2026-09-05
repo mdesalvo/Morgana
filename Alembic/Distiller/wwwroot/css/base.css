@@ -5,7 +5,7 @@
    landing, import, revise, panels, interview, controls. The palette is the first of them and stands apart
    in palette.css, spent by every file below it and defined by none.
 
-   base.css — the reset, the page shells, and the mark that carries the alembic onto every page
+   base.css — the reset, the page shells and the mark that carries the alembic onto every page
    past the landing.
    ========================================================================== */
 
@@ -26,7 +26,7 @@ html, body {
     padding: 0;
     min-height: 100%;
     /* Three layers of one light: a wide violet wash from above the page, the cold cyan the
-       distillate throws in the far corner, and the ground under both. The wash is broad and weak
+       distillate throws in the far corner and the ground under both. The wash is broad and weak
        rather than narrow and strong — a soft light fills a room, a hard one draws a spotlight. */
     background:
         radial-gradient(ellipse 75rem 48rem at 50% -12%, rgba(167, 139, 250, 0.20), transparent 72%),
@@ -52,7 +52,7 @@ html, body {
 }
 
 /* The workbench takes the room it needs. A wizard is not an article: what is on the screen is a rail
-   of seven steps, a map of the domain, a question and the box it is answered in, and squeezing all of
+   of seven steps, a map of the domain, a question and the box it is answered in and squeezing all of
    that into a column meant for prose wrapped the rail onto four lines and made a slot of the box the
    client is asked to write a paragraph into. Wide, with the reading measures set per element where a
    measure actually matters. */

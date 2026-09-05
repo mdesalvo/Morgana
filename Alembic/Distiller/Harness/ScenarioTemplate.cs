@@ -6,10 +6,10 @@ namespace Distiller.Harness;
 /// What a template needs the agent to have before it is worth deriving at all.
 /// </summary>
 /// <remarks>
-/// The mechanical half of applicability, and only that half. Whether a toolkit contains an
+/// The mechanical half of applicability and only that half. Whether a toolkit contains an
 /// irreversible action, or whether the Formatting withholds anything, is a reading of the domain
 /// and belongs to the model — which answers <c>not-applicable</c> and is believed. Whether an agent
-/// has two tools is arithmetic, and asking a model to do arithmetic on a list it was just handed is
+/// has two tools is arithmetic and asking a model to do arithmetic on a list it was just handed is
 /// a way of paying for an answer that could be wrong.
 /// </remarks>
 public enum TemplateRequirement
@@ -32,7 +32,7 @@ public enum TemplateRequirement
 /// </summary>
 /// <remarks>
 /// <para>
-/// Alembic's harness component is a set of these, authored once, in this repository, and shipped
+/// Alembic's harness component is a set of these, authored once, in this repository and shipped
 /// inside the assembly. They are not copies of anything: PromptHarness's own suite tests framework
 /// policy, which is the half a client must never duplicate, so there is nothing there to derive a
 /// domain scenario from. What a template carries instead is the <em>shape</em> of a behaviour worth
@@ -41,7 +41,7 @@ public enum TemplateRequirement
 /// </para>
 /// <para>
 /// A template is therefore two things in one file. The <c>#@</c> header is addressed to the model:
-/// what this use-case is, when it does not apply, and what a good derivation of it decides. The body
+/// what this use-case is, when it does not apply and what a good derivation of it decides. The body
 /// below it is a scenario the harness would load if the placeholders were real — key order,
 /// thresholds and comments already settled, because those are the decisions a domain expert has no
 /// way to make and no reason to.
@@ -70,11 +70,11 @@ public sealed record ScenarioTemplate(
     private static readonly string[] Directives = ["use-case", "requires", "derive"];
 
     /// <summary>
-    /// Every harness key this template uses, and therefore every key its derivation may.
+    /// Every harness key this template uses and therefore every key its derivation may.
     /// </summary>
     /// <remarks>
     /// Read off the body rather than declared beside it. A template is a scenario the harness would
-    /// load, so it already states its vocabulary by using it, and a second statement of the same
+    /// load, so it already states its vocabulary by using it and a second statement of the same
     /// thing is a second thing to keep in step.
     /// </remarks>
     public IReadOnlySet<string> Keys => field ??= ScenarioDerivation.KeysOf(Body);
@@ -124,8 +124,8 @@ public sealed record ScenarioTemplate(
                 continue;
             }
 
-            // A continuation line, and the only reason the key set is closed: prose is free to
-            // contain a colon, and a directive is not decided by punctuation.
+            // A continuation line and the only reason the key set is closed: prose is free to
+            // contain a colon and a directive is not decided by punctuation.
             current?.AppendLine().Append(content);
         }
 

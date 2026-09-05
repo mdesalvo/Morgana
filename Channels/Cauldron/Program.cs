@@ -14,7 +14,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // 1. BLAZOR SERVER CONFIGURATION
 // ============================================================================
 // Blazor Server provides server-side rendering with real-time UI updates via SignalR.
-// The UI state lives on the server, and DOM updates are sent to the client via WebSocket.
+// The UI state lives on the server and DOM updates are sent to the client via WebSocket.
 
 builder.Services.AddRazorPages();       // Razor Pages, used only to serve _Host.cshtml
 builder.Services.AddServerSideBlazor(); // Blazor Server: UI state lives here, DOM diffs go over SignalR
@@ -72,7 +72,7 @@ builder.Services.AddScoped<IConversationHistoryService, ConversationHistoryServi
 
 // Chat state, conversation lifecycle and streaming services
 // All scoped, which in Blazor Server means one instance per circuit: two browser tabs get
-// separate chat state, and everything here dies with the connection that owns it.
+// separate chat state and everything here dies with the connection that owns it.
 builder.Services.AddScoped<IChatStateService, ChatStateService>();
 builder.Services.AddScoped<IConversationLifecycleService, ConversationLifecycleService>();
 builder.Services.AddScoped<IStreamingService, StreamingService>();
@@ -97,7 +97,7 @@ app.UseHttpsRedirection();              // Redirect HTTP → HTTPS
 // ============================================================================
 // 6. EMBEDDING CONTROL (frame-ancestors)
 // ============================================================================
-// Widget puts this app in an <iframe> on third-party sites, and nothing in
+// Widget puts this app in an <iframe> on third-party sites and nothing in
 // ASP.NET Core constrains framing by default — which for a chat surface is the wrong
 // default in both directions: unconfigured, any site could frame it and phish through it.
 //

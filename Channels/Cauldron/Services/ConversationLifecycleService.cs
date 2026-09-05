@@ -6,7 +6,7 @@ namespace Cauldron.Services;
 
 /// <summary>
 /// Manages conversation lifecycle: start, resume, clear.
-/// Coordinates between HTTP API, SignalR groups, and local storage.
+/// Coordinates between HTTP API, SignalR groups and local storage.
 /// </summary>
 public class ConversationLifecycleService : IConversationLifecycleService
 {
@@ -58,11 +58,11 @@ public class ConversationLifecycleService : IConversationLifecycleService
             _logger.LogInformation("Starting new conversation...");
 
             // Joined before the conversation exists, not after it starts. The presentation is pushed
-            // the instant Morgana has a conversation, and a SignalR message sent to a group with no
+            // the instant Morgana has a conversation and a SignalR message sent to a group with no
             // members is discarded without a trace — so a join issued after the start response is a
             // race, lost every time the greeting skips the LLM (no agents configured, presenter
             // failure) and therefore costs nothing to produce. Joining first removes the race instead
-            // of narrowing it: the id is minted here, and a group is joinable before anything is
+            // of narrowing it: the id is minted here and a group is joinable before anything is
             // keyed on it. On the server side this is the documented ordering, see
             // MorganaHub.JoinConversation.
             await _signalR.JoinConversation(request.ConversationId);
@@ -225,7 +225,7 @@ public class ConversationLifecycleService : IConversationLifecycleService
         }
         catch (Exception ex)
         {
-            // Best-effort cleanup: the user is leaving this conversation either way, and the next
+            // Best-effort cleanup: the user is leaving this conversation either way and the next
             // load starts a fresh one. A failure here costs an actor tree on the server, not the
             // user's ability to move on, so it is logged and swallowed rather than surfaced.
             _logger.LogWarning(ex, "EndConversation failed for {ConversationId}", conversationId);

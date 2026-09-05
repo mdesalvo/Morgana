@@ -3,7 +3,7 @@ using Morgana.Contracts;
 namespace Cauldron.Interfaces;
 
 /// <summary>
-/// Service for managing streaming state: chunk buffering, typewriter timer, and streaming lifecycle.
+/// Service for managing streaming state: chunk buffering, typewriter timer and streaming lifecycle.
 /// </summary>
 public interface IStreamingService : IAsyncDisposable
 {

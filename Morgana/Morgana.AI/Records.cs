@@ -444,6 +444,20 @@ public static class Records
         /// <c>[ConsultsAgent]</c> and a second author of it could only contradict the first.
         /// </summary>
         public List<string>? Agents { get; set; }
+
+        /// <summary>
+        /// Conversations this system may open on this installation within a sliding hour.
+        /// </summary>
+        /// <remarks>
+        /// How far a partner reaches and how often it may come back are one declaration about one
+        /// partner, which is why the allowance sits here. What it bounds is the caller's freedom to
+        /// name its own conversation and draw a fresh budget with each name; what one exchange may
+        /// then cost is the per-conversation budget, unchanged. <b>Required of every admitted system
+        /// except this installation's own</b>, whose colleagues join the conversation the user is
+        /// already having: nothing reads an absent key as licence to spend without limit, so a
+        /// deployment wanting no real bound writes a generous number rather than leaving it out.
+        /// </remarks>
+        public int? MaxConversationsPerHour { get; set; }
     }
 
     /// <summary>

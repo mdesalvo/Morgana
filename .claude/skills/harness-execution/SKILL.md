@@ -22,7 +22,7 @@ Activated when the user says things like:
 
 1. **Confirm the active provider** before anything else: read `Morgana:LLM:Provider` from the shared
    User Secrets store (`UserSecretsId 374228be-4f26-4382-a3ef-7500a0b829dd`, same as `Morgana.Web`)
-   without printing the ApiKey/Endpoint values, and tell the user which provider/tier models
+   without printing the ApiKey/Endpoint values and tell the user which provider/tier models
    (`Tiers.Efficiency.Options.ModelId` / `Tiers.Performance.Options.ModelId`) this run will hit. This
    is the harness's own design (`PromptHarness/README.md`): it never has its own `Morgana:` config,
    it inherits the host's. The same file is where `Harness:HarnessDirectory` lives when the user has
@@ -32,7 +32,7 @@ Activated when the user says things like:
 2. **Ask the target scope** with `AskUserQuestion`, multi-select, one checkbox per test class:
    - Context (`ContextHandlingTests` — the blocking group: context cycle, closed vocabulary, cross-agent)
    - Peer consultation (`PeerConsultationTests` — the second blocking group: an agent reaching a
-     colleague over A2A when only the colleague can answer, and the user never learning it happened)
+     colleague over A2A when only the colleague can answer and the user never learning it happened)
    - Behavior (`BehaviourTests` — turn continuation, closure, rich cards)
    - Actors (`ActorTests` — classifier, channel adapter, presentation)
    - Guard (`GuardTests` — requires `Harness__EnableGuardrail=true`, off by default)
@@ -41,12 +41,12 @@ Activated when the user says things like:
    Offer "everything" as an implicit extra option by allowing all six checkboxes selected at once.
    Do not default to any pre-checked selection — the user picks the perimeter explicitly every time.
 
-   **Peer consultation takes no flag of its own**, and the absence is worth stating because it is the
-   natural thing to go looking for: `Morgana:AgentToAgent:Enabled` defaults to true, and
+   **Peer consultation takes no flag of its own** and the absence is worth stating because it is the
+   natural thing to go looking for: `Morgana:AgentToAgent:Enabled` defaults to true and
    `MorganaHostFixture` mints the per-run key for the `morgana` peer issuer itself, exactly as it
    does for `harness`. What this group does depend on instead is a **topology** — the scenarios name
    agents that must still declare `[ConsultsAgent]` of one another — so a failure here has a second
-   thing it can mean, and `Examples/Agents/*.cs` is the first place to look before the prose.
+   thing it can mean and `Examples/Agents/*.cs` is the first place to look before the prose.
 
 3. **Ask the global run/pass threshold** with `AskUserQuestion` (single-select with the following
    presets, "Other" covers any custom pair):
@@ -121,7 +121,7 @@ Activated when the user says things like:
      `PromptHarness/Harness/` — gitignored, never expect it in `git status`).
    - The user running the suite may have their own `Harness:HarnessDirectory` override pointing
      somewhere else entirely (a personal results folder, a shared drive) — it lives in the same User
-     Secrets store read in step 1, so look there rather than asking, and only ask when the store has
+     Secrets store read in step 1, so look there rather than asking and only ask when the store has
      none. Do not assume two different configured paths are the same run's output.
    - If neither location has fresh files after a run that should have produced them, do not silently
      shrug — a scenario ID and phase both funnel into the file name, so an empty/missing folder is
@@ -135,7 +135,7 @@ Activated when the user says things like:
 ## Notes
 
 - Every run is billed — live LLM calls, no mocking. Never run without both questions (scope,
-  threshold) answered first, and never assume a repeat of a previous scope/threshold.
+  threshold) answered first and never assume a repeat of a previous scope/threshold.
 - The judge (`LLMJudge`) always runs on the same provider under test, on its cheapest tier, with a
   deliberately strict system prompt ("do not be charitable"). A judge-proposition failure is not
   automatically a prompt defect — check whether the proposition itself is well-calibrated before

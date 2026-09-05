@@ -90,7 +90,7 @@ public sealed class ExpectSpec
     /// standalone emission", valid only alongside at least one primary option.
     /// </summary>
     /// <remarks>
-    /// Opt-in, and deliberately so: a turn that has genuinely concluded emits exactly those two
+    /// Opt-in and deliberately so: a turn that has genuinely concluded emits exactly those two
     /// buttons and nothing else, which is <c>ConversationClosure</c> working as intended. The
     /// assertion belongs on turns that declare continuation, where a standalone escape pair would
     /// gate a lawful in-progress step behind an exit button.
@@ -193,13 +193,13 @@ public sealed class ExpectSpec
     /// Agents that must own no message in the conversation's persisted history as it stands after
     /// this turn — named by intent (<c>billing</c>), matched against the history's own
     /// <c>Morgana (Billing)</c> attribution. The proof that a consulted colleague left nothing
-    /// behind: it answered, and the conversation has no record of it ever having spoken.
+    /// behind: it answered and the conversation has no record of it ever having spoken.
     /// </summary>
     public List<string>? HistoryExcludesAgents { get; init; }
 
     /// <summary>
     /// Exact number of user messages the persisted history must carry after this turn — one per
-    /// turn played so far, and nothing else. The other half of the same proof, from the question's
+    /// turn played so far and nothing else. The other half of the same proof, from the question's
     /// side: a colleague's inbound question is stored with the user role, so a consultation that
     /// survived would show up here as a message the person never sent.
     /// </summary>

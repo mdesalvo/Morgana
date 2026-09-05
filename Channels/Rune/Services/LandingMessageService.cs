@@ -6,7 +6,7 @@ namespace Rune.Services;
 /// "Morgana is warming up" line on stdout during the short startup window before the
 /// Spectre.Console Live UI takes over: Kestrel bind, JWT signing, TLS handshake,
 /// conversation-start handshake and the first webhook from Morgana together take
-/// roughly 0.5–2 s, and leaving the terminal empty for that stretch feels like a freeze.
+/// roughly 0.5–2 s and leaving the terminal empty for that stretch feels like a freeze.
 /// </summary>
 public sealed class LandingMessageService
 {

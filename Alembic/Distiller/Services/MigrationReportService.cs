@@ -5,13 +5,13 @@ using Distiller.Model;
 namespace Distiller.Services;
 
 /// <summary>
-/// Default <see cref="IMigrationReportService"/>: a Draft against its own baseline, and no model
+/// Default <see cref="IMigrationReportService"/>: a Draft against its own baseline and no model
 /// asked.
 /// </summary>
 /// <remarks>
 /// Every question the report answers is decidable by comparing two Drafts. What it deliberately
 /// does not attempt is judgement — whether a revised description is <em>better</em>, whether two
-/// intents now overlap — because that needs a model, belongs to the coherence pass, and would turn
+/// intents now overlap — because that needs a model, belongs to the coherence pass and would turn
 /// a report the client must trust literally into one they have to second-guess.
 /// </remarks>
 public class MigrationReportService : IMigrationReportService
@@ -60,7 +60,7 @@ public class MigrationReportService : IMigrationReportService
             if (was is null)
             {
                 entries.Add(new MigrationEntry(MigrationKind.Intent, intent.Name!, MigrationChange.Added,
-                    "New intent. Its agent class must be registered by the plugin, and the classifier now weighs this description against every other."));
+                    "New intent. Its agent class must be registered by the plugin and the classifier now weighs this description against every other."));
                 continue;
             }
 
@@ -80,7 +80,7 @@ public class MigrationReportService : IMigrationReportService
     }
 
     /// <summary>
-    /// Agents added or reworded, and every toolkit inside them.
+    /// Agents added or reworded and every toolkit inside them.
     /// </summary>
     /// <param name="draft">The domain as it stands now.</param>
     /// <param name="baseline">The domain as it stood at import.</param>
@@ -110,13 +110,13 @@ public class MigrationReportService : IMigrationReportService
             if (was is not null && !Same(was.Code.Consults, agent.Code.Consults))
                 entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised,
                     $"Colleagues changed to {PeerNaming.Describe(agent.Code.Consults)}. "
-                    + "[ConsultsAgent] lives on the agent class: re-emit it, and check the intent it names is one your plugin registers."));
+                    + "[ConsultsAgent] lives on the agent class: re-emit it and check the intent it names is one your plugin registers."));
 
-            // Unconditional, and unlike everything else here it is not about what changed: a colleague
+            // Unconditional and unlike everything else here it is not about what changed: a colleague
             // at an instance needs an address and a key this archive deliberately does not carry — a URL
-            // is the deployment's word, and a shared secret has no business in a file that is
+            // is the deployment's word and a shared secret has no business in a file that is
             // downloaded. Said on every report because a system entry that was never added is a
-            // startup failure, and one added under a differently spelled name is the same failure
+            // startup failure and one added under a differently spelled name is the same failure
             // wearing a plausible configuration.
             foreach (Morgana.AI.Records.PeerReference colleague in agent.Code.Consults.Where(c => c.Instance is not null))
                 entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised,
@@ -140,7 +140,7 @@ public class MigrationReportService : IMigrationReportService
 
     /// <summary>
     /// Whether two colleague lists say the same thing, order and casing aside — an agent declares
-    /// each colleague once, and which order the attributes sit in changes nothing.
+    /// each colleague once and which order the attributes sit in changes nothing.
     /// </summary>
     private static bool Same(IEnumerable<string> was, IEnumerable<string> now) =>
         new HashSet<string>(was, StringComparer.OrdinalIgnoreCase)
@@ -175,14 +175,14 @@ public class MigrationReportService : IMigrationReportService
             {
                 if (was is not null)
                     entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.Added,
-                        $"New tool. The generated half declares `public partial Task<string> {tool.Name}({Signature(tool)})`, and the file will not compile until you implement it in the half you own."));
+                        $"New tool. The generated half declares `public partial Task<string> {tool.Name}({Signature(tool)})` and the file will not compile until you implement it in the half you own."));
 
                 continue;
             }
 
             if (Signature(previous) != Signature(tool))
                 entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.SignatureChanged,
-                    $"`{Signature(previous)}` became `{Signature(tool)}`. Change your method to match: the generated declaration moves on its own, and MorganaToolAdapter.AddTool refuses the pair at startup if it does not."));
+                    $"`{Signature(previous)}` became `{Signature(tool)}`. Change your method to match: the generated declaration moves on its own and MorganaToolAdapter.AddTool refuses the pair at startup if it does not."));
             else if (!string.Equals(previous.Description, tool.Description, StringComparison.Ordinal)
                      || previous.Parameters.Zip(tool.Parameters).Any(p => !string.Equals(p.First.Description, p.Second.Description, StringComparison.Ordinal)))
                 entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
@@ -215,7 +215,7 @@ public class MigrationReportService : IMigrationReportService
         {
             sb.AppendLine("No configuration was uploaded into this session, so there is nothing to compare against:");
             sb.AppendLine("everything in this archive is new. Drop it into a plugin project, point Morgana's");
-            sb.AppendLine("`Morgana:Plugins:Directories` at the build output, and start.");
+            sb.AppendLine("`Morgana:Plugins:Directories` at the build output and start.");
             return sb.ToString();
         }
 
@@ -269,7 +269,7 @@ public class MigrationReportService : IMigrationReportService
     /// </summary>
     /// <remarks>
     /// Kept independent of <see cref="CodeEmitService"/>'s own signature rendering rather than
-    /// sharing it: this one exists purely to compare two Drafts as strings, and coupling it to the
+    /// sharing it: this one exists purely to compare two Drafts as strings and coupling it to the
     /// emitter would make an unrelated formatting change there silently start firing (or silently
     /// stop firing) signature-changed findings here.
     /// </remarks>

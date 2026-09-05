@@ -35,7 +35,7 @@ public sealed record ContextAccess(ContextOperation Operation, string VariableNa
 /// <remarks>
 /// The only window there is onto the other side of the exchange. The asking agent's own span shows
 /// that a colleague was called; this shows what the colleague did about it — which of its tools it
-/// reached for, and whether it ended the exchange waiting for something back, which is what a
+/// reached for and whether it ended the exchange waiting for something back, which is what a
 /// colleague that demanded a value instead of answering looks like from outside.
 /// </remarks>
 /// <param name="Caller">Intent that asked.</param>

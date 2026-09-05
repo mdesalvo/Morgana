@@ -202,17 +202,17 @@ services:
   # ============================================================================
   # ALEMBIC - AUTHORING WORKBENCH (Blazor Server UI)
   # ============================================================================
-  # Profile-gated: `compose up` does NOT start Alembic, and the reason is not the
+  # Profile-gated: `compose up` does NOT start Alembic and the reason is not the
   # terminal-ownership one that gates the TUI channels. Alembic is not part of a
   # running Morgana at all — it is the workbench where a domain is authored, it
-  # talks to no Morgana instance, and it joins no network here. Starting it
+  # talks to no Morgana instance and it joins no network here. Starting it
   # alongside the pipeline would only occupy a port for an unrelated application.
   #
   # Usage:
   #   docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
   #
   # Note the LLM block below declares Performance only: Alembic writes dispositive
-  # prose, which is exactly where the Efficiency die fails, and it runs once per
+  # prose, which is exactly where the Efficiency die fails and it runs once per
   # onboarding rather than per turn. A single-tier deployment therefore does not
   # serve it (no cross-tier fallback, by design).
   alembic:

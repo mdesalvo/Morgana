@@ -17,7 +17,7 @@ public sealed class TerminalCellService
     /// <summary>Terminal cell width of a single rune.</summary>
     public int RuneCells(System.Text.Rune rune) => rune.ToString().GetCellWidth();
 
-    /// <summary>Greedy word-wrap by terminal cell, not char count: walks the text one rune at a time so a surrogate pair is never split, and always hands back at least one (possibly empty) slice.</summary>
+    /// <summary>Greedy word-wrap by terminal cell, not char count: walks the text one rune at a time so a surrogate pair is never split and always hands back at least one (possibly empty) slice.</summary>
     public List<string> Wrap(string text, int width)
     {
         width = Math.Max(1, width);

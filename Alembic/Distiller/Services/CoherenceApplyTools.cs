@@ -16,7 +16,7 @@ namespace Distiller.Services;
 /// </para>
 /// <para>
 /// Deliberately narrower than the interview's toolset. No <c>SetAgentPersonality</c>: no coherence
-/// defect this pass exists for is about voice, and a fix that touched it would be rewriting
+/// defect this pass exists for is about voice and a fix that touched it would be rewriting
 /// something nobody asked to change. No <c>DeclareIntent</c>/<c>DropIntent</c>: the map is not
 /// reopened here any more than it is mid-interview, only its description may be sharpened.
 /// </para>
@@ -42,7 +42,7 @@ public class CoherenceApplyTools
     /// Returns one agent's prose and toolkit as they stand, by ID.
     /// </summary>
     /// <remarks>
-    /// Called before any write: this pass opens knowing only the finding's own words, and a tool
+    /// Called before any write: this pass opens knowing only the finding's own words and a tool
     /// call naming a field it has not seen the rest of risks discarding what a sibling field
     /// depended on.
     /// </remarks>
@@ -167,7 +167,7 @@ public class CoherenceApplyTools
     /// Adds a parameter to a declared tool of the named agent, or revises one already there.
     /// </summary>
     /// <remarks>
-    /// Touches exactly the one parameter named — every other parameter already on the tool, and
+    /// Touches exactly the one parameter named — every other parameter already on the tool and
     /// the tool's own name and description, are left as they stand. The tool itself must already
     /// exist: this never creates one, since a coherence finding names a tool it has already read.
     /// </remarks>

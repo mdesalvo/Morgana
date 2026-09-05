@@ -13,10 +13,10 @@ namespace Distiller.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// One call per template, and that is the design rather than an implementation detail. A single
+/// One call per template and that is the design rather than an implementation detail. A single
 /// call asking for "two or three scenarios" makes the model choose which behaviours matter, which
 /// is the one decision it is worst placed to make — it has seen this domain for the length of one
-/// request, and the answer is the same three shapes every time. The use-cases are chosen here,
+/// request and the answer is the same three shapes every time. The use-cases are chosen here,
 /// once, by people who know what breaks a domain agent; what the model does is the part it is good
 /// at, which is putting this domain's words into a shape already decided.
 /// </para>
@@ -111,7 +111,7 @@ public class ScenarioAuthorService : IScenarioAuthorService
                 if (++failures <= 1)
                     continue;
 
-                // Nothing derived means nothing to hand over, and a client who asked for scenarios
+                // Nothing derived means nothing to hand over and a client who asked for scenarios
                 // and silently received none has been told nothing: that case is worth the caller's
                 // FAILED.txt. With something in hand it is not, since a template dropping out is
                 // already how a use-case this domain has no instance of leaves the set.
@@ -126,7 +126,7 @@ public class ScenarioAuthorService : IScenarioAuthorService
             if (derivation.NotApplicable is { } reason)
             {
                 // Not a failure and not silent: a use-case the domain has no instance of is a fact
-                // about the domain, and the client's README says which ones came back empty.
+                // about the domain and the client's README says which ones came back empty.
                 logger.LogInformation(
                     "{AgentId} has no instance of {Template}: {Reason}", agent.ID, template.Name, reason);
 
@@ -174,7 +174,7 @@ public class ScenarioAuthorService : IScenarioAuthorService
     /// </para>
     /// <para>
     /// Held to <see cref="ScenarioTemplateLibrary.Vocabulary"/> rather than to one template's keys:
-    /// a scenario nobody anticipated may need any key Alembic can vouch for, and none it cannot.
+    /// a scenario nobody anticipated may need any key Alembic can vouch for and none it cannot.
     /// </para>
     /// </remarks>
     private async Task<IReadOnlyList<EmittedFile>> DiscretionaryAsync(
@@ -187,7 +187,7 @@ public class ScenarioAuthorService : IScenarioAuthorService
         CancellationToken cancellationToken)
     {
         // With no base to sit beside, there is nothing to be non-redundant against and nothing to
-        // read the idiom from — that domain's problem is the base, and this would not fix it.
+        // read the idiom from — that domain's problem is the base and this would not fix it.
         if (baseline.Count == 0)
             return [];
 
@@ -210,7 +210,7 @@ public class ScenarioAuthorService : IScenarioAuthorService
         {
             // The model's own id says what it thought it was writing, which is the only name a
             // reader would look for the file under. The shape of it is Alembic's, always: the
-            // harness loads by file name, and a name out of a model's output is one nothing agrees on.
+            // harness loads by file name and a name out of a model's output is one nothing agrees on.
             string id = Identify(document, intentName, taken);
 
             DerivedScenario derivation = ScenarioDerivation.Check(
@@ -239,7 +239,7 @@ public class ScenarioAuthorService : IScenarioAuthorService
     }
 
     /// <summary>
-    /// Assembles the discretionary request: the domain, the base in full, and the one constraint.
+    /// Assembles the discretionary request: the domain, the base in full and the one constraint.
     /// </summary>
     private static string DiscretionaryRequest(string domain, IReadOnlyList<EmittedFile> baseline) =>
         $"""
@@ -255,16 +255,16 @@ public class ScenarioAuthorService : IScenarioAuthorService
 
          # What is missing
 
-         Those cover what is worth protecting in any domain. You have read this one, and nobody else
+         Those cover what is worth protecting in any domain. You have read this one and nobody else
          has. If there is a rule here that holds nowhere else — a step that must never happen twice,
          an order this business insists on, something it never says in the same breath as something
          else — write the scenario that would catch it being broken.
 
          Every one you write must be true of this domain and of no other, must assert something none
-         of the above already asserts, and must not contradict any of them about the same turn. Use
+         of the above already asserts and must not contradict any of them about the same turn. Use
          only keys that appear in the scenarios above.
 
-         Two at the very most, and none is the ordinary answer: a domain whose behaviour the base
+         Two at the very most and none is the ordinary answer: a domain whose behaviour the base
          already describes is a well-designed domain, not a gap. If that is what you find, reply with
          `{ScenarioDerivation.NotApplicableMarker} ` and say so in one line.
          """;
@@ -343,8 +343,8 @@ public class ScenarioAuthorService : IScenarioAuthorService
     /// </summary>
     /// <remarks>
     /// The failure it guards against is a silent one, so the warning has to live in the artifact
-    /// rather than in a log the client never sees: the harness's own loader is forgiving, and the
-    /// same file would load, run, pass, and assert less than it appears to.
+    /// rather than in a log the client never sees: the harness's own loader is forgiving and the
+    /// same file would load, run, pass and assert less than it appears to.
     /// </remarks>
     private static string Flag(DerivedScenario derivation, string source) =>
         derivation.Problem is null
@@ -358,7 +358,7 @@ public class ScenarioAuthorService : IScenarioAuthorService
     /// States the agent exactly as the agent's own model will read it.
     /// </summary>
     /// <remarks>
-    /// The prose and the toolkit, and nothing about what the tools return: a scenario asserts what a
+    /// The prose and the toolkit and nothing about what the tools return: a scenario asserts what a
     /// user would see and which tools ran, never a value out of a mock nobody has to keep. An
     /// assertion on mock data is a scenario that fails the day the client wires the real system in —
     /// which is the one day the suite most needs to still work.

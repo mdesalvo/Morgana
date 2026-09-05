@@ -33,10 +33,10 @@ public class AlembicPromptService : IAlembicPromptService
     /// The two jobs a step can be doing, one of which is folded in beneath the shared prose.
     /// </summary>
     /// <remarks>
-    /// Writing a section that does not exist and correcting one that does are different work, and a
+    /// Writing a section that does not exist and correcting one that does are different work and a
     /// pass reads only the one it is doing. Kept as two rows of the same file rather than as two
     /// files: everything else — the identity, the conducting rules, the voice, every tool
-    /// declaration — is the same in both, and a second copy of it is the duplication this prompt was
+    /// declaration — is the same in both and a second copy of it is the duplication this prompt was
     /// already once rebuilt to remove.
     /// </remarks>
     private const string ComposingPromptId = "Composing";
@@ -45,26 +45,26 @@ public class AlembicPromptService : IAlembicPromptService
     private const string CorrectingPromptId = "Correcting";
 
     // Fences, in the framework's own idiom and for the framework's own reason: two layers carry
-    // overlapping section labels, and without a boundary the composed prompt shows [PERSONALITY]
+    // overlapping section labels and without a boundary the composed prompt shows [PERSONALITY]
     // twice with nothing saying which is which.
     //
-    // Two layers, not three, and that is still true of what the model reads: Morgana, then Alembic.
+    // Two layers, not three and that is still true of what the model reads: Morgana, then Alembic.
     // What changed is where Alembic's half is stored. Four passes that differ only in which tools
     // they hold were carrying four copies of the same conducting rules, the same voice and the same
-    // output format — 22 000 characters of which half was duplication, and duplication in a prompt
+    // output format — 22 000 characters of which half was duplication and duplication in a prompt
     // is not merely long: it is four places to edit a rule and three chances to leave one behind.
     //
-    // So the identical part lives once, in the "Alembic" prompt, and a pass carries only what is
+    // So the identical part lives once, in the "Alembic" prompt and a pass carries only what is
     // its own — what it settles, what it must leave alone, how it goes about that. The two are
     // merged section by section here, under one set of labels, because the composed prompt must
     // still be the four sections an agent prompt always is: the model sees no seam.
     private const string MorganaLayerHeader =
         "======== FENCE: MORGANA — WHOSE VESSEL YOU ARE ========\n" +
-        "You are an instrument of Morgana. This is her voice, and it is yours: it is not a description of someone else, and it is not overridable.";
+        "You are an instrument of Morgana. This is her voice and it is yours: it is not a description of someone else and it is not overridable.";
     private const string MorganaLayerFooter = "======== END OF FENCE ========";
     private const string AlembicLayerHeader =
         "======== ALEMBIC ========\n" +
-        "What follows specialises Morgana's voice for the step of the interview you are conducting right now. It adds that and NOTHING ELSE, and it never contradicts the layer above.";
+        "What follows specialises Morgana's voice for the step of the interview you are conducting right now. It adds that and NOTHING ELSE. It never contradicts the layer above.";
 
     /// <summary>
     /// Alembic's own prompts, parsed once on first use.
@@ -118,7 +118,7 @@ public class AlembicPromptService : IAlembicPromptService
         sb.AppendLine();
         
         // Alembic. Three rows read as one: what holds in every interview, which of the two jobs this
-        // step is, and what this interviewer alone settles — in that order, because the mode governs
+        // step is and what this interviewer alone settles — in that order, because the mode governs
         // how the interviewer's own instructions are to be read.
         Records.Prompt interviewer = Resolve(interviewerId);
         Records.Prompt alembic = Resolve(AlembicPromptId);
@@ -149,7 +149,7 @@ public class AlembicPromptService : IAlembicPromptService
     /// Names only, for every policy except the two named in <see cref="ExpressivenessPolicies"/>.
     /// What Alembic has to know for the rest is which subjects are settled above the agent, so that
     /// it writes none of them again; how they are settled is the agent's business at runtime and
-    /// not the author's, and the bodies run to some 14 000 characters of turn mechanics Alembic has
+    /// not the author's and the bodies run to some 14 000 characters of turn mechanics Alembic has
     /// no turn to apply them to.
     /// </remarks>
     private static string BindingPolicies(Records.Prompt morgana)

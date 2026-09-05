@@ -1,11 +1,11 @@
 id: behaviour-turn-continuation-operand
 description: >-
-  A turn that ends awaiting the user declares it through SetTurnContinuation alone, and never gates
+  A turn that ends awaiting the user declares it through SetTurnContinuation alone and never gates
   that wait behind a standalone exit button. This is the interplay of TurnContinuation,
   QuickReplyDoctrine and QuickReplyEscapeOptions read together.
 
 turns:
-  # Deliberately admits two lawful shapes, and asserts what holds in both.
+  # Deliberately admits two lawful shapes and asserts what holds in both.
   #
   # Asking for an invoice the user has not identified, with the customer code already given, may
   # legitimately end either as bare prose ("which invoice?") or as a list of the known invoices

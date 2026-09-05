@@ -7,7 +7,7 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// A correction that reaches past its own section, and whether the walk that reopened the agent
+/// A correction that reaches past its own section and whether the walk that reopened the agent
 /// actually closes it.
 /// </summary>
 /// <remarks>
@@ -43,7 +43,7 @@ public sealed class CrossSectionEditTests
         // added at the Target is not merely named as a gap for the client to close later — it is
         // closed in the same sitting, with the same DeclareTool a fresh compose would use.
         Assert.True(added.ToolsAfter.Count > added.ToolsBefore.Count,
-            "A capability was added that no tool of this agent backed, and the walk that reopened "
+            "A capability was added that no tool of this agent backed and the walk that reopened "
             + $"it reached the Toolkit without adding one:\n\n{added.Transcript}");
     }
 

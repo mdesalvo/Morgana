@@ -57,7 +57,7 @@ public sealed class HarnessSmokeTests
 
             // The log observer: a turn always produces host log lines. Asserting on the lines
             // rather than on parsed context accesses keeps this a test of the rig — an agent that
-            // skipped GetContextVariable would be a prompt regression, and that verdict belongs to
+            // skipped GetContextVariable would be a prompt regression and that verdict belongs to
             // the context-handling scenarios, not here.
             Assert.NotEmpty(turn.LogLines);
         }

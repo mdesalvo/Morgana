@@ -7,11 +7,11 @@ namespace Distiller.Interfaces;
 /// </summary>
 /// <remarks>
 /// A functional interview over a real domain — three passes, one of them per tool — does not fit in
-/// one sitting, and Alembic holds no database and no filesystem. The Draft therefore has to be
+/// one sitting and Alembic holds no database and no filesystem. The Draft therefore has to be
 /// something the client can take away and bring back: this is that format.
 /// <para>
 /// It is not <c>agents.json</c> and is not meant to be. It carries provenance, the C# facts the
-/// configuration cannot express, and half-answered elements — none of which belong in a file
+/// configuration cannot express and half-answered elements — none of which belong in a file
 /// Morgana has to load.
 /// </para>
 /// </remarks>

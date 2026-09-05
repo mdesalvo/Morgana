@@ -6,14 +6,14 @@ namespace Distiller.Interfaces;
 /// Renders a <see cref="DomainDraft"/> back into the <c>agents.json</c> Morgana loads.
 /// </summary>
 /// <remarks>
-/// Export closes the loop that import opens, and the pair carries the invariant everything later
+/// Export closes the loop that import opens and the pair carries the invariant everything later
 /// stands on: <b>a configuration that goes in comes back out equivalent</b>. Equivalent, not
 /// byte-identical — indentation, key order inside AdditionalProperties and explicitly-written
 /// defaults are free to differ, because none of them changes what Morgana reads. What may not
 /// differ is a single intent, prompt, tool, parameter, scope or shared flag.
 /// <para>
 /// That invariant is what makes the interview safe to build on top: a client uploading a domain of
-/// ten agents to add an eleventh gets the other ten back untouched, and Alembic does not need to
+/// ten agents to add an eleventh gets the other ten back untouched and Alembic does not need to
 /// understand them to promise it.
 /// </para>
 /// </remarks>

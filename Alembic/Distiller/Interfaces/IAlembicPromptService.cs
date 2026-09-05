@@ -7,14 +7,14 @@ namespace Distiller.Interfaces;
 /// </summary>
 /// <remarks>
 /// Alembic is an agent of Morgana that produces agents of Morgana, so it is composed the way one
-/// is: layered, fenced, and subordinate to her. <c>alembic.json</c> is a
+/// is: layered, fenced and subordinate to her. <c>alembic.json</c> is a
 /// <see cref="Records.PromptCollection"/> with the same four sections an agent has, embedded the
 /// same way <c>morgana.json</c> is embedded in Morgana.AI. Whoever tunes Alembic does the job
 /// Alembic teaches.
 /// <para>
 /// The topmost layer is <b>Morgana in her own words, resolved live</b> from <c>morgana.json</c>
 /// rather than copied: her <c>Personality</c>, because her identity is Alembic's identity; her
-/// <c>Target</c>, because it is the only place that says what an agent <em>of</em> Morgana is, and
+/// <c>Target</c>, because it is the only place that says what an agent <em>of</em> Morgana is and
 /// the lower of the two layers it describes is exactly what Alembic writes; and her
 /// <c>GlobalPolicies</c> by name, as the list of subjects already settled above every agent. A copy
 /// of any of it would drift the day the framework is tuned.
@@ -45,16 +45,16 @@ public interface IAlembicPromptService
     /// Two layers, fenced — the same shape Alembic teaches, applied to Alembic: Morgana, then
     /// Alembic. Alembic's own half is stored in three rows and read as one: the <c>Alembic</c> prompt
     /// says what holds in every interview, <c>Composing</c> or <c>Correcting</c> says which of the two
-    /// jobs this step is, and an interviewer says only what is its own. They are merged section by
+    /// jobs this step is and an interviewer says only what is its own. They are merged section by
     /// section under one set of labels, so what the model reads is still the four sections an agent
     /// prompt always is, with no seam in it.
     /// <para>
-    /// The mode is a row rather than a branch inside the prose, and rather than a second copy of the
+    /// The mode is a row rather than a branch inside the prose and rather than a second copy of the
     /// whole file. Written as clauses — "composing, ask this; correcting, ask that" — the two jobs sat
     /// in every pass and the model read both every time, which is how it opened a written agent as a
     /// blank one twice over. Written as two files they would have been nine tenths identical, tool
     /// declarations included, which is the duplication this prompt was already once rebuilt to remove.
-    /// A row costs neither: what differs is stored once, and a pass is handed only the half that is
+    /// A row costs neither: what differs is stored once and a pass is handed only the half that is
     /// true of it.
     /// </para>
     /// </remarks>

@@ -1,6 +1,6 @@
 id: classifier-routes-unambiguous-billing-request
 description: >-
-  An unambiguous request lands the classifier on the right intent, and the router sends it to the
+  An unambiguous request lands the classifier on the right intent and the router sends it to the
   agent that intent maps to — the classifier's own output asserted directly, not inferred from which
   agent happened to answer.
 

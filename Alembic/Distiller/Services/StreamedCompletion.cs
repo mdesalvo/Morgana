@@ -8,14 +8,14 @@ namespace Distiller.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Everything Alembic emits as an artifact — a tool class, a harness scenario — is a whole file, and
+/// Everything Alembic emits as an artifact — a tool class, a harness scenario — is a whole file and
 /// a file's length is a property of what it describes rather than a number choosable in advance. So
 /// nothing here declares an output ceiling: what the deployment's tier configures still holds per
-/// request, and this keeps asking until the answer is finished.
+/// request and this keeps asking until the answer is finished.
 /// </para>
 /// <para>
 /// The resume goes back as a <em>user</em> message carrying what has been written so far, not as an
-/// assistant prefill: <c>MorganaAnthropicClient</c> guards against a trailing assistant turn, and a
+/// assistant prefill: <c>MorganaAnthropicClient</c> guards against a trailing assistant turn and a
 /// mechanism that works on one provider and silently not on another is worse than the round trip it
 /// saves.
 /// </para>
@@ -28,14 +28,14 @@ public static class StreamedCompletion
     private const string ContinuationRequest =
         "That was cut off at the provider's output limit. Here is everything you have written so far.\n\n"
         + "Continue from exactly where it stops — the very next character. Do not repeat a line, do not "
-        + "start again, do not explain, and do not open a fence. Just carry on.\n\n";
+        + "start again, do not explain and do not open a fence. Just carry on.\n\n";
 
     /// <summary>
     /// How long a round may go silent before it is abandoned and retried once.
     /// </summary>
     /// <remarks>
     /// Not configurable, because there is nothing here a deployment would tune: it governs one
-    /// behaviour of one step, and the number only has to be longer than any pause a healthy model
+    /// behaviour of one step and the number only has to be longer than any pause a healthy model
     /// takes mid-artifact. Generous on purpose — it is a guard against a stream that has stopped
     /// arriving, not a budget for how long one may take.
     /// </remarks>
@@ -51,7 +51,7 @@ public static class StreamedCompletion
     /// <param name="onStall">Called when a round went silent and is about to be retried, with the length reached.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The whole answer, fence stripped. Empty when the model produced no text at all.</returns>
-    /// <exception cref="TimeoutException">The round went silent twice — once, and again on its retry.</exception>
+    /// <exception cref="TimeoutException">The round went silent twice — once and again on its retry.</exception>
     public static async Task<string> RunAsync(
         IChatClient chatClient,
         string system,
@@ -94,7 +94,7 @@ public static class StreamedCompletion
 
                         finishReason ??= update.FinishReason;
 
-                        // Text only. On a reasoning model the updates also carry the thinking, and
+                        // Text only. On a reasoning model the updates also carry the thinking and
                         // appending it would put the model's deliberation inside the artifact.
                         foreach (TextContent text in update.Contents.OfType<TextContent>())
                             answer.Append(text.Text);
@@ -121,8 +121,8 @@ public static class StreamedCompletion
             if (finishReason != ChatFinishReason.Length)
                 break;
 
-            // No progress means resuming is not working, and another round would only spend money to
-            // produce the same nothing. This is the loop's only exit besides completion, and it is a
+            // No progress means resuming is not working and another round would only spend money to
+            // produce the same nothing. This is the loop's only exit besides completion and it is a
             // fact about the last response rather than a budget.
             if (answer.Length == before)
                 break;
@@ -131,7 +131,7 @@ public static class StreamedCompletion
 
             // Rebuilt to exactly three messages every round rather than appended to: the assistant's
             // cut-off reply never re-enters the conversation (that would be the assistant-prefill
-            // shape the class-level remarks rule out), and a prior continuation request is replaced
+            // shape the class-level remarks rule out) and a prior continuation request is replaced
             // rather than accumulated, so the provider always sees system + original request + one
             // "here is everything so far, keep going" turn, however many rounds this takes.
             conversation =
@@ -149,7 +149,7 @@ public static class StreamedCompletion
     /// Strips a markdown code fence if the answer arrived wrapped in one.
     /// </summary>
     /// <remarks>
-    /// Every prompt here asks for a bare artifact, and a model that complies loses nothing. This
+    /// Every prompt here asks for a bare artifact and a model that complies loses nothing. This
     /// exists because the failure it prevents is a file that does not parse over three backticks,
     /// which is a poor thing to hand a client at the end of an interview.
     /// </remarks>

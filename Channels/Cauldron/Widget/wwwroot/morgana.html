@@ -12,22 +12,22 @@
 
         Every rule on this page is an inline style attribute. There is no stylesheet, no class
         name and no custom property anywhere in the document, deliberately: a selector cannot
-        collide with the widget's, and a custom property cannot inherit into its shadow root,
+        collide with the widget's and a custom property cannot inherit into its shadow root,
         if neither exists. What still crosses the boundary is plain inheritance — font-family,
         font-size, line-height off <body> — which is exactly what the widget's :host block
-        pins for itself, and what this page's serif type is here to put under pressure.
+        pins for itself and what this page's serif type is here to put under pressure.
 
         Photography: Unsplash (Unsplash License), served locally from /widget/demo/ so the
         sample page has no third-party dependency of any kind.
 
         Nothing on the rendered page talks about the widget, on purpose: a nursery's website
-        does not explain its own chat button, and a sample that breaks character stops being a
+        does not explain its own chat button and a sample that breaks character stops being a
         sample of anything. The whole integration is the one tag at the bottom of <body>:
 
             <script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
 
         No parameters — the script reads the Cauldron origin off its own src. It mounts a closed
-        shadow root, so neither page's CSS can reach the other, and the chat itself is a sandboxed
+        shadow root, so neither page's CSS can reach the other and the chat itself is a sandboxed
         iframe created on first open, so a visitor who never clicks costs no Blazor circuit.
         Widget/README.md has the rest.
     -->
@@ -125,7 +125,7 @@
                     <div style="padding:18px 20px 22px; display:flex; flex-direction:column; flex:1;">
                         <h3 style="margin:0; font-size:20px; font-weight:400; color:#14532d;">Rubber Plant</h3>
                         <span style="font-style:italic; font-size:15px; color:#4d7c56;">Ficus elastica</span>
-                        <p style="margin:8px 0 0; font-size:15.5px; line-height:1.6; color:#5b564d;">Wipe the leaves, turn it a quarter each week, and it will outlive the room it's in.</p>
+                        <p style="margin:8px 0 0; font-size:15.5px; line-height:1.6; color:#5b564d;">Wipe the leaves, turn it a quarter each week and it will outlive the room it's in.</p>
                         <p style="margin:auto 0 0; padding-top:16px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:17px; color:#3f3a33;">£29 <small style="color:#4d7c56; font-size:13px;">· 17cm nursery pot</small></p>
                     </div>
                 </article>
@@ -197,7 +197,7 @@
                     <h3 style="margin:0 0 12px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; font-weight:500; letter-spacing:0.2em; text-transform:uppercase; color:#4d7c56;">Open</h3>
                     <p style="margin:0 0 4px; font-size:17px; color:#14532d;">Tue – Sat, 9am – 5pm</p>
                     <p style="margin:0 0 4px; font-size:17px; color:#14532d;">Sun, 10am – 4pm</p>
-                    <p style="margin:10px 0 0; font-size:15.5px; color:#5b564d;">Closed Mondays, and the week after Christmas.</p>
+                    <p style="margin:10px 0 0; font-size:15.5px; color:#5b564d;">Closed Mondays and the week after Christmas.</p>
                 </div>
                 <div style="background:#ffffff; border:1px solid #dce4d8; border-radius:4px; padding:24px 26px;">
                     <h3 style="margin:0 0 12px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; font-weight:500; letter-spacing:0.2em; text-transform:uppercase; color:#4d7c56;">Find us</h3>
@@ -222,7 +222,7 @@
                 <h2 style="margin:8px 0 12px; font-size:clamp(26px,3.4vw,36px); font-weight:400; line-height:1.2; color:#ffffff;">Nobody here will sell you a plant that wants a room you haven't got</h2>
                 <p style="margin:0 0 18px; color:#cfe2cf;">
                     Tell us which way the window faces, how warm the room gets and how honest
-                    you're prepared to be about watering, and we'll put three names in front of
+                    you're prepared to be about watering and we'll put three names in front of
                     you. It takes a minute and it saves a plant.
                 </p>
                 <p style="margin:0; color:#cfe2cf;">

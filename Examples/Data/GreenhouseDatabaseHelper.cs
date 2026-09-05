@@ -8,7 +8,7 @@ namespace Examples.Data;
 /// The single system of record of The Greenhouse &amp; Nursery, shared by every agent of this
 /// plugin: customers, catalog and stock, orders, the Green Care Plan and its clauses, invoices
 /// and their detail lines. One shop, one database — an invoice line points at the very order
-/// that produced it, and the customer code a customer gives the accounts desk is the same code
+/// that produced it and the customer code a customer gives the accounts desk is the same code
 /// the greenhouse ledger and the care plan are keyed by.
 /// </summary>
 /// <remarks>
@@ -21,7 +21,7 @@ internal static class GreenhouseDatabaseHelper
     private static readonly object InitLock = new();
 
     // The path that was actually deployed, not a bare bool: StoragePath is an environment
-    // variable, and a process that changes it (the PromptHarness gives every run its own
+    // variable and a process that changes it (the PromptHarness gives every run its own
     // throwaway directory) must deploy the seed again rather than skip it and then query a
     // database that was never put there.
     private static string? _deployedPath;
@@ -69,14 +69,14 @@ internal static class GreenhouseDatabaseHelper
             // File.Exists is the ENTIRE "have we seeded yet" check — there is no separate flag
             // or marker row anywhere. That is deliberate: the moment Examples.db exists on disk
             // at this path, whatever it contains (seed data, or years of live orders on top of
-            // it) is the truth, and we must never overwrite it just because the process restarted.
+            // it) is the truth and we must never overwrite it just because the process restarted.
             if (!File.Exists(databasePath))
             {
                 Directory.CreateDirectory(StorageDirectory);
 
                 // Seeded under a private temporary name and only then moved into place, so a
                 // half-written or half-rebased file can never become the shop's system of record:
-                // the move is the single instant at which the database starts existing, and the
+                // the move is the single instant at which the database starts existing and the
                 // loser of a race between two processes deletes its own copy instead of
                 // overwriting the winner's.
                 string stagingPath = Path.Combine(StorageDirectory, $"Examples.{Guid.NewGuid():N}.tmp");
@@ -198,7 +198,7 @@ internal static class GreenhouseDatabaseHelper
     /// <remarks>
     /// Examples.db is a SHARED, live database: different conversations WILL try to write to it at
     /// the same instant (that is the whole point of this example). SQLite serializes writers with a
-    /// single write lock, and without a busy timeout the loser of that race throws "database is
+    /// single write lock and without a busy timeout the loser of that race throws "database is
     /// locked" immediately. PRAGMA busy_timeout instead makes it WAIT for the holder to commit and
     /// then proceed — the transactional writes in ConfirmOrder/CancelOrder rely on this so that two
     /// concurrent commits queue up rather than one of them blowing up in the caller's face.

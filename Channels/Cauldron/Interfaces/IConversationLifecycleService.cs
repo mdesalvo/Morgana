@@ -1,8 +1,8 @@
 namespace Cauldron.Interfaces;
 
 /// <summary>
-/// Service for managing conversation lifecycle: start, resume, clear, and message sending.
-/// Coordinates between HTTP API, SignalR groups, and local storage.
+/// Service for managing conversation lifecycle: start, resume, clear and message sending.
+/// Coordinates between HTTP API, SignalR groups and local storage.
 /// </summary>
 public interface IConversationLifecycleService
 {

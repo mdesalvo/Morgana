@@ -3,9 +3,9 @@ description: >-
   The classifier reads nothing but `name (Description)` for every intent, joined into one line, so
   a word that belongs to one desk and appears in another desk's description is not documentation —
   it is an attractor. This scenario pins the one that actually happened: the nursery bills plants
-  as well as subscription fees, and describing `billing` in terms of what its invoice lines contain
+  as well as subscription fees and describing `billing` in terms of what its invoice lines contain
   put "plants" and "catalog" into the discriminating text of an intent that owns neither. A bare
-  catalog question then has two plausible homes, and the wrong one answers.
+  catalog question then has two plausible homes and the wrong one answers.
   Catalog, stock and orders are `inventory`'s vocabulary and no other intent may borrow it, however
   truthfully. Three runs rather than five: the property is a routing decision, but the turn lands on
   InventoryAgent and is therefore billed at `Performance`.

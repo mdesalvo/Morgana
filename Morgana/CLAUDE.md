@@ -4,7 +4,7 @@
 
 **Load the `code-commentation` skill first, in full, at the start of every coding activity in this
 repository** — before the first edit, not after it and again in any later turn that resumes coding.
-This is unconditional: it holds for a new file, a refactor and a single changed statement alike, and
+This is unconditional: it holds for a new file, a refactor and a single changed statement alike and
 it is not waived by having read the skill earlier in the session or by remembering what it says. Code
 produced without having read it in the current turn is not conforming by construction and the
 observed failure mode is exactly that — writing first, then retrofitting comments only once somebody
@@ -66,7 +66,7 @@ own.
 | `Extensions/` | `ActorSystemExtensions` — C# 14 `extension(ActorSystem)` syntax for `GetOrCreateActorAsync<T>` and `GetOrCreateAgentAsync(Type)` |
 | `Interfaces/` | All service contracts (see Service layer below) |
 | `Providers/` | `MorganaAIContextProvider` (per-agent context variables, with cross-agent shared variables persisted in the conversation-scoped `shared_context` registry), `MorganaChatHistoryProvider` (chat history with optional summarizing reducer) |
-| `SessionStores/` | `MorganaHostedAgentSessionStore` — the `AgentSessionStore` turning an inbound A2A `contextId` into the conversation it names |
+| `SessionStores/` | `MorganaHostedAgentSessionStore` — the `AgentSessionStore` deciding which conversation an inbound A2A request is served on. A `contextId` is written by whoever calls: for this installation's own ring that is the point, since a colleague must land on the very conversation the user is having; for anyone else it is a string a stranger chose, so a partner's exchanges are namespaced under the issuer it proved itself with |
 | `Services/` | Default implementations of all interfaces |
 | `Telemetry/` | `MorganaTelemetry` (ActivitySource, metrics), `OpenTelemetryExtensions` |
 | `Records.cs` | All immutable record types (DTOs) for actor messages, configuration |
@@ -199,7 +199,7 @@ native and MCP tools. Underneath it is not a Morgana invention but the A2A proto
 through Microsoft's own stack.
 
 A colleague need not be an agent of this installation: `[ConsultsAgent("shipping", "acme")]` names
-one published by an **outbound system**, another installation declared under `Morgana:AgentToAgent:OutboundSystems`, and
+one published by an **outbound system**, another installation declared under `Morgana:AgentToAgent:OutboundSystems` and
 the function becomes `consult_acme_shipping` so a local and a remote agent of the same name can
 coexist in one tool list. Nothing downstream of the address distinguishes the two — the branch that
 does decides the base address and the signing key and the whole of the rest is one path. The prose
@@ -216,11 +216,16 @@ then mapped with`MapA2AJsonRpc` at `/a2a/{intent}` and `MapWellKnownAgentCard` a
 `/a2a/{intent}/.well-known/agent-card.json`. **Nothing is stood up when `Morgana:AgentToAgent:Enabled`
 is false**: no hosted agent, no server, no route, no card — such a deployment is the deployment it was
 before any of this existed and pays for A2A neither in prompt tokens nor in surface. The
-address those cards advertise is never configured: cards are projected while the endpoints are still
-being mapped and at `ApplicationStarted` — once Kestrel has bound and before any request can read a
-card — `IAgentDirectoryService.PublishInterfacesAsync` fills them in from `IHostAddressService`,
-which reads the bound address and answers a wildcard binding (`http://+:8080`, the Docker case) with
-loopback on the same port. Configuring an address belongs to whoever *consumes* one — a channel holds
+address those cards advertise is never configured. A card is projected while the endpoints are still
+being mapped, before anything has bound, so it cannot yet name where this instance answers; the
+well-known endpoint therefore asks `IAgentDirectoryService.GetAgentCardAsync` **per request**. That
+ask settles the address the first time one is knowable, from `IHostAddressService` — which
+reads the bound address and answers a wildcard binding (`http://+:8080`, the Docker case) with
+loopback on the same port. Deliberately not a pass over every card at startup: a pass runs at a
+moment; every moment after the server begins listening is one a caller may already be reading in.
+Serving per request also means nothing here depends on how the hosting layer treats a card handed to
+it. `AgentCardTests` is the other end of that contract — a card that stops naming an interface
+fails there. Configuring an address belongs to whoever *consumes* one — a channel holds
 Morgana's URL and a remote peer would be declared on the consuming side — never to the application
 describing itself. So **every** agent of this installation is discoverable by anything that speaks
 A2A — a sibling desk, another Morgana, an orchestrator this installation knows nothing about — and
@@ -241,8 +246,15 @@ because discovery is what tells a caller how to authenticate.
 **What Morgana contributes is exactly two types** and both exist to reconcile one mismatch: A2A
 hosting expects one long-lived agent per name, while Morgana's agents are per-conversation actors.
 - `MorganaHostedAgentSessionStore` — the hosting layer resolves a request's A2A `contextId` into a
-  session; this store returns a `MorganaHostedAgentSession` carrying it and persists nothing (the
-  real state is the actor's, already written to the per-conversation database).
+  session; this store returns a `MorganaHostedAgentSession` carrying the conversation and the system
+  that named it, persisting nothing (the real state is the actor's, already written to the
+  per-conversation database). **The `contextId` is honoured as a conversation of this installation
+  only for this installation's own ring**, where a colleague must land on the very conversation the
+  user is having. For anyone else it is a string a stranger wrote, so the exchange is namespaced
+  under the issuer the endpoint filter proved — otherwise a partner naming a live user's
+  conversation would reach that user's agents, read the shared context those agents were told and
+  spend that user's budget. The issuer reaches the store through `HttpContext.Items`, the filter
+  being the one party that knows who is calling and the store the one that has to.
 - `MorganaHostedAgent` — one per intent, owns no model: it reads the conversation from that session,
   resolves the very actor the router would have reached and`Ask`s it a `Records.PeerConsultation`.
 
@@ -255,12 +267,12 @@ else's card by an implementation that has never seen this code — whose `params
 and `audience` a caller must mint its token under. That is the one thing A2A has no field for: the
 scheme says a bearer is required and stops, leaving the two claim values to be agreed out of band,
 which is exactly the coupling a discovery document exists to remove. The extension is declared
-`required: false` on purpose — the obligation to authenticate is already stated in standard form, and
+`required: false` on purpose — the obligation to authenticate is already stated in standard form and
 a consumer that has never heard of the extension must still be able to use the card.
 
 **Consumption runs in two phases and the order is the point.**
 `ConfigurationAgentDirectoryService` projects each agent's `AgentCard` from the domain configuration
-(intent → name, the agent's own `ConsultMeFor` → description, declared tools → `AgentSkill`s), and
+(intent → name, the agent's own `ConsultMeFor` → description, declared tools → `AgentSkill`s) and
 resolves a colleague by fetching the published card **with no credentials** — the well-known endpoint
 is open precisely so a caller can learn what the endpoint behind it will demand — then building the
 client that satisfies what it turned out to ask for and only then `AgentCard.AsAIAgent`. So what the
@@ -298,16 +310,16 @@ outside it still travels, unsigned, to be refused where it lands. Every call, di
 through one shared `SocketsHttpHandler` held by the directory (a singleton) with a pooled connection
 lifetime — a client is built per colleague per conversation and a handler each would open sockets it
 holds for the conversation's life and pin the address an instance had when it was first reached. It
-**follows no redirect**: a redirect is a third party choosing where a credentialed request lands, and
+**follows no redirect**: a redirect is a third party choosing where a credentialed request lands and
 a peer that has moved says so on its card.
 
 **Morgana's own rules sit above the colleague as pipeline middleware**, built with the agent
 framework's own `AIAgentBuilder.Use` so the resolved `A2AAgent` stays untouched and no wrapper type
 is invented. The middleware refuses a chained consultation — an agent answering a colleague finds its
 own peer functions refusing, so the call graph cannot cycle without any caller chain travelling with
-the request — caps the rounds one user turn may spend (`Morgana:AgentToAgent:MaxRoundsPerTurn`), and
+the request — caps the rounds one user turn may spend (`Morgana:AgentToAgent:MaxRoundsPerTurn`) and
 declares the caller's intent in `AgentRunOptions.AdditionalProperties`, which the A2A layer carries
-as message metadata and hands back to the answering agent. Its streaming delegate is left null, and
+as message metadata and hands back to the answering agent. Its streaming delegate is left null and
 the framework bridges streaming onto the run delegate, so the guards cannot be skipped by asking for
 a stream. The cap is a safety net, not the mechanism: convergence is asked of the
 prose, by `PeerConsultationDeclaration`.
@@ -329,6 +341,18 @@ of the conversation by the registry's first-write-wins. What comes back is the s
 `Records.PeerConsultationResponse` envelope — answer, whether the colleague awaits a reply and any
 options or rich card it attached — handed over as **data** the asking agent reads and acts on, never
 as buttons to render.
+
+**Nothing is served on credit.** Behind this door a request reaches an agent's actor with none of the
+guard, classifier, rate limit and dust budget a channel's own path goes through. It also writes the
+name of the conversation it is served on — so the per-conversation budget bounds the exchange but
+never the caller, which can write a fresh name at will. The missing bound is therefore not a second
+measure of spend but one on how many exchanges may start: `IPeerAdmissionService` weighs a system
+opening a conversation this installation has never seen, against the allowance declared on that
+system's own `InboundSystems` entry. The ceiling on spend follows as admissions × the budget each
+exchange carries. Then the conversation's own budget, which a colleague of this installation is held
+to exactly as the user's own turns are. The conversation's ledger is opened before the turn runs,
+since a partner's exchange has none until then and what is not recorded can be neither reported back
+nor held against anything.
 
 **What the answer cost travels with it, one way only.** The tokens a consultation burns are burned on
 the *answering* installation, which until now made them invisible to the budget that is supposed to
@@ -407,6 +431,7 @@ OTel: a `morgana.consultation` span (`consultation.caller`, `consultation.target
 | `HistoryReducerService` | *(factory, not an interface)* | Creates `MorganaChatReducer` from `Morgana:HistoryReducer` config — named after the section it binds, not the reducer it returns, which has already changed once. Returns `null` when disabled, which `MorganaChatHistoryProvider` reads as "hand the LLM the full history". Threshold (hysteresis buffer above target, default 12) plus target count (default 8) drives summarization: reduction triggers when message count > target + threshold |
 | `MorganaChatReducer` | `IChatReducer` | Summarizing reducer replacing MEAI's `SummarizingChatReducer`, which builds the summarizer's input by **dropping every message carrying function-call or function-result content** — so in a tool-driven agent the summarizing model sees a text-only skeleton and reports, accurately for its view, that no tool ran and no identifier was produced. The cut logic (hysteresis, the walk-back that never separates a call from its result, the user-role boundary preference) is a faithful port; only the summarizer's input differs, rendering tool activity as `[tool call]`/`[tool result]` lines. The kept window is handed back as the untouched originals. Keeps MEAI's `__summary__` property name, so sessions summarized before it shipped still resume |
 | `AdaptingChannelService` | `IChannelService` | Decorator: intercepts every `SendMessageAsync`, routes through `MorganaChannelAdapter` for capability-based degradation, then dispatches to the concrete transport via `IChannelServiceFactory` |
+| `SQLitePeerAdmissionService` | `IPeerAdmissionService` | How many conversations one admitted system may **open** within a sliding hour, declared per system as `InboundSystems[].MaxConversationsPerHour` and nowhere else. The per-conversation budget says what one exchange may cost; behind the A2A door the caller names the conversation, so a system rotating names draws a fresh budget with every name. What was missing is therefore not a second measure of spend but a bound on how many exchanges may start, the ceiling on spend following as admissions × budget. The counted event is an exchange this installation has never seen, so the two measures meet without overlapping and this installation's own ring is exempt by construction — a colleague of ours joins the conversation the user is already having rather than opening one. The **one ledger in Morgana that is not a conversation's**, `morgana-peers.db` beside them, because an issuer spans every conversation it opens; a ledger of this instance, so a deployment running several reads the limit as being per instance. Required of every admitted system except `morgana` — startup refuses a partner admitted with no ceiling, since nothing reads an absent key as licence to spend without limit. Fails open. Registered only when A2A is on |
 | `ChannelMetadataStore` | `IChannelMetadataStore` | In-memory `ConcurrentDictionary<string, ChannelMetadata>` registry. Leaf singleton (no channel-service dependency) so concrete transports like `WebhookChannelService` can read per-conversation coordinates without closing a DI cycle through the decorator |
 
 ### Providers (Morgana.AI/Providers)
@@ -536,7 +561,7 @@ layer below" while giving the model no way to locate where below begins. `Framew
 by **stating its own subordination** — it specialises the framework with domain knowledge and nothing
 else, never contradicts it and yields to it wherever the two appear to differ — and `DomainLayerFooter`
 closes it, marking where the agent's own authored prose ends and the framework's per-turn
-`HeldContextDeclaration` (appended after the whole composed prompt, at invocation time) begins. These, and
+`HeldContextDeclaration` (appended after the whole composed prompt, at invocation time) begins. These and
 `GlobalPoliciesHeader`/`Footer`, are structural glue rather than domain-tunable prose: they are
 `const string` fields in `ConfigurationPromptComposerService`, not `morgana.json` entries — there is
 deliberately no configuration point for them. They are substitutable only wholesale, by replacing
@@ -616,7 +641,7 @@ At application startup, comprehensive validation is performed:
 8. **`ConfigurationAgentDirectoryService.ValidateTrustConfiguration`**, called from `Program.cs` section 9.5 whenever at least one intent is published over A2A. Three checks, one failure shape — a topology that validates cleanly and then fails, or opens, silently:
    - **The ring this installation runs itself.** If any agent declares a `[ConsultsAgent]` toward a colleague *of this installation*, the `morgana` issuer must carry a real `SymmetricKey` (undeclared, blank or still on `_SECURE_OVERRIDE_` throws), be `Type: "system"` and appear in `InboundSystems`. A local consultation goes out over HTTP signed under that issuer and comes back in through the very filter above, so it is needed at both ends. Only a *local* one: a colleague elsewhere is signed with that system's own key and never knocks at this door — which is what lets a **pure supplier** (publishing its desks for a partner, its own agents consulting nobody here) run with no `morgana` entry at all. The predicate is `HandlesIntentAgentRegistryService.DeclaresLocalConsultations`, kept beside `DiscoverAgents` so attribute reading stays in one place. The key predicate is `ConfigurationAgentDirectoryService.ResolvePeerSigningKey`, the same one the signing handler reads
    - **Every `Type: "system"` issuer has an `InboundSystems` entry.** The dangerous direction is silence: a system declared and then forgotten there would be handed the whole ring by omission, so admitting it to everything stays a sentence somebody wrote
-   - **Every `InboundSystems` entry is coherent**: its `Issuer` exists among `Issuers` and is `Type: "system"` (scoping narrows a caller that can already prove who it is and a channel is not one), every name in `Agents` is a published intent and`Agents` is **never** set for the `morgana` issuer — this installation's internal topology has one author, `[ConsultsAgent]`, validated by check 3; a scope here could only contradict it, at runtime, as a 401 on a consultation the plugin declares
+   - **Every `InboundSystems` entry is coherent**: its `Issuer` exists among `Issuers` and is `Type: "system"` (scoping narrows a caller that can already prove who it is and a channel is not one), every name in `Agents` is a published intent, every other system declares a positive `MaxConversationsPerHour` (an admitted partner with no ceiling is the same silence the mandatory entry exists to refuse, one level down) and neither `Agents` nor `MaxConversationsPerHour` is **ever** set for the `morgana` issuer — this installation's internal topology has one author, `[ConsultsAgent]`, validated by check 3; a scope here could only contradict it, at runtime, as a 401 on a consultation the plugin declares
 
 ## Key Configuration Sections (appsettings.json)
 
@@ -624,7 +649,7 @@ At application startup, comprehensive validation is performed:
 |-----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `Morgana:LLM:Provider`                              | LLM provider: `Anthropic`, `AzureOpenAI`, `Ollama`, `OpenAI`                                                                                                                                                                  |
 | `Morgana:LLM:{Provider}`                            | Provider credentials (ApiKey, Endpoint) + `Tiers` map keyed by die (`Efficiency`/`Performance`), each entry with `Options` (`ModelId`, optional `MaxOutputTokens`) and per-model `MagicDust` pricing |
-| `Morgana:AgentToAgent`                              | `Enabled` (default true — off means agents never see their declared colleagues and run exactly as before), `MaxRoundsPerTurn` (default 4, safety net on an exchange that fails to converge), `OutboundSystems[]` and `InboundSystems[]`. **Outbound** — the systems whose agents this one may consult, each `{ Name, Url, SymmetricKey, Issuer? }`. `Name` is what `[ConsultsAgent]` names and never a hostname; `Url` is everything before the published agent path; `SymmetricKey` is the key that system issued to this caller; `Issuer` overrides what its own card declares, for a key cut for this caller alone. **This installation is not among them and needs no entry** — it knows its own address by binding and already holds its own key, for validating what it receives. **Inbound** — how far each admitted system reaches, each `{ Issuer, Agents? }`. `Issuer` matches an `Issuers[]` entry typed `system` (what actually arrives in a token, never the outbound `Name`); `Agents` lists the published intents it may consult and omitting it admits that system to all of them. The list admits nobody on its own and is required of every `system` issuer, `morgana` included — whose entry never carries `Agents`. There is deliberately **no address setting for itself**: an application does not declare its own URL — see `IHostAddressService`. The wait on a colleague is one **ladder** derived from `ActorSystem:TimeoutSeconds` and stated once, in `Records.PeerConsultationWaits`: the turn keeps the whole budget, the asking side waits nine tenths of it on the wire, the answering side eight tenths on its actor. Each party gives up strictly before the one containing it, so a colleague that goes quiet costs an envelope the model reads, then a turn the agent still has time to answer in — never a supervisor concluding mid-consultation that its agent died. Proportions rather than subtracted seconds, so shortening the turn cannot invert the order. Discovery does not sit on this ladder at all — a card is a static document with no model behind it and waits its own short while; a card already read is not waited for again, see `ConfigurationAgentDirectoryService` |
+| `Morgana:AgentToAgent`                              | `Enabled` (default true — off means agents never see their declared colleagues and run exactly as before), `MaxRoundsPerTurn` (default 4, safety net on an exchange that fails to converge), `OutboundSystems[]` and `InboundSystems[]`. **Outbound** — the systems whose agents this one may consult, each `{ Name, Url, SymmetricKey, Issuer? }`. `Name` is what `[ConsultsAgent]` names and never a hostname; `Url` is everything before the published agent path; `SymmetricKey` is the key that system issued to this caller; `Issuer` overrides what its own card declares, for a key cut for this caller alone. **This installation is not among them and needs no entry** — it knows its own address by binding and already holds its own key, for validating what it receives. **Inbound** — how far each admitted system reaches, each `{ Issuer, Agents? }`. `Issuer` matches an `Issuers[]` entry typed `system` (what actually arrives in a token, never the outbound `Name`); `Agents` lists the published intents it may consult and omitting it admits that system to all of them; `MaxConversationsPerHour` is how many conversations it may open on this installation within a sliding hour, declared here and nowhere else and **required of every admitted system**: nothing reads an absent key as licence to spend without limit, so a deployment wanting no real bound writes a generous number rather than leaving it out. Never set for `morgana`, whose colleagues open no conversation but join the one the user is already having. The list admits nobody on its own and is required of every `system` issuer, `morgana` included — whose entry never carries `Agents`. There is deliberately **no address setting for itself**: an application does not declare its own URL — see `IHostAddressService`. The wait on a colleague is one **ladder** derived from `ActorSystem:TimeoutSeconds` and stated once, in `Records.PeerConsultationWaits`: the turn keeps the whole budget, the asking side waits nine tenths of it on the wire, the answering side eight tenths on its actor. Each party gives up strictly before the one containing it, so a colleague that goes quiet costs an envelope the model reads, then a turn the agent still has time to answer in — never a supervisor concluding mid-consultation that its agent died. Proportions rather than subtracted seconds, so shortening the turn cannot invert the order. Discovery does not sit on this ladder at all — a card is a static document with no model behind it and waits its own short while; a card already read is not waited for again, see `ConfigurationAgentDirectoryService` |
 | `Morgana:ActorSystem:TimeoutSeconds`                | Actor/agent receive timeout (default 180s)                                                                                                                                                                                    |
 | `Morgana:ActorSystem:EnableGuardrail`               | Toggle guard rail (useful for local dev)                                                                                                                                                                                      |
 | `Morgana:ActorSystem:IntentCollisionThreshold` | Confidence-gap threshold (default `0.10`, on the classifier's 0-1 scale) below which two or more ranked intents count as a collision. `LLMClassifierService` applies it; `ConversationSupervisorActor` turns a collision into a disambiguation quick reply instead of routing to an agent — see Classifier disambiguation |

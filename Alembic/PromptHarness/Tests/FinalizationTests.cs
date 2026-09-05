@@ -15,7 +15,7 @@ namespace PromptHarness.Tests;
 /// <remarks>
 /// This is the layer that would have caught, on its own and without a human noticing anything at
 /// runtime, two of the four defects a live session against this exact fixture found: the fallback
-/// intent reported as "Added" in the migration report, and the mock's duplicated
+/// intent reported as "Added" in the migration report and the mock's duplicated
 /// <c>[ProvidesToolForIntent]</c> attribute breaking the build. Both are asserted here directly, by
 /// name, so neither can regress silently.
 /// </remarks>

@@ -4,12 +4,12 @@ using Distiller.Model;
 namespace Distiller.Services;
 
 /// <summary>
-/// Default <see cref="ISolutionEmitService"/>: string templates, and nothing else — same discipline
+/// Default <see cref="ISolutionEmitService"/>: string templates and nothing else — same discipline
 /// as <see cref="CodeEmitService"/>, applied one level up, to the project that houses its output.
 /// </summary>
 /// <remarks>
 /// Without this, the archive is loose sources: a client unzips it and still has to create a class
-/// library, add the Morgana.AI reference, and embed agents.json by hand before anything builds.
+/// library, add the Morgana.AI reference and embed agents.json by hand before anything builds.
 /// With it, the same unzip is already <c>dotnet build</c> — assuming a NuGet feed that resolves
 /// Morgana.AI, which is the one thing here Alembic cannot see or guarantee.
 /// </remarks>
@@ -29,7 +29,7 @@ public class SolutionEmitService : ISolutionEmitService
     public IReadOnlyList<EmittedFile> Emit(DomainDraft draft)
     {
         // The first agent that carries one, since every agent of one domain is emitted into the same
-        // namespace — there is nothing to reconcile if several agents agree, and nothing sensible to
+        // namespace — there is nothing to reconcile if several agents agree and nothing sensible to
         // do if they disagree, so the first one found stands for all of them.
         string ns = draft.Agents.FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.Code.Namespace))?.Code.Namespace
                     ?? CodeEmitService.DefaultNamespace;

@@ -10,7 +10,7 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// Correcting an agent that already exists: the other half of what Alembic does, and the half every
+/// Correcting an agent that already exists: the other half of what Alembic does and the half every
 /// other test in this suite starts too late to see.
 /// </summary>
 /// <remarks>
@@ -27,7 +27,7 @@ namespace PromptHarness.Tests;
 /// <para>
 /// What the machine does: an agent leaves the domain while it is corrected, so putting it back is
 /// not bookkeeping but the whole of whether a client's configuration survives being edited — its
-/// place in the list, its provenance, its C# facts, and every other agent beside it.
+/// place in the list, its provenance, its C# facts and every other agent beside it.
 /// </para>
 /// </remarks>
 [Collection(ExamplesDomainCollection.Name)]
@@ -50,9 +50,9 @@ public sealed class EditingTests
 
         JudgeVerdict verdict = await Judge.EvaluateTurnAsync(
             "This turn is addressed to someone whose agent ALREADY HAS a personality: it says "
-            + "something specific about how that agent currently sounds, and asks what should change "
+            + "something specific about how that agent currently sounds and asks what should change "
             + "about it. It is NOT the question you would ask if no personality had been written yet "
-            + "— it does not ask the reader to describe from scratch how the agent should sound, and "
+            + "— it does not ask the reader to describe from scratch how the agent should sound and "
             + "it does not present a set of adjectives for them to choose a voice out of as though "
             + "none had been chosen.",
             corrected.Opening,
@@ -74,7 +74,7 @@ public sealed class EditingTests
     {
         // The edit walks Target, Toolkit, Instructions and Formatting on the way to Personality and
         // after it — that is the whole point, so each gets the chance to notice what the change
-        // moved — but none of them had anything to notice here, and a pass with nothing to change
+        // moved — but none of them had anything to notice here and a pass with nothing to change
         // does not call its own Set tool at all. So this is not merely "correcting does not widen
         // beyond one section" any more: it is a live proof that walking four sections which needed no
         // change actually left them untouched rather than quietly rewritten in passing.
@@ -120,9 +120,9 @@ public sealed class EditingTests
     [Fact]
     public void An_imported_agent_that_was_changed_comes_back_Revised()
     {
-        // Imported means read from the uploaded configuration and not touched since, and this one
+        // Imported means read from the uploaded configuration and not touched since and this one
         // has been. Saying so is the migration report's entire job: a client who brought ten agents
-        // has to be told which of them this sitting changed, and Authored would be a claim that it
+        // has to be told which of them this sitting changed and Authored would be a claim that it
         // exists in no file they own.
         Assert.Equal(Provenance.Imported, corrected.Before.Origin);
         Assert.Equal(Provenance.Revised, corrected.After.Origin);
@@ -154,7 +154,7 @@ public sealed class EditingTests
     {
         // The round-trip invariant, held across an edit rather than across an import: a client who
         // opens one agent of four to fix a sentence gets the other three back exactly as they
-        // brought them, and Alembic does not need to understand them to promise it.
+        // brought them and Alembic does not need to understand them to promise it.
         IDraftExportService export = corrected.Services.GetRequiredService<IDraftExportService>();
 
         Dictionary<string, JsonElement> before = AgentsById(corrected.ExportedBefore);
@@ -177,7 +177,7 @@ public sealed class EditingTests
 
     /// <summary>The Examples domain as it arrives, for comparing against what an edit gave back.</summary>
     // Awaited rather than blocked on: blocking a test thread on an async call deadlocks against
-    // xunit's synchronization context, and it does so only once the assembly runs as a whole, which
+    // xunit's synchronization context and it does so only once the assembly runs as a whole, which
     // is the worst way for it to be found.
     private async Task<DomainDraft> Imported()
     {

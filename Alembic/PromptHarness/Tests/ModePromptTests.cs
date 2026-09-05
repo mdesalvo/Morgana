@@ -17,11 +17,11 @@ namespace PromptHarness.Tests;
 /// in ways nothing downstream catches. Written as clauses inside each pass's prose, the two jobs sat
 /// in every pass and were read on every run, which is how a fully written agent was twice opened as
 /// a blank one. Written as two files they would have been nine tenths identical, tool declarations
-/// included, and the last time this prompt held two copies of anything one had already drifted from
+/// included and the last time this prompt held two copies of anything one had already drifted from
 /// the other.
 /// <para>
-/// So the mode is a third row, merged section by section beneath the shared prose, and these tests
-/// hold it to exactly that: every pass gets one of the two blocks, gets the right one, and gets
+/// So the mode is a third row, merged section by section beneath the shared prose and these tests
+/// hold it to exactly that: every pass gets one of the two blocks, gets the right one and gets
 /// nothing else different.
 /// </para>
 /// </remarks>
@@ -36,7 +36,7 @@ public sealed class ModePromptTests
     public static TheoryData<InterviewStep> Passes => [.. Enum.GetValues<InterviewStep>()];
 
     /// <summary>
-    /// How a pass tells one job from the other — the words each mode's block opens on, and the same
+    /// How a pass tells one job from the other — the words each mode's block opens on and the same
     /// words <c>InterviewService</c> puts in the message that opens the step.
     /// </summary>
     private const string Composing = "YOU ARE COMPOSING.";
@@ -66,7 +66,7 @@ public sealed class ModePromptTests
         // Paragraph by paragraph, because that is the unit the prompt is written in and a diff of
         // whole strings would only say they differ. What each composed prompt holds that the other
         // does not must be precisely its own mode row — no more, so a rule cannot come to exist in
-        // one job and not the other, and no less, so the row cannot silently stop being injected.
+        // one job and not the other; and no less, so the row cannot silently stop being injected.
         Assert.Equal<IEnumerable<string>>(
             Paragraphs(Row("Composing")),
             Paragraphs(composing).Except(Paragraphs(correcting)));
@@ -82,7 +82,7 @@ public sealed class ModePromptTests
         // The sentence that lets every pass keep its own procedure written plainly, in one voice,
         // with no conditional in it: a pass reopened over a written section is told that its own
         // running order is describing the other job. Without it the conditionals come back, one per
-        // pass, and that is the arrangement that failed.
+        // pass and that is the arrangement that failed.
         Assert.Contains("describing the other job", Row("Correcting"), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -120,7 +120,7 @@ public sealed class ModePromptTests
 
     /// <summary>One pass, composed both ways. The prompt id of a pass is its own enum name.</summary>
     // Awaited rather than blocked on. ComposeAsync resolves Morgana's own framework prompt behind a
-    // Lazy<Task>, and blocking a test thread on it deadlocks against xunit's synchronization context
+    // Lazy<Task> and blocking a test thread on it deadlocks against xunit's synchronization context
     // — which is invisible when this class runs on its own and hangs the whole assembly when it does
     // not, since what changes is only how the run is scheduled.
     private async Task<(string Composing, string Correcting)> Both(InterviewStep pass)

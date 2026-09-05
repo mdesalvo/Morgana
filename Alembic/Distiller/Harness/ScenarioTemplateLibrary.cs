@@ -36,7 +36,7 @@ public static class ScenarioTemplateLibrary
     /// <remarks>
     /// What a scenario outside the templated base is held to. It is a union rather than a schema
     /// because Alembic has no schema — the templates are its only knowledge of what the harness
-    /// binds, and a key none of them uses is a key nothing here has ever seen work. The harness's
+    /// binds and a key none of them uses is a key nothing here has ever seen work. The harness's
     /// own loader would drop such a key without a sound, so the union is exactly the line between an
     /// assertion and the appearance of one.
     /// </remarks>
@@ -49,7 +49,7 @@ public static class ScenarioTemplateLibrary
     /// <param name="agent">The agent about to be exercised.</param>
     /// <remarks>
     /// Only the arithmetic is decided here. Every template that survives this filter may still come
-    /// back <c>not-applicable</c>, and that is the model reading the domain rather than counting it.
+    /// back <c>not-applicable</c> and that is the model reading the domain rather than counting it.
     /// </remarks>
     public static IEnumerable<ScenarioTemplate> For(AgentDraft agent) =>
         All.Where(template => template.Requires switch

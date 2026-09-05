@@ -57,7 +57,7 @@ public class MorganaAuthHandler : DelegatingHandler
     /// </summary>
     public string GenerateToken()
     {
-        // Issuer must match an entry in Morgana's Authentication:Issuers list, and the key must
+        // Issuer must match an entry in Morgana's Authentication:Issuers list and the key must
         // match that entry's: an unknown issuer is rejected at the gate before any handler runs.
         SecurityTokenDescriptor descriptor =
             new SecurityTokenDescriptor

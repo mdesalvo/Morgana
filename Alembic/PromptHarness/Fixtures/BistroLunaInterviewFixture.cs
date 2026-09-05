@@ -13,7 +13,7 @@ namespace PromptHarness.Fixtures;
 /// <remarks>
 /// Every exchange of a driven interview is a live LLM call — three tests each re-running the same
 /// scripted interview would triple the cost and the wait for exactly the same Draft. This runs it
-/// once, in <see cref="InitializeAsync"/>, and every <c>[Fact]</c> in the class asserts on the one
+/// once, in <see cref="InitializeAsync"/> and every <c>[Fact]</c> in the class asserts on the one
 /// result.
 /// </remarks>
 public sealed class BistroLunaInterviewFixture : IAsyncLifetime

@@ -14,17 +14,17 @@ namespace PromptHarness.Fixtures;
 /// <remarks>
 /// Editing starts where an interview does not — from a configuration somebody already runs — so
 /// this fixture starts there too, rather than interviewing a domain into existence first. The
-/// <c>Examples</c> domain is the honest subject: four agents, real prose, real toolkits, and every
+/// <c>Examples</c> domain is the honest subject: four agents, real prose, real toolkits and every
 /// element marked <see cref="Provenance.Imported"/> exactly as a client's upload would be.
 /// <para>
-/// The agent it corrects is <c>Contract</c>, and it is the second of four on purpose. An agent
-/// under correction leaves the domain so it cannot be committed twice, and the whole question of
+/// The agent it corrects is <c>Contract</c> and it is the second of four on purpose. An agent
+/// under correction leaves the domain so it cannot be committed twice and the whole question of
 /// putting it back where it came from is invisible on a domain of one and answered by luck on the
 /// last of four.
 /// </para>
 /// <para>
 /// One correction, run once here and read by every test in the collection: each of its turns is a
-/// live call on Alembic's own Performance tier, and three tests re-running it would buy three
+/// live call on Alembic's own Performance tier and three tests re-running it would buy three
 /// copies of one answer.
 /// </para>
 /// </remarks>

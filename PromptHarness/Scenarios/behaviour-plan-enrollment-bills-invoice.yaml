@@ -31,7 +31,7 @@ description: >-
 customerCodes: [M455D, M455E, M455F, M455G, M455H]
 
 turns:
-  - say: "Hi, my customer code is {{customerCode}}. What does the Green Care Plan include, and how much would it cost me?"
+  - say: "Hi, my customer code is {{customerCode}}. What does the Green Care Plan include and how much would it cost me?"
     expect:
       agent: ContractAgent
       agentCompleted: false
@@ -39,7 +39,7 @@ turns:
       toolsNotCalled: [SubscribeToGreenCarePlan]
       # RichCardUsage: GetPlanOverview returns multi-field structured data (fee, coverage, guarantee,
       # terms) — a markdown wall of bullets standing in for a card is an explicit policy violation,
-      # not a stylistic choice, and it is what produced the dead-end turn below (no card, no quick
+      # not a stylistic choice and it is what produced the dead-end turn below (no card, no quick
       # replies, no continuation signal) the one time this regressed live.
       richCard: present
       textNotEmpty: true

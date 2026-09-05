@@ -8,19 +8,19 @@ namespace PromptHarness.Infrastructure.Reporting;
 /// whether or not the scenario itself cleared its threshold.
 /// </summary>
 /// <remarks>
-/// <para><strong>Why this exists.</strong> Every run of this suite is billed, and until now the only
+/// <para><strong>Why this exists.</strong> Every run of this suite is billed and until now the only
 /// place a failure was legible was the assertion message on a terminal: the journey row records
 /// <em>that</em> a scenario went 2/5, never <em>why</em>. Lose the console — a closed window, a
 /// truncated pipe, a session that ends — and the money is spent with nothing left to diagnose from.
 /// The transcript is the expensive part of a run; writing it to disk costs nothing.</para>
 ///
-/// <para><strong>The gate is the run, not the scenario</strong>, and that distinction was learned
+/// <para><strong>The gate is the run, not the scenario</strong> and that distinction was learned
 /// the same way as the original lesson above. A scenario at 4/5 against a threshold of 4 *passes* —
 /// and under the first version of this class that verdict deleted the transcript of the one run
 /// that failed inside it. That is precisely the transcript worth keeping: a scenario sitting on its
 /// threshold has no margin left, so its single failing run is the early warning for the phase after
 /// next. `behaviour-conversation-closure` did exactly this at A2.5.5 and the evidence went with it.
-/// A report is now written whenever <em>any</em> run failed, and removed only when every run held.</para>
+/// A report is now written whenever <em>any</em> run failed and removed only when every run held.</para>
 ///
 /// <para>Kept out of the journey file on purpose. A journey row is a naked number that stays
 /// comparable across phases; a failure report is a bulky, transient artefact of one measurement.

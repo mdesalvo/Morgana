@@ -76,7 +76,7 @@ Consequently, an implementation that does not understand this extension MUST NOT
 
 - **The secret.** The card is served unauthenticated — discovery is what tells a caller how to
   authenticate, so it cannot itself require authentication — and a public document is no place for a
-  key. The shared secret is exchanged out of band, once, and is the only thing a caller configures.
+  key. The shared secret is exchanged out of band, once and is the only thing a caller configures.
 - **The algorithm.** `bearerFormat: "JWT"` on the security scheme says the token is a JWT; which
   signature algorithm the publisher accepts is a property of the credential it handed out, not of
   its public description.
@@ -90,6 +90,6 @@ exchange needs minutes, not hours — and SHOULD carry the calling identity in `
 
 ## Implementation
 
-Morgana publishes this extension on every agent card it serves, and reads it on every card it
+Morgana publishes this extension on every agent card it serves and reads it on every card it
 consults. See the [Morgana Handbook](../../../../Morgana-Handbook.html) and
 [`ConfigurationAgentDirectoryService`](https://github.com/mdesalvo/Morgana/blob/main/Morgana/Morgana.AI/Services/ConfigurationAgentDirectoryService.cs).

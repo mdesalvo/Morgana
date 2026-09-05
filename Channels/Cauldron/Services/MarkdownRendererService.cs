@@ -23,7 +23,7 @@ public class MarkdownRendererService : IMarkdownRendererService
 
     /// <summary>
     /// Strips dangerous tags, attributes and URL schemes from the HTML Markdig produces —
-    /// script tags, event-handler attributes (onerror, onclick, ...), CSS-based vectors, and
+    /// script tags, event-handler attributes (onerror, onclick, ...), CSS-based vectors and
     /// any link/image whose URL scheme falls outside the library's own default whitelist
     /// (http, https, mailto, tel, callto, cid, xmpp — none of them script-executing or
     /// origin-redirecting the way javascript:/data: are, so left as shipped rather than

@@ -15,13 +15,13 @@
     What the page shows back is the domain, not a "file accepted" message: the client has to be able
     to see that Alembic understood the same thing Morgana would load. But it shows it as their
     business, not as the configuration — no scope column, no required/shared flags, no class names.
-    Those are true, and they are Review's business; here they would answer a question nobody asked
+    Those are true and they are Review's business; here they would answer a question nobody asked
     and bury the only one that matters, which is what to do next.
 
     So the three things that CAN be done next are the loudest thing on the page, in the same shape
     as the doorways on the landing. Getting the file back out again bare was tried and dropped: its
     only reason was proving the round-trip invariant, which automated tests already do without
-    asking a client to click for it, and what it offered duplicated Morganize's fuller archive and
+    asking a client to click for it and what it offered duplicated Morganize's fuller archive and
     the interview's own "Save my work" — a line nobody arrived wanting, kept only for what it once
     demonstrated to whoever was building this page.
 *@
@@ -61,7 +61,7 @@
     {
         @*
             An interview left half-finished is the first thing the client wants to hear about — they
-            closed the tab on it, and it is why they are back.
+            closed the tab on it and it is why they are back.
         *@
         @if (Resuming(draft) is { } resuming)
         {
@@ -81,8 +81,8 @@
         @if (HasAgents)
         {
             @*
-                What came in, as the client's own business, and it leads: this is the evidence the
-                client uploaded a file to see, and it is what "what now" below is a response to. An
+                What came in, as the client's own business and it leads: this is the evidence the
+                client uploaded a file to see and it is what "what now" below is a response to. An
                 agent is shown by the intent that reaches it and the things it can do — the two
                 facts they would recognise. Everything else the Draft holds is true and belongs on
                 Review.
@@ -132,7 +132,7 @@
         {
             @*
                 A Draft can exist with no agent at all — an interview kept the moment it opened, with
-                nothing accepted into it yet. That is not "a domain", and showing it as one — cards
+                nothing accepted into it yet. That is not "a domain" and showing it as one — cards
                 with nothing in them, doors to validate or morganize nothing — would be answering a
                 question the client never asked with a lie dressed as evidence.
             *@
@@ -143,13 +143,13 @@
         }
 
         @*
-            The point of the page, and it follows the evidence rather than leading it: what to do
+            The point of the page and it follows the evidence rather than leading it: what to do
             next only means something once the client has seen what came in. Same shape as the
             landing's doorways, because they are the same kind of thing: a way on, not a description.
 
             Which door is loudest is not fixed. An archive Emit already built has been through this
             once — checking that it still stands is at least as natural a next move as adding to it,
-            and that is true only of an archive: a bare agents.json never went through Alembic, and
+            and that is true only of an archive: a bare agents.json never went through Alembic and
             a resumed sitting is mid-answer, so it is the interview's own door that stays loudest
             there. Weighing is always reachable either way; it is only the loud one here.
         *@
@@ -170,9 +170,9 @@
                     intention and not a smaller one: somebody who uploads a domain to correct a tool
                     or a turn of phrase is not adding to it, not weighing it and not packaging it.
 
-                    It does not ask which agent, and it does not have to. Whoever comes through here
+                    It does not ask which agent and it does not have to. Whoever comes through here
                     usually cannot say where the problem is — they know it when they read it — so the
-                    walk opens on the first and leafs, and the client who DOES know finds it the same
+                    walk opens on the first and leafs and the client who DOES know finds it the same
                     way, with the walk's own prev/next: this is the only door onto that screen now.
                 *@
                 <a class="gateway" href="revise">
@@ -199,7 +199,7 @@
 
                 @*
                     A file with an interview in it is not an invitation to start one: it is the one
-                    the client left, and the door has to say so or they will read "begin" as losing
+                    the client left and the door has to say so or they will read "begin" as losing
                     what they came back with.
                 *@
                 @if (draft?.Sitting is not null)
@@ -277,7 +277,7 @@
     /// </summary>
     /// <remarks>
     /// Read from the upload's own shape (a zip), not from what turned out to be inside it: an
-    /// archive with its save file deleted still arrived as the archive, and the client's next
+    /// archive with its save file deleted still arrived as the archive and the client's next
     /// question is the same either way - does what I already built still stand? A bare
     /// configuration never went through Alembic, so it has no such question to answer first.
     /// </remarks>
@@ -364,7 +364,7 @@
 
     /// <summary>
     /// Reads the uploaded file, works out which of the three shapes it is (a save file, a bare
-    /// <c>agents.json</c>, or a zip wrapping one of those two), and hands it to the matching path.
+    /// <c>agents.json</c>, or a zip wrapping one of those two) and hands it to the matching path.
     /// </summary>
     /// <remarks>
     /// Content decides the shape, never the file name or extension — see <see cref="IsZip"/>,
@@ -394,7 +394,7 @@
             if (IsZip(buffer))
             {
                 // Trusted only on the marker's say-so, not on the upload's own shape: anyone can
-                // zip up a bare agents.json, and Import's own next-step doors read differently for
+                // zip up a bare agents.json and Import's own next-step doors read differently for
                 // an archive Alembic built than for a bare configuration someone else packed.
                 arrivedAsArchive = HasMarker(buffer);
 
@@ -456,7 +456,7 @@
     /// <remarks>
     /// An interview over a real domain does not fit in one sitting and Alembic has no database, so
     /// the save file is the whole of its memory. It carries what a configuration cannot: provenance,
-    /// the C# facts <c>agents.json</c> does not express, half-answered elements, and the baseline the
+    /// the C# facts <c>agents.json</c> does not express, half-answered elements and the baseline the
     /// migration report diffs against — which is why the report still tells the truth on the second
     /// day.
     /// </remarks>
@@ -474,16 +474,16 @@
     }
 
     /// <summary>
-    /// Puts a freshly read Draft in the circuit, and discards any interview already running against
+    /// Puts a freshly read Draft in the circuit and discards any interview already running against
     /// the one it replaces.
     /// </summary>
     /// <remarks>
     /// <c>InterviewService</c> is Scoped: once a circuit has visited <c>/interview</c>, its
-    /// <c>Current</c> stays set for the rest of the circuit, and that page only ever calls
+    /// <c>Current</c> stays set for the rest of the circuit and that page only ever calls
     /// <c>StartAsync</c> when it finds none. Without this, a client who had already begun "Distil a
     /// new domain" and then came back here to import a file instead would land back on the old,
     /// empty interview — the import would sit in <see cref="DraftStateService"/> but never reach the
-    /// page that reads it, and there would be no way out short of reloading the tab. Abandoning here
+    /// page that reads it and there would be no way out short of reloading the tab. Abandoning here
     /// is what makes the next visit to <c>/interview</c> call <c>StartAsync</c> again and pick up
     /// what was just brought in, sitting included.
     /// </remarks>
@@ -508,7 +508,7 @@
     /// </summary>
     /// <remarks>
     /// A zip holding an <c>agents.json</c> is not evidence Alembic built it: anyone can zip up a
-    /// bare configuration by hand, and this is the one entry a zip built anywhere else would have
+    /// bare configuration by hand and this is the one entry a zip built anywhere else would have
     /// no reason to contain. Checked by presence alone, never by its content — the marker carries
     /// nothing worth reading, only the fact of itself.
     /// </remarks>
@@ -525,7 +525,7 @@
     /// Pulls the one file inside the archive that carries the domain, preferring the sitting.
     /// </summary>
     /// <remarks>
-    /// The archive Emit produces holds both <c>alembic-draft.json</c> and <c>agents.json</c>, and
+    /// The archive Emit produces holds both <c>alembic-draft.json</c> and <c>agents.json</c> and
     /// they are not equivalent here: the save file is the richer of the two — provenance, the
     /// baseline, a half-finished sitting — so continuing a distillation from the archive has to read
     /// the same file the landing's own "carry on" gesture reads. <c>agents.json</c> is the fallback

@@ -21,7 +21,7 @@ WORKDIR /src
 
 # Copy project files for all required projects (layer caching optimization). The repo
 # layout is mirrored under /src so every ProjectReference resolves identically to the
-# host: Morgana.Web/AI/Contracts reference each other as siblings under Morgana/, and
+# host: Morgana.Web/AI/Contracts reference each other as siblings under Morgana/ and
 # Examples (which lives outside Morgana/) references ..\Morgana\Morgana.AI.
 COPY ["Morgana/Morgana.Web/Morgana.Web.csproj", "Morgana/Morgana.Web/"]
 COPY ["Morgana/Morgana.AI/Morgana.AI.csproj", "Morgana/Morgana.AI/"]

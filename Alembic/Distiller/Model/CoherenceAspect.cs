@@ -7,7 +7,7 @@ namespace Distiller.Model;
 /// Read off the <c>DomainValidator</c> prompt's own <c>Aspects</c> declaration rather than listed
 /// again in C#, for the same reason a pass's tools are read off its <c>Tools</c> declaration: the
 /// checkboxes the client ticks, the prose the model is handed and the <c>kind</c> values it is
-/// allowed to answer with all have to be the same list, and a second copy is a list that drifts.
+/// allowed to answer with all have to be the same list and a second copy is a list that drifts.
 /// <para>
 /// The split between <see cref="Summary"/> and <see cref="Description"/> is the split between the
 /// two readers. The client reads a line to decide whether to tick the box; the model reads the whole

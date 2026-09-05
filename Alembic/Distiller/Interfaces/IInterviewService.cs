@@ -10,9 +10,9 @@ namespace Distiller.Interfaces;
 /// <para>
 /// The division of labour is fixed and is the reason this service exists rather than a bare chat
 /// loop: the <b>state machine is C#</b> — which pass is running, which fields are set, what may be
-/// written next — and the <b>conducting is the model's</b> — which question to ask, and how to turn
+/// written next — and the <b>conducting is the model's</b> — which question to ask and how to turn
 /// a domain expert's answer into dispositive prose. Facts about the configuration are never left to
-/// a model's discretion, and phrasing is never left to a template.
+/// a model's discretion and phrasing is never left to a template.
 /// </para>
 /// </remarks>
 public interface IInterviewService
@@ -34,7 +34,7 @@ public interface IInterviewService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns><c>false</c> when the domain holds no such agent.</returns>
     // Reached from the walk and from nowhere else. That is what keeps leafing through a domain free:
-    // the walk moves a marker, and the model, the session and the agent leaving the configuration all
+    // the walk moves a marker and the model, the session and the agent leaving the configuration all
     // wait until the client actually asks to edit it.
     //
     // Always the Target, never the section the client meant to fix: an edit is a compose walk seeded
@@ -60,16 +60,16 @@ public interface IInterviewService
     Task<InterviewState> AnswerAsync(string answer, CancellationToken cancellationToken = default);
 
     // There is deliberately no Advance: a pass boundary is not the client's to cross. It is a new
-    // agent and a new session, only the configuration goes over it, and it happens inside
+    // agent and a new session, only the configuration goes over it and it happens inside
     // AnswerAsync the moment the state machine confirms the running pass settled. The client's
-    // transcript is continuous — they are having one interview, and the restart is the model's alone.
+    // transcript is continuous — they are having one interview and the restart is the model's alone.
 
     /// <summary>
     /// Steps the interview back one step of the journey, keeping everything already written.
     /// </summary>
     /// <returns><c>true</c> if it moved, <c>false</c> when there is nothing behind it.</returns>
     // Backwards is the client's where forwards is not: going on is a claim that a step is settled,
-    // which the state machine decides, and going back is a claim that something needs changing,
+    // which the state machine decides and going back is a claim that something needs changing,
     // which only they can make.
     //
     // The memory is the configuration, not the conversation. A step is re-entered the way it was
@@ -80,7 +80,7 @@ public interface IInterviewService
     Task<bool> BackAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Folds the agent just finished into the Draft, creating a Draft if there is none, and moves
+    /// Folds the agent just finished into the Draft, creating a Draft if there is none and moves
     /// the interview to the next entry of the domain map.
     /// </summary>
     /// <returns>
@@ -89,7 +89,7 @@ public interface IInterviewService
     /// </returns>
     /// <remarks>
     /// Everything committed is marked <see cref="Provenance.Authored"/>: it exists in no uploaded
-    /// file, and the migration report has to be able to say so. The fallback intent is put in the
+    /// file and the migration report has to be able to say so. The fallback intent is put in the
     /// same Draft if it is not there — it belongs to every domain and to no interview.
     /// </remarks>
     Task<bool> AcceptAsync(CancellationToken cancellationToken = default);

@@ -6,7 +6,7 @@ namespace Cauldron.Services;
 
 /// <summary>
 /// SignalR client for the Morgana backend: owns the hub connection, its reconnection policy and
-/// group membership, and republishes what arrives as plain events. This is the only place in
+/// group membership and republishes what arrives as plain events. This is the only place in
 /// Cauldron that touches SignalR — everything else subscribes.
 /// </summary>
 public class SignalRService : IAsyncDisposable

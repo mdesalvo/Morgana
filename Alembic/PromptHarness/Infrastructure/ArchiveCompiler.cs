@@ -7,7 +7,7 @@ namespace PromptHarness.Infrastructure;
 
 /// <summary>
 /// Whether the archive <see cref="ArchiveCompiler"/> extracted built, the full <c>dotnet build</c>
-/// transcript either way, and — on success — where the primary assembly landed.
+/// transcript either way and — on success — where the primary assembly landed.
 /// </summary>
 /// <param name="AssemblyPath">
 /// The built <c>{ProjectName}.dll</c>, for a caller that wants to reflect over what actually got
@@ -24,7 +24,7 @@ public sealed record ArchiveCompileResult(bool Succeeded, int ExitCode, string O
 /// <remarks>
 /// The emitted <c>.csproj</c> references <c>Morgana.AI</c>/<c>Morgana.Contracts</c> by
 /// <c>PackageReference</c>, pinned to whichever build Alembic itself is running against — exactly
-/// right for a client, whose machine resolves it from a real feed, and exactly wrong for this
+/// right for a client, whose machine resolves it from a real feed and exactly wrong for this
 /// harness, run against a checkout of a version that has not been published anywhere yet. So this
 /// rewrites those two lines to <c>ProjectReference</c>s against the local source before building,
 /// the same substitution done by hand while chasing the CS0579 mock-attribute bug this suite now
@@ -57,7 +57,7 @@ public static class ArchiveCompiler
 
     /// <summary>
     /// Extracts <paramref name="archive"/> into a fresh temporary directory, retargets its
-    /// framework references to the local source, and runs <c>dotnet build</c> against it.
+    /// framework references to the local source and runs <c>dotnet build</c> against it.
     /// </summary>
     public static async Task<ArchiveCompileResult> ExtractAndBuildAsync(byte[] archive, CancellationToken cancellationToken = default)
     {

@@ -46,8 +46,8 @@ public static class BistroLunaFixture
         [
             "We already know who is calling if they are in our loyalty program, otherwise anyone can book " +
             "by giving their name and phone number. It needs to check what tables are free for a day, time " +
-            "and party size, and it needs to actually place the reservation once the customer picks a slot, " +
-            "which needs the day, time, party size and the customer's name and phone number, and it must " +
+            "and party size. It needs to actually place the reservation once the customer picks a slot, " +
+            "which needs the day, time, party size and the customer's name and phone number. It must " +
             "not commit anything without a final confirmation from the customer.",
             "Nothing about the customer sticks around between calls except their loyalty id, if they have one."
         ]),

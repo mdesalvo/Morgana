@@ -407,9 +407,10 @@
         <li><a href="#extension-points"><span class="toc-num">04</span><span class="toc-title">Extension Points</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
         <li><a href="#security-model"><span class="toc-num">05</span><span class="toc-title">Security Model</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
         <li><a href="#configuration-reference"><span class="toc-num">06</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
-        <li><a href="#docker-deployment"><span class="toc-num">07</span><span class="toc-title">Docker Deployment</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
-        <li><a href="#observability"><span class="toc-num">08</span><span class="toc-title">Observability (OpenTelemetry)</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
-        <li><a href="#quick-reference"><span class="toc-num">09</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
+        <li><a href="#a2a-configuration"><span class="toc-num">07</span><span class="toc-title">Agent-to-Agent Configuration</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
+        <li><a href="#docker-deployment"><span class="toc-num">08</span><span class="toc-title">Docker Deployment</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
+        <li><a href="#observability"><span class="toc-num">09</span><span class="toc-title">Observability (OpenTelemetry)</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
+        <li><a href="#quick-reference"><span class="toc-num">10</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">12</span></a></li>
       </ul>
 
       <div class="page-footer">
@@ -423,7 +424,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="architecture-overview">
       <h2>Architecture Overview</h2>
-      <p>Morgana is a <strong>conversational AI framework</strong> built on a multi-agent, intent-driven architecture. It is <strong>multi-channel by design</strong>: the backend intelligence (<strong>Morgana</strong>) is decoupled from the channels users actually reach it through, and ships with <strong>three reference channels out-of-the-box</strong> &mdash; <strong>Cauldron</strong> (HTML / Blazor Server, rich UI over SignalR), <strong>Grimoire</strong> (TTY / Spectre.Console, rich CLI over webhook) and <strong>Rune</strong> (TTY / Spectre.Console, poor-but-honest CLI over webhook). Every channel advertises its <strong>capability budget</strong> at conversation start, Morgana adapts its outbound expressivity accordingly, and each channel authenticates with its own JWT issuer.</p>
+      <p>Morgana is a <strong>conversational AI framework</strong> built on a multi-agent, intent-driven architecture. It is <strong>multi-channel by design</strong>: the backend intelligence (<strong>Morgana</strong>) is decoupled from the channels users actually reach it through and ships with <strong>three reference channels out-of-the-box</strong> &mdash; <strong>Cauldron</strong> (HTML / Blazor Server, rich UI over SignalR), <strong>Grimoire</strong> (TTY / Spectre.Console, rich CLI over webhook) and <strong>Rune</strong> (TTY / Spectre.Console, poor-but-honest CLI over webhook). Every channel advertises its <strong>capability budget</strong> at conversation start, Morgana adapts its outbound expressivity accordingly and each channel authenticates with its own JWT issuer.</p>
       <p>Morgana <strong>reimagines conversational AI</strong> through 4 foundational pillars that <strong>work in harmony</strong> to deliver an <strong>orchestration framework</strong> that is powerful yet remarkably simple to configure.</p>
       
       <div class="pillars">
@@ -485,7 +486,7 @@
       </table>
 
       <h3 style="margin-top:14px;">Cauldron &mdash; HTML / Blazor Server (rich)</h3>
-      <p>Cauldron is a Blazor Server application providing a rich, real-time chat interface with streaming responses, quick replies, rich cards, and animated feedback. It communicates with Morgana over authenticated SignalR and REST (<code>deliveryMode=signalr</code>), with all capability flags on. It can be depicted as the <b>official Morgana's home</b>.</p>
+      <p>Cauldron is a Blazor Server application providing a rich, real-time chat interface with streaming responses, quick replies, rich cards and animated feedback. It communicates with Morgana over authenticated SignalR and REST (<code>deliveryMode=signalr</code>), with all capability flags on. It can be depicted as the <b>official Morgana's home</b>.</p>
 
       <div class="screenshots">
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Channels/Cauldron/Assets/Morgana-Presentation.jpg" alt="Cauldron Presentation"/>
@@ -593,7 +594,7 @@
         <span style="font-size:14.5px;">(peeks <code>iss</code>, looks up the matching <code>Issuers[]</code> entry, validates signature + audience + lifetime; unknown issuers rejected outright)</span>
       </div>
 
-      <p class="muted" style="font-size:15px; margin-top:10px;">Morgana uses a <strong>per-issuer trust model</strong>: each channel onboards with its own <code>{ Name, SymmetricKey }</code> entry in <code>Morgana:Authentication:Issuers[]</code>, so leaking one channel's key does not compromise the others. The same trust model covers <strong>peer consultation</strong>: an installation whose agents consult each other signs that traffic under an issuer named <code>morgana</code>, declared exactly like a channel, and a missing, blank or still-placeholder key there is <strong>startup-fatal</strong> &mdash; without it a colleague resolves to nothing and the topology fails silently on the first conversation instead of at boot. Consulting <strong>another installation</strong> signs with the key that installation issued to this caller, held on its <code>Morgana:AgentToAgent:ConsultableInstances[]</code> entry, so one such key opens nothing else. An installation with peer consultation enabled publishes <strong>every agent it holds</strong>, not only the ones its own agents consult: what it offers is what it can answer, so an agent modelled here is reachable by anything that speaks A2A &mdash; a sibling desk, another Morgana, an orchestrator this installation knows nothing about. <strong>The gate is the issuer, not the topology</strong>: whoever is declared under <code>Issuers[]</code> may ask any published agent, so admitting an issuer admits it to the whole ring, and an agent that must not be reachable from outside belongs in an installation that does not admit that caller rather than in one that does not publish it. The A2A JSON-RPC endpoints carry the same fail-closed gate as the REST API; only the well-known agent card stays open, because discovery is what tells a caller how to authenticate &mdash; and it is now that card which says so literally: it declares the bearer scheme it requires and, through a published extension, the issuer and audience a caller must mint its token under, so the calling side configures a secret and nothing else. The <code>IAuthenticationService</code> extension point also allows deployers to replace JWT with any strategy (API keys, mTLS, OAuth with external IdP) without modifying the application.</p>
+      <p class="muted" style="font-size:15px; margin-top:10px;">Morgana uses a <strong>per-issuer trust model</strong>: each channel onboards with its own <code>{ Name, SymmetricKey }</code> entry in <code>Morgana:Authentication:Issuers[]</code>, so leaking one channel's key does not compromise the others. The same trust model covers <strong>peer consultation</strong>: an installation whose agents consult each other signs that traffic under an issuer named <code>morgana</code>, declared exactly like a channel. A missing, blank or still-placeholder key there is <strong>startup-fatal</strong> &mdash; without it a colleague resolves to nothing and the topology fails silently on the first conversation instead of at boot. Consulting <strong>another installation</strong> signs with the key that installation issued to this caller, held on its <code>Morgana:AgentToAgent:OutboundSystems[]</code> entry, so one such key opens nothing else. An installation with peer consultation enabled publishes <strong>every agent it holds</strong>, not only the ones its own agents consult: what it offers is what it can answer, so an agent modelled here is reachable by anything that speaks A2A &mdash; a sibling desk, another Morgana, an orchestrator this installation knows nothing about. <strong>The gate is the issuer and its declared reach, never the topology</strong>: publication stays whole and what narrows is admission. A caller proves who it is under <code>Issuers[]</code> and reaches only what its <code>Morgana:AgentToAgent:InboundSystems[]</code> entry allows &mdash; an entry naming <code>Agents</code> holding it to those, an entry naming none admitting it to all &mdash; which is how one company's several installations let each other reach only the desks that concern them. An agent that must not be answerable by a given caller is kept from it by that caller's scope, never by declining to publish it. <strong>A caller is a channel or a colleague, never both</strong>: <code>Type</code> is mandatory on every issuer and decides which door its key opens, because behind the A2A door a request reaches an agent's actor with none of the guard, classifier, rate limit and dust budget a channel's own path goes through. That door has ceilings of its own: an inbound system writes the name of the conversation it is served on, so how many it may open in a sliding hour is declared on its <code>InboundSystems[]</code> entry. What one exchange may then cost is the ordinary per-conversation budget. The A2A JSON-RPC endpoints carry the same fail-closed gate as the REST API; only the well-known agent card stays open, because discovery is what tells a caller how to authenticate &mdash; and it is now that card which says so literally: it declares the bearer scheme it requires and, through a published extension, the issuer and audience a caller must mint its token under, so the calling side configures a secret and nothing else. The <code>IAuthenticationService</code> extension point also allows deployers to replace JWT with any strategy (API keys, mTLS, OAuth with external IdP) without modifying the application.</p>
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
@@ -622,7 +623,7 @@
           <tr><td>Morgana:ConversationPersistence:StoragePath</td><td>Directory for SQLite database files</td></tr>
           <tr><td>Morgana:ActorSystem:TimeoutSeconds</td><td>Actor/agent timeout (default: 180)</td></tr>
           <tr><td>Morgana:ActorSystem:EnableGuardrail</td><td>Toggle content moderation guard</td></tr>
-          <tr><td>Morgana:AgentToAgent:*</td><td>Peer consultation: <code>Enabled</code> (default <code>true</code>), <code>MaxRoundsPerTurn</code> (default 4), <code>ConsultableInstances[]</code> &mdash; other Morgana installations whose agents may be consulted, each <code>{ Name, Url, SymmetricKey }</code> &mdash; and <code>ExposedAgents[]</code>, the intents this installation answers for, which is what lets it publish an agent for another installation rather than only for a sibling that happens to consult it. No address setting for this instance &mdash; a card names it from the address Kestrel bound; an address is configured only for somebody else</td></tr>
+          <tr><td>Morgana:AgentToAgent:*</td><td>Peer consultation: <code>Enabled</code> (default <code>true</code>), <code>MaxRoundsPerTurn</code> (default 4), <code>OutboundSystems[]</code> &mdash; installations whose agents may be consulted, each <code>{ Name, Url, SymmetricKey, Issuer? }</code>, where <code>Name</code> is what <code>[ConsultsAgent]</code> writes and never a hostname &mdash; and <code>InboundSystems[]</code>, how far each admitted system reaches, each <code>{ Issuer, Agents?, MaxConversationsPerHour }</code>. The inbound list admits nobody on its own and is required of every <code>system</code> issuer, <code>morgana</code> included, whose entry carries neither of the other two keys. <code>MaxConversationsPerHour</code> is required of every partner: startup refuses one admitted with no ceiling, since nothing reads an absent key as licence to spend without limit. No address setting for this instance &mdash; a card names it from the address Kestrel bound; an address is configured only for somebody else. See <a href="#a2a-configuration">Agent-to-Agent Configuration</a> for the three shapes in full</td></tr>
           <tr><td>Morgana:AdaptiveMessaging:*</td><td>Streaming toggle, rich-features threshold for ingress heuristic</td></tr>
           <tr><td>Morgana:RateLimiting:*</td><td>Per-minute, per-hour, per-day message limits</td></tr>
           <tr><td>Morgana:DustLimiting:*</td><td>Token budget: enabled, budget per conversation, warning &amp; error messages, per-provider MagicDust pricing</td></tr>
@@ -673,7 +674,97 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 9 — DOCKER DEPLOYMENT                                                  -->
+    <!-- PAGE 9 — AGENT-TO-AGENT CONFIGURATION                                       -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="a2a-configuration">
+      <h2>Agent-to-Agent Configuration</h2>
+      <p>Peer consultation is configured in three shapes. Which one a deployment is in follows entirely from what its plugins declare with <code>[ConsultsAgent]</code> plus what <code>Morgana:AgentToAgent</code> says. Two rules run through all of them. <strong>Identity and reach are separate questions</strong>: <code>Issuers[]</code> answers who may knock, <code>InboundSystems[]</code> how far a knocker reaches and neither implies the other. And <strong>this installation never declares its own address</strong> &mdash; a published card names it from whatever Kestrel bound, so a URL is configured only for somebody else.</p>
+
+      <h3>1 &mdash; Off</h3>
+      <p>Nothing is stood up: no hosted agent, no A2A server, no route, no card. Agents never see the colleagues they declare and read not one extra token of prompt, so a deployment here is the deployment it was before any of this existed. <code>[ConsultsAgent]</code> attributes stay in the code and are simply not honoured. No <code>morgana</code> issuer is required.</p>
+      <div class="code-block"><span class="string">"AgentToAgent"</span>: {
+  <span class="string">"Enabled"</span>: <span class="keyword">false</span>
+}</div>
+
+      <h3>2 &mdash; On, colleagues of this installation only</h3>
+      <p>The ring is raised whole: <strong>every</strong> agent this installation holds is published, whether or not a sibling consults it. A local consultation leaves over HTTP signed under the <code>morgana</code> issuer and knocks back at this installation's own A2A door, which is why that issuer is needed at both ends. All three pieces below are checked at startup and a missing one is fatal &mdash; a topology that validates and then fails silently on the first conversation is exactly what those checks exist to prevent.</p>
+      <div class="code-block"><span class="string">"AgentToAgent"</span>: {
+  <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
+  <span class="string">"MaxRoundsPerTurn"</span>: <span class="keyword">4</span>,
+  <span class="string">"OutboundSystems"</span>: [],
+  <span class="string">"InboundSystems"</span>: [
+    { <span class="string">"Issuer"</span>: <span class="string">"morgana"</span> }        <span class="comment">// no Agents, no MaxConversationsPerHour</span>
+  ]
+},
+<span class="string">"Authentication"</span>: {
+  <span class="string">"Audience"</span>: <span class="string">"morgana.ai"</span>,
+  <span class="string">"Issuers"</span>: [
+    { <span class="string">"Name"</span>: <span class="string">"cauldron"</span>, <span class="string">"Type"</span>: <span class="string">"channel"</span>, <span class="string">"SymmetricKey"</span>: <span class="string">"_SECURE_OVERRIDE_"</span> },
+    { <span class="string">"Name"</span>: <span class="string">"morgana"</span>,  <span class="string">"Type"</span>: <span class="string">"system"</span>,  <span class="string">"SymmetricKey"</span>: <span class="string">"_SECURE_OVERRIDE_"</span> }
+  ]
+}</div>
+      <p class="muted" style="font-size:14.5px;">The <code>morgana</code> entry carries neither <code>Agents</code> nor <code>MaxConversationsPerHour</code>. Startup refuses both. Which colleagues an agent here may consult already has one author, <code>[ConsultsAgent]</code>; and a colleague of ours opens no conversation, it joins the one the user is already having.</p>
+
+      <h3>3 &mdash; On, colleagues here and at another installation</h3>
+      <p>The two directions are independent and neither implies the other. <strong>Outbound</strong> is what this side must bring to consult a partner: an entry naming that partner, its address and the key <em>it</em> issued to this caller. No <code>Issuers[]</code> entry is needed for a system this installation only calls. <strong>Inbound</strong> is a partner calling us. That needs both &mdash; an <code>Issuers[]</code> entry typed <code>system</code> carrying the key <em>we</em> issued to them, plus an <code>InboundSystems[]</code> entry saying how far it reaches and how often it may come back.</p>
+      <div class="code-block"><span class="string">"AgentToAgent"</span>: {
+  <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
+  <span class="string">"MaxRoundsPerTurn"</span>: <span class="keyword">4</span>,
+
+  <span class="comment">// Partners this installation may consult. Name is what [ConsultsAgent] writes,</span>
+  <span class="comment">// never a hostname. Issuer is optional: it overrides what their card declares,</span>
+  <span class="comment">// for a key they cut for this caller alone.</span>
+  <span class="string">"OutboundSystems"</span>: [
+    { <span class="string">"Name"</span>: <span class="string">"acme"</span>, <span class="string">"Url"</span>: <span class="string">"https://acme.example.com"</span>, <span class="string">"SymmetricKey"</span>: <span class="string">"_SECURE_OVERRIDE_"</span> }
+  ],
+
+  <span class="comment">// How far each admitted system reaches. Omitting Agents admits it to every</span>
+  <span class="comment">// published agent. MaxConversationsPerHour is required of every partner —</span>
+  <span class="comment">// write a generous number for a trusted one, never nothing.</span>
+  <span class="string">"InboundSystems"</span>: [
+    { <span class="string">"Issuer"</span>: <span class="string">"morgana"</span> },
+    { <span class="string">"Issuer"</span>: <span class="string">"acme"</span>, <span class="string">"Agents"</span>: [<span class="string">"billing"</span>, <span class="string">"inventory"</span>], <span class="string">"MaxConversationsPerHour"</span>: <span class="keyword">100</span> }
+  ]
+},
+<span class="string">"Authentication"</span>: {
+  <span class="string">"Audience"</span>: <span class="string">"morgana.ai"</span>,
+  <span class="string">"Issuers"</span>: [
+    { <span class="string">"Name"</span>: <span class="string">"cauldron"</span>, <span class="string">"Type"</span>: <span class="string">"channel"</span>, <span class="string">"SymmetricKey"</span>: <span class="string">"_SECURE_OVERRIDE_"</span> },
+    { <span class="string">"Name"</span>: <span class="string">"morgana"</span>,  <span class="string">"Type"</span>: <span class="string">"system"</span>,  <span class="string">"SymmetricKey"</span>: <span class="string">"_SECURE_OVERRIDE_"</span> },
+    { <span class="string">"Name"</span>: <span class="string">"acme"</span>,     <span class="string">"Type"</span>: <span class="string">"system"</span>,  <span class="string">"SymmetricKey"</span>: <span class="string">"_SECURE_OVERRIDE_"</span> }
+  ]
+}</div>
+      <div class="code-block"><span class="comment">// The declaration in code. A colleague published elsewhere is offered under a</span>
+      <span class="comment">// function name carrying its system, so two desks of the same name never collide.</span>
+<span class="attr">[HandlesIntent(</span><span class="string">"billing"</span><span class="attr">)]</span>
+<span class="attr">[RequiresLLMTier(</span>Records.LLMTier.Efficiency<span class="attr">)]</span>
+<span class="attr">[ConsultsAgent(</span><span class="string">"inventory"</span><span class="attr">)]</span>            <span class="comment">// a colleague here    → consult_inventory</span>
+<span class="attr">[ConsultsAgent(</span><span class="string">"shipping"</span>, <span class="string">"acme"</span><span class="attr">)]</span>   <span class="comment">// a colleague at acme → consult_acme_shipping</span>
+<span class="keyword">public class</span> BillingAgent : MorganaAgent { <span class="comment">/* ... */</span> }</div>
+
+      <h3>What each shape requires</h3>
+      <table>
+        <thead><tr><th></th><th>Off</th><th>Local only</th><th>Local + remote</th></tr></thead>
+        <tbody>
+          <tr><td><code>morgana</code> in <code>Issuers[]</code></td><td>&mdash;</td><td>required, <code>Type: system</code></td><td>required, <code>Type: system</code></td></tr>
+          <tr><td><code>morgana</code> in <code>InboundSystems[]</code></td><td>&mdash;</td><td>required, bare</td><td>required, bare</td></tr>
+          <tr><td>Partner in <code>Issuers[]</code></td><td>&mdash;</td><td>&mdash;</td><td>only if it calls us</td></tr>
+          <tr><td>Partner in <code>InboundSystems[]</code></td><td>&mdash;</td><td>&mdash;</td><td>only if it calls us &mdash; then mandatory, ceiling included</td></tr>
+          <tr><td>Partner in <code>OutboundSystems[]</code></td><td>&mdash;</td><td>&mdash;</td><td>only if we call it</td></tr>
+          <tr><td>Agents published</td><td>none</td><td>all of them</td><td>all of them</td></tr>
+          <tr><td>Prompt cost per agent</td><td>none</td><td>peer policy + colleagues</td><td>peer policy + colleagues</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:14.5px;">A <strong>pure supplier</strong> &mdash; publishing its desks for a partner while its own agents consult nobody here &mdash; is the one shape needing no <code>morgana</code> entry at all: nothing of it ever knocks at its own door.</p>
+
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>9</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 10 — DOCKER DEPLOYMENT                                                 -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="docker-deployment">
       <h2>Docker Deployment</h2>
@@ -706,12 +797,12 @@
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>9</span>
+        <span>10</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 10 — OBSERVABILITY                                                     -->
+    <!-- PAGE 11 — OBSERVABILITY                                                     -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="observability">
       <h2>Observability (OpenTelemetry)</h2>
@@ -739,16 +830,16 @@
         { <span class="string">"Name"</span>: <span class="string">"otlp"</span>, <span class="string">"Enabled"</span>: <span class="keyword">true</span>, <span class="string">"Endpoint"</span>: <span class="string">"http://localhost:4317"</span> }
       ]
     }</div>
-      <p class="muted" style="font-size:14.5px;">Compatible with Jaeger, Grafana Tempo, Azure Monitor, Datadog, and any OTLP-compliant backend.</p>
+      <p class="muted" style="font-size:14.5px;">Compatible with Jaeger, Grafana Tempo, Azure Monitor, Datadog and any OTLP-compliant backend.</p>
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>10</span>
+        <span>11</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 11 — QUICK REFERENCE                                                   -->
+    <!-- PAGE 12 — QUICK REFERENCE                                                   -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="quick-reference">
       <h2>Quick Reference</h2>
@@ -769,7 +860,7 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>11</span>
+        <span>12</span>
       </div>
     </div>
 

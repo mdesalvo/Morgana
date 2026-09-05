@@ -1,21 +1,21 @@
 /* ==========================================================================
    The interview: the map across the top, the journey, the question that is the whole scene, the
-   transcript folded away, and the agent's own rows along the foot. One file per component would
+   transcript folded away and the agent's own rows along the foot. One file per component would
    scatter a language that has to agree with itself - deep violet behind, the bright accent for here,
    faint for ahead - so the interview is one file and the agreement is visible in it.
    ========================================================================== */
 
-/* Where the interview stands: the domain, the four steps each entry of it goes through, and one
+/* Where the interview stands: the domain, the four steps each entry of it goes through and one
    line saying what is being asked for here. One block, because it is one fact — the entries across
    the top are the first step, not a caption above it.
 
    The entries are big enough to read as the work: a strip of tiny grey pills reads as a progress
-   ornament, and this is the list the client is dictating. */
+   ornament and this is the list the client is dictating. */
 .journey {
     margin: 1.1rem 0 1.4rem;
 }
 
-/* Under the rail, and clear of it: the station names sit on their own line and a strip pulled up
+/* Under the rail and clear of it: the station names sit on their own line and a strip pulled up
    against them reads as a caption belonging to whichever step is nearest. */
 .journey .domain {
     margin: 1.1rem 0 0;
@@ -74,13 +74,13 @@
 }
 
 /* The rail: every step the interview goes through, the two that happen once on the line itself and
-   the four of an entry's lap inside it. Three states, and the palette carries them so nobody has to
-   read a legend, and all three are the one violet the page is lit by: the deep accent, solid, for what
+   the four of an entry's lap inside it. Three states and the palette carries them so nobody has to
+   read a legend and all three are the one violet the page is lit by: the deep accent, solid, for what
    is behind; the bright accent lit and ringed for where the work is now; the plain border colour,
    faint, for what has not been reached. The rail fills deep violet up to the step in hand, so the
    journey reads left to right at a glance.
 
-   Not gold. Gold is the warm note this room keeps for a thing that is finished and closed, and a step
+   Not gold. Gold is the warm note this room keeps for a thing that is finished and closed and a step
    of six behind you is neither — on the rail it read as a second hue arguing with the violet rather
    than as the same journey earlier along. It also puts the rail in one language with the entries under
    it, where what is already written has been deep violet all along. It reports and controls nothing —
@@ -110,7 +110,7 @@
 
 /* The lap: the steps every entry of the map goes through, drawn as one thing because they are one
    thing that happens again. What says so is not a caption but the shape — a bordered run with the
-   entry's own name on its edge, stacked like sheets while entries remain, and the line of the
+   entry's own name on its edge, stacked like sheets while entries remain and the line of the
    journey passing in one side and out the other.
 
    Acceptance is inside it. It closes an entry's turn and the next turn opens on the step after the
@@ -127,7 +127,7 @@
     background: color-mix(in srgb, var(--alembic-bg) 35%, transparent);
 }
 
-/* The sheets behind it, and there is one only while there is another entry to come. Two offset
+/* The sheets behind it and there is one only while there is another entry to come. Two offset
    outlines are the plainest way a surface says "again" without a word or an arrow on it. */
 .stations > .lap.stacked::before {
     content: "";
@@ -152,7 +152,7 @@
 }
 
 /* The entry being written, on the edge of its own lap the way a legend sits on a fieldset: it names
-   what this run is a run of, and it is the same phrase the strip below lights and the panel at the
+   what this run is a run of and it is the same phrase the strip below lights and the panel at the
    foot is tabbed with. */
 .stations > .lap .lap-head {
     position: absolute;
@@ -212,7 +212,7 @@
    mark instead of hanging off the row.
 
    Each segment stops short of the mark rather than running under it. Hiding a line behind an opaque
-   disc only works while the disc and what is behind it are the same colour, and behind this one there
+   disc only works while the disc and what is behind it are the same colour and behind this one there
    is a gradient — so the line reappeared inside the circle as soon as the page was lit. A line that is
    not drawn there cannot show through. Its centre is the circle's centre, one pixel up for the
    segment's own thickness. */
@@ -240,7 +240,7 @@
 /* A disc and no number. Four of the six steps happen once per entry of the map, so a count running
    one to six would claim an order that only the two outside the lap actually have.
 
-   Filled, not outlined: at this size a ring is a hairline around a hole, and the hole takes the shape
+   Filled, not outlined: at this size a ring is a hairline around a hole and the hole takes the shape
    of whatever rounding the browser gives it rather than the shape of a circle. Solid, the three states
    are three colours and nothing else has to be read. */
 .station .mark {
@@ -283,7 +283,7 @@
     box-shadow: 0 0 0 0.32rem color-mix(in srgb, var(--alembic-accent) 18%, transparent), 0 0 1.4rem color-mix(in srgb, var(--alembic-accent) 70%, transparent);
 }
 
-/* Narrow: the lap keeps its shape, since the shape is the whole of what it says, and the words are
+/* Narrow: the lap keeps its shape, since the shape is the whole of what it says and the words are
    what gives way. */
 @media (max-width: 52rem) {
     .station {
@@ -381,7 +381,7 @@
 
 /* The two movements of the interview, on one row and at one size. Going on and going back are not
    the same gesture — one is answering, the other is changing something already answered — but they
-   are equally the client's to make, and a line of prose under the box said the second was an
+   are equally the client's to make and a line of prose under the box said the second was an
    afterthought. The primary is pushed right on its own, so the row is unchanged where there is
    nothing behind to go back to. */
 .reply-actions {
@@ -426,7 +426,7 @@ textarea:focus {
 
 /* ============================ what has been distilled ============================ */
 
-/* Everything the client can do is on one row, and the gap is the argument: the way back is about
+/* Everything the client can do is on one row and the gap is the argument: the way back is about
    what is behind them, keeping the work and answering are about what is in front. */
 .reply-actions .apart {
     margin-left: auto;
@@ -482,7 +482,7 @@ button.keep {
 /* ============================ what has been written down ============================ */
 
 /* The entry being written is a tag that opens, so it is drawn as the tag it already is with one
-   thing added: a caret, and the count of what is written. Everything else about it — the accent
+   thing added: a caret and the count of what is written. Everything else about it — the accent
    border, the lit fill — it had before, because it must stay the same object the map lights and the
    lap is headed with. */
 .journey .domain button.under-way {
@@ -518,7 +518,7 @@ button.keep {
     rotate: 180deg;
 }
 
-/* What the tag opens: directly under it, and exactly as wide as the lap above — five sevenths of the
+/* What the tag opens: directly under it and exactly as wide as the lap above — five sevenths of the
    rail, which is what the flex ratio of one station to the run gives. Full width it was a slab with
    no relation to anything; on the lap's own measure it reads as what it is, everything written down
    about the entry that lap is a lap of. */
@@ -535,7 +535,7 @@ button.keep {
 
 /* Rows of one table, not a scatter of cards. Each is a label and a value on one line, every line the
    same height it needs and no more, separated by a hairline: what the client is doing here is running
-   an eye down a column to find one thing, and nine boxes each as tall as its own contents is the one
+   an eye down a column to find one thing and nine boxes each as tall as its own contents is the one
    layout that makes that impossible. */
 .rows-open .drop {
     display: grid;

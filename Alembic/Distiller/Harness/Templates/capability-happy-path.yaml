@@ -5,8 +5,8 @@
 #@   is most for — the one its Target names first — and script a real person arriving with it.
 #@   The say: line is how they would actually type it: lowercase, partial, their words and not
 #@   the intent description's, which would be testing the classifier against its own answer key.
-#@   Name the tool that produces the answer, and assert nothing about what it returned: today
-#@   it is a mock, tomorrow it is the client's system, and that is the day this must still pass.
+#@   Name the tool that produces the answer and assert nothing about what it returned: today
+#@   it is a mock, tomorrow it is the client's system and that is the day this must still pass.
 #@   One judge proposition, about something a user would see in the reply.
 
 id: "{{intent}}-happy-path"

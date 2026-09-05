@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Panels, and everything read inside one: findings, tables, composed prompts.
+   Panels and everything read inside one: findings, tables, composed prompts.
    ========================================================================== */
 
 .panel {
@@ -98,7 +98,7 @@
     margin-top: 0;
 }
 
-/* Read as the sentence it is, not as code: the model reads this description in prose, and a domain
+/* Read as the sentence it is, not as code: the model reads this description in prose and a domain
    expert reviewing it should be able to as well, at the same size and weight as anything else here. */
 .tool-desc {
     margin: 0 0 0.7rem;
@@ -260,7 +260,7 @@ code {
    single flat wall with the one the client came about buried in the middle.
 
    A finding is a card: what is wrong, what it costs and what to do each under
-   its own label, and the fix carries the button that acts on it rather than one
+   its own label and the fix carries the button that acts on it rather than one
    floating level with the wrong line.
    ========================================================================== */
 .aspect-group {
@@ -295,7 +295,7 @@ code {
     cursor: default;
 }
 
-/* The disclosure: how many findings, and a chevron that turns when open. Quieter
+/* The disclosure: how many findings and a chevron that turns when open. Quieter
    than the Apply buttons it reveals — it is a way in, not the action. */
 .aspect-toggle {
     flex: none;
@@ -476,7 +476,7 @@ pre.prompt {
     overflow-y: auto;
 }
 
-/* One tool per line, wherever a toolkit is read: the panel behind the map's own tag, and the walk
+/* One tool per line, wherever a toolkit is read: the panel behind the map's own tag and the walk
    over a domain's agents. A hanging indent keeps a description that wraps aligned under the text
    rather than under the bullet, since the signature's own bold is exactly what a wall of eight of
    these needs to stay scannable without cutting anything short.

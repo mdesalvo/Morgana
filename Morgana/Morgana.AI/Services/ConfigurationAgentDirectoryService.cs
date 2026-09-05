@@ -142,17 +142,17 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         try
         {
             // A card outlives the ask that built it: its content is configuration, which does not change
-            // under a running process. The very instance handed back here is the one later given its
-            // published address, so a second copy would describe the same desk at no address at all.
-            if (cardsByIntent.TryGetValue(intent, out AgentCard? cached))
-                return cached;
+            // under a running process. Only where this instance answers is not known at projection
+            // time, so that one field is settled below on whichever ask first finds it knowable.
+            if (!cardsByIntent.TryGetValue(intent, out AgentCard? card))
+            {
+                // An intent nobody configured is remembered as such: it stays unconfigured for the
+                // process's life, so asking again would re-read configuration to reach the same nothing.
+                card = await ProjectCardAsync(intent);
+                cardsByIntent[intent] = card;
+            }
 
-            // An intent nobody configured is remembered as such: it stays unconfigured for the process's
-            // life, so asking again would re-read configuration to reach the same nothing.
-            AgentCard? card = await ProjectCardAsync(intent);
-            cardsByIntent[intent] = card;
-
-            return card;
+            return WithPublishedInterface(card, intent);
         }
         finally
         {
@@ -166,40 +166,40 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     public AgentCard? TryGetProjectedCard(string intent)
         => cardsByIntent.GetValueOrDefault(intent);
 
-    /// <inheritdoc />
-    public async Task PublishInterfacesAsync()
+    /// <summary>
+    /// Names on a card where this instance answers for it, as soon as that is knowable.
+    /// </summary>
+    /// <remarks>
+    /// A card is projected while the endpoints are still being mapped, before the server has bound
+    /// anything, so at that moment there is no address to put on it. Settled on whichever ask first
+    /// finds one rather than by a pass over every card at startup: a pass has to run at a moment,
+    /// and every moment after the server begins listening is a moment a caller may already be
+    /// reading. Asked for again, an address already settled costs a comparison.
+    /// </remarks>
+    /// <param name="card">Card being served, or <c>null</c> for an intent nobody configured.</param>
+    /// <param name="intent">Agent whose endpoint the card names.</param>
+    private AgentCard? WithPublishedInterface(AgentCard? card, string intent)
     {
-        // Nothing to fill in and nothing to fail over: a host that reports no address publishes
-        // cards without an interface, which is what they already carry.
+        // Nothing to name an address on. An intent configured nowhere stays absent rather than being
+        // materialised here, which would publish an agent this installation does not hold.
+        if (card is null || card.SupportedInterfaces is { Count: > 0 })
+            return card;
+
+        // Still unknown, which is the ordinary state until the server binds: the card goes out
+        // saying nothing about where to reach this agent, exactly as it did a moment ago.
         string? baseAddress = hostAddressService.ResolveBaseAddress();
         if (baseAddress is null)
-            return;
+            return card;
 
-        // A card can be asked for while this runs. What it mutates is the very instance that ask would
-        // receive, so the projection is held off for the length of the walk.
-        await cardsLock.WaitAsync();
-
-        try
-        {
-            // Every cached card, overwritten rather than filled where empty: this runs once Kestrel has
-            // bound and it is the first moment any of them can name where it actually answers.
-            foreach ((string intent, AgentCard? card) in cardsByIntent)
-            {
-                // A negatively cached intent — configured nowhere — stays null: there is no card to
-                // give an interface to and materialising one here would publish an agent that is not.
-                if (card is not null)
-                    card.SupportedInterfaces = [BuildInterface(baseAddress, intent)];
-            }
-        }
-        finally
-        {
-            // Cards are readable again and from here every one of them names where this instance answers.
-            cardsLock.Release();
-        }
+        card.SupportedInterfaces = [BuildInterface(baseAddress, intent)];
 
         // The one line telling an operator where this instance actually published, which nothing in
-        // configuration states: it was decided by whatever Kestrel bound.
-        logger.LogInformation("Agents of this instance publish their A2A interfaces at {BaseAddress}{AgentPathPrefix}/{{intent}}", baseAddress, Constants.AgentToAgent.AgentPathPrefix);
+        // configuration states: it was decided by whatever the server bound.
+        logger.LogInformation(
+            "Agent '{Intent}' of this instance publishes its A2A interface at {BaseAddress}{AgentPathPrefix}/{Intent}",
+            intent, baseAddress, Constants.AgentToAgent.AgentPathPrefix);
+
+        return card;
     }
 
     /// <inheritdoc />
@@ -463,6 +463,33 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
                     $"Morgana:AgentToAgent:InboundSystems declares \"Agents\" for '{Constants.AgentToAgent.IssuerName}'. "
                     + "Which colleagues an agent of this installation may consult is declared by [ConsultsAgent] and validated "
                     + "at startup; narrowing it here could only contradict that. Remove \"Agents\" from the entry.");
+            }
+
+            // An hour's allowance of openings is what bounds a caller free to name its own
+            // conversation. A colleague of this installation names none: it joins the one the user is
+            // already having, so a limit here would count nothing and read as one that does.
+            if (string.Equals(scopedIssuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)
+                && inboundSystem.MaxConversationsPerHour is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Morgana:AgentToAgent:InboundSystems declares \"MaxConversationsPerHour\" for '{Constants.AgentToAgent.IssuerName}'. "
+                    + "Colleagues of this installation open no conversations: they answer on the one the user is already having, "
+                    + "whose own budget already holds them. Remove \"MaxConversationsPerHour\" from the entry.");
+            }
+
+            // Every other system must say what it may spend getting there. The entry itself is already
+            // required so that admitting a partner stays a sentence somebody wrote; a partner admitted
+            // with no ceiling is that same silence one level down, except nothing reads an absent key
+            // as licence to consume this installation's model without limit. A deployment that truly
+            // wants no bound writes a number saying so, which is again a sentence somebody wrote.
+            if (!string.Equals(scopedIssuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)
+                && inboundSystem.MaxConversationsPerHour is not > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Morgana:AgentToAgent:InboundSystems admits '{scopedIssuer.Name}' without declaring "
+                    + "\"MaxConversationsPerHour\". Behind the A2A door a caller names the conversation it is served on, "
+                    + "so how many it may open in a sliding hour is the only bound on what it can spend. Declare a "
+                    + "positive number, generous if this partner is trusted, but declare it.");
             }
 
             foreach (string scopedAgent in inboundSystem.Agents ?? [])
@@ -745,8 +772,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         Records.Prompt prompt = await promptResolverService.ResolveAsync(intent);
 
         // Left empty when the server has not bound yet, which is the normal case: cards are projected
-        // while the endpoints are being mapped and PublishInterfacesAsync fills them in the moment
-        // the address is known — before any request can read one.
+        // while the endpoints are still being mapped. Whichever ask first finds an address settles it.
         string? baseAddress = hostAddressService.ResolveBaseAddress();
 
         // Everything a stranger needs to decide whether to ask this desk and how to be let in.

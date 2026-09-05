@@ -7,16 +7,16 @@ namespace Distiller.Interfaces;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A mock and not a stub, and the difference is the whole point of the turnkey promise: when the
+/// A mock and not a stub and the difference is the whole point of the turnkey promise: when the
 /// archive is dropped into a plugin project and Morgana starts, the client must be able to
-/// <em>talk to their agent</em> — see it call a tool, get plausible domain data back, and present
+/// <em>talk to their agent</em> — see it call a tool, get plausible domain data back and present
 /// it in the prose Alembic wrote for it. A stub returning <c>NotImplementedException</c> makes the
-/// prose unreviewable, and the prose is what the whole interview was for.
+/// prose unreviewable and the prose is what the whole interview was for.
 /// </para>
 /// <para>
 /// This is the one emitted artifact a template cannot write. Invented invoices, a diary with
 /// believable gaps, stock levels that vary — the data has to be specific to the domain to be worth
-/// looking at, and specific-to-the-domain is exactly what a language model is for and a template
+/// looking at and specific-to-the-domain is exactly what a language model is for and a template
 /// is not.
 /// </para>
 /// </remarks>

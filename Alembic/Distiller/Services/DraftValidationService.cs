@@ -109,7 +109,7 @@ public class DraftValidationService : IDraftValidationService
                     "The intent has no description.",
                     "The description is the only thing the classifier reads about this intent; without one it can only match on the name."));
 
-            // 'other' is exempt: it is the catch-all, it gets no presenter button, and the shipped
+            // 'other' is exempt: it is the catch-all, it gets no presenter button and the shipped
             // Examples domain declares its Label as an explicit null for exactly that reason.
             // Warning about it would train the client to ignore this whole pass.
             if (string.IsNullOrWhiteSpace(intent.Label)
@@ -122,7 +122,7 @@ public class DraftValidationService : IDraftValidationService
         if (!seen.Contains(OtherIntent))
             findings.Add(new ValidationFinding(FindingSeverity.Warning, "domain",
                 $"There is no '{OtherIntent}' intent.",
-                "The classifier falls back to 'other' whenever it cannot place a message, and that fallback is where a domain decides what happens to everything it does not cover."));
+                "The classifier falls back to 'other' whenever it cannot place a message and that fallback is where a domain decides what happens to everything it does not cover."));
     }
 
     /// <summary>
@@ -158,7 +158,7 @@ public class DraftValidationService : IDraftValidationService
         {
             findings.Add(new ValidationFinding(FindingSeverity.Error, $"agent '{agent.ID}'",
                 "No intent declares this agent.",
-                "An agent nothing routes to is unreachable, and the startup registry treats it as a configuration error rather than dead weight."));
+                "An agent nothing routes to is unreachable and the startup registry treats it as a configuration error rather than dead weight."));
         }
     }
 
@@ -167,14 +167,14 @@ public class DraftValidationService : IDraftValidationService
     /// </summary>
     /// <remarks>
     /// <c>HandlesIntentAgentRegistryService</c> validates the same two things at startup and throws:
-    /// a <c>[ConsultsAgent]</c> naming an intent no agent handles, and one naming the declaring
+    /// a <c>[ConsultsAgent]</c> naming an intent no agent handles and one naming the declaring
     /// agent's own. Here they cost nothing to fix. The third finding is not a startup rule at all
     /// but the shape of the framework's own refusal — a colleague answering a consultation is denied
-    /// its own peer functions — so a chain reaches one hop and no further, and an author who drew a
+    /// its own peer functions — so a chain reaches one hop and no further and an author who drew a
     /// chain expecting two is the person this exists to tell.
     /// <para>
     /// None of the three can be said of a colleague at an instance. Its intent is answered by a domain
-    /// this one cannot see, its own edges are unknowable, and an agent consulting a namesake of its
+    /// this one cannot see, its own edges are unknowable and an agent consulting a namesake of its
     /// own at another installation is ordinary rather than circular. So what is checked there is the
     /// only thing this side owns: that the instance was named at all.
     /// </para>
@@ -196,7 +196,7 @@ public class DraftValidationService : IDraftValidationService
                     if (string.IsNullOrWhiteSpace(colleague.Instance))
                         findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                             $"It consults '{colleague.Intent}' at a system with no name.",
-                            "The name is matched against an entry under Morgana:AgentToAgent:OutboundSystems, and a blank one matches nothing: startup refuses it."));
+                            "The name is matched against an entry under Morgana:AgentToAgent:OutboundSystems and a blank one matches nothing: startup refuses it."));
 
                     continue;
                 }
@@ -261,8 +261,8 @@ public class DraftValidationService : IDraftValidationService
 
         // Deliberately not a finding, for the same reason as Code.Inferred below: whether zero
         // native tools means "MCP-only, genuinely nothing to declare" or "the author forgot" is
-        // undecidable without knowing which MCP servers the agent reaches at runtime, and that is a
-        // C# fact — AgentCodeFacts.MCPServers — that is nowhere in an agents.json import, and no
+        // undecidable without knowing which MCP servers the agent reaches at runtime and that is a
+        // C# fact — AgentCodeFacts.MCPServers — that is nowhere in an agents.json import and no
         // more decided in an alembic-draft.json save file that has not been through Morganize yet
         // either. A warning that fires identically on both cases teaches neither apart.
 
@@ -333,7 +333,7 @@ public class DraftValidationService : IDraftValidationService
             if (!parameterNames.Add(parameter.Name))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "This tool declares two parameters with this name.",
-                    "The generated method could not declare them, and the JSON schema handed to the model would carry one property, not two."));
+                    "The generated method could not declare them and the JSON schema handed to the model would carry one property, not two."));
 
             ValidateIdentifier(parameter.Name, parameterWhere, "parameter name", findings);
 
@@ -357,7 +357,7 @@ public class DraftValidationService : IDraftValidationService
             if (parameter.Required && optionalSeen)
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "A required parameter follows an optional one.",
-                    "C# cannot declare that method signature, and MorganaToolAdapter.AddTool validates the required/optional split against the delegate."));
+                    "C# cannot declare that method signature and MorganaToolAdapter.AddTool validates the required/optional split against the delegate."));
 
             optionalSeen |= !parameter.Required;
         }
@@ -386,6 +386,6 @@ public class DraftValidationService : IDraftValidationService
         else if (ReservedWords.Contains(name))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 $"'{name}' is a C# keyword.",
-                $"The {what} becomes C# verbatim, and a keyword cannot be used bare as an identifier."));
+                $"The {what} becomes C# verbatim and a keyword cannot be used bare as an identifier."));
     }
 }

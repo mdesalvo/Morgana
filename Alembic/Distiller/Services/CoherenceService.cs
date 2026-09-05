@@ -55,7 +55,7 @@ public class CoherenceService : ICoherenceService
 
     /// <inheritdoc />
     /// <remarks>
-    /// Resolved on every read rather than cached: it is a parse of an embedded resource, and a list
+    /// Resolved on every read rather than cached: it is a parse of an embedded resource and a list
     /// held twice is a list that can disagree with the prose the pass is actually composed from.
     /// </remarks>
     public IReadOnlyList<CoherenceAspect> Aspects =>
@@ -81,16 +81,16 @@ public class CoherenceService : ICoherenceService
         IReadOnlyList<ResolvedCoherenceFinding>? resolved = null,
         CancellationToken cancellationToken = default)
     {
-        // Two agents is the floor: with one there is nothing for a relational pass to relate, and
+        // Two agents is the floor: with one there is nothing for a relational pass to relate and
         // running it anyway would spend a Performance call to say so.
         if (draft.Agents.Count < 2)
             return new CoherenceReport([], "A coherence pass needs at least two agents: everything it looks for is a relation between them.");
 
         Records.Prompt coherence = alembicPromptService.Resolve(CoherencePromptId);
 
-        // Only the classes asked for, and the pass is composed of them: the prose of an unselected
+        // Only the classes asked for and the pass is composed of them: the prose of an unselected
         // class is not sent at all, rather than sent with a line asking the model to ignore it. A
-        // rule a prompt states and then withdraws is read as a rule with an exception, and the
+        // rule a prompt states and then withdraws is read as a rule with an exception and the
         // exception is the part a model gets wrong.
         List<CoherenceAspect> asked =
             [.. coherence.GetAdditionalPropertyOrDefault<List<CoherenceAspect>>("Aspects", [])
@@ -143,8 +143,8 @@ public class CoherenceService : ICoherenceService
     /// States the whole domain: every intent description, every agent's prose, every toolkit.
     /// </summary>
     /// <remarks>
-    /// All of it, and not a summary. The defects this pass exists for live in the exact words —
-    /// two descriptions that overlap do so in their phrasing, and a summary is precisely the step
+    /// All of it and not a summary. The defects this pass exists for live in the exact words —
+    /// two descriptions that overlap do so in their phrasing and a summary is precisely the step
     /// that would smooth the overlap away before the model ever sees it.
     /// </remarks>
     /// <param name="draft">The domain to render — read whole, never summarized.</param>
@@ -154,7 +154,7 @@ public class CoherenceService : ICoherenceService
     {
         StringBuilder sb = new StringBuilder();
 
-        // Read first, and named as what it is: this pass has no memory of its own last run, so
+        // Read first and named as what it is: this pass has no memory of its own last run, so
         // without this a client who fixed something and asked to run it again would face a pass
         // with no way to tell "still there" from "reads like something already dealt with" — it
         // would just see the domain and say what it always says about it.
@@ -201,12 +201,12 @@ public class CoherenceService : ICoherenceService
                 if (!string.IsNullOrWhiteSpace(section))
                     sb.AppendLine(section);
 
-            // Nowhere in the four sections, and the whole point of one class of finding: an agent's
+            // Nowhere in the four sections and the whole point of one class of finding: an agent's
             // colleagues live in its C#, so a boundary sentence refusing a subject its colleague
             // answers is invisible from the prose alone.
             sb.AppendLine();
             sb.AppendLine(agent.Code.Consults.Count > 0
-                ? $"May consult, and is handed each as a function of its own: {PeerNaming.Describe(agent.Code.Consults)}."
+                ? $"May consult and is handed each as a function of its own: {PeerNaming.Describe(agent.Code.Consults)}."
                 : "Declares no colleagues: it can put a question to no other agent.");
 
             if (agent.Tools.Count == 0)

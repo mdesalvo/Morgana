@@ -7,7 +7,7 @@ namespace PromptHarness.Tests;
 
 /// <summary>
 /// The framework actors <c>ContextHandlingTests</c>/<c>BehaviourTests</c> never meaningfully
-/// exercise: the classifier's own output, <c>MorganaChannelAdapter</c>'s degradation path, and the
+/// exercise: the classifier's own output, <c>MorganaChannelAdapter</c>'s degradation path and the
 /// Presentation prompt's actual content.
 /// </summary>
 public sealed class ActorTests

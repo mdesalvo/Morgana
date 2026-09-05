@@ -61,6 +61,10 @@ public sealed class AgentCardTests
 
         // The transport half of the contract: a caller binds to what the card advertises, so an
         // address that is relative, empty or missing leaves it with nowhere to send its question.
+        // It is also the only thing watching the seam underneath: an installation does not know
+        // where it answers until its server binds, so the card learns that after it was written.
+        // Whatever stops carrying it here — a card frozen before the address was known, a hosting
+        // layer that answers from a copy — costs every peer its colleague and says nothing else.
         JsonElement supportedInterface = Assert.Single(card.GetProperty("supportedInterfaces").EnumerateArray().ToArray());
 
         Assert.True(Uri.TryCreate(supportedInterface.GetProperty("url").GetString(), UriKind.Absolute, out _),
@@ -75,7 +79,7 @@ public sealed class AgentCardTests
 
         JsonElement card = await httpClient.GetFromJsonAsync<JsonElement>(CardAddress(intent));
 
-        // The requirement names a scheme, and the scheme must be one the card also defines: a
+        // The requirement names a scheme and the scheme must be one the card also defines: a
         // requirement pointing at nothing tells a caller it must authenticate and not how.
         JsonElement requirement = Assert.Single(card.GetProperty("securityRequirements").EnumerateArray().ToArray());
         JsonProperty requiredScheme = Assert.Single(requirement.GetProperty("schemes").EnumerateObject().ToArray());
@@ -97,7 +101,7 @@ public sealed class AgentCardTests
             fixture.Configuration["Morgana:Authentication:Audience"],
             issuanceParameters.GetProperty("audience").GetString());
 
-        // Not required, and that is itself the contract: a consumer that has never heard of this
+        // Not required and that is itself the contract: a consumer that has never heard of this
         // extension must still be able to use the card, held to the standard requirement above.
         Assert.False(bearerIssuance.GetProperty("required").GetBoolean());
     }
@@ -144,8 +148,8 @@ public sealed class AgentCardTests
     [InlineData("monkeys")]
     public async Task Agent_endpoint_refuses_a_system_not_admitted_to_it(string closedAgent)
     {
-        // Proven to be a colleague, and still turned away: this run declares its scoped system as
-        // admitted to one desk, and every other desk of the same installation answers it exactly as
+        // Proven to be a colleague and still turned away: this run declares its scoped system as
+        // admitted to one desk and every other desk of the same installation answers it exactly as
         // it answers a stranger. That is what lets an installation be opened to a customer, a
         // supplier or a marketplace one agent at a time, rather than whole or not at all.
         HttpResponseMessage response = await CallAgentAsync(
@@ -157,10 +161,10 @@ public sealed class AgentCardTests
     [Fact]
     public async Task Agent_endpoint_admits_a_system_scoped_to_it()
     {
-        // The other half, and the one that keeps the two above from passing for the wrong reason: a
+        // The other half and the one that keeps the two above from passing for the wrong reason: a
         // gate refusing everything would satisfy them both. Only the gate is under test here, so the
         // assertion stops at "not turned away" — what the A2A handler makes of a deliberately
-        // incomplete JSON-RPC body is its business, and asserting it would tie this test to a
+        // incomplete JSON-RPC body is its business and asserting it would tie this test to a
         // protocol shape it is not measuring.
         HttpResponseMessage response = await CallAgentAsync(
             MorganaHostFixture.ScopedSystemAgent, MorganaHostFixture.ScopedSystemIssuerName, fixture.ScopedSystemKey);

@@ -31,7 +31,7 @@
           fill="none" stroke="#d8b4fe" stroke-width="1.7" stroke-linecap="round"/>
     <rect x="10.9" y="5" width="7.2" height="2.4" rx="1.2" fill="#d8b4fe"/>
 
-    <!-- The belly, and the distillate standing in it. -->
+    <!-- The belly and the distillate standing in it. -->
     <circle cx="14.5" cy="20.5" r="7.6" fill="url(#brew)"/>
     <circle cx="14.5" cy="20.5" r="7.6" fill="none" stroke="#e9d5ff" stroke-width="1.5"/>
     <circle cx="11.8" cy="17.6" r="1.9" fill="#ffffff" opacity="0.45"/>

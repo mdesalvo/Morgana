@@ -169,14 +169,14 @@
     border-radius: 50%;
     border-color: rgba(139, 92, 246, 0.7);
     background: linear-gradient(135deg, var(--morgana-surface-light), var(--morgana-surface));
-    /* The collapsed label is still a flex item, and a gap on either side of it would push the
+    /* The collapsed label is still a flex item and a gap on either side of it would push the
        chevron off the disc's centre by half of it. Zero here is what actually centres the glyph. */
     gap: 0;
 }
 
 .launcher.is-open:hover .launcher-minimize {
     color: var(--morgana-primary-light);
-    /* Nudged along the direction it points: the panel is going down, and the icon says so */
+    /* Nudged along the direction it points: the panel is going down and the icon says so */
     transform: translateY(2px);
 }
 

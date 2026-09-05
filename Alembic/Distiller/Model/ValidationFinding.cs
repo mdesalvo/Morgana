@@ -20,7 +20,7 @@ public enum FindingSeverity
 /// One deterministic observation about a Draft.
 /// </summary>
 /// <remarks>
-/// Every finding here is decidable by reading the Draft — no model is asked, and none could help.
+/// Every finding here is decidable by reading the Draft — no model is asked and none could help.
 /// That is the whole point of running this pass before the recap: the client should never be shown
 /// a beautifully composed prompt for a domain that would not start.
 /// <para>

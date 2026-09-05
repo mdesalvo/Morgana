@@ -34,11 +34,11 @@
 
     <Description>
     PromptHarness is the non-regression harness for Morgana's prompts. A domain agent in Morgana
-    *is* its prose, and prose has no compiler: the only way to know a prompt revision did not break
+    *is* its prose and prose has no compiler: the only way to know a prompt revision did not break
     anything is to make the model do the thing and look. The harness boots a real Morgana host, drives
-    it black-box over HTTP as an ordinary channel, and replays YAML scenarios N times against an
+    it black-box over HTTP as an ordinary channel and replays YAML scenarios N times against an
     explicit pass threshold — asserting on two layers, structural signals read from spans and tool
-    logs, and natural-language propositions judged by an LLM. Nothing is mocked and every turn is a
+    logs and natural-language propositions judged by an LLM. Nothing is mocked and every turn is a
     live LLM call, so the suite is on-demand only and never a build or CI gate.
     </Description>
 

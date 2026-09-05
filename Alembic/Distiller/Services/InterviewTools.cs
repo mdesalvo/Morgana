@@ -13,7 +13,7 @@ namespace Distiller.Services;
 /// <para>
 /// Every method here returns a sentence <b>to the model</b>, not to the client. That return channel
 /// is the point of having tools at all rather than a structured reply: a section that comes back
-/// the wrong shape is reported to Alembic in the same turn, and it corrects itself before the
+/// the wrong shape is reported to Alembic in the same turn and it corrects itself before the
 /// client ever sees anything. A single malformed structured reply, by contrast, costs the client a
 /// turn of their own interview.
 /// </para>
@@ -21,7 +21,7 @@ namespace Distiller.Services;
 /// The write tools also carry the <b>section labels</b>. Both composed layers use the same four,
 /// which is exactly why the framework fences them, so a domain layer arriving unlabelled leaves
 /// half the prompt without the markers the other half has. A label says which section this is, not
-/// what it means: it is structure, and structure is not left to a model remembering a rule.
+/// what it means: it is structure and structure is not left to a model remembering a rule.
 /// </para>
 /// <para>
 /// Which of these exist in a given pass is decided by <c>alembic.json</c>, not by prose. The
@@ -98,16 +98,16 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The map is the interview's spine: one entry becomes one intent and one agent, and the three
+    /// The map is the interview's spine: one entry becomes one intent and one agent and the three
     /// later passes run once down the list. Revising keeps the entry's place, because the order is
     /// the order the client thought of their own business in and the interview walks it in that
     /// order.
     /// </para>
     /// <para>
-    /// All four fields of an intent, and the two that arrive later arrive here too. The button and
+    /// All four fields of an intent and the two that arrive later arrive here too. The button and
     /// the sentence it sends are read by a user <em>beside every other intent's button</em>, exactly
     /// as the descriptions are weighed beside every other description — so they are written where
-    /// the whole set is visible, and not one at a time in an agent's own pass where nothing can be
+    /// the whole set is visible and not one at a time in an agent's own pass where nothing can be
     /// compared to anything.
     /// </para>
     /// </remarks>
@@ -124,7 +124,7 @@ public class InterviewTools
 
         if (string.Equals(cleanName, ReservedFallbackIntent, StringComparison.OrdinalIgnoreCase))
             return $"Nothing recorded: '{ReservedFallbackIntent}' is reserved. It is the intent the classifier "
-                   + "falls back to when it cannot place a message, and no agent may claim it. Call this again with a name from the domain.";
+                   + "falls back to when it cannot place a message and no agent may claim it. Call this again with a name from the domain.";
 
         if (draftStateService.Current?.Intents.Any(i =>
                 string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase)) == true)
@@ -154,7 +154,7 @@ public class InterviewTools
         List<string> complaints = [];
 
         if (!cleanName.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c)))
-            complaints.Add("But that is not a bare lowercase word, and it becomes a C# attribute argument and a prompt ID. Call this again with one that is.");
+            complaints.Add("But that is not a bare lowercase word and it becomes a C# attribute argument and a prompt ID. Call this again with one that is.");
 
         if (string.IsNullOrWhiteSpace(description))
             complaints.Add("It says nothing about what routes here, which is the sentence the classifier weighs against every other intent.");
@@ -204,8 +204,8 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// Overwrites whatever was there — a pass may call this more than once as the client's answer
-    /// sharpens, and the last call is the one that stands. <see cref="Marked"/> guarantees the
-    /// section carries <see cref="TargetMarker"/> before it is stored, and the returned sentence
+    /// sharpens and the last call is the one that stands. <see cref="Marked"/> guarantees the
+    /// section carries <see cref="TargetMarker"/> before it is stored and the returned sentence
     /// tells the model whether the prose it just wrote fits this section's shape — never blocking,
     /// only informing, so the model can tighten a Target that ran long before moving on.
     /// </remarks>
@@ -270,7 +270,7 @@ public class InterviewTools
     /// everything else about the agent — the toolkit included — is settled by the time it runs.
     /// <para>
     /// The upper bound is wider than a plain presentation rule would need, on purpose: this section
-    /// is also where a quick-reply payload or a per-tool card shape gets named exactly, and a domain
+    /// is also where a quick-reply payload or a per-tool card shape gets named exactly and a domain
     /// with several tools each earning one runs well past a handful of sentences to say so precisely
     /// — the alternative is a vaguer instruction the model has to improvise from at runtime, which is
     /// exactly what naming the payload here exists to avoid.
@@ -306,14 +306,14 @@ public class InterviewTools
         if (!revision)
             interviewState.Agent.Tools.Add(tool);
 
-        // Reported, never rewritten: the name is domain vocabulary, and a silent correction leaves
+        // Reported, never rewritten: the name is domain vocabulary and a silent correction leaves
         // Alembic telling the client one word while the configuration carries another.
         string complaint = IdentifierComplaint(cleanName, "tool name", pascalCase: true);
 
         return (revision ? $"'{cleanName}' revised." : $"'{cleanName}' declared.")
                + (complaint.Length > 0 ? " " + complaint : string.Empty)
                + (string.IsNullOrWhiteSpace(description)
-                   ? " It has no description, and the description is what the model reads when it decides whether to call this tool at all."
+                   ? " It has no description and the description is what the model reads when it decides whether to call this tool at all."
                    : string.Empty);
     }
 
@@ -322,7 +322,7 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// Revision is by name and in place, so the declaration order survives — which matters, because
-    /// that order becomes the C# method's parameter order, and C# cannot declare a required
+    /// that order becomes the C# method's parameter order and C# cannot declare a required
     /// parameter after an optional one.
     /// </remarks>
     /// <param name="toolName">The already-declared tool this parameter belongs to.</param>
@@ -375,13 +375,13 @@ public class InterviewTools
             complaints.Add(identifier);
 
         if (resolvedScope is not null and not ContextScope and not RequestScope)
-            complaints.Add($"'{cleanScope}' is not a scope: a parameter resolving an input declares '{ContextScope}' or '{RequestScope}', and one carrying a value you author yourself declares none.");
+            complaints.Add($"'{cleanScope}' is not a scope: a parameter resolving an input declares '{ContextScope}' or '{RequestScope}' and one carrying a value you author yourself declares none.");
 
         if (shared && resolvedScope != ContextScope)
             complaints.Add($"Shared only means something alongside scope '{ContextScope}': it publishes a resolved context variable so other agents can hydrate from it.");
 
         // The order is the signature, so an optional parameter followed by a required one is not a
-        // preference: MorganaToolAdapter.AddTool refuses the pair, and C# could not declare it.
+        // preference: MorganaToolAdapter.AddTool refuses the pair and C# could not declare it.
         int firstOptional = tool.Parameters.FindIndex(p => !p.Required);
         if (firstOptional >= 0 && tool.Parameters.Skip(firstOptional).Any(p => p.Required))
             complaints.Add("A required parameter now sits after an optional one, which C# cannot declare. Reorder them by dropping and re-adding, or make the earlier one required.");
@@ -448,7 +448,7 @@ public class InterviewTools
     /// Each pass is a fresh agent with a fresh session, so nothing of the previous conversation
     /// carries over — deliberately, because a toolkit pass that still has the whole functional
     /// interview in its context spends it re-litigating decisions already taken. What must carry
-    /// over is the configuration, and the configuration is exactly what this returns.
+    /// over is the configuration and the configuration is exactly what this returns.
     /// </remarks>
     public string GetAgentSoFar()
     {
@@ -469,7 +469,7 @@ public class InterviewTools
         if (!string.IsNullOrWhiteSpace(interviewState.Agent.Formatting))
             sections.Add(interviewState.Agent.Formatting);
 
-        return "Settled in the earlier passes, and not yours to reopen:\n\n"
+        return "Settled in the earlier passes and not yours to reopen:\n\n"
                + string.Join("\n\n", sections);
     }
 
@@ -477,7 +477,7 @@ public class InterviewTools
     /// Offers words for the agent's voice, to be picked from freely.
     /// </summary>
     /// <remarks>
-    /// Not buttons, and the tool is separate for the same reason the shape is: a button is one whole
+    /// Not buttons and the tool is separate for the same reason the shape is: a button is one whole
     /// answer and these are taken several at a time, none of them an answer on its own. The words
     /// come from the model because they have to be about this domain and this agent and to sit
     /// inside Morgana's own voice, which it has read and a template has not.
@@ -528,7 +528,7 @@ public class InterviewTools
 
         interviewState.PendingExample = written;
 
-        return "The example will stand in the answer box under your question, greyed, and goes the "
+        return "The example will stand in the answer box under your question, greyed and goes the "
                + "moment they answer. It is the only thing on the screen telling them how long an "
                + "answer is worth writing.";
     }
@@ -542,10 +542,10 @@ public class InterviewTools
     /// turn settles with a press instead of a typed sentence and a refining exchange nobody learns
     /// anything from. Two plain strings rather than an array of buttons, because that answer is the
     /// only one Alembic knows the whole of; everything the client actually contributes is a sentence
-    /// only they can write, and they write it in the box, which never closes. A schema admitting a
+    /// only they can write and they write it in the box, which never closes. A schema admitting a
     /// list would have the model compose a second button before anything could drop it, which costs
     /// the tokens whether or not it is ever drawn.
-    /// The id is Alembic's: nothing downstream tells two buttons apart when there is only one, and
+    /// The id is Alembic's: nothing downstream tells two buttons apart when there is only one and
     /// asking for it would be a third string with no reader.
     /// </remarks>
     public string SetChoice(string label, string value)
@@ -563,9 +563,9 @@ public class InterviewTools
     /// Returns every agent of the finished domain, whole, with the colleagues already declared.
     /// </summary>
     /// <remarks>
-    /// The closing step runs with a fresh session like every other, and unlike every other it is
+    /// The closing step runs with a fresh session like every other and unlike every other it is
     /// about the domain rather than about the agent in hand — there is none. So this is the whole of
-    /// what it knows, and it has to be the whole: an edge is a claim that one agent's question lands
+    /// what it knows and it has to be the whole: an edge is a claim that one agent's question lands
     /// on another's books, which is only decidable with both agents' Targets, toolkits and
     /// boundaries in view at once.
     /// </remarks>
@@ -601,14 +601,14 @@ public class InterviewTools
     }
 
     /// <summary>
-    /// Declares that one agent may put a question to another, and reconciles the prose that would
+    /// Declares that one agent may put a question to another and reconciles the prose that would
     /// otherwise forbid it.
     /// </summary>
     /// <remarks>
     /// The reconciled Instructions are a parameter and not an afterthought, because the edge without
     /// them is the characteristic defect this step exists against: an agent offered a colleague as a
     /// function while its own prose says the subject belongs to another bench and to say so plainly
-    /// reads two contradictory orders, and obeys the imperative one. What the prose must NOT do is
+    /// reads two contradictory orders and obeys the imperative one. What the prose must NOT do is
     /// restate the framework's own rules about consulting — when to ask, how briefly, that the answer
     /// is data — which are already on the function the agent will see.
     /// <para>
@@ -640,7 +640,7 @@ public class InterviewTools
         if (string.IsNullOrWhiteSpace(askingInstructions))
             return $"Nothing declared: '{from}' needs its Instructions rewritten in the same call. An agent handed a "
                    + "colleague while its own prose still says the subject belongs elsewhere and to stop there is being "
-                   + "given two orders, and the flat one wins.";
+                   + "given two orders and the flat one wins.";
 
         ConsultationDraft? existing = interviewState.Colleagues.FirstOrDefault(c =>
             string.Equals(c.Asking, from, StringComparison.OrdinalIgnoreCase)
@@ -665,7 +665,7 @@ public class InterviewTools
                                             && a.Code.Consults.Count > 0);
 
         return (existing is null ? $"'{from}' may now ask '{to}'." : $"The edge from '{from}' to '{to}' was revised.")
-               + $" Its Instructions were rewritten with it{(edge.AskedInstructions is null ? string.Empty : $", and '{to}'s too")}."
+               + $" Its Instructions were rewritten with it{(edge.AskedInstructions is null ? string.Empty : $" and '{to}'s too")}."
                + (secondHop
                    ? $" Note that '{to}' consults a colleague of its own: while it is answering '{from}' the framework "
                      + "withholds its peer functions, so whatever it would have asked for is not part of this answer. Say "
@@ -678,7 +678,7 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// The Instructions that came with it go too. They were written to admit a colleague that is no
-    /// longer there, and leaving them in the domain would be the mirror of the defect the edge
+    /// longer there and leaving them in the domain would be the mirror of the defect the edge
     /// exists against: prose licensing a question the agent has no function to ask.
     /// </remarks>
     public string DropConsultation(string asking, string asked)
@@ -688,7 +688,7 @@ public class InterviewTools
             && string.Equals(c.Asked, asked?.Trim(), StringComparison.OrdinalIgnoreCase));
 
         return removed > 0
-            ? $"Dropped: '{asking}' will not ask '{asked}', and the Instructions declared with it are dropped too."
+            ? $"Dropped: '{asking}' will not ask '{asked}' and the Instructions declared with it are dropped too."
             : $"Nothing dropped: no edge from '{asking}' to '{asked}' was declared this step.";
     }
 
@@ -696,7 +696,7 @@ public class InterviewTools
     /// Returns the intents already in the domain.
     /// </summary>
     /// <remarks>
-    /// Two sources, and both are load-bearing. What the domain already holds arrived from earlier
+    /// Two sources and both are load-bearing. What the domain already holds arrived from earlier
     /// sittings or an uploaded configuration; what the map still holds is what this interview has
     /// promised to write next. A description only has to be told apart from both.
     /// </remarks>
@@ -713,7 +713,7 @@ public class InterviewTools
         List<string> all = [.. written, .. planned];
 
         return all.Count == 0
-            ? "Nothing else claims a route: this is the only intent, and nothing can collide with it."
+            ? "Nothing else claims a route: this is the only intent and nothing can collide with it."
             : "The descriptions the classifier weighs this one against:\n" + string.Join("\n", all);
     }
 
@@ -803,8 +803,8 @@ public class InterviewTools
                    InterviewStep.AgentTarget => "how this agent should sound to the people who write in.",
                    InterviewStep.AgentPersonality => "the toolkit — what this agent has to reach for outside the conversation.",
                    InterviewStep.AgentToolkit => "the agent's own instructions and the way it presents what its tools return.",
-                   InterviewStep.DomainColleagues => "nothing — the domain is finished, and they land on it whole, to read, weigh and take away.",
-                   _ => "the agent joins the domain, and they can review or export it."
+                   InterviewStep.DomainColleagues => "nothing — the domain is finished and they land on it whole, to read, weigh and take away.",
+                   _ => "the agent joins the domain and they can review or export it."
                };
     }
 
@@ -824,9 +824,9 @@ public class InterviewTools
     /// Says what is wrong with a name that has to survive into C#, or nothing if it is fine.
     /// </summary>
     /// <remarks>
-    /// Shape only, and deliberately not the compiler: the point is to catch what a domain
+    /// Shape only and deliberately not the compiler: the point is to catch what a domain
     /// conversation actually produces — a space, a hyphen, a leading digit — while it is still free
-    /// to change. The casing check is separate because it is a convention rather than a rule, and it
+    /// to change. The casing check is separate because it is a convention rather than a rule and it
     /// is worth stating: the generated method and the declaration have to read like the framework's
     /// own.
     /// </remarks>
@@ -842,7 +842,7 @@ public class InterviewTools
                        && name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
 
         if (!shapeOk)
-            return $"But '{name}' cannot be a C# identifier, and the {what} becomes C# verbatim: "
+            return $"But '{name}' cannot be a C# identifier and the {what} becomes C# verbatim: "
                    + "it must start with a letter and carry only letters, digits and underscores. Call again with one that can.";
 
         bool casingOk = pascalCase ? char.IsAsciiLetterUpper(name[0]) : char.IsAsciiLetterLower(name[0]);
@@ -865,7 +865,7 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// Recorded either way. The size is a shape, not a gate: a Target of five sentences is still
-    /// better than no Target, and Alembic is told so it can tighten rather than blocked so it must.
+    /// better than no Target and Alembic is told so it can tighten rather than blocked so it must.
     /// </remarks>
     private static string Shaped(string section, string? value, int minimum, int maximum)
     {

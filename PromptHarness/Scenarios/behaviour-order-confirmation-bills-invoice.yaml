@@ -22,10 +22,10 @@ description: >-
   fired on the remaining stock and the invoiceId that this agent's own Formatting REQUIRES on the
   Confirmed card, so the judge and the prose were asking for opposite things. What the rule protects
   is that the greenhouse never reads the invoice out — its money, not its existence. That rule now
-  covers more ground than when it was written, and deliberately so: the judge reads the card's
+  covers more ground than when it was written and deliberately so: the judge reads the card's
   rendered content along with the text, so an agent that keeps its prose clean and puts the invoice's
   total on a card no longer slips past. The wording holds unchanged under the wider view — the
-  Confirmed card this Formatting prescribes carries orderId, remaining stock and invoiceId, and none
+  Confirmed card this Formatting prescribes carries orderId, remaining stock and invoiceId. None
   of those is a total, a tax or a charge line.
 
 turns:

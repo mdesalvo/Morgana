@@ -34,7 +34,7 @@ public class ConsultsAgentAttribute : Attribute
             throw new ArgumentException("A consulted agent must be declared by a non-empty intent name.", nameof(intent));
 
         Intent = intent;
-        // Trimmed rather than taken as typed: the name is matched against a configuration entry, and
+        // Trimmed rather than taken as typed: the name is matched against a configuration entry and
         // a stray space is an instance nobody declared — an error whose cause is invisible on screen.
         Instance = string.IsNullOrWhiteSpace(instance) ? null : instance.Trim();
     }

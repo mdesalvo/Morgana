@@ -19,7 +19,7 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// HTTP — the same REST surface any channel uses, with the same JWT gate and the same webhook
 /// delivery path — so nothing about the pipeline is mocked or shortcut. Hosting it inside the test
 /// process buys two things a child process could not give: an <see cref="System.Diagnostics.ActivityListener"/>
-/// that reads <c>morgana.agent</c> spans with no exporter or collector in the loop, and a tee on
+/// that reads <c>morgana.agent</c> spans with no exporter or collector in the loop and a tee on
 /// <c>Console.Out</c> that reads the tool log lines. Both are read-only observers.</para>
 ///
 /// <para><strong>Configuration inheritance.</strong> The harness owns no <c>Morgana:</c>
@@ -33,14 +33,14 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// <para><strong>What the harness overrides</strong> on top of that inherited configuration:
 /// a throwaway SQLite storage path, telemetry exporters off (the in-process listener needs none),
 /// rate and dust limiting off (they would throttle a repeated-run suite), the guard rail per
-/// <c>Harness:EnableGuardrail</c>, and a freshly-minted symmetric key for the <c>harness</c> issuer — so
+/// <c>Harness:EnableGuardrail</c> and a freshly-minted symmetric key for the <c>harness</c> issuer — so
 /// the channel's credentials live for the duration of one run and never touch disk.</para>
 /// </remarks>
 public sealed class MorganaHostFixture : IAsyncLifetime
 {
     /// <summary>
     /// Issuer the host signs its own agent-to-agent traffic under. Declared here rather than
-    /// referenced from Morgana.AI: the harness compiles without seeing the framework's internals, and
+    /// referenced from Morgana.AI: the harness compiles without seeing the framework's internals and
     /// the name is part of the configuration contract it targets.
     /// </summary>
     private const string PeerIssuerName = "morgana";
@@ -69,7 +69,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// other desk, so the scope half of the A2A gate has something to actually refuse.
     /// </summary>
     /// <remarks>
-    /// Declared per run rather than shipped: it exists to be turned away, and a deployment carrying a
+    /// Declared per run rather than shipped: it exists to be turned away and a deployment carrying a
     /// partner nobody onboarded would be a worse default than the test is worth.
     /// </remarks>
     public const string ScopedSystemIssuerName = "harness-peer";
@@ -154,7 +154,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         await Channel.StartAsync();
 
         // Step 7: assemble the scenario engine last, since it depends on everything above —
-        // the channel to drive conversations, the observer to read signals, and a judge built
+        // the channel to drive conversations, the observer to read signals and a judge built
         // over the same LLM configuration the instance under test uses.
         judgeLoggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
         Judge = LLMJudge.Create(Configuration, judgeLoggerFactory);
@@ -285,7 +285,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
         // The freshly-minted per-run keys replace whatever sits in the shared secrets store, so this
         // run's credentials are never anything durable enough to leak. Two issuers are overridden:
-        // "harness", which the suite itself authenticates as, and "morgana", which the host signs its
+        // "harness", which the suite itself authenticates as and "morgana", which the host signs its
         // own agent-to-agent traffic with — the latter is startup-fatal if left on its placeholder,
         // so a run would not even boot without it.
         Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ResolveIssuerIndex(HarnessChannel.IssuerName)}__SymmetricKey", IssuerKey);
@@ -307,7 +307,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
 
         // Framework categories at Information, everything else quiet: the tool log lines the turn
-        // observer parses are Information-level, and the rest is noise in the capture buffer.
+        // observer parses are Information-level and the rest is noise in the capture buffer.
         Environment.SetEnvironmentVariable("Logging__LogLevel__Default", "Warning");
         Environment.SetEnvironmentVariable("Logging__LogLevel__Morgana", Options.HostLogLevel);
     }
@@ -386,13 +386,13 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
             // Load-bearing. ApplicationName defaults to the entry assembly, which under a test
             // runner is the runner itself — and MVC discovers controllers from the application
-            // part named by it. Without this the host starts, serves, and answers 404 to every
+            // part named by it. Without this the host starts, serves and answers 404 to every
             // route, because it never found a controller.
             "--applicationName", hostAssembly.GetName().Name!
         ];
 
         // The host must run on its own thread: InitializeAsync needs to return control so the test
-        // process can poll the health endpoint, and top-level Main here would otherwise block
+        // process can poll the health endpoint and top-level Main here would otherwise block
         // until Kestrel shuts down (i.e. never, until the whole process exits).
         Thread hostThread = new Thread(() =>
         {
@@ -443,7 +443,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         while (DateTime.UtcNow < deadline)
         {
             // Checked every iteration, not just once: the host can crash after already having
-            // answered a transient probe failure, and a fail-fast startup error is worth surfacing
+            // answered a transient probe failure and a fail-fast startup error is worth surfacing
             // immediately rather than waiting out the rest of the timeout for nothing.
             if (hostFailure is not null)
                 throw new InvalidOperationException(

@@ -4,7 +4,7 @@ namespace PromptHarness.Infrastructure;
 
 /// <summary>
 /// What one agent's Draft promises the emitted assembly will contain: a <c>MorganaAgent</c>
-/// subclass handling its intent, and — where it declares tools — a <c>MorganaTool</c> subclass
+/// subclass handling its intent and — where it declares tools — a <c>MorganaTool</c> subclass
 /// providing them, one public method per declared tool.
 /// </summary>
 public sealed record AgentExpectation(string IntentName, IReadOnlyList<string> ToolNames);

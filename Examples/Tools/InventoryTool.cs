@@ -259,7 +259,7 @@ public class InventoryTool : MorganaTool
         // trustworthy in a way a request/context parameter never could be — see ToolContext's
         // remarks in MorganaTool.cs. orderId + sealWord together are the claim-check pair every
         // later call to ConfirmOrder/CancelOrder must present; sealWord is returned
-        // to the caller exactly once, right below, and never stored anywhere the LLM can read it
+        // to the caller exactly once, right below and never stored anywhere the LLM can read it
         // back from later (no Get* tool in this class ever surfaces it again).
         ToolContext ctx = getToolContext();
         string orderId = $"ORD-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
@@ -374,7 +374,7 @@ public class InventoryTool : MorganaTool
 
         // Decrement stock, guarded so it can NEVER go negative: WHERE QuantityOnHand >= qty means a
         // concurrent confirmation that already took the last specimens leaves rows-affected at 0
-        // here, and we roll the whole thing back (undoing the claim above too) rather than commit a
+        // here and we roll the whole thing back (undoing the claim above too) rather than commit a
         // sale of stock that no longer exists. This guard, not the pre-quote check, is the truthful one.
         int stockRows;
         await using (SqliteCommand updateStock = connection.CreateCommand())
@@ -494,7 +494,7 @@ public class InventoryTool : MorganaTool
         string cancelledAt = DateTime.UtcNow.ToString("O");
 
         // Attempt 1: claim it as a Confirmed order. Winning here (rows == 1) is the ONLY path that
-        // restores stock, and only one caller can ever win it.
+        // restores stock and only one caller can ever win it.
         int confirmedRows;
         await using (SqliteCommand cancelConfirmed = connection.CreateCommand())
         {

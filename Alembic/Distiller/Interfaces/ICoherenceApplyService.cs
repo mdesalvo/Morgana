@@ -7,9 +7,9 @@ namespace Distiller.Interfaces;
 /// </summary>
 /// <remarks>
 /// The coherence pass itself stays advisory — <see cref="ICoherenceService"/> only ever answers
-/// JSON, and a domain expert who disagrees with it is often right about their own business. This is
+/// JSON and a domain expert who disagrees with it is often right about their own business. This is
 /// the opposite half, reached only when the client presses "Apply": having read the finding and its
-/// fix, they are the ones deciding to act on it, and this pass is the hand that carries out an
+/// fix, they are the ones deciding to act on it and this pass is the hand that carries out an
 /// instruction already given rather than a second opinion.
 /// </remarks>
 public interface ICoherenceApplyService

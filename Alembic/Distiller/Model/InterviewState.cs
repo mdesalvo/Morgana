@@ -21,12 +21,12 @@ public enum InterviewStep
     DomainMapper,
 
     /// <summary>
-    /// What the agent is for and where it stops: its Target, and nothing else.
+    /// What the agent is for and where it stops: its Target and nothing else.
     /// </summary>
     AgentTarget,
 
     /// <summary>
-    /// How the agent sounds: its Personality, and nothing else.
+    /// How the agent sounds: its Personality and nothing else.
     /// </summary>
     AgentPersonality,
 
@@ -41,13 +41,13 @@ public enum InterviewStep
     AgentInstructions,
 
     /// <summary>
-    /// How the agent lays out what its tools return: its Formatting, and nothing else.
+    /// How the agent lays out what its tools return: its Formatting and nothing else.
     /// </summary>
     AgentFormatting,
 
     /// <summary>
     /// The colleagues: which of the finished agents needs to be able to put a question to another
-    /// one. Runs once, after the last entry of the map has its agent, and settles no agent's own
+    /// one. Runs once, after the last entry of the map has its agent and settles no agent's own
     /// sections beyond the boundary sentence an edge contradicts.
     /// </summary>
     /// <remarks>
@@ -62,10 +62,10 @@ public enum InterviewStep
 /// One interview in progress.
 /// </summary>
 /// <remarks>
-/// The state machine lives here, in C#, and the conducting lives in the model. That split is the
+/// The state machine lives here, in C# and the conducting lives in the model. That split is the
 /// architecture: what has been established, which pass is running and what may be written next are
-/// facts, and facts do not belong to a language model's discretion. What the model owns is the
-/// conversation — which question to ask next, and how to phrase a domain expert's answer as
+/// facts and facts do not belong to a language model's discretion. What the model owns is the
+/// conversation — which question to ask next and how to phrase a domain expert's answer as
 /// dispositive prose.
 /// </remarks>
 public sealed class InterviewState
@@ -99,7 +99,7 @@ public sealed class InterviewState
     public string? Example { get; set; }
 
     /// <summary>
-    /// The button attached to the question on the table, and whether it was pressed.
+    /// The button attached to the question on the table and whether it was pressed.
     /// </summary>
     /// <remarks>
     /// One button, never a row: the only answer worth a press is the one that agrees, since
@@ -134,7 +134,7 @@ public sealed class InterviewState
     /// The domain map: every kind of request this business gets, in the order they were named.
     /// </summary>
     /// <remarks>
-    /// The interview's spine. One entry becomes one intent and one agent, and the three later passes
+    /// The interview's spine. One entry becomes one intent and one agent and the three later passes
     /// run once down this list — which is why the map is settled first and whole: what routes to an
     /// agent is only correct relative to what routes to the others.
     /// </remarks>
@@ -169,10 +169,10 @@ public sealed class InterviewState
     /// exists, opened from the walk — rather than out of a map being drawn today.
     /// </summary>
     /// <remarks>
-    /// The steps themselves do not read this, and that is what made the walk cheap to build: writing
+    /// The steps themselves do not read this and that is what made the walk cheap to build: writing
     /// the Toolkit of an agent that already exists is the same step, asked the same way, as writing
     /// the Toolkit of one being written now. What reads it is the two ends — there is nothing behind
-    /// the first step of an edit, since no map was drawn today to step back onto, and letting the
+    /// the first step of an edit, since no map was drawn today to step back onto and letting the
     /// agent in again has to put it back where it came from rather than append it.
     /// </remarks>
     public AgentRevision? Revision { get; set; }
@@ -183,7 +183,7 @@ public sealed class InterviewState
     /// </summary>
     /// <remarks>
     /// Set only through the <c>SetPassCompleted</c> tool, never by a token in Alembic's text —
-    /// the same out-of-band rule Morgana applies to its own turn continuation, and for the same
+    /// the same out-of-band rule Morgana applies to its own turn continuation and for the same
     /// reason: a marker inside prose is a marker the prose can accidentally produce.
     /// </remarks>
     public bool ReadyForReview { get; set; }
@@ -197,10 +197,10 @@ public sealed class InterviewState
     public string? PendingExample { get; set; }
 
     /// <summary>
-    /// Words offered for the agent's voice, and the ones Alembic is about to offer.
+    /// Words offered for the agent's voice and the ones Alembic is about to offer.
     /// </summary>
     /// <remarks>
-    /// A cloud rather than buttons, and the difference is not decoration: a button is one answer and
+    /// A cloud rather than buttons and the difference is not decoration: a button is one answer and
     /// these are picked several at a time, so the shape has to say 'take what fits' rather than
     /// 'choose one'. It is the one question of the interview the client cannot dictate — nobody has
     /// a ready sentence about how their own staff should sound — and recognition is what they can do
@@ -217,7 +217,7 @@ public sealed class InterviewState
     /// that exists rather than an empty set.
     /// </summary>
     /// <remarks>
-    /// A step reopened reads what is written as settled fact, and this is that rule reaching the one
+    /// A step reopened reads what is written as settled fact and this is that rule reaching the one
     /// part of the screen it had not. An agent whose Personality says it is formal and pragmatic,
     /// offered the word 'pragmatic' unlit, is being asked to say a second time what the question
     /// above it has just read back — so the client either re-picks what was already true, which is
@@ -261,7 +261,7 @@ public sealed class InterviewState
     /// </summary>
     /// <remarks>
     /// Held here rather than written straight onto the agents for the reason the map is held here
-    /// too: what the step settles is a set, judged whole, and an edge dropped a turn after it was
+    /// too: what the step settles is a set, judged whole and an edge dropped a turn after it was
     /// declared must leave no trace on an agent that is already in the client's configuration.
     /// </remarks>
     public List<ConsultationDraft> Colleagues { get; } = [];
@@ -275,7 +275,7 @@ public sealed class InterviewState
     /// The fields the last exchange actually moved.
     /// </summary>
     /// <remarks>
-    /// The two-column layout exists so the client watches their domain being written, and that only
+    /// The two-column layout exists so the client watches their domain being written and that only
     /// works if the panel says what just changed. Without it the same rows sit there turn after turn
     /// and the panel reads as decoration — which is exactly what it becomes once a field is set and
     /// never mentioned again.
@@ -307,7 +307,7 @@ public sealed class InterviewState
             $"{t.Name}:{t.Description}:{string.Join(",", t.Parameters.Select(x => $"{x.Name}/{x.Scope}/{x.Required}/{x.Shared}/{x.Description}"))}")),
 
         // The whole set as one string, for the same reason as the toolkit above: an edge declared,
-        // dropped or re-declared with different prose moves it, and nothing finer is worth a row.
+        // dropped or re-declared with different prose moves it and nothing finer is worth a row.
         ["colleagues"] = string.Join("|", Colleagues.Select(c =>
             $"{c.Asking}->{c.Asked}:{c.AskingInstructions}:{c.AskedInstructions}"))
     };
@@ -316,10 +316,10 @@ public sealed class InterviewState
     /// The fields the <em>running</em> pass is responsible for that are still unset.
     /// </summary>
     /// <remarks>
-    /// Pass-scoped on purpose, and it is what makes <c>SetPassCompleted</c> mean anything: a pass is
+    /// Pass-scoped on purpose and it is what makes <c>SetPassCompleted</c> mean anything: a pass is
     /// complete when the fields it owns are set, never when the fields of a later one are still
     /// blank. The toolkit pass owns no field at all — an agent with no native tools is a legal
-    /// configuration, the MCP-only case — so it reports only tools left half-declared, and its
+    /// configuration, the MCP-only case — so it reports only tools left half-declared and its
     /// emptiness is a decision Alembic must have taken with the client rather than a gate.
     /// </remarks>
     public IReadOnlyList<string> Missing() => Pass switch
@@ -373,7 +373,7 @@ public sealed class InterviewState
     }
 
     /// <summary>
-    /// What the agent IS: its Target, and nothing else at all.
+    /// What the agent IS: its Target and nothing else at all.
     /// </summary>
     /// <remarks>
     /// The intent is the map's, settled whole and not reopened here; the voice is the next pass's.

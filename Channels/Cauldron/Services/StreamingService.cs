@@ -94,11 +94,11 @@ public class StreamingService : IStreamingService
     /// </remarks>
     public void FinalizeStreaming(ChannelMessage completeMessage)
     {
-        // Nothing was streaming: this response arrived complete, and the caller handles it
+        // Nothing was streaming: this response arrived complete and the caller handles it
         if (_currentStreamingMessage == null)
             return;
 
-        // Overwrite rather than append, and drop whatever was still queued: the buffered tail
+        // Overwrite rather than append and drop whatever was still queued: the buffered tail
         // belongs to the pre-adaptation text and would duplicate what is now on screen.
         _currentStreamingMessage.Text = completeMessage.Text;
         _streamingBuffer = string.Empty;

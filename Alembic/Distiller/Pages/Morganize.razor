@@ -15,8 +15,8 @@
     Morganize. The turnkey end of the workbench: the whole domain leaves as one archive,
     because the pieces are only correct together.
 
-    Three things settle before it can be built, and none of them is in agents.json: the namespace,
-    each agent's tier, and — where an agent has no native tools — nothing at all. The validator has
+    Three things settle before it can be built and none of them is in agents.json: the namespace,
+    each agent's tier and — where an agent has no native tools — nothing at all. The validator has
     been calling these "Alembic's guess" since phase 4; this is the page that stops them being one.
 
     A fourth belongs here for the same reason: which agents reach further capability through an MCP
@@ -25,11 +25,11 @@
     from the domain expert describing their work.
 
     A fifth sits here on a different argument. Which colleagues an agent may consult IS a domain
-    question, and the interview's closing step asks it properly — reconciling the boundary prose an
+    question and the interview's closing step asks it properly — reconciling the boundary prose an
     edge contradicts, which is the half that matters and the half only that step can do. But an
     uploaded agents.json carries no C# at all, so a domain that arrives and is only walked never
-    reaches that step, and every other C# fact it needs is already settled on this page. So the edge
-    is settleable here too, as the fact it is; the prose is not touched, and the coherence pass on
+    reaches that step and every other C# fact it needs is already settled on this page. So the edge
+    is settleable here too, as the fact it is; the prose is not touched and the coherence pass on
     Review is what reports an agent left saying it cannot answer what its new colleague answers.
 *@
 
@@ -64,7 +64,7 @@
                 <p class="muted">
                     A required parameter behind an optional one is the one that would also emit C#
                     that does not compile: the generated signature follows the configuration's own
-                    order, and never quietly reorders it.
+                    order and never quietly reorders it.
                 </p>
                 <p><a href="review">See them all &rarr;</a></p>
             </div>
@@ -100,11 +100,11 @@
                     else
                     {
                         <p class="field-note muted">
-                            C# files every class under one, and this is the name your team gives this
+                            C# files every class under one and this is the name your team gives this
                             plugin's code. It prefixes everything Alembic writes
                             @* Shown against a real class of this domain or not at all: a stand-in
                                name here would be one more identifier on a screen already full of
-                               them, and the only one that is not going to exist. *@
+                               them and the only one that is not going to exist. *@
                             @if (draft.Agents.FirstOrDefault(a => a.Code.AgentClassName is not null) is { } named)
                             {
                                 <text>&mdash; yours will read <code>@($"{EffectiveNamespace}.Agents.{named.Code.AgentClassName}")</code></text>
@@ -218,7 +218,7 @@
                                 </td>
                                 <td>
                                     @* One switch per other agent, not a free field: a colleague on THIS
-                                       Morgana is an intent this domain already handles, and
+                                       Morgana is an intent this domain already handles and
                                        [ConsultsAgent] naming anything else is startup-fatal. Offering
                                        what cannot be wrong is cheaper than validating what can. The
                                        free fields below are for the case where nothing here can be
@@ -295,7 +295,7 @@
                 </table>
 
                 <p class="muted">
-                    A colleague at another Morgana is named twice over &mdash; the intent, and the consultableInstance
+                    A colleague at another Morgana is named twice over &mdash; the intent and the consultableInstance
                     publishing it &mdash; and neither name is checked here or at startup, because the only
                     thing that knows is that consultableInstance's own agent card, read on the first consultation.
                     The consultableInstance itself must be declared in the deployment's configuration under
@@ -307,10 +307,10 @@
                 <p class="muted">
                     A colleague ticked here changes what an agent <em>can</em> do and not a word of what
                     its own prose <em>says</em> — so an agent whose instructions still send the customer
-                    to another desk for that very subject will keep doing exactly that, and the
+                    to another desk for that very subject will keep doing exactly that and the
                     consultation is paid for in prompt tokens and never happens. Run
                     <b>colleagues out of step</b> on Review, which is the pass that reads the two
-                    against each other. The interview's own closing step does both at once, and is
+                    against each other. The interview's own closing step does both at once and is
                     where this belongs when a domain is being written rather than uploaded.
                 </p>
             </div>
@@ -632,7 +632,7 @@
         if (Enum.TryParse(e.Value?.ToString(), out Records.LLMTier tier))
             agent.Code.Tier = tier;
 
-        // Stated is no longer guessed, and the validator's warning about it should stop.
+        // Stated is no longer guessed and the validator's warning about it should stop.
         agent.Code.Inferred = false;
         package = null;
     }
@@ -716,13 +716,13 @@
     /// <remarks>
     /// Agents of this domain only. The boxes on this page are drawn from the domain, so a colleague
     /// at an instance has none to be ticked in — it is declared in the interview, where the client can
-    /// say whose desk it is, and it must survive every toggle here untouched.
+    /// say whose desk it is and it must survive every toggle here untouched.
     /// </remarks>
     private static bool Consults(AgentDraft agent, string colleague) =>
         agent.Code.Consults.Any(c => c.Instance is null && string.Equals(c.Intent, colleague, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// Adds or removes one <c>[ConsultsAgent]</c> declaration, and invalidates any archive already
+    /// Adds or removes one <c>[ConsultsAgent]</c> declaration and invalidates any archive already
     /// built — the attribute is on the agent class, so the emitted file is no longer the one on disk.
     /// </summary>
     /// <remarks>
@@ -750,7 +750,7 @@
     /// Opens a row for a colleague published by another Morgana.
     /// </summary>
     /// <remarks>
-    /// Blank on both halves, and deliberately so: an empty instance is what the validator reports, and
+    /// Blank on both halves and deliberately so: an empty instance is what the validator reports and
     /// guessing either name here would be inventing the one thing only the instance's card knows.
     /// </remarks>
     private void AddRemoteColleague(AgentDraft agent)
@@ -946,13 +946,13 @@
         card.Count(s => s.Done) * 100 / card.Count();
 
     /// <summary>
-    /// A completion as the client reads it: a number while there is still something to count, and
+    /// A completion as the client reads it: a number while there is still something to count and
     /// the word for having arrived once there is not.
     /// </summary>
     private static string Progress(int percent) => percent == 100 ? "done" : $"{percent}%";
 
     // Named for what the client gets, not for what Alembic writes: the agent class and its toolkit
-    // are the two halves of a Morgana agent, and "Code"/"Mock" named the emit's own vocabulary.
+    // are the two halves of a Morgana agent and "Code"/"Mock" named the emit's own vocabulary.
     private static string StepKindLabel(string kind) => kind switch
     {
         "code" => "Agent",
@@ -963,7 +963,7 @@
 
     /// <summary>
     /// The belly is a circle of radius 15.2 centred at y=55, so a full pour is its diameter, 30.4.
-    /// Rounded to a tenth: the CSS transition already smooths the motion, and a long float in the
+    /// Rounded to a tenth: the CSS transition already smooths the motion and a long float in the
     /// attribute string only invites the kind of sub-pixel rounding disagreement between browsers
     /// that reads as the vessel trembling instead of pouring.
     /// </summary>
@@ -983,7 +983,7 @@
     /// </summary>
     /// <remarks>
     /// A timer rather than a redraw per reported file: it draws the last file of a burst as well as
-    /// the first, it bounds what a domain of any size costs in redraws, and it keeps ticking through
+    /// the first, it bounds what a domain of any size costs in redraws and it keeps ticking through
     /// the long silence of a model call, where <see cref="StepElapsed"/> is what tells a slow step
     /// apart from a dead page.
     /// </remarks>
@@ -1009,7 +1009,7 @@
     /// <remarks>
     /// Awaited rather than dropped, because <c>InvokeAsync</c> reports a dispatcher that is going
     /// away by completing its task as <em>cancelled</em> — not by throwing. Pressing Stop unwinds
-    /// the build in the same instant a tick is in flight, so that is exactly when it happens, and a
+    /// the build in the same instant a tick is in flight, so that is exactly when it happens and a
     /// dropped task cancelled after the fact is an unobserved <c>TaskCanceledException</c> the
     /// client meets as an unhandled error.
     /// </remarks>
@@ -1135,7 +1135,7 @@
     /// <summary>
     /// Which step one written path belongs to. Asks <see cref="Distiller.Services.CodeEmitService"/>
     /// itself for the agent's real paths rather than re-deriving the class names here — the same
-    /// formula duplicated in a second place is exactly the kind of thing that silently drifts, and
+    /// formula duplicated in a second place is exactly the kind of thing that silently drifts and
     /// this way it cannot: whatever <see cref="AssetPackageService"/> actually wrote is what this
     /// compares against.
     /// </summary>
@@ -1198,7 +1198,7 @@
                 agent.Code.Namespace = EffectiveNamespace;
 
             // State only. Nothing here renders and nothing here reaches the browser: a callback that
-            // awaited JS interop had its Task discarded, and interop that outlives the circuit's own
+            // awaited JS interop had its Task discarded and interop that outlives the circuit's own
             // one-minute call timeout throws something JSDisconnectedException does not cover — an
             // unobserved fault on a dispatched work item, which tears the circuit down and freezes
             // the page while the build carries on invisibly. Drawing is the heartbeat's job.
@@ -1218,14 +1218,14 @@
                     stepEnteredAt = DateTime.UtcNow;
             });
 
-            // Off the dispatcher, and that is load-bearing rather than tidy. An event handler runs on
-            // the renderer's synchronization context, and Progress<T> captures whatever context it is
+            // Off the dispatcher and that is load-bearing rather than tidy. An event handler runs on
+            // the renderer's synchronization context and Progress<T> captures whatever context it is
             // constructed on — so awaiting the build here queues every Report behind the build
-            // producing it, and the structure phase, whose MemoryStream writes all complete
+            // producing it and the structure phase, whose MemoryStream writes all complete
             // synchronously, never yields to let one through.
             // The token goes to the build and NOT to Task.Run. On Task.Run it would only govern
-            // scheduling, and it lets the outer task report itself cancelled while the delegate is
-            // still unwinding — leaving the real work orphaned, and whatever it throws on the way
+            // scheduling and it lets the outer task report itself cancelled while the delegate is
+            // still unwinding — leaving the real work orphaned and whatever it throws on the way
             // out observed by nobody.
             CancellationToken token = buildCts.Token;
             package = await Task.Run(
@@ -1263,7 +1263,7 @@
     /// <summary>
     /// Cancels the running build. <see cref="BuildAsync"/>'s own <c>catch</c> does the actual
     /// discarding once the cancellation unwinds through <see cref="AssetPackageService.BuildAsync"/>
-    /// — this only asks for it, and guards against a second press firing a second cancel while the
+    /// — this only asks for it and guards against a second press firing a second cancel while the
     /// first is still unwinding.
     /// </summary>
     private void Stop()
@@ -1292,7 +1292,7 @@
     /// </summary>
     /// <remarks>
     /// Here rather than beside a <c>StateHasChanged</c>, on two counts: this is the first moment the
-    /// rows being scrolled past are in the browser's DOM, and the interop's Task is awaited by the
+    /// rows being scrolled past are in the browser's DOM and the interop's Task is awaited by the
     /// framework instead of dropped — an unobserved failure on dispatched work takes the circuit
     /// down with it.
     /// </remarks>
@@ -1309,7 +1309,7 @@
         }
         catch (Exception ex)
         {
-            // Never rethrown. Keeping the newest line in view is a courtesy, and losing it is not
+            // Never rethrown. Keeping the newest line in view is a courtesy and losing it is not
             // worth failing a build the client has been waiting minutes for.
             Logger.LogDebug(ex, "Could not scroll the emission log");
         }

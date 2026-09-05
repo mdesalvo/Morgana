@@ -15,7 +15,7 @@ turns:
   - say: "Tell me about a monkey named Sebastian"
     expect:
       agent: MonkeyAgent
-      # The whole property, stated deterministically: the subject reached the domain tool, and the
+      # The whole property, stated deterministically: the subject reached the domain tool and the
       # registry was never touched. There is no judge proposition here by design.
       noContextAccess: true
       toolsCalled: [get_monkey]

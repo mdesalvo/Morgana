@@ -5,7 +5,7 @@ namespace Cauldron.Interfaces;
 
 /// <summary>
 /// Service for managing the chat UI state: message list, temporary messages,
-/// agent tracking, sending state, and UI state queries.
+/// agent tracking, sending state and UI state queries.
 /// </summary>
 public interface IChatStateService
 {

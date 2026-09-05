@@ -1,11 +1,11 @@
 /* ==========================================================================
-   Alembic — the palette, and nothing else.
+   Alembic — the palette and nothing else.
 
    Read off the alembic in wwwroot/images: a night-violet room, the vessel lit magenta from inside,
-   cyan where the distillate runs cold, and one warm gold for what is finished.
+   cyan where the distillate runs cold and one warm gold for what is finished.
 
    It lives alone, in the file every other one is linked after, because every other file spends it
-   and none of them defines it. A colour that appears anywhere but here has escaped, and the way it
+   and none of them defines it. A colour that appears anywhere but here has escaped and the way it
    is noticed is that a change made here fails to reach it — so a value with an alpha channel is
    written color-mix(in srgb, var(--token) N%, transparent) rather than as its own rgba().
    ========================================================================== */
