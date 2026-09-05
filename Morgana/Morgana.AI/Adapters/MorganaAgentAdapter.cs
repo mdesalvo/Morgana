@@ -556,7 +556,10 @@ public class MorganaAgentAdapter
     /// more. Startup validation already rejects a declaration naming no agent, so a failure here
     /// means the A2A endpoints are unreachable, not that the topology is wrong.
     /// </remarks>
+    /// <param name="agentType">Agent whose <c>[ConsultsAgent]</c> declarations are being honoured</param>
+    /// <param name="callerIntent">Asking agent, recorded on the credentials every consultation presents</param>
     /// <param name="conversationId">Conversation the consultations are scoped to, carried as the A2A context id</param>
+    /// <param name="sessionAccessor">Hands back the asking agent's live session, which the guards read at invocation</param>
     /// <param name="contextProvider">Context store of the asking agent, holding the per-turn consultation budget</param>
     /// <param name="peerTerritories">Filled with function name → the colleague's own ConsultMeFor, for the declaration spliced into this agent's instructions</param>
     /// <returns>One AIFunction per resolvable colleague, empty if none is declared</returns>
@@ -587,9 +590,38 @@ public class MorganaAgentAdapter
 
         int maxRoundsPerTurn = configuration.GetValue("Morgana:AgentToAgent:MaxRoundsPerTurn", 4);
 
-        List<AIFunction> peerAgents = [];
+        // Every colleague is reached for at once. They are independent desks, often at different
+        // systems. Asking them one after another would make this agent's first turn wait out the
+        // sum of whatever they each take — a partner that is slow would set the pace for all of them.
+        (string FunctionName, AIFunction Function, string Territory)?[] resolvedColleagues =
+            await Task.WhenAll(attributes.Select(ResolveColleagueAsync));
 
-        foreach (ConsultsAgentAttribute attribute in attributes)
+        // Reassembled in the order the agent's author declared them: which colleague answered first is
+        // a fact about the network and the model's tool list must not reorder itself between runs.
+        List<AIFunction> peerAgents = [];
+        foreach ((string FunctionName, AIFunction Function, string Territory)? colleague in resolvedColleagues)
+        {
+            // Unreachable and already reported where the reaching failed: the agent runs without it.
+            if (colleague is not (string peerFunctionName, AIFunction peerFunction, string peerTerritory))
+                continue;
+
+            peerAgents.Add(peerFunction);
+
+            // The same territory the tool description carries, kept under the callable name: the
+            // prompt's ColleaguesDeclaration lists who this agent holds and must name them the way
+            // the tool list does.
+            peerTerritories[peerFunctionName] = peerTerritory;
+        }
+
+        // Whatever was reachable, which is not necessarily everything declared: a colleague that could
+        // not be resolved was logged and skipped and the agent runs without it rather than not
+        // running at all.
+        return peerAgents;
+
+        // One declared colleague, from its published card to the function the model may call. Local to
+        // the registration because everything it closes over is this agent's — who is asking, which
+        // conversation and the session the guards read at invocation.
+        async Task<(string FunctionName, AIFunction Function, string Territory)?> ResolveColleagueAsync(ConsultsAgentAttribute attribute)
         {
             // Resolved through A2A discovery, so what comes back is Microsoft.Agents.AI.A2A's own
             // A2AAgent over the interface the colleague's card advertises — the identical object an
@@ -604,7 +636,7 @@ public class MorganaAgentAdapter
             if (resolvedPeer is not (AIAgent peerAgent, AgentCard peerCard))
             {
                 logger.LogWarning("Agent {AgentTypeName} cannot reach declared colleague '{PeerIntent}'; it will run without it", agentType.Name, attribute.Intent);
-                continue;
+                return null;
             }
 
             // The A2A context identifier is the conversation, bound once here rather than left to a
@@ -614,9 +646,8 @@ public class MorganaAgentAdapter
                 ? await a2aPeerAgent.CreateSessionAsync(conversationId)
                 : await peerAgent.CreateSessionAsync();
 
-            // Lifted out of the attribute before the closure is built: what a lambda captures should be
-            // a value, not a reference to the loop's current attribute, whose identity means nothing
-            // once the iteration has moved on.
+            // The desk being consulted, named in the guards' refusals to the model and in the trace of
+            // the exchange.
             string peerIntent = attribute.Intent;
 
             // Null for a colleague of this installation: it ran on this conversation and already
@@ -665,27 +696,20 @@ public class MorganaAgentAdapter
             // session created above so every call of it belongs to the same A2A exchange. It is offered
             // under its own ConsultMeFor and nothing else: an inventory of its tools would invite the
             // caller to rule out a question the colleague has never seen.
-            peerAgents.Add(guardedPeerAgent.AsAIFunction(
+            AIFunction peerFunction = guardedPeerAgent.AsAIFunction(
                 new AIFunctionFactoryOptions
                 {
                     Name = peerFunctionName,
                     Description = await promptComposerService.ComposePeerDescriptionAsync(peerCard)
                 },
-                peerSession));
-
-            // The same territory, kept a second time under the callable name: the prompt's
-            // ColleaguesDeclaration lists who this agent holds and it must name them the way the tool
-            // list does. Empty rather than absent for a card with no description — a colleague still
-            // exists when it failed to say what it is for.
-            peerTerritories[peerFunctionName] = peerCard.Description ?? "";
+                peerSession);
 
             logger.LogInformation("Agent {AgentTypeName} may consult '{PeerIntent}'", agentType.Name, attribute.Intent);
-        }
 
-        // Whatever was reachable, which is not necessarily everything declared: a colleague that could
-        // not be resolved was logged and skipped above and the agent runs without it rather than not
-        // running at all.
-        return peerAgents;
+            // The territory travels back beside the function. Empty rather than absent for a card with
+            // no description — a colleague still exists when it failed to say what it is for.
+            return (peerFunctionName, peerFunction, peerCard.Description ?? "");
+        }
     }
 
     /// <summary>
@@ -696,7 +720,11 @@ public class MorganaAgentAdapter
     /// A refusal comes back as an ordinary answer, never an exception: the asking agent is mid-turn
     /// with a user waiting and a refused consultation must degrade its answer, not destroy the turn.
     /// </remarks>
+    /// <param name="callerIntent">Asking agent, named in the diagnostics.</param>
+    /// <param name="peerIntent">Colleague being consulted, named in the diagnostics.</param>
     /// <param name="callerSession">The asking agent's session, or null when it has none yet.</param>
+    /// <param name="maxRoundsPerTurn">Consultations one user turn may spend before the exchange is cut short.</param>
+    /// <param name="contextProvider">Context store of the asking agent, holding the turn's round count.</param>
     /// <returns>The serialized refusal envelope, or <c>null</c> when the consultation may proceed.</returns>
     private async Task<string?> ApplyPeerGuardsAsync(
         string callerIntent,

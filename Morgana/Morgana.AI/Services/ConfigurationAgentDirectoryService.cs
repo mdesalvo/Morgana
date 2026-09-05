@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -25,6 +26,20 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
 
     /// <summary>Wait on a card: a static document with no model behind it, so nothing like a consultation.</summary>
     private static readonly TimeSpan CardDiscoveryTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How long a colleague's published card is reused before it is read from its publisher again.
+    /// Long, because a card describes a desk and a desk changes when somebody redeploys it; short
+    /// enough that a partner which moved is followed without restarting this installation.
+    /// </summary>
+    private static readonly TimeSpan PeerCardFreshness = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// How long a colleague that failed to answer stays reported unreachable before being tried
+    /// again. It is what keeps a partner's outage off the first turn of every conversation opened
+    /// while it lasts: one turn waits out the silence, the ones behind it are told at once.
+    /// </summary>
+    private static readonly TimeSpan PeerCardUnreachableWindow = TimeSpan.FromSeconds(60);
 
     /// <summary>Source of the intents, which carry each agent's name and purpose.</summary>
     private readonly IAgentConfigurationService agentConfigurationService;
@@ -54,10 +69,23 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// Cards already projected, keyed by intent. Populated on demand rather than at startup because
     /// a conversation consults few agents and an agent nobody consults never needs a card.
     /// </summary>
-    private readonly Dictionary<string, AgentCard?> cardsByIntent = new(StringComparer.OrdinalIgnoreCase);
+    /// <remarks>
+    /// Readable without the lock below, which is what lets a caller with no async seam of its own —
+    /// the hosted agent's factory — read a description that has already been projected.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, AgentCard?> cardsByIntent = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Guards <see cref="cardsByIntent"/>: agents are created concurrently across conversations.</summary>
+    /// <summary>
+    /// Holds projection to one agent at a time and holds it off entirely while every card is being
+    /// given its published address.
+    /// </summary>
     private readonly SemaphoreSlim cardsLock = new(1, 1);
+
+    /// <summary>
+    /// What each colleague published, keyed by the endpoint it was read from, so the conversations
+    /// that follow do not each ask a partner to describe the same desk again.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, Lazy<Task<PeerCardReading>>> peerCardReadings = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The one connection pool every call to a colleague goes through, card discovery included.
@@ -135,6 +163,10 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             cardsLock.Release();
         }
     }
+
+    /// <inheritdoc />
+    public AgentCard? TryGetProjectedCard(string intent)
+        => cardsByIntent.GetValueOrDefault(intent);
 
     /// <inheritdoc />
     public async Task PublishInterfacesAsync()
@@ -215,16 +247,16 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         // read and satisfied identically for a colleague of this installation and for one elsewhere.
         try
         {
-            // Fetched over the wire, never read from the projection above: this is the same call a
-            // consumer in another process makes, so an unpublished card fails here and not mid-turn.
-            // The trailing slash is load-bearing — the well-known path is appended relative to it.
-            A2ACardResolver resolver = new A2ACardResolver(
-                new Uri($"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{peer.Intent}/"),
-                new HttpClient(connectionPool, disposeHandler: false) { Timeout = CardDiscoveryTimeout });
+            // What the colleague published, as read by whoever got there first: a card describes a
+            // desk rather than a conversation, so every conversation reading the same one would be
+            // asking a partner the same question over and over while its own first turn waits.
+            AgentCard? card = await ReadPeerCardAsync(baseAddress, peer.Intent);
 
-            // The first network call of a consultation and the one that fails when a peer is down: an
-            // agent is built per conversation, so this is paid once per conversation per colleague.
-            AgentCard card = await resolver.GetAgentCardAsync();
+            // The colleague did not answer or answered with something unreadable — reported by the
+            // reading itself, which also holds it unreachable for a while rather than making the next
+            // conversation wait out the same silence.
+            if (card is null)
+                return null;
 
             // Read before anything is signed: this open document decides where every later call lands.
             // First of the two phases — learn what the endpoint demands, then satisfy it.
@@ -449,6 +481,86 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         }
     }
 
+
+    /// <summary>
+    /// Reads a colleague's published card, sharing one reading with every conversation that needs it
+    /// while that reading is still worth trusting.
+    /// </summary>
+    /// <remarks>
+    /// A colleague that did not answer comes back as <c>null</c> and is reported unreachable for the
+    /// whole of <see cref="PeerCardUnreachableWindow"/>, so an outage is waited out once rather than
+    /// by every conversation opened during it.
+    /// </remarks>
+    /// <param name="baseAddress">Where the colleague answers, this installation's own or a declared system's.</param>
+    /// <param name="intent">Colleague whose card is being read.</param>
+    /// <returns>The published card, or <c>null</c> when it could not be read.</returns>
+    private async Task<AgentCard?> ReadPeerCardAsync(string baseAddress, string intent)
+    {
+        // The endpoint is the identity, not the intent: the same desk name at two systems is two
+        // colleagues and the address is what separates them.
+        string endpoint = $"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{intent}";
+
+        // Whoever gets here first asks the colleague; the rest wait on that one reading instead of
+        // putting the same question to the same publisher at the same moment.
+        Lazy<Task<PeerCardReading>> reading = peerCardReadings.GetOrAdd(endpoint, StartReading);
+
+        PeerCardReading peerCard = await reading.Value;
+
+        // Still worth trusting, either as what the colleague publishes or as the fact that it is not
+        // answering.
+        if (!peerCard.IsStale)
+            return peerCard.Card;
+
+        // Too old to stand. One caller replaces it and whoever loses that race takes what the winner
+        // put there — so a colleague is asked once when its reading expires, not once per
+        // conversation that finds it expired.
+        Lazy<Task<PeerCardReading>> refreshed = StartReading(endpoint);
+        if (!peerCardReadings.TryUpdate(endpoint, refreshed, reading))
+            refreshed = peerCardReadings.GetOrAdd(endpoint, StartReading);
+
+        // Exactly one further reading is ever waited for here. Should that one already be expiring
+        // too — a colleague slower to describe itself than the window it is trusted for — its card is
+        // used as it stands: a turn is owed an answer, never an unbounded pursuit of a fresher one.
+        return (await refreshed.Value).Card;
+
+        // The reading itself, held back until somebody actually takes it: the one that loses the race
+        // above is discarded without ever having troubled the colleague.
+        Lazy<Task<PeerCardReading>> StartReading(string _)
+            => new Lazy<Task<PeerCardReading>>(() => FetchPeerCardAsync(baseAddress, intent));
+    }
+
+    /// <summary>
+    /// Asks a colleague to describe itself, over the wire and with no credentials.
+    /// </summary>
+    /// <remarks>
+    /// Never read from the local projection, even for an agent of this installation: this is the same
+    /// call a consumer in another process makes, so an unpublished agent fails here and not mid-turn.
+    /// </remarks>
+    /// <param name="baseAddress">Where the colleague answers.</param>
+    /// <param name="intent">Colleague being asked.</param>
+    private async Task<PeerCardReading> FetchPeerCardAsync(string baseAddress, string intent)
+    {
+        try
+        {
+            // The trailing slash is load-bearing: the well-known path is appended relative to it.
+            A2ACardResolver resolver = new A2ACardResolver(
+                new Uri($"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{intent}/"),
+                new HttpClient(connectionPool, disposeHandler: false) { Timeout = CardDiscoveryTimeout });
+
+            return new PeerCardReading(await resolver.GetAgentCardAsync(), DateTimeOffset.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            // A colleague that is down, slow or serving an unparseable card is recorded as one and
+            // costs nothing further until the window closes: the agents declaring it run without it.
+            logger.LogError(
+                ex,
+                "Could not read the published A2A card of '{Intent}' at '{BaseAddress}'; it stays unreachable for the next {UnreachableSeconds} seconds",
+                intent, baseAddress, PeerCardUnreachableWindow.TotalSeconds);
+
+            return new PeerCardReading(null, DateTimeOffset.UtcNow);
+        }
+    }
 
     /// <summary>Scheme, host and port: the boundary a credential may cross and nothing wider.</summary>
     /// <param name="origin">Address trusted to receive a token.</param>
@@ -784,6 +896,25 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
                || string.Equals(issuer.SymmetricKey.Trim(), Constants.Overrides.Secure, StringComparison.Ordinal)
             ? null
             : issuer.SymmetricKey;
+    }
+
+    /// <summary>
+    /// One reading of a colleague's published card, with the moment it was taken.
+    /// </summary>
+    /// <remarks>
+    /// A null card is a reading that failed and is kept as deliberately as a successful one: it is
+    /// what holds a colleague that is not answering away from the turn of the next conversation.
+    /// </remarks>
+    /// <param name="Card">What the colleague published, or <c>null</c> when it could not be read.</param>
+    /// <param name="ReadAt">When the reading was taken, which is what makes it expire.</param>
+    private sealed record PeerCardReading(AgentCard? Card, DateTimeOffset ReadAt)
+    {
+        /// <summary>
+        /// Whether this reading has to be taken again. A colleague that answered is trusted far
+        /// longer than one that did not: the first describes a desk, the second an outage.
+        /// </summary>
+        public bool IsStale
+            => DateTimeOffset.UtcNow - ReadAt > (Card is null ? PeerCardUnreachableWindow : PeerCardFreshness);
     }
 
     /// <summary>
