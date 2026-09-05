@@ -43,7 +43,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// referenced from Morgana.AI: the harness compiles without seeing the framework's internals and
     /// the name is part of the configuration contract it targets.
     /// </summary>
-    private const string PeerIssuerName = "morgana";
+    public const string PeerIssuerName = "morgana";
+
+    /// <summary>Position of <see cref="PeerIssuerName"/> in the host's declared issuers.</summary>
+    public int PeerIssuerIndex { get; private set; }
 
     /// <summary>Configuration resolved by the harness: the host's own appsettings plus the shared secrets store.</summary>
     public IConfiguration Configuration { get; private set; } = null!;
@@ -79,6 +82,25 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
     /// <summary>Symmetric key minted for this run under <see cref="ScopedSystemIssuerName"/>.</summary>
     public string ScopedSystemKey { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Conversations <see cref="ScopedSystemIssuerName"/> may open in an hour. Declared because the
+    /// instance under test demands it of every admitted system, high enough never to be reached.
+    /// </summary>
+    public const int ScopedSystemConversationsPerHour = 100_000;
+
+    /// <summary>
+    /// Position this run's scoped system takes in <c>Morgana:AgentToAgent:InboundSystems</c>, past
+    /// the last entry the host's own configuration declares. Read by the group that boots a doomed
+    /// host to break one declaration at a time.
+    /// </summary>
+    public int ScopedSystemInboundIndex { get; private set; }
+
+    /// <summary>
+    /// Position this run's scoped system takes in <c>Morgana:Authentication:Issuers</c>, past the
+    /// last entry the host's own configuration declares.
+    /// </summary>
+    public int ScopedSystemIssuerIndex { get; private set; }
 
     /// <summary>Tee on the host's stdout; the turn observer reads tool log lines from it.</summary>
     public HostOutputCapture Output { get; private set; } = null!;
@@ -288,22 +310,29 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // "harness", which the suite itself authenticates as and "morgana", which the host signs its
         // own agent-to-agent traffic with — the latter is startup-fatal if left on its placeholder,
         // so a run would not even boot without it.
+        PeerIssuerIndex = ResolveIssuerIndex(PeerIssuerName);
         Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ResolveIssuerIndex(HarnessChannel.IssuerName)}__SymmetricKey", IssuerKey);
-        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ResolveIssuerIndex(PeerIssuerName)}__SymmetricKey", peerIssuerKey);
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{PeerIssuerIndex}__SymmetricKey", peerIssuerKey);
 
         // One more issuer than the host declares, appended past the last index its appsettings uses:
         // a system admitted to a single desk, which is the only way the scope half of the A2A gate
         // can be observed at all — refusing an unauthenticated call proves the door is shut, not that
         // it is shut selectively. Both halves of the declaration are pushed, because either alone is
         // startup-fatal by design: an issuer with no reach, or a reach for nobody.
-        int scopedIssuerIndex = Configuration.GetSection("Morgana:Authentication:Issuers").GetChildren().Count();
-        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{scopedIssuerIndex}__Name", ScopedSystemIssuerName);
-        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{scopedIssuerIndex}__SymmetricKey", ScopedSystemKey);
-        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{scopedIssuerIndex}__Type", "system");
+        ScopedSystemIssuerIndex = Configuration.GetSection("Morgana:Authentication:Issuers").GetChildren().Count();
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ScopedSystemIssuerIndex}__Name", ScopedSystemIssuerName);
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ScopedSystemIssuerIndex}__SymmetricKey", ScopedSystemKey);
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ScopedSystemIssuerIndex}__Type", "system");
 
-        int scopedInboundIndex = Configuration.GetSection("Morgana:AgentToAgent:InboundSystems").GetChildren().Count();
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__InboundSystems__{scopedInboundIndex}__Issuer", ScopedSystemIssuerName);
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__InboundSystems__{scopedInboundIndex}__Agents__0", ScopedSystemAgent);
+        ScopedSystemInboundIndex = Configuration.GetSection("Morgana:AgentToAgent:InboundSystems").GetChildren().Count();
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__InboundSystems__{ScopedSystemInboundIndex}__Issuer", ScopedSystemIssuerName);
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__InboundSystems__{ScopedSystemInboundIndex}__Agents__0", ScopedSystemAgent);
+
+        // How many conversations this partner may open in an hour, which the instance under test
+        // demands of every admitted system. Far above anything a scripted suite could reach: the
+        // ceiling exists here to satisfy a declaration, never to be met.
+        Environment.SetEnvironmentVariable(
+            $"Morgana__AgentToAgent__InboundSystems__{ScopedSystemInboundIndex}__MaxConversationsPerHour", ScopedSystemConversationsPerHour.ToString());
 
 
         // Framework categories at Information, everything else quiet: the tool log lines the turn

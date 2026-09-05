@@ -113,6 +113,9 @@ dotnet test PromptHarness/PromptHarness.csproj
 # just the rig, before believing any scenario result
 dotnet test … --filter "FullyQualifiedName~HarnessSmokeTests"
 
+# the two groups that cost nothing — the published card, the boot-time trust checks
+dotnet test … --filter "FullyQualifiedName~AgentCardTests|FullyQualifiedName~StartupValidationTests"
+
 # the blocking group
 dotnet test … --filter "FullyQualifiedName~ContextHandlingTests"
 

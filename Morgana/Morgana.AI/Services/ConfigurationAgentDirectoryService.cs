@@ -180,8 +180,11 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// <param name="intent">Agent whose endpoint the card names.</param>
     private AgentCard? WithPublishedInterface(AgentCard? card, string intent)
     {
-        // Nothing to name an address on. An intent configured nowhere stays absent rather than being
-        // materialised here, which would publish an agent this installation does not hold.
+        // Two reasons to hand back what arrived. An intent configured nowhere has no card to put an
+        // address on: materialising one here would publish an agent this installation does not hold.
+        // A card already naming its interface was settled by an earlier ask, which is the ordinary
+        // state of every request after the first — where this instance answers does not move under a
+        // running process, so deciding it again could only disagree with what a caller already read.
         if (card is null || card.SupportedInterfaces is { Count: > 0 })
             return card;
 
@@ -191,13 +194,15 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         if (baseAddress is null)
             return card;
 
-        card.SupportedInterfaces = [BuildInterface(baseAddress, intent)];
+        // The card provides a single endpoint for the agent, replacing a complex set of addresses
+        // with one interface to evaluate.
+        AgentInterface publishedInterface = BuildInterface(baseAddress, intent);
+        card.SupportedInterfaces = [publishedInterface];
 
-        // The one line telling an operator where this instance actually published, which nothing in
-        // configuration states: it was decided by whatever the server bound.
+        // The one line telling an operator where this instance actually answers for this agent, which
+        // nothing in configuration states: it was decided by whatever the server bound.
         logger.LogInformation(
-            "Agent '{Intent}' of this instance publishes its A2A interface at {BaseAddress}{AgentPathPrefix}/{Intent}",
-            intent, baseAddress, Constants.AgentToAgent.AgentPathPrefix);
+            "Agent '{Intent}' of this instance publishes its A2A interface at {InterfaceUrl}", intent, publishedInterface.Url);
 
         return card;
     }
