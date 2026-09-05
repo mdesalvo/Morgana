@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
@@ -47,20 +47,31 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     {
         Console.WriteLine("🔍 Scanning assemblies for MorganaTool implementations...");
 
-        Dictionary<string, Type> registry = new(StringComparer.OrdinalIgnoreCase);
-        // Collected rather than thrown immediately (see the "Check for duplicate tool
-        // registrations" branch below): unlike HandlesIntentAgentRegistryService's intent↔agent
-        // validation, a duplicate tool registration here is reported loudly but does NOT abort
-        // startup — the first-seen tool simply keeps winning that intent. Tools are an agent's own
-        // capability, not the framework's routing table, so a plugin author shipping a conflicting
-        // tool is treated as a configuration warning to fix, not a hard boot failure.
-        List<string> registrationErrors = [];
+        Dictionary<string, Type> registry = DiscoverTools(out List<string> registrationErrors);
 
-        // Discovery of available tools with their declared intent. Every assembly currently loaded
-        // into the process is scanned, not just this one — same rationale as
-        // HandlesIntentAgentRegistryService's identical scan: a domain author's plugin DLL is
-        // exactly where [ProvidesToolForIntent]-decorated MorganaTool subclasses are expected to
-        // live, and it's loaded (by PluginLoaderService) before this service ever runs.
+        // Printed rather than thrown: none of what it reports stops a deployment, so the operator is
+        // told at startup instead of discovering it on the first conversation that lacks a tool.
+        ReportRegistry(registry, registrationErrors);
+
+        return registry;
+    }
+
+    /// <summary>
+    /// Finds every <see cref="MorganaTool"/> that declares an intent, keeping the first found per intent.
+    /// </summary>
+    /// <remarks>
+    /// A duplicate is reported rather than resolved: which of two tools reached the scan first depends
+    /// on assembly order, so silently keeping one would make the domain's behaviour depend on it.
+    /// </remarks>
+    /// <param name="registrationErrors">Filled with one message per intent claimed by two tools.</param>
+    /// <returns>Intent to tool type, lowercased, case-insensitive.</returns>
+    private Dictionary<string, Type> DiscoverTools(out List<string> registrationErrors)
+    {
+        Dictionary<string, Type> registry = new(StringComparer.OrdinalIgnoreCase);
+        registrationErrors = [];
+
+        // Every assembly in the process, since a domain's tools arrive in a plugin DLL that
+        // PluginLoaderService has already loaded by the time this runs.
         IEnumerable<Type> toolTypes = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic)
             .SelectMany(a =>
@@ -71,23 +82,28 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
                 }
                 catch (ReflectionTypeLoadException ex)
                 {
+                    // An assembly with incomplete dependencies costs only its own types: a half-built
+                    // plugin must not hide the tools of every other one.
                     logger.LogWarning("Could not load types from assembly {ArgFullName}: {ExMessage}", a.FullName, ex.Message);
                     return [];
                 }
             })
+            // Concrete tools that declare which desk they belong to. A tool without the attribute
+            // belongs to no agent, so nothing could ever reach it.
             .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaTool)))
             .Where(t => t.GetCustomAttribute<ProvidesToolForIntentAttribute>() != null);
 
         foreach (Type toolType in toolTypes)
         {
-            ProvidesToolForIntentAttribute? attr = toolType.GetCustomAttribute<ProvidesToolForIntentAttribute>();
-            if (attr == null)
-                continue;
+            // Which desk this tool belongs to, in the author's own words. Never absent: a type that does
+            // not declare one was filtered out above, so the filter is the guard.
+            ProvidesToolForIntentAttribute declaration = toolType.GetCustomAttribute<ProvidesToolForIntentAttribute>()!;
 
-            string intent = attr.Intent.ToLowerInvariant();
+            // Lowercased on the way in, since an intent is typed by hand here and in agents.json.
+            string intent = declaration.Intent.ToLowerInvariant();
 
-            // Duplicate registration: reported (registrationErrors, printed further down) but the
-            // FIRST tool found for this intent keeps the slot — `continue` skips the overwrite.
+            // The first tool found keeps the desk. Overwriting would hand the intent to whichever
+            // assembly the runtime happened to enumerate last.
             if (registry.TryGetValue(intent, out Type? value))
             {
                 string error = $"Duplicate tool registration for intent '{intent}': {value.Name} and {toolType.Name}";
@@ -97,105 +113,82 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             }
 
             registry[intent] = toolType;
-            Console.WriteLine($"  📦 Registered tool: {toolType.Name} for intent '{attr.Intent}'");
+            Console.WriteLine($"  📦 Registered tool: {toolType.Name} for intent '{declaration.Intent}'");
         }
 
         Console.WriteLine($"✅ Tool registry initialized with {registry.Count} tool(s)");
         Console.WriteLine();
 
-        #region Validation
+        return registry;
+    }
+
+    /// <summary>
+    /// Prints how the discovered tools line up against the discovered agents.
+    /// </summary>
+    /// <remarks>
+    /// Neither mismatch is fatal, which is why this reports instead of throwing: an agent may legally
+    /// have no native tool. A tool left behind by a renamed agent is dead code rather than a fault.
+    /// </remarks>
+    /// <param name="registry">Intent to tool type, as discovered.</param>
+    /// <param name="registrationErrors">Intents claimed by two tools, already collected.</param>
+    private static void ReportRegistry(IReadOnlyDictionary<string, Type> registry, IReadOnlyList<string> registrationErrors)
+    {
         Console.WriteLine("========================================");
         Console.WriteLine("Tool Registry Validation");
         Console.WriteLine("========================================");
 
-        // Same reflection scan HandlesIntentAgentRegistryService runs for its own registry —
-        // duplicated here rather than shared, because this service needs the raw agent Type list
-        // (to cross-reference against tool intents below), not just the finished intent→type map.
-        List<Type> agentTypes =
-        [
-            .. AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => !a.IsDynamic)
-                .SelectMany(a =>
-                {
-                    try
-                    {
-                        return a.GetTypes();
-                    }
-                    catch (ReflectionTypeLoadException)
-                    {
-                        return [];
-                    }
-                })
-                .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)))
-                .Where(t => t.GetCustomAttribute<HandlesIntentAttribute>() != null)
-        ];
+        // The agent side of the comparison, taken from the registry service rather than scanned again:
+        // two scans that can disagree would report a mismatch neither of them causes.
+        Dictionary<string, Type> agentsByIntent = HandlesIntentAgentRegistryService.DiscoverAgents();
 
-        HashSet<string> agentIntents = agentTypes
-            .Select(t => t.GetCustomAttribute<HandlesIntentAttribute>()?.Intent)
-            .Where(i => i != null)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+        HashSet<string> agentIntents = new(agentsByIntent.Keys, StringComparer.OrdinalIgnoreCase);
+        HashSet<string> toolIntents = new(registry.Keys, StringComparer.OrdinalIgnoreCase);
 
-        HashSet<string> toolIntents = [.. registry.Keys];
-
-        // Warning, not an error: an MCP-only agent (see [UsesMCPServer]) legitimately has no
-        // native MorganaTool at all — its tools arrive at runtime from the MCP server instead.
-        List<string> agentsWithoutTools = [.. agentIntents.Except(toolIntents, StringComparer.OrdinalIgnoreCase)];
-        if (agentsWithoutTools.Count > 0)
+        // The header is owed only if something is actually warned about, so it is written by whichever
+        // of the two lists below turns out to be non-empty.
+        bool warningsHeaderWritten = false;
+        void WriteWarningsHeader()
         {
+            if (warningsHeaderWritten)
+                return;
+
             Console.WriteLine();
             Console.WriteLine("Warnings:");
-            foreach (string intent in agentsWithoutTools)
-            {
-                Type? agentType = agentTypes.FirstOrDefault(t =>
-                    string.Equals(t.GetCustomAttribute<HandlesIntentAttribute>()?.Intent, intent, StringComparison.OrdinalIgnoreCase));
-
-                string message = $"ℹ️  Agent '{intent}' ({agentType?.Name ?? "unknown"}) has no native tool registered!";
-                Console.WriteLine($"  {message}");
-            }
+            warningsHeaderWritten = true;
         }
 
-        // Orphaned tool: a MorganaTool built for an intent no agent currently claims — dead code
-        // (renamed/removed agent) more often than intentional, so flagged but not fatal.
-        List<string> toolsWithoutAgents = [.. toolIntents.Except(agentIntents, StringComparer.OrdinalIgnoreCase)];
-        if (toolsWithoutAgents.Count > 0)
+        // An agent with no native tool is legal: an MCP-only agent acquires its competences at runtime,
+        // so this says what a reader would otherwise have to guess from silence.
+        foreach (string intent in agentIntents.Except(toolIntents, StringComparer.OrdinalIgnoreCase))
         {
-            if (agentsWithoutTools.Count == 0)
-                Console.WriteLine();
-
-            if (agentsWithoutTools.Count == 0)
-                Console.WriteLine("Warnings:");
-
-            foreach (string intent in toolsWithoutAgents)
-            {
-                Type? toolType = registry.GetValueOrDefault(intent);
-                string message = $"⚠️  Tool '{toolType?.Name ?? "unknown"}' provides intent '{intent}' but no agent handles this intent.";
-                Console.WriteLine($"  {message}");
-            }
+            WriteWarningsHeader();
+            Console.WriteLine($"  ℹ️  Agent '{intent}' ({agentsByIntent.GetValueOrDefault(intent)?.Name ?? "unknown"}) has no native tool registered!");
         }
 
-        // Display successful mappings (agents with tools)
+        // A tool built for an intent nobody claims: dead code left by a renamed or removed agent far
+        // more often than something intended, so it is surfaced without stopping the deployment.
+        foreach (string intent in toolIntents.Except(agentIntents, StringComparer.OrdinalIgnoreCase))
+        {
+            WriteWarningsHeader();
+            Console.WriteLine($"  ⚠️  Tool '{registry.GetValueOrDefault(intent)?.Name ?? "unknown"}' provides intent '{intent}' but no agent handles this intent.");
+        }
+
+        // The pairs that hold. Printed too, so the absence of a desk from this list is itself readable.
         foreach (string intent in agentIntents.Intersect(toolIntents, StringComparer.OrdinalIgnoreCase))
-        {
-            Type? toolType = registry.GetValueOrDefault(intent);
-            Console.WriteLine($"✅ Tool Registry: Agent '{intent}' → Tool '{toolType?.Name ?? "unknown"}'");
-        }
+            Console.WriteLine($"✅ Tool Registry: Agent '{intent}' → Tool '{registry.GetValueOrDefault(intent)?.Name ?? "unknown"}'");
 
-        // Display duplicate errors if any
+        // Two tools claiming one desk, which unlike the warnings above is a defect somebody must fix:
+        // one of the two is unreachable, whichever assembly order decided it.
         if (registrationErrors.Count > 0)
         {
             Console.WriteLine();
             Console.WriteLine("Errors:");
             foreach (string error in registrationErrors)
-            {
                 Console.WriteLine($"  ❌ {error}");
-            }
         }
 
         Console.WriteLine("========================================");
         Console.WriteLine();
-        #endregion
-
-        return registry;
     }
 
     /// <summary>Finds the MorganaTool type registered for an intent, or null (case-insensitive).</summary>

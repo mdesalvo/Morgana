@@ -59,7 +59,7 @@ public sealed class A2AAuthenticationFilter(
             return Results.Unauthorized();
         }
 
-        // Proven to be a colleague, and now: which desks. An issuer admitted to the installation is
+        // Proven to be a colleague and now: which desks. An issuer admitted to the installation is
         // not thereby admitted to every agent of it — that is what makes this installation openable
         // to a partner one desk at a time.
         if (authentication.Issuer is null || !admittedIssuers.Contains(authentication.Issuer))

@@ -15,7 +15,7 @@ public interface IMCPClientRegistryService : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="serverAttribute">
     /// The <see cref="UsesMCPServerAttribute"/> declared on the agent class.
-    /// Carries transport type, command/URI, and optional arguments.
+    /// Carries transport type, command/URI and optional arguments.
     /// </param>
     /// <returns>Connected MCPClient instance ready for tool discovery and invocation</returns>
     Task<MCPClient> GetOrCreateClientAsync(UsesMCPServerAttribute serverAttribute);

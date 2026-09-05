@@ -13,7 +13,7 @@ namespace Morgana.AI.Actors;
 
 /// <summary>
 /// Main FSM orchestration actor: supervises conversation flow through guard check, classification,
-/// agent routing, and follow-up handling. Tracks active agent for multi-turn conversations.
+/// agent routing and follow-up handling. Tracks active agent for multi-turn conversations.
 /// 5 states: Idle, AwaitingGuardCheck, AwaitingClassification, AwaitingAgentResponse,
 /// AwaitingFollowUpResponse. Manages OpenTelemetry context hierarchy via TurnContext.
 /// </summary>
@@ -241,7 +241,7 @@ public class ConversationSupervisorActor : MorganaActor
     /// AwaitingGuardCheck state: waiting for content moderation result from GuardActor.
     /// Opens a morgana.guard child span using the TurnContext from ProcessingContext.
     /// </summary>
-    /// <param name="ctx">Processing context containing original message, sender, and OTel TurnContext</param>
+    /// <param name="ctx">Processing context containing original message, sender and OTel TurnContext</param>
     private void AwaitingGuardCheck(Records.ProcessingContext ctx)
     {
         actorLogger.Info("→ State: AwaitingGuardCheck");
@@ -258,7 +258,7 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Records.GuardCheckResponse>(response => {
             // Cancels the guard-check window now that GuardActor actually answered — this
             // handler is about to Become() into AwaitingClassification, AwaitingFollowUpResponse,
-            // or Idle on rejection, and each of those arms (or clears) its own timeout
+            // or Idle on rejection and each of those arms (or clears) its own timeout
             // independently. Clearing here just guarantees the guard check's own window never
             // carries over into whatever state runs next.
             Context.SetReceiveTimeout(null);
@@ -428,7 +428,7 @@ public class ConversationSupervisorActor : MorganaActor
     /// AwaitingClassification state: waiting for intent classification result from ClassifierActor.
     /// Opens a morgana.classifier child span using the TurnContext from ProcessingContext.
     /// </summary>
-    /// <param name="ctx">Processing context containing original message, sender, and OTel TurnContext</param>
+    /// <param name="ctx">Processing context containing original message, sender and OTel TurnContext</param>
     private void AwaitingClassification(Records.ProcessingContext ctx)
     {
         actorLogger.Info("→ State: AwaitingClassification");
@@ -444,7 +444,7 @@ public class ConversationSupervisorActor : MorganaActor
         ReceiveAsync<Records.ClassificationResult>(async classification => {
             // Cancels the classification window now that ClassifierActor actually answered —
             // this handler is about to Become() into AwaitingAgentResponse (or reply directly and
-            // Become(Idle) on a disambiguation), and either arms its own timeout independently.
+            // Become(Idle) on a disambiguation) and either arms its own timeout independently.
             Context.SetReceiveTimeout(null);
 
             actorLogger.Info($"Classification result: {classification.Intent}");
@@ -577,7 +577,7 @@ public class ConversationSupervisorActor : MorganaActor
     /// AwaitingAgentResponse state: waiting for specialized agent to process the request.
     /// Annotates the turn span with agent name and intent on response.
     /// </summary>
-    /// <param name="ctx">Processing context containing original message, sender, and classification</param>
+    /// <param name="ctx">Processing context containing original message, sender and classification</param>
     private void AwaitingAgentResponse(Records.ProcessingContext ctx)
     {
         actorLogger.Info("→ State: AwaitingAgentResponse");
@@ -715,7 +715,7 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Records.AgentResponse>(response =>
         {
             // Cancels the same routing/agent window as ActiveAgentResponse above — RouterActor's
-            // fallback still answered in time, and this handler also Become(Idle)s next.
+            // fallback still answered in time and this handler also Become(Idle)s next.
             Context.SetReceiveTimeout(null);
 
             try
@@ -919,7 +919,7 @@ public class ConversationSupervisorActor : MorganaActor
     #region Helper Methods
 
     /// <summary>
-    /// Closes the turn span, records metrics, and transitions to Idle.
+    /// Closes the turn span, records metrics and transitions to Idle.
     /// Called at every point where the FSM returns to Idle after processing a user message.
     /// </summary>
     private void CloseTurnSpan(
@@ -1030,7 +1030,7 @@ public class ConversationSupervisorActor : MorganaActor
     private Task HandleContentFilterRejectionAsync(IActorRef originalSender)
     {
         // Cancels whatever timeout was active: this is wired into every Awaiting* state, all of
-        // which arm one, and a content-filter rejection can arrive from any of them.
+        // which arm one and a content-filter rejection can arrive from any of them.
         Context.SetReceiveTimeout(null);
 
         actorLogger.Warning("Content filter rejection received from agent, treating as guard rejection");

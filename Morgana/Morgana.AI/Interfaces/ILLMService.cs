@@ -10,7 +10,7 @@ namespace Morgana.AI.Interfaces;
 /// <para><strong>Purpose:</strong></para>
 /// <para>This service abstracts LLM provider specifics (Anthropic, Azure OpenAI, Ollama, OpenAI, ...) and provides
 /// a unified interface for all LLM interactions in the Morgana framework. It manages conversation
-/// history, prompt formatting, and provider-specific API calls.</para>
+/// history, prompt formatting and provider-specific API calls.</para>
 /// <para><strong>Usage Patterns:</strong></para>
 /// <list type="bullet">
 /// <item><term>Actors</term><description>GuardActor, ClassifierActor use CompleteWithSystemPromptAsync for stateless operations</description></item>
@@ -30,7 +30,7 @@ public interface ILLMService
     /// <remarks>
     /// <para><strong>Stateless vs Stateful:</strong></para>
     /// <para>This method is stateless—it doesn't rely on conversation history. Each call is independent,
-    /// making it suitable for classification, guard checks, and other single-turn operations.</para>
+    /// making it suitable for classification, guard checks and other single-turn operations.</para>
     /// <para><strong>JSON Response Pattern:</strong></para>
     /// <para>Most actors using this method expect JSON responses. The system prompt should instruct
     /// the LLM to respond only with JSON (no markdown, no preamble) for reliable parsing.</para>

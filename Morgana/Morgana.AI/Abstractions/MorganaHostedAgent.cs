@@ -12,7 +12,7 @@ namespace Morgana.AI.Abstractions;
 
 /// <summary>
 /// The <see cref="AIAgent"/> under which one Morgana intent is published over A2A: it owns no model
-/// and no session, and carries an inbound request to the actor serving that intent.
+/// and no session and carries an inbound request to the actor serving that intent.
 /// </summary>
 /// <remarks>
 /// The seam between two ownership models — A2A hosting expects one long-lived agent per name, while
@@ -60,7 +60,7 @@ public sealed class MorganaHostedAgent : AIAgent
     public override string Description => description;
 
     /// <summary>Publishes one intent, which must be handled by a registered Morgana agent.</summary>
-    /// <param name="intent">Intent published under this name, and the agent's own name on its card.</param>
+    /// <param name="intent">Intent published under this name and the agent's own name on its card.</param>
     /// <param name="description">Purpose of the agent, as advertised on its card.</param>
     /// <param name="agentRegistryService">Resolves the intent to the agent type serving it.</param>
     /// <param name="promptComposerService">Composes the note declaring that this turn serves a colleague.</param>
@@ -107,15 +107,15 @@ public sealed class MorganaHostedAgent : AIAgent
         }
 
         // One question out of however many parts the protocol delivered: A2A carries a message, not a
-        // sentence, and the colleague is owed the whole of what was asked in a single turn — it has
+        // sentence and the colleague is owed the whole of what was asked in a single turn — it has
         // no way to come back for the rest.
         string question = string.Join("\n", messages.Select(m => m.Text).Where(text => !string.IsNullOrWhiteSpace(text))).Trim();
 
         // Who is asking travels as metadata beside the message rather than inside it, which is what
         // keeps the question the caller's own words: an agent introducing itself in prose would be
         // spending the colleague's reading on its own name. Only an agent of this installation
-        // declares itself, and the endpoint answers anything that speaks A2A — so an unnamed caller
-        // is ordinary, and what to call it is the composer's word to choose, not this method's.
+        // declares itself and the endpoint answers anything that speaks A2A — so an unnamed caller
+        // is ordinary and what to call it is the composer's word to choose, not this method's.
         string? callerIntent =
             options?.AdditionalProperties?.TryGetValue(Constants.MessageProperties.CallerIntent, out object? caller) == true
                 ? caller?.ToString()
@@ -144,7 +144,7 @@ public sealed class MorganaHostedAgent : AIAgent
 
             // The note goes in front of the question rather than into the answering agent's prompt:
             // that prompt is composed once, while whether a turn serves a colleague changes turn by
-            // turn, and it is the only thing telling the agent its reader is not the user.
+            // turn and it is the only thing telling the agent its reader is not the user.
             string declaredQuestion = await promptComposerService.ComposeConsultationRequestAsync(callerIntent) + question;
 
             // Taken before the turn so the ledger can be asked afterwards what happened in between.
@@ -163,9 +163,9 @@ public sealed class MorganaHostedAgent : AIAgent
                 cancellationToken);
 
             // What the answer cost travels back only to a caller that declared itself an agent of a
-            // Morgana: anything else that speaks A2A has no ledger to charge it to, and would carry a
+            // Morgana: anything else that speaks A2A has no ledger to charge it to and would carry a
             // number it cannot read. Unreported, the spend simply stays ours — it is on our own books
-            // either way, and this line only decides whether the asker gets to see it.
+            // either way and this line only decides whether the asker gets to see it.
             if (callerIntent is not null)
             {
                 peerConsultationResponse = peerConsultationResponse with
@@ -188,7 +188,7 @@ public sealed class MorganaHostedAgent : AIAgent
 
     /// <summary>Streaming form of <see cref="RunCoreAsync"/>, emitting the answer as a single update.</summary>
     /// <remarks>
-    /// Nobody watches a consultation, and the published card declares no streaming: this exists
+    /// Nobody watches a consultation and the published card declares no streaming: this exists
     /// because <see cref="AIAgent"/> requires it.
     /// </remarks>
     protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(
@@ -197,7 +197,7 @@ public sealed class MorganaHostedAgent : AIAgent
         AgentRunOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // The whole consultation runs here, awaited, and only then is emitted as one update: asking
+        // The whole consultation runs here, awaited and only then is emitted as one update: asking
         // for a stream is not a second path into a colleague, so the Ask, its timeout and the
         // serialized envelope hold identically whichever form the caller picked.
         AgentResponse response = await RunCoreAsync(messages, session, options, cancellationToken);

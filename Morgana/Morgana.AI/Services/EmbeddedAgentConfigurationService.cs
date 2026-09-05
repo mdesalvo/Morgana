@@ -69,24 +69,28 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     {
         logger.LogInformation("Searching for agents.json in loaded assemblies...");
 
-        // Every assembly currently loaded into the process is a candidate — not just Morgana's
-        // own — because a domain author's plugin DLL (loaded by PluginLoaderService before this
-        // service ever runs, see Program.cs) is exactly where agents.json is expected to live.
-        // IsDynamic assemblies are skipped because they never carry embedded resources (they're
-        // runtime-generated, e.g. by reflection emit) and GetManifestResourceNames would just
-        // throw NotSupportedException on them.
+        // Every assembly in the process, not Morgana's own: a domain lives in a plugin DLL, which
+        // PluginLoaderService has already loaded by the time this runs.
         foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies()
+                                                             // A runtime-generated assembly carries no
+                                                             // embedded resource to find.
                                                              .Where(a => !a.IsDynamic))
         {
+            // Matched by file name alone, as morgana.json is: what a plugin author calls their root
+            // namespace is their business.
             string? resourceName = assembly.GetManifestResourceNames()
                                            .FirstOrDefault(n => n.EndsWith(".agents.json", StringComparison.OrdinalIgnoreCase));
 
+            // The assembly that carries the domain. Every other one in the process is passed over in
+            // silence, since not carrying a domain is the normal condition of an assembly.
             if (resourceName != null)
             {
                 logger.LogInformation("✅ Found agents.json in assembly: {Name}", assembly.GetName().Name);
 
                 try
                 {
+                    // Named in the manifest yet unreadable: the search moves on rather than settling
+                    // for an assembly that advertised a domain it cannot hand over.
                     using Stream? stream = assembly.GetManifestResourceStream(resourceName);
                     if (stream == null)
                     {
@@ -94,6 +98,8 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                         continue;
                     }
 
+                    // The whole domain: the intents the classifier routes on, plus the prompt of every
+                    // agent that handles one.
                     AgentConfiguration? config = JsonSerializer.Deserialize<AgentConfiguration>(
                         stream, Records.DefaultJsonSerializerOptions);
 
@@ -102,41 +108,33 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                         logger.LogInformation(
                             "✅ Loaded {IntentsCount} intents and {AgentsCount} agent prompts from agents.json", config.Intents.Count, config.Agents.Count);
 
-                        // Log loaded intents for debugging
+                        // The intent list spelled out at startup. It is what the classifier will be given,
+                        // the only place an operator reads it back before a conversation exists.
                         foreach (Records.IntentDefinition intent in config.Intents)
-                        {
                             logger.LogInformation("   📋 Intent: {IntentName} - {IntentDescription}", intent.Name, intent.Description);
-                        }
 
-                        // First successful load wins, full stop — this method does NOT keep
-                        // scanning to merge a second agents.json from a second plugin assembly.
-                        // Today's deployment model is one domain plugin per Morgana instance, so
-                        // this is a deliberate simplification, not an oversight: if a future
-                        // multi-plugin scenario needs several agents.json files merged together,
-                        // this early return is exactly the line that would need to change.
+                        // One domain per installation, so the first is the only one. Merging several
+                        // agents.json files would begin exactly here.
                         return config;
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Deliberately caught per-assembly rather than left to propagate: a malformed
-                    // agents.json in ONE assembly (e.g. a half-built plugin sitting in the plugins/
-                    // folder) should not prevent scanning the rest for a valid one elsewhere, and
-                    // should definitely not crash Morgana's startup over a single bad resource file.
+                    // A half-built plugin left in plugins/ costs itself: the search goes on through the
+                    // other assemblies rather than taking Morgana's startup down with it.
                     logger.LogError(ex, "Failed to deserialize agents.json from {Name}", assembly.GetName().Name);
                 }
             }
         }
 
-        // Reached only if no assembly contributed a usable agents.json at all. This is a
-        // supported, documented mode ("agentless") rather than a startup failure — see
-        // EmbeddedAgentConfigurationService's class summary and HandlesIntentAgentRegistryService,
-        // which both tolerate an empty intent/agent set gracefully.
+        // No domain anywhere in the process. That is agentless mode, which Morgana supports: the
+        // registry tolerates an empty intent set, so this warns instead of throwing.
         logger.LogWarning(
             "⚠️  No agents.json found in any loaded assembly. " +
             "Classifier and presentation will have no intents available. " +
             "Add agents.json as embedded resource to your domain project.");
 
+        // An empty domain rather than null: every caller reads intents and prompts without a guard.
         return new AgentConfiguration([], []);
     }
 

@@ -38,7 +38,7 @@ public interface IAgentDirectoryService
     /// because it is the one an implementation actually read: for a colleague published elsewhere
     /// there is no local projection to describe it by.
     /// </remarks>
-    /// <param name="peer">Colleague to resolve: its intent, and the installation publishing it.</param>
+    /// <param name="peer">Colleague to resolve: its intent and the installation publishing it.</param>
     /// <param name="callerIntent">Asking agent, recorded on the credentials the resolved agent presents.</param>
     Task<(AIAgent Agent, AgentCard Card)?> ResolvePeerAgentAsync(Records.PeerReference peer, string callerIntent);
 }

@@ -11,7 +11,7 @@ namespace Morgana.AI.Attributes;
 /// Usage: [UsesMCPServer("https://...")] for HTTP/HTTPS or
 /// [UsesMCPServer(MCPTransport.Stdio, "path/to/cmd", args)] for local stdio.
 /// MorganaAgentAdapter collects attributes via reflection, connects to each server,
-/// discovers tools, and hands them to the agent.
+/// discovers tools and hands them to the agent.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class UsesMCPServerAttribute : Attribute

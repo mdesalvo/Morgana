@@ -81,7 +81,7 @@ public class MorganaAgentAdapter
     protected readonly ILogger logger;
 
     /// <summary>
-    /// Morgana framework prompt containing global policies, base tools, and error message templates.
+    /// Morgana framework prompt containing global policies, base tools and error message templates.
     /// Loaded once during adapter initialization from morgana.json.
     /// </summary>
     protected readonly Records.Prompt morganaPrompt;
@@ -174,7 +174,7 @@ public class MorganaAgentAdapter
         string conversationId,
         Func<AgentSession?> sessionAccessor,
         Func<string, object, Task>? sharedContextCallback = null)
-        // The single sync-over-async point of the whole creation path, and it is a structural
+        // The single sync-over-async point of the whole creation path and it is a structural
         // boundary rather than a shortcut: a MorganaAgent is materialized by Akka through
         // DependencyResolver.Props, i.e. inside a constructor, which offers no async seam. Everything
         // below this line is properly awaited; callers that DO have one — Forge composing a draft
@@ -185,7 +185,7 @@ public class MorganaAgentAdapter
             .GetResult();
 
     /// <summary>
-    /// Asynchronous counterpart of <see cref="CreateAgent"/>, and the real implementation: prompt
+    /// Asynchronous counterpart of <see cref="CreateAgent"/> and the real implementation: prompt
     /// resolution, prompt composition and tool-description assembly are all awaited here.
     /// </summary>
     /// <inheritdoc cref="CreateAgent" path="/param"/>
@@ -264,7 +264,7 @@ public class MorganaAgentAdapter
 
         // 6c) Collect the colleagues this agent declares it may consult. Like MCP tools they arrive
         //     already AIFunctions and bypass the native adapter entirely — they are not declared in
-        //     agents.json, are not implemented by any MorganaTool, and their prose is the colleague's
+        //     agents.json, are not implemented by any MorganaTool and their prose is the colleague's
         //     own card rather than something this agent's author wrote.
         Dictionary<string, string> peerTerritories = [];
         List<AIFunction> peerAgents = await RegisterPeerAgentsAsync(
@@ -298,7 +298,7 @@ public class MorganaAgentAdapter
 
         // 9) Assemble the Microsoft.Agents.AI agent over the metered client, injecting the
         //    context + history providers, a stable per-conversation Id (intent-conversationId),
-        //    the two-layer composed instructions (framework prompt + domain prompt), and the
+        //    the two-layer composed instructions (framework prompt + domain prompt) and the
         //    tool delegates materialized as AIFunctions.
         AIAgent aiAgent = agentChatClient.AsAIAgent(
             new ChatClientAgentOptions
@@ -594,7 +594,7 @@ public class MorganaAgentAdapter
             // Resolved through A2A discovery, so what comes back is Microsoft.Agents.AI.A2A's own
             // A2AAgent over the interface the colleague's card advertises — the identical object an
             // agent in another process would obtain for the same colleague. The card comes back with
-            // it, and it is that fetched card the model is told about: the colleague describes itself,
+            // it and it is that fetched card the model is told about: the colleague describes itself,
             // rather than being described by whatever this installation believes about it.
             Records.PeerReference peer = new Records.PeerReference(attribute.Intent, attribute.Instance);
 
@@ -608,7 +608,7 @@ public class MorganaAgentAdapter
             }
 
             // The A2A context identifier is the conversation, bound once here rather than left to a
-            // per-call default: every consultation of this colleague belongs to one exchange, and it
+            // per-call default: every consultation of this colleague belongs to one exchange and it
             // is that id the answering side turns back into the conversation's actor.
             AgentSession peerSession = peerAgent is A2AAgent a2aPeerAgent
                 ? await a2aPeerAgent.CreateSessionAsync(conversationId)
@@ -619,16 +619,15 @@ public class MorganaAgentAdapter
             // once the iteration has moved on.
             string peerIntent = attribute.Intent;
 
-            // Null for a colleague of this installation, which runs on this very conversation and has
-            // already charged it — importing what it reports would bill the same tokens twice. Only a
-            // colleague elsewhere spent someone else's ledger, which is the one worth bringing home.
+            // Null for a colleague of this installation: it ran on this conversation and already
+            // charged it. It still reports the figure, not knowing its caller is one of its own.
             string? peerSystem = attribute.Instance;
 
             // Morgana's rules sit above the colleague as pipeline middleware, in the shape the agent
             // framework defines, leaving the resolved A2AAgent untouched. The closure holds nothing
             // that can go stale: it captures immutables only, reads the live session through
-            // sessionAccessor() at invocation, and never captures the colleague — innerAgent is handed
-            // in by the pipeline on every call. One closure per declared colleague per agent, and
+            // sessionAccessor() at invocation and never captures the colleague — innerAgent is handed
+            // in by the pipeline on every call. One closure per declared colleague per agent and
             // agents are per-conversation, so none is shared. The streaming delegate is left null and
             // the framework bridges streaming onto the run delegate, so the guards cannot be skipped.
             AIAgent guardedPeerAgent = new AIAgentBuilder(peerAgent)
@@ -636,11 +635,11 @@ public class MorganaAgentAdapter
                 {
                     // The two rules a consultation is bound by, evaluated against the CALLER's live
                     // session — not the peer session this function was built with — because both are
-                    // facts about the turn asking: whether it is itself serving a colleague, and how
+                    // facts about the turn asking: whether it is itself serving a colleague and how
                     // many rounds it has already spent. Passing means the round is charged.
                     string? refusal = await ApplyPeerGuardsAsync(callerIntent, peerIntent, sessionAccessor(), maxRoundsPerTurn, contextProvider);
 
-                    // Refused, and the colleague is never reached: the model gets the refusal in the
+                    // Refused and the colleague is never reached: the model gets the refusal in the
                     // very envelope a real answer travels in, so it reads one shape whatever happened
                     // and cannot mistake a rule for a colleague's opinion.
                     if (refusal is not null)
@@ -652,17 +651,13 @@ public class MorganaAgentAdapter
                     AgentResponse peerResponse =
                         await innerAgent.RunAsync(messages, session, WithDeclaredCaller(options, callerIntent), cancellationToken);
 
-                    // A colleague of this installation is handed back untouched — its spend is already
-                    // on this conversation's books. One elsewhere may have reported what it cost, and
-                    // that figure is brought home and taken out of the envelope before a model sees it.
-                    return peerSystem is null
-                        ? peerResponse
-                        : await ImportPeerDustAsync(peerResponse, conversationId, peerIntent, peerSystem);
+                    // Stripped whoever answered, charged only when the ledger was somebody else's.
+                    return await SettlePeerDustAsync(peerResponse, conversationId, peerIntent, peerSystem);
                 }, null)
                 .Build();
 
             // The function name is what the model calls, so it is derived from the colleague's intent
-            // rather than from the card's free-form name, and sanitized because a name is constrained
+            // rather than from the card's free-form name and sanitized because a name is constrained
             // where a card's name is not.
             string peerFunctionName = ToFunctionName(peer);
 
@@ -679,7 +674,7 @@ public class MorganaAgentAdapter
                 peerSession));
 
             // The same territory, kept a second time under the callable name: the prompt's
-            // ColleaguesDeclaration lists who this agent holds, and it must name them the way the tool
+            // ColleaguesDeclaration lists who this agent holds and it must name them the way the tool
             // list does. Empty rather than absent for a card with no description — a colleague still
             // exists when it failed to say what it is for.
             peerTerritories[peerFunctionName] = peerCard.Description ?? "";
@@ -688,18 +683,18 @@ public class MorganaAgentAdapter
         }
 
         // Whatever was reachable, which is not necessarily everything declared: a colleague that could
-        // not be resolved was logged and skipped above, and the agent runs without it rather than not
+        // not be resolved was logged and skipped above and the agent runs without it rather than not
         // running at all.
         return peerAgents;
     }
 
     /// <summary>
-    /// Applies the two rules a consultation is bound by, and charges the round to the turn's budget
+    /// Applies the two rules a consultation is bound by and charges the round to the turn's budget
     /// when they pass.
     /// </summary>
     /// <remarks>
     /// A refusal comes back as an ordinary answer, never an exception: the asking agent is mid-turn
-    /// with a user waiting, and a refused consultation must degrade its answer, not destroy the turn.
+    /// with a user waiting and a refused consultation must degrade its answer, not destroy the turn.
     /// </remarks>
     /// <param name="callerSession">The asking agent's session, or null when it has none yet.</param>
     /// <returns>The serialized refusal envelope, or <c>null</c> when the consultation may proceed.</returns>
@@ -711,7 +706,7 @@ public class MorganaAgentAdapter
         MorganaAIContextProvider contextProvider)
     {
         // No session means no turn has run yet, so neither rule has anything to read: there is no
-        // consultation in progress to refuse a second hop to, and no round count to have exceeded.
+        // consultation in progress to refuse a second hop to and no round count to have exceeded.
         // Letting it through is the only answer that is not invented.
         if (callerSession is null)
             return null;
@@ -721,7 +716,7 @@ public class MorganaAgentAdapter
         if (contextProvider.GetVariable(callerSession, Constants.ContextKeys.ServingConsultation) is not null)
         {
             logger.LogWarning("Agent '{CallerIntent}' attempted to consult '{PeerIntent}' while itself answering a colleague", callerIntent, peerIntent);
-            return RefusalEnvelope("You are currently answering a colleague, and a colleague may not consult a further colleague. Answer with what you know.");
+            return RefusalEnvelope("You are currently answering a colleague and a colleague may not consult a further colleague. Answer with what you know.");
         }
 
         // The second rule: a cap on how many rounds one user turn may spend talking to colleagues.
@@ -735,7 +730,7 @@ public class MorganaAgentAdapter
         }
 
         // Charged before the colleague is called, not after it answers: a consultation that hangs or
-        // throws has still spent its round, and counting only successful ones would let a failing
+        // throws has still spent its round and counting only successful ones would let a failing
         // colleague be retried without limit for the whole turn.
         await contextProvider.SetVariableAsync(callerSession, Constants.ContextKeys.ConsultationRounds, roundsSoFar + 1);
 
@@ -775,54 +770,47 @@ public class MorganaAgentAdapter
         };
 
     /// <summary>
-    /// Charges what a colleague elsewhere reports having spent to this conversation, and returns the
-    /// answer with that figure removed.
+    /// Takes what a colleague reports having spent off its answer and charges it home when that
+    /// colleague was published elsewhere.
     /// </summary>
     /// <remarks>
-    /// Two reasons the number cannot simply be left where it arrived. It is the caller's budget that
-    /// must state what the whole conversation cost, wherever the tokens burned; and the envelope is
-    /// read by a model, which has no use for accounting and every opportunity to narrate it. An
-    /// envelope that will not parse is handed back untouched: a colleague that answered is not made
-    /// to fail over bookkeeping.
+    /// Two independent halves. Stripping is unconditional: a model given a number will narrate it and
+    /// every colleague reports one. Charging is not: one of ours already billed this conversation.
+    /// An envelope that will not parse is handed back untouched rather than made to fail.
     /// </remarks>
     /// <param name="peerResponse">The colleague's answer, carrying the serialized envelope.</param>
     /// <param name="conversationId">Conversation charged for what the colleague spent.</param>
     /// <param name="peerIntent">Colleague consulted, named in the metric.</param>
-    /// <param name="peerSystem">System publishing it, named in the metric beside the intent.</param>
-    private async Task<AgentResponse> ImportPeerDustAsync(
+    /// <param name="peerSystem">System publishing it, named in the metric beside the intent; null for a colleague of this installation.</param>
+    private async Task<AgentResponse> SettlePeerDustAsync(
         AgentResponse peerResponse,
         string conversationId,
         string peerIntent,
-        string peerSystem)
+        string? peerSystem)
     {
         try
         {
-            // The colleague's answer is the serialized envelope, so reading what it cost means reading
-            // the envelope: there is no side channel, and none is wanted — this is Morgana's own JSON
-            // at both ends, which no hosting layer in between has to agree to carry.
+            // No side channel and none wanted: Morgana's own JSON at both ends, carried by any host.
             Records.PeerConsultationResponse? envelope = JsonSerializer.Deserialize<Records.PeerConsultationResponse>(
                 peerResponse.Text, Records.DefaultJsonSerializerOptions);
 
-            // Nothing to charge and nothing to hide: an answer from an installation that does not
-            // report, or one that reported zero, is left exactly as it arrived rather than rebuilt.
+            // Nothing to hide: an installation that does not report is left as it arrived.
             if (envelope?.DustConsumed is not > 0)
                 return peerResponse;
 
-            // Attributed to the desk that burned it and the system it runs on, so a conversation's
-            // spend stays readable as a bill: this agent's own turns, and this much bought elsewhere.
-            await dustLimitService.ChargeAsync(
-                conversationId, envelope.DustConsumed.Value, $"{Constants.Morgana} ({peerIntent}@{peerSystem})");
+            // Attributed to the desk and system that burned it, so the spend stays readable as a bill.
+            if (peerSystem is not null)
+                await dustLimitService.ChargeAsync(
+                    conversationId, envelope.DustConsumed.Value, $"{Constants.Morgana} ({peerIntent}@{peerSystem})");
 
-            // Re-serialized without the figure, which has done its job the moment it was charged. The
-            // response is rebuilt rather than edited in place because what the model reads is the text
-            // of this message, and it must not contain a number it has no use for.
+            // The model reads this message's text, so the figure has to be gone from the text itself.
             return new AgentResponse(new ChatMessage(
                 ChatRole.Assistant,
                 JsonSerializer.Serialize(envelope with { DustConsumed = null }, Records.DefaultJsonSerializerOptions)));
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Could not read what '{PeerIntent}' at '{PeerSystem}' spent; its answer stands and the charge is lost", peerIntent, peerSystem);
+            logger.LogWarning(ex, "Could not read what '{PeerIntent}' at '{PeerSystem}' spent; its answer stands and the charge is lost", peerIntent, peerSystem ?? Constants.Morgana);
             return peerResponse;
         }
     }
@@ -910,7 +898,7 @@ public class MorganaAgentAdapter
 
         // A reachable server that advertises zero tools is not an error (it may expose
         // none yet, or only prompts/resources): warn for visibility and return — there is
-        // simply nothing to bind, and the agent keeps its base/native tools.
+        // simply nothing to bind and the agent keeps its base/native tools.
         if (mcpTools.Count == 0)
         {
             logger.LogWarning("No tools discovered from MCP server: {ServerAttributeCommand}", serverAttribute.Command);

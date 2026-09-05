@@ -62,7 +62,7 @@ public static class A2APublicationExtensions
                         serviceProvider.GetRequiredService<ILogger>()))
 
                 // The session store is where a request's A2A context id becomes a Morgana conversation.
-                // Not isolation-key scoped: the context id IS the partition here, and Morgana's own
+                // Not isolation-key scoped: the context id IS the partition here and Morgana's own
                 // per-conversation database already isolates everything the conversation owns.
                 .WithSessionStore(
                     (serviceProvider, agentName) => new MorganaHostedAgentSessionStore(serviceProvider.GetRequiredService<ILogger>()),
@@ -75,12 +75,12 @@ public static class A2APublicationExtensions
         }
 
         // Handed back so this call can sit in a chain of registrations like every other Add* in the
-        // host's manifest, and for no other reason: nothing was replaced, only added to.
+        // host's manifest and for no other reason: nothing was replaced, only added to.
         return builder;
     }
 
     /// <summary>
-    /// Maps one JSON-RPC endpoint and one well-known agent card per published agent, and arranges for
+    /// Maps one JSON-RPC endpoint and one well-known agent card per published agent and arranges for
     /// the cards to learn the address Kestrel ends up binding.
     /// </summary>
     /// <remarks>
@@ -95,7 +95,7 @@ public static class A2APublicationExtensions
         if (publishedIntents.Count == 0)
             return;
 
-        // Resolved once: this is the singleton holding the card cache, and the one that later fills
+        // Resolved once: this is the singleton holding the card cache and the one that later fills
         // those cards in with the address Kestrel bound.
         IAgentDirectoryService agentDirectory = app.Services.GetRequiredService<IAgentDirectoryService>();
 
@@ -122,7 +122,7 @@ public static class A2APublicationExtensions
                    ConfigurationAgentDirectoryService.ResolveAdmittedIssuers(app.Configuration, publishedIntent),
                    app.Services.GetRequiredService<ILogger>()));
 
-            // The card itself stays open: discovery is what tells a caller how to authenticate, and a
+            // The card itself stays open: discovery is what tells a caller how to authenticate and a
             // card behind authentication cannot be found by anyone not already knowing how to reach it.
             app.MapWellKnownAgentCard(publishedCard, agentPath);
         }
@@ -130,7 +130,7 @@ public static class A2APublicationExtensions
         // The cards above were projected while the endpoints were still being mapped, before Kestrel had
         // bound anything, so none of them names an address yet. The moment it has, the directory fills
         // them in — the well-known endpoint serialises its card on every request, so a card read after
-        // this point carries the interface, and nothing ever had to be told the application's own URL.
+        // this point carries the interface and nothing ever had to be told the application's own URL.
         app.Lifetime.ApplicationStarted.Register(() => agentDirectory.PublishInterfacesAsync().GetAwaiter().GetResult());
     }
 }

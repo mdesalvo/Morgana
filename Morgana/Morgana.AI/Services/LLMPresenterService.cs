@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Adapters;
@@ -96,9 +96,8 @@ public class LLMPresenterService : IPresenterService
         // through the Lazy<Task<>>; every subsequent caller re-enters the same Task and observes
         // the same materialised PresentationResult.
         ChannelCapabilities channelCapabilities = channelMetadata.Capabilities;
-        string channelName = channelMetadata.Coordinates.ChannelName;
         return cache.GetOrAdd(
-            channelName,
+            channelMetadata.Coordinates.ChannelName,
             key => new Lazy<Task<Records.PresentationResult>>(
                         () => BuildPresentationResultAsync(displayableIntents, channelCapabilities, key))
         ).Value;
@@ -120,15 +119,14 @@ public class LLMPresenterService : IPresenterService
         logger.LogInformation(
             "LLMPresenterService: building presentation for channel '{ChannelName}' (cache miss)", channelName);
 
-        // Generate the rich presentation message, or the fallback version
-        // in case of any blocking issues. Morgana must always present herself.
+        // Generate the rich presentation message, or the fallback version in case of any blocking issues.
+        // Morgana must always present herself.
         Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Presentation);
         Records.PresentationResult presentationResult = displayableIntents.Count == 0
             ? new Records.PresentationResult(presentationPrompt.GetAdditionalProperty<string>("NoAgentsMessage"), [])
             : await GenerateMessageAsync(presentationPrompt, displayableIntents);
 
-        // Capability-driven degradation with caching of the outcome:
-        // subsequent conversations on this channel pay zero LLM cost.
+        // Capability-driven degradation with caching of the outcome: subsequent conversations on this channel pay zero LLM cost.
         ChannelMessage channelMessage = await channelAdapter.AdaptAsync(
             new ChannelMessage
             {
@@ -141,7 +139,7 @@ public class LLMPresenterService : IPresenterService
             }, channelCapabilities);
 
         // Unwrap back into the presenter's domain type. RichCard is intentionally ignored here —
-        // the presentation never produces one, and the supervisor's send path doesn't read it
+        // the presentation never produces one and the supervisor's send path doesn't read it
         // off PresentationResult either.
         return new Records.PresentationResult(channelMessage.Text, channelMessage.QuickReplies ?? []);
     }
@@ -151,8 +149,8 @@ public class LLMPresenterService : IPresenterService
     /// null payload) it logs and returns the deterministic fallback so the caller never sees an
     /// exception — the service's reliability contract is enforced here.
     /// </summary>
-    /// <param name="presentationPrompt">Resolved <c>Presentation</c> prompt; its <c>((intents))</c> placeholder is interpolated here, and it also carries the fallback text.</param>
-    /// <param name="displayableIntents">Intents rendered into the prompt as a bullet list, and reused verbatim by the fallback path.</param>
+    /// <param name="presentationPrompt">Resolved <c>Presentation</c> prompt; its <c>((intents))</c> placeholder is interpolated here and it also carries the fallback text.</param>
+    /// <param name="displayableIntents">Intents rendered into the prompt as a bullet list and reused verbatim by the fallback path.</param>
     /// <returns>The LLM-generated presentation, or the deterministic fallback if anything went wrong.</returns>
     private async Task<Records.PresentationResult> GenerateMessageAsync(
         Records.Prompt presentationPrompt,
@@ -203,11 +201,13 @@ public class LLMPresenterService : IPresenterService
     /// </summary>
     /// <param name="presentationPrompt">Resolved <c>Presentation</c> prompt, read here only for its <c>FallbackMessage</c> additional property.</param>
     /// <param name="displayableIntents">One quick reply is derived per intent from its <c>Label</c> and <c>DefaultValue</c>.</param>
-    /// <returns>A presentation built purely from configuration; makes no LLM call and cannot fail.</returns>
+    /// <returns>The presentation a user sees when no model wrote one.</returns>
     private Records.PresentationResult BuildFallbackMessage(
         Records.Prompt presentationPrompt,
         IReadOnlyList<Records.IntentDefinition> displayableIntents)
     {
+        // The greeting authored for exactly this case: a real welcome somebody wrote in morgana.json,
+        // never an error string, because the user is opening a conversation rather than meeting a fault.
         string fallbackMessage = presentationPrompt.GetAdditionalProperty<string>("FallbackMessage");
 
         // One quick reply per intent. Label falls back to the intent name; value falls back to a

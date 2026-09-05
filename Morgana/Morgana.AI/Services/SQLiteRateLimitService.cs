@@ -1,4 +1,4 @@
-using Microsoft.Data.Sqlite;
+﻿using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Interfaces;
@@ -10,7 +10,7 @@ namespace Morgana.AI.Services;
 /// SQLite-based sliding-window rate limiter: per-minute/hour/day caps, one row per accepted
 /// request in the SAME per-conversation database conversation persistence uses (table
 /// <c>rate_limit_log</c>). Each check cleans up requests older than 24h, counts each configured
-/// window, and — only if every window is under its cap — records the request, all in one transaction.
+/// window and— only if every window is under its cap — records the request, all in one transaction.
 /// </summary>
 public class SQLiteRateLimitService : IRateLimitService
 {
@@ -53,6 +53,8 @@ public class SQLiteRateLimitService : IRateLimitService
         this.persistenceService = persistenceService;
         this.logger = logger;
 
+        // The caps this installation runs under, on one line at startup: they are read per request from
+        // here on, so this is where an operator confirms the deployment took the configuration it meant.
         logger.LogInformation(
             $"SQLiteRateLimitService initialized: " +
             $"{options.Value.MaxMessagesPerMinute}/min, " +
@@ -73,6 +75,8 @@ public class SQLiteRateLimitService : IRateLimitService
     /// </returns>
     public async Task<RateLimitResult> CheckAndRecordAsync(string conversationId)
     {
+        // Switched off, so every request passes and none is recorded: a deployment that does not limit
+        // pays nothing, not even the write.
         if (!options.Enabled)
             return new RateLimitResult(IsAllowed: true);
 
@@ -83,6 +87,8 @@ public class SQLiteRateLimitService : IRateLimitService
             // here too, on-demand, avoids a FileNotFoundException on a brand-new conversation.
             await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
 
+            // The conversation's own database, which is also what scopes the limit: a caller opening a
+            // second conversation is counted separately, by design.
             string sqliteConnectionString = GetConnectionString(conversationId);
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
@@ -93,16 +99,21 @@ public class SQLiteRateLimitService : IRateLimitService
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
             try
             {
+                // One instant for the whole check, so the three windows are measured from the same point
+                // and a request cannot fall inside one of them but outside another.
                 DateTime utcNow = DateTime.UtcNow;
                 string utcNowIso = utcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
 
-                // Step 1: Clean up old requests
+                // Yesterday's requests can no longer breach any window, so they go before they are
+                // counted: the log stays bounded without a housekeeping pass of its own.
                 await CleanupOldRequestsAsync(sqliteConnection, sqliteTransaction, utcNow);
 
-                // Step 2: Check time windows
+                // The narrowest window with no room left, or nothing when all three still have some.
                 RateLimitResult? violation = await CheckTimeWindowsAsync(
                     sqliteConnection, sqliteTransaction, utcNow);
 
+                // A denied request leaves no trace: counting it would push the caller further past the
+                // cap on every retry, so being refused would lengthen the wait it caused.
                 if (violation != null)
                 {
                     await sqliteTransaction.RollbackAsync();
@@ -113,9 +124,11 @@ public class SQLiteRateLimitService : IRateLimitService
                     return violation;
                 }
 
-                // Step 3: Record request
+                // Admitted, so it counts against the next caller's windows.
                 await RecordRequestAsync(sqliteConnection, sqliteTransaction, utcNowIso);
 
+                // Count and record become visible together: until this line no concurrent check sees this
+                // request, which is what stops two of them slipping past one cap.
                 await sqliteTransaction.CommitAsync();
 
                 logger.LogDebug("Rate limit ALLOWED for conversation {ConversationId}", conversationId);
@@ -124,6 +137,8 @@ public class SQLiteRateLimitService : IRateLimitService
             }
             catch
             {
+                // Nothing half-written: a failure here must not leave a request counted against a caller
+                // whose turn never ran.
                 await sqliteTransaction.RollbackAsync();
                 throw;
             }
@@ -156,11 +171,13 @@ public class SQLiteRateLimitService : IRateLimitService
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
 
+            // The whole log, not a window of it: this hands the conversation back its full allowance.
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText = "DELETE FROM rate_limit_log;";
 
             int rowsDeleted = await sqliteCommand.ExecuteNonQueryAsync();
 
+            // How much allowance came back, which is the only evidence the reset did anything.
             logger.LogInformation(
                 "Rate limit reset for conversation {ConversationId} ({RowsDeleted} requests cleared)", conversationId, rowsDeleted);
         }
@@ -188,9 +205,11 @@ public class SQLiteRateLimitService : IRateLimitService
         // ISO-8601 with a fixed-width, zero-padded format: request_timestamp is stored as TEXT,
         // and this specific format sorts correctly under a plain lexicographic "<"/">=" comparison
         // — the same trick every timestamp comparison in this file relies on.
+        // A day back, which outlives the widest configured window: anything older cannot affect a count.
         DateTime cutoff = now.AddDays(-1);
         string cutoffIso = cutoff.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
 
+        // Inside the caller's transaction, so a request denied further down un-deletes these rows too.
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = "DELETE FROM rate_limit_log WHERE request_timestamp < @cutoff;";
@@ -215,7 +234,7 @@ public class SQLiteRateLimitService : IRateLimitService
         SqliteTransaction transaction,
         DateTime utcNow)
     {
-        // >= not >: count is the number of PRIOR requests already in the window, and this one
+        // >= not >: count is the number of PRIOR requests already in the window and this one
         // would be the (count+1)th — so count==limit means this request is the one that breaches
         // the cap and must be denied, not admitted as the "last allowed" one. A limit of 0 skips
         // the window entirely (see the `> 0` guards) rather than meaning "zero requests allowed".

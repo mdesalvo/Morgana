@@ -12,7 +12,7 @@ namespace Morgana.AI.ChatClients;
 /// <para><strong>Why an instance carries its own llmRole.</strong> There is no singleton dust
 /// wrapper on <see cref="Abstractions.MorganaLLM"/>'s chat client. Instead this client is constructed at
 /// exactly two points, each stamping its own <c>llmRole</c> at construction time — so we never
-/// need a separate llmRole-stamping decorator, and the same call is never charged twice:</para>
+/// need a separate llmRole-stamping decorator and the same call is never charged twice:</para>
 /// <list type="bullet">
 ///   <item><see cref="Abstractions.MorganaLLM.CompleteWithSystemPromptAsync"/> wraps per call with llmRole
 ///   <c>"Morgana"</c> (framework actors: guard, classifier, presenter, channel adapter).</item>
@@ -21,7 +21,7 @@ namespace Morgana.AI.ChatClients;
 /// </list>
 /// <para>The conversation id is read from <see cref="ChatOptions.ConversationId"/>, which
 /// every caller already sets. Charging is best-effort: <see cref="IDustLimitService"/> itself
-/// fails open, and any exception here is swallowed so dust accounting can never break a turn.</para>
+/// fails open and any exception here is swallowed so dust accounting can never break a turn.</para>
 /// </remarks>
 public sealed class DustAccountingChatClient : DelegatingChatClient
 {

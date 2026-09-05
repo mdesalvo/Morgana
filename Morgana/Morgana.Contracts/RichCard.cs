@@ -208,7 +208,7 @@ public record BadgeComponent(
 
 /// <summary>
 /// Image component for displaying visual content from URLs.
-/// Supports captions, alt text, and size variants.
+/// Supports captions, alt text and size variants.
 /// </summary>
 /// <param name="Src">Image URL (must be publicly accessible, HTTPS recommended)</param>
 /// <param name="Alt">Alternative text for accessibility (optional but recommended)</param>

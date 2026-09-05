@@ -34,7 +34,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
         // Lazy<> rather than loading eagerly in the constructor: morgana.json never changes after
         // deployment, so the embedded-resource read + JSON parse in LoadMorganaPrompts only ever
         // needs to happen once, on whichever thread first asks for a prompt — not on every DI
-        // resolution of this singleton, and not before it's actually needed.
+        // resolution of this singleton and not before it's actually needed.
         morganaPrompts = new Lazy<Records.Prompt[]>(LoadMorganaPrompts);
     }
 
@@ -55,14 +55,13 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     /// <exception cref="KeyNotFoundException">ID not found in morgana.json or agents.json.</exception>
     public async Task<Records.Prompt> ResolveAsync(string promptID)
     {
+        // Both layers already merged: a framework id and a domain intent are looked up the same way,
+        // which is what lets an agent's prompt be reached by its intent name alone.
         Records.Prompt[] allPrompts = await GetAllPromptsAsync();
 
-        // SingleOrDefault, not FirstOrDefault: framework IDs ("Morgana", "Classifier", "Guard",
-        // "Presentation") and domain IDs (intent names from agents.json) are meant to be disjoint
-        // vocabularies. If a plugin author names an intent "guard" or "classifier", that collides
-        // with a framework prompt and SingleOrDefault throws InvalidOperationException — loud and
-        // at prompt-resolution time — rather than silently letting whichever one happens to come
-        // first in the merged array win and the other become permanently unreachable.
+        // A framework id and a domain intent name are meant to be disjoint vocabularies. An intent
+        // named "guard" or "classifier" collides with a framework prompt: that has to fail loudly
+        // here, never let one of the two win the lookup while the other becomes unreachable.
         Records.Prompt? prompt = allPrompts
             .SingleOrDefault(p => string.Equals(p.ID, promptID, StringComparison.OrdinalIgnoreCase));
 
@@ -79,16 +78,19 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     {
         Assembly assembly = Assembly.GetExecutingAssembly();
 
-        // EndsWith rather than an exact resource name: the MSBuild-generated manifest resource
-        // name is namespace-prefixed (typically "Morgana.AI.morgana.json"), and matching only the
-        // file-name suffix means this keeps working even if the root namespace or the assembly
-        // name itself changes — the file is still found by its own name.
+        // The manifest name MSBuild generates is namespace-prefixed ("Morgana.AI.morgana.json"), so
+        // matching the file name alone survives a change of root namespace or assembly name. The file
+        // is still found by the name it was authored under.
         string resourceName = assembly.GetManifestResourceNames()
             .First(n => n.EndsWith(".morgana.json", StringComparison.OrdinalIgnoreCase));
 
+        // The framework prompts ship inside this very assembly, so their absence is a broken build
+        // rather than a deployment that forgot a file.
         using Stream? stream = assembly.GetManifestResourceStream(resourceName)
-            ?? throw new FileNotFoundException("Resource morgana.json not found in Morgana.Agents assembly.");
+            ?? throw new FileNotFoundException("Resource morgana.json not found in the Morgana.AI assembly.");
 
+        // The whole framework layer as morgana.json declares it: every prompt with its four sections,
+        // the global policies, the injection templates, the error answers.
         Records.PromptCollection? promptsCollection = JsonSerializer.Deserialize<Records.PromptCollection>(
             stream, Records.DefaultJsonSerializerOptions);
 

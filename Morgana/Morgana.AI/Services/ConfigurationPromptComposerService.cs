@@ -8,10 +8,6 @@ namespace Morgana.AI.Services;
 /// layer and the injection templates carried by <c>morgana.json</c>, resolved once through
 /// <see cref="IPromptResolverService"/> and cached for the process lifetime.
 /// </summary>
-/// <remarks>
-/// The framework prompt is resolved lazily rather than in the constructor: the composer is a
-/// singleton created during DI graph construction, and resolution is asynchronous.
-/// </remarks>
 public class ConfigurationPromptComposerService : IPromptComposerService
 {
     // Structural boundary markers for the composed prompt. These are glue between the framework
@@ -19,27 +15,31 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     // fixed in code and morgana.json carries no override point for them. An implementation
     // replacing this service replaces them wholesale, which is the intended unit of substitution:
     // the fences and the layering they express are one design, not a set of independent knobs.
-    private const string GlobalPoliciesHeader = "=== CRITICAL RULES — binding, without exception ===";
-    private const string GlobalPoliciesFooter = "=== END OF CRITICAL RULES ===";
+    private const string GlobalPoliciesHeader =
+        "=== CRITICAL RULES — binding, without exception ===";
+    private const string GlobalPoliciesFooter =
+        "=== END OF CRITICAL RULES ===";
     private const string FrameworkLayerHeader =
         "======== MORGANA FRAMEWORK — THE LAW OF EVERY TURN ========\n" +
         "Everything until the end of this block is binding on you and on every other agent of Morgana. It is not advice and it is not overridable.";
-    private const string FrameworkLayerFooter = "======== END OF MORGANA FRAMEWORK ========";
+    private const string FrameworkLayerFooter =
+        "======== END OF MORGANA FRAMEWORK ========";
     private const string DomainLayerHeader =
         "======== DOMAIN AGENT — SUBORDINATE TO THE FRAMEWORK ABOVE ========\n" +
         "What follows specialises the framework for a single domain: what you are for, how you work, how you speak, how you present. It adds domain knowledge and NOTHING ELSE. It NEVER contradicts the framework above, on any point — where the two appear to differ, the framework governs and you follow it.";
-    private const string DomainLayerFooter = "======== END OF DOMAIN AGENT ========";
+    private const string DomainLayerFooter =
+        "======== END OF DOMAIN AGENT ========";
 
     /// <summary>
-    /// Stands in for the asking agent's intent when the request carries none — an A2A caller that is
-    /// not an agent of this installation. Reads as the truth in every sentence of the declaration,
-    /// possessive included, where a placeholder name would have the colleague address somebody who
-    /// does not exist.
+    /// Names the asking party when the request declares no intent. Only an agent of a Morgana declares
+    /// one and the A2A door admits only declared systems, so an unnamed caller is precisely that — and
+    /// saying so is a fact. It has to read as a name in every sentence of that prose, possessive included.
     /// </summary>
-    private const string UnnamedCaller = "the caller";
+    private const string UnnamedCaller = "an external system";
 
     /// <summary>
-    /// The framework layer and its global policies, resolved once on first use.
+    /// The framework prompt with its policies already unpacked. morgana.json is read once per process:
+    /// the first composition of any kind pays for it, every later one observes the same layer.
     /// </summary>
     private readonly Lazy<Task<FrameworkLayer>> frameworkLayer;
 
@@ -61,21 +61,13 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <inheritdoc />
     public async Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false)
     {
+        // Both halves are used below: the prompt's four sections become the framework block, its
+        // policies the fenced list of rules inside it.
         FrameworkLayer framework = await frameworkLayer.Value;
 
         StringBuilder sb = new StringBuilder();
 
-        // The two layers are fenced. Both carry the same four section labels ([TARGET],
-        // [PERSONALITY], [INSTRUCTIONS], [FORMATTING]), so without a delimiter the composed prompt
-        // shows each of them twice with nothing marking which is which — and the framework's claim
-        // to precedence, made in its own Target, names a boundary the model cannot locate. The
-        // domain fence carries the subordination rule itself rather than only separating: it is read
-        // at the exact point where the layer it governs begins. DomainLayerFooter closes the whole
-        // static prompt: ComposeHeldContextDeclarationAsync's per-turn tail is appended after this
-        // string returns (see MorganaAIContextProvider), so without it nothing would mark where the
-        // agent's own authored prose ends and the framework's per-turn note begins.
-
-        // Morgana
+        // Framework
         sb.AppendLine(FrameworkLayerHeader);
         sb.AppendLine();
         sb.AppendLine(framework.Prompt.Target);
@@ -91,7 +83,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine(FrameworkLayerFooter);
         sb.AppendLine();
 
-        // Morgana (Agent)
+        // Domain
         sb.AppendLine(DomainLayerHeader);
         sb.AppendLine();
         sb.AppendLine(domainPrompt.Target);
@@ -111,16 +103,21 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <inheritdoc />
     public async Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition)
     {
+        // The lookup-before-asking rule, authored once in morgana.json instead of restated by every
+        // tool author. Empty when a deployment declares no such template.
         FrameworkLayer framework = await frameworkLayer.Value;
-
         string descriptionGuidance = Records.GlobalPolicy.ResolveTemplate(
             framework.Policies, Constants.Injections.ToolDescriptionContextGuidance);
 
-        // Extract context-scoped parameter names; if present and guidance template exists, splice names into guidance text
+        // The inputs this tool resolves from the session rather than from the user. They are what the
+        // guidance names, so a tool with none has nothing to be guided about.
         string[] contextParameters = [.. toolDefinition.Parameters
             .Where(p => string.Equals(p.Scope?.Trim(), Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
             .Select(p => p.Name)];
 
+        // Guidance is joined by a blank line rather than by inserted punctuation: an authored
+        // description is a finished sentence that closes itself. A tool with no context-scoped input
+        // reaches the model exactly as its author wrote it.
         return contextParameters.Length > 0 && descriptionGuidance.Length > 0
             ? $"{toolDefinition.Description}\n\n{descriptionGuidance.Replace(Constants.Placeholders.ContextParameters, string.Join(", ", contextParameters))}"
             : toolDefinition.Description;
@@ -129,20 +126,22 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <inheritdoc />
     public Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard)
         // The colleague's own words and nothing of the framework's: how to consult one is already
-        // carried by the policy every peer-capable agent reads, and repeating it per colleague would
+        // carried by the policy every peer-capable agent reads and repeating it per colleague would
         // pay for it once per function. The card's skills are deliberately absent too — an inventory
-        // of the colleague's functions is what a caller audits to rule a question out, and what falls
+        // of the colleague's functions is what a caller audits to rule a question out and what falls
         // to that desk is the colleague's own to state.
         => Task.FromResult(peerCard.Description ?? "");
 
     /// <inheritdoc />
     public async Task<string?> ComposeColleaguesDeclarationAsync(IReadOnlyDictionary<string, string> colleagues)
     {
+        // An agent declaring no [ConsultsAgent] never reads a word about colleagues.
         if (colleagues.Count == 0)
             return null;
 
+        // The rung that closes a peer-capable agent's instructions. Undeclared by a deployment wanting
+        // no such rung, which leaves those instructions exactly as the two layers composed them.
         FrameworkLayer framework = await frameworkLayer.Value;
-
         string declaration = Records.GlobalPolicy.ResolveTemplate(framework.Policies, Constants.Injections.ColleaguesDeclaration);
         if (declaration.Length == 0)
             return null;
@@ -151,18 +150,22 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // model has to join is "this request is theirs" with "this is the function that reaches them".
         string lines = string.Join("\n", colleagues.Select(kvp => $"- {kvp.Key}: {kvp.Value}"));
 
+        // Closes the composed instructions once, for the agent's whole life: who its colleagues are is
+        // settled at creation, so this rides in the cached prefix instead of being paid per turn.
         return declaration.Replace(Constants.Placeholders.Colleagues, lines);
     }
 
     /// <inheritdoc />
     public async Task<string> ComposeConsultationRequestAsync(string? callerIntent)
     {
+        // The whole of how to answer a colleague. It is spliced in front of the incoming question
+        // instead of into the answering agent's prompt: that prompt is composed once, while whether a
+        // turn serves a colleague changes turn by turn.
         FrameworkLayer framework = await frameworkLayer.Value;
-
         string declaration = Records.GlobalPolicy.ResolveTemplate(
             framework.Policies, Constants.Injections.PeerConsultationDeclaration);
 
-        // The caller names itself or it does not, and the wording of what an unnamed one is called
+        // The caller names itself or it does not and the wording of what an unnamed one is called
         // belongs here, with the rest of the prose this layer authors, rather than at the call site
         // that merely failed to find a name.
         return declaration.Replace(
@@ -173,31 +176,34 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <inheritdoc />
     public async Task<string?> ComposeHeldContextDeclarationAsync(IReadOnlyDictionary<string, object> heldVariables)
     {
+        // A session holding nothing gets no injection at all.
         if (heldVariables.Count == 0)
             return null;
 
+        // The one framework entry that carries a fact rather than a rule. It is also the only rung read
+        // before any tool is weighed: a tool description can state the contract, never what is held now.
         FrameworkLayer framework = await frameworkLayer.Value;
-
         string declaration = Records.GlobalPolicy.ResolveTemplate(framework.Policies, Constants.Injections.HeldContextDeclaration);
 
-        // ResolveTemplate returns "" for a template the prompt layer does not declare, which every
-        // splice site reads as "inject nothing".
+        // A deployment declaring no such template gets no per-turn tail.
         if (declaration.Length == 0)
             return null;
 
-        // "name: value" for every held variable — the model gets the fact outright, not just the
-        // name, so it has nothing left to look up.
+        // Values and not merely names: an agent waking on a shared variable it never asked for has
+        // nothing left to look up. The names-only variant relied on the model choosing to call
+        // GetContextVariable, which proved unreliable.
         string pairs = string.Join(", ", heldVariables.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
         string resolvedDeclaration = declaration.Replace(Constants.Placeholders.HeldVariables, pairs);
 
-        // The marker: see its own doc comment on Constants — it lets MarkLeadingSystemForCache split
-        // this per-turn tail off the stable framework+domain prefix before applying the cache marker.
+        // Marked so the cache split lands above this tail. It changes every turn while the framework
+        // and domain layers before it do not. A changing tail must not bust the whole prefix.
         return Constants.Markers.DynamicInstructions + resolvedDeclaration;
     }
 
     /// <summary>
     /// Renders the global policies into the fenced block that opens the framework layer.
     /// </summary>
+    /// <param name="policies">The framework prompt's own policy list, injection templates included.</param>
     /// <param name="peerCapable">Admits the peer-consultation policy, skipped for every other agent.</param>
     private static string FormatGlobalPolicies(List<Records.GlobalPolicy> policies, bool peerCapable)
     {
@@ -205,22 +211,21 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
         sb.AppendLine(GlobalPoliciesHeader);
 
-        // Injection templates are excluded: they are not policies but fragments spliced into the
-        // description of the tool (or parameter) they govern, at the point where the model decides.
-        //
-        // The peer-consultation policy is excluded too unless this agent is inside the A2A topology:
-        // it is the one rule whose subject may not exist for a given agent, and an agent with no
-        // colleagues that nobody consults would otherwise pay for it on every turn of its life.
-        //
-        // Ordered by Type, then ascending Priority within each type. The LLM reads the system
-        // prompt top-to-bottom and the order is load-bearing for compliance, so a policy's
-        // Priority states where it must be read, not merely how it was filed.
-        foreach (Records.GlobalPolicy policy in policies.Where(p => !p.IsInjectionTemplate)
-                                                        .Where(p => peerCapable || !string.Equals(
-                                                            p.Name, Constants.Policies.PeerConsultation,
-                                                            StringComparison.OrdinalIgnoreCase))
-                                                        .OrderBy(p => p.Type)
-                                                        .ThenBy(p => p.Priority))
+        foreach (Records.GlobalPolicy policy in policies
+                     // Injection templates share the list, but are not policies: each is spliced where
+                     // it has a referent. Rendered here it would instruct against nothing.
+                     .Where(p => !p.IsInjectionTemplate)
+
+                     // The one rule whose subject may not exist. An agent outside the A2A topology is
+                     // never asked by a colleague, so it would carry this on every turn of its life.
+                     .Where(p => peerCapable || !string.Equals(
+                         p.Name, Constants.Policies.PeerConsultation,
+                         StringComparison.OrdinalIgnoreCase))
+
+                     // The model reads top to bottom, so a policy's Priority states where it must be
+                     // read rather than how it was filed.
+                     .OrderBy(p => p.Type)
+                     .ThenBy(p => p.Priority))
         {
             sb.AppendLine($"{policy.Name}: {policy.Description}");
         }

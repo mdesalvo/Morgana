@@ -32,7 +32,7 @@ public class MorganaController : ControllerBase
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
     /// <summary>
-    /// Initializes controller with actor system, authentication, rate/dust limits, and channel factory.
+    /// Initializes controller with actor system, authentication, rate/dust limits and channel factory.
     /// Validates channel metadata handshake and delivery mode at conversation start.
     /// </summary>
     public MorganaController(
@@ -468,7 +468,7 @@ public class MorganaController : ControllerBase
         // boundary that scope draws.
         if (authResult.IssuerType is Records.IssuerType.System)
         {
-            logger.LogWarning("Authentication rejected: issuer '{Issuer}' is a system, and the conversation API serves channels", authResult.Issuer);
+            logger.LogWarning("Authentication rejected: issuer '{Issuer}' is a system and the conversation API serves channels", authResult.Issuer);
             return (Unauthorized(new { error = "This API serves channels; a system consults published agents over A2A." }), null);
         }
 

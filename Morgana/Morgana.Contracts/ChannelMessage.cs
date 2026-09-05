@@ -5,7 +5,7 @@ namespace Morgana.Contracts;
 /// <summary>
 /// Transport-agnostic envelope for a structured outbound message delivered to the end user
 /// through an <c>IChannelService</c>. Carries the full payload an actor needs to publish:
-/// text, quick replies, rich card, agent identity, error reason, and rendering metadata
+/// text, quick replies, rich card, agent identity, error reason and rendering metadata
 /// (message type, fading duration).
 /// </summary>
 public sealed class ChannelMessage

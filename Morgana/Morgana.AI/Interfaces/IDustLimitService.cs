@@ -34,7 +34,7 @@ public interface IDustLimitService
     /// <summary>
     /// Dust consumed by a conversation since a <paramref name="baseline"/> a previous
     /// <see cref="GetConsumedAsync"/> returned — what the work between the two reads cost.
-    /// Never negative, and 0.0 whenever the reading itself is unavailable.
+    /// Never negative and0.0 whenever the reading itself is unavailable.
     /// </summary>
     Task<double> GetConsumedSinceAsync(string conversationId, double baseline);
 

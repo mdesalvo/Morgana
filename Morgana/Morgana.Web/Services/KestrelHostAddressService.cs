@@ -15,7 +15,7 @@ namespace Morgana.Web.Services;
 /// </remarks>
 public class KestrelHostAddressService : IHostAddressService
 {
-    /// <summary>Hosts that name every interface rather than one, and so cannot be dialed as written.</summary>
+    /// <summary>Hosts that name every interface rather than one and so cannot be dialed as written.</summary>
     private static readonly string[] WildcardHosts = ["+", "*", "0.0.0.0", "[::]", "::"];
 
     /// <summary>The running server, queried for the addresses it bound.</summary>

@@ -1,3 +1,4 @@
+﻿using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
 
@@ -48,6 +49,8 @@ public class LLMGuardRailService : IGuardRailService
         Records.Prompt guardPrompt =
             promptResolverService.ResolveAsync(Constants.Prompts.Guard).GetAwaiter().GetResult();
 
+        // What the Guard reads before every user message. No placeholder to splice, unlike the
+        // classifier's: what is admissible is a policy of the framework, not of a domain.
         guardSystemPrompt = $"{guardPrompt.Target}\n{guardPrompt.Instructions}\n{guardPrompt.Formatting}";
     }
 
@@ -56,25 +59,28 @@ public class LLMGuardRailService : IGuardRailService
     {
         try
         {
+            // The first call of every turn, on the cheapest configured tier: it stands between the user
+            // and the whole pipeline, so nothing downstream runs until it has answered.
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
                 guardSystemPrompt,
                 message);
 
-            Records.GuardCheckResponse? llmResult =
-                System.Text.Json.JsonSerializer.Deserialize<Records.GuardCheckResponse>(response, Records.DefaultJsonSerializerOptions);
+            // The verdict, in the shape the Guard prompt's Formatting section asked for. Nothing here
+            // is null when the model answered as instructed.
+            Records.GuardCheckResponse? llmResult = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
+                response, Records.DefaultJsonSerializerOptions);
 
-            // `compliant` here is only for the log line below — it is NOT what the return
-            // statement branches on (that re-checks llmResult != null itself). Both default to
-            // true/compliant on a null result, so the two are never actually inconsistent, but
-            // don't confuse this local for the decision — a null parse fails open by design,
-            // same policy as the outer catch clause a few lines down.
+            // For the log line alone. The answer below is decided on the verdict itself.
             bool compliant = llmResult?.Compliant ?? true;
 
             logger.LogInformation(
                 "LLMGuardRailService: LLM policy check result — compliant={Compliant} for conversation {ConversationId}",
                 compliant, conversationId);
 
+            // A verdict that could not be read admits the message. Refusing a user over a model that
+            // answered badly would silence a legitimate turn, so the doubt is spent in their favour —
+            // the same choice the general catch below makes.
             return llmResult != null
                 ? new Records.GuardRailResult(llmResult.Compliant, llmResult.Violation)
                 : new Records.GuardRailResult(Compliant: true, Violation: null);
@@ -90,7 +96,7 @@ public class LLMGuardRailService : IGuardRailService
 
             return new Records.GuardRailResult(
                 Compliant: false,
-                Violation: "That is a path closed to you, and no phrasing will reopen it.");
+                Violation: "That is a path closed to you and no phrasing will reopen it.");
         }
         catch (Exception ex)
         {

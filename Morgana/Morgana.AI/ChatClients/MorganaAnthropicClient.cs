@@ -241,7 +241,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
             return (chatMessages, chatOptions);
 
         // Mark the LAST TextContent of the LAST leading System message: callers may append multiple
-        // system messages (e.g. base prompt + a later addendum), and Anthropic's cache breakpoint
+        // system messages (e.g. base prompt + a later addendum) and Anthropic's cache breakpoint
         // covers everything up to and including the marked block — placing it last covers the whole
         // leading run in one shot.
         TextContent? lastText = chatMessages[lastSystemIdx].Contents.OfType<TextContent>().LastOrDefault();
@@ -256,12 +256,12 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
     /// <summary>
     /// Reads the Anthropic-specific cache-creation token count from the response usage and emits it
     /// as a span tag. Complements MEAI's built-in cache_read tag, which has no counterpart for writes.
-    /// Non-streaming path only — see inline comments for why, and for the tag-naming and lookup
+    /// Non-streaming path only — see inline comments for why and for the tag-naming and lookup
     /// choices.
     /// </summary>
     private static void EmitCacheWriteTag(UsageDetails? usageDetails)
     {
-        // Called only from GetResponseAsync: the streaming path forwards chunks untouched, and cache
+        // Called only from GetResponseAsync: the streaming path forwards chunks untouched and cache
         // observability there comes from MEAI's own OpenTelemetryChatClient aggregating cache_read
         // across the stream — there is no single final UsageDetails to read a cache-write count from.
         if (usageDetails?.AdditionalCounts is null)

@@ -187,7 +187,7 @@ public class ConversationManagerActor : MorganaActor
 
             // Normalise the declaration at the ingress so every downstream consumer sees
             // consistent data: ChannelName and DeliveryMode are trimmed and lowercased so their
-            // name spaces stay case-insensitive end-to-end, and Capabilities are reconciled
+            // name spaces stay case-insensitive end-to-end and Capabilities are reconciled
             // against the AdaptiveMessaging policy (see NormaliseCapabilities) before being
             // persisted and registered.
             ChannelMetadata channelMetadata = new ChannelMetadata
@@ -395,7 +395,7 @@ public class ConversationManagerActor : MorganaActor
         // Reads the dust gauge before sending: the fraction still available (1.0 = full,
         // 0.0 = empty). Every previous turn is already accounted for; the only cost missing is
         // this message's own adaptation, which cannot be known until the adapter has run. So the
-        // value rides on the main response as a best effort, and the reading taken after the send
+        // value rides on the main response as a best effort and the reading taken after the send
         // (below) supersedes it on the trailing warning message. Null when dust limiting is off.
         ConversationMetadata? preSendMetadata = dustLimitingOptions.Enabled
             ? new ConversationMetadata(
@@ -428,7 +428,7 @@ public class ConversationManagerActor : MorganaActor
             // degrading the response for a poor channel (Rune squeezing a long answer into its
             // 500-char profile) costs a ChannelAdapter LLM call. This second reading is the
             // authoritative end-of-turn level — the same number IsOverBudgetAsync will see on the
-            // next send — so the warning/exhaustion decision below, and the gauge the trailing
+            // next send — so the warning/exhaustion decision below and the gauge the trailing
             // message carries, are taken on it rather than on the stale pre-send snapshot.
             ConversationMetadata? postSendMetadata = dustLimitingOptions.Enabled
                 ? new ConversationMetadata(

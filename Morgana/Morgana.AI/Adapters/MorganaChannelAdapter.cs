@@ -206,7 +206,7 @@ public class MorganaChannelAdapter
         // title + subtitle in isolation (without the component payload) would look alien
         // next to the narrative text. The happy path's LLM rewrite is the only place
         // capable of transcoding a card into prose — if we're in the template fallback,
-        // the LLM call already failed, and an honestly incomplete message beats a message
+        // the LLM call already failed and an honestly incomplete message beats a message
         // with orphaned metadata.
         StringBuilder sb = new StringBuilder();
         sb.Append(channelMessage.Text);

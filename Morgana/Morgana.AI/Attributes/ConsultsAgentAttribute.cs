@@ -5,7 +5,7 @@ namespace Morgana.AI.Attributes;
 /// Apply multiple times for several colleagues.
 /// </summary>
 /// <remarks>
-/// Declared rather than implicit so the topology is validated at startup, and so an agent pays in
+/// Declared rather than implicit so the topology is validated at startup and so an agent pays in
 /// prompt tokens only for the colleagues it needs. Read like <see cref="UsesMCPServerAttribute"/>.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]

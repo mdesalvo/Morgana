@@ -191,7 +191,7 @@ builder.Services.AddSingleton<IConversationPersistenceService, SQLiteConversatio
 // ==============================================================================
 // SECTION 7.2: Rate Limiting
 // ==============================================================================
-// Protects against spam, abuse, and cost explosion by enforcing message quotas
+// Protects against spam, abuse and cost explosion by enforcing message quotas
 // Stores request logs in the same SQLite database as conversation persistence
 //
 // Architecture:
@@ -299,9 +299,9 @@ string[] publishedIntents = builder.Configuration.GetValue("Morgana:AgentToAgent
     ? [.. discoveredAgents.Keys]
     : [];
 
-// Who may call these endpoints is declared, never assumed, and the rules live beside what they
+// Who may call these endpoints is declared, never assumed and the rules live beside what they
 // validate rather than here: identity in Morgana:Authentication:Issuers, where every entry carries
-// the role its key was cut for, and reach in Morgana:AgentToAgent:InboundSystems. Throws on the
+// the role its key was cut for and reach in Morgana:AgentToAgent:InboundSystems. Throws on the
 // first incoherence, naming what to add.
 ConfigurationAgentDirectoryService.ValidateTrustConfiguration(
     builder.Configuration,
@@ -310,7 +310,7 @@ ConfigurationAgentDirectoryService.ValidateTrustConfiguration(
 
 // One hosted agent and one A2A server per published intent. Its other half, MapMorganaA2AAsync, runs
 // on the built application in section 10 — the container is sealed in between, so the pass cannot be
-// one. What must not drift is the list, and it does not: both halves are handed this same one.
+// one. What must not drift is the list and it does not: both halves are handed this same one.
 builder.AddMorganaA2A(publishedIntents);
 
 // ==============================================================================
@@ -328,7 +328,7 @@ app.UseAuthorization();                 // Enable authorization middleware
 app.MapControllers();                   // Map REST API controllers
 app.MapHub<MorganaHub>("/morganaHub");  // Map SignalR hub endpoint
 
-// The publication's second half: the endpoints, the cards, and the address they learn once Kestrel
+// The publication's second half: the endpoints, the cards and the address they learn once Kestrel
 // has bound. Declared in section 9.5 and mapped here, because a route needs the built application.
 await app.MapMorganaA2AAsync(publishedIntents);
 

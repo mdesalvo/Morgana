@@ -131,7 +131,7 @@ public class MorganaToolAdapter
 
     /// <summary>
     /// Validates delegate implementation matches tool definition.
-    /// Checks parameter count, names, and required-vs-optional consistency.
+    /// Checks parameter count, names and required-vs-optional consistency.
     /// </summary>
     /// <param name="implementation">Delegate to validate</param>
     /// <param name="definition">Tool definition to validate against</param>

@@ -4,7 +4,7 @@ namespace Morgana.Contracts;
 
 /// <summary>
 /// Interactive button displayed to the user for quick action selection.
-/// Used in presentation messages, agent responses, and JSON deserialization from LLM tool calls.
+/// Used in presentation messages, agent responses and JSON deserialization from LLM tool calls.
 /// </summary>
 /// <param name="Id">Unique identifier for the quick reply (typically matches intent name or action)</param>
 /// <param name="Label">Display text shown on the button with emoji (e.g., "📄 View Invoices")</param>

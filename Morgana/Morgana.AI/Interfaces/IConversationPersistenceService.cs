@@ -15,7 +15,7 @@ public interface IConversationPersistenceService
 {
     /// <summary>
     /// Saves the complete conversation state of the given agent to persistent storage.
-    /// Serializes the AgentSession including message history, context variables, and metadata.
+    /// Serializes the AgentSession including message history, context variables and metadata.
     /// </summary>
     /// <param name="agentIdentifier">Unique identifier for the agent's conversation</param>
     /// <param name="agent">AIAgent instance corresponding to the running agent</param>
@@ -73,7 +73,7 @@ public interface IConversationPersistenceService
 
     /// <summary>
     /// Retrieves the complete conversation history across all agents for a given conversation.
-    /// Decrypts, deserializes, and chronologically orders messages from all participating agents.
+    /// Decrypts, deserializes and chronologically orders messages from all participating agents.
     /// </summary>
     /// <param name="conversationId">Conversation identifier</param>
     /// <param name="jsonSerializerOptions">JSON serialization options (optional, uses AgentAbstractionsJsonUtilities.DefaultOptions if null)</param>

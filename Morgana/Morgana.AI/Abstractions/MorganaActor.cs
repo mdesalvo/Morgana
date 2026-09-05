@@ -7,7 +7,7 @@ namespace Morgana.AI.Abstractions;
 
 /// <summary>
 /// Base class for all Morgana actors, providing common infrastructure for conversation-scoped actors.
-/// Provides conversation ID tracking, LLM service access, prompt resolution, logging, and automatic timeout handling.
+/// Provides conversation ID tracking, LLM service access, prompt resolution, logging and automatic timeout handling.
 /// </summary>
 /// <remarks>
 /// Inheritance: ReceiveActor → MorganaActor (base) → specialized actors (Manager, Supervisor,
@@ -18,7 +18,7 @@ public class MorganaActor : ReceiveActor
 {
     /// <summary>
     /// Unique identifier of the conversation this actor is handling.
-    /// Used for logging, correlation, and actor hierarchy organization.
+    /// Used for logging, correlation and actor hierarchy organization.
     /// </summary>
     protected readonly string conversationId;
 
@@ -30,7 +30,7 @@ public class MorganaActor : ReceiveActor
 
     /// <summary>
     /// Service for resolving prompt templates from configuration (morgana.json, agents.json).
-    /// Loads system prompts, agent prompts, and dynamic templates with variable substitution.
+    /// Loads system prompts, agent prompts and dynamic templates with variable substitution.
     /// </summary>
     protected readonly IPromptResolverService promptResolverService;
 
@@ -47,7 +47,7 @@ public class MorganaActor : ReceiveActor
 
     /// <summary>
     /// Initializes a new instance of MorganaActor with core infrastructure services.
-    /// Sets up conversation context, services, logging, and timeout handling.
+    /// Sets up conversation context, services, logging and timeout handling.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation this actor will handle</param>
     /// <param name="llmService">LLM service for AI completions</param>

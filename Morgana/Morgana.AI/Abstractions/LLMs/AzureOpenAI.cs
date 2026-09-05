@@ -16,7 +16,7 @@ namespace Morgana.AI.Abstractions.LLMs;
 /// </summary>
 /// <remarks>
 /// Azure OpenAI / Azure AI Foundry provider. Configuration under Morgana:LLM:AzureOpenAI with Endpoint,
-/// ApiKey, and Tiers map. Supports both classic Azure OpenAI endpoints (e.g., https://resource.openai.azure.com)
+/// ApiKey and Tiers map. Supports both classic Azure OpenAI endpoints (e.g., https://resource.openai.azure.com)
 /// and Azure AI Foundry v1 API endpoints (e.g., https://resource.services.ai.azure.com/api/projects/X/openai/v1).
 /// MagicDust defaults use gpt-4o-mini/gpt-4o reference pricing. When you change a tier's ModelId
 /// to a different model, recalibrate InputTokensPerDustUnit and OutputTokensPerDustUnit.
@@ -27,7 +27,7 @@ public class AzureOpenAI : MorganaLLM
     /// Initializes a new instance of AzureOpenAI.
     /// Creates an Azure OpenAI (or Azure AI Foundry) client and wraps it with Microsoft.Extensions.AI IChatClient.
     /// </summary>
-    /// <param name="configuration">Application configuration containing Azure endpoint, key, and deployment</param>
+    /// <param name="configuration">Application configuration containing Azure endpoint, key and deployment</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="loggerFactory">Optional logger factory used to instrument the chat client with the MEAI OpenTelemetry decorator.</param>
     public AzureOpenAI(

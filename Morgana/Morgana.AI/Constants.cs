@@ -60,12 +60,12 @@ public static class Constants
     /// <summary>
     /// Names of the global policies that code resolves by name. The rest of the list lives in
     /// <c>morgana.json</c> and nowhere else: a policy the framework only renders is read by the model
-    /// and by whoever edits the prompt, and naming it here would be an index that no rename breaks.
+    /// and by whoever edits the prompt and naming it here would be an index that no rename breaks.
     /// </summary>
     public static class Policies
     {
         /// <summary>
-        /// P8 — the two-role contract of a consultation, and the one policy rendered conditionally:
+        /// P8 — the two-role contract of a consultation and the one policy rendered conditionally:
         /// only an agent inside the A2A topology reads it (see <c>ComposeAgentInstructionsAsync</c>),
         /// so this name is resolved on every composition rather than only edited in the prompt.
         /// </summary>
@@ -75,7 +75,7 @@ public static class Constants
     /// <summary>
     /// Names of the entries carrying <c>Type: "Injection"</c> in the same array as the policies.
     /// They are templates, not rules: each is spliced at exactly one site instead of being rendered
-    /// among the policies, and each is resolved by name through <c>GlobalPolicy.ResolveTemplate</c>.
+    /// among the policies and each is resolved by name through <c>GlobalPolicy.ResolveTemplate</c>.
     /// </summary>
     public static class Injections
     {
@@ -110,7 +110,7 @@ public static class Constants
     }
 
     /// <summary>
-    /// The framework's own context keys: ephemeral, one turn long, and excluded from the held-context
+    /// The framework's own context keys: ephemeral, one turn long and excluded from the held-context
     /// declaration precisely because they are machinery rather than knowledge about the user. Written
     /// by a base tool or by the consultation guards, read and dropped by the agent at end of turn.
     /// </summary>
@@ -149,7 +149,7 @@ public static class Constants
 
         /// <summary>
         /// Written alongside <see cref="UserFacing"/>, carrying the turn's reply exactly as it was
-        /// delivered to the channel, and read back by
+        /// delivered to the channel and read back by
         /// <c>SQLiteConversationPersistenceService.ExtractTextFromMessage</c>.
         /// </summary>
         public const string TurnText = "morgana:turn_text";
@@ -163,7 +163,7 @@ public static class Constants
 
     /// <summary>
     /// Placeholders authored inside prompt prose and resolved in code. Double parentheses because no
-    /// natural sentence contains them, and a prompt is edited by people who are not reading this file.
+    /// natural sentence contains them and a prompt is edited by people who are not reading this file.
     /// </summary>
     public static class Placeholders
     {
@@ -216,7 +216,7 @@ public static class Constants
     }
 
     /// <summary>
-    /// Transport dispatch keys: a channel announces one at the handshake, and the host must have a
+    /// Transport dispatch keys: a channel announces one at the handshake and the host must have a
     /// service registered under exactly that spelling or the conversation is refused at ingress.
     /// </summary>
     /// <remarks>
@@ -238,24 +238,24 @@ public static class Constants
     /// </summary>
     public static class AgentToAgent
     {
-        /// <summary>Prefix of the function a colleague is offered under, and the marker by which a consultation is recognised in an agent's own history.</summary>
+        /// <summary>Prefix of the function a colleague is offered under and the marker by which a consultation is recognised in an agent's own history.</summary>
         public const string PeerFunctionNamePrefix = "consult_";
 
         /// <summary>Root of the published A2A routes: <c>/a2a/{intent}</c>, with the card one level below it.</summary>
         public const string AgentPathPrefix = "/a2a";
 
-        /// <summary>Issuer name Morgana signs its own peer requests under, and is admitted back in under. Declared in <c>Morgana:Authentication:Issuers</c> like any caller, typed <c>system</c>, and scoped in <c>Morgana:AgentToAgent:InboundSystems</c> like any other.</summary>
+        /// <summary>Issuer name Morgana signs its own peer requests under and is admitted back in under. Declared in <c>Morgana:Authentication:Issuers</c> like any caller, typed <c>system</c> and scoped in <c>Morgana:AgentToAgent:InboundSystems</c> like any other.</summary>
         public const string IssuerName = "morgana";
 
         /// <summary>
         /// URI of the agent-card extension by which a published agent declares how a caller mints its
         /// bearer token. Names a specification that resolves: an extension URI is read on somebody
-        /// else's card, by an implementation that has never seen this code, and must lead them to what
+        /// else's card, by an implementation that has never seen this code and must lead them to what
         /// it means.
         /// </summary>
         public const string BearerIssuanceExtensionUri = "https://mdesalvo.github.io/Morgana/a2a/extensions/bearer-issuance/v1";
 
-        /// <summary>Name the bearer scheme is declared under on a card, and referenced by in its requirements.</summary>
+        /// <summary>Name the bearer scheme is declared under on a card and referenced by in its requirements.</summary>
         public const string BearerSchemeName = "morgana-bearer";
 
         /// <summary>HTTP authentication scheme a card requires, in the spelling the A2A schema uses.</summary>
@@ -274,8 +274,8 @@ public static class Constants
     /// <summary>
     /// Log lines somebody OUTSIDE the process reads. Ordinary logging is prose for an operator and
     /// belongs nowhere near this file; these three lines are different — they are the only place a
-    /// context variable's NAME becomes observable, and the PromptHarness parses them to assert the
-    /// lookup-before-asking cycle, which no span attribute carries (a name is data, and spans carry
+    /// context variable's NAME becomes observable and the PromptHarness parses them to assert the
+    /// lookup-before-asking cycle, which no span attribute carries (a name is data and spans carry
     /// none). That makes their shape a contract with a reader that cannot be recompiled with them.
     /// </summary>
     public static class ObservableLogs
@@ -322,7 +322,7 @@ public static class Constants
     /// Sentinel values <c>appsettings.json</c> ships in place of a setting that MUST be filled in
     /// before the application is usable — a secret through User Secrets or the environment, a
     /// non-secret required value through either. A setting still holding one has not been
-    /// configured, and every reader treats it as absent rather than as a value.
+    /// configured and every reader treats it as absent rather than as a value.
     /// </summary>
     public static class Overrides
     {
@@ -338,7 +338,7 @@ public static class Constants
 
     /// <summary>
     /// Characters that join or separate two pieces of composed text. Never prose: each one is
-    /// structure, and says nothing of its own to whoever reads the text it punctuates.
+    /// structure and says nothing of its own to whoever reads the text it punctuates.
     /// </summary>
     public static class Markers
     {

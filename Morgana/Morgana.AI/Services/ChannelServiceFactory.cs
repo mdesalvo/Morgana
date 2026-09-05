@@ -27,6 +27,7 @@ public class ChannelServiceFactory : IChannelServiceFactory
         Dictionary<string, IChannelService> table = new(StringComparer.Ordinal);
         foreach (ChannelServiceRegistration registration in registrations)
         {
+            // The key this transport will be found under, taken from what its own registration declared.
             string key = Normalise(registration.DeliveryMode);
 
             // TryAdd returning false means some earlier registration already claimed this exact
@@ -38,12 +39,15 @@ public class ChannelServiceFactory : IChannelServiceFactory
                     "Each delivery mode must be served by exactly one concrete channel service.",
                     nameof(registrations));
         }
+        // The dispatch surface is settled: from here the set of usable delivery modes never changes.
         servicesByDeliveryMode = table;
     }
 
     /// <inheritdoc/>
     public IChannelService Resolve(string deliveryMode)
     {
+        // The caller's spelling put through the rule the keys went through, so a channel announcing
+        // "Webhook " reaches the webhook transport.
         string key = Normalise(deliveryMode);
 
         // This throw is not expected to be reachable in practice: MorganaController's
@@ -60,7 +64,7 @@ public class ChannelServiceFactory : IChannelServiceFactory
 
     /// <inheritdoc/>
     // Null/blank guarded explicitly rather than left to Normalise/ContainsKey: an unset
-    // deliveryMode is a common malformed-handshake shape, and this keeps that case a plain "false"
+    // deliveryMode is a common malformed-handshake shape and this keeps that case a plain "false"
     // instead of an exception thrown from inside a supposedly side-effect-free predicate.
     public bool IsRegistered(string deliveryMode) =>
         !string.IsNullOrWhiteSpace(deliveryMode)

@@ -262,7 +262,7 @@ public class MorganaLLM : ILLMService
             // fixed once at startup by FinalizeModelRegistration. They have no
             // [RequiresLLMTier] of their own; a domain agent, by contrast, is built by
             // MorganaAgentAdapter against its own declared tier via
-            // GetChatClient(tier)/GetPricing(tier), and never touches this method or
+            // GetChatClient(tier)/GetPricing(tier) and never touches this method or
             // frameworkChatClient at all.
             //
             // Framework-actor calls are metered under the bare framework role, which is what tells a
@@ -271,7 +271,7 @@ public class MorganaLLM : ILLMService
                 ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, dustPricing, Constants.Morgana)
                 : frameworkChatClient;
 
-            // These two messages are the entire request: no history, no session, no tools, and nothing
+            // These two messages are the entire request: no history, no session, no tools and nothing
             // carried over from the caller's previous call. That is what makes this method the
             // stateless half of the LLM surface — a framework actor asks one question and is answered
             // once, where an agent's turn accumulates in a session. The conversation id travels on the

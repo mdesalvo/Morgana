@@ -18,7 +18,7 @@ namespace Morgana.AI.Abstractions;
 /// precedence, because it arrives mid-turn from outside the composed prompt. So a return value
 /// states FACTS about the data and the record: what was written, what was not, what this response
 /// does and does not carry. It never instructs behaviour ("tell the user to…", "offer to…", "call X
-/// only after…"): behaviour is settled above, and a tool restating it is a second author of a rule
+/// only after…"): behaviour is settled above and a tool restating it is a second author of a rule
 /// it does not own — where the two ever drift apart, the model has no way to tell which one binds.
 /// A tool that needs the agent to behave a certain way is asking for a line of domain
 /// <c>Instructions</c>, or for a global policy where it holds for every domain. Free-text in tool
@@ -176,7 +176,7 @@ public class MorganaTool
     /// visual hierarchy over plain text.
     /// </summary>
     /// <param name="richCard">
-    /// JSON string containing the rich card structure with title, subtitle, and components array.
+    /// JSON string containing the rich card structure with title, subtitle and components array.
     /// </param>
     /// <returns>Confirmation message for the LLM.</returns>
     /// <remarks>

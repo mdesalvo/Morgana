@@ -33,10 +33,10 @@
     complex customer service scenarios through a sophisticated multi-agent architecture.
     Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET,
     Morgana orchestrates specialized AI agents that collaborate to understand,
-    classify, and resolve customer inquiries with precision and context awareness.
+    classify and resolve customer inquiries with precision and context awareness.
     The system is powered by Microsoft.Agents.AI framework, enabling seamless
     integration with Large Language Models (LLMs) while maintaining strict governance
-    through guard rails, policy enforcement, and comprehensive conversation archival.
+    through guard rails, policy enforcement and comprehensive conversation archival.
     </Description>
 
   </PropertyGroup>

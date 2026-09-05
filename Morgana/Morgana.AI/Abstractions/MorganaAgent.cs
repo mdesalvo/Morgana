@@ -56,7 +56,7 @@ public class MorganaAgent : MorganaActor
     protected MorganaChatHistoryProvider aiChatHistoryProvider;
 
     /// <summary>
-    /// Persistence service used to load, save, and resume serialized <see cref="AgentSession"/>s
+    /// Persistence service used to load, save and resume serialized <see cref="AgentSession"/>s
     /// across actor restarts and conversation resumes.
     /// </summary>
     protected readonly IConversationPersistenceService persistenceService;
@@ -78,7 +78,7 @@ public class MorganaAgent : MorganaActor
     /// </summary>
     /// <remarks>
     /// While a colleague is being answered this is the consultation's own session, not the agent's:
-    /// that turn's tools, and the guard refusing a chained consultation, must all read the session
+    /// that turn's tools and the guard refusing a chained consultation, must all read the session
     /// the turn is actually running on.
     /// </remarks>
     public AgentSession? CurrentSession
@@ -141,7 +141,7 @@ public class MorganaAgent : MorganaActor
         JsonElement serializedState,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
-        // What comes back is the agent's own session from here on: the callback rewired below, and
+        // What comes back is the agent's own session from here on: the callback rewired below and
         // every later turn, act on this instance rather than on whatever the actor held before.
         aiAgentSession = await aiAgent.DeserializeSessionAsync(serializedState, jsonSerializerOptions);
 
@@ -192,7 +192,7 @@ public class MorganaAgent : MorganaActor
     /// Processes an incoming <see cref="Records.AgentRequest"/>, running the LLM turn
     /// and streaming or batching the response back to the sender.
     /// </summary>
-    /// <param name="req">Agent request containing the user's message, optional classification, and OTel TurnContext</param>
+    /// <param name="req">Agent request containing the user's message, optional classification and OTel TurnContext</param>
     protected virtual async Task ExecuteAgentAsync(Records.AgentRequest req)
     {
         IActorRef? senderRef = Sender;
@@ -211,7 +211,7 @@ public class MorganaAgent : MorganaActor
         try
         {
             // Read from the database once per actor lifetime: on later turns the field already holds
-            // the live session, and re-reading would discard everything this actor has appended since.
+            // the live session and re-reading would discard everything this actor has appended since.
             // The agent hands itself over because deserializing a session is its own responsibility.
             aiAgentSession ??= await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
             if (aiAgentSession != null)
@@ -288,7 +288,7 @@ public class MorganaAgent : MorganaActor
                 {
                     if (!string.IsNullOrEmpty(chunk.Text))
                     {
-                        // Two text chunks with different MessageIds come from different messages, and that
+                        // Two text chunks with different MessageIds come from different messages and that
                         // is where the separator belongs. Within one message the chunks are tokens and must
                         // stay welded, so only text-carrying chunks update the id. A provider that never
                         // sets MessageId reports no boundary and nothing is inserted.
@@ -325,7 +325,7 @@ public class MorganaAgent : MorganaActor
             {
                 Stopwatch responseStopwatch = Stopwatch.StartNew();
                 // Same turn as the streaming branch, awaited whole: nothing reaches the channel until the
-                // model, and every tool it decided to call, are done.
+                // model and every tool it decided to call, are done.
                 AgentResponse response = await aiAgent.RunAsync(userMessage, aiAgentSession);
                 responseStopwatch.Stop();
 
@@ -484,13 +484,13 @@ public class MorganaAgent : MorganaActor
             // The colleague may know things this agent has never been told: shared variables are
             // hydrated exactly as on a user turn, which is what makes a consultation answerable
             // without asking the asker for what the conversation already established. This is the
-            // only channel reaching the ephemeral session, and it carries values, never history.
+            // only channel reaching the ephemeral session and it carries values, never history.
             Dictionary<string, object> sharedFromRegistry = await persistenceService.LoadSharedVariablesAsync(conversationId);
             if (sharedFromRegistry.Count > 0)
                 aiContextProvider.MergeSharedContext(consultationSession, sharedFromRegistry);
 
             // Marks this turn as served for a colleague. Read by MorganaPeerGuardAgent to refuse a
-            // chained consultation, and read for its presence alone — so the mark is a flag and not
+            // chained consultation and read for its presence alone — so the mark is a flag and not
             // the caller's name, which a caller that is not an agent of this installation never sent.
             // Who asked is on the span and in the line below, where something actually reads it.
             await aiContextProvider.SetVariableAsync(consultationSession, Constants.ContextKeys.ServingConsultation, true);
@@ -519,8 +519,8 @@ public class MorganaAgent : MorganaActor
             consultationSpan?.SetTag(MorganaTelemetry.ConsultationAnswer, response.Text);
             consultationSpan?.Dispose();
 
-            // Nothing is persisted, and that is the design rather than an omission: what this turn
-            // wrote dies with the session it wrote it on, and the agent's own row — if it has one —
+            // Nothing is persisted and that is the design rather than an omission: what this turn
+            // wrote dies with the session it wrote it on and the agent's own row — if it has one —
             // is left exactly as the user's last turn left it.
 
             senderRef.Tell(new Records.PeerConsultationResponse(
@@ -543,7 +543,7 @@ public class MorganaAgent : MorganaActor
         finally
         {
             // The failure path included: with the field cleared nothing holds a reference to that
-            // session any more, and CurrentSession points back at the agent's own. The keys this
+            // session any more and CurrentSession points back at the agent's own. The keys this
             // turn wrote need no dropping — they were written on a session now unreachable.
             consultationSession = null;
         }
@@ -561,7 +561,7 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>
-    /// Removes this turn's peer-consultation calls, and their results, from the agent's own history.
+    /// Removes this turn's peer-consultation calls and their results, from the agent's own history.
     /// </summary>
     /// <param name="historyBaseline">Messages present before the turn ran; earlier turns cleared themselves.</param>
     protected void StripPeerConsultations(AgentSession session, int historyBaseline)
@@ -569,7 +569,7 @@ public class MorganaAgent : MorganaActor
         // The session's live list, not a copy: removing from it is what actually clears the history.
         List<ChatMessage> messages = aiChatHistoryProvider.GetMessages(session);
 
-        // Only this turn's consultations: a call id from an earlier turn was already cleared by it, and
+        // Only this turn's consultations: a call id from an earlier turn was already cleared by it and
         // matching on the id is what keeps a call and its result together across two separate messages.
         HashSet<string> consultationCallIds =
         [
@@ -583,7 +583,7 @@ public class MorganaAgent : MorganaActor
         if (consultationCallIds.Count == 0)
             return;
 
-        // Backwards from the end down to the baseline: removals shift everything after them, and the
+        // Backwards from the end down to the baseline: removals shift everything after them and the
         // messages before the baseline belong to earlier turns that already cleared themselves.
         for (int index = messages.Count - 1; index >= historyBaseline; index--)
         {
@@ -607,7 +607,7 @@ public class MorganaAgent : MorganaActor
                     message.Contents.RemoveAt(contentIndex);
             }
 
-            // A message whose only content was the consultation is now empty, and an empty message is
+            // A message whose only content was the consultation is now empty and an empty message is
             // rejected on the next turn, so it goes with it.
             if (message.Contents.Count == 0)
                 messages.RemoveAt(index);

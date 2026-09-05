@@ -84,30 +84,33 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
 
         try
         {
-            // Extract agent_name and conversation_id from agent_identifier (format: "{agent_name}-{conversation_id}")
+            // Split at the FIRST dash only: a conversation id is a GUID and carries dashes of its own,
+            // so an unbounded split would cut it apart and address the wrong database.
             string[] agentIdentifierParts = agentIdentifier.Split('-', 2);
             if (agentIdentifierParts.Length != 2)
                 throw new ArgumentException($"Invalid agent_identifier format: '{agentIdentifier}'. Expected format: '{{agent_name}}-{{conversation_id}}'");
-
             string agentName = agentIdentifierParts[0];
             string conversationId = agentIdentifierParts[1];
 
-            // Serialize AgentSession to JSON
+            // Serialized by the agent itself, not by this layer: the session's shape belongs to the
+            // agent framework and only it knows how to write one that can be read back.
             JsonElement agentSessionJsonElement = await agent.SerializeSessionAsync(agentSession, jsonSerializerOptions);
             string agentSessionJsonString = JsonSerializer.Serialize(agentSessionJsonElement, jsonSerializerOptions);
 
-            // Encrypt JSON content
+            // A session holds the whole conversation in clear — user text, tool arguments, results.
+            // It is a BLOB on disk for that reason and the key never leaves configuration.
             byte[] encryptedAgentSessionJsonString = Encrypt(agentSessionJsonString);
 
-            // Get database connection
+            // One database per conversation, so every agent of it writes to the same file and nothing
+            // here has to filter by conversation.
             string sqliteConnectionString = GetConnectionString(conversationId);
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
 
-            // Initialize database only if needed (checked via user_version pragma)
+            // Cheap on the common path: a pragma read decides, so an already-initialized database
+            // pays one query rather than a schema script.
             await EnsureDatabaseInitializedAsync(sqliteConnection);
 
-            // Upsert agent session with transaction
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
             try
             {
@@ -121,8 +124,12 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     agent_session = excluded.agent_session, last_update = @last_update, is_active = @is_active;
 """;
 
+                // Server time and the same instant for both columns: on an insert they are equal and
+                // on the conflict path only last_update is written, so creation_date survives untouched.
                 string utcNow = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
 
+                // is_active is the completion flag inverted: a turn the agent did not close leaves the
+                // row active and that is what a resumed conversation reads to find its agent again.
                 sqliteCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
                 sqliteCommand.Parameters.AddWithValue("@agent_name", agentName);
                 sqliteCommand.Parameters.AddWithValue("@agent_session", encryptedAgentSessionJsonString);
@@ -233,6 +240,8 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             await sqliteConnection.OpenAsync();
 
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+            // The agent a resumed conversation wakes up on: active means it left a turn incomplete and
+            // the most recently updated of those is the one the user was talking to.
             sqliteCommand.CommandText = "SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIMIT 1;";
 
             object? result = await sqliteCommand.ExecuteScalarAsync();
@@ -439,6 +448,8 @@ WHERE id = 1;
                 return null;
             }
 
+            // SQLite has no boolean and no int32: every flag comes back as a long and an absent length
+            // as DBNull, which is the channel declaring no budget rather than a budget of zero.
             ChannelCapabilities capabilities = new ChannelCapabilities(
                 SupportsRichCards: (long)reader["supports_rich_cards"] == 1,
                 SupportsQuickReplies: (long)reader["supports_quick_replies"] == 1,
@@ -599,9 +610,7 @@ WHERE id = 1;
 
     /// <inheritdoc />
     public bool ConversationExists(string conversationId)
-    {
-        return File.Exists(GetDatabasePath(conversationId));
-    }
+        => File.Exists(GetDatabasePath(conversationId));
 
     /// <summary>
     /// Constructs the full file path for a conversation database.
@@ -751,7 +760,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
     /// <summary>
     /// Processes raw messages from AgentSession into UI-ready MorganaChatMessage array.
-    /// Handles quick reply extraction, message filtering, and chronological ordering.
+    /// Handles quick reply extraction, message filtering and chronological ordering.
     /// </summary>
     private MorganaChatMessage[] ProcessMessagesForHistory(
         string conversationId,
@@ -938,10 +947,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
                 _ => JsonSerializer.Serialize(quickRepliesValue, jsonSerializerOptions)
             };
 
-            List<QuickReply>? quickReplies = JsonSerializer.Deserialize<List<QuickReply>>(
-                quickRepliesString,
-                jsonSerializerOptions);
-
+            List<QuickReply>? quickReplies = JsonSerializer.Deserialize<List<QuickReply>>(quickRepliesString, jsonSerializerOptions);
             return quickReplies?.Count > 0 ? quickReplies : null;
         }
         catch (Exception ex)
@@ -975,9 +981,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
                 _ => JsonSerializer.Serialize(richCardsValue, jsonSerializerOptions)
             };
 
-            return JsonSerializer.Deserialize<RichCard>(
-                richCardString,
-                jsonSerializerOptions);
+            return JsonSerializer.Deserialize<RichCard>(richCardString, jsonSerializerOptions);
         }
         catch (Exception ex)
         {
@@ -999,35 +1003,42 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     /// </remarks>
     private string ExtractTextFromMessage(ChatMessage chatMessage)
     {
+        // What the user actually read, whole, when the turn recorded it.
         string? turnText = TryGetRecordedTurnText(chatMessage);
         if (!string.IsNullOrWhiteSpace(turnText))
             return turnText;
 
+        // Nothing a transcript could show. A message stripped of its content is not a turn.
         if (chatMessage.Contents == null || chatMessage.Contents.Count == 0)
             return string.Empty;
 
+        // Every text fragment joined into one line: a model may split an answer across several content
+        // parts, while a transcript shows one message per turn.
         return string.Join(" ", chatMessage.Contents
             .OfType<TextContent>()
             .Where(tc => !string.IsNullOrEmpty(tc.Text))
             .Select(tc => tc.Text.Trim()));
 
-        //TODO: in future we may have more content types handled here
+        // Text alone, because that is what a transcript is. An image or a data part would need a shape
+        // on MorganaChatMessage that no channel is asking for yet.
     }
 
     /// <summary>
     /// Reads <see cref="Constants.MessageProperties.TurnText"/> off a message, or <c>null</c> when absent.
     /// </summary>
     /// <remarks>
-    /// Both shapes of the value are accepted: a live <see cref="string"/> for a session still in memory,
-    /// and a <see cref="JsonElement"/> for one that has been through the encrypted round trip, where
-    /// <c>AdditionalProperties</c> deserializes as loosely-typed JSON. Anything else is treated as absent
-    /// rather than trusted, leaving the caller on its original extraction path.
+    /// A session's properties come back from the encrypted round trip as loosely-typed JSON, so the same
+    /// value has two shapes depending on whether the session was ever persisted.
     /// </remarks>
     private static string? TryGetRecordedTurnText(ChatMessage chatMessage)
     {
+        // Absent on a user turn or on a session persisted before turn text was ever recorded.
         if (chatMessage.AdditionalProperties?.TryGetValue(Constants.MessageProperties.TurnText, out object? value) != true)
             return null;
 
+        // A session still in memory hands back what was stored; one reloaded from the database hands
+        // back JSON. Anything else is treated as absent rather than trusted, which leaves the caller on
+        // its own extraction path instead of on a value nobody wrote.
         return value switch
         {
             string text => text,
@@ -1048,20 +1059,24 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         List<QuickReply>? quickReplies = null,
         RichCard? richCard = null)
     {
+        // What this turn actually said, which is not always the text of this one message.
         string messageText = ExtractTextFromMessage(chatMessage);
 
-        // Determine message type from role
+        // A transcript knows only who spoke: everything not the user is Morgana, whichever desk answered.
         ChatMessageType messageType = chatMessage.Role == ChatRole.User
             ? ChatMessageType.User
             : ChatMessageType.Assistant;
 
-        // Format agent name for UI
+        // The name a channel prints beside the bubble. The pipeline speaking in its own voice is plain
+        // "Morgana"; a desk is named beside it, so a user sees one assistant with several competences.
         string displayAgentName = chatMessage.Role == ChatRole.User
             ? "User"
             : string.IsNullOrEmpty(agentName) || agentName.Equals(Constants.Morgana, StringComparison.OrdinalIgnoreCase)
                 ? Constants.Morgana
                 : $"Morgana ({char.ToUpper(agentName[0])}{agentName[1..]})";
 
+        // The wire shape a channel renders. Nothing downstream reads the original message again, so
+        // everything a transcript needs has been decided by this line.
         return new MorganaChatMessage
         {
             ConversationId = conversationId,

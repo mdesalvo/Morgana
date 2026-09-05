@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 
@@ -33,33 +33,43 @@ public class RequiresLLMTierValidationService : ILLMTierValidationService
     /// </remarks>
     public void ValidateAgentTiers(IReadOnlyDictionary<string, Type> agentRegistry)
     {
-        // Which tiers the active provider actually has a model for.
+        // The dies this deployment actually holds a model for. A single-model deployment declares one,
+        // which is what makes an agent asking for the other one fail here rather than at its first turn.
         IReadOnlyCollection<Records.LLMTier> configuredTiers = llmService.ConfiguredTiers;
 
-        // Every agent gets checked before anything is thrown, so a misconfigured deployment
-        // reports every problem agent at once instead of one at a time across repeated restarts.
+        // Two lists because the two failures are fixed in different places: one in the agent's own code,
+        // the other in the provider's configuration. Both are collected before either is reported.
         List<string> missingAttribute = [];
         List<string> unconfiguredTier = [];
 
         foreach ((string intent, Type agentType) in agentRegistry)
         {
+            // The die this agent runs on, fixed for its life. A domain author declares it because only
+            // they know whether the desk needs deep reasoning or merely routine work.
             RequiresLLMTierAttribute? tierAttribute =
                 agentType.GetCustomAttribute<RequiresLLMTierAttribute>();
 
+            // Undeclared, so nobody chose. Defaulting would put an agent on a model its author never
+            // weighed, which is the silent wrong-model failure this whole check exists to prevent.
             if (tierAttribute is null)
             {
                 missingAttribute.Add($"{agentType.Name} (intent '{intent}')");
                 continue;
             }
 
+            // Declared but unavailable here: the choice was made, this deployment cannot honour it. No
+            // fallback to the other die, since running a desk on a model nobody chose is the same defect.
             if (!configuredTiers.Contains(tierAttribute.Tier))
                 unconfiguredTier.Add($"{agentType.Name} requires tier '{tierAttribute.Tier}' (intent '{intent}')");
         }
 
+        // Reported first because it is the more fundamental of the two: an agent that declares nothing
+        // cannot even be weighed against what the provider offers.
         if (missingAttribute.Count > 0)
             throw new InvalidOperationException(
                 $"The following Morgana agents are missing the mandatory [RequiresLLMTier] attribute: {string.Join(", ", missingAttribute)}");
 
+        // Named together with what to add, since the fix is one configuration entry rather than a code change.
         if (unconfiguredTier.Count > 0)
             throw new InvalidOperationException(
                 $"The following Morgana agents require an LLM tier that is not configured for the active provider " +

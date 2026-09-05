@@ -9,7 +9,7 @@ using Morgana.Contracts;
 namespace Morgana.AI;
 
 /// <summary>
-/// Immutable record types (DTOs) for actor messages, configuration, and serialization.
+/// Immutable record types (DTOs) for actor messages, configuration and serialization.
 /// Organized by functional area: conversation lifecycle, classification, prompts, tools, presentation, LLM providers.
 /// Immutability ensures thread-safety; explicit types prevent routing errors in actor system.
 /// </summary>
@@ -273,7 +273,7 @@ public static class Records
 
     /// <summary>
     /// Deliberately minimal JSON-bindable DTO of tier-configurable ChatOptions subset.
-    /// Excludes sampling knobs, Reasoning, StopSequences, and per-call parameters.
+    /// Excludes sampling knobs, Reasoning, StopSequences and per-call parameters.
     /// Contains only ModelId (provider-specific identifier, e.g. "claude-haiku-4-5") and
     /// MaxOutputTokens (per-tier ceiling). Left null, MaxOutputTokens defers to provider SDK
     /// defaults, which are NOT uniform: Anthropic caps at 1024, while OpenAI/AzureOpenAI/Ollama
@@ -323,14 +323,14 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// What a declared issuer is to this installation, and therefore which door its token opens.
+    /// What a declared issuer is to this installation and therefore which door its token opens.
     /// </summary>
     public enum IssuerType
     {
-        /// <summary>Carries people: the REST API and SignalR, and nothing published under <c>/a2a</c>.</summary>
+        /// <summary>Carries people: the REST API and SignalR and nothing published under <c>/a2a</c>.</summary>
         Channel,
 
-        /// <summary>Carries agent work over A2A: the published agents its <see cref="InboundSystemOptions"/> entry allows, and nothing else.</summary>
+        /// <summary>Carries agent work over A2A: the published agents its <see cref="InboundSystemOptions"/> entry allows and nothing else.</summary>
         System
     }
 
@@ -378,7 +378,7 @@ public static class Records
 
         /// <summary>
         /// Which door this issuer's token opens. Mandatory on every entry, channels included:
-        /// a role that may be omitted is a role that gets guessed, and the guess would decide
+        /// a role that may be omitted is a role that gets guessed and the guess would decide
         /// whether a caller reaches an agent's actor bypassing the whole conversation pipeline.
         /// </summary>
         public IssuerType? Type { get; set; }
@@ -395,7 +395,7 @@ public static class Records
     public record OutboundSystemOptions
     {
         /// <summary>
-        /// Name this system is declared under in <c>[ConsultsAgent]</c>, and never a hostname: an
+        /// Name this system is declared under in <c>[ConsultsAgent]</c> and never a hostname: an
         /// attribute names whose desk is being called, while where that desk runs is deployment.
         /// </summary>
         public string Name { get; set; } = string.Empty;
@@ -440,7 +440,7 @@ public static class Records
         /// <summary>
         /// Published agents this system may consult, or <c>null</c> to admit it to every one of them.
         /// Never set for this installation's own issuer: its internal topology is declared by
-        /// <c>[ConsultsAgent]</c>, and a second author of it could only contradict the first.
+        /// <c>[ConsultsAgent]</c> and a second author of it could only contradict the first.
         /// </summary>
         public List<string>? Agents { get; set; }
     }
@@ -642,7 +642,7 @@ public static class Records
     /// <param name="Options">Options offered, as data to choose from — never buttons to render.</param>
     /// <param name="Card">Structured data presented, as data to read — never a card to render.</param>
     /// <param name="DustConsumed">What answering cost the colleague, in its own dust. Set only when the
-    /// caller declared itself an agent of a Morgana, since nothing else knows what to do with it, and
+    /// caller declared itself an agent of a Morgana, since nothing else knows what to do with it and
     /// removed by the asking side before the envelope reaches a model.</param>
     public record PeerConsultationResponse(
         [property: JsonPropertyName("answer")] string Answer,
@@ -730,7 +730,7 @@ public static class Records
 
     /// <summary>
     /// Processing context maintained throughout the conversation pipeline.
-    /// Captures the original message, sender, and classification result as it flows through states.
+    /// Captures the original message, sender and classification result as it flows through states.
     /// </summary>
     /// <param name="OriginalMessage">The user message being processed</param>
     /// <param name="OriginalSender">Actor reference to reply to (typically ConversationManagerActor)</param>

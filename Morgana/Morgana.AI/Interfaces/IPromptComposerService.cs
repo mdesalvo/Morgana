@@ -2,7 +2,7 @@ namespace Morgana.AI.Interfaces;
 
 /// <summary>
 /// Assembles every piece of text destined for a domain agent's model: the composed system prompt
-/// (framework layer + domain layer, fenced), the tool descriptions, and the per-turn declaration of
+/// (framework layer + domain layer, fenced), the tool descriptions and the per-turn declaration of
 /// held context variables. Sibling of <see cref="IPromptResolverService"/> — that one abstracts
 /// <em>where prompts come from</em>, this one abstracts <em>how they are assembled into what the
 /// model reads</em>.
@@ -19,7 +19,7 @@ public interface IPromptComposerService
     /// Composes an agent's full system prompt: the framework layer (target, personality, global
     /// policies, instructions, formatting) followed by the domain layer, each inside its own fence.
     /// The fences are load-bearing — both layers carry the same four section labels, so without
-    /// them the model sees each label twice with nothing marking which is which, and the
+    /// them the model sees each label twice with nothing marking which is which and the
     /// framework's claim to precedence names a boundary the model cannot locate.
     /// </summary>
     /// <param name="domainPrompt">The agent's own prompt, resolved from <c>agents.json</c>.</param>
@@ -53,7 +53,7 @@ public interface IPromptComposerService
     /// Produces the block naming the colleagues an agent holds, spliced into its own instructions.
     /// </summary>
     /// <remarks>
-    /// One rung above <see cref="ComposePeerDescriptionAsync"/> on the placement ladder, and the rung
+    /// One rung above <see cref="ComposePeerDescriptionAsync"/> on the placement ladder and the rung
     /// that decides whether the lower one is ever read: a colleague's own description reaches the
     /// model only once it is already weighing that function, which is exactly what an agent about to
     /// answer "this is not on my books" never does. Static for the agent's life, so it rides in the

@@ -6,7 +6,7 @@ namespace Morgana.AI.SessionStores;
 
 /// <summary>
 /// The session of <c>MorganaHostedAgent</c>: it carries the conversation an inbound A2A request
-/// belongs to, and nothing else.
+/// belongs to and nothing else.
 /// </summary>
 /// <remarks>
 /// A2A identifies a conversation by its <c>contextId</c>, which the hosting layer turns into the key
@@ -25,7 +25,7 @@ public sealed class MorganaHostedAgentSession : AgentSession
 
 /// <summary>
 /// The <see cref="AgentSessionStore"/> of <c>MorganaHostedAgent</c>: hands it the A2A context id as
-/// a <see cref="MorganaHostedAgentSession"/>, and stores nothing.
+/// a <see cref="MorganaHostedAgentSession"/> and stores nothing.
 /// </summary>
 /// <remarks>
 /// Storing nothing is correct, not a shortcut: a Morgana agent's state lives in its actor and,

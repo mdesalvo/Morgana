@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -61,29 +61,36 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     {
         ObjectDisposedException.ThrowIf(disposed, this);
 
+        // What identifies one server across every agent that declares it: two agents naming the same
+        // endpoint are asking for the same open session, not for two.
         string poolKey = PoolKey(serverAttribute);
 
-        // Check if client already exists
+        // A server is connected once per pool key and shared: the handshake is the expensive part,
+        // and every agent declaring that same server wants the session already open.
         if (mcpClients.TryGetValue(poolKey, out MCPClient? pooledMCPClient))
         {
             logger.LogDebug("Reusing existing MCP client for: {Key}", poolKey);
             return pooledMCPClient;
         }
 
-        // Create new client (MCPClient.ConnectAsync is static factory method)
         try
         {
             logger.LogInformation("Creating new MCP client for: {Key}", poolKey);
+
+            // Reaches the server for real, handshake included: an unreachable endpoint fails here, while
+            // the agent that declared it is still being built rather than mid-conversation.
             MCPClient mcpClient = await MCPClient.ConnectAsync(serverAttribute, logger);
 
-            // TryAdd is atomic — if another thread won the race, dispose ours and use theirs
+            // Two agents can be built concurrently and both miss the lookup above, so the loser of the
+            // atomic add drops the transport it just opened rather than leaking an unpooled session.
             if (mcpClients.TryAdd(poolKey, mcpClient))
             {
                 logger.LogInformation("Successfully connected to MCP server: {Key}", poolKey);
                 return mcpClient;
             }
 
-            // Another thread won the race - dispose our client and use theirs
+            // The session this call opened is closed again: the winner's is the one every agent will
+            // share, so keeping a second open would leave a connection nobody can reach.
             await mcpClient.DisposeAsync();
             return mcpClients[poolKey];
         }
@@ -97,13 +104,18 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// <summary>Disconnects and removes a specific MCP client from pool.</summary>
     public async Task DisconnectClientAsync(UsesMCPServerAttribute serverAttribute)
     {
+        // The same identity the connection was pooled under: this disconnects a server, never one
+        // agent's use of it.
         string poolKey = PoolKey(serverAttribute);
 
-        // Atomic TryRemove ensures single caller disposes each client; absent keys are benign no-ops
+        // Taken out of the pool before it is closed, so exactly one caller ever closes it. A server that
+        // was never connected is not an error: nothing was holding it open.
         if (mcpClients.TryRemove(poolKey, out MCPClient? disconnectedMCPClient))
         {
             try
             {
+                // Closes the session for every agent that was sharing it, which is why nothing here
+                // consults who else declared this server.
                 await disconnectedMCPClient.DisposeAsync();
                 logger.LogInformation("Disconnected MCP client: {Key}", poolKey);
             }
@@ -121,6 +133,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
 
         // Disconnect in parallel (network I/O may block); failures caught per-client to avoid cascading
         await Task.WhenAll(mcpClients.Select(kvp => DisconnectOneAsync(kvp.Key, kvp.Value)));
+
+        // Emptied only after every session is closed, so a caller arriving now opens a new connection
+        // instead of receiving one already being torn down.
         mcpClients.Clear();
 
         logger.LogInformation("All MCP clients disconnected");
@@ -131,6 +146,8 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     {
         try
         {
+            // One server's shutdown, awaited on its own: a stdio server that hangs on exit costs its own
+            // line in the log rather than the shutdown of every other one.
             await client.DisposeAsync();
             logger.LogInformation("Disconnected MCP client: {Key}", key);
         }
@@ -204,15 +221,18 @@ public class MCPClient : IAsyncDisposable
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
-        // Build the transport (not yet connected); the actual connection + initialize
-        // handshake happens once below in McpClient.CreateAsync.
+        // How this server is reached, decided but not yet opened. The label travels with it as the
+        // name this server answers under in every log line about it.
         IClientTransport transport;
         string label;
 
+        // Two ways a domain author can declare a server, so two ways to reach one. Nothing after this
+        // switch knows which was chosen.
         switch (attr.Transport)
         {
             case Records.MCPTransport.Http:
             {
+                // A remote server already running somewhere: the address is its whole identity.
                 label = attr.Command;
                 logger.LogInformation("Connecting to HTTP MCP server: {Label}", label);
 
@@ -229,12 +249,17 @@ public class MCPClient : IAsyncDisposable
 
             case Records.MCPTransport.Stdio:
             {
+                // A server this process starts and speaks to over its pipes. Prefixed so a command named
+                // like a URL cannot collide with an HTTP server in the pool.
                 label = $"stdio:{attr.Command}";
                 logger.LogInformation("Connecting to stdio MCP server: {AttrCommand}", attr.Command);
 
                 StdioClientTransportOptions options = new StdioClientTransportOptions
                 {
                     Command   = attr.Command,
+
+                    // An empty argument list is handed over as nothing at all: what a declaration omits
+                    // must not reach the process as an empty argument it then has to interpret.
                     Arguments = attr.Args.Length > 0 ? attr.Args : null,
                     Name      = label
                 };
@@ -244,6 +269,8 @@ public class MCPClient : IAsyncDisposable
                 break;
             }
 
+            // A transport this build does not know how to reach. Nothing can be connected, so nothing
+            // is attempted.
             default:
                 throw new NotSupportedException(
                     $"Unsupported MCPTransport value '{attr.Transport}'.");
@@ -251,16 +278,22 @@ public class MCPClient : IAsyncDisposable
 
         try
         {
+            // The one moment the server is actually reached: the handshake runs here, so a bad endpoint
+            // or a command that will not start is discovered now instead of on the first tool call.
             McpClient mcpClient = await McpClient.CreateAsync(
                 transport,
                 clientOptions: null,
                 cancellationToken: cancellationToken);
 
             logger.LogInformation("Connected to MCP server: {Label}", label);
+
+            // A live session, ready to be shared by every agent that declared this same server.
             return new MCPClient(mcpClient, label, logger);
         }
         catch (Exception ex)
         {
+            // Logged here where the server has a name, then rethrown: the pool above turns it into the
+            // failure of the agent that declared it.
             logger.LogError(ex, "Failed to connect to MCP server: {Label}", label);
             throw;
         }
@@ -275,13 +308,20 @@ public class MCPClient : IAsyncDisposable
         {
             logger.LogDebug("Discovering tools from: {ServerLabel}", ServerLabel);
 
+            // Asked of the server on every agent creation, never cached: what a server offers is its own
+            // to change. An agent built now must see what it offers now.
             IList<McpClientTool> tools = await mcpClient.ListToolsAsync(cancellationToken: cancellationToken);
 
             logger.LogInformation("Discovered {ToolsCount} tools from: {ServerLabel}", tools.Count, ServerLabel);
+
+            // Handed back as the server described them, schemas and prose included: their author is
+            // whoever wrote that server, so Morgana adapts none of it.
             return tools;
         }
         catch (Exception ex)
         {
+            // An agent whose tools cannot be listed has no competences at all, so this is not survivable
+            // the way one unreachable colleague is.
             logger.LogError(ex, "Failed to discover tools from: {ServerLabel}", ServerLabel);
             throw;
         }
@@ -301,7 +341,7 @@ public class MCPClient : IAsyncDisposable
 
             // The SDK expects IReadOnlyDictionary<string, object?> but callers build a plain
             // Dictionary<string, object>. The 'as' cast is safe: Dictionary implements the
-            // interface, and null is a valid sentinel meaning "no arguments".
+            // interface and null is a valid sentinel meaning "no arguments".
             CallToolResult result = await mcpClient.CallToolAsync(
                 toolName,
                 arguments as IReadOnlyDictionary<string, object?>,

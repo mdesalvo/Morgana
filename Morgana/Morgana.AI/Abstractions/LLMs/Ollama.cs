@@ -44,7 +44,7 @@ public class Ollama : MorganaLLM
         // Ollama's client binds its model at construction (unlike the SDK-based providers,
         // there is no single client + per-call model selection), so one OllamaApiClient per
         // configured tier — each with its own HttpClient, since HttpClient.BaseAddress is
-        // fixed but the model differs, and OllamaApiClient does not expose overriding it later.
+        // fixed but the model differs and OllamaApiClient does not expose overriding it later.
         foreach ((Records.LLMTier tier, Records.TierDefinition tierDefinition) in tiers)
         {
             IChatClient tierClient = WrapWithTelemetry(

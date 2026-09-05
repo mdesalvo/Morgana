@@ -13,7 +13,7 @@ public class ChannelMetadataStore : IChannelMetadataStore
 {
     /// <summary>
     /// The registry itself: one handshake record per live conversation, keyed by conversation id.
-    /// In-memory only — a process restart loses it, and the persisted copy in the conversation's
+    /// In-memory only — a process restart loses it and the persisted copy in the conversation's
     /// own database is what a resume replays into it.
     /// </summary>
     private readonly ConcurrentDictionary<string, ChannelMetadata> metadataByConversation = new();
@@ -25,6 +25,8 @@ public class ChannelMetadataStore : IChannelMetadataStore
         metadataByConversation[conversationId] = channelMetadata;
 
     /// <inheritdoc/>
+    // Forgets the conversation's handshake. Ending one that never completed a handshake is ordinary,
+    // and nothing held here needs disposing, so an absent key is not a failure.
     public void UnregisterChannelMetadata(string conversationId) =>
         metadataByConversation.TryRemove(conversationId, out _);
 
