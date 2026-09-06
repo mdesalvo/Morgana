@@ -623,7 +623,7 @@
           <tr><td>Morgana:ConversationPersistence:StoragePath</td><td>Directory for SQLite database files</td></tr>
           <tr><td>Morgana:ActorSystem:TimeoutSeconds</td><td>Actor/agent timeout (default: 180)</td></tr>
           <tr><td>Morgana:ActorSystem:EnableGuardrail</td><td>Toggle content moderation guard</td></tr>
-          <tr><td>Morgana:AgentToAgent:*</td><td>Peer consultation: <code>Enabled</code> (default <code>true</code>), <code>MaxRoundsPerTurn</code> (default 4) and <code>Partners[]</code> &mdash; one entry per federated installation, carrying <code>{ Name, Url, SymmetricKey, Enabled }</code> plus <code>OutboundPolicy</code> (may we call it) and <code>InboundPolicy</code> (may it call us), each with its own <code>Enabled</code> so a relationship can be closed globally or on one direction alone. <code>Name</code> is what <code>[ConsultsAgent]</code> writes and never a hostname. <code>InboundPolicy.OnAgents</code> lists the published agents that partner reaches and omitting it admits it to all; its <code>RateLimiting</code> block is required of every admitted partner &mdash; startup refuses one admitted with none, since nothing reads an absence as licence to spend without limit; a deployment wanting no bound writes <code>"Enabled": false</code>. Nothing here describes this instance: no address (a card names it from what Kestrel bound) and no key (its own agents consult each other under a secret coined at startup). See <a href="#a2a-configuration">Agent-to-Agent Configuration</a> for the three shapes in full</td></tr>
+          <tr><td>Morgana:AgentToAgent:*</td><td>Peer consultation: <code>Enabled</code> (default <code>true</code>), <code>MaxRoundsPerTurn</code> (default 4) and <code>Partners[]</code> &mdash; one entry per federated installation, carrying <code>{ Name, Url, SymmetricKey, Enabled }</code> plus <code>OutboundPolicy</code> (outbound: agents here consult its own) and <code>InboundPolicy</code> (inbound: its agents consult those here), each with its own <code>Enabled</code> so a relationship can be closed globally or on one direction alone. <code>Name</code> is what <code>[ConsultsAgent]</code> writes and never a hostname. <code>InboundPolicy.OnAgents</code> lists the published agents that partner reaches and omitting it admits it to all; its <code>RateLimiting</code> block is required of every admitted partner &mdash; startup refuses one admitted with none, since nothing reads an absence as licence to spend without limit; a deployment wanting no bound writes <code>"Enabled": false</code>. Nothing here describes this instance: no address (a card names it from what Kestrel bound) and no key (its own agents consult each other under a secret coined at startup). See <a href="#a2a-configuration">Agent-to-Agent Configuration</a> for the three shapes in full</td></tr>
           <tr><td>Morgana:AdaptiveMessaging:*</td><td>Streaming toggle, rich-features threshold for ingress heuristic</td></tr>
           <tr><td>Morgana:RateLimiting:*</td><td>Per-minute, per-hour, per-day message limits</td></tr>
           <tr><td>Morgana:DustLimiting:*</td><td>Token budget: enabled, budget per conversation, warning &amp; error messages, per-provider MagicDust pricing</td></tr>
@@ -681,28 +681,26 @@
       <p>Peer consultation comes in three shapes, differing only in how much has to be configured. Which one a deployment is in depends on what its plugins declare with <code>[ConsultsAgent]</code> plus what <code>Morgana:AgentToAgent</code> says.</p>
 
       <h3>1 &mdash; Off</h3>
-      <p>Nothing is created: no agent, no route, no card. Agents never see the colleagues they declare. <code>[ConsultsAgent]</code> attributes stay in the code and are ignored.</p>
+      <p>A2A is off entirely: no agent is published, no route exists, no card is served. This is a "classic Morgana" scenario (before v0.29)</p>
       <div class="code-block"><span class="string">"AgentToAgent"</span>: {
   <span class="string">"Enabled"</span>: <span class="keyword">false</span>
 }</div>
 
-      <h3>2 &mdash; On, colleagues of this installation only</h3>
-      <p>Agents here consult one another. Such a call still travels over HTTP and comes back through this installation's own door. Three lines are the whole of it:</p>
+      <h3>2 &mdash; On, without partners</h3>
+      <p>A2A is on for this installation alone. Agents here consult one another over the protocol, each colleague named by a <code>[ConsultsAgent]</code> attribute in the plugin's code. No system outside is involved, so three lines are the whole declaration:</p>
       <div class="code-block"><span class="string">"AgentToAgent"</span>: {
   <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
   <span class="string">"MaxRoundsPerTurn"</span>: <span class="keyword">4</span>,
   <span class="string">"Partners"</span>: []
 }</div>
-      <p class="muted" style="font-size:14.5px;">Which colleagues an agent may consult is decided in the plugin's code, by <code>[ConsultsAgent]</code>.</p>
 
-      <h3>3 &mdash; On, colleagues here and at another installation</h3>
-      <p>Agents here can also consult agents from trusted partners: other installations, each declared once. A partner is one entry with three switches inside it:</p>
+      <h3>3 &mdash; On, with partners</h3>
+      <p>A2A is on for this installation and for the partners it trusts. Agents here keep consulting one another exactly as above; on top of that, each partner is declared once and opens up to two directions:</p>
       <ul>
-        <li><code>Enabled</code> on the partner &mdash; turn it off to park the relationship without deleting what describes it.</li>
-        <li><code>OutboundPolicy.Enabled</code> &mdash; we may consult them.</li>
-        <li><code>InboundPolicy.Enabled</code> &mdash; they may consult us.</li>
+        <li><strong>Outbound</strong> (<code>OutboundPolicy</code>) &mdash; agents here consult the partner's. This is what <code>[ConsultsAgent("shipping", "acme")]</code> needs to work.</li>
+        <li><strong>Inbound</strong> (<code>InboundPolicy</code>) &mdash; the partner's agents consult those here. This is where the entry says which desks they reach, plus how often they may come back.</li>
       </ul>
-      <p>The two directions are independent. A partner may only answer us, only ask us, or do both. An entry with both directions off is refused at startup.</p>
+      <p>The two are independent: a partner may be outbound only, inbound only, or both. <code>Enabled</code> on the partner itself parks the whole relationship without deleting what describes it. An entry with neither direction open is refused at startup.</p>
       <div class="code-block"><span class="string">"AgentToAgent"</span>: {
   <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
   <span class="string">"MaxRoundsPerTurn"</span>: <span class="keyword">4</span>,
@@ -717,16 +715,15 @@
       <span class="string">"SymmetricKey"</span>: <span class="string">"_SECURE_OVERRIDE_"</span>,
       <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
 
-      <span class="comment">// We may consult them. Issuer is the name THEY know US by — the Name on</span>
-      <span class="comment">// their own entry for us. Required to be signed at all.</span>
+      <span class="comment">// Outbound. Issuer is the name the PARTNER knows THIS INSTALLATION by:</span>
+      <span class="comment">// the Name on its own entry for it. Nothing can be signed without it.</span>
       <span class="string">"OutboundPolicy"</span>: {
         <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
         <span class="string">"Issuer"</span>: <span class="string">"greenhouse"</span>
       },
 
-      <span class="comment">// They may consult us. Omitting OnAgents admits them to every published</span>
-      <span class="comment">// agent of our installation. RateLimiting is required on every admitted partner:</span>
-      <span class="comment">// switch it off in as many words, never leave it out.</span>
+      <span class="comment">// Inbound. Leave OnAgents out to admit the partner everywhere.</span>
+      <span class="comment">// RateLimiting is required: to grant a free hand, write Enabled false.</span>
       <span class="string">"InboundPolicy"</span>: {
         <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
         <span class="string">"OnAgents"</span>: [<span class="string">"billing"</span>, <span class="string">"inventory"</span>],
@@ -756,18 +753,18 @@
 
       <h3>What each shape requires</h3>
       <table>
-        <thead><tr><th></th><th>Off</th><th>Local only</th><th>Local + remote</th></tr></thead>
+        <thead><tr><th></th><th>Off</th><th>Without partners</th><th>With partners</th></tr></thead>
         <tbody>
-          <tr><td>Anything for this installation's own agents</td><td>&mdash;</td><td>nothing</td><td>nothing</td></tr>
-          <tr><td>Partner in <code>Partners[]</code></td><td>&mdash;</td><td>&mdash;</td><td>required, with a shared key</td></tr>
-          <tr><td><code>OutboundPolicy</code> on it</td><td>&mdash;</td><td>&mdash;</td><td>only if we call it &mdash; then a <code>Url</code> plus an <code>Issuer</code>, unless it authenticates nobody</td></tr>
-          <tr><td><code>InboundPolicy</code> on it</td><td>&mdash;</td><td>&mdash;</td><td>only if it calls us &mdash; then <code>RateLimiting</code> is mandatory</td></tr>
-          <tr><td>Partner in <code>Issuers[]</code></td><td>&mdash;</td><td>&mdash;</td><td>never &mdash; that list is channels</td></tr>
+          <tr><td>To configure for agents here</td><td>&mdash;</td><td>nothing</td><td>nothing</td></tr>
+          <tr><td>Entry in <code>Partners[]</code></td><td>&mdash;</td><td>&mdash;</td><td>one per partner, with the shared key</td></tr>
+          <tr><td><code>OutboundPolicy</code></td><td>&mdash;</td><td>&mdash;</td><td>outbound only; needs <code>Url</code> plus <code>Issuer</code></td></tr>
+          <tr><td><code>InboundPolicy</code></td><td>&mdash;</td><td>&mdash;</td><td>inbound only; needs <code>RateLimiting</code></td></tr>
+          <tr><td>Partner in <code>Issuers[]</code></td><td>&mdash;</td><td>&mdash;</td><td>never: that list is channels</td></tr>
           <tr><td>Agents published</td><td>none</td><td>all of them</td><td>all of them</td></tr>
           <tr><td>Prompt cost per agent</td><td>none</td><td>peer policy + colleagues</td><td>peer policy + colleagues</td></tr>
         </tbody>
       </table>
-      <p class="muted" style="font-size:14.5px;">A <strong>pure supplier</strong> &mdash; publishing its desks for a partner while its own agents consult nobody here &mdash; declares that partner with an <code>InboundPolicy</code> and no <code>OutboundPolicy</code>. It needs no <code>Url</code> for it at all: it is never the side placing the call.</p>
+      <p class="muted" style="font-size:14.5px;">An installation that only <strong>answers</strong> declares each partner inbound only, with no <code>OutboundPolicy</code>. It needs no <code>Url</code> either: it never places the call.</p>
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
