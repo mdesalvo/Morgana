@@ -704,24 +704,23 @@
   <span class="string">"Partners"</span>: [
     {
       <span class="comment">// Name is what [ConsultsAgent] writes and the iss its own calls arrive</span>
-      <span class="comment">// under — never a hostname. One key, shared: calls out are signed with</span>
-      <span class="comment">// it, calls in are proven against it.</span>
+      <span class="comment">// under, never a hostname. One key, shared: calls out are signed with it,</span>
+      <span class="comment">// calls in are proven against it.</span>
       <span class="string">"Name"</span>: <span class="string">"acme"</span>,
       <span class="string">"Url"</span>: <span class="string">"https://acme.example.com"</span>,
       <span class="string">"SymmetricKey"</span>: <span class="string">"_SECURE_OVERRIDE_"</span>,
       <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
 
       <span class="comment">// We may consult them. Issuer is the name THEY know US by — the Name on</span>
-      <span class="comment">// their own entry for us. A card cannot carry it (it is per-caller), so</span>
-      <span class="comment">// it arrives out of band with the key. Required to be signed at all.</span>
+      <span class="comment">// their own entry for us. Required to be signed at all.</span>
       <span class="string">"OutboundPolicy"</span>: {
         <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
         <span class="string">"Issuer"</span>: <span class="string">"greenhouse"</span>
       },
 
       <span class="comment">// They may consult us. Omitting OnAgents admits them to every published</span>
-      <span class="comment">// agent. RateLimiting is required of every admitted partner: switch it</span>
-      <span class="comment">// off in as many words, never leave it out.</span>
+      <span class="comment">// agent of our installation. RateLimiting is required on every admitted partner:</span>
+      <span class="comment">// switch it off in as many words, never leave it out.</span>
       <span class="string">"InboundPolicy"</span>: {
         <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
         <span class="string">"OnAgents"</span>: [<span class="string">"billing"</span>, <span class="string">"inventory"</span>],
