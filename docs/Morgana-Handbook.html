@@ -678,12 +678,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="a2a-configuration">
       <h2>Agent-to-Agent Configuration</h2>
-      <p>Peer consultation comes in three shapes. Which one a deployment is in depends on what its plugins declare with <code>[ConsultsAgent]</code> plus what <code>Morgana:AgentToAgent</code> says. They differ only in how much has to be configured, so it helps to know what never does:</p>
-      <ul>
-        <li><strong>Publication is not configured.</strong> Every agent this installation holds is published; what varies is which of them a given caller may reach.</li>
-        <li><strong>This installation is not configured.</strong> Its address is whatever Kestrel bound. The key its own agents consult each other with is generated at startup.</li>
-        <li><strong>A partner is configured once.</strong> One <code>Partners[]</code> entry holds its name, the key both sides share and one policy per direction.</li>
-      </ul>
+      <p>Peer consultation comes in three shapes, differing only in how much has to be written. Which one a deployment is in depends on what its plugins declare with <code>[ConsultsAgent]</code> plus what <code>Morgana:AgentToAgent</code> says.</p>
 
       <h3>1 &mdash; Off</h3>
       <p>Nothing is created: no agent, no route, no card. Agents never see the colleagues they declare. <code>[ConsultsAgent]</code> attributes stay in the code and are ignored.</p>
