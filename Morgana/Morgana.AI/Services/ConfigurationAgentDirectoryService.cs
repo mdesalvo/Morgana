@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json;
 using A2A;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Configuration;
@@ -44,8 +43,11 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// <summary>Source of the agent prompts, whose tool definitions become the card's skills.</summary>
     private readonly IPromptResolverService promptResolverService;
 
-    /// <summary>Application configuration, read for the credentials Morgana signs its own requests with.</summary>
+    /// <summary>Application configuration, read for the partners this installation federates with.</summary>
     private readonly IConfiguration configuration;
+
+    /// <summary>Secret this installation signs consultations between its own agents with.</summary>
+    private readonly PeerRingKeyService peerRingKeyService;
 
     /// <summary>
     /// Tells the directory where this instance answers, so a published card can name a callable
@@ -113,18 +115,21 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// <param name="promptResolverService">Resolves an agent's prompt and with it its tool definitions.</param>
     /// <param name="configuration">Application configuration.</param>
     /// <param name="hostAddressService">Reports the address this instance answers on.</param>
+    /// <param name="peerRingKeyService">Holds the secret this installation's own consultations are signed with.</param>
     /// <param name="logger">Logger for directory diagnostics.</param>
     public ConfigurationAgentDirectoryService(
         IAgentConfigurationService agentConfigurationService,
         IPromptResolverService promptResolverService,
         IConfiguration configuration,
         IHostAddressService hostAddressService,
+        PeerRingKeyService peerRingKeyService,
         ILogger logger)
     {
         this.agentConfigurationService = agentConfigurationService;
         this.promptResolverService = promptResolverService;
         this.configuration = configuration;
         this.hostAddressService = hostAddressService;
+        this.peerRingKeyService = peerRingKeyService;
         this.logger = logger;
 
         // The same ladder the answering side reads its own step off, so the two cannot disagree about
@@ -213,7 +218,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         // Where the colleague answers: this installation's own address, or the one a declared system
         // was given. The instance stays null for one of ours and that null is read again below — it
         // decides whose key signs the call and under whose issuer name.
-        Records.OutboundSystemOptions? consultableInstance = null;
+        Records.PartnerOptions? consultablePartner = null;
         string? baseAddress;
 
         if (peer.Instance is null)
@@ -229,21 +234,26 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         }
         else
         {
-            // The system that publishes this colleague. Its name is typed twice by hand — on the
-            // attribute in code, on the entry in configuration — so spacing is not allowed to part them.
-            consultableInstance = ResolveOutboundSystems(configuration)
-                .FirstOrDefault(candidate => string.Equals(candidate.Name.Trim(), peer.Instance, StringComparison.OrdinalIgnoreCase));
+            // The partner that publishes this colleague, admitted here only while the relationship is
+            // live and this direction of it is open. Its name is typed twice by hand — on the attribute
+            // in code, on the entry in configuration — so spacing is not allowed to part them.
+            consultablePartner = ResolvePartners(configuration)
+                .FirstOrDefault(candidate => candidate.Enabled
+                                             && candidate.OutboundPolicy?.Enabled == true
+                                             && string.Equals(candidate.Name.Trim(), peer.Instance, StringComparison.OrdinalIgnoreCase));
 
-            // Reachable only if configuration says where: unlike its own address, a peer's is declared.
-            if (consultableInstance is null)
+            // Reachable only if configuration says where: unlike its own address, a partner's is declared.
+            if (consultablePartner is null)
             {
-                logger.LogError("System '{Instance}' is not declared under Morgana:AgentToAgent:OutboundSystems; '{Intent}' cannot be consulted", peer.Instance, peer.Intent);
+                logger.LogError(
+                    "Partner '{Instance}' is not declared under Morgana:AgentToAgent:Partners, or is not open to being consulted; '{Intent}' cannot be consulted",
+                    peer.Instance, peer.Intent);
                 return null;
             }
 
             // The agent path is concatenated with its own leading slash, so a Url written with a
             // trailing one would otherwise produce a double slash in every address built from it.
-            baseAddress = consultableInstance.Url.TrimEnd('/');
+            baseAddress = consultablePartner.Url.TrimEnd('/');
         }
 
         // From here one path, whichever side of the boundary the address came from: a card is fetched,
@@ -268,7 +278,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
 
             // Null when the card demands something this installation cannot present — OAuth2, mTLS, an
             // unknown scheme. Refused rather than called bare: an unsigned call would just 401 anyway.
-            HttpClient? peerHttpClient = BuildPeerHttpClient(card, baseAddress, peer, consultableInstance, callerIntent);
+            HttpClient? peerHttpClient = BuildPeerHttpClient(card, baseAddress, peer, consultablePartner, callerIntent);
             if (peerHttpClient is null)
                 return null;
 
@@ -296,221 +306,227 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     }
 
     /// <summary>
-    /// The systems this installation may consult, as configuration declares them.
+    /// The partners this installation federates with, as configuration declares them.
     /// </summary>
     /// <remarks>
     /// Static and public because the startup checks must read the very list resolution reads: a
     /// colleague that validates cleanly and then resolves to nothing on the first conversation is
     /// precisely the silent failure those checks exist to prevent.
+    /// <para>A parked partner is dropped here rather than at each reader, so switching one off closes
+    /// both directions at once instead of leaving whichever reader forgot to ask.</para>
     /// </remarks>
     /// <param name="configuration">Application configuration.</param>
-    public static List<Records.OutboundSystemOptions> ResolveOutboundSystems(IConfiguration configuration)
-        => configuration.GetSection("Morgana:AgentToAgent:OutboundSystems").Get<List<Records.OutboundSystemOptions>>() ?? [];
+    public static List<Records.PartnerOptions> ResolvePartners(IConfiguration configuration)
+        => [.. (configuration.GetSection("Morgana:AgentToAgent:Partners").Get<List<Records.PartnerOptions>>() ?? [])
+                .Where(partner => partner.Enabled)];
 
     /// <summary>
-    /// How far each admitted system reaches, as configuration declares it.
+    /// The partners admitted to call this installation, under the name their calls arrive with.
     /// </summary>
     /// <remarks>
-    /// The inbound half of <see cref="ResolveOutboundSystems"/>, read by the gate and by the startup
-    /// check alike so the two cannot disagree on what was declared.
+    /// A partner signing under a name of its own choosing says so on its inbound policy; everyone
+    /// else arrives under the name this installation knows it by.
     /// </remarks>
     /// <param name="configuration">Application configuration.</param>
-    public static List<Records.InboundSystemOptions> ResolveInboundSystems(IConfiguration configuration)
-        => configuration.GetSection("Morgana:AgentToAgent:InboundSystems").Get<List<Records.InboundSystemOptions>>() ?? [];
+    public static List<(string Issuer, Records.PartnerOptions Partner)> ResolveAdmittedPartners(IConfiguration configuration)
+        => [.. ResolvePartners(configuration)
+                .Where(partner => partner.InboundPolicy?.Enabled == true)
+                // What arrives in a real token's iss claim, so a stray space in configuration must not
+                // refuse a caller for a reason nobody can see.
+                .Select(partner => ((partner.InboundPolicy!.Issuer ?? partner.Name).Trim(), partner))];
 
     /// <summary>
     /// The issuers admitted to one published agent, resolved once so a gate need not read
     /// configuration per request.
     /// </summary>
     /// <remarks>
-    /// An entry declaring no <c>Agents</c> reaches every published agent — what a wholly trusted peer
-    /// gets and what this installation declares about itself.
+    /// A policy declaring no <c>OnAgents</c> reaches every published agent, which is what a wholly
+    /// trusted partner gets. This installation's own agents are admitted to all of them
+    /// unconditionally: which colleagues they may consult has one author, <c>[ConsultsAgent]</c>.
     /// </remarks>
     /// <param name="configuration">Application configuration.</param>
     /// <param name="intent">Published agent whose admitted callers are being resolved.</param>
     public static HashSet<string> ResolveAdmittedIssuers(IConfiguration configuration, string intent)
         => new HashSet<string>(
-               ResolveInboundSystems(configuration)
-                   // A null Agents list is the entry admitting its system everywhere; an empty one admits
-                   // it nowhere and both are meant — omitting the key is not the same as writing [].
-                   .Where(system => system.Agents is null
-                                    || system.Agents.Any(agent => string.Equals(agent?.Trim(), intent, StringComparison.OrdinalIgnoreCase)))
-                   // What arrives in a real token's iss claim, so a stray space in configuration must not
-                   // refuse a caller for a reason nobody can see. The same holds for its casing below.
-                   .Select(system => system.Issuer.Trim()),
+               ResolveAdmittedPartners(configuration)
+                   // A null OnAgents list is the policy admitting its partner everywhere; an empty one
+                   // admits it nowhere and both are meant — omitting the key is not the same as writing [].
+                   .Where(admitted => admitted.Partner.InboundPolicy!.OnAgents is null
+                                      || admitted.Partner.InboundPolicy.OnAgents.Any(agent => string.Equals(agent?.Trim(), intent, StringComparison.OrdinalIgnoreCase)))
+                   .Select(admitted => admitted.Issuer)
+                   .Append(Constants.AgentToAgent.IssuerName),
                StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Refuses a trust configuration that would publish agents nobody can reach, or reach agents
-    /// nobody declared. Throws on the first incoherence; returns silently when nothing is published.
+    /// Refuses a partner declaration that would admit a caller nobody can prove, or grant a reach
+    /// over agents nobody publishes. Throws on the first incoherence; returns silently when nothing
+    /// is published.
     /// </summary>
     /// <remarks>
     /// Beside the resolvers it reads, so a check and the runtime depending on it cannot disagree.
     /// All of it guards one shape: a topology that validates cleanly, then fails or opens silently.
+    /// Every check weighs one partner entry against itself — what a partner is, where it answers and
+    /// how far it reaches are one declaration, so there is no second list left to contradict it.
     /// </remarks>
     /// <param name="configuration">Application configuration.</param>
     /// <param name="publishedIntents">Agents this installation publishes over A2A; empty switches every check off.</param>
-    /// <param name="consultsLocally">Whether any agent here consults a colleague of this same installation.</param>
     /// <exception cref="InvalidOperationException">Thrown on the first incoherent declaration, naming what to add.</exception>
     public static void ValidateTrustConfiguration(
         IConfiguration configuration,
-        IReadOnlyCollection<string> publishedIntents,
-        bool consultsLocally)
+        IReadOnlyCollection<string> publishedIntents)
     {
         // Nothing published means no door to guard: the whole of this concerns who reaches an agent
         // over A2A and a deployment with the ring down has none.
         if (publishedIntents.Count == 0)
             return;
 
-        // Who may knock at all — one registry, read by the channel gate and the A2A gate alike.
-        List<Records.IssuerOptions> declaredIssuers = configuration
-            .GetSection("Morgana:Authentication:Issuers").Get<List<Records.IssuerOptions>>() ?? [];
+        // Every partner a deployment wrote down, parked ones included: an entry switched off is still
+        // weighed for the name it holds, so reviving it later cannot revive a collision with it.
+        List<Records.PartnerOptions> declaredPartners = configuration
+            .GetSection("Morgana:AgentToAgent:Partners").Get<List<Records.PartnerOptions>>() ?? [];
 
-        // How far each knocker reaches. Every check below is one list saying something the other
-        // contradicts or leaves unsaid.
-        List<Records.InboundSystemOptions> inboundSystems = ResolveInboundSystems(configuration);
+        // Names accepted so far, against which each new one must be new.
+        HashSet<string> declaredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // A local consultation leaves over HTTP signed under the "morgana" issuer and comes back in
-        // through this installation's own A2A door, so that issuer is needed at both ends. An
-        // installation consulting only elsewhere, or nobody, never mints such a token and needs none.
-        if (consultsLocally)
+        foreach (Records.PartnerOptions partner in declaredPartners)
         {
-            // This installation's own entry among the issuers it admits, weighed for its role below;
-            // its key is weighed separately, by the predicate the signing handler shares.
-            Records.IssuerOptions? peerIssuer = declaredIssuers.FirstOrDefault(issuer =>
-                string.Equals(issuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase));
+            string partnerName = partner.Name?.Trim() ?? string.Empty;
 
-            // The same predicate the signing handler reads, so a startup that passes cannot be followed
-            // by a runtime that finds no key. Undeclared, blank and still-placeholder are all "no key".
-            if (ResolvePeerSigningKey(configuration) is null)
+            // Nameless, so there is nothing for an attribute to consult and nothing for an iss claim
+            // to match: the entry describes a relationship with nobody.
+            if (partnerName.Length == 0)
             {
                 throw new InvalidOperationException(
-                    $"Agents of this installation consult colleagues of their own, but no usable signing key is "
-                    + $"configured for the '{Constants.AgentToAgent.IssuerName}' issuer: declare it under "
-                    + "Morgana:Authentication:Issuers with a real SymmetricKey (User Secrets or environment), "
-                    + "or set Morgana:AgentToAgent:Enabled to false to run without peer consultation.");
+                    "A Morgana:AgentToAgent:Partners entry is missing \"Name\". It is what [ConsultsAgent] writes to reach "
+                    + "that partner's desks and the name its own calls arrive under.");
             }
 
-            // Typed as a channel it would be turned away by the A2A filter, which refuses a channel
-            // key at that door: the ring would be configured, signed and refused by its own gate.
-            if (peerIssuer?.Type is not Records.IssuerType.System)
+            // Reserved for this installation's own agents, whose consultations are signed with a secret
+            // coined at every start. A partner taking the name would have its calls proven against that
+            // secret and refused, at runtime, for a reason nothing in configuration shows.
+            if (string.Equals(partnerName, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    $"Issuer '{Constants.AgentToAgent.IssuerName}' must declare \"Type\": \"system\": it is what this "
-                    + "installation signs its own consultations with and they are admitted at the A2A door like any other peer's.");
+                    $"Morgana:AgentToAgent:Partners declares a partner named '{Constants.AgentToAgent.IssuerName}', which is "
+                    + "reserved for this installation's own agents. Give the partner a name of its own.");
             }
 
-            // Proving who you are is not being admitted: without an inbound entry the filter's admitted
-            // set is empty for every agent and this installation would 401 its own consultations.
-            if (!inboundSystems.Any(system =>
-                    string.Equals(system.Issuer?.Trim(), Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)))
+            // Two entries under one name leave which key proves a caller, and which address a call
+            // goes to, decided by the order somebody happened to write them in.
+            if (!declaredNames.Add(partnerName))
             {
                 throw new InvalidOperationException(
-                    $"Agents of this installation consult colleagues of their own, but '{Constants.AgentToAgent.IssuerName}' "
-                    + "is not declared under Morgana:AgentToAgent:InboundSystems: add { \"Issuer\": "
-                    + $"\"{Constants.AgentToAgent.IssuerName}\" }}, which admits it to every published agent.");
+                    $"Morgana:AgentToAgent:Partners declares '{partnerName}' twice. One partner is one entry, "
+                    + "carrying its key beside what each direction of the relationship allows.");
             }
-        }
 
-        // A system declared and then forgotten in InboundSystems would be handed the whole ring by
-        // omission and an omission is exactly what nobody notices. So the scope is required of every
-        // system and admitting it to everything stays a sentence somebody wrote.
-        foreach (Records.IssuerOptions systemIssuer in declaredIssuers.Where(issuer => issuer.Type is Records.IssuerType.System))
-        {
-            // A system that can prove who it is and reaches nothing: absent from every agent's admitted
-            // set, it would be refused at each one for a reason nobody wrote down.
-            if (!inboundSystems.Any(system => string.Equals(system.Issuer?.Trim(), systemIssuer.Name, StringComparison.OrdinalIgnoreCase)))
+            // A parked relationship is not weighed any further: it opens nothing in either direction,
+            // so an address or a ceiling it is still missing costs nothing until somebody revives it.
+            if (!partner.Enabled)
+                continue;
+
+            bool consultable = partner.OutboundPolicy?.Enabled == true;
+            bool admitted = partner.InboundPolicy?.Enabled == true;
+
+            // Neither direction open is an entry that reads as a live relationship and is none. Parking
+            // one is what "Enabled": false says and it says it where a reader looks first.
+            if (!consultable && !admitted)
             {
                 throw new InvalidOperationException(
-                    $"Issuer '{systemIssuer.Name}' is declared as a system but has no entry under "
-                    + "Morgana:AgentToAgent:InboundSystems. Declare how far it reaches — a list of published agents in "
-                    + $"\"Agents\", or the entry alone to admit it to all of them ({string.Join(", ", publishedIntents)}).");
+                    $"Partner '{partnerName}' opens neither direction: declare \"OutboundPolicy\": {{ \"Enabled\": true }} to "
+                    + "consult its agents, \"InboundPolicy\": { \"Enabled\": true } to let it consult this installation's, "
+                    + "or \"Enabled\": false on the partner itself to park the relationship.");
             }
-        }
 
-        // The reverse direction of the loop above: there, a system with no scope; here, a scope that
-        // describes an admission which can never happen. Both leave a topology that reads as intended.
-        foreach (Records.InboundSystemOptions inboundSystem in inboundSystems)
-        {
-            // Empty when the entry names no issuer at all, which the lookup below then fails to match —
-            // reported as an undeclared issuer, which is what a nameless entry effectively is.
-            string declaredIssuer = inboundSystem.Issuer?.Trim() ?? string.Empty;
-
-            // The identity behind the name this scope claims to narrow; absent when nobody declared it.
-            Records.IssuerOptions? scopedIssuer = declaredIssuers.FirstOrDefault(issuer =>
-                string.Equals(issuer.Name, declaredIssuer, StringComparison.OrdinalIgnoreCase));
-
-            // Scoping admits nobody: an entry naming an issuer that cannot prove who it is, or one whose
-            // key was cut for a channel, describes an admission that will never happen.
-            if (scopedIssuer is null)
+            // The placeholder counts as absent, or an un-overridden deployment signs and proves with
+            // the literal word — which fails at the first call rather than here.
+            if (string.IsNullOrWhiteSpace(partner.SymmetricKey)
+                || string.Equals(partner.SymmetricKey.Trim(), Constants.Overrides.Secure, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    $"Morgana:AgentToAgent:InboundSystems declares '{declaredIssuer}', which is not among "
-                    + "Morgana:Authentication:Issuers. Scoping narrows a caller that can already prove who it is.");
+                    $"Partner '{partnerName}' carries no usable SymmetricKey. It is the one secret the two installations "
+                    + "share: calls to that partner are signed with it and calls from it are proven against it. "
+                    + "Override it through User Secrets or the environment.");
             }
 
-            // A channel's key opens the conversation API and nothing under /a2a, so listing which agents
-            // it reaches describes a reach that key can never have.
-            if (scopedIssuer.Type is not Records.IssuerType.System)
-            {
-                throw new InvalidOperationException(
-                    $"Morgana:AgentToAgent:InboundSystems declares '{scopedIssuer.Name}', which is declared as a channel. "
-                    + "A caller is a channel or a colleague, never both.");
-            }
+            if (consultable)
+                ValidateConsultableAddress(partnerName, partner.Url);
 
-            // This installation's own topology has one author, [ConsultsAgent], validated at startup.
-            // A scope on the "morgana" issuer would be a second author of it, able only to contradict
-            // the first — and to do so at runtime, as a 401 on a consultation the plugin declares.
-            if (string.Equals(scopedIssuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)
-                && inboundSystem.Agents is not null)
-            {
-                throw new InvalidOperationException(
-                    $"Morgana:AgentToAgent:InboundSystems declares \"Agents\" for '{Constants.AgentToAgent.IssuerName}'. "
-                    + "Which colleagues an agent of this installation may consult is declared by [ConsultsAgent] and validated "
-                    + "at startup; narrowing it here could only contradict that. Remove \"Agents\" from the entry.");
-            }
-
-            // An hour's allowance of openings is what bounds a caller free to name its own
-            // conversation. A colleague of this installation names none: it joins the one the user is
-            // already having, so a limit here would count nothing and read as one that does.
-            if (string.Equals(scopedIssuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)
-                && inboundSystem.MaxConversationsPerHour is not null)
-            {
-                throw new InvalidOperationException(
-                    $"Morgana:AgentToAgent:InboundSystems declares \"MaxConversationsPerHour\" for '{Constants.AgentToAgent.IssuerName}'. "
-                    + "Colleagues of this installation open no conversations: they answer on the one the user is already having, "
-                    + "whose own budget already holds them. Remove \"MaxConversationsPerHour\" from the entry.");
-            }
-
-            // Every other system must say what it may spend getting there. The entry itself is already
-            // required so that admitting a partner stays a sentence somebody wrote; a partner admitted
-            // with no ceiling is that same silence one level down, except nothing reads an absent key
-            // as licence to consume this installation's model without limit. A deployment that truly
-            // wants no bound writes a number saying so, which is again a sentence somebody wrote.
-            if (!string.Equals(scopedIssuer.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase)
-                && inboundSystem.MaxConversationsPerHour is not > 0)
-            {
-                throw new InvalidOperationException(
-                    $"Morgana:AgentToAgent:InboundSystems admits '{scopedIssuer.Name}' without declaring "
-                    + "\"MaxConversationsPerHour\". Behind the A2A door a caller names the conversation it is served on, "
-                    + "so how many it may open in a sliding hour is the only bound on what it can spend. Declare a "
-                    + "positive number, generous if this partner is trusted, but declare it.");
-            }
-
-            foreach (string scopedAgent in inboundSystem.Agents ?? [])
-            {
-                // A name this installation publishes nothing under is a permission granted over nothing —
-                // most often a typo and read by whoever wrote it as real access.
-                if (!publishedIntents.Any(intent => string.Equals(intent, scopedAgent?.Trim(), StringComparison.OrdinalIgnoreCase)))
-                {
-                    throw new InvalidOperationException(
-                        $"Morgana:AgentToAgent:InboundSystems admits '{scopedIssuer.Name}' to '{scopedAgent}', which this "
-                        + $"installation does not publish (published: {string.Join(", ", publishedIntents)}).");
-                }
-            }
+            if (admitted)
+                ValidateAdmission(partnerName, partner.InboundPolicy!, publishedIntents);
         }
     }
 
+    /// <summary>
+    /// Refuses an address a signed request could not be sent to.
+    /// </summary>
+    /// <param name="partnerName">Partner being weighed, named in the diagnostics.</param>
+    /// <param name="url">Address declared for it.</param>
+    /// <exception cref="InvalidOperationException">The address is missing, relative or on a scheme carrying no bearer.</exception>
+    private static void ValidateConsultableAddress(string partnerName, string url)
+    {
+        // A base address to join with the published agent path, never a fragment to resolve.
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? consultableUrl))
+        {
+            throw new InvalidOperationException(
+                $"Partner '{partnerName}' is open to being consulted but declares no absolute Url. It is everything before "
+                + "the published agent path, which is appended from the intent being consulted.");
+        }
+
+        // This Url is where a token signed with that partner's key is sent: only the two schemes carrying one.
+        if (!string.Equals(consultableUrl.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(consultableUrl.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Partner '{partnerName}' declares the Url scheme '{consultableUrl.Scheme}': a colleague is reached over http or https.");
+        }
+    }
+
+    /// <summary>
+    /// Refuses an admission granted over agents nobody publishes, or granted with nothing bounding it.
+    /// </summary>
+    /// <param name="partnerName">Partner being weighed, named in the diagnostics.</param>
+    /// <param name="inboundPolicy">How far that partner reaches, as declared.</param>
+    /// <param name="publishedIntents">Agents this installation publishes over A2A.</param>
+    /// <exception cref="InvalidOperationException">The admission names an unpublished agent or carries no ceiling.</exception>
+    private static void ValidateAdmission(
+        string partnerName,
+        Records.PartnerInboundPolicy inboundPolicy,
+        IReadOnlyCollection<string> publishedIntents)
+    {
+        foreach (string admittedAgent in inboundPolicy.OnAgents ?? [])
+        {
+            // A name this installation publishes nothing under is a permission granted over nothing —
+            // most often a typo and read by whoever wrote it as real access.
+            if (!publishedIntents.Any(intent => string.Equals(intent, admittedAgent?.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    $"Partner '{partnerName}' is admitted to '{admittedAgent}', which this installation does not publish "
+                    + $"(published: {string.Join(", ", publishedIntents)}).");
+            }
+        }
+
+        // Behind the A2A door a caller names the conversation it is served on, so how many it may open
+        // in an hour is the only bound on what it can spend. Nothing reads an absent declaration as
+        // licence to spend without limit — a deployment wanting no real bound switches the ceiling off,
+        // or writes a generous number and either way it is a sentence somebody wrote.
+        if (inboundPolicy.RateLimiting is null)
+        {
+            throw new InvalidOperationException(
+                $"Partner '{partnerName}' is admitted without declaring \"RateLimiting\". Behind the A2A door a caller names "
+                + "the conversation it is served on, so how many it may open in a sliding hour is the only bound on what it "
+                + "can spend. Declare { \"Enabled\": true, \"MaxConversationsPerHour\": <n> }, or { \"Enabled\": false } to "
+                + "say in as many words that this partner opens what it likes.");
+        }
+
+        // A ceiling switched on and left without a number bounds nothing while reading as if it did.
+        if (inboundPolicy.RateLimiting.Enabled && inboundPolicy.RateLimiting.MaxConversationsPerHour is not > 0)
+        {
+            throw new InvalidOperationException(
+                $"Partner '{partnerName}' declares a rate limit with no positive \"MaxConversationsPerHour\". "
+                + "Declare how many conversations it may open within a sliding hour, generous if it is trusted, but declare it.");
+        }
+    }
 
     /// <summary>
     /// Reads a colleague's published card, sharing one reading with every conversation that needs it
@@ -648,14 +664,14 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// <param name="card">The colleague's card, already fetched.</param>
     /// <param name="baseAddress">Address the card was fetched from and the only one a token is ever attached for.</param>
     /// <param name="peer">The colleague being resolved, named in the diagnostics.</param>
-    /// <param name="consultableInstance">Declaration of the instance publishing it, or <c>null</c> when it is an agent of this installation.</param>
+    /// <param name="consultablePartner">Declaration of the partner publishing it, or <c>null</c> when it is an agent of this installation.</param>
     /// <param name="callerIntent">Asking agent, recorded as the subject of the minted token.</param>
     /// <returns>The client to call the colleague with, or <c>null</c> when its requirements cannot be met.</returns>
     private HttpClient? BuildPeerHttpClient(
         AgentCard card,
         string baseAddress,
         Records.PeerReference peer,
-        Records.OutboundSystemOptions? consultableInstance,
+        Records.PartnerOptions? consultablePartner,
         string callerIntent)
     {
         // A2A states alternatives and satisfying one is enough — so these are candidates to try, not
@@ -678,25 +694,45 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
                 || !string.Equals(httpAuthScheme.Scheme, Constants.AgentToAgent.BearerScheme, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            // A instance's key is the one it cut for this caller; this installation's own key is the
-            // one it shares with itself. Either way the secret is configured here and never discovered.
-            string? symmetricKey = consultableInstance is null
-                ? ResolvePeerSigningKey(configuration)
-                : consultableInstance.SymmetricKey;
+            // A partner's key is the secret the two installations share; a colleague of this one is
+            // reached under the ring's own, coined at start. Neither is ever discovered from a card.
+            string? symmetricKey = consultablePartner is null
+                ? peerRingKeyService.SymmetricKey
+                : consultablePartner.SymmetricKey;
 
-            // The colleague is left unresolved rather than called unsigned and the message names both
-            // places a key can be declared, since which one applies depends on where the colleague runs.
+            // The colleague is left unresolved rather than called unsigned. Only a partner can be
+            // missing a key here — the ring always has one — so that is what the message names.
             if (string.IsNullOrWhiteSpace(symmetricKey))
             {
                 logger.LogError(
-                    "No usable signing key for '{Intent}': declare the '{IssuerName}' issuer under Morgana:Authentication:Issuers for an agent of this installation, or a SymmetricKey on the instance entry for one published elsewhere",
-                    peer.Intent, Constants.AgentToAgent.IssuerName);
+                    "No usable signing key for '{Intent}': declare a SymmetricKey on partner '{Partner}' under Morgana:AgentToAgent:Partners",
+                    peer.Intent, consultablePartner?.Name);
                 return null;
             }
 
-            // The claim values the callee validates against, as its own card declares them — never a
-            // pair this side assumes.
-            (string issuer, string audience) = ReadBearerIssuance(card);
+            // Who this installation is to the callee. A colleague of its own knows it by the reserved
+            // ring name; a partner knows it by whatever name it filed this caller's key under, which
+            // only that partner can say and it says it out of band, when it cuts the key.
+            string? issuer = consultablePartner is null
+                ? Constants.AgentToAgent.IssuerName
+                : consultablePartner.OutboundPolicy?.Issuer?.Trim();
+
+            // Signing under a name the callee never filed produces a token it refuses, so the
+            // colleague is left unresolved instead — a missing declaration rather than a 401 per turn.
+            if (string.IsNullOrWhiteSpace(issuer))
+            {
+                logger.LogError(
+                    "Partner '{Partner}' requires a bearer but no Issuer is declared on its OutboundPolicy: it is the name that partner knows this installation by and only that partner can say it, so '{Intent}' cannot be consulted",
+                    consultablePartner?.Name, peer.Intent);
+                return null;
+            }
+
+            // The audience the callee validates against. Declared on that partner's entry only when
+            // it runs on something other than the shared default, which two installations of Morgana
+            // both do until one of them changes it.
+            string audience = consultablePartner?.OutboundPolicy?.Audience?.Trim() is { Length: > 0 } declaredAudience
+                ? declaredAudience
+                : ResolveAudience();
 
             // The one address this client will ever attach a token for.
             Uri trustedOrigin = new Uri(baseAddress);
@@ -707,10 +743,8 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
                     "Consultations of '{Intent}' at '{BaseAddress}' are signed over plaintext HTTP: the bearer token is replayable by anyone on the path",
                     peer.Intent, baseAddress);
 
-            // A instance that cut a key for this caller alone names the issuer it filed that key
-            // under, which its public card cannot say without naming it to everyone else too.
             return new HttpClient(
-                new MorganaPeerAuthenticationHandler(connectionPool, symmetricKey, consultableInstance?.Issuer ?? issuer, audience, callerIntent, trustedOrigin, logger),
+                new MorganaPeerAuthenticationHandler(connectionPool, symmetricKey, issuer, audience, callerIntent, trustedOrigin, logger),
                 disposeHandler: false) { Timeout = peerRequestTimeout };
         }
 
@@ -720,41 +754,6 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
 
         return null;
     }
-
-    /// <summary>
-    /// Reads the claims a card asks a caller to mint its token with.
-    /// </summary>
-    /// <remarks>
-    /// A card that does not carry the extension — one published before it existed, or by an
-    /// implementation that has never heard of it — is answered with this installation's own values,
-    /// which is what the caller assumed unconditionally before the card could say.
-    /// </remarks>
-    /// <param name="card">The colleague's card, already fetched.</param>
-    private (string Issuer, string Audience) ReadBearerIssuance(AgentCard card)
-    {
-        // The bearer-issuance entry among whatever extensions the publisher declared; absent on a card
-        // published before it existed, or by an implementation that never heard of it.
-        JsonElement? bearerIssuanceParameters = card.Capabilities.Extensions?
-            .FirstOrDefault(extension => string.Equals(extension.Uri, Constants.AgentToAgent.BearerIssuanceExtensionUri, StringComparison.OrdinalIgnoreCase))?
-            .Params;
-
-        // Each half is read on its own, so a card may declare one value and leave the other to default.
-        return (ReadStringParameter(bearerIssuanceParameters, Constants.AgentToAgent.BearerIssuerParameter) ?? Constants.AgentToAgent.IssuerName,
-                ReadStringParameter(bearerIssuanceParameters, Constants.AgentToAgent.BearerAudienceParameter) ?? ResolveAudience());
-    }
-
-    /// <summary>
-    /// Reads one string parameter out of an extension's free-form parameters, which are whatever the
-    /// publisher put there and are therefore never trusted to have a shape.
-    /// </summary>
-    /// <param name="parameters">The extension's parameters, absent when it declared none.</param>
-    /// <param name="parameterName">Parameter to read.</param>
-    private static string? ReadStringParameter(JsonElement? parameters, string parameterName)
-        => parameters is { ValueKind: JsonValueKind.Object } parametersElement
-           && parametersElement.TryGetProperty(parameterName, out JsonElement value)
-           && value.ValueKind is JsonValueKind.String
-            ? value.GetString()
-            : null;
 
     /// <summary>
     /// Builds one card from the intent and prompt declared for <paramref name="intent"/>, including
@@ -795,12 +794,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             Capabilities = new AgentCapabilities
             {
                 Streaming = false,
-                PushNotifications = false,
-
-                // How to mint the token the requirement below asks for. The scheme states that a
-                // bearer is needed and stops there, leaving the two claim values this installation
-                // validates to be agreed out of band — which is the coupling discovery exists to remove.
-                Extensions = [BuildBearerIssuanceExtension()]
+                PushNotifications = false
             },
 
             // Bearer, in the standard form every A2A consumer reads. The card is what tells a caller
@@ -873,59 +867,12 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         };
 
     /// <summary>
-    /// The audience this installation validates an inbound token against and therefore the one its
-    /// cards ask a caller to name. An opaque identifier compared for equality: it is neither a
-    /// hostname nor a resource anybody has to own.
+    /// The audience this installation validates an inbound token against, which is also what a
+    /// partner is assumed to validate until its own entry says otherwise. An opaque identifier
+    /// compared for equality: it is neither a hostname nor a resource anybody has to own.
     /// </summary>
     private string ResolveAudience()
         => configuration["Morgana:Authentication:Audience"] ?? "morgana.ai";
-
-    /// <summary>
-    /// Builds the extension by which the card declares the two claim values a caller must mint its
-    /// bearer token with.
-    /// </summary>
-    /// <remarks>
-    /// Declared as not required, deliberately: the obligation to authenticate is already stated in
-    /// standard form by the card's own security requirement and this says only how to satisfy it.
-    /// So a consumer that has never heard of the extension is held to exactly what any A2A consumer
-    /// is held to and one holding a token issued out of band is unaffected. The URI names a
-    /// published specification because it is read on somebody else's card, by an implementation that
-    /// will never see this code.
-    /// </remarks>
-    private AgentExtension BuildBearerIssuanceExtension()
-        => new AgentExtension
-        {
-            Uri = Constants.AgentToAgent.BearerIssuanceExtensionUri,
-            Description = "Issuer and audience a caller must mint its bearer token under.",
-            Required = false,
-            Params = JsonSerializer.SerializeToElement(new Dictionary<string, string>
-            {
-                [Constants.AgentToAgent.BearerIssuerParameter] = Constants.AgentToAgent.IssuerName,
-                [Constants.AgentToAgent.BearerAudienceParameter] = ResolveAudience()
-            })
-        };
-
-    /// <summary>
-    /// The key Morgana signs its own peer traffic with, or <c>null</c> when the <c>morgana</c> issuer
-    /// is undeclared, blank, or still holding the placeholder <c>appsettings.json</c> ships.
-    /// </summary>
-    /// <param name="configuration">Application configuration.</param>
-    /// <returns>The signing key, or null when it has not been configured.</returns>
-    public static string? ResolvePeerSigningKey(IConfiguration configuration)
-    {
-        // This installation's own entry among the issuers it admits: it signs its internal consultations
-        // with the very key it validates them against when they knock back at its own door.
-        Records.IssuerOptions? issuer = configuration.GetSection("Morgana:Authentication:Issuers")
-            .Get<List<Records.IssuerOptions>>()?
-            .FirstOrDefault(i => string.Equals(i.Name, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase));
-
-        // The placeholder appsettings.json ships counts as no key: a deployment that never overrode it is
-        // unconfigured, not one that signs its consultations with the literal word.
-        return string.IsNullOrWhiteSpace(issuer?.SymmetricKey)
-               || string.Equals(issuer.SymmetricKey.Trim(), Constants.Overrides.Secure, StringComparison.Ordinal)
-            ? null
-            : issuer.SymmetricKey;
-    }
 
     /// <summary>
     /// One reading of a colleague's published card, with the moment it was taken.

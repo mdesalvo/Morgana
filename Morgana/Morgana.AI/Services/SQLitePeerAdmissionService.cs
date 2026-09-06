@@ -29,13 +29,16 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
     /// <summary>Where the ledger sits: the same directory the conversations themselves are kept in.</summary>
     private readonly ConversationPersistenceOptions persistenceOptions;
 
-    /// <summary>Allowance of each system, resolved once from what configuration declared for it.</summary>
+    /// <summary>Allowance of each partner, resolved once from what configuration declared for it.</summary>
     private readonly Dictionary<string, int> limitByIssuer;
+
+    /// <summary>What each partner is told when it has opened all it may, as its own entry words it.</summary>
+    private readonly Dictionary<string, string> refusalMessageByIssuer;
 
     /// <summary>Records a system turned away and the fail-open path, which leaves no other trace.</summary>
     private readonly ILogger logger;
 
-    /// <summary>Reads what each admitted system is allowed, off the same entry that gave it its reach.</summary>
+    /// <summary>Reads what each admitted partner is allowed, off the same entry that gave it its reach.</summary>
     /// <param name="configuration">Application configuration.</param>
     /// <param name="persistenceOptions">Persistence configuration, read for the directory the ledger lives in.</param>
     /// <param name="logger">Logger for refusals and for a count that could not be read.</param>
@@ -50,37 +53,40 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
         // The allowance is declared where the reach is and nowhere else: how far a partner may go and
         // how often it may come back are one declaration about one partner, so there is no second
         // place to look and no default quietly deciding for a partner nobody wrote a number for.
-        limitByIssuer = ConfigurationAgentDirectoryService.ResolveInboundSystems(configuration)
-            .Where(system => !string.IsNullOrWhiteSpace(system.Issuer))
+        // This installation's own agents are not on this list at all: they join the conversation the
+        // user is already having rather than opening one, so there is nothing here to count.
+        List<Records.PartnerOptions> cappedPartners =
+            [.. ConfigurationAgentDirectoryService.ResolveAdmittedPartners(configuration)
+                    .Select(admitted => admitted.Partner)
+                    // A ceiling switched off is a deployment saying that partner opens what it likes and
+                    // one with no number bounds nothing. Startup refuses the latter, so what is tolerated
+                    // here is a service built outside a validated deployment: never a limit invented for it.
+                    .Where(partner => partner.InboundPolicy!.RateLimiting is { Enabled: true, MaxConversationsPerHour: > 0 })];
 
-            // This installation's own ring is left out. A colleague of ours joins the conversation the
-            // user is already having rather than opening one, so it would never be counted anyway —
-            // stated here so that a local consultation reaching an unopened conversation, which is a
-            // fault of ours rather than a partner's traffic, is not refused as if it were.
-            .Where(system => !string.Equals(system.Issuer.Trim(), Constants.Morgana, StringComparison.OrdinalIgnoreCase))
-            .GroupBy(system => system.Issuer.Trim(), StringComparer.OrdinalIgnoreCase)
+        limitByIssuer = cappedPartners.ToDictionary(
+            partner => (partner.InboundPolicy!.Issuer ?? partner.Name).Trim(),
+            partner => partner.InboundPolicy!.RateLimiting!.MaxConversationsPerHour!.Value,
+            StringComparer.OrdinalIgnoreCase);
 
-            // An entry that names no number is kept out of the map rather than given one. Startup
-            // refuses such an entry for every partner, so what this tolerates is a directory built
-            // outside a validated deployment: a ceiling is missing here, never quietly invented.
-            .Select(entries => (Issuer: entries.Key, Limit: entries.Select(system => system.MaxConversationsPerHour).FirstOrDefault(limit => limit is not null)))
-            .Where(system => system.Limit is not null)
-            .ToDictionary(system => system.Issuer, system => system.Limit!.Value, StringComparer.OrdinalIgnoreCase);
+        refusalMessageByIssuer = cappedPartners.ToDictionary(
+            partner => (partner.InboundPolicy!.Issuer ?? partner.Name).Trim(),
+            partner => partner.InboundPolicy!.RateLimiting!.ErrorMessagePerHour,
+            StringComparer.OrdinalIgnoreCase);
 
         // What an operator reads to know which partners are actually held to something, a ceiling
         // nobody wrote being indistinguishable at runtime from one nobody needed.
         logger.LogInformation(
-            "SQLitePeerAdmissionService initialized: {Count} system(s) held to a limit on new conversations per hour", limitByIssuer.Count);
+            "SQLitePeerAdmissionService initialized: {Count} partner(s) held to a limit on new conversations per hour", limitByIssuer.Count);
     }
 
     /// <inheritdoc/>
-    public async Task<bool> TryAdmitNewConversationAsync(string issuer)
+    public async Task<Records.PeerAdmissionResult> TryAdmitNewConversationAsync(string issuer)
     {
-        // A system nobody put a limit on opens what it likes. It still had to prove who it is and be
+        // A partner nobody put a ceiling on opens what it likes. It still had to prove who it is and be
         // admitted to this agent: what is absent here is a ceiling, never the gate.
         int limit = limitByIssuer.GetValueOrDefault(issuer, 0);
         if (limit <= 0)
-            return true;
+            return new Records.PeerAdmissionResult(IsAdmitted: true);
 
         try
         {
@@ -118,10 +124,10 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
                 await transaction.RollbackAsync();
 
                 logger.LogWarning(
-                    "System '{Issuer}' has opened its {Limit} conversation(s) for this hour and is admitted to no further ones until the window moves",
+                    "Partner '{Issuer}' has opened its {Limit} conversation(s) for this hour and is admitted to no further ones until the window moves",
                     issuer, limit);
 
-                return false;
+                return new Records.PeerAdmissionResult(IsAdmitted: false, RefusalMessage: refusalMessageByIssuer.GetValueOrDefault(issuer));
             }
 
             await ExecuteAsync(
@@ -133,14 +139,14 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
             // past one limit.
             await transaction.CommitAsync();
 
-            return true;
+            return new Records.PeerAdmissionResult(IsAdmitted: true);
         }
         catch (Exception ex)
         {
             // Fails open, as every limiter here does: a partner is refused for going too far, never
             // because this installation could not read its own count.
             logger.LogError(ex, "Could not weigh the conversations '{Issuer}' has opened; it is admitted", issuer);
-            return true;
+            return new Records.PeerAdmissionResult(IsAdmitted: true);
         }
     }
 
@@ -150,7 +156,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
     {
         await using SqliteCommand command = connection.CreateCommand();
 
-        // Indexed by issuer because every question asked of this table is about one system. Indexed by
+        // Indexed by issuer because every question asked of this table is about one partner. Indexed by
         // the instant because the window is what decides which of its rows still count.
         command.CommandText = """
             CREATE TABLE IF NOT EXISTS peer_conversation_log (

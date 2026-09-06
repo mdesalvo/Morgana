@@ -140,8 +140,7 @@ public static class A2APublicationExtensions
             // cannot yet name where this instance answers — Kestrel has bound nothing — and a document
             // completed later by mutating it would be read, by whoever asked in between, in whatever
             // state that pass had reached. Resolved per request there is no such moment.
-            app.MapGet(
-                $"{agentPath}/{Constants.AgentToAgent.WellKnownAgentCardPath}",
+            app.MapGet($"{agentPath}/{Constants.AgentToAgent.WellKnownAgentCardPath}",
                 async () => Results.Ok(await agentDirectory.GetAgentCardAsync(publishedIntent)));
         }
     }

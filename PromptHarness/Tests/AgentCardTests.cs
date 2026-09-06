@@ -24,12 +24,6 @@ namespace PromptHarness.Tests;
 /// </remarks>
 public sealed class AgentCardTests
 {
-    /// <summary>URI of the extension by which a card declares how a caller mints its bearer token.</summary>
-    private const string BearerIssuanceExtensionUri = "https://mdesalvo.github.io/Morgana/a2a/extensions/bearer-issuance/v1";
-
-    /// <summary>Issuer the host expects peer traffic to be signed under, as its cards must declare it.</summary>
-    private const string PeerIssuerName = "morgana";
-
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
     private readonly MorganaHostFixture fixture;
 
@@ -89,21 +83,14 @@ public sealed class AgentCardTests
         Assert.Equal("bearer", declaredScheme.GetProperty("httpAuthSecurityScheme").GetProperty("scheme").GetString());
         Assert.Equal("JWT", declaredScheme.GetProperty("httpAuthSecurityScheme").GetProperty("bearerFormat").GetString());
 
-        // What the standard has no field for: which claims the token must carry. Absent it, a caller
-        // holding the shared secret still cannot produce a token this host will accept.
-        JsonElement bearerIssuance = Assert.Single(card.GetProperty("capabilities").GetProperty("extensions").EnumerateArray()
-            .Where(extension => extension.GetProperty("uri").GetString() == BearerIssuanceExtensionUri).ToArray());
-
-        JsonElement issuanceParameters = bearerIssuance.GetProperty("params");
-
-        Assert.Equal(PeerIssuerName, issuanceParameters.GetProperty("issuer").GetString());
-        Assert.Equal(
-            fixture.Configuration["Morgana:Authentication:Audience"],
-            issuanceParameters.GetProperty("audience").GetString());
-
-        // Not required and that is itself the contract: a consumer that has never heard of this
-        // extension must still be able to use the card, held to the standard requirement above.
-        Assert.False(bearerIssuance.GetProperty("required").GetBoolean());
+        // The card declares the scheme and stops and that silence is the contract. Neither claim
+        // value a token must carry is publishable: an issuer is the name this host filed ONE caller
+        // under, and an audience is agreed in the same breath as the key. Both travel out of band,
+        // so a card growing a capability extension to state them is a regression this notices.
+        Assert.False(card.GetProperty("capabilities").TryGetProperty("extensions", out JsonElement extensions)
+                     && extensions.ValueKind is JsonValueKind.Array
+                     && extensions.GetArrayLength() > 0,
+            "The card advertises a capability extension: neither claim value belongs on a document served to everyone.");
     }
 
     [Theory]
@@ -132,34 +119,34 @@ public sealed class AgentCardTests
         // reaches an agent's actor with none of the guard, classifier, rate limit and dust budget the
         // conversation API applies.
         HttpResponseMessage response = await CallAgentAsync(
-            MorganaHostFixture.ScopedSystemAgent, HarnessChannel.IssuerName, fixture.IssuerKey);
+            MorganaHostFixture.ScopedPartnerAgent, HarnessChannel.IssuerName, fixture.IssuerKey);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     /// <summary>
-    /// Every published agent this run's scoped system is NOT admitted to — the theory data above
-    /// minus <see cref="MorganaHostFixture.ScopedSystemAgent"/>, spelled out for the same reason
+    /// Every published agent this run's partner is NOT admitted to — the theory data above minus
+    /// <see cref="MorganaHostFixture.ScopedPartnerAgent"/>, spelled out for the same reason
     /// everything else here is: what must be noticed is the published surface changing shape.
     /// </summary>
     [Theory]
     [InlineData("billing")]
     [InlineData("contract")]
     [InlineData("monkeys")]
-    public async Task Agent_endpoint_refuses_a_system_not_admitted_to_it(string closedAgent)
+    public async Task Agent_endpoint_refuses_a_partner_not_admitted_to_it(string closedAgent)
     {
-        // Proven to be a colleague and still turned away: this run declares its scoped system as
-        // admitted to one desk and every other desk of the same installation answers it exactly as
-        // it answers a stranger. That is what lets an installation be opened to a customer, a
+        // Proven to be a colleague and still turned away: this run declares its partner as admitted
+        // to one desk and every other desk of the same installation answers it exactly as it answers
+        // a stranger. That is what lets an installation be opened to a customer, a
         // supplier or a marketplace one agent at a time, rather than whole or not at all.
         HttpResponseMessage response = await CallAgentAsync(
-            closedAgent, MorganaHostFixture.ScopedSystemIssuerName, fixture.ScopedSystemKey);
+            closedAgent, MorganaHostFixture.ScopedPartnerName, fixture.ScopedPartnerKey);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
-    public async Task Agent_endpoint_admits_a_system_scoped_to_it()
+    public async Task Agent_endpoint_admits_a_partner_scoped_to_it()
     {
         // The other half and the one that keeps the two above from passing for the wrong reason: a
         // gate refusing everything would satisfy them both. Only the gate is under test here, so the
@@ -167,7 +154,7 @@ public sealed class AgentCardTests
         // incomplete JSON-RPC body is its business and asserting it would tie this test to a
         // protocol shape it is not measuring.
         HttpResponseMessage response = await CallAgentAsync(
-            MorganaHostFixture.ScopedSystemAgent, MorganaHostFixture.ScopedSystemIssuerName, fixture.ScopedSystemKey);
+            MorganaHostFixture.ScopedPartnerAgent, MorganaHostFixture.ScopedPartnerName, fixture.ScopedPartnerKey);
 
         Assert.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }

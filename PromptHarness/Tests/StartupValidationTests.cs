@@ -19,6 +19,11 @@ namespace PromptHarness.Tests;
 /// live before the container is built, so a doomed host throws before it binds a port or raises an
 /// actor system, which is what lets these run in the same process as the live host.</para>
 ///
+/// <para>Every case here breaks one <c>Morgana:AgentToAgent:Partners</c> entry against itself: what a
+/// partner is, where it answers and how far it reaches are one declaration, so there is no second
+/// list for a case to set against the first. This installation's own agents appear nowhere — they
+/// consult each other under a key coined at startup, which no deployer can misdeclare.</para>
+///
 /// <para>What configuration cannot reach is deliberately absent: a <c>[ConsultsAgent]</c> naming an
 /// unknown colleague, one naming its own agent, two folding to one function name. Those are refused
 /// at startup too, but they are declared in a plugin's code, so reaching them would need a second
@@ -41,141 +46,104 @@ public sealed class StartupValidationTests
     private const string SecureOverride = "_SECURE_OVERRIDE_";
 
     [Fact]
-    public void Boot_is_refused_when_the_peer_issuer_has_no_usable_key()
+    public void Boot_is_refused_when_a_partner_has_no_usable_key()
     {
-        // The key an installation signs its own consultations with. Left on the placeholder it is
-        // unconfigured rather than secret. A colleague would resolve to nothing on the first
-        // conversation instead of here.
+        // The one secret the two installations share. Left on the placeholder it is unconfigured
+        // rather than secret and every call to or from that partner would fail on the wire instead.
         Exception refusal = AssertRefusesToBoot(
-            ($"Morgana__Authentication__Issuers__{fixture.PeerIssuerIndex}__SymmetricKey", SecureOverride));
+            ($"Morgana__AgentToAgent__Partners__{fixture.ScopedPartnerIndex}__SymmetricKey", SecureOverride));
 
         Assert.Contains("SymmetricKey", refusal.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void Boot_is_refused_when_the_peer_issuer_is_typed_as_a_channel()
+    public void Boot_is_refused_when_a_partner_takes_the_name_of_this_installation()
     {
-        // Signed under an issuer its own A2A door turns away: the ring would be configured, signed
-        // and refused by the instance that raised it.
-        Exception refusal = AssertRefusesToBoot(
-            ($"Morgana__Authentication__Issuers__{fixture.PeerIssuerIndex}__Type", "channel"));
+        // Reserved for the agents of this installation, whose consultations are proven against a
+        // secret coined at startup. A partner taking it would be refused at runtime, for a reason
+        // nothing in configuration shows.
+        int reservedName = fixture.ScopedPartnerIndex + 1;
 
-        Assert.Contains("system", refusal.Message, StringComparison.OrdinalIgnoreCase);
+        Exception refusal = AssertRefusesToBoot(
+            ($"Morgana__AgentToAgent__Partners__{reservedName}__Name", "morgana"));
+
+        Assert.Contains("reserved", refusal.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void Boot_is_refused_when_the_peer_issuer_is_admitted_nowhere()
+    public void Boot_is_refused_when_a_partner_is_declared_twice()
     {
-        // Proving who you are is not being admitted. With its own issuer absent from the inbound
-        // declarations the instance would answer its own consultations with a 401.
-        Exception refusal = AssertRefusesToBoot(
-            ("Morgana__AgentToAgent__InboundSystems__0__Issuer", MorganaHostFixture.ScopedSystemIssuerName));
+        // Which key proves a caller, and which address its calls go to, would be decided by the
+        // order somebody happened to write the two entries in.
+        int duplicate = fixture.ScopedPartnerIndex + 1;
 
-        Assert.Contains("InboundSystems", refusal.Message, StringComparison.Ordinal);
+        Exception refusal = AssertRefusesToBoot(
+            ($"Morgana__AgentToAgent__Partners__{duplicate}__Name", MorganaHostFixture.ScopedPartnerName),
+            ($"Morgana__AgentToAgent__Partners__{duplicate}__SymmetricKey", fixture.ScopedPartnerKey));
+
+        Assert.Contains(MorganaHostFixture.ScopedPartnerName, refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Boot_is_refused_when_a_system_issuer_reaches_nothing()
+    public void Boot_is_refused_when_a_partner_opens_neither_direction()
     {
-        // A system declared then forgotten in the inbound list would be refused at every agent for
-        // a reason nobody wrote down. Silence is the dangerous direction, so it is not allowed.
-        int orphanIssuer = fixture.ScopedSystemIssuerIndex + 1;
-
+        // An entry that reads as a live relationship and is none. Parking one is what "Enabled": false
+        // says on the partner itself and it says it where a reader looks first.
         Exception refusal = AssertRefusesToBoot(
-            ($"Morgana__Authentication__Issuers__{orphanIssuer}__Name", "harness-orphan"),
-            ($"Morgana__Authentication__Issuers__{orphanIssuer}__SymmetricKey", fixture.ScopedSystemKey),
-            ($"Morgana__Authentication__Issuers__{orphanIssuer}__Type", "system"));
+            ($"Morgana__AgentToAgent__Partners__{fixture.ScopedPartnerIndex}__InboundPolicy__Enabled", "false"));
 
-        Assert.Contains("harness-orphan", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("neither direction", refusal.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void Boot_is_refused_when_a_scope_names_an_issuer_nobody_declared()
+    public void Boot_is_refused_when_a_consultable_partner_declares_no_address()
     {
-        // Scoping narrows a caller that can already prove who it is. A name absent from the issuers
-        // describes an admission that can never happen.
-        int strayScope = fixture.ScopedSystemInboundIndex + 1;
+        // Where a token signed with that partner's key is sent. Without it the colleague resolves to
+        // nothing on the first conversation instead of here.
+        int addressless = fixture.ScopedPartnerIndex + 1;
 
         Exception refusal = AssertRefusesToBoot(
-            ($"Morgana__AgentToAgent__InboundSystems__{strayScope}__Issuer", "harness-unknown"),
-            ($"Morgana__AgentToAgent__InboundSystems__{strayScope}__MaxConversationsPerHour", "10"));
+            ($"Morgana__AgentToAgent__Partners__{addressless}__Name", "harness-addressless"),
+            ($"Morgana__AgentToAgent__Partners__{addressless}__SymmetricKey", fixture.ScopedPartnerKey),
+            ($"Morgana__AgentToAgent__Partners__{addressless}__OutboundPolicy__Enabled", "true"));
 
-        Assert.Contains("harness-unknown", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Url", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Boot_is_refused_when_a_scope_names_a_channel()
-    {
-        // A caller is a channel or a colleague, never both: a channel's key opens the conversation
-        // API and nothing under the published agents, so listing which of them it reaches is a
-        // reach that key can never have.
-        int channelScope = fixture.ScopedSystemInboundIndex + 1;
-
-        Exception refusal = AssertRefusesToBoot(
-            ($"Morgana__AgentToAgent__InboundSystems__{channelScope}__Issuer", "cauldron"),
-            ($"Morgana__AgentToAgent__InboundSystems__{channelScope}__MaxConversationsPerHour", "10"));
-
-        Assert.Contains("channel", refusal.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void Boot_is_refused_when_the_peer_issuer_carries_a_scope()
-    {
-        // Which colleagues an agent of this installation may consult has one author, the attribute
-        // in its code. A scope here could only contradict it, at runtime, as a 401.
-        Exception refusal = AssertRefusesToBoot(
-            ("Morgana__AgentToAgent__InboundSystems__0__Agents__0", MorganaHostFixture.ScopedSystemAgent));
-
-        Assert.Contains("Agents", refusal.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Boot_is_refused_when_the_peer_issuer_carries_a_ceiling()
-    {
-        // A colleague of this installation opens no conversation, it joins the one the user is
-        // already having, so a ceiling on openings would count nothing while reading as one that does.
-        Exception refusal = AssertRefusesToBoot(
-            ("Morgana__AgentToAgent__InboundSystems__0__MaxConversationsPerHour", "10"));
-
-        Assert.Contains("MaxConversationsPerHour", refusal.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Boot_is_refused_when_an_admitted_system_has_no_ceiling()
+    public void Boot_is_refused_when_an_admitted_partner_declares_no_rate_limiting()
     {
         // Behind the A2A door the caller names the conversation it is served on, so how many it may
-        // open is the only bound on what it can spend. An absent key is not licence to spend freely.
-        int uncappedPartner = fixture.ScopedSystemInboundIndex + 1;
+        // open is the only bound on what it can spend. An absent declaration is not licence to spend
+        // freely — a deployment wanting no bound switches the ceiling off in as many words.
+        int unmetered = fixture.ScopedPartnerIndex + 1;
 
         Exception refusal = AssertRefusesToBoot(
-            ($"Morgana__AgentToAgent__InboundSystems__{uncappedPartner}__Issuer", MorganaHostFixture.ScopedSystemIssuerName),
-            ($"Morgana__AgentToAgent__InboundSystems__{uncappedPartner}__Agents__0", MorganaHostFixture.ScopedSystemAgent));
+            ($"Morgana__AgentToAgent__Partners__{unmetered}__Name", "harness-unmetered"),
+            ($"Morgana__AgentToAgent__Partners__{unmetered}__SymmetricKey", fixture.ScopedPartnerKey),
+            ($"Morgana__AgentToAgent__Partners__{unmetered}__InboundPolicy__Enabled", "true"));
+
+        Assert.Contains("RateLimiting", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Boot_is_refused_when_a_ceiling_is_switched_on_without_a_number()
+    {
+        // A ceiling that bounds nothing while reading as one that does.
+        Exception refusal = AssertRefusesToBoot(
+            ($"Morgana__AgentToAgent__Partners__{fixture.ScopedPartnerIndex}__InboundPolicy__RateLimiting__MaxConversationsPerHour", "0"));
 
         Assert.Contains("MaxConversationsPerHour", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Boot_is_refused_when_a_scope_names_an_agent_nobody_publishes()
+    public void Boot_is_refused_when_a_partner_is_admitted_to_an_agent_nobody_publishes()
     {
         // A permission granted over nothing, most often a typo, read by whoever wrote it as real access.
         Exception refusal = AssertRefusesToBoot(
-            ($"Morgana__AgentToAgent__InboundSystems__{fixture.ScopedSystemInboundIndex}__Agents__0", "harness-nodesk"));
+            ($"Morgana__AgentToAgent__Partners__{fixture.ScopedPartnerIndex}__InboundPolicy__OnAgents__0", "harness-nodesk"));
 
         Assert.Contains("harness-nodesk", refusal.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Boot_is_refused_when_an_issuer_declares_no_type()
-    {
-        // Type decides which door a key opens. Defaulting it would classify a caller by enum ordering —
-        // a classification that decides whether a key reaches an agent's actor at all.
-        int untypedIssuer = fixture.ScopedSystemIssuerIndex + 1;
-
-        Exception refusal = AssertRefusesToBoot(
-            ($"Morgana__Authentication__Issuers__{untypedIssuer}__Name", "harness-untyped"),
-            ($"Morgana__Authentication__Issuers__{untypedIssuer}__SymmetricKey", fixture.ScopedSystemKey));
-
-        Assert.Contains("Type", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

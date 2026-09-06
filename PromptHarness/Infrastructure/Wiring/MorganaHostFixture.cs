@@ -38,16 +38,6 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// </remarks>
 public sealed class MorganaHostFixture : IAsyncLifetime
 {
-    /// <summary>
-    /// Issuer the host signs its own agent-to-agent traffic under. Declared here rather than
-    /// referenced from Morgana.AI: the harness compiles without seeing the framework's internals and
-    /// the name is part of the configuration contract it targets.
-    /// </summary>
-    public const string PeerIssuerName = "morgana";
-
-    /// <summary>Position of <see cref="PeerIssuerName"/> in the host's declared issuers.</summary>
-    public int PeerIssuerIndex { get; private set; }
-
     /// <summary>Configuration resolved by the harness: the host's own appsettings plus the shared secrets store.</summary>
     public IConfiguration Configuration { get; private set; } = null!;
 
@@ -61,46 +51,33 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public string IssuerKey { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Key minted for this run under the <c>morgana</c> issuer, which the host uses to sign the A2A
-    /// requests its agents send one another. Separate from <see cref="IssuerKey"/> on purpose: two
-    /// issuers sharing a key would defeat the per-issuer trust model the instance under test relies on.
-    /// </summary>
-    private string peerIssuerKey = string.Empty;
-
-    /// <summary>
-    /// Issuer this run declares as a system admitted to <see cref="ScopedSystemAgent"/> and to no
-    /// other desk, so the scope half of the A2A gate has something to actually refuse.
+    /// Partner this run declares, admitted to <see cref="ScopedPartnerAgent"/> and to no other desk,
+    /// so the scope half of the A2A gate has something to actually refuse.
     /// </summary>
     /// <remarks>
     /// Declared per run rather than shipped: it exists to be turned away and a deployment carrying a
     /// partner nobody onboarded would be a worse default than the test is worth.
     /// </remarks>
-    public const string ScopedSystemIssuerName = "harness-peer";
+    public const string ScopedPartnerName = "harness-peer";
 
-    /// <summary>The one published agent <see cref="ScopedSystemIssuerName"/> is admitted to.</summary>
-    public const string ScopedSystemAgent = "inventory";
+    /// <summary>The one published agent <see cref="ScopedPartnerName"/> is admitted to.</summary>
+    public const string ScopedPartnerAgent = "inventory";
 
-    /// <summary>Symmetric key minted for this run under <see cref="ScopedSystemIssuerName"/>.</summary>
-    public string ScopedSystemKey { get; private set; } = string.Empty;
-
-    /// <summary>
-    /// Conversations <see cref="ScopedSystemIssuerName"/> may open in an hour. Declared because the
-    /// instance under test demands it of every admitted system, high enough never to be reached.
-    /// </summary>
-    public const int ScopedSystemConversationsPerHour = 100_000;
+    /// <summary>Symmetric key minted for this run under <see cref="ScopedPartnerName"/>.</summary>
+    public string ScopedPartnerKey { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Position this run's scoped system takes in <c>Morgana:AgentToAgent:InboundSystems</c>, past
-    /// the last entry the host's own configuration declares. Read by the group that boots a doomed
-    /// host to break one declaration at a time.
+    /// Conversations <see cref="ScopedPartnerName"/> may open in an hour. Declared because the
+    /// instance under test demands a ceiling of every admitted partner, high enough never to be reached.
     /// </summary>
-    public int ScopedSystemInboundIndex { get; private set; }
+    public const int ScopedPartnerConversationsPerHour = 100_000;
 
     /// <summary>
-    /// Position this run's scoped system takes in <c>Morgana:Authentication:Issuers</c>, past the
-    /// last entry the host's own configuration declares.
+    /// Position this run's partner takes in <c>Morgana:AgentToAgent:Partners</c>, past the last entry
+    /// the host's own configuration declares. Read by the group that boots a doomed host to break one
+    /// declaration at a time.
     /// </summary>
-    public int ScopedSystemIssuerIndex { get; private set; }
+    public int ScopedPartnerIndex { get; private set; }
 
     /// <summary>Tee on the host's stdout; the turn observer reads tool log lines from it.</summary>
     public HostOutputCapture Output { get; private set; } = null!;
@@ -139,8 +116,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // Step 2: mint per-run, disposable identity — a fresh JWT signing key (never written to
         // disk) and a scratch directory for the SQLite databases this run's conversations create.
         IssuerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        peerIssuerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        ScopedSystemKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        ScopedPartnerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         storagePath = Path.Combine(Path.GetTempPath(), "morgana-harness", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(storagePath);
 
@@ -305,34 +281,30 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         foreach (IConfigurationSection _ in Configuration.GetSection("Morgana:OpenTelemetry:Exporters").GetChildren())
             Environment.SetEnvironmentVariable($"Morgana__OpenTelemetry__Exporters__{exporterIndex++}__Enabled", "false");
 
-        // The freshly-minted per-run keys replace whatever sits in the shared secrets store, so this
-        // run's credentials are never anything durable enough to leak. Two issuers are overridden:
-        // "harness", which the suite itself authenticates as and "morgana", which the host signs its
-        // own agent-to-agent traffic with — the latter is startup-fatal if left on its placeholder,
-        // so a run would not even boot without it.
-        PeerIssuerIndex = ResolveIssuerIndex(PeerIssuerName);
+        // The freshly-minted per-run key replaces whatever sits in the shared secrets store, so this
+        // run's credentials are never anything durable enough to leak. Only "harness" needs one: the
+        // host signs the traffic between its own agents under a key it coins at startup, which is
+        // configured nowhere and therefore cannot be overridden here.
         Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ResolveIssuerIndex(HarnessChannel.IssuerName)}__SymmetricKey", IssuerKey);
-        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{PeerIssuerIndex}__SymmetricKey", peerIssuerKey);
 
-        // One more issuer than the host declares, appended past the last index its appsettings uses:
-        // a system admitted to a single desk, which is the only way the scope half of the A2A gate
-        // can be observed at all — refusing an unauthenticated call proves the door is shut, not that
-        // it is shut selectively. Both halves of the declaration are pushed, because either alone is
-        // startup-fatal by design: an issuer with no reach, or a reach for nobody.
-        ScopedSystemIssuerIndex = Configuration.GetSection("Morgana:Authentication:Issuers").GetChildren().Count();
-        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ScopedSystemIssuerIndex}__Name", ScopedSystemIssuerName);
-        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ScopedSystemIssuerIndex}__SymmetricKey", ScopedSystemKey);
-        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{ScopedSystemIssuerIndex}__Type", "system");
-
-        ScopedSystemInboundIndex = Configuration.GetSection("Morgana:AgentToAgent:InboundSystems").GetChildren().Count();
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__InboundSystems__{ScopedSystemInboundIndex}__Issuer", ScopedSystemIssuerName);
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__InboundSystems__{ScopedSystemInboundIndex}__Agents__0", ScopedSystemAgent);
+        // One partner appended past the last index the host's own appsettings uses: admitted to a
+        // single desk, which is the only way the scope half of the A2A gate can be observed at all —
+        // refusing an unauthenticated call proves the door is shut, not that it is shut selectively.
+        // Its key, its reach and its ceiling are one entry, so there is no second half to forget.
+        ScopedPartnerIndex = Configuration.GetSection("Morgana:AgentToAgent:Partners").GetChildren().Count();
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__Name", ScopedPartnerName);
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__SymmetricKey", ScopedPartnerKey);
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__Enabled", "true");
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__OnAgents__0", ScopedPartnerAgent);
 
         // How many conversations this partner may open in an hour, which the instance under test
-        // demands of every admitted system. Far above anything a scripted suite could reach: the
+        // demands of every admitted partner. Far above anything a scripted suite could reach: the
         // ceiling exists here to satisfy a declaration, never to be met.
         Environment.SetEnvironmentVariable(
-            $"Morgana__AgentToAgent__InboundSystems__{ScopedSystemInboundIndex}__MaxConversationsPerHour", ScopedSystemConversationsPerHour.ToString());
+            $"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__RateLimiting__Enabled", "true");
+        Environment.SetEnvironmentVariable(
+            $"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__RateLimiting__MaxConversationsPerHour",
+            ScopedPartnerConversationsPerHour.ToString());
 
 
         // Framework categories at Information, everything else quiet: the tool log lines the turn

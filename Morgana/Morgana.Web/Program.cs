@@ -232,6 +232,12 @@ builder.Services.AddSingleton<IDustLimitService, SQLiteDustLimitService>();
 
 builder.Services.Configure<Records.AuthenticationOptions>(
     builder.Configuration.GetSection("Morgana:Authentication"));
+
+// The secret this installation's own agents consult each other under. Coined at every start and
+// shared with nobody, so it is registered before the gate that proves it and the directory that
+// signs with it.
+builder.Services.AddSingleton<PeerRingKeyService>();
+
 builder.Services.AddSingleton<IAuthenticationService, JWTAuthenticationService>();
 
 // ==============================================================================
@@ -299,14 +305,11 @@ string[] publishedIntents = builder.Configuration.GetValue("Morgana:AgentToAgent
     ? [.. discoveredAgents.Keys]
     : [];
 
-// Who may call these endpoints is declared, never assumed and the rules live beside what they
-// validate rather than here: identity in Morgana:Authentication:Issuers, where every entry carries
-// the role its key was cut for and reach in Morgana:AgentToAgent:InboundSystems. Throws on the
-// first incoherence, naming what to add.
-ConfigurationAgentDirectoryService.ValidateTrustConfiguration(
-    builder.Configuration,
-    publishedIntents,
-    HandlesIntentAgentRegistryService.DeclaresLocalConsultations(discoveredAgents));
+// Who may call these endpoints is declared, never assumed and the rule lives beside what it
+// validates rather than here: one Morgana:AgentToAgent:Partners entry per partner, carrying its key
+// beside what each direction of the relationship allows. Throws on the first incoherence, naming
+// what to add. This installation's own agents need no declaration at all.
+ConfigurationAgentDirectoryService.ValidateTrustConfiguration(builder.Configuration, publishedIntents);
 
 // One hosted agent and one A2A server per published intent. Its other half, MapMorganaA2AAsync, runs
 // on the built application in section 10 — the container is sealed in between, so the pass cannot be

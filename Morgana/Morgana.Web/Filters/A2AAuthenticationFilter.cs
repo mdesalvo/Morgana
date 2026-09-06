@@ -15,7 +15,7 @@ namespace Morgana.Web.Filters;
 /// </remarks>
 /// <param name="authenticationService">Validates the bearer token, exactly as the controller does.</param>
 /// <param name="publishedIntent">Agent this filter guards, named in the diagnostics.</param>
-/// <param name="admittedIssuers">Issuers whose inbound declaration reaches this agent.</param>
+/// <param name="admittedIssuers">Partners whose inbound policy reaches this agent, plus this installation's own agents.</param>
 /// <param name="logger">Records who was turned away and why: the caller only ever sees a bare 401.</param>
 public sealed class A2AAuthenticationFilter(
     IAuthenticationService authenticationService,
@@ -60,23 +60,13 @@ public sealed class A2AAuthenticationFilter(
 
         // Authentic is not enough here: behind this filter a request reaches an agent's actor
         // directly, with none of the guard, classifier, rate limit and dust budget a channel's own
-        // path goes through. A caller is a channel or a colleague, never both, so a channel's key
-        // opens the door it was cut for and not this one.
-        if (authentication.IssuerType is not Records.IssuerType.System)
-        {
-            logger.LogWarning(
-                "A2A call to '{Intent}' refused: issuer '{Issuer}' is declared as a channel, not a system",
-                publishedIntent, authentication.Issuer);
-            return Results.Unauthorized();
-        }
-
-        // Proven to be a colleague and now: which desks. An issuer admitted to the installation is
-        // not thereby admitted to every agent of it — that is what makes this installation openable
-        // to a partner one desk at a time.
+        // path goes through. Which desks a caller reaches is drawn from the partner declarations
+        // alone, so a channel's key is turned away by the same test that scopes a partner — never
+        // admitted to one desk and refused at another for two different reasons.
         if (authentication.Issuer is null || !admittedIssuers.Contains(authentication.Issuer))
         {
             logger.LogWarning(
-                "A2A call to '{Intent}' refused: system '{Issuer}' is not admitted to it under Morgana:AgentToAgent:InboundSystems",
+                "A2A call to '{Intent}' refused: '{Issuer}' is not a partner admitted to it under Morgana:AgentToAgent:Partners",
                 publishedIntent, authentication.Issuer);
             return Results.Unauthorized();
         }

@@ -42,9 +42,9 @@ Activated when the user says things like:
    Do not default to any pre-checked selection — the user picks the perimeter explicitly every time.
 
    **Peer consultation takes no flag of its own** and the absence is worth stating because it is the
-   natural thing to go looking for: `Morgana:AgentToAgent:Enabled` defaults to true and
-   `MorganaHostFixture` mints the per-run key for the `morgana` peer issuer itself, exactly as it
-   does for `harness`. What this group does depend on instead is a **topology** — the scenarios name
+   natural thing to go looking for: `Morgana:AgentToAgent:Enabled` defaults to true and the host
+   signs the traffic between its own agents under a key it coins at startup, so there is nothing for
+   the fixture to mint or override. What this group does depend on instead is a **topology** — the scenarios name
    agents that must still declare `[ConsultsAgent]` of one another — so a failure here has a second
    thing it can mean and `Examples/Agents/*.cs` is the first place to look before the prose.
 

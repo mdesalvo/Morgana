@@ -7,11 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.31.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Cross-Instance collaboration over A2A
-Morgana now speaks the **A2A protocol** instance to instance. She takes in **every agent of the instance**, each published at `/a2a/{intent}` with its well-known agent card. Agents can consult peers on **other Morgana instances**: `[ConsultsAgent("shipping", "acme")]` names an "acme" installation trusted under `Morgana:AgentToAgent:ConsultableInstances` on which the collegue "shipping" can be consulted.
+Morgana now speaks the **A2A protocol** instance to instance. She takes in **every agent of the instance**, each published at `/a2a/{intent}` with its well-known agent card. Agents can consult peers on **other Morgana instances**: `[ConsultsAgent("shipping", "acme")]` names an "acme" installation trusted under `Morgana:AgentToAgent:Partners` on which the collegue "shipping" can be consulted.
 
 ### ✨ Added
-- **`[ConsultsAgent("intent", "system")]`** and **`OutboundSystems[]`** — a colleague published by another system, offered to the model as `consult_{system}_{intent}`
-- **A2A bearer issuance, v1** — the card extension naming the issuer and audience a caller mints under, published on every card Morgana serves and read on every card she consults
+- **`[ConsultsAgent("intent", "partner")]`** and **`Partners[]`** — a colleague published by another installation, offered to the model as `consult_{partner}_{intent}`
 - **Transport and authentication on the card** — the absolute address this installation bound, the bearer scheme and the requirement pointing at it
 
 ### 🔄 Changed

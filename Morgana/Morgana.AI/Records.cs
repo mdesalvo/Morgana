@@ -324,28 +324,19 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// What a declared issuer is to this installation and therefore which door its token opens.
+    /// Per-channel trust model: each channel declares its own entry with its own signing key, so the
+    /// blast radius of a leaked key is one channel. Tokens with an undeclared <c>iss</c> claim are refused.
     /// </summary>
-    public enum IssuerType
-    {
-        /// <summary>Carries people: the REST API and SignalR and nothing published under <c>/a2a</c>.</summary>
-        Channel,
-
-        /// <summary>Carries agent work over A2A: the published agents its <see cref="InboundSystemOptions"/> entry allows and nothing else.</summary>
-        System
-    }
-
-    /// <summary>
-    /// Per-issuer trust model: each channel declares own IssuerOptions entry with own signing key (compromise isolation).
-    /// Tokens with undeclared iss claim are rejected. Onboarding new channel: add IssuerOptions where Name=iss claim,
-    /// SymmetricKey=channel's signing secret. Rejected at first request if not declared or key mismatch.
-    /// </summary>
+    /// <remarks>
+    /// This list holds channels and nothing else. A colleague reaching this installation over A2A is
+    /// declared once, as a <see cref="PartnerOptions"/> entry carrying its key beside its reach, so
+    /// what a caller is follows from the list it was written in rather than from a field it declares.
+    /// </remarks>
     public record AuthenticationOptions
     {
         /// <summary>
-        /// Declared issuers Morgana will accept tokens from. Each entry carries its own
-        /// signing key, so the blast radius of a leaked key is limited to a single channel.
-        /// A token whose <c>iss</c> claim is not in this list is rejected.
+        /// Channels this installation accepts tokens from, each with its own signing key. A token
+        /// whose <c>iss</c> claim names none of them and no declared partner either is refused.
         /// </summary>
         public List<IssuerOptions> Issuers { get; set; } = [];
 
@@ -358,9 +349,8 @@ public static class Records
     }
 
     /// <summary>
-    /// Per-issuer authentication entry. Binds an issuer name (the value Morgana
-    /// expects in the JWT <c>iss</c> claim) to the signing key used to validate
-    /// tokens emitted under that name.
+    /// One channel this installation serves. Binds the name Morgana expects in the JWT <c>iss</c>
+    /// claim to the key that channel signs with.
     /// </summary>
     public record IssuerOptions
     {
@@ -376,88 +366,144 @@ public static class Records
         /// environment variables in production.
         /// </summary>
         public string SymmetricKey { get; set; } = string.Empty;
-
-        /// <summary>
-        /// Which door this issuer's token opens. Mandatory on every entry, channels included:
-        /// a role that may be omitted is a role that gets guessed and the guess would decide
-        /// whether a caller reaches an agent's actor bypassing the whole conversation pipeline.
-        /// </summary>
-        public IssuerType? Type { get; set; }
     }
 
     /// <summary>
-    /// Another system whose agents this installation may consult.
+    /// One installation this one federates with, in whichever direction it federates.
     /// </summary>
     /// <remarks>
-    /// An entry describes a system, not an agent: declaring one opens as many colleagues as it serves.
-    /// A system need not be another Morgana, nor somebody else's. This is the outbound half of
-    /// <see cref="InboundSystemOptions"/> — there one is admitted, here one is addressed.
+    /// A partner is declared once and the entry answers every question about it: who it is, where it
+    /// answers, the secret the two sides share and what each direction is allowed. Both directions are
+    /// off until a policy says otherwise, so an entry alone grants nothing.
+    /// <para>An entry describes an installation, not an agent: declaring one opens as many colleagues
+    /// as it serves. A partner need not be another Morgana, nor somebody else's.</para>
     /// </remarks>
-    public record OutboundSystemOptions
+    public record PartnerOptions
     {
         /// <summary>
-        /// Name this system is declared under in <c>[ConsultsAgent]</c> and never a hostname: an
-        /// attribute names whose desk is being called, while where that desk runs is deployment.
+        /// Name this partner is known by here: what <c>[ConsultsAgent]</c> writes to reach its desks
+        /// and, unless a policy overrides it, the <c>iss</c> claim its own calls must arrive under.
+        /// Never a hostname — an attribute names whose desk is being called, while where that desk
+        /// runs is deployment. <c>morgana</c> is reserved for this installation's own agents.
         /// </summary>
         public string Name { get; set; } = string.Empty;
 
         /// <summary>
-        /// Absolute address the installation answers on — everything before the published agent path,
-        /// which is appended from the intent being consulted.
+        /// Absolute address the partner answers on — everything before the published agent path,
+        /// which is appended from the intent being consulted. Required only to call it.
         /// </summary>
         public string Url { get; set; } = string.Empty;
 
         /// <summary>
-        /// Key this side signs its requests to that system with (HMAC-SHA256, at least 256 bits).
-        /// The receiving side must hold the same key under the issuer named below.
+        /// The secret the two installations share (HMAC-SHA256, at least 256 bits): calls made to this
+        /// partner are signed with it and calls arriving from it are proven against it. One key per
+        /// partner, so what a leak costs is this relationship and no other.
         /// </summary>
         public string SymmetricKey { get; set; } = string.Empty;
 
         /// <summary>
-        /// Issuer to sign under, overriding what the system's own card declares. Left unset in the
-        /// ordinary case; set when a system cut a key for this caller alone, so that revoking it
-        /// does not rotate the key every other caller uses.
+        /// Whether this partner exists at all. Set to false to park a relationship — its agents become
+        /// unreachable and its calls are refused — without deleting the declaration that describes it.
         /// </summary>
-        public string? Issuer { get; set; }
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>Whether and how this installation may call the partner. Absent means it may not.</summary>
+        public PartnerOutboundPolicy? OutboundPolicy { get; set; }
+
+        /// <summary>Whether and how far the partner may call this installation. Absent means it may not.</summary>
+        public PartnerInboundPolicy? InboundPolicy { get; set; }
     }
 
     /// <summary>
-    /// How far a system reaches once inside, among the agents this installation publishes.
+    /// What this installation may do toward a partner: consult its published agents, or nothing.
     /// </summary>
-    /// <remarks>
-    /// This list admits nobody: it only narrows a caller already proven in
-    /// <c>Morgana:Authentication:Issuers</c>. Required of every system, since a forgotten entry would
-    /// hand one the whole ring by omission.
-    /// </remarks>
-    public record InboundSystemOptions
+    public record PartnerOutboundPolicy
     {
         /// <summary>
-        /// Issuer this entry scopes, matching the <c>Name</c> of an <see cref="IssuerOptions"/> entry.
-        /// Identified by what actually arrives in a token, never by the outbound
-        /// <see cref="OutboundSystemOptions.Name"/> an attribute writes.
+        /// Whether agents here may consult that partner's. Off, a <c>[ConsultsAgent]</c> naming it is
+        /// refused at startup rather than failing on the first conversation.
         /// </summary>
-        public string Issuer { get; set; } = string.Empty;
+        public bool Enabled { get; set; }
 
         /// <summary>
-        /// Published agents this system may consult, or <c>null</c> to admit it to every one of them.
-        /// Never set for this installation's own issuer: its internal topology is declared by
-        /// <c>[ConsultsAgent]</c> and a second author of it could only contradict the first.
-        /// </summary>
-        public List<string>? Agents { get; set; }
-
-        /// <summary>
-        /// Conversations this system may open on this installation within a sliding hour.
+        /// The name that partner knows this installation by, which its own declaration of this
+        /// relationship carries and which its gate expects in the <c>iss</c> claim.
         /// </summary>
         /// <remarks>
-        /// How far a partner reaches and how often it may come back are one declaration about one
-        /// partner, which is why the allowance sits here. What it bounds is the caller's freedom to
-        /// name its own conversation and draw a fresh budget with each name; what one exchange may
-        /// then cost is the per-conversation budget, unchanged. <b>Required of every admitted system
-        /// except this installation's own</b>, whose colleagues join the conversation the user is
-        /// already having: nothing reads an absent key as licence to spend without limit, so a
-        /// deployment wanting no real bound writes a generous number rather than leaving it out.
+        /// Required whenever the partner demands a bearer and it cannot come from its card: an
+        /// issuer is the name a publisher filed one caller under, so a document served to everyone
+        /// cannot state it. It travels out of band with the key it goes with. Left unset only for a
+        /// partner whose card requires no credentials at all, which is called bare.
         /// </remarks>
+        public string? Issuer { get; set; }
+
+        /// <summary>
+        /// Audience that partner validates a token against, when it is not the one this installation
+        /// uses itself. Left unset in the ordinary case: two installations of Morgana share the
+        /// shipped default until one of them deliberately changes it.
+        /// </summary>
+        public string? Audience { get; set; }
+    }
+
+    /// <summary>
+    /// What a partner may do toward this installation: which desks it reaches and how often it may
+    /// open a new exchange at them.
+    /// </summary>
+    public record PartnerInboundPolicy
+    {
+        /// <summary>
+        /// Whether the partner is admitted at all. Off, its key proves who it is and opens nothing,
+        /// which is what a purely outbound relationship looks like.
+        /// </summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Name its calls actually arrive under, when the partner signs under something other than the
+        /// name this installation knows it by. Left unset in the ordinary case.
+        /// </summary>
+        public string? Issuer { get; set; }
+
+        /// <summary>
+        /// Published agents this partner may consult, or <c>null</c> to admit it to every one of them.
+        /// This is how one company's several installations reach only the desks that concern them:
+        /// publication stays whole and what narrows is admission.
+        /// </summary>
+        public List<string>? OnAgents { get; set; }
+
+        /// <summary>
+        /// How often the partner may open an exchange here. Required whenever it is admitted, since
+        /// nothing reads an absent declaration as licence to spend without limit.
+        /// </summary>
+        public PartnerRateLimitingOptions? RateLimiting { get; set; }
+    }
+
+    /// <summary>
+    /// The ceiling on how many conversations one admitted partner may open within a sliding hour.
+    /// </summary>
+    /// <remarks>
+    /// Behind the A2A door the caller writes the name of the conversation it is served on, so a
+    /// partner rotating names would draw a fresh per-conversation budget with every one. What is
+    /// bounded here is therefore not a second measure of spend but how many exchanges may start; the
+    /// ceiling on spend follows as admissions times the budget each one carries.
+    /// </remarks>
+    public record PartnerRateLimitingOptions
+    {
+        /// <summary>
+        /// Whether the ceiling applies. Off is a deployment saying in as many words that this partner
+        /// is trusted to open what it likes — which is a sentence somebody wrote, unlike an omission.
+        /// </summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Conversations the partner may open within a sliding hour. Required when the ceiling applies.</summary>
         public int? MaxConversationsPerHour { get; set; }
+
+        /// <summary>
+        /// What the partner is told when it has opened all it may. Reaches the asking agent as the
+        /// colleague's own answer, so it reads as an agent that cannot take the question rather than
+        /// as an error code.
+        /// </summary>
+        public string ErrorMessagePerHour { get; set; } =
+            "This agent cannot take on further conversations right now. Proceed without it.";
     }
 
     /// <summary>
@@ -469,15 +515,16 @@ public static class Records
     /// <param name="Error">Description of why authentication failed, null if authenticated</param>
     /// <param name="Issuer">The validated <c>iss</c>, set only on success. Names which door the
     /// credential was cut for, so a gate can admit some issuers and not others.</param>
-    /// <param name="IssuerType">Role that issuer was declared under, set only on success. Each gate
-    /// admits one role and refuses the other, so this is what tells the two apart.</param>
+    /// <param name="IsPartner">Whether the key that proved this caller was a partner's rather than a
+    /// channel's. Not a role the caller declared but which list it was found in: the conversation API
+    /// serves channels and the A2A door serves partners, and neither will take the other's key.</param>
     public record AuthenticationResult(
         bool IsAuthenticated,
         string? CallerId = null,
         string? DisplayName = null,
         string? Error = null,
         string? Issuer = null,
-        IssuerType? IssuerType = null);
+        bool IsPartner = false);
 
     // ==========================================================================
     // USER MESSAGE HANDLING
@@ -677,10 +724,19 @@ public static class Records
     /// Names one consultable colleague.
     /// </summary>
     /// <param name="Intent">Intent the colleague handles, as its own installation publishes it.</param>
-    /// <param name="Instance">Installation publishing it, declared in <c>Morgana:AgentToAgent:OutboundSystems</c>;
+    /// <param name="Instance">Partner publishing it, declared in <c>Morgana:AgentToAgent:Partners</c>;
     /// <c>null</c> for an agent of this one. Two colleagues handling the same intent at two
     /// installations are two colleagues, which is why the pair and not the intent is the name.</param>
     public record PeerReference(string Intent, string? Instance = null);
+
+    /// <summary>
+    /// Whether a partner may open one more exchange here and what it is told when it may not.
+    /// </summary>
+    /// <param name="IsAdmitted">Whether the conversation may be opened.</param>
+    /// <param name="RefusalMessage">What the partner reads instead, set only on a refusal. Written by
+    /// the deployment on that partner's own entry, so a turned-away colleague answers in this
+    /// installation's voice rather than with a status code the asking model would narrate.</param>
+    public record PeerAdmissionResult(bool IsAdmitted, string? RefusalMessage = null);
 
     /// <summary>
     /// Question one agent puts to a colleague of the same conversation, sent to the colleague's

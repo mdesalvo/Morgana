@@ -121,7 +121,7 @@ public class MigrationReportService : IMigrationReportService
             foreach (Morgana.AI.Records.PeerReference colleague in agent.Code.Consults.Where(c => c.Instance is not null))
                 entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised,
                     $"Consults '{colleague.Intent}' at system '{colleague.Instance}'. Declare that system under "
-                    + $"Morgana:AgentToAgent:OutboundSystems with its Url and the key it issued to you, under exactly the name "
+                    + $"Morgana:AgentToAgent:Partners with its Url, the key you share with it and \"OutboundPolicy\": {{ \"Enabled\": true }}, under exactly the name "
                     + $"'{colleague.Instance}' — spelling and spacing included, or startup refuses the agent. Neither the "
                     + "address nor the key is in this archive. That the system really publishes an agent for "
                     + $"'{colleague.Intent}' is its own card's word, read on the first consultation: a mistake there is a "

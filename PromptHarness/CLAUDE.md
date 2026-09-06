@@ -151,12 +151,14 @@ The judge is skipped once a turn already fails structurally (saves a live call).
   actually see. Two contracts and they are complementary halves: the card is served open (a caller
   that must authenticate to learn how to authenticate can never begin) precisely because what it
   points at is not. The gate is asserted on all three of its refusals — no token; a **channel's** own
-  valid token, which is refused for being cut for the other door; and a **system's** valid token at a
-  desk its `InboundSystems` entry does not name — plus the admission that keeps those from passing for
-  the wrong reason, since a gate refusing everything would satisfy all three. Every literal is spelled
-  out in the test rather than read from `Constants`: a test comparing a constant against itself
-  asserts that a constant equals a constant, while the point is to notice a published document, or a
-  door, changing shape under whoever consumes it.
+  valid token, which is refused for being cut for the other door; and a **partner's** valid token at a
+  desk its `InboundPolicy.OnAgents` does not name — plus the admission that keeps those from passing
+  for the wrong reason, since a gate refusing everything would satisfy all three. One assertion runs
+  the other way and is the only kind that can hold a field **out** of a document: the card must
+  declare no capability extension at all, neither claim value a token carries being publishable on a
+  document served to everyone. Every literal is spelled out in the test rather than read from `Constants`: a test
+  comparing a constant against itself asserts that a constant equals a constant, while the point is to
+  notice a published document, or a door, changing shape under whoever consumes it.
 
 **The journey is the point of the suite.** Every `ScenarioRunner.RunAsync` call writes a row to
 `<scenario-id>.md` via `HarnessWriter` — one row per revision phase, with pass rate, token

@@ -24,10 +24,4 @@ The source, the issue tracker and the releases live in the
     <p>The authoring workbench that distils an interview with a domain expert into a complete,
        buildable Morgana domain.</p>
   </a>
-  <a class="tile" href="a2a/extensions/bearer-issuance/v1/">
-    <div class="icon">&#x1F511;</div>
-    <h4>A2A Bearer Issuance</h4>
-    <p>The agent-card extension by which a published agent declares the JWT issuer and audience a
-       caller must mint its bearer token under.</p>
-  </a>
 </div>

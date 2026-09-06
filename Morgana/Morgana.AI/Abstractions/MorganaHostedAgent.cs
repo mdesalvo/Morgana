@@ -155,13 +155,15 @@ public sealed class MorganaHostedAgent : AIAgent
         {
             // An exchange this installation has never seen. A caller admitted here reaches an agent
             // directly, with none of the rate limit a channel's own path goes through. It also writes
-            // the name of the conversation it is served on — so a system free to keep writing new
-            // ones would draw a fresh budget with every one of them.
+            // the name of the conversation it is served on — so a partner free to keep writing new
+            // ones would draw a fresh budget with every one of them. What a turned-away partner reads
+            // is written on its own entry, so the refusal speaks in this deployment's voice.
             if (!persistenceService.ConversationExists(hostedAgentSession.ConversationId)
                 && hostedAgentSession.CallerIssuer is { } openingIssuer
-                && !await peerAdmissionService.TryAdmitNewConversationAsync(openingIssuer))
+                && await peerAdmissionService.TryAdmitNewConversationAsync(openingIssuer) is { IsAdmitted: false } refusal)
             {
-                return BuildAgentResponseFromMessage($"The agent for '{intent}' cannot take on further conversations right now. Proceed without it.");
+                return BuildAgentResponseFromMessage(
+                    refusal.RefusalMessage ?? $"The agent for '{intent}' cannot take on further conversations right now. Proceed without it.");
             }
 
             // Opened before the turn, because a partner's exchange has none until now: the ledger is

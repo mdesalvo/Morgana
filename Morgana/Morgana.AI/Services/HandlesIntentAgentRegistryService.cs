@@ -61,15 +61,6 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
-    /// Whether any discovered agent declares a colleague of this same installation.
-    /// </summary>
-    /// <param name="discoveredAgents">The intent-to-type map <see cref="DiscoverAgents"/> returned.</param>
-    /// <returns><c>true</c> when at least one agent declares <c>[ConsultsAgent]</c> naming no system.</returns>
-    public static bool DeclaresLocalConsultations(IReadOnlyDictionary<string, Type> discoveredAgents)
-        => discoveredAgents.Values.Any(agentType =>
-               agentType.GetCustomAttributes<ConsultsAgentAttribute>().Any(consultsAgent => consultsAgent.Instance is null));
-
-    /// <summary>
     /// Scans every loaded assembly for <see cref="MorganaAgent"/> subclasses declaring an intent,
     /// and returns the intent-to-type map, without validating it.
     /// </summary>
@@ -216,7 +207,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
         // A colleague published elsewhere is declared in configuration rather than in code, so code
         // alone cannot say whether the name on the attribute resolves to anything.
-        List<Records.OutboundSystemOptions> outboundSystems = ConfigurationAgentDirectoryService.ResolveOutboundSystems(configuration);
+        List<Records.PartnerOptions> partners = ConfigurationAgentDirectoryService.ResolvePartners(configuration);
 
         foreach ((string declaredIntent, Type agentType) in registry)
         {
@@ -235,7 +226,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 // How the colleague is named back to whoever has to fix the declaration.
                 string colleague = consultsAgent.Instance is null
                     ? $"'{consultsAgent.Intent}'"
-                    : $"'{consultsAgent.Intent}' at system '{consultsAgent.Instance}'";
+                    : $"'{consultsAgent.Intent}' at partner '{consultsAgent.Instance}'";
 
                 // A colleague of this installation: the registry knows every agent, so this is settled here.
                 if (consultsAgent.Instance is null)
@@ -247,9 +238,9 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 }
 
                 // One published elsewhere: only this side of the wire is checkable.
-                else if (ValidateOutboundDeclaration(outboundSystems, consultsAgent.Instance, agentType.Name, colleague) is { } outboundError)
+                else if (ValidateConsultablePartner(partners, consultsAgent.Instance, agentType.Name, colleague) is { } partnerError)
                 {
-                    errors.Add(outboundError);
+                    errors.Add(partnerError);
                 }
 
                 // Two colleagues folding to one function name would reach the provider as a duplicate
@@ -263,51 +254,41 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
-    /// Checks what this side must bring to consult a colleague published elsewhere: an entry, an
-    /// address a token can be sent to, a key to sign it with. What that system publishes is its
-    /// card's word, read on the first consultation and deliberately not checked here.
+    /// Checks that the partner an attribute names is one this installation may actually call. What
+    /// that partner publishes is its card's word, read on the first consultation and not checked here;
+    /// that its address and key are usable is checked with the rest of the entry, at publication.
     /// </summary>
-    /// <remarks>Ordered: each check reads what the previous established. Stops at the first failure.</remarks>
-    /// <param name="outboundSystems">Systems declared under <c>Morgana:AgentToAgent:OutboundSystems</c>.</param>
-    /// <param name="instanceName">System named on the attribute.</param>
+    /// <param name="partners">Partners declared under <c>Morgana:AgentToAgent:Partners</c>, parked ones already dropped.</param>
+    /// <param name="instanceName">Partner named on the attribute.</param>
     /// <param name="agentName">Agent carrying the declaration, named in the diagnostics.</param>
     /// <param name="colleague">The colleague as the caller renders it, reused in the messages.</param>
     /// <returns>The first thing missing, or <c>null</c> when nothing is.</returns>
-    private static string? ValidateOutboundDeclaration(
-        List<Records.OutboundSystemOptions> outboundSystems,
+    private static string? ValidateConsultablePartner(
+        List<Records.PartnerOptions> partners,
         string instanceName,
         string agentName,
         string colleague)
     {
-        // The entry that says where that system answers. Trimmed on the configuration side because the
+        // The entry that says where that partner answers. Trimmed on the configuration side because the
         // two spellings are authored in different files by different hands.
-        Records.OutboundSystemOptions? outboundSystem = outboundSystems
-            .FirstOrDefault(candidate => string.Equals(candidate.Name.Trim(), instanceName, StringComparison.OrdinalIgnoreCase));
+        Records.PartnerOptions? partner = partners
+            .FirstOrDefault(candidate => string.Equals(candidate.Name?.Trim(), instanceName, StringComparison.OrdinalIgnoreCase));
 
-        // The mismatch is almost always a name written twice, so the declared ones are listed back.
-        if (outboundSystem is null)
+        // The mismatch is almost always a name written twice, so the declared ones are listed back. A
+        // parked partner is absent from this list and reads the same way, which is what parking means.
+        if (partner is null)
         {
-            return $"Agent '{agentName}' declares a consultation of {colleague}, which is not declared under Morgana:AgentToAgent:OutboundSystems "
-                 + $"(declared: {(outboundSystems.Count > 0 ? string.Join(", ", outboundSystems.Select(declared => $"'{declared.Name}'")) : "none")}). "
+            return $"Agent '{agentName}' declares a consultation of {colleague}, which is not declared under Morgana:AgentToAgent:Partners "
+                 + $"(declared: {(partners.Count > 0 ? string.Join(", ", partners.Select(declared => $"'{declared.Name}'")) : "none")}). "
                  + "The name on the attribute and the Name on the entry must be the same, spelling and spacing included";
         }
 
-        // A base address to join with the published agent path, never a fragment to resolve.
-        if (!Uri.TryCreate(outboundSystem.Url, UriKind.Absolute, out Uri? outboundUrl))
-            return $"System '{outboundSystem.Name}', consulted by agent '{agentName}', declares no absolute Url";
-
-        // This Url is where a token signed with the key below is sent: only the two schemes carrying one.
-        if (!string.Equals(outboundUrl.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(outboundUrl.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        // Declared but not open to being consulted: the relationship exists in the other direction only,
+        // so the attribute claims a reach the entry beside it refuses.
+        if (partner.OutboundPolicy?.Enabled != true)
         {
-            return $"System '{outboundSystem.Name}', consulted by agent '{agentName}', declares the Url scheme '{outboundUrl.Scheme}': a colleague is reached over http or https";
-        }
-
-        // The placeholder counts as absent, or an un-overridden deployment signs with the literal word.
-        if (string.IsNullOrWhiteSpace(outboundSystem.SymmetricKey)
-            || string.Equals(outboundSystem.SymmetricKey.Trim(), Constants.Overrides.Secure, StringComparison.Ordinal))
-        {
-            return $"System '{outboundSystem.Name}', consulted by agent '{agentName}', carries no usable SymmetricKey (User Secrets or environment)";
+            return $"Agent '{agentName}' declares a consultation of {colleague}, but partner '{partner.Name}' declares no "
+                 + "\"OutboundPolicy\": { \"Enabled\": true }: this installation may not call it";
         }
 
         return null;

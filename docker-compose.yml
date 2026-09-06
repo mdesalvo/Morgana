@@ -30,15 +30,14 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5001
 
-      # Authentication (JWT) - per-issuer keys (3 is harness, which isn't dockerized)
+      # Authentication (JWT) - per-channel keys (3 is harness, which isn't dockerized).
+      # Agents of this installation consult each other under a key coined at startup: nothing to set.
       - Morgana__Authentication__Issuers__0__Name=cauldron
       - Morgana__Authentication__Issuers__0__SymmetricKey=${JWT_SYMMETRIC_KEY}
       - Morgana__Authentication__Issuers__1__Name=grimoire
       - Morgana__Authentication__Issuers__1__SymmetricKey=${JWT_SYMMETRIC_KEY}
       - Morgana__Authentication__Issuers__2__Name=rune
       - Morgana__Authentication__Issuers__2__SymmetricKey=${JWT_SYMMETRIC_KEY}
-      - Morgana__Authentication__Issuers__4__Name=morgana
-      - Morgana__Authentication__Issuers__4__SymmetricKey=${JWT_SYMMETRIC_KEY}
 
       # Conversation persistence (SQLite)
       - Morgana__ConversationPersistence__EncryptionKey=${ENCRYPTIONKEY}

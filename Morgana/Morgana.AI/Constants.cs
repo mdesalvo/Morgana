@@ -250,16 +250,12 @@ public static class Constants
         /// </summary>
         public const string WellKnownAgentCardPath = ".well-known/agent-card.json";
 
-        /// <summary>Issuer name Morgana signs its own peer requests under and is admitted back in under. Declared in <c>Morgana:Authentication:Issuers</c> like any caller, typed <c>system</c> and scoped in <c>Morgana:AgentToAgent:InboundSystems</c> like any other.</summary>
-        public const string IssuerName = "morgana";
-
         /// <summary>
-        /// URI of the agent-card extension by which a published agent declares how a caller mints its
-        /// bearer token. Names a specification that resolves: an extension URI is read on somebody
-        /// else's card, by an implementation that has never seen this code and must lead them to what
-        /// it means.
+        /// Name this installation signs consultations between its own agents under and admits them
+        /// back in under. Configured nowhere: the secret behind it is coined at every start, so the
+        /// name is reserved rather than declared and no partner may be given it.
         /// </summary>
-        public const string BearerIssuanceExtensionUri = "https://mdesalvo.github.io/Morgana/a2a/extensions/bearer-issuance/v1";
+        public const string IssuerName = "morgana";
 
         /// <summary>Name the bearer scheme is declared under on a card and referenced by in its requirements.</summary>
         public const string BearerSchemeName = "morgana-bearer";
@@ -270,11 +266,6 @@ public static class Constants
         /// <summary>Format the bearer token is advertised in, as a hint to whoever has to produce one.</summary>
         public const string BearerFormat = "JWT";
 
-        /// <summary>Extension parameter naming the issuer a caller must sign under.</summary>
-        public const string BearerIssuerParameter = "issuer";
-
-        /// <summary>Extension parameter naming the audience a caller must address.</summary>
-        public const string BearerAudienceParameter = "audience";
     }
 
     /// <summary>
