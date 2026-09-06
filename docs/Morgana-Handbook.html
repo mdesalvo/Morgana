@@ -735,14 +735,8 @@
       }
     }
   ]
-},
-<span class="string">"Authentication"</span>: {
-  <span class="comment">// Channels only. A partner is declared above, this installation nowhere.</span>
-  <span class="string">"Audience"</span>: <span class="string">"morgana.ai"</span>,
-  <span class="string">"Issuers"</span>: [
-    { <span class="string">"Name"</span>: <span class="string">"cauldron"</span>, <span class="string">"SymmetricKey"</span>: <span class="string">"_SECURE_OVERRIDE_"</span> }
-  ]
-}</div>
+}
+</div>
       <div class="code-block"><span class="comment">// The declaration in code. A colleague published elsewhere is offered under a</span>
       <span class="comment">// function name carrying its partner, so two desks of the same name never collide.</span>
 <span class="attr">[HandlesIntent(</span><span class="string">"billing"</span><span class="attr">)]</span>
@@ -750,22 +744,7 @@
 <span class="attr">[ConsultsAgent(</span><span class="string">"inventory"</span><span class="attr">)]</span>            <span class="comment">// a colleague here    → consult_inventory</span>
 <span class="attr">[ConsultsAgent(</span><span class="string">"shipping"</span>, <span class="string">"acme"</span><span class="attr">)]</span>   <span class="comment">// a colleague at acme → consult_acme_shipping</span>
 <span class="keyword">public class</span> BillingAgent : MorganaAgent { <span class="comment">/* ... */</span> }</div>
-
-      <h3>What each shape requires</h3>
-      <table>
-        <thead><tr><th></th><th>Off</th><th>Without partners</th><th>With partners</th></tr></thead>
-        <tbody>
-          <tr><td>To configure for agents here</td><td>&mdash;</td><td>nothing</td><td>nothing</td></tr>
-          <tr><td>Entry in <code>Partners[]</code></td><td>&mdash;</td><td>&mdash;</td><td>one per partner, with the shared key</td></tr>
-          <tr><td><code>OutboundPolicy</code></td><td>&mdash;</td><td>&mdash;</td><td>outbound only; needs <code>Url</code> plus <code>Issuer</code></td></tr>
-          <tr><td><code>InboundPolicy</code></td><td>&mdash;</td><td>&mdash;</td><td>inbound only; needs <code>RateLimiting</code></td></tr>
-          <tr><td>Partner in <code>Issuers[]</code></td><td>&mdash;</td><td>&mdash;</td><td>never: that list is channels</td></tr>
-          <tr><td>Agents published</td><td>none</td><td>all of them</td><td>all of them</td></tr>
-          <tr><td>Prompt cost per agent</td><td>none</td><td>peer policy + colleagues</td><td>peer policy + colleagues</td></tr>
-        </tbody>
-      </table>
-      <p class="muted" style="font-size:14.5px;">An installation that only <strong>answers</strong> declares each partner inbound only, with no <code>OutboundPolicy</code>. It needs no <code>Url</code> either: it never places the call.</p>
-
+      
       <div class="page-footer">
         <span>Morgana Handbook</span>
         <span>9</span>
