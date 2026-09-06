@@ -678,22 +678,22 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="a2a-configuration">
       <h2>Agent-to-Agent Configuration</h2>
-      <p>Peer consultation is configured in three shapes. Which one a deployment is in follows entirely from what its plugins declare with <code>[ConsultsAgent]</code> plus what <code>Morgana:AgentToAgent</code> says. Two rules run through all of them. <strong>One partner is one entry</strong>: <code>Partners[]</code> carries the partner's name, the single key the two installations share and one policy per direction, so who may knock and how far it reaches are never two declarations that can drift apart. Then: <strong>this installation never declares its own address, nor its own key</strong> &mdash; a published card names the address from whatever Kestrel bound while the traffic between this installation's own agents is signed with a secret coined at every start.</p>
+      <p>Peer consultation is configured in three shapes. Which one a deployment is in follows entirely from what its plugins declare with <code>[ConsultsAgent]</code> plus what <code>Morgana:AgentToAgent</code> says. Three rules run through them. <strong>Switched on, the ring is raised whole</strong>: <em>every</em> agent this installation holds is published, whether or not a sibling or a partner consults it &mdash; what an installation offers is what it can answer, never a side effect of who happens to ask. What narrows is admission, never publication. <strong>One partner is one entry</strong>: <code>Partners[]</code> carries the partner's name, the single key the two installations share and one policy per direction, so who may knock and how far it reaches are never two declarations that can drift apart. <strong>This installation declares neither its own address nor its own key</strong>: a published card names the address from whatever Kestrel bound while the traffic between this installation's own agents is signed with a secret coined at every start.</p>
 
       <h3>1 &mdash; Off</h3>
-      <p>Nothing is stood up: no hosted agent, no A2A server, no route, no card. Agents never see the colleagues they declare and read not one extra token of prompt, so a deployment here is the deployment it was before any of this existed. <code>[ConsultsAgent]</code> attributes stay in the code and are simply not honoured.</p>
+      <p>Nothing is stood up: no hosted agent, no A2A server, no route, no card. Agents never see the colleagues they declare and read not one extra token of prompt, so such a deployment pays for peer consultation neither in prompt tokens nor in surface. <code>[ConsultsAgent]</code> attributes stay in the code and are simply not honoured.</p>
       <div class="code-block"><span class="string">"AgentToAgent"</span>: {
   <span class="string">"Enabled"</span>: <span class="keyword">false</span>
 }</div>
 
       <h3>2 &mdash; On, colleagues of this installation only</h3>
-      <p>The ring is raised whole: <strong>every</strong> agent this installation holds is published, whether or not a sibling consults it. A local consultation does leave over HTTP and knock back at this installation's own A2A door, so it carries a bearer like any caller &mdash; but that credential is minted here, proven here and reaches nobody, so <strong>there is nothing to configure</strong>. This is the whole of it:</p>
+      <p>A local consultation does leave over HTTP and knock back at this installation's own A2A door, so it carries a bearer like any caller. That credential is minted here, proven here and reaches nobody, which is what makes it <strong>nothing for a deployment to write down</strong>. Three lines are the whole declaration:</p>
       <div class="code-block"><span class="string">"AgentToAgent"</span>: {
   <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
   <span class="string">"MaxRoundsPerTurn"</span>: <span class="keyword">4</span>,
   <span class="string">"Partners"</span>: []
 }</div>
-      <p class="muted" style="font-size:14.5px;">No issuer, no key, no admission. Which colleagues an agent here may consult has one author, <code>[ConsultsAgent]</code> and a colleague of ours opens no conversation &mdash; it joins the one the user is already having, whose own budget already holds it.</p>
+      <p class="muted" style="font-size:14.5px;">Which colleagues an agent here may consult has one author, <code>[ConsultsAgent]</code> in the plugin's own code. A colleague of ours also opens no conversation: it joins the one the user is already having, whose budget already holds it and whose ledger already records what it spends.</p>
 
       <h3>3 &mdash; On, colleagues here and at another installation</h3>
       <p>A partner is one entry and <strong>three switches nest inside it</strong>: <code>Enabled</code> on the partner itself parks the whole relationship without deleting what describes it; <code>OutboundPolicy.Enabled</code> opens consulting its agents; <code>InboundPolicy.Enabled</code> opens being consulted by them. The two directions are independent and neither implies the other &mdash; a partner may be a pure supplier to this installation, a pure customer of it, or both. An entry opening neither direction is refused at startup: it reads as a live relationship and is none.</p>
