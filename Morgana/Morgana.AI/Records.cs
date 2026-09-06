@@ -517,7 +517,7 @@ public static class Records
     /// credential was cut for, so a gate can admit some issuers and not others.</param>
     /// <param name="IsPartner">Whether the key that proved this caller was a partner's rather than a
     /// channel's. Not a role the caller declared but which list it was found in: the conversation API
-    /// serves channels and the A2A door serves partners, and neither will take the other's key.</param>
+    /// serves channels while the A2A door serves partners and neither will take the other's key.</param>
     public record AuthenticationResult(
         bool IsAuthenticated,
         string? CallerId = null,

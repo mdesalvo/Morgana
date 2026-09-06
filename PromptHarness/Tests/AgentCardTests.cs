@@ -85,7 +85,7 @@ public sealed class AgentCardTests
 
         // The card declares the scheme and stops and that silence is the contract. Neither claim
         // value a token must carry is publishable: an issuer is the name this host filed ONE caller
-        // under, and an audience is agreed in the same breath as the key. Both travel out of band,
+        // under while an audience is agreed in the same breath as the key. Both travel out of band,
         // so a card growing a capability extension to state them is a regression this notices.
         Assert.False(card.GetProperty("capabilities").TryGetProperty("extensions", out JsonElement extensions)
                      && extensions.ValueKind is JsonValueKind.Array

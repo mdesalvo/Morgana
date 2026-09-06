@@ -73,8 +73,8 @@ public sealed class StartupValidationTests
     [Fact]
     public void Boot_is_refused_when_a_partner_is_declared_twice()
     {
-        // Which key proves a caller, and which address its calls go to, would be decided by the
-        // order somebody happened to write the two entries in.
+        // The order somebody happened to write the two entries in would decide which key proves a
+        // caller and which address its calls go to.
         int duplicate = fixture.ScopedPartnerIndex + 1;
 
         Exception refusal = AssertRefusesToBoot(

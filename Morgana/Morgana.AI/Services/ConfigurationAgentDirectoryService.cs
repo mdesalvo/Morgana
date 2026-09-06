@@ -411,8 +411,8 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
                     + "reserved for this installation's own agents. Give the partner a name of its own.");
             }
 
-            // Two entries under one name leave which key proves a caller, and which address a call
-            // goes to, decided by the order somebody happened to write them in.
+            // Two entries under one name leave the order somebody happened to write them in to decide
+            // which key proves a caller and which address a call goes to.
             if (!declaredNames.Add(partnerName))
             {
                 throw new InvalidOperationException(
