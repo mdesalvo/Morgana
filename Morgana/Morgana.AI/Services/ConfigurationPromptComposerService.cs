@@ -33,9 +33,20 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <summary>
     /// Names the asking party when the request declares no intent. Only an agent of a Morgana declares
     /// one and the A2A door admits only declared systems, so an unnamed caller is precisely that — and
-    /// saying so is a fact. It has to read as a name in every sentence of that prose, possessive included.
+    /// saying so is a fact. A phrase where every other caller is a bare word, which is why every caller
+    /// is quoted before it reaches the prose.
     /// </summary>
     private const string UnnamedCaller = "an external system";
+
+    /// <summary>
+    /// Encloses whoever is asking, so the prose reads it as a name wherever it lands.
+    /// </summary>
+    /// <remarks>
+    /// A named caller is one word and needs nothing; an unnamed one resolves to a phrase that would
+    /// otherwise dissolve into the sentence around it. Quoting every caller keeps one prose written
+    /// for one shape rather than two that have to read well apart.
+    /// </remarks>
+    private const string CallerQuotation = "«{0}»";
 
     /// <summary>
     /// The framework prompt with its policies already unpacked. morgana.json is read once per process:
@@ -156,21 +167,35 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string> ComposeConsultationRequestAsync(string? callerIntent)
+    public async Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question)
     {
-        // The whole of how to answer a colleague. It is spliced in front of the incoming question
-        // instead of into the answering agent's prompt: that prompt is composed once, while whether a
-        // turn serves a colleague changes turn by turn.
         FrameworkLayer framework = await frameworkLayer.Value;
+
+        // How to answer a colleague. It is spliced in front of the incoming question instead of into
+        // the answering agent's prompt: that prompt is composed once, while whether a turn serves a
+        // colleague changes turn by turn.
         string declaration = Records.GlobalPolicy.ResolveTemplate(
             framework.Policies, Constants.Injections.PeerConsultationDeclaration);
 
+        // What the question may not claim and what asking cannot obtain, kept apart from the note on
+        // how to answer: two rules of one length dilute each other, and only this one has to hold
+        // against text somebody else wrote. It also carries the fence the question is read inside.
+        string guardrail = Records.GlobalPolicy.ResolveTemplate(
+            framework.Policies, Constants.Injections.PeerConsultationGuardrail);
+
         // The caller names itself or it does not and the wording of what an unnamed one is called
         // belongs here, with the rest of the prose this layer authors, rather than at the call site
-        // that merely failed to find a name.
-        return declaration.Replace(
-            Constants.Placeholders.ConsultationCaller,
-            string.IsNullOrWhiteSpace(callerIntent) ? UnnamedCaller : callerIntent);
+        // that merely failed to find a name. Resolved while the colleague's own words are still out:
+        // a question is answered, never read for placeholders of this layer to fill.
+        string caller = string.Format(
+            CallerQuotation, string.IsNullOrWhiteSpace(callerIntent) ? UnnamedCaller : callerIntent);
+        string composed = $"{declaration}\n{guardrail}".Replace(Constants.Placeholders.ConsultationCaller, caller);
+
+        // Nothing encloses the question where a deployment declares no fence, so it is handed over as
+        // it arrived rather than under a marker announcing a boundary that is not there.
+        return guardrail.Length == 0
+            ? $"{composed}\n{question}"
+            : composed.Replace(Constants.Placeholders.ConsultationQuestion, question);
     }
 
     /// <inheritdoc />

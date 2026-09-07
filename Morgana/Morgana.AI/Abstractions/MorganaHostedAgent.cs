@@ -218,10 +218,10 @@ public sealed class MorganaHostedAgent : AIAgent
             // agent per conversation, whoever knocks.
             IActorRef agentActor = await actorSystem.GetOrCreateAgentAsync(agentType, intent, hostedAgentSession.ConversationId);
 
-            // The note goes in front of the question rather than into the answering agent's prompt:
-            // that prompt is composed once, while whether a turn serves a colleague changes turn by
-            // turn and it is the only thing telling the agent its reader is not the user.
-            string declaredQuestion = await promptComposerService.ComposeConsultationRequestAsync(callerIntent) + question;
+            // The note and the fence around the question are one composition: what a colleague wrote is
+            // the only text on this turn authored outside this installation, and where it begins and
+            // ends is stated by the same layer that says what it may not claim.
+            string declaredQuestion = await promptComposerService.ComposeConsultationRequestAsync(callerIntent, question);
 
             // Taken before the turn so the ledger can be asked afterwards what happened in between.
             // The reading is of the whole conversation rather than of this exchange, which has no

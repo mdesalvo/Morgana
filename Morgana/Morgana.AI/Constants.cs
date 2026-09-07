@@ -88,6 +88,9 @@ public static class Constants
         /// <summary>Placed in front of a colleague's question, telling the answering agent who its reader is.</summary>
         public const string PeerConsultationDeclaration = "PeerConsultationDeclaration";
 
+        /// <summary>Fences a colleague's question and states what its text may not claim or be given.</summary>
+        public const string PeerConsultationGuardrail = "PeerConsultationGuardrail";
+
         /// <summary>Spliced into a peer-capable agent's own instructions, naming the colleagues it holds.</summary>
         public const string ColleaguesDeclaration = "ColleaguesDeclaration";
     }
@@ -175,6 +178,9 @@ public static class Constants
 
         /// <summary>In <see cref="Injections.PeerConsultationDeclaration"/> — the intent of the agent asking.</summary>
         public const string ConsultationCaller = "((caller))";
+
+        /// <summary>In <see cref="Injections.PeerConsultationGuardrail"/> — the colleague's question, inside the fence that marks it as data.</summary>
+        public const string ConsultationQuestion = "((question))";
 
         /// <summary>In <see cref="Injections.ColleaguesDeclaration"/> — one line per colleague: function name and territory.</summary>
         public const string Colleagues = "((colleagues))";

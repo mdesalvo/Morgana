@@ -64,13 +64,14 @@ public interface IPromptComposerService
     Task<string?> ComposeColleaguesDeclarationAsync(IReadOnlyDictionary<string, string> colleagues);
 
     /// <summary>
-    /// Produces the note placed in front of a colleague's question — the one signal telling the
-    /// answering agent that this turn's reader is not the user.
+    /// Produces the whole of what an answering agent reads on a turn serving a colleague: the note
+    /// telling it its reader is not the user, then the question inside the fence marking it as data.
     /// </summary>
     /// <param name="callerIntent">Intent of the asking agent; <c>null</c> when the caller named none,
     /// which the composer renders as an unnamed caller rather than as a name.</param>
-    /// <returns>The note, or an empty string when the prompt layer declares no such template.</returns>
-    Task<string> ComposeConsultationRequestAsync(string? callerIntent);
+    /// <param name="question">What the colleague asked, in its own words.</param>
+    /// <returns>The composed turn, falling back to the bare question where no template is declared.</returns>
+    Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question);
 
     /// <summary>
     /// Produces the per-turn declaration handing the session's currently-held context variables
