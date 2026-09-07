@@ -50,6 +50,9 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~AgentCardTests"
 # the federation group — what leaves toward a partner's colleague, against a stub peer; no LLM call, no cost
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTests"
 
+# the served-consultation group — this installation answering a partner; three real turns, one free refusal
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultationTests"
+
 # the summarization group — requires a lowered boot-time reducer trigger, unset by default
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"
 

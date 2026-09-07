@@ -79,6 +79,45 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// </summary>
     public int ScopedPartnerIndex { get; private set; }
 
+    /// <summary>
+    /// A second partner, admitted to the same desk but allowed to open exactly one conversation an
+    /// hour, so the ceiling can be observed doing something rather than merely being declared.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="ScopedPartnerName"/> because the count is per issuer: a ceiling worth
+    /// testing has to be met, and meeting it on the partner every other group calls would turn every
+    /// later consultation into a refusal.
+    /// </remarks>
+    public const string MeteredPartnerName = "harness-peer-metered";
+
+    /// <summary>Conversations <see cref="MeteredPartnerName"/> may open in an hour: the second is refused.</summary>
+    public const int MeteredPartnerConversationsPerHour = 1;
+
+    /// <summary>What <see cref="MeteredPartnerName"/> reads when it has opened its one conversation.</summary>
+    /// <remarks>
+    /// Written on that partner's own entry, so a turned-away colleague is answered in this
+    /// deployment's voice rather than with a status code the asking model would narrate.
+    /// </remarks>
+    public const string MeteredPartnerRefusal = "The nursery cannot take on further exchanges with you this hour.";
+
+    /// <summary>Symmetric key minted for this run under <see cref="MeteredPartnerName"/>.</summary>
+    public string MeteredPartnerKey { get; private set; } = string.Empty;
+
+    /// <summary>Position <see cref="MeteredPartnerName"/> takes in <c>Morgana:AgentToAgent:Partners</c>.</summary>
+    public int MeteredPartnerIndex { get; private set; }
+
+    /// <summary>
+    /// The first position in <c>Morgana:AgentToAgent:Partners</c> no declaration occupies, which the
+    /// group booting a doomed host writes its own broken entry into.
+    /// </summary>
+    public int FreePartnerIndex { get; private set; }
+
+    /// <summary>
+    /// Directory holding the per-conversation databases this run creates, read by the one assertion
+    /// that asks which conversation a request was served on rather than what came back from it.
+    /// </summary>
+    public string StoragePath => storagePath;
+
     /// <summary>Tee on the host's stdout; the turn observer reads tool log lines from it.</summary>
     public HostOutputCapture Output { get; private set; } = null!;
 
@@ -117,6 +156,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // disk) and a scratch directory for the SQLite databases this run's conversations create.
         IssuerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         ScopedPartnerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        MeteredPartnerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         storagePath = Path.Combine(Path.GetTempPath(), "morgana-harness", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(storagePath);
 
@@ -305,6 +345,26 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable(
             $"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__RateLimiting__MaxConversationsPerHour",
             ScopedPartnerConversationsPerHour.ToString());
+
+        // The same admission with a ceiling that can actually be met, and the sentence this deployment
+        // turns a partner away with. One conversation an hour is the smallest bound that still lets the
+        // first exchange be served, which is what makes the second one's refusal mean something.
+        MeteredPartnerIndex = ScopedPartnerIndex + 1;
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__Name", MeteredPartnerName);
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__SymmetricKey", MeteredPartnerKey);
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__Enabled", "true");
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__OnAgents__0", ScopedPartnerAgent);
+        Environment.SetEnvironmentVariable(
+            $"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__RateLimiting__Enabled", "true");
+        Environment.SetEnvironmentVariable(
+            $"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__RateLimiting__MaxConversationsPerHour",
+            MeteredPartnerConversationsPerHour.ToString());
+        Environment.SetEnvironmentVariable(
+            $"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__RateLimiting__ErrorMessagePerHour",
+            MeteredPartnerRefusal);
+
+        // Where a broken declaration may be written without landing on either of the two above.
+        FreePartnerIndex = MeteredPartnerIndex + 1;
 
 
         // Framework categories at Information, everything else quiet: the tool log lines the turn

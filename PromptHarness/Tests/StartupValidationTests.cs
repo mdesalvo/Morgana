@@ -76,7 +76,7 @@ public sealed class StartupValidationTests
         // Reserved for the agents of this installation, whose consultations are proven against a
         // secret coined at startup. A partner taking it would be refused at runtime, for a reason
         // nothing in configuration shows.
-        int reservedName = fixture.ScopedPartnerIndex + 1;
+        int reservedName = fixture.FreePartnerIndex;
 
         Exception refusal = AssertRefusesToBoot(
             ($"Morgana__AgentToAgent__Partners__{reservedName}__Name", "morgana"));
@@ -89,7 +89,7 @@ public sealed class StartupValidationTests
     {
         // The order somebody happened to write the two entries in would decide which key proves a
         // caller and which address its calls go to.
-        int duplicate = fixture.ScopedPartnerIndex + 1;
+        int duplicate = fixture.FreePartnerIndex;
 
         Exception refusal = AssertRefusesToBoot(
             ($"Morgana__AgentToAgent__Partners__{duplicate}__Name", MorganaHostFixture.ScopedPartnerName),
@@ -114,7 +114,7 @@ public sealed class StartupValidationTests
     {
         // Where a token signed with that partner's key is sent. Without it the colleague resolves to
         // nothing on the first conversation instead of here.
-        int addressless = fixture.ScopedPartnerIndex + 1;
+        int addressless = fixture.FreePartnerIndex;
 
         Exception refusal = AssertRefusesToBoot(
             ($"Morgana__AgentToAgent__Partners__{addressless}__Name", "harness-addressless"),
@@ -130,7 +130,7 @@ public sealed class StartupValidationTests
         // Behind the A2A door the caller names the conversation it is served on, so how many it may
         // open is the only bound on what it can spend. An absent declaration is not licence to spend
         // freely — a deployment wanting no bound switches the ceiling off in as many words.
-        int unmetered = fixture.ScopedPartnerIndex + 1;
+        int unmetered = fixture.FreePartnerIndex;
 
         Exception refusal = AssertRefusesToBoot(
             ($"Morgana__AgentToAgent__Partners__{unmetered}__Name", "harness-unmetered"),
