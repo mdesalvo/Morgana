@@ -47,6 +47,9 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ActorTests"
 # the card-and-gate group — deterministic, no LLM call, no cost
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~AgentCardTests"
 
+# the federation group — what leaves toward a partner's colleague, against a stub peer; no LLM call, no cost
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTests"
+
 # the summarization group — requires a lowered boot-time reducer trigger, unset by default
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"
 

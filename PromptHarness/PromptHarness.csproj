@@ -66,6 +66,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.*" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
     <PackageReference Include="YamlDotNet" Version="18.*" />
+    <PackageReference Include="WireMock.Net" Version="2.*" />
   </ItemGroup>
 
   <ItemGroup>
