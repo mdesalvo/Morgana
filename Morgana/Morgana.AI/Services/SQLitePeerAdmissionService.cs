@@ -35,7 +35,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
     /// <summary>What each partner is told when it has opened all it may, as its own entry words it.</summary>
     private readonly Dictionary<string, string> refusalMessageByIssuer;
 
-    /// <summary>Records a system turned away and the fail-open path, which leaves no other trace.</summary>
+    /// <summary>Records a system turned away, whether for going too far or because the count could not be read.</summary>
     private readonly ILogger logger;
 
     /// <summary>Reads what each admitted partner is allowed, off the same entry that gave it its reach.</summary>
@@ -143,10 +143,17 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
         }
         catch (Exception ex)
         {
-            // Fails open, as every limiter here does: a partner is refused for going too far, never
-            // because this installation could not read its own count.
-            logger.LogError(ex, "Could not weigh the conversations '{Issuer}' has opened; it is admitted", issuer);
-            return new Records.PeerAdmissionResult(IsAdmitted: true);
+            // The one limiter here that closes on its own failure, and it closes because of where it
+            // stands: behind this door a request reaches an agent with none of the guard, classifier
+            // and channel rate limit a user's own path goes through, so this count is the whole of
+            // what bounds a partner. Admitted while unreadable it would not weaken a measure among
+            // several, it would remove the only one — and silently, every conversation so opened
+            // drawing a budget of its own.
+            logger.LogError(ex, "Could not weigh the conversations '{Issuer}' has opened; it is turned away", issuer);
+
+            // Answered in the words a partner over its allowance would read, its own entry having
+            // nothing to say about a ledger this installation could not open.
+            return new PeerAdmissionResult(IsAdmitted: false, RefusalMessage: null);
         }
     }
 

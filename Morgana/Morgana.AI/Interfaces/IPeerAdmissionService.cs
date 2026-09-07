@@ -21,8 +21,10 @@ public interface IPeerAdmissionService
     /// when it is admitted.
     /// </summary>
     /// <remarks>
-    /// Fails open, as every limiter here does: a partner is refused because it went too far, never
-    /// because the count could not be read.
+    /// Fails closed, unlike every other limiter here, because of where it stands: behind this door a
+    /// request reaches an agent with none of the guard, classifier and channel rate limit a user's
+    /// own path goes through, so this count is the whole of what bounds a partner. A count that
+    /// cannot be read is therefore a refusal, never a conversation opened on the word of nobody.
     /// </remarks>
     /// <param name="issuer">Partner asking, as its token declared it.</param>
     /// <returns>Whether the conversation may be opened and, when it may not, what the partner is told.</returns>
