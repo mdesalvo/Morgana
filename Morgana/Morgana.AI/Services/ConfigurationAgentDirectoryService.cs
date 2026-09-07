@@ -909,7 +909,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     {
         return
         [
-            .. prompt.GetAdditionalPropertyOrDefault<Records.ToolDefinition[]>("Tools", [])
+            .. prompt.GetAdditionalPropertyOrDefault<Records.ToolDefinition[]>(Constants.PromptProperties.Tools, [])
                 .Select(tool => new A2A.AgentSkill
                 {
                     Id = tool.Name,

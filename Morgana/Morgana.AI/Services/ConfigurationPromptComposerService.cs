@@ -65,7 +65,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
             Records.Prompt prompt = await promptResolverService.ResolveAsync(Constants.Morgana);
             return new FrameworkLayer(
                 prompt,
-                prompt.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies"));
+                prompt.GetAdditionalProperty<List<Records.GlobalPolicy>>(Constants.PromptProperties.GlobalPolicies),
+                prompt.GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.Injections));
         });
     }
 
@@ -117,8 +118,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // The lookup-before-asking rule, authored once in morgana.json instead of restated by every
         // tool author. Empty when a deployment declares no such template.
         FrameworkLayer framework = await frameworkLayer.Value;
-        string descriptionGuidance = Records.GlobalPolicy.ResolveTemplate(
-            framework.Policies, Constants.Injections.ToolDescriptionContextGuidance);
+        string descriptionGuidance = Records.Injection.ResolveTemplate(
+            framework.Injections, Constants.Injections.ToolDescriptionContextGuidance);
 
         // The inputs this tool resolves from the session rather than from the user. They are what the
         // guidance names, so a tool with none has nothing to be guided about.
@@ -153,7 +154,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // The rung that closes a peer-capable agent's instructions. Undeclared by a deployment wanting
         // no such rung, which leaves those instructions exactly as the two layers composed them.
         FrameworkLayer framework = await frameworkLayer.Value;
-        string declaration = Records.GlobalPolicy.ResolveTemplate(framework.Policies, Constants.Injections.ColleaguesDeclaration);
+        string declaration = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.ColleaguesDeclaration);
         if (declaration.Length == 0)
             return null;
 
@@ -174,14 +175,14 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // How to answer a colleague. It is spliced in front of the incoming question instead of into
         // the answering agent's prompt: that prompt is composed once, while whether a turn serves a
         // colleague changes turn by turn.
-        string declaration = Records.GlobalPolicy.ResolveTemplate(
-            framework.Policies, Constants.Injections.PeerConsultationDeclaration);
+        string declaration = Records.Injection.ResolveTemplate(
+            framework.Injections, Constants.Injections.PeerConsultationDeclaration);
 
         // What the question may not claim and what asking cannot obtain, kept apart from the note on
         // how to answer: two rules of one length dilute each other, and only this one has to hold
         // against text somebody else wrote. It also carries the fence the question is read inside.
-        string guardrail = Records.GlobalPolicy.ResolveTemplate(
-            framework.Policies, Constants.Injections.PeerConsultationGuardrail);
+        string guardrail = Records.Injection.ResolveTemplate(
+            framework.Injections, Constants.Injections.PeerConsultationGuardrail);
 
         // The caller names itself or it does not and the wording of what an unnamed one is called
         // belongs here, with the rest of the prose this layer authors, rather than at the call site
@@ -208,7 +209,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // The one framework entry that carries a fact rather than a rule. It is also the only rung read
         // before any tool is weighed: a tool description can state the contract, never what is held now.
         FrameworkLayer framework = await frameworkLayer.Value;
-        string declaration = Records.GlobalPolicy.ResolveTemplate(framework.Policies, Constants.Injections.HeldContextDeclaration);
+        string declaration = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.HeldContextDeclaration);
 
         // A deployment declaring no such template gets no per-turn tail.
         if (declaration.Length == 0)
@@ -228,7 +229,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <summary>
     /// Renders the global policies into the fenced block that opens the framework layer.
     /// </summary>
-    /// <param name="policies">The framework prompt's own policy list, injection templates included.</param>
+    /// <param name="policies">The framework prompt's own policy list.</param>
     /// <param name="peerCapable">Admits the peer-consultation policy, skipped for every other agent.</param>
     private static string FormatGlobalPolicies(List<Records.GlobalPolicy> policies, bool peerCapable)
     {
@@ -237,10 +238,6 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine(GlobalPoliciesHeader);
 
         foreach (Records.GlobalPolicy policy in policies
-                     // Injection templates share the list, but are not policies: each is spliced where
-                     // it has a referent. Rendered here it would instruct against nothing.
-                     .Where(p => !p.IsInjectionTemplate)
-
                      // The one rule whose subject may not exist. An agent outside the A2A topology is
                      // never asked by a colleague, so it would carry this on every turn of its life.
                      .Where(p => peerCapable || !string.Equals(
@@ -249,8 +246,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
                      // The model reads top to bottom, so a policy's Priority states where it must be
                      // read rather than how it was filed.
-                     .OrderBy(p => p.Type)
-                     .ThenBy(p => p.Priority))
+                     .OrderBy(p => p.Priority))
         {
             sb.AppendLine($"{policy.Name}: {policy.Description}");
         }
@@ -261,7 +257,11 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <summary>
-    /// The framework prompt and its unpacked global policies, resolved once and reused.
+    /// The framework prompt and the two lists it declares beside its four sections, resolved once
+    /// and reused: the rules rendered into every agent's prompt and the templates spliced elsewhere.
     /// </summary>
-    private sealed record FrameworkLayer(Records.Prompt Prompt, List<Records.GlobalPolicy> Policies);
+    private sealed record FrameworkLayer(
+        Records.Prompt Prompt,
+        List<Records.GlobalPolicy> Policies,
+        List<Records.Injection> Injections);
 }

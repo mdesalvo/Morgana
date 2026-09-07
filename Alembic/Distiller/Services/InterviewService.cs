@@ -829,7 +829,7 @@ public class InterviewService : IInterviewService
         Records.Prompt interviewer = alembicPromptService.Resolve(interviewerId);
 
         List<Records.ToolDefinition> definitions =
-            interviewer.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>("Tools", []);
+            interviewer.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>(Constants.PromptProperties.Tools, []);
 
         InterviewTools tools = new InterviewTools(interviewState, draftStateService, draftValidationService, recapService);
         MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);

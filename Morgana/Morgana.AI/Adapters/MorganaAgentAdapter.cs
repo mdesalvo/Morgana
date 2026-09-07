@@ -141,7 +141,7 @@ public class MorganaAgentAdapter
 
         morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
 
-        morganaTools = [.. morganaPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools")
+        morganaTools = [.. morganaPrompt.GetAdditionalProperty<Records.ToolDefinition[]>(Constants.PromptProperties.Tools)
             .Select(t => t with { Reserved = true })];
     }
 
@@ -222,7 +222,7 @@ public class MorganaAgentAdapter
         // 3) Tool surface = framework base tools (morgana.json: GetContextVariable,
         //    SetContextVariable, SetQuickReplies, SetRichCard) UNION the agent's domain
         //    tools (agents.json). Union de-dups so a domain tool can't shadow a base one.
-        Records.ToolDefinition[] domainTools = [.. agentPrompt.GetAdditionalProperty<Records.ToolDefinition[]>("Tools")
+        Records.ToolDefinition[] domainTools = [.. agentPrompt.GetAdditionalProperty<Records.ToolDefinition[]>(Constants.PromptProperties.Tools)
             .Select(t => t with { Reserved = false })];
         Records.ToolDefinition[] agentTools = [.. morganaTools.Union(domainTools)];
 

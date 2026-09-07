@@ -1011,7 +1011,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         // Get the disambiguation message from the classifier's prompt
         Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Classifier);
-        string disambiguationMessage = classifierPrompt.GetAdditionalProperty<string>("DisambiguationMessage");
+        string disambiguationMessage = classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.DisambiguationMessage);
 
         // Tell the response straight to the client — no router, no agent, exactly like a Guard
         // rejection or the Presentation message. AgentCompleted:false signals "I'm not done, I'm

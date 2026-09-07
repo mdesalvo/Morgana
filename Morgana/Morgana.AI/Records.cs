@@ -1020,37 +1020,37 @@ public static class Records
     }
 
     /// <summary>
-    /// Framework-level behavioral rule: Name, Description, Type (Critical or Injection), Priority (lower=higher).
-    /// Critical policies render into system prompt. Injection templates splice into tool/parameter descriptions
-    /// or per-turn context declaration (see Templates.ToolDescriptionContextGuidance, HeldContextDeclaration).
-    /// MorganaAgentAdapter orders by Type then Priority.
+    /// One framework-level rule, rendered among the global policies of every agent's system prompt.
+    /// Every policy binds equally, so the only thing left to declare about one is where it is read:
+    /// <c>Priority</c> orders the block, lowest first.
     /// </summary>
     public record GlobalPolicy(
         string Name,
         string Description,
-        string Type,
-        int Priority)
+        int Priority);
+
+    /// <summary>
+    /// One framework-level template, spliced at the single site where it has a referent — a tool
+    /// description, an agent's own instructions, the turn serving a colleague. Never rendered among
+    /// the policies, where it would instruct against nothing.
+    /// </summary>
+    /// <remarks>
+    /// It is the array an entry lives in that says which of the two it is, so a rule and a template
+    /// cannot be confused for one another by anything anybody writes inside an entry. Carries no
+    /// priority: each is fetched by name and no two are ever read together.
+    /// </remarks>
+    public record Injection(
+        string Name,
+        string Description)
     {
         /// <summary>
-        /// <see cref="Type"/> value marking an injection template rather than a rendered policy.
+        /// Resolves a template's text by name (see <see cref="Constants.Injections"/>); returns an
+        /// empty string when the prompt layer declares none, which every splice site reads as
+        /// "inject nothing".
         /// </summary>
-        public const string InjectionType = "Injection";
-
-        /// <summary>
-        /// True when this entry is an injection template, spliced into tool/parameter descriptions
-        /// instead of being rendered among the global policies.
-        /// </summary>
-        public bool IsInjectionTemplate
-            => string.Equals(Type, InjectionType, StringComparison.OrdinalIgnoreCase);
-
-        /// <summary>
-        /// Resolves an injection template's text by name (see <see cref="Constants.Injections"/>);
-        /// returns an empty string when the prompt layer declares none, which every splice site
-        /// reads as "inject nothing".
-        /// </summary>
-        public static string ResolveTemplate(IEnumerable<GlobalPolicy> policies, string name)
-            => policies.FirstOrDefault(policy =>
-                   string.Equals(policy.Name, name, StringComparison.OrdinalIgnoreCase))?.Description ?? "";
+        public static string ResolveTemplate(IEnumerable<Injection> injections, string name)
+            => injections.FirstOrDefault(injection =>
+                   string.Equals(injection.Name, name, StringComparison.OrdinalIgnoreCase))?.Description ?? "";
     }
 
     /// <summary>

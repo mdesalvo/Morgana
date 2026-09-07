@@ -563,7 +563,7 @@ public class MorganaAgent : MorganaActor
         agentLogger.LogError(failure.Failure.Cause, "Agent execution failed in {Name}", GetType().Name);
 
         Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
-        List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>("ErrorAnswers");
+        List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>(Constants.PromptProperties.ErrorAnswers);
         Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
 
         failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));

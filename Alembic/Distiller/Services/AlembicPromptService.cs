@@ -155,7 +155,7 @@ public class AlembicPromptService : IAlembicPromptService
     private static string BindingPolicies(Records.Prompt morgana)
     {
         List<Records.GlobalPolicy> policies =
-            morgana.GetAdditionalPropertyOrDefault<List<Records.GlobalPolicy>>("GlobalPolicies", []);
+            morgana.GetAdditionalPropertyOrDefault<List<Records.GlobalPolicy>>(Constants.PromptProperties.GlobalPolicies, []);
 
         if (policies.Count == 0)
             return string.Empty;

@@ -14,12 +14,6 @@ namespace Morgana.AI.Services;
 public class LLMClassifierService : IClassifierService
 {
     /// <summary>
-    /// Section of the Classifier prompt describing the complement of the domain: what a request that
-    /// matches no modelled desk is. Authored where it is read, since no domain owns it.
-    /// </summary>
-    private const string ComplementIntentDescription = "ComplementIntentDescription";
-
-    /// <summary>
     /// LLM used for every classification call. Consumed through the stateless completion path:
     /// classification keeps no per-conversation memory, so it always runs on the cheapest tier.
     /// </summary>
@@ -100,7 +94,7 @@ public class LLMClassifierService : IClassifierService
         // to no agent and its description is authored here, in the prompt that reads it.
         string formattedIntents = string.Join("|",
             intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})")
-                .Append($"{Constants.Intents.Other} ({classifierPrompt.GetAdditionalProperty<string>(ComplementIntentDescription)})"));
+                .Append($"{Constants.Intents.Other} ({classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.ComplementIntentDescription)})"));
 
         // What the classifier reads on every turn of this process's life: the three authored sections
         // with the domain's vocabulary spliced into the first. Composed here so no turn pays for it.

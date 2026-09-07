@@ -24,6 +24,12 @@ public class CoherenceService : ICoherenceService
     private const string CoherencePromptId = "DomainValidator";
 
     /// <summary>
+    /// The key under which that prompt lists the subjects the pass weighs. Alembic's own, unlike the
+    /// keys of a Morgana prompt: nothing outside this workbench writes or reads it.
+    /// </summary>
+    private const string AspectsPropertyName = "Aspects";
+
+    /// <summary>
     /// Where the composed Instructions carry the classes asked for this run.
     /// </summary>
     private const string AspectsPlaceholder = "((aspects))";
@@ -60,7 +66,7 @@ public class CoherenceService : ICoherenceService
     /// </remarks>
     public IReadOnlyList<CoherenceAspect> Aspects =>
         alembicPromptService.Resolve(CoherencePromptId)
-            .GetAdditionalPropertyOrDefault<List<CoherenceAspect>>("Aspects", []);
+            .GetAdditionalPropertyOrDefault<List<CoherenceAspect>>(AspectsPropertyName, []);
 
     /// <inheritdoc />
     /// <remarks>
@@ -93,7 +99,7 @@ public class CoherenceService : ICoherenceService
         // rule a prompt states and then withdraws is read as a rule with an exception and the
         // exception is the part a model gets wrong.
         List<CoherenceAspect> asked =
-            [.. coherence.GetAdditionalPropertyOrDefault<List<CoherenceAspect>>("Aspects", [])
+            [.. coherence.GetAdditionalPropertyOrDefault<List<CoherenceAspect>>(AspectsPropertyName, [])
                     .Where(a => aspects.Contains(a.Id, StringComparer.OrdinalIgnoreCase))];
 
         if (asked.Count == 0)

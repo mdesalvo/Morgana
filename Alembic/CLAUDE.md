@@ -57,7 +57,9 @@ Two layers, in `AlembicPromptService.ComposeAsync`:
 1. **Morgana in her own words**, resolved live from `morgana.json` rather than copied: her
    `Personality`, because her identity is Alembic's identity; her `Target`, the only place that says
    what an agent *of* Morgana is; and her `GlobalPolicies` **by name only**, as the subjects already
-   settled above every agent.
+   settled above every agent. Her `Injections` are deliberately not read: they are splice templates
+   rather than subjects a domain author could write a rule about, so naming them would hand the model
+   five pieces of turn machinery dressed as competences it must keep off.
 2. **Alembic's own prose**, from two rows of `alembic.json`: what every pass says identically and
    what this pass adds.
 
@@ -457,7 +459,7 @@ the shipped `Examples` domain demonstrated before it was fixed: `BillingAgent` c
 `[ConsultsAgent("inventory")]` while its own `Instructions` said orders *belong to another bench —
 say so plainly, never answer from the invoice*. The model reads a function offering the colleague and
 a flat imperative refusing the subject. Morgana's `PeerConsultation` policy now decides that
-collision by precedence — it is `Critical` and the domain layer is subordinate — but an agent whose
+collision by precedence — it is a global policy and the domain layer is subordinate — but an agent whose
 own prose has to be overruled on every turn is still a defect: the contradiction is paid in tokens
 and settled by a model rather than by its author. So `DeclareConsultation` takes the asking agent's rewritten
 `Instructions` **in the same call** — and optionally the colleague's, only where its own words would

@@ -62,7 +62,7 @@ public class CoherenceApplyService : ICoherenceApplyService
     {
         Records.Prompt prompt = alembicPromptService.Resolve(PromptId);
         List<Records.ToolDefinition> definitions =
-            prompt.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>("Tools", []);
+            prompt.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>(Constants.PromptProperties.Tools, []);
 
         CoherenceApplyTools tools = new CoherenceApplyTools(draft);
         MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);

@@ -123,7 +123,7 @@ public class LLMPresenterService : IPresenterService
         // Morgana must always present herself.
         Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Presentation);
         Records.PresentationResult presentationResult = displayableIntents.Count == 0
-            ? new Records.PresentationResult(presentationPrompt.GetAdditionalProperty<string>("NoAgentsMessage"), [])
+            ? new Records.PresentationResult(presentationPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.NoAgentsMessage), [])
             : await GenerateMessageAsync(presentationPrompt, displayableIntents);
 
         // Capability-driven degradation with caching of the outcome: subsequent conversations on this channel pay zero LLM cost.
@@ -208,7 +208,7 @@ public class LLMPresenterService : IPresenterService
     {
         // The greeting authored for exactly this case: a real welcome somebody wrote in morgana.json,
         // never an error string, because the user is opening a conversation rather than meeting a fault.
-        string fallbackMessage = presentationPrompt.GetAdditionalProperty<string>("FallbackMessage");
+        string fallbackMessage = presentationPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.FallbackMessage);
 
         // One quick reply per intent. Label falls back to the intent name; value falls back to a
         // generic "Help me with X" so the button always carries a usable payload.

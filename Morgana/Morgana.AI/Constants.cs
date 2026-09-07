@@ -73,9 +73,9 @@ public static class Constants
     }
 
     /// <summary>
-    /// Names of the entries carrying <c>Type: "Injection"</c> in the same array as the policies.
-    /// They are templates, not rules: each is spliced at exactly one site instead of being rendered
-    /// among the policies and each is resolved by name through <c>GlobalPolicy.ResolveTemplate</c>.
+    /// Names of the entries in the framework prompt's <c>Injections</c> array, the sibling of its
+    /// policies. They are templates, not rules: each is spliced at exactly one site instead of being
+    /// rendered among the policies and each is resolved by name through <c>Injection.ResolveTemplate</c>.
     /// </summary>
     public static class Injections
     {
@@ -93,6 +93,44 @@ public static class Constants
 
         /// <summary>Spliced into a peer-capable agent's own instructions, naming the colleagues it holds.</summary>
         public const string ColleaguesDeclaration = "ColleaguesDeclaration";
+    }
+
+    /// <summary>
+    /// The keys of a prompt's <c>AdditionalProperties</c>: everything a prompt declares beside its
+    /// four authored sections. Each is written in <c>morgana.json</c> or a plugin's <c>agents.json</c>
+    /// and read by code that never sees that file, which is exactly the contract this glossary holds.
+    /// </summary>
+    public static class PromptProperties
+    {
+        /// <summary>The framework rules rendered into every agent's system prompt.</summary>
+        public const string GlobalPolicies = "GlobalPolicies";
+
+        /// <summary>The framework templates spliced where each has a referent (see <see cref="Constants.Injections"/>).</summary>
+        public const string Injections = "Injections";
+
+        /// <summary>The callable tools a prompt declares, framework base tools and domain tools alike.</summary>
+        public const string Tools = "Tools";
+
+        /// <summary>What the user is told when a turn fails, authored rather than hard-coded.</summary>
+        public const string ErrorAnswers = "ErrorAnswers";
+
+        /// <summary>The opening message served when the presenter's own model call fails.</summary>
+        public const string FallbackMessage = "FallbackMessage";
+
+        /// <summary>The opening message served by a deployment carrying no agent at all.</summary>
+        public const string NoAgentsMessage = "NoAgentsMessage";
+
+        /// <summary>What the user is asked when two intents collide too closely to route between.</summary>
+        public const string DisambiguationMessage = "DisambiguationMessage";
+
+        /// <summary>What the user is told when classification lands on an intent no agent handles.</summary>
+        public const string UnrecognizedIntentError = "UnrecognizedIntentError";
+
+        /// <summary>
+        /// What a request matching no modelled desk is. It belongs to the classifier and to no domain,
+        /// so it is authored beside the vocabulary it closes rather than in any plugin.
+        /// </summary>
+        public const string ComplementIntentDescription = "ComplementIntentDescription";
     }
 
     /// <summary>
