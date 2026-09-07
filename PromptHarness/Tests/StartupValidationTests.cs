@@ -19,10 +19,12 @@ namespace PromptHarness.Tests;
 /// live before the container is built, so a doomed host throws before it binds a port or raises an
 /// actor system, which is what lets these run in the same process as the live host.</para>
 ///
-/// <para>Every case here breaks one <c>Morgana:AgentToAgent:Partners</c> entry against itself: what a
-/// partner is, where it answers and how far it reaches are one declaration, so there is no second
-/// list for a case to set against the first. This installation's own agents appear nowhere — they
-/// consult each other under a key coined at startup, which no deployer can misdeclare.</para>
+/// <para>Almost every case here breaks one <c>Morgana:AgentToAgent:Partners</c> entry against itself:
+/// what a partner is, where it answers and how far it reaches are one declaration, so there is no
+/// second list for a case to set against the first. The exception is the address this installation
+/// publishes itself at, which a proxied deployment declares because its binding cannot. Its own
+/// agents appear nowhere — they consult each other under a key coined at startup, which no deployer
+/// can misdeclare.</para>
 ///
 /// <para>What configuration cannot reach is deliberately absent: a <c>[ConsultsAgent]</c> naming an
 /// unknown colleague, one naming its own agent, two folding to one function name. Those are refused
@@ -156,6 +158,18 @@ public sealed class StartupValidationTests
             ($"Morgana__AgentToAgent__Partners__{fixture.ScopedPartnerIndex}__InboundPolicy__OnAgents__0", "harness-nodesk"));
 
         Assert.Contains("harness-nodesk", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Boot_is_refused_when_this_installation_declares_an_address_no_peer_could_reach()
+    {
+        // The only declaration here that is about this installation rather than a partner and it is
+        // made only when the binding cannot answer for it. Wrong, every card published carries it and
+        // every consumer refuses the colleague behind it, for a reason no running instance announces.
+        Exception refusal = AssertRefusesToBoot(
+            ("Morgana__AgentToAgent__PublicUrl", "morgana.example.com"));
+
+        Assert.Contains("PublicUrl", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

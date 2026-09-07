@@ -20,6 +20,9 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// <summary>Version stamped on every locally projected card, tracking the framework's own contract.</summary>
     private const string LocalCardVersion = "1.0";
 
+    /// <summary>Hosts naming every interface rather than one, which no peer can knock at.</summary>
+    private static readonly string[] WildcardHosts = ["+", "*", "0.0.0.0", "[::]", "::"];
+
     /// <summary>Wait on a card: a static document with no model behind it, so nothing like a consultation.</summary>
     private static readonly TimeSpan CardDiscoveryTimeout = TimeSpan.FromSeconds(30);
 
@@ -356,6 +359,57 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
                    .Select(admitted => admitted.Issuer)
                    .Append(Constants.AgentToAgent.IssuerName),
                StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Refuses an address this installation could not be reached at, declared for the card its
+    /// agents publish. Returns silently when nothing is published, or when nothing is declared.
+    /// </summary>
+    /// <remarks>
+    /// The one thing a deployment says about itself and it says it only when the binding cannot:
+    /// behind an ingress or a published container port, what Kestrel bound is not where a peer knocks
+    /// and a card naming the binding is refused by every consumer. Weighed here because the value is
+    /// read at the first card ask, long after a deployer could still be watching for a typo in it.
+    /// </remarks>
+    /// <param name="configuration">Application configuration.</param>
+    /// <param name="publishedIntents">Agents this installation publishes over A2A; empty switches the check off.</param>
+    /// <exception cref="InvalidOperationException">The declared address is relative or on a scheme carrying no bearer.</exception>
+    public static void ValidatePublishedAddress(IConfiguration configuration, IReadOnlyCollection<string> publishedIntents)
+    {
+        if (publishedIntents.Count == 0)
+            return;
+
+        // Undeclared is the ordinary case: an instance reached at what it bound describes itself from
+        // the binding and has nothing to say here.
+        string? declaredPublicAddress = configuration["Morgana:AgentToAgent:PublicUrl"];
+        if (string.IsNullOrWhiteSpace(declaredPublicAddress))
+            return;
+
+        // Everything before the published agent path, which every card built from it appends. A
+        // fragment to resolve against something else names no host a peer could knock at.
+        if (!Uri.TryCreate(declaredPublicAddress.Trim(), UriKind.Absolute, out Uri? publicAddress))
+        {
+            throw new InvalidOperationException(
+                $"Morgana:AgentToAgent:PublicUrl is '{declaredPublicAddress}', which is not an absolute address. It is where "
+                + "peers reach this installation when something in front of it terminates the connection, so it carries a "
+                + "scheme and a host: https://morgana.example.com.");
+        }
+
+        if (!string.Equals(publicAddress.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(publicAddress.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Morgana:AgentToAgent:PublicUrl declares the scheme '{publicAddress.Scheme}': this installation is reached over http or https.");
+        }
+
+        // A host naming every interface rather than one is what the binding already reports and what
+        // this declaration exists to replace: published on a card it sends a peer nowhere.
+        if (WildcardHosts.Contains(publicAddress.Host, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Morgana:AgentToAgent:PublicUrl declares the host '{publicAddress.Host}', which names every interface rather "
+                + "than the one peers reach this installation at. Declare the name they resolve.");
+        }
+    }
 
     /// <summary>
     /// Refuses a partner declaration that would admit a caller nobody can prove, or grant a reach

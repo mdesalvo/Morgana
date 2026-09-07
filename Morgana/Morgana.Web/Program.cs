@@ -124,7 +124,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IPromptComposerService: Assembles what the model reads (composed prompt, tool descriptions, held-context declaration)
 // - IAgentRegistryService: Maps intents to agent types for routing
 // - IAgentDirectoryService: Describes agents to one another as A2A cards, for peer consultation
-// - IHostAddressService: Reports the address this instance bound, so a card names a callable endpoint
+// - IHostAddressService: Reports where this instance is reached — what Kestrel bound, or the public address a proxied deployment declares
 // - IGuardRailService: Checks user messages for content safety and compliance
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
@@ -310,6 +310,11 @@ string[] publishedIntents = builder.Configuration.GetValue("Morgana:AgentToAgent
 // beside what each direction of the relationship allows. Throws on the first incoherence, naming
 // what to add. This installation's own agents need no declaration at all.
 ConfigurationAgentDirectoryService.ValidateTrustConfiguration(builder.Configuration, publishedIntents);
+
+// The one thing this installation says about itself and only where the binding cannot say it: behind
+// an ingress or a published container port, what Kestrel binds is not where a peer knocks and a card
+// naming the binding is refused by everyone who reads it. Undeclared, nothing is weighed here.
+ConfigurationAgentDirectoryService.ValidatePublishedAddress(builder.Configuration, publishedIntents);
 
 // One hosted agent and one A2A server per published intent. Its other half, MapMorganaA2AAsync, runs
 // on the built application in section 10 — the container is sealed in between, so the pass cannot be
