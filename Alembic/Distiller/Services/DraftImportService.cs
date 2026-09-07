@@ -101,15 +101,13 @@ public class DraftImportService : IDraftImportService
             }
         };
 
-        // On the working draft only. The baseline is the file as it arrived, so a domain that came
-        // without a fallback shows the addition in the migration report, which is where the client
-        // should meet it — not silently and not as something they have to write themselves.
-        int before = draft.Intents.Count;
-        draft.EnsureFallbackIntent();
-
-        if (draft.Intents.Count > before)
-            notices.Add($"This configuration had no '{DomainDraft.FallbackIntent}' intent, so one is in place: "
-                        + "it is where the classifier sends everything the domain does not cover and it is the one intent no agent may claim.");
+        // On the working draft only. The baseline stays the file as it arrived, so what the client is
+        // told here is a change to their configuration rather than a quiet difference between what
+        // they uploaded and what they will download.
+        if (draft.DropFallbackIntent())
+            notices.Add($"This configuration declared the '{DomainDraft.FallbackIntent}' intent, which has been removed: "
+                        + "it is the complement of your domain rather than a part of it, so Morgana's classifier now carries it "
+                        + "and describes it in its own prompt. An installation ignores such a declaration in any case.");
 
         logger.LogInformation(
             "Imported {IntentCount} intents and {AgentCount} agents from {FileName}",

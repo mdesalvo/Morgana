@@ -224,6 +224,9 @@
         },
         {
           "DisambiguationMessage": "You've lit more than one candle with those words andI can't tell which lights your way. Which is it?"
+        },
+        {
+          "ComplementIntentDescription": "any other topic not expressly intercepted by known intents"
         }
       ]
     }

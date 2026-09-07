@@ -328,6 +328,13 @@ builder.AddMorganaA2A(publishedIntents);
 
 WebApplication app = builder.Build();
 
+// The domain and the registry, read here rather than on the first conversation. Both refuse what they
+// cannot serve — a name two plugins claim, a reserved one a plugin took, an intent with no agent or an
+// agent with no intent — and a refusal is only a startup refusal if something asks at startup. Left to
+// the first turn, the same fault reaches a user as a conversation that never answers.
+await app.Services.GetRequiredService<IAgentConfigurationService>().GetIntentsAsync();
+app.Services.GetRequiredService<IAgentRegistryService>();
+
 app.UseCors("Channel");                 // Open CORS; trust gate is JWT, not origin
 app.UseHttpsRedirection();              // Redirect HTTP to HTTPS
 app.UseStaticFiles();                   // Serve static files (if any)

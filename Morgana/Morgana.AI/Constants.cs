@@ -208,10 +208,16 @@ public static class Constants
     public static class Intents
     {
         /// <summary>
-        /// The classifier's fallback: no agent handles it, it is never offered as a quick reply and
-        /// never counts as a collision candidate. Routed all the same, so the router answers with
-        /// its unrecognized-intent message rather than the pipeline stalling.
+        /// The complement of whatever domain is deployed: what a request matching no modelled desk
+        /// is. No agent handles it, it is never offered as a quick reply and never counts as a
+        /// collision candidate. Routed all the same, so the router answers with its
+        /// unrecognized-intent message rather than the pipeline stalling.
         /// </summary>
+        /// <remarks>
+        /// The classifier's own and no domain's: the name is here because three parties compare it,
+        /// while the description a model reads is authored in the Classifier prompt beside the rest
+        /// of that actor's prose. A plugin declaring it is ignored at the door.
+        /// </remarks>
         public const string Other = "other";
     }
 

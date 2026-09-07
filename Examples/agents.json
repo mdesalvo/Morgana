@@ -23,12 +23,6 @@
       "Description": "requests to browse the nursery catalog of plants and flowers (flowering shrubs, exotic blooms, aromatic herbs, seeds, bulbs, foliage plants, succulents), check stock levels, place or confirm a plant order, check an existing order's status, or cancel an order",
       "Label": "🌿 Greenhouse",
       "DefaultValue": "Show me the greenhouse catalog"
-    },
-    {
-      "Name": "other",
-      "Description": "any other topic not expressly intercepted by known intents",
-      "Label": null,
-      "DefaultValue": null
     }
   ],
   "Agents": [

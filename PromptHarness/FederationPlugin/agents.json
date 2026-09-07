@@ -5,12 +5,6 @@
       "Description": "requests about the delivery of plants the customer is expecting or wants to order: when an order leaves, whether something can be sent, and whether the greenhouse at the annex actually has a plant in stock to send",
       "Label": "🚚 Dispatch",
       "DefaultValue": "When is my delivery arriving?"
-    },
-    {
-      "Name": "other",
-      "Description": "any other topic not expressly intercepted by known intents",
-      "Label": null,
-      "DefaultValue": null
     }
   ],
   "Agents": [

@@ -88,7 +88,7 @@ in, so the interview rested on the model already knowing what "a Morgana domain"
 explaining Morgana in its own words would drift the day the framework is tuned, so her `Target` is
 injected instead and `alembic.json` states only what `morgana.json` does **not** — that a classifier
 routes on intent descriptions, that a tool is the only reach outside the conversation, what
-`context`/`request`/shared mean and that `other` catches what nothing else does. Her policies go in
+`context`/`request`/shared mean and that the classifier's own complement catches what nothing else does. Her policies go in
 **as names, not bodies**: Alembic needs only *which* subjects are already covered above an agent, not
 how.
 
@@ -525,10 +525,13 @@ one sentence of finished prose. Rather than a conditional per pass, which is the
 `ModePromptTests` exists to prevent coming back, the pass's own `Target` states the fact flatly in
 its first line and it is read last, where the most specific layer belongs.
 
-**The fallback intent is not on the map and never was.** `other` is where the classifier sends what it
-cannot place; `DomainDraft.EnsureFallbackIntent` puts it in every domain (greenfield at commit,
-uploaded at import) and `DeclareIntent` refuses the name — the one element of a domain no interview
-authors and no client edits.
+**The fallback intent is not on the map, and not in the domain either.** `other` is where the
+classifier sends what it cannot place, and it is the *complement* of a domain rather than a part of
+one: Morgana's classifier carries it and describes it in its own prompt. So `DeclareIntent` refuses
+the name and nothing here adds it back — `DomainDraft.DropFallbackIntent` takes it out of an uploaded
+configuration written before that was true, and the client is told in the import notices rather than
+in the migration report, which would otherwise send them looking for an agent to unregister for an
+intent no agent ever answered.
 
 ### The walk: a domain is edited, not only added to
 

@@ -87,31 +87,18 @@ public sealed class DomainDraft
     public const string FallbackIntent = Constants.Intents.Other;
 
     /// <summary>
-    /// Puts the fallback intent in the domain if it is not already there.
+    /// Takes the fallback intent out of the domain, wherever it came from.
     /// </summary>
     /// <remarks>
-    /// The one intent no interview writes and no client edits. Every domain has it, it takes no
-    /// agent — <c>HandlesIntentAgentRegistryService</c> exempts this single name from its
-    /// bidirectional check — and it carries no label, because it is not a button anybody presses.
-    /// A domain without it has nowhere to put the messages it does not cover, which is why the
-    /// description is the framework's own words rather than something to phrase per client.
-    /// <para>
-    /// Matched case-insensitively but never rewritten: a domain that arrived with its own wording
-    /// for the fallback keeps it, since that is the client's sentence about their own catch-all.
-    /// </para>
+    /// It is the complement of the domain rather than a part of it — what a request matching no desk
+    /// is — so it belongs to Morgana's classifier and is described in that actor's own prompt. No
+    /// interview writes it, no client edits it and nothing this workbench emits declares it. A
+    /// configuration that arrived carrying one was written before that was true: it is dropped here
+    /// and the client is told, since an installation ignores such a declaration anyway.
     /// </remarks>
-    public void EnsureFallbackIntent()
-    {
-        if (Intents.Any(i => string.Equals(i.Name, FallbackIntent, StringComparison.OrdinalIgnoreCase)))
-            return;
-
-        Intents.Add(new IntentDraft
-        {
-            Name = FallbackIntent,
-            Description = "any other topic not expressly intercepted by known intents",
-            Origin = Provenance.Authored
-        });
-    }
+    /// <returns>Whether a declaration was actually there to remove.</returns>
+    public bool DropFallbackIntent()
+        => Intents.RemoveAll(i => string.Equals(i.Name, FallbackIntent, StringComparison.OrdinalIgnoreCase)) > 0;
 }
 
 /// <summary>

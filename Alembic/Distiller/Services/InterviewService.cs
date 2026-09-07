@@ -292,12 +292,6 @@ public class InterviewService : IInterviewService
 
         DomainDraft draft = draftStateService.Current ?? new DomainDraft();
 
-        // Every domain has the fallback, including one being written from nothing this minute. It is
-        // the single intent no interview authors and no client edits: the classifier goes there when
-        // it cannot place a message and a domain without it has nowhere to put what it does not
-        // cover.
-        draft.EnsureFallbackIntent();
-
         AgentRevision? revision = interviewState.Revision;
 
         Provenance origin = Committed(revision, interviewState);

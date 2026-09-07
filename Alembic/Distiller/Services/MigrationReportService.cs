@@ -47,11 +47,11 @@ public class MigrationReportService : IMigrationReportService
     /// <param name="entries">The report under construction — findings are appended, never returned.</param>
     private static void CompareIntents(DomainDraft draft, DomainDraft baseline, List<MigrationEntry> entries)
     {
-        // The fallback intent is not on the map and no interview ever authors it — DomainDraft
-        // ensures it exists in every domain, baseline included where the baseline is a real upload,
-        // but a fresh baseline (nothing uploaded this sitting, see the remarks on Build) has none of
-        // its own yet. Reporting it as "Added" would say the interview did something it never did,
-        // to a client who cannot act on it: it needs no plugin registration and no agent answers it.
+        // The fallback intent is on neither side of a comparison worth reporting: no interview
+        // authors it and nothing emitted declares it, while an uploaded configuration written before
+        // that was true may still carry one — which the importer already removed and told the client
+        // about, in its own words. Reporting it again as "Removed" would send them looking for an
+        // agent to unregister for an intent no agent ever answered.
         foreach (IntentDraft intent in draft.Intents.Where(i =>
                      !string.IsNullOrWhiteSpace(i.Name) && !string.Equals(i.Name, DomainDraft.FallbackIntent, StringComparison.OrdinalIgnoreCase)))
         {

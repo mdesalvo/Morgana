@@ -154,13 +154,10 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         List<string> errors = [];
         HashSet<string> registeredIntents = [.. registry.Keys];
 
-        // The fallback intent is agentless by design, so it is not owed an agent like the others.
-        HashSet<string> classifierIntents =
-        [
-            .. configuredIntents
-                .Where(intent => !string.Equals(intent.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
-                .Select(intent => intent.Name)
-        ];
+        // Every configured intent is a modelled desk and is owed an agent. The one intent that is
+        // not — the complement of the domain — never reaches here: it belongs to the classifier and
+        // is described in its prompt, so no domain declares it and none has to be excused for it.
+        HashSet<string> classifierIntents = [.. configuredIntents.Select(intent => intent.Name)];
 
         // Offered to the classifier with nobody behind it: the router would answer its
         // unrecognized-intent fallback for a request the domain claims to serve.

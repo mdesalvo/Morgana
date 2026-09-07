@@ -54,8 +54,8 @@ public sealed class MappingTests
         Assert.False(string.IsNullOrWhiteSpace(intent.DefaultValue), $"Intent '{intent.Name}' has no DefaultValue.\n{driven}");
 
         // The fallback intent is never authored by an interview — DeclareIntent refuses the name —
-        // so it must not appear on the map itself even though DomainDraft.EnsureFallbackIntent will
-        // add it to the Draft later, outside the interview's own bookkeeping.
+        // and nothing adds it afterwards either: it is the complement of the domain, which Morgana's
+        // classifier owns and describes in its own prompt.
         Assert.DoesNotContain(driven.FinalState.Map, i =>
             string.Equals(i.Name, DomainDraft.FallbackIntent, StringComparison.OrdinalIgnoreCase));
     }

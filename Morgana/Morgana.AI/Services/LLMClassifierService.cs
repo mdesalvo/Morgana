@@ -14,6 +14,12 @@ namespace Morgana.AI.Services;
 public class LLMClassifierService : IClassifierService
 {
     /// <summary>
+    /// Section of the Classifier prompt describing the complement of the domain: what a request that
+    /// matches no modelled desk is. Authored where it is read, since no domain owns it.
+    /// </summary>
+    private const string ComplementIntentDescription = "ComplementIntentDescription";
+
+    /// <summary>
     /// LLM used for every classification call. Consumed through the stateless completion path:
     /// classification keeps no per-conversation memory, so it always runs on the cheapest tier.
     /// </summary>
@@ -83,14 +89,18 @@ public class LLMClassifierService : IClassifierService
 
         Records.IntentCollection intentCollection = new Records.IntentCollection(intents);
 
-        // The whole vocabulary the model may answer with, each name carrying the description that
-        // teaches it what lands there. A name absent from this line cannot come back from a turn.
-        string formattedIntents = string.Join("|",
-            intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})"));
-
         // Blocking like the intents above, for the same reason: nothing later rebuilds this prompt.
         Records.Prompt classifierPrompt =
             promptResolverService.ResolveAsync(Constants.Prompts.Classifier).GetAwaiter().GetResult();
+
+        // The whole vocabulary the model may answer with, each name carrying the description that
+        // teaches it what lands there. A name absent from this line cannot come back from a turn.
+        // It closes on the complement of the domain — everything the domain does not cover — which
+        // is this actor's own word and not a desk anybody modelled: no plugin declares it, it routes
+        // to no agent and its description is authored here, in the prompt that reads it.
+        string formattedIntents = string.Join("|",
+            intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})")
+                .Append($"{Constants.Intents.Other} ({classifierPrompt.GetAdditionalProperty<string>(ComplementIntentDescription)})"));
 
         // What the classifier reads on every turn of this process's life: the three authored sections
         // with the domain's vocabulary spliced into the first. Composed here so no turn pays for it.

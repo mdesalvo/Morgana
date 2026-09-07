@@ -48,9 +48,10 @@ public sealed class InterviewConductionTests
         Assert.All(agent.Tools, tool => Assert.False(string.IsNullOrWhiteSpace(tool.Name), $"A tool has no Name.\n{driven}"));
         Assert.All(agent.Tools, tool => Assert.False(string.IsNullOrWhiteSpace(tool.Description), $"Tool '{tool.Name}' has no Description.\n{driven}"));
 
-        // The fallback intent belongs to every domain and to no interview — AcceptAsync adds it on
-        // the way out, once the map is exhausted, never as something the client was asked about.
-        Assert.Contains(draft.Intents, i =>
+        // The fallback intent is the complement of a domain rather than a part of one: Morgana's
+        // classifier carries it and describes it in its own prompt, so nothing authored here declares
+        // it and an interview that produced one would be writing a desk nobody can answer for.
+        Assert.DoesNotContain(draft.Intents, i =>
             string.Equals(i.Name, DomainDraft.FallbackIntent, StringComparison.OrdinalIgnoreCase));
 
         // Every accepted agent is Authored, since nothing here came from an upload — this is the
