@@ -57,7 +57,7 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~AgentCardTests"
 # the federation group — what leaves toward a partner's colleague, against a stub peer; no LLM call, no cost
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTests"
 
-# the served-consultation group — this installation answering a partner; three real turns, one free refusal
+# the served-consultation group — this installation answering a partner; three real turns, the refusals free
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultationTests"
 
 # the federation group — two Morganas, one consulting the other; requires the second installation at boot

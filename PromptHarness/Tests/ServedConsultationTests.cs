@@ -124,6 +124,32 @@ public sealed class ServedConsultationTests
         Assert.Null(refused.DustConsumed);
     }
 
+    [Theory]
+    [InlineData("live/../../etc/passwd")]
+    [InlineData("a name with spaces")]
+    [InlineData("padded-to-well-past-any-conversation-this-installation-would-ever-name-itself-and-then-some-more-and-still-more-and-more-and-more")]
+    public async Task A_context_id_this_installation_cannot_name_a_conversation_by_is_refused_before_anything_is_opened(string unusableContextId)
+    {
+        // A context id is a string a stranger wrote and this installation raises an actor and opens a
+        // database under it. What cannot be one of those names has to be turned away at the door: met
+        // later it is a fault thrown at a partner mid-turn, on an exchange already admitted.
+        PeerEnvelope refused = await ConsultAsync(
+            MorganaHostFixture.ScopedPartnerName, fixture.ScopedPartnerKey, unusableContextId, CallerIntent);
+
+        // Answered in prose the asking model can act on, exactly as every other refusal behind this
+        // door is: a partner never reads a status code it would have to narrate.
+        Assert.False(string.IsNullOrWhiteSpace(refused.Answer));
+
+        // Nothing was opened under the name the caller wrote, nor under the one it would have been
+        // kept apart by: the refusal lands before a desk, a ledger or an admission is troubled.
+        Assert.False(File.Exists(ConversationDatabase(unusableContextId)));
+        Assert.False(File.Exists(ConversationDatabase(
+            $"{MorganaHostFixture.ScopedPartnerName}{ForeignConversationSeparator}{unusableContextId}")));
+
+        // Refused before any desk answered, so there is nothing to report the cost of.
+        Assert.Null(refused.DustConsumed);
+    }
+
     /// <summary>
     /// Consults one published agent as a partner would, handing back the envelope it answered with.
     /// </summary>

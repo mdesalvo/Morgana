@@ -21,6 +21,17 @@ namespace Morgana.AI.Abstractions;
 /// </remarks>
 public sealed class MorganaHostedAgent : AIAgent
 {
+    /// <summary>
+    /// Longest conversation name an inbound request may be served on.
+    /// </summary>
+    /// <remarks>
+    /// A conversation of this installation is an identifier of a few dozen characters, so the
+    /// ceiling costs an honest caller nothing. It is there because the name reaches a filesystem,
+    /// whose own limit on a path component would otherwise be met mid-turn by a caller free to
+    /// write whatever it likes.
+    /// </remarks>
+    private const int MaximumConversationNameLength = 128;
+
     /// <summary>Intent this hosted agent publishes; fixed for its lifetime.</summary>
     private readonly string intent;
 
@@ -123,6 +134,22 @@ public sealed class MorganaHostedAgent : AIAgent
         {
             logger.LogError("Hosted agent '{Intent}' was invoked with session type '{SessionType}', which carries no conversation", intent, session?.GetType().Name ?? "null");
             return BuildAgentResponseFromMessage($"The request for '{intent}' named no conversation and cannot be served.");
+        }
+
+        // The name is the caller's context id namespaced under the issuer that was proven, which this
+        // installation raises an actor and opens a database under. Neither takes every string: a
+        // separator or a space names an actor Akka refuses, an unbounded one a path no filesystem
+        // opens — both after the exchange was admitted, mid-turn. Refused here in prose instead.
+        if (hostedAgentSession.ConversationId.Length > MaximumConversationNameLength
+            || !ActorPath.IsValidPathElement(hostedAgentSession.ConversationId))
+        {
+            logger.LogWarning(
+                "Hosted agent '{Intent}' refused a request from '{CallerIssuer}': the context id names no conversation this installation can serve on",
+                intent, hostedAgentSession.CallerIssuer ?? "an undeclared system");
+
+            return BuildAgentResponseFromMessage(
+                $"The request for '{intent}' named a conversation this installation cannot serve on: a context id must carry no path "
+                + $"separator, space or control character and must resolve to at most {MaximumConversationNameLength} characters.");
         }
 
         // One question out of however many parts the protocol delivered: A2A carries a message, not a
