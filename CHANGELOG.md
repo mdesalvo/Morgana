@@ -14,6 +14,8 @@ Morgana now speaks the **A2A protocol** instance to instance. She takes in **eve
 - **Transport and authentication on the card** — the absolute address this installation bound, the bearer scheme and the requirement pointing at it
 
 ### 🔄 Changed
+- **A deployment may bring several plugins** — every `agents.json` found is merged into one domain, instead of the first one discovered silently winning. Two plugins claiming one intent, or one prompt id, are refused at startup naming both
+- **`other` belongs to the classifier** — the complement of a domain is no longer declared by every `agents.json` but described once in the Classifier prompt. The name is reserved: a plugin declaring it is refused
 
 ### 🐛 Fixed
 
