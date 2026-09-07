@@ -29,22 +29,45 @@ Activated when the user says things like:
    overridden it (see step 7), so read both in one pass. Note the store is written with a UTF-8 BOM:
    parse it as `utf-8-sig`, or a plain JSON read fails on the first character.
 
-2. **Ask the target scope** with `AskUserQuestion`, multi-select, one checkbox per test class:
-   - Context (`ContextHandlingTests` — the blocking group: context cycle, closed vocabulary, cross-agent)
-   - Peer consultation (`PeerConsultationTests` — the second blocking group: an agent reaching a
-     colleague over A2A when only the colleague can answer and the user never learning it happened)
+2. **Ask the target scope** with `AskUserQuestion`, multi-select. **Enumerate `PromptHarness/Tests/`
+   first and offer what is actually there** — the class list below is a description of a moving
+   directory, not a contract, and a `--filter` naming a class that no longer exists runs zero tests
+   and exits 0: a green nobody asked for. Thirteen classes at the time of writing, in four families:
+
+   *Deterministic — no model, no cost. Run them first: they are the cheapest way to learn the
+   topology under test is sane before any billed turn.*
+   - Startup validation (`StartupValidationTests` — an incoherent partner declaration must stop the boot)
+   - Agent card (`AgentCardTests` — the published card and how far the gate behind it reaches)
+   - Peer federation (`PeerFederationTests` — the outbound half: which cards this side accepts, what it signs, where a credential may go)
+
+   *Blocking — a silent failure mode, which is why these two are the ones a revision stops on.*
+   - Context (`ContextHandlingTests` — the context cycle, the closed vocabulary, cross-agent)
+   - Consulting (`ConsultingTests` — a colleague reached on demand and the conversation left as it was found)
+
+   *Behavioural — billed, judged.*
    - Behavior (`BehaviourTests` — turn continuation, closure, rich cards)
    - Actors (`ActorTests` — classifier, channel adapter, presentation)
-   - Guard (`GuardTests` — requires `Harness__EnableGuardrail=true`, off by default)
-   - Summarizer (`SummarizationTests` — requires `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`, unset by default)
+   - Served consultation (`ServedConsultationTests` — this installation answering a partner: which conversation, what it cost, how many exchanges are admitted. Its refusals are decided before a desk is troubled and cost nothing; the rest runs a real model)
 
-   Offer "everything" as an implicit extra option by allowing all six checkboxes selected at once.
+   *Boot-flagged — each needs a process-wide knob the other groups must NOT carry, so each is its own
+   invocation. This is the whole reason filters are never combined.*
+   - Guard (`GuardTests` — `Harness__EnableGuardrail=true`)
+   - Summarizer (`SummarizationTests` — `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`)
+   - Dust (`DustTests` — `Harness__DustBudgetPerConversation=15`; 3 and 8 both let one turn jump past 90% straight into exhaustion, which reads as "90% never appeared")
+   - Federation (`FederationTests` — `Harness__FederatedPeer=true`, which stands a **second Morgana** up and **replaces the whole domain** of the instance under test with one toolless desk. Every other group would find its own desks missing, so this one never shares an invocation with anything)
+
+   Plus `HarnessSmokeTests`, which is not a choice: step 4 runs it regardless.
+
+   `AskUserQuestion` takes at most four options, so thirteen checkboxes do not fit: ask by **family**
+   — the four above, multi-select — and let a user wanting a single class say so through "Other".
+   A user who has already said "everything" has answered this question; do not ask it again.
+
    Do not default to any pre-checked selection — the user picks the perimeter explicitly every time.
 
-   **Peer consultation takes no flag of its own** and the absence is worth stating because it is the
-   natural thing to go looking for: `Morgana:AgentToAgent:Enabled` defaults to true and the host
-   signs the traffic between its own agents under a key it coins at startup, so there is nothing for
-   the fixture to mint or override. What this group does depend on instead is a **topology** — the scenarios name
+   **Consulting takes no flag of its own** and the absence is worth stating because it is the natural
+   thing to go looking for: `Morgana:AgentToAgent:Enabled` defaults to true and the host signs the
+   traffic between its own agents under a key it coins at startup, so there is nothing for the fixture
+   to mint or override. What this group does depend on instead is a **topology** — the scenarios name
    agents that must still declare `[ConsultsAgent]` of one another — so a failure here has a second
    thing it can mean and `Examples/Agents/*.cs` is the first place to look before the prose.
 
@@ -72,27 +95,37 @@ Activated when the user says things like:
    PromptHarness/PromptHarness.csproj && dotnet build PromptHarness/PromptHarness.csproj` fixes it.
 
 5. **Run each selected group** with `Harness__DefaultRuns=N Harness__DefaultMinPasses=M` plus its
-   own extra flags, one `dotnet test` invocation per group (never combine filters — Guard and
-   Summarizer need boot-time flags the other groups must NOT carry):
+   own extra flags, **one `dotnet test` invocation per group, strictly one at a time**. Filters are
+   never combined, because four groups carry a boot-time knob the others must not see. And the
+   invocations are never parallelised either, for a second reason: they share one csproj, so two
+   concurrent runs fight over the same `bin`/`obj`.
    ```
-   # Context
+   # Deterministic — no model, no cost
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~StartupValidationTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~AgentCardTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTests"
+
+   # Blocking
    Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
 
-   # Peer consultation — no extra flag: A2A is on by default and the fixture mints the peer key
-   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PeerConsultationTests"
+   # Consulting — no extra flag: A2A is on by default and the host coins its own ring key
+   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ConsultingTests"
 
-   # Behavior
+   # Behavioural
    Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~BehaviourTests"
-
-   # Actors
    Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ActorTests"
+   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultationTests"
 
-   # Guard
+   # Boot-flagged — one knob each, never together
    Harness__EnableGuardrail=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~GuardTests"
-
-   # Summarizer
    Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"
+   Harness__DustBudgetPerConversation=15 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~DustTests"
+   Harness__FederatedPeer=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"
    ```
+
+   **Read the test count in every summary line, not only the pass/fail verdict.** A filter matching
+   no class is not an error: the run exits 0 having executed nothing. A group reported green having
+   run zero tests is the one failure mode of this procedure that looks exactly like success.
 
 6. **Always redirect full output to a log file** in the scratchpad directory (`> file 2>&1`, never
    pipe through `tail` on the live command) — grep the file afterward for the summary line and any
@@ -127,7 +160,12 @@ Activated when the user says things like:
      shrug — a scenario ID and phase both funnel into the file name, so an empty/missing folder is
      itself worth flagging rather than only relying on the `dotnet test` console summary.
 
-8. **Report a results table**: one row per scenario actually exercised (not per test class — a
+8. **Leave `Harness:Phase` alone unless the user raises it.** It was the row key of the harness's
+   own development phases and re-running a phase replaces its row rather than appending one. It no
+   longer tracks anything the user asks about, so do not invent a new phase name for a run and do not
+   edit `appsettings.Harness.json` to bump one.
+
+9. **Report a results table**: one row per scenario actually exercised (not per test class — a
    `[Theory]` class covers several scenario IDs), columns `Scenario | Group | Result`, plus a short
    note under any row that failed (which assertion or judge proposition, one line). Do not editorialize
    pass/fail severity in the table itself — keep judgment calls in prose below it.
