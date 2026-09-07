@@ -62,6 +62,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      The federation domain is a plugin, built and deployed as one. It sits inside this folder for
+      proximity and belongs to the project below it, never to this one: compiled in here it would be
+      a compile-time type, which is the one thing a plugin must never be to the harness.
+    -->
+    <Compile Remove="FederationPlugin\**" />
+    <None Remove="FederationPlugin\**" />
+    <EmbeddedResource Remove="FederationPlugin\**" />
+    <Content Remove="FederationPlugin\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="xunit.v3" Version="3.*" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.*" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
@@ -79,6 +91,24 @@
       compile-time types. ReferenceOutputAssembly=false keeps the black-box boundary honest.
     -->
     <ProjectReference Include="..\Examples\Examples.csproj" ReferenceOutputAssembly="false" Private="false" />
+
+    <!--
+      The federation domain, built and copied beside the example plugin but into a directory of its
+      own: the federation run loads that directory INSTEAD of plugins/, so its one agent is the whole
+      domain of the asking instance and no other group ever sees the intent it declares.
+    -->
+    <ProjectReference Include="FederationPlugin\FederationPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Where the second instance is started from. It is Morgana.Web's own output rather than this one,
+      because a child process needs the runtime configuration and dependency manifest that are
+      generated there — and because the example plugin is already deployed beside it, which is
+      exactly the domain the answering side must serve.
+    -->
+    <AssemblyMetadata Include="MorganaWebEntryPoint"
+                      Value="$(MSBuildThisFileDirectory)..\Morgana\Morgana.Web\bin\$(Configuration)\net10.0\Morgana.Web.dll" />
   </ItemGroup>
 
   <ItemGroup>
@@ -89,8 +119,11 @@
   </ItemGroup>
 
   <!--
-    PluginLoaderService scans {AppContext.BaseDirectory}/plugins, which under test is the harness
-    output directory — so the example plugin has to land here, not in Morgana.Web's bin.
+    The example plugin has to land in the harness output, since that is the base directory the
+    instance under test scans from. It lands in a directory the fixture names rather than in the
+    implicit plugins/, because plugins/ is always scanned on top of whatever configuration declares:
+    an installation holds one domain, so a run that swaps the domain has to be able to leave the
+    shipped one out entirely.
   -->
   <Target Name="CopyExamplePluginToHarness" AfterTargets="Build">
     <MSBuild Projects="..\Examples\Examples.csproj"
@@ -98,8 +131,23 @@
              Properties="Configuration=$(Configuration)">
       <Output TaskParameter="TargetOutputs" ItemName="ExamplePluginAssembly" />
     </MSBuild>
-    <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
-    <Copy SourceFiles="@(ExamplePluginAssembly)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />
+    <MakeDir Directories="$(OutDir)domain-plugins" Condition="!Exists('$(OutDir)domain-plugins')" />
+    <Copy SourceFiles="@(ExamplePluginAssembly)" DestinationFolder="$(OutDir)domain-plugins" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
+    The federation domain lands in a directory of its own, never in plugins/: the federation run
+    points the instance under test at this one alone, so the desk that holds a colleague abroad is
+    all that instance knows and every other run is the instance it was.
+  -->
+  <Target Name="CopyFederationPluginToHarness" AfterTargets="Build">
+    <MSBuild Projects="FederationPlugin\FederationPlugin.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="FederationPluginAssembly" />
+    </MSBuild>
+    <MakeDir Directories="$(OutDir)federation-plugins" Condition="!Exists('$(OutDir)federation-plugins')" />
+    <Copy SourceFiles="@(FederationPluginAssembly)" DestinationFolder="$(OutDir)federation-plugins" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

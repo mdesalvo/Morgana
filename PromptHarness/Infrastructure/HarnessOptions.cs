@@ -79,6 +79,18 @@ public sealed class HarnessOptions
     public double? DustBudgetPerConversation { get; init; }
 
     /// <summary>
+    /// Whether this run stands a second Morgana up and points the instance under test at it as a
+    /// partner, which is what <c>FederationTests</c> needs and nothing else does.
+    /// </summary>
+    /// <remarks>
+    /// Off by default and process-wide when on, exactly like the guard rail and the dust budget: it
+    /// replaces the whole domain of the instance under test with the one agent that holds a colleague
+    /// abroad, so every other group would find its own desks missing. Run it on its own:
+    /// <c>Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"</c>
+    /// </remarks>
+    public bool FederatedPeer { get; init; }
+
+    /// <summary>
     /// Pins Examples' InventoryTool.GenerateSealWord() to this fixed value for the run instead of a
     /// fresh random one — see that method's own remarks. The harness DSL has no way to capture a
     /// value the model invents in one turn and replay it into a later turn's fixed <c>say:</c> text,

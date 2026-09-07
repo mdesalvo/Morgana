@@ -13,6 +13,13 @@ document, a gate's status codes — it is asserted as plain unit testing, no run
 judge (see `AgentCardTests`). What holds for both kinds is the last clause: the suite **never becomes
 a build/CI gate** — it is on-demand only, because the expensive half cannot be.
 
+One thing about the layout is worth knowing before touching the build: the shipped example plugin is
+deployed to **`domain-plugins/`** rather than to the implicit `plugins/`, and the fixture names it in
+`Morgana:Plugins:Directories`. `plugins/` is always scanned on top of whatever configuration
+declares, so a domain deployed there can be added to but never left out — and an installation reads
+the **first** `agents.json` it finds and holds exactly one domain. The federation run needs to swap
+the domain, not extend it, which is only possible while the implicit directory stays empty.
+
 It is its own solution (`PromptHarness.slnx`), a sibling of `../Morgana/` and `../Examples/` rather
 than a project inside `Morgana.slnx`. It reaches the framework through project references only and
 one of them deliberately excludes the compiled assembly (`../Examples/Examples.csproj`,
@@ -52,6 +59,9 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTest
 
 # the served-consultation group — this installation answering a partner; three real turns, one free refusal
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultationTests"
+
+# the federation group — two Morganas, one consulting the other; requires the second installation at boot
+Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"
 
 # the summarization group — requires a lowered boot-time reducer trigger, unset by default
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"

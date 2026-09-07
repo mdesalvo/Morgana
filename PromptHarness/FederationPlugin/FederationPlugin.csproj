@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <Title>FederationPlugin</Title>
+    <OutputType>Library</OutputType>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Version>0.31.0</Version>
+    <IsPackable>false</IsPackable>
+
+    <Description>
+    A one-agent domain whose single competence is holding a colleague at another installation.
+    It exists for the harness's federation run and ships with nothing: an agent of Morgana declaring
+    a peer across the wire cannot be written in configuration, so a plugin has to carry it. Kept out
+    of Examples on purpose — that plugin is the framework's business card and must not grow a desk
+    that exists to be tested.
+    </Description>
+
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="agents.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Morgana\Morgana.AI\Morgana.AI.csproj" />
+  </ItemGroup>
+
+</Project>

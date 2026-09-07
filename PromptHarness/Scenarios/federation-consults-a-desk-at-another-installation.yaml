@@ -1,0 +1,30 @@
+id: federation-consults-a-desk-at-another-installation
+description: >-
+  The whole loop, across two installations. The instance under test carries one desk and no books:
+  DispatchAgent answers for deliveries and declares [ConsultsAgent("inventory", "annex")], so the
+  greenhouse it needs is not merely another agent — it is another Morgana, in another process, that
+  published a card this one read, demanded a token this one minted and admitted a caller under a name
+  agreed out of band.
+  What makes the assertion worth anything is that nothing else can produce it: there is no local
+  inventory to fall back on and no tool of its own to answer from, so a turn that names a stock level
+  at all has been through the wire and back. The consult_annex_inventory call is the same structural
+  signal the local-ring group reads, which is the point — from the caller's side a colleague abroad
+  is a colleague, and the topology it lives in is deployment.
+  Two runs rather than the usual five: every run spends a turn here and a turn at the other
+  installation, and what is measured is a mechanism firing rather than a wording holding up.
+runs: 2
+minPasses: 2
+
+turns:
+  # Squarely a question the dispatch desk cannot answer and cannot look up: the ledger it needs is
+  # kept at the other installation, by the colleague its attribute names.
+  - say: "I want to send someone an aloe as a gift — do you have any at the annex?"
+    expect:
+      agent: DispatchAgent
+      toolsCalled: [consult_annex_inventory]
+      textNotEmpty: true
+    judge:
+      # One proposition and it is the datum only the other installation holds. Deliberately nothing
+      # about how it is worded: a judge asked to also weigh what a response should not sound like
+      # goes looking for an offence and finds one, and the wording is not what this group measures.
+      - "The response says whether the aloe can be had."
