@@ -57,6 +57,18 @@ public sealed class StartupValidationTests
     }
 
     [Fact]
+    public void Boot_is_refused_when_a_partner_key_is_too_short_to_sign_with()
+    {
+        // A key under the margin HMAC-SHA256 needs is refused here rather than where it is used: a
+        // partner this installation only consults is proven by nobody at boot, so the first
+        // consultation would be the one to discover it, mid-turn, inside an agent's tool call.
+        Exception refusal = AssertRefusesToBoot(
+            ($"Morgana__AgentToAgent__Partners__{fixture.ScopedPartnerIndex}__SymmetricKey", "too-short-to-sign"));
+
+        Assert.Contains("256 bits", refusal.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Boot_is_refused_when_a_partner_takes_the_name_of_this_installation()
     {
         // Reserved for the agents of this installation, whose consultations are proven against a

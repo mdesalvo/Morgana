@@ -449,6 +449,17 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
                     + "Override it through User Secrets or the environment.");
             }
 
+            // A partner this installation only consults never reaches JWTAuthenticationService, which
+            // proves the key of every caller it admits: nothing else would weigh this one until the
+            // first consultation tried to sign with it, mid-turn, inside an agent's tool call.
+            byte[] symmetricKeyBytes = Encoding.UTF8.GetBytes(partner.SymmetricKey);
+            if (symmetricKeyBytes.Length < 32)
+            {
+                throw new InvalidOperationException(
+                    $"Partner '{partnerName}' carries a SymmetricKey of {symmetricKeyBytes.Length * 8} bits: it must be at "
+                    + "least 256 bits (32 bytes), the margin HMAC-SHA256 signs and proves a peer token with.");
+            }
+
             if (consultable)
                 ValidateConsultableAddress(partnerName, partner.Url);
 
