@@ -986,7 +986,7 @@ public static class Records
         /// </summary>
         public T GetAdditionalProperty<T>(string additionalPropertyName)
         {
-            foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
+            foreach (Dictionary<string, object> additionalProperties in AdditionalProperties ?? [])
             {
                 if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
                 {
@@ -1007,7 +1007,7 @@ public static class Records
         /// <param name="defaultValue">Value returned when the property is absent</param>
         public T GetAdditionalPropertyOrDefault<T>(string additionalPropertyName, T defaultValue)
         {
-            foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
+            foreach (Dictionary<string, object> additionalProperties in AdditionalProperties ?? [])
             {
                 if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
                 {
