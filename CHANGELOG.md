@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Morgana now speaks the **A2A protocol** instance to instance. She takes in **every agent of the instance**, each published at `/a2a/{intent}` with its well-known agent card. Agents can now consult peers on **other Morgana instances**: `[ConsultsAgent("shipping", "acme")]` names an "acme" partner trusted under `Morgana:AgentToAgent:Partners` on which the agent "shipping" can be engaged.
 
 ### ✨ Added
-- **`[ConsultsAgent("intent", "partner")]`** and **`Partners[]`** — a peer published by a trusted remote installation, offered to the model as `consult_{partner}_{intent}` tool
+- **`[ConsultsAgent("intent", "partner")]`** and **`Partners[]`** — a peer published by a trusted remote installation, opening Morgana to remote A2A collaboration
 - **Transport and authentication on the card** — the absolute address this installation bound, the bearer scheme and the requirement pointing at it
 
 ### 🔄 Changed
