@@ -112,7 +112,6 @@ graph LR
     C@{shape: rounded, label: "Classifier"}
     R@{shape: rounded, label: "Router"}
     MA@{shape: rounded, label: "Agent"}
-    MA2@{shape: rounded, label: "Colleague"}
   end
 
   %% User → Channel
@@ -131,14 +130,10 @@ graph LR
   R -- 7. Activates agent for intent handling --> MA
 
   %% External systems
-  PEER@{shape: das, label: "🔮 Partner Morgana"}
-
   G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Anthropic, Azure OpenAI, Ollama, OpenAI)"}
   C -. 5 Prompts for intent classification .-> LLM
   MA -. 8 MCP tool discovery .-> MCP@{shape: das, label: "MCP Server"}
   MA -. 9 Intent handling .-> LLM
-  MA -. 10 A2A consultation with an agent of this installation .-> MA2
-  MA -. 11 A2A consultation with an agent of a trusted partner .-> PEER
 ```
 
 ### 🤖 Morgana Agent System
@@ -174,6 +169,27 @@ public class BillingTool : MorganaTool
 The **MCP integration** permits agents to extend their capabilities by consuming **Model Context Protocol servers**, making external tools indistinguishable from native implementations. This enables rapid prototyping, microservice integration and ecosystem-driven feature development, all without writing a single line of tool implementation code.
 
 The **A2A integration** allows agents to collaborate behind the scenes, consulting their peers on-demand via competence-driven queries to deliver cross-cutting answers that horizontally cover the entire application domain. This enables seamless peer collaboration, autonomous knowledge sharing and cross-domain reasoning, all without user-facing friction or explicit inter-agent configuration.
+```mermaid
+graph LR
+  U@{shape: circle, label: "👤 User"}
+
+  subgraph Here["This Morgana"]
+    B@{shape: rounded, label: "Billing"}
+    I@{shape: rounded, label: "Inventory"}
+  end
+
+  subgraph Acme["Partner: acme"]
+    S@{shape: rounded, label: "Shipping"}
+  end
+
+  U -- one question --> B
+  B -- consult_inventory --> I
+  I -. answer .-> B
+  B -- consult_acme_shipping --> S
+  S -. answer .-> B
+  B -- one answer --> U
+```
+
 A colleague living in the same installation needs nothing configured: that traffic is signed under a key coined at every start. A colleague living in **another Morgana** is one `Morgana:AgentToAgent:Partners[]` entry away, carrying the shared key and one policy per direction (`OutboundPolicy` for the desks consulted there, `InboundPolicy` for the desks reachable from there, with the ceiling on how many conversations that partner may open). Where a colleague runs is a deployment decision and the prose of an agent never says.
 
 ### 📝 Morgana Prompt System
