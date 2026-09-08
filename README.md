@@ -219,8 +219,6 @@ Some information, though, is meant to travel. A customer code given to BillingAg
 
 Conversations survive restarts and agent handoffs without losing this context. Users always see one coherent conversation, even when several specialized agents quietly took turns behind the scenes.
 
-Everything a conversation holds lives in its own **AES-256 encrypted SQLite database**, beside the two ledgers that bound it: a sliding **rate limit** on how often a channel may write and a **magic dust** budget on what the conversation may spend, which warns the user at 70% and 90% before closing the turn down.
-
 ---
 
 ## 🧪 Authoring a Domain: Alembic
