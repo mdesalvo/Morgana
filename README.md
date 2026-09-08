@@ -1,6 +1,4 @@
-<a href="https://mdesalvo.github.io/Morgana/Morgana-Handbook.html" title="Morgana Handbook">
-  <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Banner.jpg" alt="Morgana Logo" width="100%" />
-</a>
+<img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Banner.jpg" alt="Morgana Logo" width="100%" />
 
 <p>
   <img src="https://img.shields.io/badge/.NET-10-932BD4" alt=".NET 10"/>
