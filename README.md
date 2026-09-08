@@ -252,7 +252,7 @@ These pillars are argued at length in the [**Morgana Handbook**](https://mdesalv
 <details>
 <summary><i>From a cloned repository to a running Morgana, one channel at a time</i></summary>
 
-<details>
+<details open>
 <summary><b>⚙️ Setup</b> — <i>once, before any channel</i></summary>
 
 ```bash
@@ -308,22 +308,6 @@ docker compose --env-file .env --env-file .env.versions run --rm --service-ports
 
 </details>
 
-<details>
-<summary><b>🧪 Alembic</b> — <i>the authoring workbench, which needs no Morgana at all</i></summary>
-
-Not part of a running Morgana: it talks to no backend — only to an LLM — and it joins no network, so
-it is profile-gated in compose and `up` never starts it.
-
-```bash
-# 🔨 Build it (optional)
-dotnet build ./Alembic/Distiller
-
-# 🧪 Model a domain, at http://localhost:5005
-docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
-```
-
-</details>
-
 </details>
 
 ### 🧪 Authoring a Domain: Alembic
@@ -336,6 +320,21 @@ Agents can be authored entirely by hand — `agents.json` plus a thin C# class a
 What the interview produces is kept honest over time by **PromptHarness**, the live non-regression suite in the repository root: scenarios run against the configured provider and score the prose the agents actually read.
 
 The interview, what it distils and how the archive is built are walked through in the [**Alembic Handbook**](https://mdesalvo.github.io/Morgana/Alembic-Handbook.html).
+
+<details>
+<summary><b>▶️ Running it</b> — <i>a build plus a profile-gated compose service</i></summary>
+
+It joins no network, so compose keeps it behind a profile: `up` never starts it.
+
+```bash
+# 🔨 Build it (optional)
+dotnet build ./Alembic/Distiller
+
+# 🧪 Model a domain, at http://localhost:5005
+docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
+```
+
+</details>
 
 </details>
 
