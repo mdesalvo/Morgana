@@ -81,7 +81,9 @@ Morgana **reimagines conversational AI** through 4 foundational pillars that **w
 </p>
 
 ### 🎭 Morgana Actor System
-*Resilient multi-channel orchestration through Akka.NET message-driven architecture*
+
+<details>
+<summary><i>Resilient multi-channel orchestration through Akka.NET message-driven architecture</i></summary>
 
 Morgana leverages the **actor model** to create a fault-tolerant, scalable orchestration layer. Each conversation is managed by a hierarchy of **specialized actors that collaborate** through asynchronous message passing:
 
@@ -136,8 +138,12 @@ graph LR
   MA -. 9 Intent handling .-> LLM
 ```
 
+</details>
+
 ### 🤖 Morgana Agent System
-*Declarative specialization with automatic discovery and dynamic capabilities (MCP + A2A)*
+
+<details>
+<summary><i>Declarative specialization with automatic discovery and dynamic capabilities (MCP + A2A)</i></summary>
 
 Agents in Morgana are **domain specialists** that self-register through **declarative attributes**, eliminating manual configuration and enabling true plugin-based extensibility. Each agent inherits from `MorganaAgent` and declares its responsibilities through simple annotations:
 
@@ -192,8 +198,12 @@ graph LR
 
 A colleague living in the same installation needs nothing configured: that traffic is signed under a key coined at every start. A colleague living in **another Morgana** is one `Morgana:AgentToAgent:Partners[]` entry away, carrying the shared key and one policy per direction (`OutboundPolicy` for the desks consulted there, `InboundPolicy` for the desks reachable from there, with the ceiling on how many conversations that partner may open). Where a colleague runs is a deployment decision and the prose of an agent never says.
 
+</details>
+
 ### 📝 Morgana Prompt System
-*First-class artifacts with layered personality architecture and structured behavioral policies*
+
+<details>
+<summary><i>First-class artifacts with layered personality architecture and structured behavioral policies</i></summary>
 
 Prompts are not hardcoded strings in Morgana—they are **versioned, maintainable project artifacts** managed through the `IPromptResolverService`. This separation of concerns enables prompt engineering teams to iterate independently from application logic, supporting A/B testing, localization and behavioral evolution without redeployment.
 
@@ -210,14 +220,20 @@ For example, BillingAgent might be "a pragmatic and concrete witch" while Contra
 
 Prompts also define **Global Policies** that are automatically composed into agent instructions, ensuring **system-wide behavioral consistency** without repetition.
 
+</details>
+
 ### 💾 Morgana Context System
-*Private by default, self-synchronizing where it matters*
+
+<details>
+<summary><i>Private by default, self-synchronizing where it matters</i></summary>
 
 Every agent in Morgana keeps its own **secure, isolated context**: memories, variables and conversation state that no other agent can see or touch by default. This is what lets a dozen specialized agents work side by side without stepping on each other's toes.
 
 Some information, though, is meant to travel. A customer code given to BillingAgent shouldn't have to be asked again the moment ContractAgent takes over. Morgana handles this with **self-synchronizing shared variables**: information explicitly marked as shared is transparently picked up by any agent that needs it, the instant it needs it (no re-asking the user, no manual wiring between agents).
 
 Conversations survive restarts and agent handoffs without losing this context. Users always see one coherent conversation, even when several specialized agents quietly took turns behind the scenes.
+
+</details>
 
 ---
 
