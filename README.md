@@ -250,7 +250,9 @@ These pillars are argued at length in the [**Morgana Handbook**](https://mdesalv
 ### 🚀 Quick Start
 
 <details>
-<summary><i>From a cloned repository to a running Morgana, one shell block</i></summary>
+<summary><i>From a cloned repository to a running Morgana, one channel at a time</i></summary>
+
+**⚙️ Setup** — once, before any channel
 
 ```bash
 # 📋 Copy the development template
@@ -265,31 +267,46 @@ dotnet build ./Channels/Cauldron
 dotnet build ./Channels/Grimoire
 dotnet build ./Channels/Rune
 
-# 🔨 Alembic, the authoring workbench (optional)
-#    Not part of a running Morgana: it talks to no backend, only to an LLM,
-#    so it is profile-gated in compose and never started by `up`.
-dotnet build ./Alembic/Distiller
-
 # 🐳 Build Docker images
 docker compose --env-file .env --env-file .env.versions build
+```
 
+**🌐 Morgana on Cauldron** — the browser channel and the stack everything else talks to
+
+```bash
 # 🚀 Start the containers (Morgana + Cauldron)
 docker compose --env-file .env --env-file .env.versions up
 
 # ✅ Open your browser at http://localhost:5002
 
-# 💬 (Optional) Chat with Morgana via Grimoire's rich TUI
-docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases grimoire
-
-# 💬 (Optional) ...or via Rune, the deliberately poor one
-docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
-
-# 🧪 (Optional) Model a domain with Alembic, at http://localhost:5005
-#    Profile-gated: it joins no network, so `up` never starts it
-docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
-
-# 🛑 Stop the containers
+# 🛑 Stop the containers (when you are done, whichever channel you used)
 docker compose --env-file .env --env-file .env.versions down
+```
+
+**📟 Morgana on Grimoire** — the rich TTY, on the stack started above
+
+```bash
+# --use-aliases is mandatory: without it the webhook callback fails DNS resolution
+docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases grimoire
+```
+
+**📜 Morgana on Rune** — the deliberately poor TTY, same stack
+
+```bash
+docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
+```
+
+**🧪 Alembic** — the authoring workbench, which needs no Morgana at all
+
+Not part of a running Morgana: it talks to no backend — only to an LLM — and it joins no network, so
+it is profile-gated in compose and `up` never starts it.
+
+```bash
+# 🔨 Build it (optional)
+dotnet build ./Alembic/Distiller
+
+# 🧪 Model a domain, at http://localhost:5005
+docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
 ```
 
 </details>
