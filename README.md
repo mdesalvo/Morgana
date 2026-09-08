@@ -237,39 +237,15 @@ Conversations survive restarts and agent handoffs without losing this context. U
 
 ---
 
+## Hands On
+
 <p align="center">
+  <a href="#-quick-start">🚀 Quick Start</a> |
   <a href="#-authoring-a-domain-alembic">🧪 Alembic</a> |
-  <a href="#-morgana-where-your-users-already-are-the-widget">🔮 Widget</a> |
-  <a href="#-quick-start">🚀 Quick Start</a>
+  <a href="#-morgana-where-your-users-already-are-the-widget">🔮 Widget</a>
 </p>
 
-## 🧪 Authoring a Domain: Alembic
-
-<details>
-<summary><i>An AI-conducted interview that distils a whole domain into a buildable plugin</i></summary>
-
-Agents can be authored entirely by hand — `agents.json` plus a thin C# class against the **Morgana.AI** NuGet package. The shorter path is **Alembic**, Morgana's authoring workbench: an AI-conducted interview that distils a new domain from scratch, or extends an existing one, into intents, agent prose, tool contracts and working C#, packaged as one downloadable archive ready to be built into a plugin. It talks to no Morgana instance — only to an LLM — so it runs on its own, whenever somebody sits down to model a business.
-
-What the interview produces is kept honest over time by **PromptHarness**, the live non-regression suite in the repository root: scenarios run against the configured provider and score the prose the agents actually read.
-
-</details>
-
-## 🔮 Morgana Where Your Users Already Are: the Widget
-
-<details>
-<summary><i>An embeddable launcher that drops a live conversation into a page that already exists</i></summary>
-
-Reaching Morgana from a browser does not require landing on Cauldron. Cauldron publishes an embeddable launcher that puts a live conversation into a page that already exists, whatever built it:
-
-```html
-<script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
-```
-
-No parameters: the loader reads its own `src` to learn which Cauldron to open, so a snippet copied from a deployment points back at that deployment by construction. Closed, it is a floating pill carrying Morgana's animated face; opened, it reveals a sandboxed `<iframe>` running the **real** Cauldron chat — streaming, rich cards, quick replies and dust gauge included. Isolation runs both ways and is browser-native: a closed shadow root keeps the host page's CSS out of the launcher and the launcher's CSS off the host, while the iframe keeps the conversation on Cauldron's own origin, unreadable from the embedding document. Framing is closed by default — a site may host the widget only once its origin is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
-
-</details>
-
-## 🚀 Quick Start
+### 🚀 Quick Start
 
 <details>
 <summary><i>From a cloned repository to a running Morgana, one shell block</i></summary>
@@ -313,5 +289,31 @@ docker compose --env-file .env --env-file .env.versions --profile authoring up a
 # 🛑 Stop the containers
 docker compose --env-file .env --env-file .env.versions down
 ```
+
+</details>
+
+### 🧪 Authoring a Domain: Alembic
+
+<details>
+<summary><i>An AI-conducted interview that distils a whole domain into a buildable plugin</i></summary>
+
+Agents can be authored entirely by hand — `agents.json` plus a thin C# class against the **Morgana.AI** NuGet package. The shorter path is **Alembic**, Morgana's authoring workbench: an AI-conducted interview that distils a new domain from scratch, or extends an existing one, into intents, agent prose, tool contracts and working C#, packaged as one downloadable archive ready to be built into a plugin. It talks to no Morgana instance — only to an LLM — so it runs on its own, whenever somebody sits down to model a business.
+
+What the interview produces is kept honest over time by **PromptHarness**, the live non-regression suite in the repository root: scenarios run against the configured provider and score the prose the agents actually read.
+
+</details>
+
+### 🔮 Morgana Where Your Users Already Are: the Widget
+
+<details>
+<summary><i>An embeddable launcher that drops a live conversation into a page that already exists</i></summary>
+
+Reaching Morgana from a browser does not require landing on Cauldron. Cauldron publishes an embeddable launcher that puts a live conversation into a page that already exists, whatever built it:
+
+```html
+<script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
+```
+
+No parameters: the loader reads its own `src` to learn which Cauldron to open, so a snippet copied from a deployment points back at that deployment by construction. Closed, it is a floating pill carrying Morgana's animated face; opened, it reveals a sandboxed `<iframe>` running the **real** Cauldron chat — streaming, rich cards, quick replies and dust gauge included. Isolation runs both ways and is browser-native: a closed shadow root keeps the host page's CSS out of the launcher and the launcher's CSS off the host, while the iframe keeps the conversation on Cauldron's own origin, unreadable from the embedding document. Framing is closed by default — a site may host the widget only once its origin is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
 
 </details>
