@@ -405,12 +405,13 @@
         <li><a href="#reference-channels"><span class="toc-num">02</span><span class="toc-title">Reference Channels</span><span class="toc-dots"></span><span class="toc-page">4</span></a></li>
         <li><a href="#building-your-agents"><span class="toc-num">03</span><span class="toc-title">Building Your Agents with Alembic</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
         <li><a href="#extension-points"><span class="toc-num">04</span><span class="toc-title">Extension Points</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
-        <li><a href="#security-model"><span class="toc-num">05</span><span class="toc-title">Security Model</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
-        <li><a href="#configuration-reference"><span class="toc-num">06</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
-        <li><a href="#a2a-configuration"><span class="toc-num">07</span><span class="toc-title">Agent-to-Agent Configuration</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
-        <li><a href="#docker-deployment"><span class="toc-num">08</span><span class="toc-title">Docker Deployment</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
-        <li><a href="#observability"><span class="toc-num">09</span><span class="toc-title">Observability (OpenTelemetry)</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
-        <li><a href="#quick-reference"><span class="toc-num">10</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">12</span></a></li>
+        <li><a href="#startup-validation"><span class="toc-num">05</span><span class="toc-title">Startup Validation</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
+        <li><a href="#security-model"><span class="toc-num">06</span><span class="toc-title">Security Model</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
+        <li><a href="#configuration-reference"><span class="toc-num">07</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
+        <li><a href="#a2a-configuration"><span class="toc-num">08</span><span class="toc-title">Agent-to-Agent Configuration</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
+        <li><a href="#docker-deployment"><span class="toc-num">09</span><span class="toc-title">Docker Deployment</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
+        <li><a href="#observability"><span class="toc-num">10</span><span class="toc-title">Observability (OpenTelemetry)</span><span class="toc-dots"></span><span class="toc-page">12</span></a></li>
+        <li><a href="#quick-reference"><span class="toc-num">11</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">13</span></a></li>
       </ul>
 
       <div class="page-footer">
@@ -494,6 +495,8 @@
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Channels/Cauldron/Assets/Morgana-Agent.jpg" alt="Cauldron Agent"/>
       </div>
 
+      <p style="margin-top:10px;"><strong>Widget &mdash; Cauldron inside a site that already exists.</strong> Reaching Morgana from a browser does not require landing on the Blazor app: Cauldron publishes an embeddable launcher under <code>/widget/</code>, added to any page &mdash; whatever built it &mdash; with one parameterless tag, <code>&lt;script src="https://your-cauldron-host/widget/morgana-widget.js" defer&gt;&lt;/script&gt;</code>. The loader reads its own <code>src</code> to learn which Cauldron to open, so a snippet copied from a deployment points back at that deployment by construction. Closed it is a floating pill; opened it reveals a sandboxed <code>&lt;iframe&gt;</code> running the <em>real</em> Cauldron chat &mdash; streaming, rich cards, quick replies and dust gauge included &mdash; on Cauldron's own origin, unreadable from the embedding document. Framing is closed by default: a site may host the widget only once its origin is listed in <code>Cauldron:Widget:AllowedEmbedOrigins</code>, emitted as a CSP <code>frame-ancestors</code> directive.</p>
+
       <h3 style="margin-top:18px;">Grimoire &mdash; TTY / Spectre.Console (rich)</h3>
       <p>Grimoire is the <strong>textual Cauldron</strong>: a Kestrel-hosted console app with a Spectre.Console Live UI that renders Morgana's <strong>full</strong> expressive surface inside the terminal &mdash; streaming responses, markdown, rich cards and quick replies, all capability flags on (<code>MaxMessageLength=null</code>). It uses the same <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) as Rune, proving the framework adapts on the <em>capability profile</em>, not the transport. Content arrives intact and is &ldquo;Spectrized&rdquo; locally: markdown via a Markdig&rarr;Spectre renderer, rich cards mapped to bordered boxes, quick replies into an inline arrow-key selector.</p>
 
@@ -539,20 +542,28 @@
       <table>
         <thead><tr><th>Interface</th><th>Default Implementation</th><th>Purpose</th></tr></thead>
         <tbody>
-          <tr><td>ILLMService</td><td>Anthropic / AzureOpenAI / Ollama / OpenAI</td><td>LLM provider abstraction</td></tr>
-          <tr><td>IAuthenticationService</td><td>JWTAuthenticationService</td><td>Request authentication (JWT HMAC-SHA256)</td></tr>
-          <tr><td>IGuardRailService</td><td>LLMGuardRailService</td><td>Content moderation &amp; policy enforcement</td></tr>
-          <tr><td>IClassifierService</td><td>LLMClassifierService</td><td>Intent classification</td></tr>
-          <tr><td>IPresenterService</td><td>LLMPresenterService</td><td>Welcome presentation &amp; first engagement</td></tr>
-          <tr><td>IRateLimitService</td><td>SQLiteRateLimitService</td><td>Per-conversation message frequency throttling</td></tr>
-          <tr><td>IDustLimitService</td><td>SQLiteDustLimitService</td><td>Per-conversation token budget protection</td></tr>
-          <tr><td>IConversationPersistenceService</td><td>SQLiteConversationPersistenceService</td><td>Encrypted conversation storage</td></tr>
-          <tr><td>IAgentConfigurationService</td><td>JsonAgentConfigurationService</td><td>Agent discovery</td></tr>
-          <tr><td>IPromptResolverService</td><td>EmbeddedResourcePromptResolverService</td><td>System &amp; Domain prompt loading</td></tr>
-          <tr><td>ISignalRBridgeService</td><td>SignalRBridgeService</td><td>Real-time frontend communication</td></tr>
-          <tr><td>ILLMTierValidationService</td><td>RequiresLLMTierValidationService</td><td>Agent LLM-tier declaration validation</td></tr>
+          <tr><td>IAgentConfigurationService</td><td>EmbeddedAgentConfigurationService</td><td>Agent discovery &mdash; every plugin's <code>agents.json</code>, merged</td></tr>
           <tr><td>IAgentDirectoryService</td><td>ConfigurationAgentDirectoryService</td><td>A2A agent cards &amp; colleague resolution</td></tr>
+          <tr><td>IAgentRegistryService</td><td>HandlesIntentAgentRegistryService</td><td>Agent-to-intent binding &amp; bidirectional validation</td></tr>
+          <tr><td>IAuthenticationService</td><td>JWTAuthenticationService</td><td>Request authentication (JWT HMAC-SHA256)</td></tr>
+          <tr><td>IChannelMetadataStore</td><td>ChannelMetadataStore</td><td>Per-conversation channel coordinates &amp; capabilities</td></tr>
+          <tr><td>IChannelService</td><td>AdaptingChannelService</td><td>Outbound delivery, degraded to the channel's budget</td></tr>
+          <tr><td>IChannelServiceFactory</td><td>ChannelServiceFactory</td><td>Per-conversation dispatch to the concrete transport</td></tr>
+          <tr><td>IChatReducer</td><td>MorganaChatReducer</td><td>History summarization preserving tool calls</td></tr>
+          <tr><td>IClassifierService</td><td>LLMClassifierService</td><td>Intent classification</td></tr>
+          <tr><td>IConversationPersistenceService</td><td>SQLiteConversationPersistenceService</td><td>Encrypted conversation storage</td></tr>
+          <tr><td>IDustLimitService</td><td>SQLiteDustLimitService</td><td>Per-conversation token budget protection</td></tr>
+          <tr><td>IGuardRailService</td><td>LLMGuardRailService</td><td>Content moderation &amp; policy enforcement</td></tr>
           <tr><td>IHostAddressService</td><td>KestrelHostAddressService</td><td>Address this instance publishes on its A2A cards</td></tr>
+          <tr><td>ILLMService</td><td>Anthropic / AzureOpenAI / Ollama / OpenAI</td><td>LLM provider abstraction</td></tr>
+          <tr><td>ILLMTierValidationService</td><td>RequiresLLMTierValidationService</td><td>Agent LLM-tier declaration validation</td></tr>
+          <tr><td>IMCPClientRegistryService</td><td>MCPClientRegistryService</td><td>MCP connection pool (Http / Stdio)</td></tr>
+          <tr><td>IPeerAdmissionService</td><td>SQLitePeerAdmissionService</td><td>Conversations a partner may open per hour (fails closed)</td></tr>
+          <tr><td>IPresenterService</td><td>LLMPresenterService</td><td>Welcome presentation &amp; first engagement</td></tr>
+          <tr><td>IPromptComposerService</td><td>ConfigurationPromptComposerService</td><td>Everything the model reads, assembled into one prompt</td></tr>
+          <tr><td>IPromptResolverService</td><td>ConfigurationPromptResolverService</td><td>System &amp; Domain prompt loading</td></tr>
+          <tr><td>IRateLimitService</td><td>SQLiteRateLimitService</td><td>Per-conversation message frequency throttling</td></tr>
+          <tr><td>IToolRegistryService</td><td>ProvidesToolForIntentRegistryService</td><td>Native tool discovery per intent</td></tr>
         </tbody>
       </table>
     
@@ -567,7 +578,39 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 7 — SECURITY MODEL                                                     -->
+    <!-- PAGE 7 — STARTUP VALIDATION                                                 -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="startup-validation">
+      <h2>Startup Validation</h2>
+      <p>A plugin declares its world across three places at once &mdash; attributes in C#, intents and prose in <code>agents.json</code>, credentials and policies in configuration &mdash; and nothing in the type system holds the three together. Morgana closes that gap at boot with <strong>nine checks, each of them fatal</strong>, all guarding one failure shape: <strong>a topology that validates cleanly and then fails, or opens, silently.</strong></p>
+
+      <table>
+        <thead><tr><th>#</th><th>Check</th><th>What it prevents</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Every configured intent has an agent and every agent an intent</td><td>A classified intent routed nowhere, or a desk nobody can reach</td></tr>
+          <tr><td>2</td><td>Every agent declares <code>[RequiresLLMTier]</code> and that tier is configured</td><td>An agent needing deep reasoning silently served by the cheap die &mdash; there is no cross-tier fallback</td></tr>
+          <tr><td>3</td><td>Every <code>[ConsultsAgent]</code> names a reachable colleague and no two fold to one function name</td><td>A consultation that fails at the first question, or two colleagues answering under one name</td></tr>
+          <tr><td>4</td><td>Tools: orphans warn, duplicates for one intent are refused</td><td>Two implementations claiming the same tool, with the winner decided by scan order</td></tr>
+          <tr><td>5</td><td>Every plugin's <code>agents.json</code> merges with no duplicated intent or prompt id, none declaring the reserved <code>other</code></td><td>One deployment's plugins silently overwriting each other's domain</td></tr>
+          <tr><td>6</td><td>No <code>Tiers</code> entry left on its override placeholder, no empty <code>Tiers</code> map</td><td>A deployment shipped with the template's secrets still in place</td></tr>
+          <tr><td>7</td><td>Every admitted issuer &mdash; channel, partner and the ring alike &mdash; carries a name and a key of at least 256 bits, with no name admitted twice</td><td>A door held shut by a key too short to hold it, or one name answering for two callers</td></tr>
+          <tr><td>8</td><td><code>ValidateTrustConfiguration</code>: each <code>Partners[]</code> entry names somebody once, does something, is coherent per open direction and carries a key that can sign</td><td>A relationship that looks configured and admits nobody, or admits without a ceiling</td></tr>
+          <tr><td>9</td><td><code>ValidatePublishedAddress</code>: <code>PublicUrl</code>, where declared, is absolute, on a bearer-carrying scheme and names one interface</td><td>A card sending peers to an address this installation is not reachable at, or one that would carry tokens in clear</td></tr>
+        </tbody>
+      </table>
+
+      <div class="info-box">
+        <strong>Where they run is part of the guarantee:</strong> the configuration and registry services are resolved immediately after the container is built, so a fault of this kind is a <em>startup</em> refusal. Left lazy, the same fault would reach a user as a conversation that never answers, on a host that had passed its health probe.
+      </div>
+
+      <div class="page-footer">
+        <span>Morgana Handbook</span>
+        <span>7</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 8 — SECURITY MODEL                                                     -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="security-model">
       <h2>Security Model</h2>
@@ -598,12 +641,12 @@
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>7</span>
+        <span>8</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 8 — CONFIGURATION REFERENCE                                            -->
+    <!-- PAGE 9 — CONFIGURATION REFERENCE                                            -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="configuration-reference">
       <h2>Configuration Reference</h2>
@@ -618,16 +661,19 @@
           <tr><td>Morgana:LLM:{Provider}:Tiers:{Tier}:Options:*</td><td>Narrow, JSON-bindable mirror of <code>ChatOptions</code> for this tier: <code>ModelId</code> (required), optional <code>MaxOutputTokens</code></td></tr>
           <tr><td>Morgana:LLM:{Provider}:Tiers:{Tier}:MagicDust:*</td><td>Per-tier token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
           <tr><td>Morgana:Authentication:Audience</td><td>Expected JWT audience (default: <code>morgana.ai</code>)</td></tr>
-          <tr><td>Morgana:Authentication:Issuers[]</td><td>Per-channel trust list: array of <code>{ Name, SymmetricKey }</code> entries (e.g. <code>cauldron</code>, <code>grimoire</code>, <code>rune</code>), plus <code>morgana</code> &mdash; with a real key &mdash; wherever agents consult each other</td></tr>
+          <tr><td>Morgana:Authentication:Issuers[]</td><td><strong>Channels only</strong>: array of <code>{ Name, SymmetricKey }</code> entries, one per channel (e.g. <code>cauldron</code>, <code>grimoire</code>, <code>rune</code>, <code>harness</code>). Partners live in <code>Morgana:AgentToAgent:Partners[]</code> and a name declared in both lists is startup-fatal. Nothing is authored for <code>morgana</code>, the reserved name this installation's own agents consult each other under: that key is coined at every start</td></tr>
           <tr><td>Morgana:ConversationPersistence:EncryptionKey</td><td>AES-256 key for SQLite encryption (base64)</td></tr>
           <tr><td>Morgana:ConversationPersistence:StoragePath</td><td>Directory for SQLite database files</td></tr>
           <tr><td>Morgana:ActorSystem:TimeoutSeconds</td><td>Actor/agent timeout (default: 180)</td></tr>
           <tr><td>Morgana:ActorSystem:EnableGuardrail</td><td>Toggle content moderation guard</td></tr>
+          <tr><td>Morgana:ActorSystem:IntentCollisionThreshold</td><td>How close two candidate intents must rank before the turn asks the user which one it is, instead of routing</td></tr>
           <tr><td>Morgana:AgentToAgent:*</td><td>Peer consultation: <code>Enabled</code> (default <code>true</code>), <code>MaxRoundsPerTurn</code> (default 4) and <code>Partners[]</code> &mdash; one entry per federated installation, carrying <code>{ Name, Url, SymmetricKey, Enabled }</code> plus <code>OutboundPolicy</code> (outbound: agents here consult its own) and <code>InboundPolicy</code> (inbound: its agents consult those here), each with its own <code>Enabled</code> so a relationship can be closed globally or on one direction alone. <code>Name</code> is what <code>[ConsultsAgent]</code> writes and never a hostname. <code>InboundPolicy.OnAgents</code> lists the published agents that partner reaches and omitting it admits it to all; its <code>RateLimiting</code> block is required of every admitted partner &mdash; startup refuses one admitted with none, since nothing reads an absence as licence to spend without limit; a deployment wanting no bound writes <code>"Enabled": false</code>. Almost nothing here describes this instance: no key (its own agents consult each other under a secret coined at startup) and no address, a card naming it from what Kestrel bound &mdash; with one exception, <code>PublicUrl</code>, which a deployment reached through an ingress, a reverse proxy or a published container port declares because its binding is not where a peer knocks. Most deployments never declare it and the address comes from what the server bound. See <a href="#a2a-configuration">Agent-to-Agent Configuration</a> for the three shapes in full</td></tr>
           <tr><td>Morgana:AdaptiveMessaging:*</td><td>Streaming toggle, rich-features threshold for ingress heuristic</td></tr>
           <tr><td>Morgana:RateLimiting:*</td><td>Per-minute, per-hour, per-day message limits</td></tr>
-          <tr><td>Morgana:DustLimiting:*</td><td>Token budget: enabled, budget per conversation, warning &amp; error messages, per-provider MagicDust pricing</td></tr>
-          <tr><td>Morgana:OpenTelemetry:*</td><td>Tracing: exporters, service name, endpoints</td></tr>
+          <tr><td>Morgana:DustLimiting:*</td><td>Token budget: enabled, budget per conversation, the 70% / 90% warnings and the lockout message. Pricing is not here: it is per tier, under <code>Tiers:{Tier}:MagicDust</code></td></tr>
+          <tr><td>Morgana:HistoryReducer:*</td><td>History summarization: <code>Enabled</code>, <code>SummarizationThreshold</code>, <code>SummarizationTargetCount</code>, <code>SummarizationPrompt</code>. Disabled hands the LLM the whole history</td></tr>
+          <tr><td>Morgana:Plugins:Directories</td><td>Directories scanned at startup for plugin DLLs carrying agents, tools and their <code>agents.json</code></td></tr>
+          <tr><td>Morgana:OpenTelemetry:*</td><td>Tracing: <code>Enabled</code>, <code>ServiceName</code>, <code>Exporters</code> and <code>EnableSensitiveData</code> (message and response text on spans, off by default)</td></tr>
         </tbody>
       </table>
 
@@ -639,6 +685,7 @@
           <tr><td>Cauldron:Authentication:SymmetricKey</td><td>HMAC-SHA256 key matching the <code>cauldron</code> entry in Morgana's <code>Issuers[]</code></td></tr>
           <tr><td>Cauldron:StreamingResponse:*</td><td>Typewriter effect speed (tick ms, chars per tick)</td></tr>
           <tr><td>Cauldron:LandingMessages</td><td>Array of random loading messages</td></tr>
+          <tr><td>Cauldron:Widget:AllowedEmbedOrigins</td><td>Origins allowed to embed the widget, emitted as a CSP <code>frame-ancestors</code> directive. Empty admits nobody</td></tr>
         </tbody>
       </table>
 
@@ -669,12 +716,12 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>8</span>
+        <span>9</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 9 — AGENT-TO-AGENT CONFIGURATION                                       -->
+    <!-- PAGE 10 — AGENT-TO-AGENT CONFIGURATION                                      -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="a2a-configuration">
       <h2>Agent-to-Agent Configuration</h2>
@@ -747,16 +794,16 @@
       
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>9</span>
+        <span>10</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 10 — DOCKER DEPLOYMENT                                                 -->
+    <!-- PAGE 11 — DOCKER DEPLOYMENT                                                 -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="docker-deployment">
       <h2>Docker Deployment</h2>
-      <p>Morgana ships with a ready-to-use <code>docker-compose.yml</code> defining Morgana, Cauldron, Grimoire and Rune on a dedicated bridge network with persistent SQLite volume. <code>docker compose up</code> starts Morgana + Cauldron; Grimoire and Rune are TUIs that need their own terminal, so each is launched interactively on demand in a separate shell (and only one TTY channel can own stdin/stdout at a time).</p>
+      <p>Morgana ships with a ready-to-use <code>docker-compose.yml</code> defining Morgana, Cauldron, Grimoire, Rune and Alembic on a dedicated bridge network with persistent SQLite volume. <code>docker compose up</code> starts Morgana + Cauldron; the other three are left out of it for two different reasons. Grimoire and Rune are TUIs that need their own terminal, so each is launched interactively on demand in a separate shell (and only one TTY channel can own stdin/stdout at a time). Alembic is the authoring workbench: it reaches no Morgana instance and joins no network, so it is started on its own profile when somebody sits down to model a domain.</p>
 
       <div class="code-block"><span class="comment"># Quick Start (production images from Docker Hub)</span>
     cp production.env.template .env
@@ -764,11 +811,12 @@
     docker compose up                  <span class="comment"># Morgana + Cauldron (HTML on :5002)</span>
     docker compose run --rm --service-ports --use-aliases grimoire   <span class="comment"># Grimoire TUI (rich TTY on :5004)</span>
     docker compose run --rm --service-ports --use-aliases rune   <span class="comment"># Rune TUI (poor TTY on :5003) — `--use-aliases` registers the service as a network alias so Morgana's webhook callback resolves</span>
+    docker compose --profile authoring up alembic   <span class="comment"># Alembic, the authoring workbench (Blazor on :5005) — no Morgana instance needed</span>
 
     <span class="comment"># Development (build from source)</span>
     cp development.env.template .env
     nano .env
-    dotnet build ./Morgana && dotnet build ./Channels/Cauldron && dotnet build ./Channels/Grimoire && dotnet build ./Channels/Rune
+    dotnet build ./Morgana && dotnet build ./Channels/Cauldron && dotnet build ./Channels/Grimoire && dotnet build ./Channels/Rune && dotnet build ./Alembic/Distiller
     docker compose --env-file .env --env-file .env.versions build
     docker compose --env-file .env --env-file .env.versions up</div>
 
@@ -785,12 +833,12 @@
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>10</span>
+        <span>11</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 11 — OBSERVABILITY                                                     -->
+    <!-- PAGE 12 — OBSERVABILITY                                                     -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="observability">
       <h2>Observability (OpenTelemetry)</h2>
@@ -809,6 +857,15 @@
         </tbody>
       </table>
     
+      <h3>Metrics</h3>
+      <table>
+        <thead><tr><th>Metric</th><th>Unit</th><th>Tags</th></tr></thead>
+        <tbody>
+          <tr><td>morgana.dust.consumed</td><td>dust</td><td>dust.llm_role (<code>Morgana</code> for framework actors, <code>Morgana (Intent)</code> for agents), conversation.id</td></tr>
+          <tr><td>gen_ai.usage.*</td><td>tokens</td><td>Emitted by Microsoft.Extensions.AI beside the above, so cost in dust and cost in tokens are read on the same dashboard</td></tr>
+        </tbody>
+      </table>
+
       <h3>Exporter Configuration</h3>
       <div class="code-block"><span class="string">"OpenTelemetry"</span>: {
       <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
@@ -822,12 +879,12 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>11</span>
+        <span>12</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 12 — QUICK REFERENCE                                                   -->
+    <!-- PAGE 13 — QUICK REFERENCE                                                   -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="quick-reference">
       <h2>Quick Reference</h2>
@@ -848,7 +905,7 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>12</span>
+        <span>13</span>
       </div>
     </div>
 

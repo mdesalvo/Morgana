@@ -112,6 +112,7 @@ graph LR
     C@{shape: rounded, label: "Classifier"}
     R@{shape: rounded, label: "Router"}
     MA@{shape: rounded, label: "Agent"}
+    MA2@{shape: rounded, label: "Colleague"}
   end
 
   %% User → Channel
@@ -130,10 +131,14 @@ graph LR
   R -- 7. Activates agent for intent handling --> MA
 
   %% External systems
+  PEER@{shape: das, label: "🔮 Partner Morgana"}
+
   G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Anthropic, Azure OpenAI, Ollama, OpenAI)"}
   C -. 5 Prompts for intent classification .-> LLM
   MA -. 8 MCP tool discovery .-> MCP@{shape: das, label: "MCP Server"}
   MA -. 9 Intent handling .-> LLM
+  MA -. 10 A2A consultation with an agent of this installation .-> MA2
+  MA -. 11 A2A consultation with an agent of a trusted partner .-> PEER
 ```
 
 ### 🤖 Morgana Agent System
@@ -169,6 +174,7 @@ public class BillingTool : MorganaTool
 The **MCP integration** permits agents to extend their capabilities by consuming **Model Context Protocol servers**, making external tools indistinguishable from native implementations. This enables rapid prototyping, microservice integration and ecosystem-driven feature development, all without writing a single line of tool implementation code.
 
 The **A2A integration** allows agents to collaborate behind the scenes, consulting their peers on-demand via competence-driven queries to deliver cross-cutting answers that horizontally cover the entire application domain. This enables seamless peer collaboration, autonomous knowledge sharing and cross-domain reasoning, all without user-facing friction or explicit inter-agent configuration.
+A colleague living in the same installation needs nothing configured: that traffic is signed under a key coined at every start. A colleague living in **another Morgana** is one `Morgana:AgentToAgent:Partners[]` entry away, carrying the shared key and one policy per direction (`OutboundPolicy` for the desks consulted there, `InboundPolicy` for the desks reachable from there, with the ceiling on how many conversations that partner may open). Where a colleague runs is a deployment decision and the prose of an agent never says.
 
 ### 📝 Morgana Prompt System
 *First-class artifacts with layered personality architecture and structured behavioral policies*
@@ -196,6 +202,26 @@ Every agent in Morgana keeps its own **secure, isolated context**: memories, var
 Some information, though, is meant to travel. A customer code given to BillingAgent shouldn't have to be asked again the moment ContractAgent takes over. Morgana handles this with **self-synchronizing shared variables**: information explicitly marked as shared is transparently picked up by any agent that needs it, the instant it needs it (no re-asking the user, no manual wiring between agents).
 
 Conversations survive restarts and agent handoffs without losing this context. Users always see one coherent conversation, even when several specialized agents quietly took turns behind the scenes.
+
+Everything a conversation holds lives in its own **AES-256 encrypted SQLite database**, beside the two ledgers that bound it: a sliding **rate limit** on how often a channel may write and a **magic dust** budget on what the conversation may spend, which warns the user at 70% and 90% before closing the turn down.
+
+---
+
+## 🧪 Authoring a Domain: Alembic
+
+Agents can be authored entirely by hand — `agents.json` plus a thin C# class against the **Morgana.AI** NuGet package. The shorter path is **Alembic**, Morgana's authoring workbench: an AI-conducted interview that distils a new domain from scratch, or extends an existing one, into intents, agent prose, tool contracts and working C#, packaged as one downloadable archive ready to be built into a plugin. It talks to no Morgana instance — only to an LLM — so it runs on its own, whenever somebody sits down to model a business.
+
+What the interview produces is kept honest over time by **PromptHarness**, the live non-regression suite in the repository root: scenarios run against the configured provider and score the prose the agents actually read.
+
+## 🔮 Morgana Where Your Users Already Are: the Widget
+
+Reaching Morgana from a browser does not require landing on Cauldron. Cauldron publishes an embeddable launcher that puts a live conversation into a page that already exists, whatever built it:
+
+```html
+<script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
+```
+
+No parameters: the loader reads its own `src` to learn which Cauldron to open, so a snippet copied from a deployment points back at that deployment by construction. Closed, it is a floating pill carrying Morgana's animated face; opened, it reveals a sandboxed `<iframe>` running the **real** Cauldron chat — streaming, rich cards, quick replies and dust gauge included. Isolation runs both ways and is browser-native: a closed shadow root keeps the host page's CSS out of the launcher and the launcher's CSS off the host, while the iframe keeps the conversation on Cauldron's own origin, unreadable from the embedding document. Framing is closed by default — a site may host the widget only once its origin is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
 
 ---
 
@@ -227,8 +253,15 @@ docker compose --env-file .env --env-file .env.versions up
 
 # ✅ Open your browser at http://localhost:5002
 
-# 💬 (Optional) Chat with Morgana via Grimoire's TUI
+# 💬 (Optional) Chat with Morgana via Grimoire's rich TUI
 docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases grimoire
+
+# 💬 (Optional) ...or via Rune, the deliberately poor one
+docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
+
+# 🧪 (Optional) Model a domain with Alembic, at http://localhost:5005
+#    Profile-gated: it joins no network, so `up` never starts it
+docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
 
 # 🛑 Stop the containers
 docker compose --env-file .env --env-file .env.versions down
