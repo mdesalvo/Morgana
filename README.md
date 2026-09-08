@@ -329,12 +329,12 @@ The interview, what it distils and how the archive is built are walked through i
 <details>
 <summary><i>An embeddable launcher that drops a live conversation into a page that already exists</i></summary>
 
-Reaching Morgana from a browser does not require landing on Cauldron. Cauldron publishes an embeddable launcher that puts a live conversation into a page that already exists, whatever built it:
+Reaching Morgana from a browser does not require landing on Cauldron: it publishes a launcher any page can host, whatever built it.
 
 ```html
 <script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
 ```
 
-No parameters: the loader reads its own `src` to learn which Cauldron to open, so a snippet copied from a deployment points back at that deployment by construction. Closed, it is a floating pill carrying Morgana's animated face; opened, it reveals a sandboxed `<iframe>` running the **real** Cauldron chat — streaming, rich cards, quick replies and dust gauge included. Isolation runs both ways and is browser-native: a closed shadow root keeps the host page's CSS out of the launcher and the launcher's CSS off the host, while the iframe keeps the conversation on Cauldron's own origin, unreadable from the embedding document. Framing is closed by default — a site may host the widget only once its origin is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
+No parameters: the loader reads its own `src` to learn which Cauldron to open, so a copied snippet points back at the deployment it came from. Closed, it is a floating pill carrying Morgana's animated face; opened, a sandboxed `<iframe>` running the **real** Cauldron chat — streaming, rich cards, quick replies, dust gauge. A closed shadow root keeps the two stylesheets from reaching each other while the iframe keeps the conversation on Cauldron's own origin, unreadable from the host page. Framing stays closed until a site is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
 
 </details>
