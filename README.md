@@ -252,7 +252,8 @@ These pillars are argued at length in the [**Morgana Handbook**](https://mdesalv
 <details>
 <summary><i>From a cloned repository to a running Morgana, one channel at a time</i></summary>
 
-**⚙️ Setup** — once, before any channel
+<details>
+<summary><b>⚙️ Setup</b> — <i>once, before any channel</i></summary>
 
 ```bash
 # 📋 Copy the development template
@@ -271,7 +272,10 @@ dotnet build ./Channels/Rune
 docker compose --env-file .env --env-file .env.versions build
 ```
 
-**🌐 Morgana on Cauldron** — the browser channel and the stack everything else talks to
+</details>
+
+<details>
+<summary><b>🌐 Morgana on Cauldron</b> — <i>the browser channel and the stack everything else talks to</i></summary>
 
 ```bash
 # 🚀 Start the containers (Morgana + Cauldron)
@@ -283,20 +287,29 @@ docker compose --env-file .env --env-file .env.versions up
 docker compose --env-file .env --env-file .env.versions down
 ```
 
-**📟 Morgana on Grimoire** — the rich TTY, on the stack started above
+</details>
+
+<details>
+<summary><b>📟 Morgana on Grimoire</b> — <i>the rich TTY, on the stack started above</i></summary>
 
 ```bash
 # --use-aliases is mandatory: without it the webhook callback fails DNS resolution
 docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases grimoire
 ```
 
-**📜 Morgana on Rune** — the deliberately poor TTY, same stack
+</details>
+
+<details>
+<summary><b>📜 Morgana on Rune</b> — <i>the deliberately poor TTY, same stack</i></summary>
 
 ```bash
 docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
 ```
 
-**🧪 Alembic** — the authoring workbench, which needs no Morgana at all
+</details>
+
+<details>
+<summary><b>🧪 Alembic</b> — <i>the authoring workbench, which needs no Morgana at all</i></summary>
 
 Not part of a running Morgana: it talks to no backend — only to an LLM — and it joins no network, so
 it is profile-gated in compose and `up` never starts it.
@@ -308,6 +321,8 @@ dotnet build ./Alembic/Distiller
 # 🧪 Model a domain, at http://localhost:5005
 docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
 ```
+
+</details>
 
 </details>
 
