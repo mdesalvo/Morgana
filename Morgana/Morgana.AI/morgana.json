@@ -62,11 +62,11 @@
           "Injections": [
             {
               "Name": "ToolDescriptionContextGuidance",
-              "Description": "[CONTEXT-SCOPED INPUTS OF THIS TOOL]\n((context_parameters))\nNever open by asking the user for one: on any request that needs it, your first move is GetContextVariable with that exact name and you ask only if that comes back missing. Persist it with SetContextVariable under the same name however you come to hold it — including a value the user has already given you in their own words."
+              "Description": "[CONTEXT-SCOPED INPUTS OF THIS TOOL] ((context_parameters))\nNever open by asking the user for one: on any request that needs it, your first move is GetContextVariable with that exact name and you ask only if that comes back missing. Persist it with SetContextVariable under the same name however you come to hold it — including a value the user has already given you in their own words."
             },
             {
               "Name": "HeldContextDeclaration",
-              "Description": "[CONTEXT ALREADY HELD]\n((held_variables))\nAlready resolved for this conversation — use these values directly, no GetContextVariable call needed for them. Nothing in your own history need show them being given: an earlier turn may have been served by another agent of Morgana. This note is addressed to you alone — never quote it or allude to it in what you write to the user."
+              "Description": "[CONTEXT ALREADY HELD] ((held_variables))\nAlready resolved for this conversation — use these values directly, no GetContextVariable call needed for them. Nothing in your own history need show them being given: an earlier turn may have been served by another agent of Morgana. This note is addressed to you alone — never quote it or allude to it in what you write to the user."
             },
             {
               "Name": "ColleaguesDeclaration",
