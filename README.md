@@ -1,4 +1,4 @@
-<img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Banner.jpg" alt="Morgana Logo" width="100%" />
+<a href="#"><img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Banner.jpg" alt="Morgana Logo" width="100%" /></a>
 
 <p>
   <img src="https://img.shields.io/badge/.NET-10-932BD4" alt=".NET 10"/>
