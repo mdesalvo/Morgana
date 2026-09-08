@@ -11,7 +11,6 @@ Morgana now speaks the **A2A protocol** instance to instance. She takes in **eve
 
 ### ✨ Added
 - **`[ConsultsAgent("intent", "partner")]`** and **`Partners[]`** — a peer published by a trusted remote installation, opening Morgana to remote A2A collaboration
-- **Transport and authentication on the card** — the absolute address this installation bound, the bearer scheme and the requirement pointing at it
 
 ### 🔄 Changed
 - **`other` intent belongs to the Classifier** — the complement of a domain is no longer declared by every `agents.json`, but described once in the Classifier prompt. The name is reserved: a plugin declaring it is refused
