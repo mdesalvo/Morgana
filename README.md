@@ -11,9 +11,6 @@
   <a href="https://hub.docker.com/r/mdesalvo/grimoire"><img src="https://img.shields.io/docker/pulls/mdesalvo/grimoire?logo=docker&logoColor=white&label=Grimoire&color=9f7aea" alt="Grimoire (Docker Pulls)"></a>
   <a href="https://hub.docker.com/r/mdesalvo/rune"><img src="https://img.shields.io/docker/pulls/mdesalvo/rune?logo=docker&logoColor=white&label=Rune&color=9f7aea" alt="Rune (Docker Pulls)"></a>
   <a href="https://hub.docker.com/r/mdesalvo/alembic"><img src="https://img.shields.io/docker/pulls/mdesalvo/alembic?logo=docker&logoColor=white&label=Alembic&color=9f7aea" alt="Alembic (Docker Pulls)"></a>
-  <br/>
-  <a href="https://mdesalvo.github.io/Morgana/Morgana-Handbook.html"><img src="https://img.shields.io/badge/Handbook-Morgana-932BD4?logo=readthedocs&logoColor=white" alt="Morgana Handbook"></a>
-  <a href="https://mdesalvo.github.io/Morgana/Alembic-Handbook.html"><img src="https://img.shields.io/badge/Handbook-Alembic-932BD4?logo=readthedocs&logoColor=white" alt="Alembic Handbook"></a>
 </p>
 
 Morgana is a modern and flexible **conversational AI framework** designed to handle complex scenarios through a sophisticated **multi-agent, intent-driven architecture**. Built on cutting-edge **.NET 10** and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that collaborate to understand, classify and resolve customer inquiries with precision and context awareness.
@@ -238,7 +235,7 @@ Conversations survive restarts and agent handoffs without losing this context. U
 
 </details>
 
-Each pillar is argued at length — pipeline, prompt composition, channels, persistence, observability — in the [**Morgana Handbook**](https://mdesalvo.github.io/Morgana/Morgana-Handbook.html).
+These pillars are argued at length in the [**Morgana Handbook**](https://mdesalvo.github.io/Morgana/Morgana-Handbook.html).
 
 ---
 
