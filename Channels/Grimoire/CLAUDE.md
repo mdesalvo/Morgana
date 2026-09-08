@@ -1,190 +1,127 @@
-# Grimoire - Morgana's Rich-TTY Webhook Channel
+# Grimoire — Morgana's rich-TTY webhook channel
 
 ## What is Grimoire
 
-Grimoire is a minimal **.NET 10 console application** that serves as the rich-TTY reference channel for Morgana, sibling to Cauldron. Where Cauldron renders Morgana's full expressive surface in HTML (SignalR, streaming, rich cards, quick replies, markdown), Grimoire renders the **same** full profile inside a Spectre.Console terminal UI: every expressive feature on, no message-length cap, content arrives integral and is Spectrized locally. It is the **textual Cauldron** — what a power user sees when their workflow lives in the terminal.
+A **.NET 10 console application**, the rich-TTY reference channel: it declares the **same full
+capability profile as Cauldron** — every expressive feature on, no length cap — then renders that
+undegraded output inside a Spectre.Console terminal. It is the **textual Cauldron**.
 
-Grimoire lives at `Channels/Grimoire/` in the repo root, alongside Cauldron and Rune. Rune occupies the matrix's complementary cell (TTY-poor: 500-char cap, no rich features, exercises Morgana's degradation path); Grimoire is its rich sibling and the two never run at the same time — only one can own stdin/stdout.
+It closes the channel × capability matrix, which is the whole reason it exists:
 
-## Why "textual Cauldron"
+|          | HTML     | TTY          |
+|----------|----------|--------------|
+| **Full** | Cauldron | **Grimoire** |
+| **Poor** | —        | Rune         |
 
-A pure-text channel doesn't have to be poor. Grimoire's role is to demonstrate that Morgana's content layer is channel-renderer-agnostic: the same rich card schema, the same streaming chunks, the same quick replies all land at Grimoire intact and turn into Spectre primitives (panels, tables, rules, trees, selection prompts). It also closes the channels × capability matrix that Cauldron and Rune leave half-open:
+A pure-text channel does not have to be a poor one: the same card schema, the same chunks, the same
+quick replies land here intact and become Spectre primitives. Because the profile is full,
+`MorganaChannelAdapter` short-circuits on every turn — **Grimoire never exercises the degradation
+path**, which stays Rune's job.
 
-|             | HTML        | TTY                |
-|-------------|-------------|--------------------|
-| **Full**    | Cauldron    | **Grimoire**       |
-| **Poor**    | —           | Rune               |
+**Not a Cauldron fork**: its own channel identity, `iss=grimoire`, its own key, its own port (5004).
+Grimoire and Rune share the `tui` docker profile, mutually exclusive at runtime — only one process
+can own stdin and stdout.
 
-Grimoire is **not a Cauldron fork**. It is its own channel identity: self-issued JWTs under `iss=grimoire` with its own `SymmetricKey`, its own Kestrel port (`5004`) and a direct project reference to the shared `Morgana.Contracts` wire package. The per-issuer auth gate is closed end-to-end by a third channel identity, independent of Cauldron and Rune.
+## Channel handshake
 
-## Project Structure
-
-```
-Channels/Grimoire/
-  Program.cs                         # Entry point: Kestrel + DI + lifecycle
-  Grimoire.csproj                    # .NET 10 Web SDK, deps: Spectre.Console, JsonWebTokens
-  Grimoire.slnx                      # Solution (sibling to Cauldron.slnx / Rune.slnx)
-  Directory.Build.props              # Shared build/version metadata
-  Directory.Build.targets            # MSBuild target that regenerates root .env.versions on each build
-  appsettings.json                   # Morgana URL, callback URL, auth, typewriter cadence
-  Properties/launchSettings.json     # Dev profile: https://localhost:5004
-  Grimoire.Dockerfile                # Multi-stage container build (root context)
-  Handlers/
-    MorganaAuthHandler.cs            # DelegatingHandler: self-issues JWT for outbound calls
-  Interfaces/
-    IViewportResizeWatcher.cs        # Abstraction over terminal resize notifications (SIGWINCH vs polling)
-  Messages/                          # Channel-only shapes (the shared wire DTOs come from Morgana.Contracts)
-    GrimoireChannelMetadata.cs       # Build(callbackUrl) factory over Morgana.Contracts.ChannelMetadata (channel identity)
-  Services/
-    MorganaClientService.cs          # REST wrapper: start / send / end conversation
-    WebhookReceiverService.cs        # Thin dispatcher, OnMessage + OnChunk delegates wired in Program.cs
-    ConsoleUiService.cs              # Spectre.Console Live(Layout) — sticky header, history, live streaming pane, REPL prompt
-    LandingMessageService.cs         # Random startup line from Grimoire:LandingMessages pool
-    PollingResizeWatcherService.cs   # IViewportResizeWatcher impl: cross-platform Console.WindowWidth/Height polling
-    SigWinchResizeWatcherService.cs  # IViewportResizeWatcher impl: Linux/macOS SIGWINCH-driven (no polling overhead)
-```
-
-## Architecture
-
-### Communication with Morgana
-
-```
-Grimoire   ──REST──────→ Morgana.Web (MorganaController)        # outbound: start/send/end
-       ←─webhook POST── Morgana.Web (WebhookChannelService)     # inbound:  ChannelMessage on /morgana-hook
-       ←─webhook POST── Morgana.Web (WebhookChannelService)     # inbound:  StreamChunkRequest on /morgana-hook/chunk
-```
-
-- **Outbound REST** (via `HttpClient` named "Morgana", base address `Grimoire:MorganaURL`): conversation start/send/end, authenticated by a self-issued JWT injected through `MorganaAuthHandler`.
-- **Inbound webhook** (via Kestrel on port 5004): two endpoints, both POST.
-  - `/morgana-hook` — Morgana POSTs a serialized `ChannelMessage` for every final outbound turn.
-  - `/morgana-hook/chunk` — Morgana POSTs `StreamChunkRequest` deltas while an agent streams its response.
-  - `WebhookReceiver.Dispatch` / `DispatchChunk` hand the payloads to `ConsoleUi.EnqueueIncoming` / `EnqueueChunk` via delegates wired in `Program.cs` (breaks the circular DI between receiver and UI).
-
-### DI Registrations (Program.cs)
-
-| Registration | Type | Purpose |
-|---|---|---|
-| `MorganaAuthHandler` | Transient | JWT token generation for outbound REST auth |
-| `HttpClient` "Morgana" | Named | REST API calls with auto Bearer token injection |
-| `MorganaClientService` | Singleton | Start/send/end conversation wrapper |
-| `WebhookReceiverService` | Singleton | Minimal-API dispatcher, settable `OnMessage` / `OnChunk` callbacks |
-| `ConsoleUiService` | Singleton | Spectre.Console Live UI (one Grimoire session per process) |
-| `LandingMessageService` | Singleton | Picks a random "warming up" line from the `Grimoire:LandingMessages` pool |
-| `IViewportResizeWatcher` | Singleton | OS-specific resize watcher: `SigWinchResizeWatcherService` on Linux/macOS, `PollingResizeWatcherService` elsewhere — selected at startup in `Program.cs` |
-
-### Lifecycle (Program.cs)
-
-1. `builder.Logging.ClearProviders()` — silence Kestrel / ASP.NET Core logs (they corrupt the Live TUI)
-2. `app.StartAsync()` — Kestrel listens on `https://localhost:5004` (dev) / `http://+:5004` (container)
-3. `webhook.OnMessage = uiService.EnqueueIncoming` + `webhook.OnChunk = uiService.EnqueueChunk` — wire inbound to UI
-4. `morganaClientService.StartConversationAsync()` — handshake with `ChannelMetadata.Build(callbackUrl)` → returns conversationId
-5. `uiService.RunAsync(conversationId, onSend)` — blocks on the Live loop until `/quit` / `Esc`
-6. `finally { morganaClientService.EndConversationAsync(); await app.StopAsync(); }`
-
-## Channel Handshake
-
-At conversation start, Grimoire announces itself via `ChannelMetadata.Build(callbackUrl)`:
 ```csharp
-Coordinates  = { ChannelName = "grimoire", DeliveryMode = "webhook", CallbackUrl = "<from Grimoire:CallbackURL>" }
-Capabilities = { SupportsRichCards: true, SupportsQuickReplies: true, SupportsStreaming: true, SupportsMarkdown: true,
-                 MaxMessageLength: null }
+Coordinates  = { ChannelName = "grimoire", DeliveryMode = "webhook", CallbackUrl = "<Grimoire:CallbackURL>" }
+Capabilities = { SupportsRichCards: true, SupportsQuickReplies: true, SupportsStreaming: true,
+                 SupportsMarkdown: true, MaxMessageLength: null }
 ```
 
-Morgana's controller gate additionally requires `callbackUrl` to be an absolute URI when `deliveryMode=webhook` — enforced at handshake, fail-closed. The full capability profile means `MorganaChannelAdapter.AdaptAsync` short-circuits on every turn (`FitsWithin` returns true), the streaming path is **not** suppressed upstream and the wire payload reaches Grimoire integral.
+Morgana's gate additionally requires `callbackUrl` to be an **absolute** URI when
+`deliveryMode=webhook`, fail-closed at the handshake.
 
 ## Authentication
 
-`MorganaAuthHandler` is a `DelegatingHandler` that generates short-lived JWT tokens:
-- **Algorithm**: HMAC-SHA256 with shared symmetric key from `Grimoire:Authentication:SymmetricKey`
-- **Issuer**: `grimoire` — must be present in Morgana's `Morgana:Authentication:Issuers[]` list with a matching `SymmetricKey`; unknown issuers are rejected at the Morgana gate
-- **Subject**: `grimoire-app`
-- **Audience**: `morgana.ai`
-- **Lifetime**: 5 minutes (re-generated per request)
+`MorganaAuthHandler` mints short-lived JWTs: HMAC-SHA256 with `Grimoire:Authentication:SymmetricKey`,
+issuer `grimoire`, audience `morgana.ai`, five minutes.
 
-**Trust model is asymmetric by design**: Grimoire signs its outbound calls toward Morgana; Morgana does **not** sign the inbound webhook POST toward Grimoire. This matches `WebhookChannelService`'s convention (GitHub / Stripe / Twilio style) and is not a gap.
+**Trust is asymmetric by design**: Grimoire signs its outbound calls toward Morgana; Morgana does
+**not** sign the inbound webhook POST toward Grimoire. That matches `WebhookChannelService`'s
+convention (the GitHub / Stripe / Twilio style) — it is not a gap, so do not add webhook signing
+without revisiting the decision recorded there.
 
-**Onboarding checklist for a fresh Morgana instance:**
-1. Add an entry to `Morgana:Authentication:Issuers[]` in the destination Morgana configuration: `{ "Name": "grimoire", "SymmetricKey": "<at least 256 bit, base64>" }`. That list holds channels and nothing else: an entry there admits the key to the conversation API (REST + SignalR) and to nothing published under `/a2a`, which is reached only by a partner declared under `Morgana:AgentToAgent:Partners`
-2. Put the same `SymmetricKey` under `Grimoire:Authentication:SymmetricKey` via user-secrets or env var (never commit)
+**Onboarding a fresh Morgana instance:**
+1. Add `{ "Name": "grimoire", "SymmetricKey": "<≥256 bit, base64>" }` to
+   `Morgana:Authentication:Issuers[]`. That list holds **channels and nothing else**: the key buys
+   the conversation API and nothing published under `/a2a`
+2. Put the same key under `Grimoire:Authentication:SymmetricKey` through user-secrets or an
+   environment variable, never a commit
 3. Start Morgana (`:5001`), then `dotnet run` from `Channels/Grimoire/` (`:5004`)
 
-## Wire Contracts (shared project)
+## Wire contracts
 
-The wire DTOs (`ChannelMessage`, `ChannelMetadata`, `ChannelCoordinates` incl. `CallbackUrl`, `ChannelCapabilities`, `QuickReply`, `RichCard`/`CardComponent`, `StartConversationRequest`, `SendMessageRequest`, `StreamChunkRequest`) are **no longer duplicated**: Grimoire takes a direct `ProjectReference` to **`Morgana.Contracts`** (`..\..\Morgana\Morgana.Contracts\Morgana.Contracts.csproj`) — the single source of truth shared with Morgana.AI — and consumes them under the `Morgana.Contracts` namespace. Change a contract once, in `Morgana.Contracts`. `StreamChunkRequest` (the `{callbackUrl}/chunk` webhook body) now lives in `Morgana.Contracts` too and is consumed directly by Morgana.Web's `WebhookChannelService`, so there is no longer a private server-side copy to keep in lockstep.
+A `ProjectReference` on **`Morgana.Contracts`**, consumed directly — requests, responses and
+`StreamChunkRequest`, the `{callbackUrl}/chunk` body, which lives there too and is consumed by
+Morgana.Web's own `WebhookChannelService`. There is no private copy on either side. Channel identity
+lives channel-side in `Messages/GrimoireChannelMetadata.cs`.
 
-The contract types are immutable records (init-only / positional): `StartConversationRequest`/`SendMessageRequest` are constructed positionally and `QuickReply.Termination` is now `bool?`. Channel identity lives channel-side in `Messages/GrimoireChannelMetadata.cs` (`GrimoireChannelMetadata.Build(callbackUrl)`), not on the shared contract.
+## Terminal UI
 
-The Docker build mirrors the repo layout under `/src` and stages the `Morgana.Contracts` subtree so the `ProjectReference` resolves (see `Grimoire.Dockerfile`).
+Spectre.Console `LiveDisplay` plus `Layout`: a sticky header (speaker, truncated conversation id, the
+magic-dust gauge) over a scrolling body, with the live streaming pane sandwiched between history and
+the input line.
 
-Responses are contracts too: `StartConversationResponse` is consumed straight from `Morgana.Contracts` — the controller returns that very type — so there is no channel-side mirror left to keep in step with a controller rename.
+Colours mirror Cauldron's palette: `#8b5cf6` for base Morgana, `#ec4899` for a specialised agent,
+white for the user, the dust gauge crossing amber at 30% and red at 10%. The streaming pane uses the
+agent colour because streamed chunks are assumed to come from agents, which avoids threading
+`AgentName` through the chunk wire.
 
-## Terminal UI (ConsoleUiService)
+### Streaming the deferred commit
 
-Built on Spectre.Console's `LiveDisplay` + `Layout`:
+- **One FIFO `Channel<InboundEvent>` carries both messages and chunks.** A single drain loop is what
+  guarantees a trailing chunk can never be reordered after a final message, leaking past the buffer
+  clear.
+- Two buffers: what is waiting to be revealed, what is actually rendered. A timer moves
+  `TypewriterTickChars` from one to the other every `TypewriterTickMilliseconds`.
+- **When the final message lands while the buffer is still draining, the commit to history waits**:
+  the message is stashed, the completion is latched, then the first tick observing an empty buffer
+  commits it. The user sees the typewriter finish naturally instead of the text snapping to full.
+- Timer cleanup is enforced in a `finally`, so the threadpool callback can never outlive the live
+  display context.
 
-- **Header** (sticky, 3 rows): panel with the current speaker name colored by role, a truncated conversation id and the magic-dust gauge.
-- **Body** (scrolling): chat history with each line colored by speaker, a live streaming pane sandwiched between history and the input row (visible only while an agent is streaming) and a bottom-most input line with a blinking cursor.
+### Input
 
-### Colors (dark-theme palette)
-
-| Who | Color   | Rationale |
-|---|---------|---|
-| `Morgana` | `#8b5cf6` | Base assistant identity — matches Cauldron's `--primary-color` |
-| `Morgana (Agent)` | `#ec4899` | Specialised agent — matches Cauldron's `--secondary-color` |
-| `You` | `white` | User input and committed messages |
-| Streaming pane | `#ec4899` | Streamed chunks are assumed to originate from agents (base Morgana ships single messages), so the live reveal uses the secondary color without needing to thread `AgentName` through the chunk wire |
-| Dust gauge | `#8b5cf6` / `#f59e0b` (≤30%) / `#ef4444` (≤10%) | Mirror of Cauldron's `.dust-meter` thresholds |
-
-### Streaming and typewriter
-
-The live streaming pane mirrors Cauldron's `StreamingService`:
-- A single FIFO `Channel<InboundEvent>` carries both `MessageEvent`s (`/morgana-hook`) and `ChunkEvent`s (`/morgana-hook/chunk`). One drain loop = strictly FIFO — a trailing chunk can never be reordered after a final message and leak past the buffer clear.
-- Two buffers: `streamingPending` (raw deltas waiting to be revealed) and `streamingDisplayed` (what's actually rendered).
-- A `Timer` ticks every `Grimoire:StreamingResponse:TypewriterTickMilliseconds` (default 15 ms), pulling `Grimoire:StreamingResponse:TypewriterTickChars` (default 1) characters off `streamingPending` into `streamingDisplayed` and refreshing the live view.
-- When the final `ChannelMessage` lands while the buffer is still draining, the commit to history is **deferred**: the message is stashed in `pendingFinalMessage` and `streamingComplete` is latched true. The next tick that observes an empty pending buffer commits the deferred final to `history`, resets the streaming state and stops the timer — so the user sees the typewriter complete naturally before history snaps. No "jump to full text" glitch.
-- Timer cleanup is enforced by `try/finally` in `RunAsync.StartAsync`: the threadpool callback can never outlive the `LiveDisplayContext`.
-
-### Input handling
-
-- `Console.ReadKey(intercept: true)` on a background task, polling `Console.KeyAvailable` every 25 ms (Spectre.Console's Live rendering cannot share stdin with a first-class prompt).
-- **Enter** — commits the current buffer: if it equals `/quit` the UI exits; otherwise it's appended to history as `You: …` and sent via `onSend`.
-- **Backspace** — deletes the last character from the buffer.
-- **Esc** — immediate exit.
-- **Other printable chars** — appended to the buffer; layout refreshed on each keystroke.
+`Console.ReadKey(intercept: true)` on a background task polling every 25 ms — Spectre's Live
+rendering cannot share stdin with a first-class prompt. **Enter** commits (or exits on `/quit`),
+**Backspace** deletes, **Esc** exits.
 
 ### Resume
 
-No resume in v1. Every Grimoire process start begins a fresh conversation. Keep this explicit: if future Grimoire picks up a conversation id from some store, the `ChannelMetadata.Build` handshake must also be re-announced (Morgana's `ConversationManagerActor` re-persists channel metadata on resume).
+**There is none.** Every process start begins a fresh conversation. Keep that explicit: a future
+Grimoire picking up a conversation id from a store must **re-announce the handshake**, since
+`ConversationManagerActor` re-persists channel metadata on resume.
 
-## Key Configuration (appsettings.json)
+## Key configuration
 
 | Section | Purpose |
 |---|---|
-| `Grimoire:MorganaURL` | Morgana backend base URL for outbound REST (default `https://localhost:5001`) |
-| `Grimoire:CallbackURL` | Absolute URL Morgana POSTs inbound messages to (default `https://localhost:5004/morgana-hook`) |
-| `Grimoire:Authentication:SymmetricKey` | Shared HMAC key matching Morgana's `Issuers[].SymmetricKey` for `Name=grimoire` |
-| `Grimoire:Authentication:Issuer` | Token issuer (default `grimoire`) |
-| `Grimoire:Authentication:Audience` | Token audience (default `morgana.ai`) |
-| `Grimoire:AgentExitMessage` | Template for the courtesy line appended when a specialised agent completes (default `"{0} has completed its spell. I'm back to you!"`; `{0}` is the agent's display name). Mirrors Cauldron's `Cauldron:AgentExitMessage`. |
-| `Grimoire:LandingMessages` | String array of whimsical "warming up" lines printed to stdout during the startup window between `builder.Build()` and `ui.RunAsync`. Picked uniformly at random per process; overwritten by `AnsiConsole.Clear()` just before the Live UI takes over. Mirrors Cauldron's `Cauldron:LandingMessages` (same pool, same intent). |
-| `Grimoire:StartupTimeoutSeconds` | How long (in seconds) to keep the landing line visible while waiting for Morgana's first webhook delivery before entering the Live UI anyway. Default `30`. Raise on slow LLM providers with cold starts (Ollama on CPU, Azure OpenAI in a distant region); lower for faster "something's wrong" feedback during development. Non-positive values fall back to the default. |
-| `Grimoire:StreamingResponse:TypewriterTickMilliseconds` | Cadence between typewriter ticks (default `15`). Raise to slow the reveal (e.g. `30`–`40` for a more contemplative feel). Mirrors Cauldron's `Cauldron:StreamingResponse:TypewriterTickMilliseconds`. |
-| `Grimoire:StreamingResponse:TypewriterTickChars` | Characters revealed per tick (default `1`). Raise above `1` to keep up with very fast LLM streams without lengthening the tick interval. Mirrors Cauldron's `Cauldron:StreamingResponse:TypewriterTickChars`. |
+| `Grimoire:MorganaURL` · `:CallbackURL` | Backend base URL; the absolute URL Morgana POSTs to (default `https://localhost:5004/morgana-hook`) |
+| `Grimoire:Authentication:*` | `SymmetricKey` matching Morgana's entry for `Name=grimoire`, plus `Issuer` and `Audience` |
+| `Grimoire:AgentExitMessage` · `:LandingMessages` | The courtesy line on agent completion; the startup lines, cleared when the Live UI takes over. Both mirror Cauldron's |
+| `Grimoire:StartupTimeoutSeconds` | How long to wait for Morgana's first delivery before entering the Live UI anyway (default 30). Raise it on providers with cold starts |
+| `Grimoire:StreamingResponse:*` | `TypewriterTickMilliseconds` (15), `TypewriterTickChars` (1) |
 
 ## Build and Run
 
-- **Target**: .NET 10, console app hosted on Kestrel (via `Microsoft.NET.Sdk.Web`)
-- **Build**: `dotnet build` from `Channels/Grimoire/` directory
-- **Run**: `dotnet run` — default `https://localhost:5004` for the webhook listener (requires Morgana backend running and the `grimoire` issuer onboarded)
-- **Docker**: `Channels/Grimoire/Grimoire.Dockerfile` (context is the repo root, mirroring the Morgana / Cauldron / Rune pattern). Grimoire is **not** launched by `docker compose up` — the service is profile-gated (`profiles: ["tui"]` in `docker-compose.yml`) so `up` skips it; the Spectre.Console Live UI needs to own the terminal, so it must be started interactively in a separate terminal after Morgana is up:
+- **Target**: .NET 10 console app hosted on Kestrel (`Microsoft.NET.Sdk.Web`)
+- **Run**: `dotnet run` from `Channels/Grimoire/` — listener on `https://localhost:5004`
+- **Docker**: profile-gated (`tui`), so `compose up` skips it. The Live UI must own the terminal, so
+  start it interactively after Morgana is up:
   ```bash
   docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases grimoire
   ```
-  `compose run <service>` auto-activates the service's profiles so no `--profile tui` flag is needed. The `run --service-ports` invocation allocates the TTY Spectre requires *and* publishes `5004:5004` so Morgana's webhook callback can reach Grimoire's listener. `--use-aliases` is mandatory: unlike `compose up`, `compose run` does not register the service name as a network alias, so without it Morgana's callback to `http://grimoire:5004/morgana-hook` fails DNS resolution. The compose file sets `stdin_open: true` + `tty: true` on the `grimoire` service to keep this flow explicit. Rune and Grimoire share the `tui` profile and are mutually exclusive at runtime (only one process can own stdin/stdout).
+  `run` auto-activates the service's profiles, `--service-ports` allocates the TTY **and** publishes
+  5004 so the callback can land. **`--use-aliases` is mandatory**: unlike `up`, `run` registers
+  no network alias, so without it Morgana's callback to `http://grimoire:5004/morgana-hook` fails DNS
+  resolution.
 
 ## Conventions
 
-- **Logging is silenced** at startup — the Spectre.Console Live UI owns the terminal; errors surface as red in-UI system lines.
-- **Asymmetric trust** is a first-class design choice, not a bug — do not introduce webhook signing without revisiting the decision recorded in the `WebhookChannelService` notes.
-- **Singletons** — one Grimoire process == one Grimoire session; if multi-session ever becomes a goal, move state (`ConsoleUiService.history`, `WebhookReceiverService.OnMessage`) onto a per-conversation scope first.
-- **Server is source of truth** for final message text — even when streaming chunks have already painted the buffer, the deferred commit uses the final `ChannelMessage.Text` so any (rare) adapter rewrite wins over the streamed prefix.
+- **Logging is silenced at startup** — the Live UI owns the terminal; errors surface as red in-UI lines
+- **Singletons**: one process is one session. Multi-session would first have to move
+  `ConsoleUiService.history` and the receiver's callback onto a per-conversation scope
+- **The server is the source of truth** for final text: the deferred commit uses the final
+  `ChannelMessage.Text`, so a rare adapter rewrite wins over the streamed prefix
