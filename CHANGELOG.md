@@ -7,15 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.31.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Cross-Instance collaboration over A2A
-Morgana now speaks the **A2A protocol** instance to instance. She takes in **every agent of the instance**, each published at `/a2a/{intent}` with its well-known agent card. Agents can consult peers on **other Morgana instances**: `[ConsultsAgent("shipping", "acme")]` names an "acme" partner trusted under `Morgana:AgentToAgent:Partners` on which the agent "shipping" can be consulted.
+Morgana now speaks the **A2A protocol** instance to instance. She takes in **every agent of the instance**, each published at `/a2a/{intent}` with its well-known agent card. Agents can now consult peers on **other Morgana instances**: `[ConsultsAgent("shipping", "acme")]` names an "acme" partner trusted under `Morgana:AgentToAgent:Partners` on which the agent "shipping" can be engaged.
 
 ### ✨ Added
 - **`[ConsultsAgent("intent", "partner")]`** and **`Partners[]`** — a peer published by a trusted remote installation, offered to the model as `consult_{partner}_{intent}` tool
 - **Transport and authentication on the card** — the absolute address this installation bound, the bearer scheme and the requirement pointing at it
 
 ### 🔄 Changed
-- **A deployment may bring several plugins** — every `agents.json` found is merged into one domain, instead of the first one discovered silently winning. Two plugins claiming one intent, or one prompt id, are refused at startup naming both
-- **`other` belongs to the classifier** — the complement of a domain is no longer declared by every `agents.json` but described once in the Classifier prompt. The name is reserved: a plugin declaring it is refused
+- **A deployment may bring several plugins** — every `agents.json` found is merged into the domain, instead of the first one discovered silently winning. Two plugins claiming one intent, or one prompt id, are refused at startup naming both
+- **`other` belongs to the classifier** — the complement of a domain is no longer declared by every `agents.json`, but described once in the Classifier prompt. The name is reserved: a plugin declaring it is refused
 
 ### 🐛 Fixed
 
